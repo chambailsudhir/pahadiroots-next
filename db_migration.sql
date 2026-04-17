@@ -1,19 +1,22 @@
 -- ============================================================
--- PAHADI ROOTS — DB MIGRATION
+-- PAHADI ROOTS — DB MIGRATION (FIXED v2)
+-- Matches ACTUAL schema — orders.customer_id → customers table
+-- Column names: order_status NOT status, total_amount NOT total
 -- Run in Supabase SQL Editor BEFORE deploying Next.js site
 -- ============================================================
 
 -- ─── 1. Indexes for performance (Audit #B8) ─────────────────
+-- orders uses: order_status (NOT status), customer_id FK, payment_id (NOT razorpay_payment_id)
+-- customers has: phone column (orders does NOT have customer_phone)
 CREATE INDEX IF NOT EXISTS idx_products_slug        ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_category    ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_state       ON products(state_id);
 CREATE INDEX IF NOT EXISTS idx_products_status      ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_deleted     ON products(is_deleted);
 CREATE INDEX IF NOT EXISTS idx_order_items_product  ON order_items(product_id);
-CREATE INDEX IF NOT EXISTS idx_orders_phone         ON orders(customer_phone);
-CREATE INDEX IF NOT EXISTS idx_orders_idem_key      ON orders(idempotency_key);
-CREATE INDEX IF NOT EXISTS idx_orders_status        ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_rzp_order_id  ON orders(razorpay_order_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id   ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status        ON orders(order_status);
+CREATE INDEX IF NOT EXISTS idx_customers_phone      ON customers(phone);
 
 -- ─── 2. Add idempotency_key to orders (Audit #A5) ───────────
 ALTER TABLE orders

@@ -4,6 +4,7 @@ import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
+import MobileMenu from '@/components/layout/MobileMenu'
 import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
@@ -98,6 +99,7 @@ export default async function RootLayout({
           {/* Global overlays — rendered once at root */}
           <CartDrawer settings={settings} />
           <SearchOverlay />
+          <MobileMenu settings={settings} />
         </Providers>
       </body>
     </html>

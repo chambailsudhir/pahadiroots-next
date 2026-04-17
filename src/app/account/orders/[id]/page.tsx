@@ -31,9 +31,10 @@ export default function OrderDetailPage() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, order_number, status, payment_method, payment_status,
-          total, subtotal, discount, shipping, gst_total,
-          coupon_code, address, created_at, updated_at,
+          id, order_number, order_status, payment_method, payment_status,
+          total_amount, subtotal, coupon_discount, shipping_charge, tax,
+          coupon_code, created_at, updated_at,
+          customers(first_name, last_name, phone, address_line1, address_line2, city, state, postal_code),
           order_items(id, product_id, variant_id, quantity, price, size)
         `)
         .eq('id', id)
@@ -54,8 +55,8 @@ export default function OrderDetailPage() {
 
   if (!order) return null
 
-  const currentStep = STATUS_INDEX[order.status] ?? -1
-  const isCancelled = ['cancelled', 'returned', 'refunded', 'return_requested'].includes(order.status)
+  const currentStep = STATUS_INDEX[order.order_status] ?? -1
+  const isCancelled = ['cancelled', 'returned', 'refunded', 'return_requested'].includes(order.order_status)
 
   return (
     <div className="space-y-5">
@@ -69,7 +70,7 @@ export default function OrderDetailPage() {
           <p className="text-xs text-stone-400">Placed on {formatDate(order.created_at)}</p>
         </div>
         <div className="text-right">
-          <div className="text-xl font-bold text-stone-900">{formatPrice(order.total)}</div>
+          <div className="text-xl font-bold text-stone-900">{formatPrice(order.total_amount)}</div>
           <div className="text-xs text-stone-400 capitalize mt-0.5">
             {order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
           </div>
@@ -83,9 +84,9 @@ export default function OrderDetailPage() {
         {isCancelled ? (
           <div className="text-center py-4">
             <div className="text-3xl mb-2">
-              {order.status === 'cancelled' ? '❌' : order.status === 'return_requested' ? '↩️ Return Requested' : '✅ Returned'}
+              {order.order_status === 'cancelled' ? '❌' : order.order_status === 'return_requested' ? '↩️ Return Requested' : '✅ Returned'}
             </div>
-            <div className="font-semibold text-stone-700 capitalize">{order.status.replace(/_/g, ' ')}</div>
+            <div className="font-semibold text-stone-700 capitalize">{order.order_status.replace(/_/g, ' ')}</div>
           </div>
         ) : (
           <div className="relative">
@@ -122,14 +123,14 @@ export default function OrderDetailPage() {
       </div>
 
       {/* Delivery address */}
-      {order.address && (
+      {order.customers && (
         <div className="bg-white border border-stone-200 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-stone-700 mb-3">Delivery Address</h2>
           <div className="text-sm text-stone-600 space-y-0.5">
-            <div className="font-semibold">{order.address.name}</div>
-            <div>{order.address.flat}, {order.address.area}</div>
-            <div>{order.address.city}, {order.address.state} — {order.address.pincode}</div>
-            <div className="text-stone-400">{order.address.phone}</div>
+            <div className="font-semibold">{order.customers.first_name} {order.customers.last_name}</div>
+            <div>{order.customers.address_line1}{order.customers.address_line2 ? `, ${order.customers.address_line2}` : ''}</div>
+            <div>{order.customers.city}, {order.customers.state} — {order.customers.postal_code}</div>
+            <div className="text-stone-400">{order.customers.phone}</div>
           </div>
         </div>
       )}
@@ -139,17 +140,17 @@ export default function OrderDetailPage() {
         <h2 className="text-sm font-bold text-stone-700 mb-4">Price Details</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between text-stone-600"><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
-          {order.discount > 0 && <div className="flex justify-between text-forest-700"><span>Discount</span><span>−{formatPrice(order.discount)}</span></div>}
-          <div className="flex justify-between text-stone-600"><span>Shipping</span><span>{order.shipping === 0 ? 'FREE' : formatPrice(order.shipping)}</span></div>
+          {(order.coupon_discount || 0) > 0 && <div className="flex justify-between text-forest-700"><span>Discount</span><span>−{formatPrice(order.coupon_discount)}</span></div>}
+          <div className="flex justify-between text-stone-600"><span>Shipping</span><span>{order.shipping_charge === 0 ? 'FREE' : formatPrice(order.shipping_charge)}</span></div>
           <div className="flex justify-between font-bold text-stone-900 pt-2 border-t border-stone-100">
-            <span>Total Paid</span><span>{formatPrice(order.total)}</span>
+            <span>Total Paid</span><span>{formatPrice(order.total_amount)}</span>
           </div>
-          <div className="text-[11px] text-stone-400">Incl. ₹{order.gst_total} GST</div>
+          <div className="text-[11px] text-stone-400">Incl. ₹{order.tax} GST</div>
         </div>
       </div>
 
       {/* Actions */}
-      {order.status === 'delivered' && (
+      {order.order_status === 'delivered' && (
         <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5">
           <h2 className="text-sm font-bold text-stone-700 mb-3">Need Help?</h2>
           <div className="flex gap-3">

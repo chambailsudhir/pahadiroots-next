@@ -54,14 +54,14 @@ export async function POST(req: Request) {
       const { data: order } = await db
         .from('orders')
         .select('id, status, order_number')
-        .eq('razorpay_order_id', rzpOrderId)
+        .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && order.status === 'pending_payment') {
+      if (order && order.order_status === 'pending_payment') {
         await db.from('orders').update({
-          status:              'paid',
+          order_status:        'paid',
           payment_status:      'paid',
-          razorpay_payment_id: paymentId,
+          payment_id:          paymentId,
           updated_at:          new Date().toISOString(),
         }).eq('id', order.id)
 
@@ -79,12 +79,12 @@ export async function POST(req: Request) {
       const { data: order } = await db
         .from('orders')
         .select('id, status')
-        .eq('razorpay_order_id', rzpOrderId)
+        .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && order.status === 'pending_payment') {
+      if (order && order.order_status === 'pending_payment') {
         await db.from('orders').update({
-          payment_status: 'failed',
+          payment_status:      'failed',
           updated_at:     new Date().toISOString(),
         }).eq('id', order.id)
 

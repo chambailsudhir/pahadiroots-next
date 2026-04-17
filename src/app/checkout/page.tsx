@@ -90,14 +90,21 @@ export default function CheckoutPage() {
     setPlacing(true)
 
     try {
+      // Flat fields — matches real orders+customers schema
       const payload = {
-        address:         addr,
+        name:            addr.name,
+        phone:           addr.phone,
+        email:           user?.email || '',
+        flat:            addr.flat,
+        area:            addr.area,
+        city:            addr.city,
+        state:           addr.state,
+        pincode:         addr.pincode,
+        label:           addr.label,
         items:           items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
         payment_method:  payMethod,
         coupon_code:     coupon?.code,
         idempotency_key: idempotencyKey,
-        customer_email:  user?.email,
-        customer_id:     user?.id,
       }
 
       if (payMethod === 'cod') {

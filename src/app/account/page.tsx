@@ -30,7 +30,7 @@ export default function AccountPage() {
     async () => {
       const { data } = await supabase
         .from('orders')
-        .select('id, order_number, status, payment_method, total, created_at, address')
+        .select('id, order_number, order_status, payment_method, total_amount, created_at')
         .eq('customer_phone', user!.phone)
         .order('created_at', { ascending: false })
         .limit(10)
@@ -56,8 +56,8 @@ export default function AccountPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { label: 'Total Orders', value: orders?.length ?? '—', icon: '📦' },
-          { label: 'Delivered',    value: orders?.filter(o => o.status === 'delivered').length ?? '—', icon: '✅' },
-          { label: 'In Transit',   value: orders?.filter(o => ['shipped', 'out_for_delivery'].includes(o.status)).length ?? '—', icon: '🚛' },
+          { label: 'Delivered',    value: orders?.filter(o => o.order_status === 'delivered').length ?? '—', icon: '✅' },
+          { label: 'In Transit',   value: orders?.filter(o => ['shipped', 'out_for_delivery'].includes(o.order_status)).length ?? '—', icon: '🚛' },
         ].map(stat => (
           <div key={stat.label} className="bg-white border border-stone-100 rounded-xl p-4">
             <div className="text-xl mb-1">{stat.icon}</div>
@@ -101,10 +101,10 @@ export default function AccountPage() {
                   <div className="text-xs text-stone-400 mt-0.5">{formatDate(order.created_at)}</div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[order.status] || ''}`}>
-                    {order.status.replace(/_/g, ' ')}
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[order.order_status] || ''}`}>
+                    {order.order_status.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-sm font-bold text-stone-900">{formatPrice(order.total)}</span>
+                  <span className="text-sm font-bold text-stone-900">{formatPrice(order.total_amount)}</span>
                 </div>
               </Link>
             ))}

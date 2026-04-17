@@ -105,9 +105,8 @@ export interface AppliedCoupon {
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
 export type OrderStatus =
-  | 'created'
+  | 'pending'
   | 'pending_payment'
-  | 'paid'
   | 'confirmed'
   | 'packed'
   | 'shipped'
@@ -130,8 +129,8 @@ export interface OrderAddress {
 }
 
 export interface OrderItem {
-  id: string
-  order_id: string
+  id: number
+  order_id: number
   product_id: string
   variant_id: string | null
   quantity: number
@@ -141,29 +140,37 @@ export interface OrderItem {
   size: string | null
 }
 
+// Address stored in customers table (not orders)
+export interface CustomerAddress {
+  flat:    string
+  area:    string
+  city:    string
+  state:   string
+  pincode: string
+  label?:  string
+}
+
 export interface Order {
-  id: string
+  id: number
   order_number: string
-  customer_id: string | null
-  customer_name: string
-  customer_phone: string
-  customer_email: string | null
-  status: OrderStatus
-  payment_method: 'razorpay' | 'cod'
+  customer_id: number | null
+  order_status: OrderStatus
+  payment_method: 'razorpay' | 'cod' | 'razorpay_online'
   payment_status: 'pending' | 'paid' | 'failed' | 'refunded'
-  razorpay_order_id: string | null
-  razorpay_payment_id: string | null
+  payment_id: string | null          // stores razorpay order/payment id
   subtotal: number
-  discount: number
-  shipping: number
-  gst_total: number
-  total: number
+  coupon_discount: number
+  shipping_charge: number
+  tax: number
+  total_amount: number
   coupon_code: string | null
-  address: OrderAddress
-  idempotency_key: string
-  notes: string | null
+  idempotency_key: string | null
+  tracking_number: string | null
+  courier: string | null
+  shipped_at: string | null
+  delivered_at: string | null
   created_at: string
-  updated_at: string
+  updated_at: string | null
   order_items?: OrderItem[]
 }
 

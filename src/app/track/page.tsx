@@ -26,7 +26,7 @@ const STATUS_INDEX: Partial<Record<OrderStatus, number>> = {
 
 interface TrackResult {
   order_number: string
-  status:       OrderStatus
+  order_status: string
   payment_method: string
   created_at:   string
   total:        number
@@ -52,7 +52,7 @@ export default function TrackPage() {
       // Public query — returns only safe fields, no personal data
       const { data, error: qErr } = await supabase
         .from('orders')
-        .select('order_number, status, payment_method, created_at, total')
+        .select('order_number, order_status, payment_method, created_at, total_amount')
         .eq('order_number', orderNum.trim().toUpperCase())
         .eq('customer_phone', phone.replace(/\D/g, '').slice(-10))
         .single()
@@ -69,7 +69,7 @@ export default function TrackPage() {
     }
   }
 
-  const currentStep = result ? (STATUS_INDEX[result.status] ?? -1) : -1
+  const currentStep = result ? (STATUS_INDEX[result.order_status as OrderStatus] ?? -1) : -1
 
   return (
     <div className="max-w-xl mx-auto px-4 py-12">
@@ -133,12 +133,12 @@ export default function TrackPage() {
           </div>
 
           {/* Cancelled / special states */}
-          {(result.status === 'cancelled' || result.status === 'returned' || result.status === 'refunded') ? (
+          {(result.order_status === 'cancelled' || result.order_status === 'returned' || result.order_status === 'refunded') ? (
             <div className="text-center py-4">
               <div className="text-3xl mb-2">
-                {result.status === 'cancelled' ? '❌' : result.status === 'returned' ? '↩️' : '💰'}
+                {result.order_status === 'cancelled' ? '❌' : result.order_status === 'returned' ? '↩️' : '💰'}
               </div>
-              <div className="font-semibold text-stone-700 capitalize">{result.status.replace('_', ' ')}</div>
+              <div className="font-semibold text-stone-700 capitalize">{result.order_status.replace('_', ' ')}</div>
             </div>
           ) : (
             /* Progress tracker */
@@ -187,7 +187,7 @@ export default function TrackPage() {
           </div>
           <div className="flex justify-between text-sm mt-1">
             <span className="text-stone-500">Total</span>
-            <span className="font-bold text-stone-900">₹{result.total?.toLocaleString('en-IN')}</span>
+            <span className="font-bold text-stone-900">₹{result.total_amount?.toLocaleString('en-IN')}</span>
           </div>
 
           <p className="text-[11px] text-stone-400 text-center mt-5">

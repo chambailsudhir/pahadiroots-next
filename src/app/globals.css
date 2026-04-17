@@ -1,47 +1,70 @@
-:root {
-  --accent: #1a5c2a;
-  --bg:     #0d1117;
-  --bg2:    #161b22;
-  --bd:     #1a5c2a;
-  --tx:     #ffffff;
-  --tx2:    #8b949e;
-  --tx3:    #6e7681;
-  --input-bg: #21262d;
-  --tx-on-light: #0d1117;
-  --chart-grid: rgba(255,255,255,0.06);
-  --chart-axis: #6e7681;
-  --tooltip-bg: #161b22;
-  --tooltip-bd: #30363d;
-}
-
-* { box-sizing: border-box; }
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg, #0d1117);
-  color: var(--tx, #ffffff);
+:root {
+  --font-geist-sans: 'Geist Sans', system-ui, sans-serif;
+  --font-geist-mono: 'Geist Mono', monospace;
 }
 
-/* Recharts — use chart-axis var so light themes remain readable */
-.recharts-cartesian-axis-tick-value { fill: var(--chart-axis, #6e7681) !important; }
-.recharts-legend-item-text { color: var(--chart-axis, #6e7681) !important; }
-.recharts-tooltip-wrapper { z-index: 50; }
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line { stroke: var(--chart-grid, rgba(255,255,255,0.06)) !important; }
-.recharts-default-tooltip {
-  background: var(--tooltip-bg, #161b22) !important;
-  border: 1px solid var(--tooltip-bd, #30363d) !important;
-  border-radius: 8px !important;
-  font-size: 12px !important;
-  color: var(--tx, #fff) !important;
+/* Smooth scrolling */
+html { scroll-behavior: smooth; }
+
+/* Prevent layout shift on scrollbar appear */
+html { scrollbar-gutter: stable; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Focus ring - accessible */
+*:focus-visible {
+  outline: 2px solid #1a6b20;
+  outline-offset: 2px;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg, #0d1117); }
-::-webkit-scrollbar-thumb { background: var(--bd, #1a5c2a); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent, #1a5c2a); }
+/* Ticker animation */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 35s linear infinite;
+}
+.ticker-track:hover { animation-play-state: paused; }
+
+/* Line clamp utilities */
+.line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Product image aspect ratio */
+.product-img { aspect-ratio: 1 / 1; object-fit: cover; }
+
+/* Cart drawer overlay */
+.drawer-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* Hide scrollbar but keep scroll */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

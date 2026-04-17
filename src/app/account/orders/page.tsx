@@ -24,7 +24,7 @@ export default function OrdersPage() {
     async () => {
       const { data } = await supabase
         .from('orders')
-        .select('id, order_number, status, payment_method, total, created_at')
+        .select('id, order_number, order_status, payment_method, total_amount, created_at')
         .eq('customer_phone', user!.phone)
         .order('created_at', { ascending: false })
       return (data as Order[]) || []
@@ -56,10 +56,10 @@ export default function OrdersPage() {
                 <div className="text-xs text-stone-400 mt-0.5">{formatDate(order.created_at)}</div>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[order.status] || ''}`}>
-                  {order.status.replace(/_/g, ' ')}
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[order.order_status] || ''}`}>
+                  {order.order_status.replace(/_/g, ' ')}
                 </span>
-                <span className="text-sm font-bold text-stone-900">{formatPrice(order.total)}</span>
+                <span className="text-sm font-bold text-stone-900">{formatPrice(order.total_amount)}</span>
                 <svg className="w-4 h-4 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
