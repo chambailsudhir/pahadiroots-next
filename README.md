@@ -1,117 +1,113 @@
-# Pahadi Roots — Next.js Site
+# 🌿 Pahadi Roots — Admin Panel v3.0 (Next.js)
 
-Production-grade e-commerce site for Pahadi Roots. Next.js 14 + Supabase + Razorpay + Tailwind CSS.
+## Setup Instructions
 
-## Setup
+### Step 1: Copy files into your project
 
-### 1. Clone and install
+Copy ALL files from this ZIP into your `pahadi-admin` folder.
+When it asks to replace files — click YES for all.
 
-```bash
-git clone https://github.com/chambailsudhir/pahadiroots-next
-cd pahadiroots-next
-npm install
+### Step 2: Install dependencies
+
+Open terminal in `pahadi-admin` folder and run:
+```
+npm install recharts date-fns
 ```
 
-### 2. Environment variables
+### Step 3: Set environment variables
 
-```bash
-cp .env.example .env.local
-# Fill in all values in .env.local
+Open `.env.local` file and fill in:
+- `SUPABASE_URL` — your Supabase project URL
+- `SUPABASE_SERVICE_KEY` — from Supabase → Settings → API → service_role key
+- `ADMIN_PASSWORD` — your current admin password (same as pahadiroots.com/admin)
+- `MANAGER_PASSWORD` — password for manager role
+- `PACKING_PASSWORD` — password for packing team
+
+### Step 4: Run locally
+
 ```
-
-### 3. Database migration
-
-Run `db_migration.sql` in Supabase SQL Editor:
-- Go to supabase.com → Your Project → SQL Editor
-- Paste contents of `db_migration.sql` and run
-- This creates: indexes, new tables (reviews, wishlist, webhook_logs, event_logs), RPC functions, RLS policies
-
-### 4. Run locally
-
-```bash
 npm run dev
-# Open http://localhost:3000
 ```
 
-### 5. Deploy to Vercel
+Open: http://localhost:3000/admin
 
-```bash
-vercel --prod
-# Or push to GitHub and connect repo in Vercel dashboard
-```
+### Step 5: Deploy to Vercel
 
-Add all `.env.local` values as Vercel Environment Variables.
+1. Push to a NEW GitHub repo (e.g. `pahadi-admin`)
+2. Go to vercel.com → New Project → Import that repo
+3. Add environment variables in Vercel dashboard
+4. Deploy!
+
+Your admin will be at: `https://pahadi-admin.vercel.app/admin`
 
 ---
 
-## Architecture
-
-```
-pahadiroots-next/          ← This repo (main site)
-pahadi-admin/              ← Admin panel (separate repo, unchanged)
-
-Both connect to same Supabase DB:
-  Main site → anon key (public reads only)
-  Admin     → service key (full access, password-protected)
-  API routes → service key (server-side only)
-```
-
-## Key files
-
-| File | Purpose |
-|------|---------|
-| `src/lib/getSiteSettings.ts` | Reads site_settings from Supabase — controls all section toggles |
-| `src/middleware.ts` | Store open/closed check + API rate limiting |
-| `src/lib/services/orderService.ts` | Order creation with state machine, idempotency, fraud checks |
-| `src/lib/services/inventoryService.ts` | Atomic stock deduction (race condition safe) |
-| `src/lib/services/pricingService.ts` | Server-side price calculation — never trust client totals |
-| `src/lib/schemas/index.ts` | Zod validation for all API inputs |
-
-## Admin → Site settings
-
-The admin panel (`pahadi-admin`) controls the live site via `site_settings` table.
-Changes take effect within 5 minutes (ISR revalidation).
-
-| Admin Setting | Effect on Site |
-|---------------|----------------|
-| `store_open = false` | Site goes into maintenance mode instantly |
-| `ann_hide = true` | Hides announcement bar |
-| `ticker_hide = true` | Hides scrolling ticker |
-| `show_trust_bar = false` | Hides trust badges strip |
-| `show_best_sellers = false` | Hides best sellers section |
-| `cod_enabled = false` | Disables COD at checkout |
-| `prepaid_discount_pct = 5` | Shows 5% prepaid discount |
-| `catalogue_visible = false` | Shows "coming soon" on all product pages |
-
 ## Pages
 
-| Route | Rendering | Description |
-|-------|-----------|-------------|
-| `/` | SSG (5min) | Homepage |
-| `/products` | SSG (5min) | All products with filters |
-| `/products/[slug]` | ISR (1hr) | Product detail |
-| `/collections/[slug]` | ISR (2hr) | Category page |
-| `/regions/[slug]` | ISR (6hr) | State/region page |
-| `/cart` | CSR | Cart |
-| `/checkout` | CSR | Checkout |
-| `/account` | CSR | Customer account |
-| `/track` | CSR | Public order tracker |
-| `/search` | CSR | Search results |
+| URL | Page | Role Access |
+|-----|------|-------------|
+| `/admin` | Home Dashboard | Owner, Manager |
+| `/admin/products` | Product Analytics | Owner, Manager |
+| `/admin/customers` | Customer Insights | Owner, Manager |
+| `/admin/operations` | Operations | Owner, Manager, Packing |
+| `/admin/marketing` | Marketing & Sales | Owner, Manager |
 
-## Security checklist before launch
+## Features (from doc)
 
-- [ ] All env vars set in Vercel
-- [ ] `db_migration.sql` run in Supabase
-- [ ] RLS policies verified in Supabase dashboard
-- [ ] Razorpay webhook URL added: `https://pahadiroots.com/api/v1/webhook/razorpay`
-- [ ] Razorpay webhook secret matches `RAZORPAY_KEY_SECRET`
-- [ ] Test order flow end-to-end in Razorpay test mode
-- [ ] Test COD flow end-to-end
-- [ ] Test store_open toggle (maintenance mode)
-- [ ] Run Lighthouse — target 90+ on all pages
+### Home Dashboard
+- ✅ Revenue, Orders, Pending, Customers, AOV, Repeat % KPIs
+- ✅ Revenue Trend (Bar + Orders line)
+- ✅ Revenue vs Profit (Dual chart)
+- ✅ Customer Growth Trend
+- ✅ Sales Forecast (Moving Average — next 14 days)
+- ✅ Order Status Donut
+- ✅ Top 5 Products by Revenue
+- ✅ Category Sales Split
+- ✅ GST Collected (CGST + SGST)
+- ✅ Payment Method Split
+- ✅ Region-wise Orders
+- ✅ Festival / Seasonal Trends
+- ✅ Coupon & Cart Analytics
+- ✅ Smart Alerts (bell icon)
+- ✅ Date Range Filter (Today/7d/30d/90d)
 
-## Phase completion
+### Product Analytics
+- ✅ Revenue, Units, Profit, Dead Stock KPIs
+- ✅ Top 10 by Revenue + Units
+- ✅ Category Distribution
+- ✅ Profit Margin per product
+- ✅ Full table (sortable + filterable)
+- ✅ Dead Stock Analysis
+- ✅ Stock Turnover Rate
 
-- [x] Phase 1 — Foundation (homepage, products, PDP, cart, checkout, APIs)
-- [x] Phase 2 — Discovery (collections, regions, search, account, track)
-- [ ] Phase 3 — Polish (blog, about, contact, policies, Sentry, load test)
+### Customer Insights
+- ✅ Total, New, Returning, Repeat %, CLV KPIs
+- ✅ Customer Growth Trend
+- ✅ New vs Returning (donut)
+- ✅ Customer Segmentation (High/Medium/Low)
+- ✅ Purchase Frequency chart
+- ✅ Top Locations
+- ✅ Top Customers table with CLV tier
+
+### Operations
+- ✅ Pending, Packed, Shipped, Delivered, Cancel Rate KPIs
+- ✅ Order Status Funnel
+- ✅ Daily Order Heatmap
+- ✅ Low Stock Alerts
+- ✅ Full Orders table with status update dropdown
+- ✅ Search + filter by status
+
+### Marketing
+- ✅ Revenue, Coupon Uses, Discount, Abandoned, Lost Revenue KPIs
+- ✅ Revenue + Coupon Activity chart
+- ✅ Sales by Channel
+- ✅ Conversion Funnel
+- ✅ Abandoned Cart Analysis
+- ✅ Coupon Performance table
+- ✅ All Coupons table
+
+### Role-Based Access
+- ✅ Owner — full access
+- ✅ Manager — no settings
+- ✅ Packing — operations only
+- ✅ Auto role detection on login
