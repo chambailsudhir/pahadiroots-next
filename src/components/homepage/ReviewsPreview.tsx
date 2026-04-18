@@ -14,7 +14,7 @@ function Stars() {
 const REVIEWS = [
   {
     initial: 'P', name: 'Priya Sharma',   location: 'Mumbai · Verified Buyer',
-    text: 'The Kumaoni wild honey is unlike anything I've had. Raw, dark, floral — I can literally taste the altitude. My whole family is hooked.',
+    text: 'The Kumaoni wild honey is unlike anything I\'ve had. Raw, dark, floral — I can literally taste the altitude. My whole family is hooked.',
   },
   {
     initial: 'R', name: 'Rahul Mehta',    location: 'Delhi · Verified Buyer',
