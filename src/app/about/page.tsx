@@ -12,20 +12,26 @@ export const revalidate = 3600
 
 export default async function AboutPage() {
   // Fetch team members if exists
-  const { data: team } = await supabase
-    .from('team_members')
-    .select('id, name, role, bio, image_url, sort_order')
-    .eq('is_active', true)
-    .order('sort_order')
-    .catch(() => ({ data: null }))
+  let team = null
+  try {
+    const { data } = await supabase
+      .from('team_members')
+      .select('id, name, role, bio, image_url, sort_order')
+      .eq('is_active', true)
+      .order('sort_order')
+    team = data
+  } catch { team = null }
 
   // Fetch founder images
-  const { data: founderImages } = await supabase
-    .from('founder_images')
-    .select('url, caption')
-    .order('sort_order')
-    .limit(4)
-    .catch(() => ({ data: null }))
+  let founderImages = null
+  try {
+    const { data } = await supabase
+      .from('founder_images')
+      .select('url, caption')
+      .order('sort_order')
+      .limit(4)
+    founderImages = data
+  } catch { founderImages = null }
 
   return (
     <div>

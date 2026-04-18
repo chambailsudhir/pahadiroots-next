@@ -12,30 +12,37 @@ export const revalidate = 86400
 interface Props { params: { slug: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { data: post } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', params.slug).single().catch(() => ({ data: null }))
+  let post = null
+  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', params.slug).single(); post = data } catch {}
   if (!post) return { title: 'Article Not Found' }
   return { title: post.title, description: post.excerpt || '' }
 }
 
 export default async function BlogArticlePage({ params }: Props) {
-  const { data: post } = await supabase
-    .from('blog_posts')
-    .select('id, title, slug, content, cover_image, published_at, excerpt, related_product_id')
-    .eq('slug', params.slug)
-    .eq('is_published', true)
-    .single()
-    .catch(() => ({ data: null }))
+  let post = null
+  try {
+    const { data } = await supabase
+      .from('blog_posts')
+      .select('id, title, slug, content, cover_image, published_at, excerpt, related_product_id')
+      .eq('slug', params.slug)
+      .eq('is_published', true)
+      .single()
+    post = data
+  } catch { post = null }
 
   if (!post) notFound()
 
   // Related product
   let relatedProduct: Product | null = null
   if (post.related_product_id) {
-    const { data } = await supabase
-      .from('products')
-      .select(`id, name, slug, emoji, price, mrp, available_stock, gst_rate, image_url, unit_label, badges_bestseller, badges_new, category_id, is_deleted, status, categories:categories(id,name,slug), product_variants(id,price,mrp,size,available_stock,is_active)`)
-      .eq('id', post.related_product_id).single().catch(() => ({ data: null }))
-    relatedProduct = data as Product | null
+    try {
+      const { data } = await supabase
+        .from('products')
+        .select(`id, name, slug, emoji, price, mrp, available_stock, gst_rate, image_url, unit_label, badges_bestseller, badges_new, category_id, is_deleted, status, categories:categories(id,name,slug), product_variants(id,price,mrp,size,available_stock,is_active)`)
+        .eq('id', post.related_product_id)
+        .single()
+      relatedProduct = data as Product | null
+    } catch { relatedProduct = null }
   }
 
   return (
@@ -94,6 +101,7 @@ export default async function BlogArticlePage({ params }: Props) {
 }
 
 export async function generateStaticParams() {
-  const { data } = await supabase.from('blog_posts').select('slug').eq('is_published', true).catch(() => ({ data: null }))
+  let data = null
+  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch {}
   return (data || []).map(p => ({ slug: p.slug }))
 }

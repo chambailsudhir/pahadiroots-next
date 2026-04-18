@@ -200,6 +200,7 @@ async function fetchCategory(slug: string): Promise<Category | null> {
 }
 
 export async function generateStaticParams() {
-  const { data } = await supabase.from('categories').select('slug').eq('is_active', true)
-  return (data || []).map(c => ({ slug: c.slug }))
+  let data = null
+  try { const r = await supabase.from('categories').select('slug').eq('is_active', true); data = r.data } catch {}
+  return (data || []).map((c: any) => ({ slug: c.slug }))
 }

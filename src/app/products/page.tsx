@@ -62,8 +62,7 @@ export default async function ProductsPage({
 
   if (instock)  query = query.gt('available_stock', 0)
   if (catSlug) {
-    const { data: cat } = await supabase.from('categories').select('id').eq('slug', catSlug).single()
-    if (cat) query = query.eq('category_id', cat.id)
+    try { const { data: cat } = await supabase.from('categories').select('id').eq('slug', catSlug).single(); if (cat) query = query.eq('category_id', (cat as any).id) } catch {}
   }
 
   // Sort
@@ -79,11 +78,15 @@ export default async function ProductsPage({
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Fetch categories for filter
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name, slug')
-    .eq('is_active', true)
-    .order('name')
+  let categories = null
+  try {
+    const { data } = await supabase
+      .from('categories')
+      .select('id, name, slug')
+      .eq('is_active', true)
+      .order('name')
+    categories = data
+  } catch { categories = null }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

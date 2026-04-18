@@ -17,13 +17,16 @@ export default async function BlogPage() {
   const settings = await getSiteSettings()
   if (settings.show_blog === 'false') notFound()
 
-  const { data: posts } = await supabase
-    .from('blog_posts')
-    .select('id, title, slug, excerpt, cover_image, published_at')
-    .eq('is_published', true)
-    .order('published_at', { ascending: false })
-    .limit(20)
-    .catch(() => ({ data: null }))
+  let posts = null
+  try {
+    const { data } = await supabase
+      .from('blog_posts')
+      .select('id, title, slug, excerpt, cover_image, published_at')
+      .eq('is_published', true)
+      .order('published_at', { ascending: false })
+      .limit(20)
+    posts = data
+  } catch { posts = null }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

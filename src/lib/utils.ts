@@ -88,3 +88,16 @@ export function whatsappURL(number: string, message: string): string {
   const digits = number.replace(/\D/g, '')
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
 }
+
+// ─── Settings helpers (used by pricingService) ────────────────────────────────
+
+export function asNumber(value: string | undefined, defaultValue: number): number {
+  if (!value) return defaultValue
+  const n = parseFloat(value)
+  return isNaN(n) ? defaultValue : n
+}
+
+export function isEnabled(value: string | undefined, defaultValue = true): boolean {
+  if (value === undefined) return defaultValue
+  return value !== 'false'
+}

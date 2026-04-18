@@ -23,20 +23,24 @@ export default async function RegionPage({ params }: Props) {
   const state = await fetchState(params.slug)
   if (!state) notFound()
 
-  const { data: products } = await supabase
-    .from('products')
-    .select(`
-      id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-      image_url, unit_label, badges_bestseller, badges_new,
-      category_id, is_deleted, status,
-      categories:categories(id, name, slug),
-      product_variants(id, price, mrp, size, available_stock, is_active)
-    `)
-    .eq('state_id', state.id)
-    .eq('is_deleted', false)
-    .eq('status', 'active')
-    .order('badges_bestseller', { ascending: false })
-    .limit(24)
+  let products = null
+  try {
+    const { data } = await supabase
+      .from('products')
+      .select(`
+        id, name, slug, emoji, price, mrp, available_stock, gst_rate,
+        image_url, unit_label, badges_bestseller, badges_new,
+        category_id, is_deleted, status,
+        categories:categories(id, name, slug),
+        product_variants(id, price, mrp, size, available_stock, is_active)
+      `)
+      .eq('state_id', state.id)
+      .eq('is_deleted', false)
+      .eq('status', 'active')
+      .order('badges_bestseller', { ascending: false })
+      .limit(24)
+    products = data
+  } catch { products = null }
 
   const stateProducts = (products as Product[]) || []
 
@@ -113,6 +117,7 @@ async function fetchState(slug: string) {
 }
 
 export async function generateStaticParams() {
-  const { data } = await supabase.from('states').select('slug')
-  return (data || []).map(s => ({ slug: s.slug }))
+  let data = null
+  try { const r = await supabase.from('states').select('slug'); data = r.data } catch {}
+  return (data || []).map((s: any) => ({ slug: s.slug }))
 }

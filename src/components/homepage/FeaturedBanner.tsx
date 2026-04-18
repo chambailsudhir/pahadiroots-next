@@ -4,12 +4,15 @@ import { supabase } from '@/lib/supabase'
 interface Props { slug: string }
 
 export default async function FeaturedBanner({ slug }: Props) {
-  const { data: cat } = await supabase
-    .from('categories')
-    .select('id, name, slug, description, image_url')
-    .eq('slug', slug)
-    .single()
-    .catch(() => ({ data: null }))
+  let cat = null
+  try {
+    const { data } = await supabase
+      .from('categories')
+      .select('id, name, slug, description, image_url')
+      .eq('slug', slug)
+      .single()
+    cat = data
+  } catch { cat = null }
 
   if (!cat) return null
 

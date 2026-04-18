@@ -15,11 +15,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   // Products
-  const { data: products } = await supabase
-    .from('products')
-    .select('slug, updated_at')
-    .eq('is_deleted', false)
-    .eq('status', 'active')
+  let products = null
+  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false).eq('status', 'active'); products = data } catch {}
 
   const productPages: MetadataRoute.Sitemap = (products || []).map(p => ({
     url:             `${BASE}/products/${p.slug}`,
@@ -29,10 +26,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   // Collections
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('slug')
-    .eq('is_active', true)
+  let categories = null
+  try { const { data } = await supabase.from('categories').select('slug').eq('is_active', true); categories = data } catch {}
 
   const collectionPages: MetadataRoute.Sitemap = (categories || []).map(c => ({
     url:             `${BASE}/collections/${c.slug}`,
@@ -42,9 +37,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   // Regions
-  const { data: states } = await supabase
-    .from('states')
-    .select('slug')
+  let states = null
+  try { const { data } = await supabase.from('states').select('slug'); states = data } catch {}
 
   const regionPages: MetadataRoute.Sitemap = (states || []).map(s => ({
     url:             `${BASE}/regions/${s.slug}`,

@@ -259,10 +259,7 @@ async function fetchProduct(slug: string): Promise<Product | null> {
 
 // Generate static params for all active products (ISR)
 export async function generateStaticParams() {
-  const { data } = await supabase
-    .from('products')
-    .select('slug')
-    .eq('is_deleted', false)
-    .eq('status', 'active')
-  return (data || []).map(p => ({ slug: p.slug }))
+  let data = null
+  try { const r = await supabase.from('products').select('slug').eq('is_deleted', false).eq('status', 'active'); data = r.data } catch {}
+  return (data || []).map((p: any) => ({ slug: p.slug }))
 }
