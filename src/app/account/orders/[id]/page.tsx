@@ -17,7 +17,7 @@ const STATUS_STEPS: { status: OrderStatus; label: string; desc: string; icon: st
 ]
 
 const STATUS_INDEX: Partial<Record<OrderStatus, number>> = {
-  paid: 0, confirmed: 0, packed: 1, shipped: 2, out_for_delivery: 3, delivered: 4,
+  confirmed: 0, packed: 1, shipped: 2, out_for_delivery: 3, delivered: 4,
 }
 
 export default function OrderDetailPage() {
@@ -25,7 +25,7 @@ export default function OrderDetailPage() {
   const user     = useUserStore(s => s.user)
   const router   = useRouter()
 
-  const { data: order, isLoading } = useSWR<Order>(
+  const { data: order, isLoading } = useSWR<Order | null>(
     user && id ? `order-${id}` : null,
     async () => {
       const { data, error } = await supabase
@@ -40,8 +40,8 @@ export default function OrderDetailPage() {
         .eq('id', id)
         .eq('customer_phone', user!.phone)
         .single()
-      if (error) { router.replace('/account/orders'); return undefined }
-      return data as Order
+      if (error) { router.replace('/account/orders'); return null }
+      return data as Order | null
     }
   )
 

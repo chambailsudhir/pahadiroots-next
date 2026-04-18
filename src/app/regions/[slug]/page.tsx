@@ -42,7 +42,7 @@ export default async function RegionPage({ params }: Props) {
     products = data
   } catch { products = null }
 
-  const stateProducts = (products as Product[]) || []
+  const stateProducts = (products as unknown as Product[]) || []
 
   return (
     <div>

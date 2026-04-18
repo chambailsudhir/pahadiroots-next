@@ -31,8 +31,8 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     if (!inStock) return
 
     addItem({
-      productId: product.id,
-      variantId: selectedVariant?.id ?? product.id,
+      productId: String(product.id),
+      variantId: String(selectedVariant?.id ?? product.id),
       name:      product.name,
       slug:      product.slug,
       image:     product.image_url,

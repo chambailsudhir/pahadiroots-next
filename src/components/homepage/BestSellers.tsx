@@ -19,7 +19,7 @@ async function fetchBestSellers(): Promise<Product[]> {
       .eq('badges_bestseller', true)
       .gt('available_stock', 0)
       .limit(8)
-    return (data as Product[]) || []
+    return (data as unknown as Product[]) || []
   } catch { return [] }
 }
 

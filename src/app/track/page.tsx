@@ -14,9 +14,7 @@ const STATUS_STEPS: { status: OrderStatus; label: string; icon: string }[] = [
 ]
 
 const STATUS_INDEX: Partial<Record<OrderStatus, number>> = {
-  created:          -1,
   pending_payment:  -1,
-  paid:              0,
   confirmed:         0,
   packed:            1,
   shipped:           2,
@@ -29,7 +27,7 @@ interface TrackResult {
   order_status: string
   payment_method: string
   created_at:   string
-  total:        number
+  total_amount: number
 }
 
 export default function TrackPage() {

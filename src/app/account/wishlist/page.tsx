@@ -27,7 +27,7 @@ export default function WishlistPage() {
         .in('id', wishlist)
         .eq('is_deleted', false)
         .eq('status', 'active')
-      return (data as Product[]) || []
+      return (data as unknown as Product[]) || []
     }
   )
 

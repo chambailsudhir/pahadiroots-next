@@ -29,7 +29,22 @@ export async function POST(req: Request) {
       const settings = await getSiteSettings()
 
       // Create order in our DB first (idempotency, stock check, price recalc)
-      const { order } = await createOrder({ ...parsed.data, payment_method: 'razorpay' }, settings)
+      const pd = parsed.data
+      const { order } = await createOrder({
+        customerName:   pd.address.name,
+        customerPhone:  pd.address.phone,
+        customerEmail: pd.customer_email,
+        flat:           pd.address.flat,
+        area:           pd.address.area,
+        city:           pd.address.city,
+        state:          pd.address.state,
+        pincode:        pd.address.pincode,
+        label:          pd.address.label,
+        items:          pd.items,
+        paymentMethod:  'razorpay',
+        couponCode:     pd.coupon_code,
+        idempotencyKey: pd.idempotency_key,
+      }, settings)
 
       // Create Razorpay order
       const rzpRes = await withTimeout(

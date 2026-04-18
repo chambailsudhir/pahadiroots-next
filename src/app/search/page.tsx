@@ -28,7 +28,7 @@ function SearchContent() {
         .eq('status', 'active')
         .or(`name.ilike.%${q}%,tags.ilike.%${q}%`)
         .limit(48)
-      return (data as Product[]) || []
+      return (data as unknown as Product[]) || []
     }
   )
 

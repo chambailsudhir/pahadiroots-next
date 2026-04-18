@@ -74,7 +74,7 @@ export default async function ProductsPage({
   }
 
   const { data, count } = await query
-  const products  = (data as Product[]) || []
+  const products  = (data as unknown as Product[]) || []
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Fetch categories for filter

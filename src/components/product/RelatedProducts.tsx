@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import ProductCard from './ProductCard'
 import type { Product } from '@/types'
 
-interface Props { categoryId: string; excludeId: string }
+interface Props { categoryId: string | number; excludeId: string | number }
 
 export default async function RelatedProducts({ categoryId, excludeId }: Props) {
   let products: Product[] = []
@@ -21,7 +21,7 @@ export default async function RelatedProducts({ categoryId, excludeId }: Props) 
       .eq('status', 'active')
       .neq('id', excludeId)
       .limit(4)
-    products = (data as Product[]) || []
+    products = (data as unknown as Product[]) || []
   } catch { return null }
 
   if (!products.length) return null

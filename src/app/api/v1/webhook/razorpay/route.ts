@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     payload:     event,
     status:      'received',
     created_at:  new Date().toISOString(),
-  }).catch(e => console.error('[webhook] Log failed:', e))
+  }).then(res => { if (res.error) console.error('[webhook] Log failed:', res.error) })
 
   // Return 200 IMMEDIATELY — process async (Audit #6)
   // Using a background-style approach (Vercel doesn't support true async after response,
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && order.order_status === 'pending_payment') {
+      if (order && (order as any).status === 'pending_payment') {
         await db.from('orders').update({
           order_status:        'paid',
           payment_status:      'paid',
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && order.order_status === 'pending_payment') {
+      if (order && (order as any).status === 'pending_payment') {
         await db.from('orders').update({
           payment_status:      'failed',
           updated_at:     new Date().toISOString(),

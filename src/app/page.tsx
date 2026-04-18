@@ -106,7 +106,7 @@ async function fetchStates() {
   try {
     const { data } = await supabase
       .from('states')
-      .select('id, name, slug, description, image_url')
+      .select('id, name, slug, description, image_url, region')
       .order('name')
       .limit(12)
     return data || []

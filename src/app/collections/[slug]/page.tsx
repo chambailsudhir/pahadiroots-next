@@ -76,7 +76,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   }
 
   const { data, count } = await query
-  const products   = (data as Product[]) || []
+  const products   = (data as unknown as Product[]) || []
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Build breadcrumb JSON-LD

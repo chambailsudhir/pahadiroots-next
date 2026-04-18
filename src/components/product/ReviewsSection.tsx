@@ -17,7 +17,7 @@ function Stars({ n }: { n: number }) {
   )
 }
 
-export default function ReviewsSection({ productId }: { productId: string }) {
+export default function ReviewsSection({ productId }: { productId: string | number }) {
   const { data: reviews, isLoading } = useSWR<Review[]>(
     `reviews-${productId}`,
     async () => {
@@ -28,7 +28,7 @@ export default function ReviewsSection({ productId }: { productId: string }) {
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(10)
-      return data || []
+      return (data as unknown as Review[]) || []
     }
   )
 

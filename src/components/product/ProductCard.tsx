@@ -22,7 +22,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const addToWishlist  = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  const inWishlist = isInWishlist(product.id)
+  const inWishlist = isInWishlist(String(product.id))
 
   // Get cheapest active variant (or base product price)
   const variants    = product.product_variants?.filter(v => v.is_active) || []
@@ -40,8 +40,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     if (!inStock) return
 
     addItem({
-      productId: product.id,
-      variantId: baseVariant?.id ?? product.id,
+      productId: String(product.id),
+      variantId: String(baseVariant?.id ?? product.id),
       name:      product.name,
       slug:      product.slug,
       image:     product.image_url,
@@ -57,7 +57,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
 
   function handleWishlist(e: React.MouseEvent) {
     e.preventDefault()
-    inWishlist ? removeFromWishlist(product.id) : addToWishlist(product.id)
+    inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
   }
 
   return (

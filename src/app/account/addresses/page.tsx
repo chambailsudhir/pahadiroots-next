@@ -53,7 +53,7 @@ export default function AddressesPage() {
   }
 
   function startEdit(idx: number) {
-    setForm({ ...(savedAddresses[idx] as any) } || EMPTY)
+    setForm({ ...(savedAddresses[idx] ? (savedAddresses[idx] as any) : EMPTY) })
     setEditIdx(idx)
     setEditing(true)
   }

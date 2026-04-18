@@ -58,7 +58,7 @@ export default function SearchOverlay() {
         .eq('status', 'active')
         .ilike('name', `%${debouncedQ}%`)
         .limit(6)
-      return data || []
+      return (data as unknown as Product[]) || []
     }
   )
 
