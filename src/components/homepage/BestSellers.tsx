@@ -17,9 +17,8 @@ async function fetchBestSellers(): Promise<Product[]> {
       .eq('is_deleted', false)
       .eq('status', 'active')
       .eq('badges_bestseller', true)
-      .gt('available_stock', 0)
       .limit(8)
-    return (data as unknown as Product[]) || []
+    return (data as Product[]) || []
   } catch { return [] }
 }
 
@@ -28,42 +27,48 @@ export default async function BestSellers() {
   if (!products.length) return null
 
   return (
-    <section className="py-12 sm:py-16">
+    <section className="py-12 sm:py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-7">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-earth-600 mb-1">
-              Customer Favourites
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-stone-900">
-              Best Sellers
-            </h2>
+
+        {/* Section header — matches old site exactly */}
+        <div className="text-center mb-9">
+          <div className="inline-block text-xs font-bold uppercase tracking-widest text-forest-600 bg-forest-50 border border-forest-100 px-3 py-1 rounded-full mb-3">
+            Bestsellers
           </div>
-          <Link
-            href="/collections/best-sellers"
-            className="text-sm font-semibold text-forest-700 hover:text-forest-900 flex items-center gap-1 transition-colors"
-          >
-            View All
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
+          <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-2">
+            Our Finest Offerings
+          </h2>
+          <p className="text-stone-500 text-sm max-w-md mx-auto">
+            Curated from Himalayan states — the products our customers love most.
+          </p>
         </div>
 
-        {/* Horizontal scroll on mobile, grid on desktop */}
-        <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Desktop grid */}
+        <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-8">
           {products.map((p, i) => (
             <ProductCard key={p.id} product={p} priority={i < 4} />
           ))}
         </div>
 
-        {/* Mobile scroll */}
-        <div className="sm:hidden flex gap-3 overflow-x-auto no-scrollbar pb-2">
+        {/* Mobile horizontal scroll */}
+        <div className="sm:hidden flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-6">
           {products.map((p, i) => (
             <div key={p.id} className="w-44 shrink-0">
               <ProductCard product={p} priority={i < 2} />
             </div>
           ))}
+        </div>
+
+        <div className="text-center">
+          <Link
+            href="/products"
+            className="inline-flex items-center gap-2 border-2 border-forest-700 text-forest-700 hover:bg-forest-700 hover:text-white font-bold px-8 py-3 rounded-xl text-sm transition-all"
+          >
+            View All Products
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>

@@ -3,21 +3,21 @@ import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { supabase } from '@/lib/supabase'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
-import BestSellers from '@/components/homepage/BestSellers'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
-import NewArrivals from '@/components/homepage/NewArrivals'
+import BestSellers from '@/components/homepage/BestSellers'
 import StateStories from '@/components/homepage/StateStories'
+import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
 import NewsletterBar from '@/components/homepage/NewsletterBar'
+import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 
 export const metadata: Metadata = {
-  title: 'Pahadi Roots — Natural Himalayan Products',
-  description:
-    'Pure, natural products sourced directly from Himalayan mountain farming communities. Honey, spices, grains, and more — delivered across India.',
+  title: '5 Pahadi Roots — Pure Himalayan Natural Products',
+  description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
 }
 
-export const revalidate = 300  // 5 minutes
+export const revalidate = 300
 
 export default async function HomePage() {
   const settings = await getSiteSettings()
@@ -27,7 +27,6 @@ export default async function HomePage() {
     fetchStates(),
   ])
 
-  // Feature flag checks
   const showTrustBar     = isEnabled(settings.show_trust_bar)
   const showBestSellers  = isEnabled(settings.show_best_sellers)
   const showNewArrivals  = isEnabled(settings.show_new_arrivals)
@@ -38,41 +37,41 @@ export default async function HomePage() {
 
   return (
     <>
-      {/* Hero banner */}
+      {/* 1. Hero slider */}
       <HeroBanner images={heroImages} settings={settings} />
 
-      {/* Trust badges */}
+      {/* 2. Trust bar */}
       {showTrustBar && <TrustBar settings={settings} />}
 
-      {/* Best Sellers */}
-      {showBestSellers && <BestSellers />}
-
-      {/* Category tiles */}
+      {/* 3. Browse Collections — "What the Mountains Offer" */}
       <CategoryTiles categories={categories} />
 
-      {/* New Arrivals */}
+      {/* 4. Bestsellers — "Our Finest Offerings" */}
+      {showBestSellers && <BestSellers />}
+
+      {/* 5. New Arrivals */}
       {showNewArrivals && <NewArrivals />}
 
-      {/* Featured collection banner */}
+      {/* 6. Featured collection banner (if set in admin) */}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
 
-      {/* Shop by Region */}
+      {/* 7. Explore by Region — "Discover the Himalayas" */}
       {showStateStories && <StateStories states={states} />}
 
-      {/* Customer Reviews */}
+      {/* 8. Why 5 Pahadi Roots — "Our Promise" */}
+      <WhySection />
+
+      {/* 9. Reviews — "What Our Community Says" */}
       {showReviews && <ReviewsPreview />}
 
-      {/* Newsletter */}
+      {/* 10. Newsletter */}
       {showNewsletter && <NewsletterBar />}
     </>
   )
 }
 
-// ─── Data fetchers ────────────────────────────────────────────────────────────
-
 async function fetchHeroImages(settings: any) {
-  // Use hero_slide_* keys from site_settings (already loaded)
-  const slides = []
+  const slides: any[] = []
   for (let i = 1; i <= 5; i++) {
     const img = settings[`hero_slide_${i}_img`]
     if (img) {
@@ -80,11 +79,10 @@ async function fetchHeroImages(settings: any) {
         url:      img,
         alt_text: settings[`hero_slide_${i}_title`] || 'Pahadi Roots',
         title:    settings[`hero_slide_${i}_title`] || '',
-        subtitle: settings[`hero_slide_${i}_sub`] || '',
+        subtitle: settings[`hero_slide_${i}_sub`]   || '',
       })
     }
   }
-  // Fallback to single hero_bg_image if no slides
   if (slides.length === 0 && settings.hero_bg_image) {
     slides.push({ url: settings.hero_bg_image, alt_text: 'Pahadi Roots', title: '', subtitle: '' })
   }

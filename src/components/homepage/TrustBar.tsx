@@ -1,31 +1,37 @@
-// TrustBar.tsx
 import type { SiteSettings } from '@/types'
 
 interface Props { settings: SiteSettings }
 
-const TRUST_ITEMS = [
-  { icon: '🌿', label: '100% Natural', sub: 'No preservatives or additives' },
-  { icon: '🚚', label: 'Free Shipping',  sub: 'On orders above ₹{min}' },
-  { icon: '🏔️', label: 'Direct Sourced', sub: 'From mountain farmers' },
-  { icon: '🔒', label: 'Secure Payments', sub: 'Razorpay · UPI · COD' },
-  { icon: '↩️', label: 'Easy Returns',   sub: '7-day return policy' },
-]
-
 export default function TrustBar({ settings }: Props) {
-  const min = settings.free_shipping_min || '799'
+  // Read trust items from site_settings (trust_1_*, trust_2_*, etc.)
+  // Your DB has: trust_1_icon, trust_1_title, trust_1_sub, trust_1_hide
+  const items = [1, 2, 3, 4].map(i => ({
+    icon:   settings[`trust_${i}_icon`]  || '',
+    title:  settings[`trust_${i}_title`] || '',
+    sub:    settings[`trust_${i}_sub`]   || '',
+    hidden: settings[`trust_${i}_hide`] === 'true',
+  })).filter(t => !t.hidden && t.title)
+
+  // Fallback if no trust items configured
+  const fallback = [
+    { icon: '🌿', title: '100% Natural',       sub: 'No chemicals, no preservatives' },
+    { icon: '🏔️', title: 'Himalayan Sourced',  sub: 'Directly from mountain farms' },
+    { icon: '🤝', title: 'Fair Trade',          sub: 'Supporting local farmers always' },
+    { icon: '🚚', title: 'Free Shipping',       sub: `On orders above ₹${settings.free_shipping_min || '799'}` },
+  ]
+
+  const displayItems = items.length > 0 ? items : fallback
 
   return (
-    <section className="border-y border-stone-100 bg-stone-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {TRUST_ITEMS.map(item => (
-            <div key={item.label} className="flex items-center gap-3">
-              <span className="text-xl">{item.icon}</span>
+    <section className="border-y border-stone-100 bg-gradient-to-r from-forest-50 to-stone-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {displayItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <span className="text-2xl">{item.icon}</span>
               <div>
-                <div className="text-xs font-bold text-stone-800">{item.label}</div>
-                <div className="text-[10px] text-stone-500">
-                  {item.sub.replace('{min}', min)}
-                </div>
+                <div className="text-xs font-bold text-stone-800">{item.title}</div>
+                <div className="text-[11px] text-stone-500 leading-snug">{item.sub}</div>
               </div>
             </div>
           ))}
