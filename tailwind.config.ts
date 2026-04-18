@@ -50,7 +50,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'var(--font-geist-sans)', 'system-ui', 'sans-serif'],
         serif: ['Georgia', 'serif'],
       },
       animation: {

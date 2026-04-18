@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import DOMPurify from 'isomorphic-dompurify'
+import { Resend } from 'resend'
 
 // Input schema matching real checkout form
 const orderSchema = z.object({
@@ -61,7 +62,6 @@ export async function POST(req: Request) {
     // Send confirmation email for COD orders
     if (d.payment_method === 'cod' && settings.order_email_enabled !== 'false' && d.email && !alreadyExists) {
       try {
-        const { Resend } = await import('resend')
         const resend = new Resend(process.env.RESEND_API_KEY)
         await withTimeout(resend.emails.send({
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
@@ -75,7 +75,6 @@ export async function POST(req: Request) {
     // Notify admin
     if (settings.admin_notify_email && !alreadyExists) {
       try {
-        const { Resend } = await import('resend')
         const resend = new Resend(process.env.RESEND_API_KEY)
         await withTimeout(resend.emails.send({
           from:    'Pahadi Roots <noreply@pahadiroots.com>',

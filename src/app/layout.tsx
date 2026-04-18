@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import Header from '@/components/layout/Header'
@@ -9,8 +9,7 @@ import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
 
-const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
-const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
+const inter = Inter({ variable: '--font-geist-sans', subsets: ['latin'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
@@ -89,7 +88,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white`}>
+      <body className={`${inter.variable} antialiased bg-white`}>
         <Providers>
           <Header settings={settings} />
           <main className="min-h-screen">

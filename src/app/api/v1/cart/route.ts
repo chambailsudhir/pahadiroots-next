@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { subscribeSchema, reviewSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import DOMPurify from 'isomorphic-dompurify'
+import { Resend } from 'resend'
 
 export async function POST(req: Request) {
   try {
@@ -64,7 +65,6 @@ export async function POST(req: Request) {
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
       try {
-        const { Resend } = await import('resend')
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',

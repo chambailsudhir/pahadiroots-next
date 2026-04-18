@@ -3,8 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --font-geist-sans: 'Geist Sans', system-ui, sans-serif;
-  --font-geist-mono: 'Geist Mono', monospace;
+  --font-geist-sans: 'Inter', system-ui, sans-serif;
 }
 
 /* Smooth scrolling */
