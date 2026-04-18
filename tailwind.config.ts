@@ -50,8 +50,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        serif: ['Georgia', 'serif'],
+        sans:    ['var(--font-lato)', 'Lato', 'Inter', 'system-ui', 'sans-serif'],
+        serif:   ['var(--font-playfair)', 'Playfair Display', 'Georgia', 'serif'],
+        playfair:['var(--font-playfair)', 'Playfair Display', 'Georgia', 'serif'],
+        lato:    ['var(--font-lato)', 'Lato', 'system-ui', 'sans-serif'],
       },
       animation: {
         'ticker': 'ticker 30s linear infinite',

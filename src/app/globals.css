@@ -4,7 +4,21 @@
 
 :root {
   --font-geist-sans: 'Inter', system-ui, sans-serif;
+  /* Old site brand palette — used in inline styles */
+  --g:   #1a3a1e;
+  --g2:  #2d5233;
+  --g3:  #3d6b42;
+  --gd:  #c8920a;
+  --gd2: #e8b84b;
+  --gd3: #f5d98a;
+  --tx:  #1a1a1a;
+  --tx2: #4a4a4a;
+  --tx3: #7a7a7a;
+  --bd:  rgba(26,58,30,.12);
 }
+
+/* Playfair Display shorthand */
+.font-playfair { font-family: var(--font-playfair), 'Playfair Display', Georgia, serif; }
 
 /* Smooth scrolling */
 html { scroll-behavior: smooth; }

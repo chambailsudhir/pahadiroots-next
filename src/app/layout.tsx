@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import Header from '@/components/layout/Header'
@@ -10,6 +10,17 @@ import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
 
 const inter = Inter({ variable: '--font-geist-sans', subsets: ['latin'] })
+const playfair = Playfair_Display({
+  variable: '--font-playfair',
+  subsets: ['latin'],
+  weight: ['400', '600', '700', '900'],
+  style: ['normal', 'italic'],
+})
+const lato = Lato({
+  variable: '--font-lato',
+  subsets: ['latin'],
+  weight: ['300', '400', '700', '900'],
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
@@ -88,7 +99,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased bg-white`}>
+      <body className={`${inter.variable} ${playfair.variable} ${lato.variable} antialiased bg-white`}>
         <Providers>
           <Header settings={settings} />
           <main className="min-h-screen">
