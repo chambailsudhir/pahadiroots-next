@@ -19,7 +19,7 @@ export default async function NewArrivals() {
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(4)
-    products = (data as Product[]) || []
+    products = (data as unknown as Product[]) || []
   } catch { return null }
 
   if (!products.length) return null

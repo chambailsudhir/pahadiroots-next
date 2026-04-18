@@ -18,7 +18,7 @@ async function fetchBestSellers(): Promise<Product[]> {
       .eq('status', 'active')
       .eq('badges_bestseller', true)
       .limit(8)
-    return (data as Product[]) || []
+    return (data as unknown as Product[]) || []
   } catch { return [] }
 }
 
