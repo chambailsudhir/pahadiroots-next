@@ -81,3 +81,20 @@ html { scrollbar-gutter: stable; }
 /* Hide scrollbar but keep scroll */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── ExploreByRegion panel animation ── */
+@keyframes pr-spIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.pr-panel-anim { animation: pr-spIn .35s ease; }
+.pr-shdr { display:grid; grid-template-columns:54% 46%; height:450px; overflow:hidden; }
+.pr-spgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:24px; padding:24px 40px; background:#0d1f0e; }
+@media(max-width:640px) {
+  .pr-shdr { grid-template-columns:1fr !important; height:auto !important; }
+  .pr-spgrid { grid-template-columns:1fr 1fr !important; padding:16px 20px !important; }
+}
+
+/* ── CategoryTiles hover ── */
+.pr-cat-card:hover { transform:translateY(-5px) !important; box-shadow:0 14px 36px rgba(0,0,0,.12) !important; border-color:#c8920a !important; }
+.pr-cat-card:hover img { transform:scale(1.05) !important; }
+@media(max-width:960px){ .pr-cat-grid { grid-template-columns:repeat(3,1fr) !important; } }
+@media(max-width:640px){ .pr-cat-grid { grid-template-columns:repeat(2,1fr) !important; gap:12px !important; } }
+@media(max-width:360px){ .pr-cat-grid { grid-template-columns:repeat(2,1fr) !important; gap:8px !important; } }
