@@ -7,6 +7,7 @@ import CategoryTiles from '@/components/homepage/CategoryTiles'
 import BestSellers from '@/components/homepage/BestSellers'
 import ExploreByRegion from '@/components/homepage/ExploreByRegion'
 import type { RichState } from '@/components/homepage/ExploreByRegion'
+import type { Product } from '@/types'
 import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
 import NewsletterBar from '@/components/homepage/NewsletterBar'
@@ -130,11 +131,11 @@ async function fetchStates(): Promise<RichState[]> {
       .in('state_id', stateIds)
       .limit(40)
 
-    const products = (productsData as unknown as (typeof productsData & { state_id: string })[]) ?? []
+    const products = (productsData ?? []) as unknown as (Product & { state_id: string })[]
 
     return statesData.map(s => ({
       ...s,
-      products: (products ?? []).filter((p: any) => String(p.state_id) === String(s.id)).slice(0, 4),
-    }))
+      products: products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
+    })) as unknown as RichState[]
   } catch { return [] }
 }
