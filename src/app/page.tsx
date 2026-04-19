@@ -103,39 +103,67 @@ async function fetchCategories() {
 }
 
 async function fetchStates(): Promise<RichState[]> {
+  // DB-verified schema (confirmed from Supabase table editor screenshot):
+  // states: id(text), created_at, name(text), description(text), image_path(text), is_active(bool), updated_at
+  // state_images: state_id, image_url, sort_order
+  // products.state_id references states.id
   try {
-    const { data: statesData } = await supabase
+    const { data: statesData, error } = await supabase
       .from('states')
-      .select('id, name, slug, description, image_url, region, flag_emoji, is_active')
+      .select('id, name, description, image_path, is_active')
+      .eq('is_active', true)
       .order('name')
-      .limit(12)
+      .limit(15)
 
-    if (!statesData?.length) return []
+    if (error || !statesData?.length) {
+      console.error('fetchStates: states query error', error)
+      return []
+    }
 
-    // Fetch active products with variants for each state in one query
     const stateIds = statesData.map(s => s.id)
+
+    // Fetch per-state gallery images (state_images table)
+    const { data: stateImagesData } = await supabase
+      .from('state_images')
+      .select('state_id, image_url, sort_order')
+      .in('state_id', stateIds)
+      .order('sort_order')
+
+    // Fetch products belonging to these states
     const { data: productsData } = await supabase
       .from('products')
       .select(`
-        id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
+        id, name, slug, emoji, price, mrp, available_stock, gst_rate,
         image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-        category_id, state_id, is_deleted, status, sku, cost_price, initial_stock,
-        short_description, long_description, tags, created_at,
-        ai_description, ai_health_benefits, ai_how_to_use, ai_storage_tips,
-        ai_who_should_buy, ai_generated_at,
+        category_id, state_id, is_deleted, status,
         categories:categories(id, name, slug),
         product_variants(id, price, mrp, size, available_stock, is_active)
       `)
       .eq('is_deleted', false)
       .eq('status', 'active')
       .in('state_id', stateIds)
-      .limit(40)
+      .limit(60)
 
     const products = (productsData ?? []) as unknown as (Product & { state_id: string })[]
+    const stateImages = (stateImagesData ?? []) as { state_id: string; image_url: string; sort_order: number }[]
 
-    return statesData.map(s => ({
-      ...s,
-      products: products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
-    })) as unknown as RichState[]
-  } catch { return [] }
+    return statesData.map(s => {
+      // Get first gallery image, fall back to image_path on states row
+      const galleryImages = stateImages.filter(img => String(img.state_id) === String(s.id))
+      const primaryImage = galleryImages[0]?.image_url ?? s.image_path ?? null
+
+      return {
+        id: s.id,
+        name: s.name,
+        slug: s.id,              // id IS the slug (e.g. "hp", "uk", "jk")
+        description: s.description ?? null,
+        image_url: primaryImage, // first gallery image or image_path fallback
+        region: null,
+        products: products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
+      }
+    }) as unknown as RichState[]
+  } catch (e) {
+    console.error('fetchStates error:', e)
+    return []
+  }
 }

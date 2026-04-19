@@ -12,12 +12,13 @@ export interface Category {
 export interface State {
   id: string
   name: string
-  slug: string
+  slug: string         // same as id in admin
   description: string | null
-  image_url: string | null
+  image_url: string | null  // mapped from image_path
+  image_path?: string | null
   region: string | null
-  flag_emoji?: string | null
   is_active?: boolean
+  // flag_emoji does NOT exist in DB — removed
 }
 
 export interface ProductVariant {

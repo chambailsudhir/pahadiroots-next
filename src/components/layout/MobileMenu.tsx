@@ -79,7 +79,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
             </div>
             {states.slice(0, 8).map(s => (
               <Link key={s.id} href={`/regions/${s.slug}`} onClick={closeMobileMenu}>
-                {s.flag_emoji || '🏔️'} {s.name}
+                🏔️ {s.name}
               </Link>
             ))}
           </>

@@ -66,7 +66,7 @@ export default function MegaMenu({ categories, states }: Props) {
                         style={{ fontSize: 13, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .15s' }}
                         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--g)')}
                         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--tx2)')}>
-                        <span>{s.flag_emoji || '🏔️'}</span>{s.name}
+                        <span>🏔️</span>{s.name}
                       </Link>
                     </li>
                   ))}

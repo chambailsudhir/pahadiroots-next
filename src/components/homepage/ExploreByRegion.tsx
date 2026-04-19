@@ -100,7 +100,9 @@ const REGION_META: Record<string, {
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface RichState {
   id: string; name: string; slug: string
-  image_url: string | null; description: string | null; region: string | null
+  image_url: string | null   // mapped from image_path in DB
+  description: string | null
+  region: string | null
   products: Product[]
 }
 interface Props { states: RichState[] }

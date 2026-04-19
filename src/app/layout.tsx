@@ -67,10 +67,13 @@ export default async function RootLayout({
   const [settings, catsResult, statesResult] = await Promise.all([
     getSiteSettings(),
     supabase.from('categories').select('id,name,slug,is_active,image_url,description').eq('is_active', true).order('sort_order'),
-    supabase.from('states').select('id,name,slug,flag_emoji,is_active').eq('is_active', true).order('name'),
+    supabase.from('states').select('id,name,is_active').eq('is_active', true).order('name'),
   ])
   const categories = (catsResult.data || []) as any[]
-  const states     = (statesResult.data || []) as any[]
+  const states     = (statesResult.data || []).map((s: any) => ({
+    ...s,
+    slug: s.id,  // In admin, the id IS the slug
+  })) as any[]
 
   return (
     <html lang="en-IN" suppressHydrationWarning>
