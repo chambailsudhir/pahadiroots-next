@@ -57,11 +57,12 @@ export default function CartDrawer({ settings }: Props) {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-stone-900">Your Cart</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bd)', background: 'var(--g)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>🛒</span>
+            <h2 style={{ fontSize: 16, fontWeight: 900, color: '#fff', fontFamily: '"Playfair Display", Georgia, serif' }}>Your Cart</h2>
             {items.length > 0 && (
-              <span className="bg-forest-700 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              <span style={{ background: 'var(--gd)', color: '#1a0800', fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 12 }}>
                 {items.reduce((s, i) => s + i.qty, 0)}
               </span>
             )}
@@ -69,11 +70,9 @@ export default function CartDrawer({ settings }: Props) {
           <button
             onClick={closeCart}
             aria-label="Close cart"
-            className="p-2 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-50 transition-colors"
+            style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕ Close
           </button>
         </div>
 

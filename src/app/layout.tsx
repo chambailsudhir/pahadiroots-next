@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
@@ -63,17 +64,26 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const settings = await getSiteSettings()
+  const [settings, catsResult, statesResult] = await Promise.all([
+    getSiteSettings(),
+    supabase.from('categories').select('id,name,slug,is_active,image_url,description').eq('is_active', true).order('sort_order'),
+    supabase.from('states').select('id,name,slug,flag_emoji,is_active').eq('is_active', true).order('name'),
+  ])
+  const categories = (catsResult.data || []) as any[]
+  const states     = (statesResult.data || []) as any[]
 
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
+        <meta name="theme-color" content="#1a3a1e" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
           href="https://ulyrhnpoiypuvaurlqqi.supabase.co"
           crossOrigin="anonymous"
         />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Organization JSON-LD */}
         <script
           type="application/ld+json"
@@ -99,9 +109,9 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${playfair.variable} ${lato.variable} antialiased bg-white`}>
+      <body className={`${inter.variable} ${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         <Providers>
-          <Header settings={settings} />
+          <Header settings={settings} categories={categories} states={states} />
           <main className="min-h-screen">
             {children}
           </main>
@@ -109,7 +119,7 @@ export default async function RootLayout({
           {/* Global overlays — rendered once at root */}
           <CartDrawer settings={settings} />
           <SearchOverlay />
-          <MobileMenu settings={settings} />
+          <MobileMenu settings={settings} categories={categories} states={states} />
         </Providers>
       </body>
     </html>

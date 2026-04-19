@@ -27,49 +27,35 @@ export default async function BestSellers() {
   if (!products.length) return null
 
   return (
-    <section className="py-12 sm:py-16 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="sec" style={{ background: '#fff' }}>
+      <div className="ct">
+        <div className="chip">⭐ Our Bestsellers</div>
+        <h2 className="sh2">Our Finest Offerings</h2>
+        <p className="ssub">Curated from Himalayan states — the products our customers love most.</p>
+      </div>
 
-        {/* Section header — matches old site exactly */}
-        <div className="text-center mb-9">
-          <div className="inline-block text-xs font-bold uppercase tracking-widest text-forest-600 bg-forest-50 border border-forest-100 px-3 py-1 rounded-full mb-3">
-            Bestsellers
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-2">
-            Our Finest Offerings
-          </h2>
-          <p className="text-stone-500 text-sm max-w-md mx-auto">
-            Curated from Himalayan states — the products our customers love most.
-          </p>
-        </div>
+      {/* Desktop grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 24, maxWidth: 1300, margin: '0 auto 32px' }}>
+        {products.map((p, i) => (
+          <ProductCard key={p.id} product={p} priority={i < 4} />
+        ))}
+      </div>
 
-        {/* Desktop grid */}
-        <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 mb-8">
-          {products.map((p, i) => (
-            <ProductCard key={p.id} product={p} priority={i < 4} />
-          ))}
-        </div>
-
-        {/* Mobile horizontal scroll */}
-        <div className="sm:hidden flex gap-3 overflow-x-auto no-scrollbar pb-2 mb-6">
-          {products.map((p, i) => (
-            <div key={p.id} className="w-44 shrink-0">
-              <ProductCard product={p} priority={i < 2} />
-            </div>
-          ))}
-        </div>
-
-        <div className="text-center">
-          <Link
-            href="/products"
-            className="inline-flex items-center gap-2 border-2 border-forest-700 text-forest-700 hover:bg-forest-700 hover:text-white font-bold px-8 py-3 rounded-xl text-sm transition-all"
-          >
-            View All Products
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
-        </div>
+      <div style={{ textAlign: 'center' }}>
+        <Link href="/products" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          border: '2px solid var(--g)', color: 'var(--g)',
+          fontWeight: 800, padding: '12px 32px', borderRadius: 28,
+          fontSize: 14, transition: 'all .2s', letterSpacing: '.3px',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--g)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--g)'; }}
+        >
+          View All Products
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </Link>
       </div>
     </section>
   )

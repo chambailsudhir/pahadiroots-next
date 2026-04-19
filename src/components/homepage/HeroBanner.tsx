@@ -6,145 +6,138 @@ import Link from 'next/link'
 import type { SiteSettings } from '@/types'
 
 interface HeroImage { url: string; alt_text?: string | null; title?: string; subtitle?: string }
+interface Props { images: HeroImage[]; settings: SiteSettings }
 
-interface Props {
-  images:   HeroImage[]
-  settings: SiteSettings
-}
-
-const FALLBACK_SLIDES = [
-  { gradient: 'from-forest-900 to-forest-700', label: 'Pure Himalayan Honey 🍯' },
-  { gradient: 'from-earth-800 to-earth-600',   label: 'Mountain Spices 🌶️' },
-  { gradient: 'from-stone-800 to-stone-600',   label: 'Natural Grains 🌾' },
-]
+const LEAVES = ['🍃','🌿','🍀','☘️','🌱']
 
 export default function HeroBanner({ images, settings }: Props) {
   const [current, setCurrent] = useState(0)
+  const [mounted, setMounted] = useState(false)
   const slides = images.length > 0 ? images : null
+  const total  = slides ? slides.length : 1
 
-  const next = useCallback(() => {
-    const max = slides ? slides.length : FALLBACK_SLIDES.length
-    setCurrent(c => (c + 1) % max)
-  }, [slides])
+  const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
 
+  useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
-    const interval = setInterval(next, 4500)
-    return () => clearInterval(interval)
-  }, [next])
+    if (total <= 1) return
+    const iv = setInterval(next, 4500)
+    return () => clearInterval(iv)
+  }, [next, total])
 
-  const totalSlides = slides ? slides.length : FALLBACK_SLIDES.length
+  const leafData = [
+    { top: '10%', left: '8%',  size: 22, dur: '12s', delay: '0s'   },
+    { top: '5%',  left: '25%', size: 16, dur: '15s', delay: '2s'   },
+    { top: '15%', left: '70%', size: 20, dur: '11s', delay: '4s'   },
+    { top: '8%',  left: '85%', size: 14, dur: '14s', delay: '1.5s' },
+    { top: '20%', left: '50%', size: 18, dur: '13s', delay: '3s'   },
+  ]
 
   return (
-    <section className="relative w-full overflow-hidden bg-forest-900" style={{ height: 'clamp(340px, 55vw, 600px)' }}>
-
+    <section className="hero">
       {/* Slides */}
       {slides ? (
         slides.map((img, i) => (
-          <div
-            key={i}
-            className={`absolute inset-0 transition-opacity duration-700 ${i === current ? 'opacity-100' : 'opacity-0'}`}
-          >
-            <Image
-              src={img.url}
-              alt={img.alt_text || 'Pahadi Roots'}
-              fill
-              sizes="100vw"
-              className="object-cover"
-              priority={i === 0}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+          <div key={i} className="absolute inset-0" style={{ opacity: i === current ? 1 : 0, transition: 'opacity .7s' }}>
+            <Image src={img.url} alt={img.alt_text || 'Pahadi Roots'} fill sizes="100vw" className="object-cover" priority={i === 0} />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(170deg,rgba(7,26,9,.65) 0%,rgba(26,58,30,.4) 60%,transparent 100%)' }} />
           </div>
         ))
       ) : (
-        FALLBACK_SLIDES.map((slide, i) => (
-          <div
-            key={i}
-            className={`absolute inset-0 bg-gradient-to-br ${slide.gradient} transition-opacity duration-700 ${i === current ? 'opacity-100' : 'opacity-0'}`}
-          >
-            <div className="absolute inset-0 flex items-center justify-center opacity-10 text-[200px]">
-              🏔️
-            </div>
-          </div>
-        ))
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(170deg,#071a09 0%,#0e2812 25%,#1a3a1e 55%,#2d5233 80%,#3a6140 100%)' }} />
       )}
 
-      {/* Content overlay */}
-      <div className="relative h-full flex items-center">
-        <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 w-full">
-          <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-4 border border-white/20">
-              <span className="w-1.5 h-1.5 bg-green-400 rounded-full" />
-              100% Natural · Direct from Farmers
-            </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight mb-4">
-              {slides && slides[current]?.title
-                ? slides[current].title
-                : (<>Pure Products from<br /><span className="text-earth-300">The Himalayas</span></>)
-              }
-            </h1>
-            <p className="text-base text-white/80 mb-7 max-w-md leading-relaxed">
-              {slides && slides[current]?.subtitle
-                ? slides[current].subtitle
-                : 'Sourced directly from mountain farming communities. No middlemen, no additives — just the pure goodness of the mountains.'
-              }
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/products"
-                className="inline-flex items-center gap-2 bg-earth-500 hover:bg-earth-600 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors shadow-lg"
-              >
-                Shop Now
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
-              <Link
-                href="/about"
-                className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white font-semibold px-6 py-3 rounded-xl text-sm transition-colors border border-white/30 backdrop-blur-sm"
-              >
-                Our Story
-              </Link>
-            </div>
+      {/* Overlay */}
+      <div className="hero-overlay" />
+
+      {/* Falling leaves */}
+      {mounted && leafData.map((l, i) => (
+        <div key={i} className="lf" style={{ top: l.top, left: l.left, fontSize: l.size, animationDuration: l.dur, animationDelay: l.delay }}>
+          {LEAVES[i % LEAVES.length]}
+        </div>
+      ))}
+
+      {/* Mountain silhouette */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%', pointerEvents: 'none', zIndex: 2 }}>
+        <svg viewBox="0 0 1440 220" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+          <polygon points="0,220 180,80 360,140 540,60 720,120 900,50 1080,110 1260,70 1440,100 1440,220" fill="rgba(7,26,9,0.55)" />
+          <polygon points="0,220 200,110 400,160 600,90 800,150 1000,80 1200,130 1440,120 1440,220" fill="rgba(7,26,9,0.35)" />
+        </svg>
+      </div>
+
+      {/* Content */}
+      <div className="hero-content">
+        <div className="eyebrow">✦ PURE HIMALAYAN NATURALS ✦</div>
+        <h1 className="hero-h1">
+          {slides && slides[current]?.title ? (
+            slides[current].title
+          ) : (
+            <>From the Heart of<br /><em>The Himalayas</em></>
+          )}
+        </h1>
+        <p className="hero-sub">
+          {slides && slides[current]?.subtitle
+            ? slides[current].subtitle
+            : 'Sourced directly from mountain farming communities — wild honey, A2 ghee, saffron & more. No middlemen, just pure goodness.'
+          }
+        </p>
+        <div className="hbtns">
+          <Link href="/products" className="btn-g">Shop Now</Link>
+          <Link href="/about" className="btn-w">Our Story</Link>
+        </div>
+
+        {/* Stats */}
+        <div className="hstats">
+          <div className="hstat">
+            <div className="hstat-num">500<em>+</em></div>
+            <div className="hstat-lbl">HAPPY CUSTOMERS</div>
+          </div>
+          <div className="hstat-div" />
+          <div className="hstat">
+            <div className="hstat-num">{settings.states_covered || '10'}<em>+</em></div>
+            <div className="hstat-lbl">HIMALAYAN STATES</div>
+          </div>
+          <div className="hstat-div" />
+          <div className="hstat">
+            <div className="hstat-num">100<em>%</em></div>
+            <div className="hstat-lbl">NATURAL</div>
+          </div>
+          <div className="hstat-div" />
+          <div className="hstat">
+            <div className="hstat-num">4.9<em>★</em></div>
+            <div className="hstat-lbl">CUSTOMER RATING</div>
           </div>
         </div>
       </div>
 
+      {/* Scroll cue */}
+      <div className="scroll-cue">
+        <span>SCROLL</span>
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </div>
+
       {/* Dots */}
-      {totalSlides > 1 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-          {Array.from({ length: totalSlides }).map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrent(i)}
-              aria-label={`Go to slide ${i + 1}`}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === current ? 'bg-white w-6' : 'bg-white/40 w-1.5'
-              }`}
-            />
+      {total > 1 && (
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6, zIndex: 4 }}>
+          {Array.from({ length: total }).map((_, i) => (
+            <button key={i} onClick={() => setCurrent(i)} aria-label={`Slide ${i + 1}`}
+              style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.9)', width: i === current ? 24 : 6, opacity: i === current ? 1 : 0.4, border: 'none', cursor: 'pointer', transition: 'all .3s' }} />
           ))}
         </div>
       )}
 
-      {/* Prev / Next */}
-      {totalSlides > 1 && (
+      {/* Prev/Next */}
+      {total > 1 && (
         <>
-          <button
-            onClick={() => setCurrent(c => (c - 1 + totalSlides) % totalSlides)}
-            aria-label="Previous slide"
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-full flex items-center justify-center transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
+          <button onClick={() => setCurrent(c => (c - 1 + total) % total)} aria-label="Previous"
+            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 4, background: 'rgba(255,255,255,.2)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
           </button>
-          <button
-            onClick={next}
-            aria-label="Next slide"
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-full flex items-center justify-center transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
+          <button onClick={next} aria-label="Next"
+            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 4, background: 'rgba(255,255,255,.2)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}>
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
           </button>
         </>
       )}

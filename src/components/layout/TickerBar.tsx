@@ -1,8 +1,6 @@
 import type { SiteSettings } from '@/types'
 
-interface Props {
-  settings: SiteSettings
-}
+interface Props { settings: SiteSettings }
 
 export default function TickerBar({ settings }: Props) {
   if (settings.ticker_hide === 'true') return null
@@ -14,17 +12,13 @@ export default function TickerBar({ settings }: Props) {
 
   if (!items.length) return null
 
-  // Duplicate for seamless loop
   const doubled = [...items, ...items]
 
   return (
-    <div className="bg-earth-500 text-white overflow-hidden py-2 relative">
+    <div className="ticker-wrap">
       <div className="ticker-track">
         {doubled.map((item, idx) => (
-          <span key={idx} className="inline-flex items-center whitespace-nowrap text-xs font-medium px-8">
-            {item}
-            <span className="mx-6 opacity-40">•</span>
-          </span>
+          <span key={idx} className="ticker-item">{item}</span>
         ))}
       </div>
     </div>

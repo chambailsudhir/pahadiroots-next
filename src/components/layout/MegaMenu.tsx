@@ -4,10 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import type { Category, State } from '@/types'
 
-interface Props {
-  categories: Category[]
-  states:     State[]
-}
+interface Props { categories: Category[]; states: State[] }
 
 const CURATED = [
   { label: 'Best Sellers',    href: '/collections/best-sellers' },
@@ -20,51 +17,39 @@ const CURATED = [
 
 export default function MegaMenu({ categories, states }: Props) {
   const [open, setOpen] = useState(false)
-
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <button
-        className="flex items-center gap-1 text-sm font-medium text-stone-700 hover:text-forest-700 transition-colors py-1"
+        className="flex items-center gap-1"
         aria-expanded={open}
+        style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx2)', padding: '6px 14px', borderRadius: 20, background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '.3px', transition: 'all .2s' }}
       >
         Shop
-        <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-0 pt-3 z-50 w-[760px]">
-          <div className="bg-white rounded-2xl shadow-2xl border border-stone-100 overflow-hidden">
-            <div className="grid grid-cols-3 gap-0">
-
+        <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50" style={{ width: 760 }}>
+          <div className="mega-menu-panel">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
               {/* All Collections */}
-              <div className="p-6 border-r border-stone-100">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">
-                  All Collections
-                </div>
-                <ul className="space-y-1.5">
+              <div style={{ padding: '24px', borderRight: '1px solid var(--bd)' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>All Collections</div>
+                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {categories.filter(c => c.is_active).map(cat => (
                     <li key={cat.id}>
-                      <Link
-                        href={`/collections/${cat.slug}`}
-                        className="text-sm text-stone-600 hover:text-forest-700 hover:translate-x-0.5 transition-all inline-block"
-                        onClick={() => setOpen(false)}
-                      >
+                      <Link href={`/collections/${cat.slug}`} onClick={() => setOpen(false)}
+                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'block', transition: 'color .15s, paddingLeft .15s' }}
+                        onMouseEnter={e => { (e.target as HTMLElement).style.color = 'var(--g)'; (e.target as HTMLElement).style.paddingLeft = '4px'; }}
+                        onMouseLeave={e => { (e.target as HTMLElement).style.color = 'var(--tx2)'; (e.target as HTMLElement).style.paddingLeft = '0'; }}>
                         {cat.name}
                       </Link>
                     </li>
                   ))}
-                  <li className="pt-1">
-                    <Link
-                      href="/products"
-                      className="text-sm font-semibold text-forest-700 hover:text-forest-900"
-                      onClick={() => setOpen(false)}
-                    >
+                  <li style={{ paddingTop: 4, borderTop: '1px solid var(--bd)' }}>
+                    <Link href="/products" onClick={() => setOpen(false)} style={{ fontSize: 13, fontWeight: 700, color: 'var(--g)' }}>
                       View All Products →
                     </Link>
                   </li>
@@ -72,64 +57,38 @@ export default function MegaMenu({ categories, states }: Props) {
               </div>
 
               {/* Shop by Region */}
-              <div className="p-6 border-r border-stone-100">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">
-                  Shop by Region
-                </div>
-                <ul className="space-y-1.5">
-                  {states.slice(0, 10).map(state => (
-                    <li key={state.id}>
-                      <Link
-                        href={`/regions/${state.slug}`}
-                        className="text-sm text-stone-600 hover:text-forest-700 hover:translate-x-0.5 transition-all inline-block"
-                        onClick={() => setOpen(false)}
-                      >
-                        {state.name}
-                      </Link>
-                    </li>
-                  ))}
-                  <li className="pt-1">
-                    <Link
-                      href="/regions"
-                      className="text-sm font-semibold text-forest-700 hover:text-forest-900"
-                      onClick={() => setOpen(false)}
-                    >
-                      All Regions →
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Curated + Featured banner */}
-              <div className="p-6">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-3">
-                  Curated For You
-                </div>
-                <ul className="space-y-1.5 mb-5">
-                  {CURATED.map(item => (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className="text-sm text-stone-600 hover:text-forest-700 hover:translate-x-0.5 transition-all inline-block"
-                        onClick={() => setOpen(false)}
-                      >
-                        {item.label}
+              <div style={{ padding: '24px', borderRight: '1px solid var(--bd)' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>Shop by Region</div>
+                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {states.slice(0, 10).map(s => (
+                    <li key={s.id}>
+                      <Link href={`/regions/${s.slug}`} onClick={() => setOpen(false)}
+                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .15s' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--g)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--tx2)')}>
+                        <span>{s.flag_emoji || '🏔️'}</span>{s.name}
                       </Link>
                     </li>
                   ))}
                 </ul>
-
-                {/* Mini banner */}
-                <div className="rounded-xl bg-forest-50 border border-forest-100 p-4">
-                  <div className="text-xs font-bold text-forest-800 mb-1">
-                    🏔️ Direct from Mountains
-                  </div>
-                  <p className="text-[11px] text-forest-700 leading-relaxed">
-                    Every product sourced directly from mountain farming communities across the Himalayas.
-                  </p>
-                </div>
               </div>
 
+              {/* Curated */}
+              <div style={{ padding: '24px', background: 'linear-gradient(135deg,#f9f5ee,#f2ead8)' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>Curated Picks</div>
+                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {CURATED.map(l => (
+                    <li key={l.href}>
+                      <Link href={l.href} onClick={() => setOpen(false)}
+                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .15s' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--g)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--tx2)')}>
+                        ✦ {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
