@@ -56,7 +56,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   let query = supabase
     .from('products')
     .select(`
-      id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
+      id, name, slug, emoji, price, mrp, cost_price, available_stock, gst_rate,
       image_url, unit_label, badges, category_id, is_deleted, status,
       categories:categories(id, name, slug),
       product_variants(id, price, mrp, variant_value, available_stock, is_active)

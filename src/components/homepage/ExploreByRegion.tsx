@@ -138,28 +138,28 @@ export default function ExploreByRegion({ states }: Props) {
         </p>
       </div>
 
-      {/* ── Story Cards Row (horizontal scroll) ── */}
-      <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '18px', paddingLeft: '40px', paddingRight: '40px', scrollbarWidth: 'none', marginBottom: '8px', msOverflowStyle: 'none' } as React.CSSProperties}>
+      {/* ── State Cards Grid — wraps into 2 rows automatically ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px', padding: '0 40px 18px', marginBottom: '8px' }}>
         {states.map(s => {
           const m = REGION_META[s.id]
           const isActive = s.id === activeId
           return (
-            <button key={s.id} onClick={() => setActiveId(s.id)} style={{ flexShrink: 0, width: '200px', borderRadius: '14px', overflow: 'hidden', position: 'relative', cursor: 'pointer', border: 'none', padding: 0, background: 'none', boxShadow: isActive ? '0 12px 32px rgba(0,0,0,.22)' : '0 3px 14px rgba(0,0,0,.1)', transform: isActive ? 'translateY(-5px)' : 'translateY(0)', transition: 'transform .3s, box-shadow .3s' }}>
+            <button key={s.id} onClick={() => setActiveId(s.id)} style={{ borderRadius: '14px', overflow: 'hidden', position: 'relative', cursor: 'pointer', border: 'none', padding: 0, background: 'none', boxShadow: isActive ? '0 12px 32px rgba(0,0,0,.22)' : '0 3px 14px rgba(0,0,0,.1)', transform: isActive ? 'translateY(-5px)' : 'translateY(0)', transition: 'transform .3s, box-shadow .3s' }}>
               {/* Image */}
-              <div style={{ width: '100%', height: '130px', overflow: 'hidden', background: m?.panelBg ?? '#1a3a1e', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '52px' }}>
+              <div style={{ width: '100%', height: '120px', overflow: 'hidden', background: m?.panelBg ?? '#1a3a1e', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>
                 {s.image_url
-                  ? <Image src={s.image_url} alt={s.name} fill sizes="200px" style={{ objectFit: 'cover', objectPosition: 'center top' }} />
+                  ? <Image src={s.image_url} alt={s.name} fill sizes="(max-width:768px) 50vw, 200px" style={{ objectFit: 'cover', objectPosition: 'center top' }} />
                   : <span>{m?.emoji ?? '🏔️'}</span>}
               </div>
               {/* Body */}
-              <div style={{ padding: '12px 14px 14px', background: isActive ? '#1a3a1e' : '#fff', transition: 'background .22s' }}>
-                <div style={{ fontFamily: serif, fontSize: '13px', fontWeight: 700, color: isActive ? '#fff' : '#1a3a1e', marginBottom: '3px' }}>
+              <div style={{ padding: '10px 12px 12px', background: isActive ? '#1a3a1e' : '#fff', transition: 'background .22s' }}>
+                <div style={{ fontFamily: serif, fontSize: '12px', fontWeight: 700, color: isActive ? '#fff' : '#1a3a1e', marginBottom: '2px' }}>
                   {s.name}
                 </div>
-                <div style={{ fontSize: '10px', color: isActive ? '#e8b84b' : '#c8920a', fontWeight: 700, letterSpacing: '.5px', marginBottom: '5px', fontFamily: sans }}>
+                <div style={{ fontSize: '9px', color: isActive ? '#e8b84b' : '#c8920a', fontWeight: 700, letterSpacing: '.5px', marginBottom: '4px', fontFamily: sans }}>
                   {m?.tagline ?? s.region ?? ''}
                 </div>
-                <div style={{ fontSize: '11px', color: isActive ? 'rgba(255,255,255,.65)' : '#7a7a7a', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', fontFamily: sans } as React.CSSProperties}>
+                <div style={{ fontSize: '10px', color: isActive ? 'rgba(255,255,255,.65)' : '#7a7a7a', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', fontFamily: sans } as React.CSSProperties}>
                   {m?.snippet ?? s.description ?? ''}
                 </div>
               </div>

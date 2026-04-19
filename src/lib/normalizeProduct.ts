@@ -1,13 +1,17 @@
 import type { Product } from '@/types'
 
 /**
- * Correct DB select string for products.
- * - badges  = jsonb array e.g. ['bestseller','organic'] — NOT separate boolean columns
- * - variant_value = the size/weight field in product_variants — NOT "size"
- * - status  = 'active'|'inactive' string on products (is_active doesn't exist on products)
+ * Exact DB columns for products table (verified from admin catalogue query):
+ * id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
+ * status('active'|'inactive'|'draft'), category_id, state_id, unit_label,
+ * short_description, long_description, image_url, tags, badges(jsonb array),
+ * is_deleted, created_at
+ *
+ * Does NOT exist in DB: selling, is_active, badges_bestseller, badges_new, badges_organic
+ * product_variants column: variant_value (NOT "size")
  */
 export const PRODUCT_SELECT = `
-  id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
+  id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
@@ -16,8 +20,8 @@ export const PRODUCT_SELECT = `
 
 /**
  * Maps raw Supabase product rows to the shape ProductCard expects:
- * - badges array → badges_bestseller / badges_new / badges_organic booleans
- * - variant_value → size alias so no changes needed in ProductCard
+ * - badges jsonb array → badges_bestseller / badges_new / badges_organic booleans
+ * - variant_value → size alias so ProductCard needs zero changes
  */
 export function normalizeProduct(p: any): Product {
   const badges: string[] = Array.isArray(p.badges) ? p.badges : []
