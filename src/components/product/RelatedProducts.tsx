@@ -23,3 +23,16 @@ export default async function RelatedProducts({ categoryId, excludeId }: Props) 
       .neq('id', excludeId)
       .limit(4)
     products = normalizeProducts(data ?? [])
+  } catch { return null }
+
+  if (!products.length) return null
+
+  return (
+    <section className="border-t border-stone-100 pt-10">
+      <h2 className="text-xl font-bold text-stone-900 mb-6">You Might Also Like</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        {products.map(p => <ProductCard key={p.id} product={p} />)}
+      </div>
+    </section>
+  )
+}

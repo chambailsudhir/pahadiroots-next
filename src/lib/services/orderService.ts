@@ -60,7 +60,7 @@ export async function createOrder(
   const variantIds = input.items.map(i => i.variantId)
   const { data: variants, error: varErr } = await db
     .from('product_variants')
-    .select('id, price, mrp, gst_rate, available_stock, product_id, size, is_active')
+    .select('id, price, mrp, gst_rate, available_stock, product_id, variant_value, is_active')
     .in('id', variantIds)
   if (varErr || !variants?.length) throw new Error('Failed to fetch product data')
   const variantMap = new Map(variants.map(v => [String(v.id), v]))
@@ -71,7 +71,7 @@ export async function createOrder(
     return {
       productId: item.productId, variantId: item.variantId,
       name: '', slug: '', image: null, emoji: null,
-      size: v.size || '', price: v.price, mrp: v.mrp,
+      size: v.variant_value || '', price: v.price, mrp: v.mrp,
       gstRate: v.gst_rate || 0, qty: item.qty, maxQty: v.available_stock,
     }
   })

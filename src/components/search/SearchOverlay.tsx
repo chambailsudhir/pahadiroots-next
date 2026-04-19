@@ -6,6 +6,7 @@ import Image from 'next/image'
 import useSWR from 'swr'
 import { useUIStore } from '@/store/uiStore'
 import { supabase } from '@/lib/supabase'
+import { normalizeProducts } from '@/lib/normalizeProduct'
 import { formatPrice } from '@/lib/utils'
 import type { Product } from '@/types'
 
@@ -58,7 +59,7 @@ export default function SearchOverlay() {
         .eq('status', 'active')
         .ilike('name', `%${debouncedQ}%`)
         .limit(6)
-      return (data as unknown as Product[]) || []
+      return normalizeProducts(data ?? [])
     }
   )
 

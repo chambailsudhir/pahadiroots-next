@@ -71,7 +71,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   switch (sort) {
     case 'price_asc':  query = query.order('price', { ascending: true });   break
     case 'price_desc': query = query.order('price', { ascending: false });  break
-    case 'popular':    query = query.eq('badges, ', true);         break
+    case 'popular':    break   // bestseller filter applied client-side after normalizeProducts
     default:           query = query.order('created_at', { ascending: false })
   }
 

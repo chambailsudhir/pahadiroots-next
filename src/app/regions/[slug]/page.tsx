@@ -37,12 +37,12 @@ export default async function RegionPage({ params }: Props) {
       .eq('state_id', state.id)
       .eq('is_deleted', false)
       .eq('status', 'active')
-      .order('badges, ', { ascending: false })
+      .order('name')
       .limit(24)
-    products = data
+    products = normalizeProducts(data ?? [])
   } catch { products = null }
 
-  const stateProducts = (products as unknown as Product[]) || []
+  const stateProducts = (products as Product[]) || []
 
   return (
     <div>

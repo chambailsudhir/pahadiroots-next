@@ -42,7 +42,11 @@ export default async function BlogArticlePage({ params }: Props) {
         .select(`id, name, slug, emoji, price, mrp, available_stock, gst_rate, image_url, unit_label, badges, category_id, is_deleted, status, categories:categories(id,name,slug), product_variants(id,price,mrp,variant_value,available_stock,is_active)`)
         .eq('id', post.related_product_id)
         .single()
-      relatedProduct = data as Product | null
+      if (data) {
+        const d = data as any
+        const b: string[] = Array.isArray(d.badges) ? d.badges : []
+        relatedProduct = { ...d, badges_bestseller: b.includes('bestseller'), badges_new: b.includes('new'), badges_organic: b.includes('organic'), product_variants: (d.product_variants ?? []).map((v: any) => ({ ...v, size: v.variant_value ?? '' })) } as Product
+      }
     } catch { relatedProduct = null }
   }
 
