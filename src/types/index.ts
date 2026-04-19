@@ -16,6 +16,8 @@ export interface State {
   description: string | null
   image_url: string | null
   region: string | null
+  flag_emoji?: string | null
+  is_active?: boolean
 }
 
 export interface ProductVariant {
