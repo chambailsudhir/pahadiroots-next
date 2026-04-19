@@ -48,8 +48,8 @@ export default async function HomePage() {
       {/* 3. Browse Collections — "What the Mountains Offer" */}
       <CategoryTiles categories={categories} />
 
-      {/* 4. Bestsellers — "Our Finest Offerings" */}
-      {showBestSellers && <BestSellers />}
+      {/* 4. Bestsellers — "Our Finest Offerings" with filters + sort */}
+      <BestSellers />
 
       {/* 5. New Arrivals */}
       {showNewArrivals && <NewArrivals />}
@@ -57,8 +57,8 @@ export default async function HomePage() {
       {/* 6. Featured collection banner (if set in admin) */}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
 
-      {/* 7. Explore by Region — "Discover the Himalayas" */}
-      {showStateStories && <ExploreByRegion states={states} />}
+      {/* 7. Explore by Region — "Discover the Himalayas" — always show if states exist */}
+      {states.length > 0 && <ExploreByRegion states={states} />}
 
       {/* 8. Why 5 Pahadi Roots — "Our Promise" */}
       <WhySection />
@@ -106,7 +106,7 @@ async function fetchStates(): Promise<RichState[]> {
   try {
     const { data: statesData } = await supabase
       .from('states')
-      .select('id, name, slug, description, image_url, region')
+      .select('id, name, slug, description, image_url, region, flag_emoji, is_active')
       .order('name')
       .limit(12)
 
