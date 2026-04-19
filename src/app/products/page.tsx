@@ -52,7 +52,7 @@ export default async function ProductsPage({
     .from('products')
     .select(PRODUCT_SELECT, { count: 'exact' })
     .eq('is_deleted', false)
-    .eq('is_active', true)
+    .eq('status', 'active')
     .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock)  query = query.gt('available_stock', 0)

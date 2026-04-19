@@ -237,7 +237,7 @@ async function fetchProduct(slug: string): Promise<Product | null> {
     const { data, error } = await supabase
       .from('products')
       .select(`
-        id, name, slug, emoji, sku, category_id, state_id, is_active, unit_label,
+        id, name, slug, emoji, sku, category_id, state_id, status, unit_label,
         gst_rate, price, mrp, cost_price, available_stock, initial_stock,
         short_description, long_description, image_url, tags,
         badges, is_deleted, created_at,
@@ -249,7 +249,7 @@ async function fetchProduct(slug: string): Promise<Product | null> {
       `)
       .eq('slug', slug)
       .eq('is_deleted', false)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .single()
 
     if (error || !data) return null
@@ -273,6 +273,6 @@ async function fetchProduct(slug: string): Promise<Product | null> {
 // Generate static params for all active products (ISR)
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('products').select('slug').eq('is_deleted', false).eq('is_active', true); data = r.data } catch {}
+  try { const r = await supabase.from('products').select('slug').eq('is_deleted', false).eq('status', 'active'); data = r.data } catch {}
   return (data || []).map((p: any) => ({ slug: p.slug }))
 }

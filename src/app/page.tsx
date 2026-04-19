@@ -140,7 +140,7 @@ async function fetchStates(): Promise<RichState[]> {
       .from('products')
       .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .in('state_id', stateIds)
       .limit(60)
 

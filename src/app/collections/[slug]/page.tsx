@@ -57,13 +57,13 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     .from('products')
     .select(`
       id, name, slug, emoji, price, mrp, cost_price, available_stock, gst_rate,
-      image_url, unit_label, badges, category_id, is_deleted, is_active,
+      image_url, unit_label, badges, category_id, is_deleted, status,
       categories:categories(id, name, slug),
       product_variants(id, price, mrp, variant_value, available_stock, is_active)
     `, { count: 'exact' })
     .eq('category_id', cat.id)
     .eq('is_deleted', false)
-    .eq('is_active', true)
+    .eq('status', 'active')
     .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock) query = query.gt('available_stock', 0)
