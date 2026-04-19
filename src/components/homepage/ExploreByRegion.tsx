@@ -168,31 +168,6 @@ export default function ExploreByRegion({ states }: Props) {
         })}
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', background: '#f0e8d4', padding: '8px 8px 0', gap: '6px', overflowX: 'auto', scrollbarWidth: 'none' } as React.CSSProperties}>
-        {states.map(s => {
-          const m = REGION_META[s.id]
-          const isActive = s.id === activeId
-          return (
-            <button key={s.id} onClick={() => setActiveId(s.id)} style={{ flexShrink: 0, width: '140px', border: 'none', borderRadius: '8px 8px 0 0', background: isActive ? '#1a3a1e' : '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'stretch', transition: 'all .22s', fontFamily: sans, boxShadow: isActive ? '0 4px 18px rgba(26,58,30,.3)' : '0 1px 4px rgba(0,0,0,.08)', transform: isActive ? 'translateY(-2px)' : 'translateY(0)', overflow: 'hidden', padding: 0 }}>
-              <div style={{ width: '100%', height: '90px', overflow: 'hidden', background: m?.panelBg ?? 'linear-gradient(135deg,#1a3a1e,#2d5233)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', position: 'relative' }}>
-                {s.image_url
-                  ? <Image src={s.image_url} alt={s.name} fill sizes="140px" style={{ objectFit: 'cover', objectPosition: '55% 15%' }} />
-                  : <span>{m?.emoji ?? '🏔️'}</span>}
-              </div>
-              <div style={{ padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', gap: '3px', textAlign: 'center' }}>
-                <div style={{ fontSize: '8.5px', fontWeight: 800, letterSpacing: '.9px', textTransform: 'uppercase', color: isActive ? '#fff' : '#1a1a1a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {s.name}
-                </div>
-                <div style={{ fontSize: '7.5px', color: isActive ? 'rgba(255,255,255,.6)' : '#7a7a7a', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '1px' }}>
-                  {m?.tagline ?? s.region ?? ''}
-                </div>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
       {/* ── Active Panel ── */}
       <div key={activeId} className="pr-panel-anim">
 

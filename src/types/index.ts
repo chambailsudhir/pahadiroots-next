@@ -40,7 +40,7 @@ export interface Product {
   emoji: string | null
   sku: string | null
   category_id: number
-  state_id: number | null
+  state_id: string | null
   status: 'active' | 'inactive' | 'draft'
   unit_label: string | null
   gst_rate: number
