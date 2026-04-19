@@ -3,17 +3,17 @@ import type { Product } from '@/types'
 /**
  * Exact DB columns for products table (verified from admin catalogue query):
  * id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
- * status('active'|'inactive'|'draft'), category_id, state_id, unit_label,
+ * is_active(bool), is_deleted(bool), category_id, state_id, unit_label,
  * short_description, long_description, image_url, tags, badges(jsonb array),
- * is_deleted, created_at
+ * created_at
  *
- * Does NOT exist in DB: selling, is_active, badges_bestseller, badges_new, badges_organic
+ * Does NOT exist in DB: status, selling, badges_bestseller, badges_new, badges_organic
  * product_variants column: variant_value (NOT "size")
  */
 export const PRODUCT_SELECT = `
   id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
   image_url, unit_label, badges, short_description, tags,
-  category_id, state_id, is_deleted, status, created_at,
+  category_id, state_id, is_deleted, is_active, created_at,
   categories:categories(id, name, slug),
   product_variants(id, price, mrp, variant_value, available_stock, is_active)
 `

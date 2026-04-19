@@ -38,10 +38,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Regions
   let states = null
-  try { const { data } = await supabase.from('states').select('slug'); states = data } catch {}
+  try { const { data } = await supabase.from('states').select('id'); states = data } catch {}
 
   const regionPages: MetadataRoute.Sitemap = (states || []).map(s => ({
-    url:             `${BASE}/regions/${s.slug}`,
+    url:             `${BASE}/regions/${s.id}`,
     lastModified:    now,
     changeFrequency: 'weekly' as const,
     priority:        0.65,

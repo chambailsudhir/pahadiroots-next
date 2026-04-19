@@ -237,7 +237,7 @@ async function fetchProduct(slug: string): Promise<Product | null> {
     const { data, error } = await supabase
       .from('products')
       .select(`
-        id, name, slug, emoji, sku, category_id, state_id, status, unit_label,
+        id, name, slug, emoji, sku, category_id, state_id, is_active, unit_label,
         gst_rate, price, mrp, cost_price, available_stock, initial_stock,
         short_description, long_description, image_url, tags,
         badges, is_deleted, created_at,

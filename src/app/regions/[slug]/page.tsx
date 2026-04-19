@@ -34,7 +34,7 @@ export default async function RegionPage({ params }: Props) {
         categories:categories(id, name, slug),
         product_variants(id, price, mrp, variant_value, available_stock, is_active)
       `)
-      .eq('state_id', state.id)
+      .eq('state_id', state.id)   // state.id is the text code e.g. "hp"
       .eq('is_deleted', false)
       .eq('is_active', true)
       .order('name')
@@ -48,8 +48,8 @@ export default async function RegionPage({ params }: Props) {
     <div>
       {/* Hero */}
       <div className="relative h-64 sm:h-80 bg-forest-900 overflow-hidden">
-        {state.image_url && (
-          <Image src={state.image_url} alt={state.name} fill sizes="100vw" className="object-cover opacity-50" />
+        {state.image_path && (
+          <Image src={state.image_path} alt={state.name} fill sizes="100vw" className="object-cover opacity-50" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-forest-950/80 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-end px-6 sm:px-12 lg:px-20 pb-8">
@@ -61,9 +61,6 @@ export default async function RegionPage({ params }: Props) {
             <span className="text-white">{state.name}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-white">{state.name}</h1>
-          {state.region && (
-            <p className="text-forest-300 text-sm mt-1">{state.region}</p>
-          )}
         </div>
       </div>
 
@@ -105,12 +102,14 @@ export default async function RegionPage({ params }: Props) {
   )
 }
 
+// states table: id=text (e.g. "hp"), name, description, is_active, image_path
+// The URL /regions/hp → params.slug = "hp" → match states.id = "hp"
 async function fetchState(slug: string) {
   try {
     const { data, error } = await supabase
       .from('states')
-      .select('id, name, slug, description, image_url, region')
-      .eq('slug', slug)
+      .select('id, name, description, image_path, is_active')
+      .eq('id', slug)   // ← FIX: states uses "id" as the slug, not a separate "slug" column
       .single()
     return error ? null : data
   } catch { return null }
@@ -118,6 +117,9 @@ async function fetchState(slug: string) {
 
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('states').select('slug'); data = r.data } catch {}
-  return (data || []).map((s: any) => ({ slug: s.slug }))
+  try {
+    const r = await supabase.from('states').select('id')  // ← FIX: select "id" not "slug"
+    data = r.data
+  } catch {}
+  return (data || []).map((s: any) => ({ slug: s.id }))  // ← FIX: use s.id not s.slug
 }
