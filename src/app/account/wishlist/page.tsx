@@ -4,6 +4,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { supabase } from '@/lib/supabase'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product } from '@/types'
@@ -19,15 +20,15 @@ export default function WishlistPage() {
         .from('products')
         .select(`
           id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-          image_url, unit_label, badges_bestseller, badges_new, category_id,
+          image_url, unit_label, badges, category_id,
           is_deleted, status,
           categories:categories(id, name, slug),
-          product_variants(id, price, mrp, size, available_stock, is_active)
+          product_variants(id, price, mrp, variant_value, available_stock, is_active)
         `)
         .in('id', wishlist)
         .eq('is_deleted', false)
         .eq('status', 'active')
-      return (data as unknown as Product[]) || []
+      return normalizeProducts(data ?? [])
     }
   )
 

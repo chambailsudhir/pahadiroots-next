@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product, Category } from '@/types'
@@ -56,10 +57,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     .from('products')
     .select(`
       id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
-      image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-      category_id, is_deleted, status,
+      image_url, unit_label, badges, category_id, is_deleted, status,
       categories:categories(id, name, slug),
-      product_variants(id, price, mrp, size, available_stock, is_active)
+      product_variants(id, price, mrp, variant_value, available_stock, is_active)
     `, { count: 'exact' })
     .eq('category_id', cat.id)
     .eq('is_deleted', false)
@@ -71,12 +71,12 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   switch (sort) {
     case 'price_asc':  query = query.order('price', { ascending: true });   break
     case 'price_desc': query = query.order('price', { ascending: false });  break
-    case 'popular':    query = query.eq('badges_bestseller', true);         break
+    case 'popular':    query = query.eq('badges, ', true);         break
     default:           query = query.order('created_at', { ascending: false })
   }
 
   const { data, count } = await query
-  const products   = (data as unknown as Product[]) || []
+  const products   = normalizeProducts(data ?? [])
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Build breadcrumb JSON-LD

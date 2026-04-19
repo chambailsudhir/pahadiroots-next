@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ProductCard from '@/components/product/ProductCard'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import type { Product, Category } from '@/types'
 
 const FILTERS = [
@@ -28,18 +29,14 @@ async function fetchProducts(): Promise<Product[]> {
   try {
     const { data } = await supabase
       .from('products')
-      .select(`
-        id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
-        image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-        category_id, is_deleted, status,
-        categories:categories(id, name, slug),
-        product_variants(id, price, mrp, size, available_stock, is_active)
-      `)
+      .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
       .eq('status', 'active')
-      .eq('badges_bestseller', true)
       .limit(20)
-    return (data as unknown as Product[]) || []
+    // Filter bestsellers client-side since badges is a jsonb array (can't .eq on array element)
+    const all = normalizeProducts(data ?? [])
+    const bs = all.filter(p => p.badges_bestseller)
+    return bs.length > 0 ? bs : all
   } catch { return [] }
 }
 

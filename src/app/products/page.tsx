@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
 export const metadata: Metadata = {
@@ -49,13 +50,7 @@ export default async function ProductsPage({
   // Build query
   let query = supabase
     .from('products')
-    .select(`
-      id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
-      image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-      category_id, is_deleted, status,
-      categories:categories(id, name, slug),
-      product_variants(id, price, mrp, size, available_stock, is_active)
-    `, { count: 'exact' })
+    .select(PRODUCT_SELECT, { count: 'exact' })
     .eq('is_deleted', false)
     .eq('status', 'active')
     .range(offset, offset + PAGE_SIZE - 1)
@@ -65,16 +60,21 @@ export default async function ProductsPage({
     try { const { data: cat } = await supabase.from('categories').select('id').eq('slug', catSlug).single(); if (cat) query = query.eq('category_id', (cat as any).id) } catch {}
   }
 
-  // Sort
+  // Sort — badges_bestseller doesn't exist as a column; filter client-side after fetch
   switch (sort) {
     case 'price_asc':  query = query.order('price', { ascending: true });  break
     case 'price_desc': query = query.order('price', { ascending: false }); break
-    case 'popular':    query = query.eq('badges_bestseller', true).order('name'); break
+    case 'popular':    query = query.order('name'); break   // normalized below
     default:           query = query.order('created_at', { ascending: false })
   }
 
   const { data, count } = await query
-  const products  = (data as unknown as Product[]) || []
+  let products = normalizeProducts(data ?? [])
+  // For 'popular' sort, filter to bestsellers first then fall back to all
+  if (sort === 'popular') {
+    const bs = products.filter(p => p.badges_bestseller)
+    if (bs.length > 0) products = bs
+  }
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Fetch categories for filter

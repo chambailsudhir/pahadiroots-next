@@ -123,10 +123,10 @@ export default function ExploreByRegion({ states }: Props) {
   const sans  = 'var(--font-lato,Lato,sans-serif)'
 
   return (
-    <section style={{ background: '#f4eed6', padding: '40px 40px 0' }}>
+    <section style={{ background: '#f4eed6', padding: '40px 0 0', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div id="regions" style={{ marginBottom: '20px' }}>
+      <div id="regions" style={{ marginBottom: '20px', padding: '0 40px' }}>
         <div style={{ display: 'inline-block', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#c8920a', background: 'rgba(200,146,10,.1)', border: '1px solid rgba(200,146,10,.25)', padding: '4px 14px', borderRadius: '20px', marginBottom: '10px', fontFamily: sans }}>
           Explore by Region
         </div>
@@ -139,7 +139,7 @@ export default function ExploreByRegion({ states }: Props) {
       </div>
 
       {/* ── Story Cards Row (horizontal scroll) ── */}
-      <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '18px', scrollbarWidth: 'none', marginBottom: '8px', msOverflowStyle: 'none' } as React.CSSProperties}>
+      <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', paddingBottom: '18px', paddingLeft: '40px', paddingRight: '40px', scrollbarWidth: 'none', marginBottom: '8px', msOverflowStyle: 'none' } as React.CSSProperties}>
         {states.map(s => {
           const m = REGION_META[s.id]
           const isActive = s.id === activeId

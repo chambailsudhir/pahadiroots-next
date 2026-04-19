@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { supabase } from '@/lib/supabase'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -103,10 +104,12 @@ async function fetchCategories() {
 }
 
 async function fetchStates(): Promise<RichState[]> {
-  // DB-verified schema (confirmed from Supabase table editor screenshot):
-  // states: id(text), created_at, name(text), description(text), image_path(text), is_active(bool), updated_at
-  // state_images: state_id, image_url, sort_order
-  // products.state_id references states.id
+  // DB schema (verified from admin catalogue & Supabase screenshots):
+  // states:           id(text e.g. "hp"), name, description, image_path, is_active(bool)
+  // state_images:     state_id, image_url, sort_order
+  // products:         status('active'|'inactive'), is_deleted(bool), badges(jsonb array),
+  //                   state_id(text), variant column is variant_value (NOT size)
+  // product_variants: variant_value, is_active(bool)
   try {
     const { data: statesData, error } = await supabase
       .from('states')
@@ -122,44 +125,43 @@ async function fetchStates(): Promise<RichState[]> {
 
     const stateIds = statesData.map(s => s.id)
 
-    // Fetch per-state gallery images (state_images table)
+    // Fetch per-state gallery images
     const { data: stateImagesData } = await supabase
       .from('state_images')
       .select('state_id, image_url, sort_order')
       .in('state_id', stateIds)
       .order('sort_order')
 
-    // Fetch products belonging to these states
-    const { data: productsData } = await supabase
+    // Fetch products — use correct column names from actual DB schema:
+    // - badges is a jsonb array, NOT separate badges_bestseller / badges_new / badges_organic booleans
+    // - status is 'active'|'inactive' string (NOT is_active boolean on products table)
+    // - product_variants uses variant_value NOT size
+    const { data: productsData, error: prodError } = await supabase
       .from('products')
-      .select(`
-        id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-        image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-        category_id, state_id, is_deleted, is_active,
-        categories:categories(id, name, slug),
-        product_variants(id, price, mrp, size, available_stock, is_active)
-      `)
+      .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .in('state_id', stateIds)
       .limit(60)
 
-    const products = (productsData ?? []) as unknown as (Product & { state_id: string })[]
+    if (prodError) console.error('fetchStates: products query error', prodError)
+
+    const products = normalizeProducts(productsData ?? []) as (Product & { state_id: string })[]
+
     const stateImages = (stateImagesData ?? []) as { state_id: string; image_url: string; sort_order: number }[]
 
     return statesData.map(s => {
-      // Get first gallery image, fall back to image_path on states row
       const galleryImages = stateImages.filter(img => String(img.state_id) === String(s.id))
-      const primaryImage = galleryImages[0]?.image_url ?? s.image_path ?? null
+      const primaryImage  = galleryImages[0]?.image_url ?? s.image_path ?? null
 
       return {
-        id: s.id,
-        name: s.name,
-        slug: s.id,              // id IS the slug (e.g. "hp", "uk", "jk")
+        id:          s.id,
+        name:        s.name,
+        slug:        s.id,
         description: s.description ?? null,
-        image_url: primaryImage, // first gallery image or image_path fallback
-        region: null,
-        products: products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
+        image_url:   primaryImage,
+        region:      null,
+        products:    products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
       }
     }) as unknown as RichState[]
   } catch (e) {

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { normalizeProducts } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 
@@ -29,15 +30,14 @@ export default async function RegionPage({ params }: Props) {
       .from('products')
       .select(`
         id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-        image_url, unit_label, badges_bestseller, badges_new,
-        category_id, is_deleted, status,
+        image_url, unit_label, badges, category_id, is_deleted, status,
         categories:categories(id, name, slug),
-        product_variants(id, price, mrp, size, available_stock, is_active)
+        product_variants(id, price, mrp, variant_value, available_stock, is_active)
       `)
       .eq('state_id', state.id)
       .eq('is_deleted', false)
       .eq('status', 'active')
-      .order('badges_bestseller', { ascending: false })
+      .order('badges, ', { ascending: false })
       .limit(24)
     products = data
   } catch { products = null }

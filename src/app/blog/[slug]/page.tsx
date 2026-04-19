@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { formatDate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -38,7 +39,7 @@ export default async function BlogArticlePage({ params }: Props) {
     try {
       const { data } = await supabase
         .from('products')
-        .select(`id, name, slug, emoji, price, mrp, available_stock, gst_rate, image_url, unit_label, badges_bestseller, badges_new, category_id, is_deleted, status, categories:categories(id,name,slug), product_variants(id,price,mrp,size,available_stock,is_active)`)
+        .select(`id, name, slug, emoji, price, mrp, available_stock, gst_rate, image_url, unit_label, badges, category_id, is_deleted, status, categories:categories(id,name,slug), product_variants(id,price,mrp,variant_value,available_stock,is_active)`)
         .eq('id', post.related_product_id)
         .single()
       relatedProduct = data as Product | null

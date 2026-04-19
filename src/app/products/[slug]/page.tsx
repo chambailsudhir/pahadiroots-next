@@ -240,11 +240,11 @@ async function fetchProduct(slug: string): Promise<Product | null> {
         id, name, slug, emoji, sku, category_id, state_id, status, unit_label,
         gst_rate, price, selling, mrp, cost_price, available_stock, initial_stock,
         short_description, long_description, image_url, tags,
-        badges_bestseller, badges_new, badges_organic, is_deleted, created_at,
+        badges, is_deleted, created_at,
         ai_description, ai_health_benefits, ai_how_to_use, ai_storage_tips,
         ai_who_should_buy, ai_generated_at,
         categories:categories(id, name, slug),
-        product_variants(id, price, mrp, size, sku, available_stock, is_active),
+        product_variants(id, price, mrp, variant_value, sku, available_stock, is_active),
         product_images(id, url, sort_order, alt_text)
       `)
       .eq('slug', slug)
@@ -253,7 +253,20 @@ async function fetchProduct(slug: string): Promise<Product | null> {
       .single()
 
     if (error || !data) return null
-    return data as unknown as Product
+
+    // Normalize badges array → boolean flags ProductCard/detail expects
+    const raw = data as any
+    const badges: string[] = Array.isArray(raw.badges) ? raw.badges : []
+    return {
+      ...raw,
+      badges_bestseller: badges.includes('bestseller'),
+      badges_new:        badges.includes('new'),
+      badges_organic:    badges.includes('organic'),
+      product_variants: (raw.product_variants ?? []).map((v: any) => ({
+        ...v,
+        size: v.variant_value ?? v.size ?? '',
+      })),
+    } as unknown as Product
   } catch { return null }
 }
 

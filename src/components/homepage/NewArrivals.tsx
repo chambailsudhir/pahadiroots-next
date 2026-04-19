@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import ProductCard from '@/components/product/ProductCard'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
 export default async function NewArrivals() {
@@ -8,18 +9,12 @@ export default async function NewArrivals() {
   try {
     const { data } = await supabase
       .from('products')
-      .select(`
-        id, name, slug, emoji, price, mrp, selling, available_stock, gst_rate,
-        image_url, unit_label, badges_bestseller, badges_new, badges_organic,
-        category_id, is_deleted, status, created_at,
-        categories:categories(id, name, slug),
-        product_variants(id, price, mrp, size, available_stock, is_active)
-      `)
+      .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(4)
-    products = (data as unknown as Product[]) || []
+    products = normalizeProducts(data ?? [])
   } catch { return null }
 
   if (!products.length) return null
