@@ -26,7 +26,7 @@ function SearchContent() {
           product_variants(id, price, mrp, variant_value, available_stock, is_active)
         `)
         .eq('is_deleted', false)
-        .eq('status', 'active')
+        .eq('is_active', true)
         .or(`name.ilike.%${q}%,tags.ilike.%${q}%`)
         .limit(48)
       return normalizeProducts(data ?? [])

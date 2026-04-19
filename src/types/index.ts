@@ -41,7 +41,8 @@ export interface Product {
   sku: string | null
   category_id: number
   state_id: string | null
-  status: 'active' | 'inactive' | 'draft'
+  is_active: boolean
+  status?: 'active' | 'inactive' | 'draft' // legacy, use is_active
   unit_label: string | null
   gst_rate: number
   price: number           // base selling price

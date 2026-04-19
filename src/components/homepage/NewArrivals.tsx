@@ -11,7 +11,7 @@ export default async function NewArrivals() {
       .from('products')
       .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
-      .eq('status', 'active')
+      .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(4)
     products = normalizeProducts(data ?? [])

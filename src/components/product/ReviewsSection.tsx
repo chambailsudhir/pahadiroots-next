@@ -23,7 +23,7 @@ export default function ReviewsSection({ productId }: { productId: string | numb
     async () => {
       const { data } = await supabase
         .from('reviews')
-        .select('id, customer_name, location, rating, review_text, status, product_id, created_at')
+        .select('id, customer_name, location, rating, review_text, is_active, product_id, created_at')
         .eq('product_id', productId)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })

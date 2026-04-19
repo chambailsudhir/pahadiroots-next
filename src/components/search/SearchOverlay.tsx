@@ -54,9 +54,9 @@ export default function SearchOverlay() {
     async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, slug, emoji, price, mrp, image_url, available_stock, status, is_deleted')
+        .select('id, name, slug, emoji, price, mrp, image_url, available_stock, is_active, is_deleted')
         .eq('is_deleted', false)
-        .eq('status', 'active')
+        .eq('is_active', true)
         .ilike('name', `%${debouncedQ}%`)
         .limit(6)
       return normalizeProducts(data ?? [])

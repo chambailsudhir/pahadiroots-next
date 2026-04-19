@@ -30,13 +30,13 @@ export default async function RegionPage({ params }: Props) {
       .from('products')
       .select(`
         id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-        image_url, unit_label, badges, category_id, is_deleted, status,
+        image_url, unit_label, badges, category_id, is_deleted, is_active,
         categories:categories(id, name, slug),
         product_variants(id, price, mrp, variant_value, available_stock, is_active)
       `)
       .eq('state_id', state.id)
       .eq('is_deleted', false)
-      .eq('status', 'active')
+      .eq('is_active', true)
       .order('name')
       .limit(24)
     products = normalizeProducts(data ?? [])
