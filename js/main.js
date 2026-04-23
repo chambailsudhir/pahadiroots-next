@@ -1761,18 +1761,26 @@ function renderStoryCards() {
   var statesData = (STATES && STATES.length) ? STATES : FALLBACK_STATES;
   el.innerHTML = statesData.map(function(s, i) {
     var imgSrc = (s._uploadedImgs && s._uploadedImgs[0]) || s._uploadedImg || s.cover_photo_url || s.tab_photo_url || '';
+    // Reference uses position:relative wrapper + absolute fill image — fixes portrait crop
     var imgHtml = imgSrc
-      ? '<img class="story-card-img" src="' + imgOpt(imgSrc,{w:440,h:320,q:78}) + '" alt="' + s.name + '" loading="' + (i < 6 ? 'eager' : 'lazy') + '" decoding="async" ' + (i < 3 ? 'fetchpriority="high" ' : '') + 'onload="this.closest(\'.story-card\').classList.add(\'img-ready\')" onerror="this.style.display=\'none\'">'
-      : '<div class="story-card-emo" style="background:' + (s.panel_bg||'linear-gradient(135deg,#1a3a1e,#2d5233)') + '">' + s.emoji + '</div>';
+      ? '<div class="sc-img-wrap" style="background:' + (s.panel_bg||'linear-gradient(135deg,#1a3a1e,#2d5233)') + '">' +
+          '<img src="' + imgOpt(imgSrc,{w:480,q:78}) + '" alt="' + s.name + '" loading="' + (i < 6 ? 'eager' : 'lazy') + '" decoding="async" ' + (i < 3 ? 'fetchpriority="high" ' : '') + 'onload="this.closest(\'.story-card\').classList.add(\'img-ready\')" onerror="this.style.display=\'none\'">' +
+          '<span class="sc-img-emo">' + s.emoji + '</span>' +
+        '</div>'
+      : '<div class="sc-img-wrap" style="background:' + (s.panel_bg||'linear-gradient(135deg,#1a3a1e,#2d5233)') + '">' +
+          '<span class="sc-img-emo">' + s.emoji + '</span>' +
+        '</div>';
     var snippet = _storySnippets[s.id] || (s.description||'').substring(0, 88) + '…';
     var cardUrl = '/state.html?id=' + s.id;
     var onclickAttr = 'var sp=document.getElementById(\'spnls\');if(sp&&sp.children.length){event.preventDefault();swState(\'' + s.id + '\');var el=document.getElementById(\'spnls\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}}'
     return '<a class="story-card" href="' + cardUrl + '" data-state="' + s.id + '" style="text-decoration:none;color:inherit" title="Explore ' + s.name + '" onclick="' + onclickAttr + '">' +
-      imgHtml +
-      '<div class="story-card-body">' +
-        '<div class="story-card-name">' + s.emoji + ' ' + s.name + '</div>' +
-        '<div class="story-card-tag">' + (s.tagline||'') + '</div>' +
-        '<div class="story-card-line">' + snippet + '</div>' +
+      '<div class="story-card-inner">' +
+        imgHtml +
+        '<div class="story-card-body">' +
+          '<div class="story-card-name">' + s.emoji + ' ' + s.name + '</div>' +
+          '<div class="story-card-tag">' + (s.tagline||'') + '</div>' +
+          '<div class="story-card-line">' + snippet + '</div>' +
+        '</div>' +
       '</div>' +
     '</a>';
   }).join('');

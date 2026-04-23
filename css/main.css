@@ -305,20 +305,28 @@ section.sec{padding:52px 40px;content-visibility:auto;contain-intrinsic-size:0 6
 .state-sec .sh2{color:var(--g);font-size:clamp(28px,4vw,52px)}
 .state-sec .ssub{color:var(--tx2);margin-bottom:24px}
 /* ── REGION STORYTELLING CARDS ──────────────────── */
-.story-card{width:100%;border-radius:14px;overflow:hidden;position:relative;cursor:pointer;transition:transform .3s,box-shadow .3s;box-shadow:0 3px 14px rgba(0,0,0,.1);border:none;padding:0;background:none;display:block}
-.story-card:hover{transform:translateY(-5px);box-shadow:0 12px 32px rgba(0,0,0,.18)}
-/* Skeleton shimmer on top of story card img area before load */
-.story-card:not(.img-ready)::before{content:'';position:absolute;top:0;left:0;right:0;height:120px;z-index:2;background:linear-gradient(90deg,#d4cfc7 25%,#e8e4dc 50%,#d4cfc7 75%);background-size:200% 100%;animation:skelshimmer 1.4s infinite;pointer-events:none}
-.story-card.img-ready::before{display:none}
-.story-card-img{width:100%;height:120px;object-fit:cover;object-position:center top;display:block}
-.story-card-emo{width:100%;height:120px;display:flex;align-items:center;justify-content:center;font-size:48px}
+/* ── STORY CARD — premium animated gold border ── */
+@keyframes goldShimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.story-card{width:100%;border-radius:14px;overflow:hidden;position:relative;cursor:pointer;display:block;border:none;padding:1.5px;background:linear-gradient(135deg,#c8920a,#f5d06a,#c8920a,#8b5e00,#f5d06a,#c8920a);background-size:300% 300%;animation:goldShimmer 4s ease infinite;transition:transform .3s,box-shadow .3s}
+.story-card:hover{transform:translateY(-5px);box-shadow:0 14px 36px rgba(200,146,10,.35)}
+/* Inner wrapper clips content inside the gold border */
+.story-card-inner{border-radius:12.5px;overflow:hidden;background:#fff;height:100%}
+body.dark .story-card-inner{background:#0d1a0f}
+/* Image wrapper — positioned container exactly like reference Next.js <Image fill> */
+.sc-img-wrap{width:100%;height:120px;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;font-size:48px}
+.sc-img-wrap img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.sc-img-emo{position:relative;z-index:1;opacity:.7;user-select:none}
+/* Skeleton shimmer — targets the wrapper before img loads */
+.story-card:not(.img-ready) .sc-img-wrap::before{content:'';position:absolute;inset:0;z-index:2;background:linear-gradient(90deg,#d4cfc7 25%,#e8e4dc 50%,#d4cfc7 75%);background-size:200% 100%;animation:skelshimmer 1.4s infinite;pointer-events:none}
+.story-card.img-ready .sc-img-wrap::before{display:none}
+/* Ladakh image fix — subject in lower half */
+.story-card[data-state="la"] .sc-img-wrap img{object-position:center 60%}
 .story-card-body{padding:10px 12px 12px;background:#fff}
 .story-card-name{font-family:'Playfair Display',serif;font-size:12px;font-weight:700;color:var(--g);margin-bottom:2px}
 .story-card-tag{font-size:9px;color:var(--gd);font-weight:700;letter-spacing:.5px;margin-bottom:4px}
 .story-card-line{font-size:10px;color:var(--tx3);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* Ladakh image fix — subject is in lower portion of image */
-.story-card[data-state="la"] .story-card-img{object-position:center 60%}
-.story-card.active-state .story-card-body{background:var(--g)}
+.story-card.active-state{box-shadow:0 14px 36px rgba(200,146,10,.45)!important;animation:goldShimmer 1.5s ease infinite!important}.story-card.active-state .story-card-inner{background:var(--g)}.story-card.active-state .story-card-body{background:var(--g)}
 .story-card.active-state .story-card-name{color:#fff}
 .story-card.active-state .story-card-tag{color:var(--gd2)}
 .story-card.active-state .story-card-line{color:rgba(255,255,255,.65)}
@@ -2796,9 +2804,7 @@ html[data-theme="valley"] .hslide-btn-primary { background: #4a7c59; }
 .shdr-img-col img { opacity: 1; transition: transform 10s; }
 .shdr-img-col.skel::before { border-radius: 0; z-index: 2; }
 
-/* Story card image — fade handled by inline onload style */
-.story-card-img { opacity: 0; transition: opacity .4s ease; display: block; }
-.story-card.img-ready .story-card-img { opacity: 1; }
+/* Story card image fade now handled via .sc-img-wrap img */
 /* Hero banner background — starts as solid dark, fades in */
 .hslide[data-img-ready="true"] { transition: background-image .001s; }
 
@@ -2818,7 +2824,7 @@ html[data-theme="valley"] .hslide-btn-primary { background: #4a7c59; }
 .ccat-v2-box img,
 .stab-thumb img,
 .shdr-img-col img,
-.story-card-img,
+.sc-img-wrap img,
 .qv-img-wrap img {
   will-change: opacity;
   transform: translateZ(0); /* force compositing layer */
@@ -2857,7 +2863,7 @@ html[data-theme="valley"] .hslide-btn-primary { background: #4a7c59; }
 @media (prefers-reduced-motion: reduce) {
   .piw img,
   .ccat-v2-box img,
-  .story-card-img { transition: none !important; opacity: 1 !important; }
+  .sc-img-wrap img { transition: none !important; opacity: 1 !important; }
   .skel::before { animation: none !important; }
 }
 
