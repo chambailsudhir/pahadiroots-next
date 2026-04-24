@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
 }
 
-export const revalidate = 300
+export const revalidate = 30  // Revalidate every 30 seconds — admin changes reflect quickly
 
 export default async function HomePage() {
   const settings = await getSiteSettings()

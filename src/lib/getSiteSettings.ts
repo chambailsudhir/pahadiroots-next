@@ -52,16 +52,9 @@ const DEFAULTS: Partial<SiteSettings> = {
   new_arrivals_enabled:    'true',
 }
 
-// In-memory cache for server-side (Next.js ISR revalidation handles the rest)
-let _cache: { data: SiteSettings; ts: number } | null = null
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-
 export async function getSiteSettings(): Promise<SiteSettings> {
-  // Return cache if fresh
-  if (_cache && Date.now() - _cache.ts < CACHE_TTL) {
-    return _cache.data
-  }
-
+  // No in-memory cache — Next.js ISR (revalidate on page.tsx) handles caching at the page level.
+  // This ensures admin changes are reflected as soon as ISR revalidates.
   try {
     const { data, error } = await supabase
       .from('site_settings')
@@ -76,7 +69,6 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     // Merge: defaults first, then DB values override
     const settings = { ...DEFAULTS, ...fromDB } as SiteSettings
 
-    _cache = { data: settings, ts: Date.now() }
     return settings
   } catch (err) {
     console.error('[getSiteSettings] Failed to fetch, using defaults:', err)
