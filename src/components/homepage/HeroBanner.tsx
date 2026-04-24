@@ -107,23 +107,30 @@ export default function HeroBanner({ images, settings }: Props) {
         )}
       </div>
 
-      {/* ── Stats bar — sits directly below slider, no gap ── */}
-      <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
-        {[
-          { num: '500+',  lbl: 'Farmer Families'   },
-          { num: `${settings.states_covered || '10'}+`, lbl: 'Himalayan States' },
-          { num: '10K+',  lbl: 'Happy Customers'   },
-          { num: '48hr',  lbl: 'Avg Dispatch'       },
-        ].map((s, i) => (
-          <div key={i} style={{ display:'flex', alignItems:'center', gap:0 }}>
-            <div style={{ textAlign:'center', padding:'0 32px' }}>
-              <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
-              <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
-            </div>
-            {i < 3 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
+      {/* ── Stats bar — reads from admin settings, respects hide flags ── */}
+      {(() => {
+        const allStats = [
+          { num: settings.stat_farmer_families  ? settings.stat_farmer_families + '+'  : '500+',  lbl: settings.stat_farmer_label    || 'Farmer Families',  hidden: settings.stat_hide_stat_farmer_families  === 'true' },
+          { num: settings.stat_himalayan_states ? settings.stat_himalayan_states + '+' : (settings.states_covered || '10') + '+', lbl: settings.stat_states_label || 'Himalayan States', hidden: settings.stat_hide_stat_himalayan_states === 'true' },
+          { num: settings.stat_happy_customers  ? settings.stat_happy_customers + '+'  : '10K+',  lbl: settings.stat_customers_label || 'Happy Customers',   hidden: settings.stat_hide_stat_happy_customers  === 'true' },
+          { num: settings.stat_avg_dispatch     ? settings.stat_avg_dispatch + 'hr'    : '48hr',  lbl: settings.stat_dispatch_label  || 'Avg Dispatch',       hidden: settings.stat_hide_stat_avg_dispatch     === 'true' },
+        ]
+        const visible = allStats.filter(s => !s.hidden)
+        if (visible.length === 0) return null
+        return (
+          <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
+            {visible.map((s, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:0 }}>
+                <div style={{ textAlign:'center', padding:'0 32px' }}>
+                  <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
+                  <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
+                </div>
+                {i < visible.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )
+      })()}
 
       <style>{`
         @media(max-width:860px){
