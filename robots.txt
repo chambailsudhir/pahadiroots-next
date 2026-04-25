@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://pahadiroots.com/sitemap.xml
+
+# Crawl delay (be gentle)
+Crawl-delay: 1

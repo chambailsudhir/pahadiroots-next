@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Order Confirmed — 5 Pahadi Roots</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --g:    #1a3a1e;
+    --g2:   #2d6a4f;
+    --g3:   #40916c;
+    --gd:   #c8920a;
+    --gd2:  #f4a261;
+    --bg:   #faf7f2;
+    --bg2:  #f0ebe2;
+    --bd:   #e8e0d0;
+    --tx:   #1a1a1a;
+    --tx2:  #444;
+    --tx3:  #888;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--tx);
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    background: var(--g);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    text-decoration: none;
+  }
+  .logo-name { font-family: 'Playfair Display', serif; font-size: 20px; color: #fff; font-weight: 900; }
+  .logo-tl   { font-size: 10px; color: rgba(255,255,255,.55); letter-spacing: 1.5px; text-transform: uppercase; }
+  .nav-back {
+    color: rgba(255,255,255,.8); font-size: 13px; font-weight: 600;
+    text-decoration: none; display: flex; align-items: center; gap: 6px;
+    transition: color .2s;
+  }
+  .nav-back:hover { color: #fff; }
+
+  /* ── HERO CONFIRM ── */
+  .confirm-hero {
+    background: linear-gradient(135deg, var(--g) 0%, var(--g2) 100%);
+    padding: 52px 24px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .confirm-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+  .check-circle {
+    width: 80px; height: 80px;
+    background: rgba(255,255,255,.15);
+    border: 3px solid rgba(255,255,255,.4);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 38px;
+    animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .confirm-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px; font-weight: 900;
+    color: #fff; margin-bottom: 8px;
+    animation: fadeUp .5s .2s both;
+  }
+  .confirm-sub {
+    font-size: 15px; color: rgba(255,255,255,.75);
+    animation: fadeUp .5s .3s both;
+  }
+  @keyframes fadeUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  .order-num-badge {
+    display: inline-block;
+    background: rgba(255,255,255,.15);
+    border: 1.5px solid rgba(255,255,255,.3);
+    border-radius: 20px;
+    padding: 6px 18px;
+    font-size: 13px; font-weight: 700; color: #fff;
+    margin-top: 14px;
+    letter-spacing: .5px;
+    animation: fadeUp .5s .4s both;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main { max-width: 720px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    border: 1.5px solid var(--bd);
+    padding: 22px 22px;
+    margin-bottom: 16px;
+    animation: fadeUp .4s both;
+  }
+  .card:nth-child(1) { animation-delay: .1s; }
+  .card:nth-child(2) { animation-delay: .2s; }
+  .card:nth-child(3) { animation-delay: .3s; }
+  .card:nth-child(4) { animation-delay: .4s; }
+  .card-title {
+    font-size: 12px; font-weight: 700; color: var(--tx3);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .card-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--bd);
+  }
+
+  /* ── STATUS STEPPER ── */
+  .stepper { display: flex; align-items: flex-start; gap: 0; }
+  .step { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .step:not(:last-child)::after {
+    content: ''; position: absolute;
+    top: 16px; left: 50%; width: 100%; height: 2px;
+    background: var(--bd); z-index: 0;
+  }
+  .step.done:not(:last-child)::after { background: var(--g2); }
+  .step-dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; z-index: 1; position: relative;
+    border: 2px solid var(--bd); background: #fff;
+    transition: all .3s;
+  }
+  .step.done .step-dot  { background: var(--g2); border-color: var(--g2); color: #fff; }
+  .step.active .step-dot{ background: #fff; border-color: var(--g2); color: var(--g2); box-shadow: 0 0 0 4px rgba(45,106,79,.12); }
+  .step-label { font-size: 10px; font-weight: 700; color: var(--tx3); margin-top: 6px; text-align: center; text-transform: uppercase; letter-spacing: .5px; }
+  .step.done .step-label, .step.active .step-label { color: var(--g2); }
+
+  /* ── ORDER ITEMS ── */
+  .order-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--bg2);
+  }
+  .order-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .item-img {
+    width: 54px; height: 54px; border-radius: 10px;
+    background: var(--bg2); overflow: hidden; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .item-img img { width: 100%; height: 100%; object-fit: cover; }
+  .item-info { flex: 1; }
+  .item-name  { font-size: 14px; font-weight: 700; color: var(--tx); }
+  .item-meta  { font-size: 12px; color: var(--tx3); margin-top: 2px; }
+  .item-price { font-size: 14px; font-weight: 800; color: var(--g); }
+
+  /* ── SUMMARY ROW ── */
+  .sum-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 14px; }
+  .sum-row.total { border-top: 2px solid var(--bd); margin-top: 6px; padding-top: 12px; font-size: 17px; font-weight: 900; color: var(--g); }
+  .sum-row .lbl { color: var(--tx2); }
+  .sum-row .val { font-weight: 700; }
+  .free-ship { color: var(--g2); font-weight: 700; }
+
+  /* ── DELIVERY INFO ── */
+  .del-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .del-field label { font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 3px; }
+  .del-field span  { font-size: 14px; font-weight: 600; color: var(--tx); }
+
+  /* ── DELIVERY TIMELINE ── */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .tl-item { display: flex; gap: 14px; padding-bottom: 16px; position: relative; }
+  .tl-item:not(:last-child)::before {
+    content: ''; position: absolute; left: 16px; top: 32px;
+    width: 2px; height: calc(100% - 16px);
+    background: var(--bd);
+  }
+  .tl-dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--bg2); border: 2px solid var(--bd);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; z-index: 1;
+  }
+  .tl-dot.active { background: var(--g2); border-color: var(--g2); }
+  .tl-body { padding-top: 4px; }
+  .tl-title { font-size: 13px; font-weight: 700; color: var(--tx); }
+  .tl-date  { font-size: 12px; color: var(--tx3); margin-top: 2px; }
+
+  /* ── TRACKING ── */
+  .track-box {
+    background: var(--bg2); border-radius: 12px; padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .track-box .track-icon { font-size: 28px; }
+  .track-box .track-info { flex: 1; }
+  .track-box .track-label { font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: .5px; }
+  .track-box .track-val   { font-size: 15px; font-weight: 800; color: var(--g); margin-top: 2px; }
+  .track-link {
+    display: inline-block; background: var(--g); color: #fff;
+    padding: 8px 16px; border-radius: 8px; font-size: 12px;
+    font-weight: 700; text-decoration: none; margin-top: 10px;
+    transition: background .2s;
+  }
+  .track-link:hover { background: var(--g2); }
+
+  /* ── ACTION BUTTONS ── */
+  .actions { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .btn-primary {
+    flex: 1; min-width: 160px;
+    background: var(--g); color: #fff;
+    border: none; border-radius: 12px; padding: 14px 20px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    text-align: center; text-decoration: none;
+    transition: background .2s, transform .15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:hover { background: var(--g2); transform: translateY(-1px); }
+  .btn-secondary {
+    flex: 1; min-width: 160px;
+    background: #fff; color: var(--g);
+    border: 2px solid var(--bd); border-radius: 12px; padding: 13px 20px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    text-align: center; text-decoration: none;
+    transition: all .2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-secondary:hover { border-color: var(--g); background: var(--bg2); }
+
+  /* ── UPSELL ── */
+  .upsell-grid { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .upsell-grid::-webkit-scrollbar { display: none; }
+  .upsell-card {
+    min-width: 140px; background: var(--bg2); border-radius: 12px;
+    padding: 12px; text-align: center; cursor: pointer;
+    transition: transform .2s, box-shadow .2s; border: 1.5px solid var(--bd);
+    flex-shrink: 0;
+  }
+  .upsell-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,.1); }
+  .upsell-emoji { font-size: 32px; margin-bottom: 6px; }
+  .upsell-name  { font-size: 12px; font-weight: 700; color: var(--tx); }
+  .upsell-price { font-size: 13px; font-weight: 800; color: var(--g2); margin-top: 3px; }
+  .upsell-add   { display: inline-block; background: var(--g); color: #fff; border: none; border-radius: 7px; padding: 5px 12px; font-size: 11px; font-weight: 700; margin-top: 7px; cursor: pointer; }
+
+  /* ── LOADING ── */
+  .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 8px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* ── EMPTY/ERROR ── */
+  .error-box { text-align: center; padding: 60px 20px; }
+  .error-box .err-icon { font-size: 48px; margin-bottom: 16px; }
+  .error-box h2 { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--g); margin-bottom: 8px; }
+  .error-box p  { color: var(--tx3); font-size: 14px; margin-bottom: 24px; }
+
+  @media(max-width:600px) {
+    .confirm-title { font-size: 26px; }
+    .del-info { grid-template-columns: 1fr; }
+    .actions { flex-direction: column; }
+    .btn-primary, .btn-secondary { min-width: unset; }
+  }
+</style>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body data-theme="pahadi">
+<script src="/js/theme.js"></script>
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="/" class="nav-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+    <div style="width:38px;height:38px;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <img src="https://ulyrhnpoiypuvaurlqqi.supabase.co/storage/v1/object/public/pahadi-images/5%20pahadi%20roots.png" alt="5 Pahadi Roots" style="width:38px;height:38px;object-fit:contain" onerror="this.style.display='none';this.parentElement.textContent='🌿'">
+    </div>
+    <div>
+      <div class="logo-name">5 Pahadi Roots</div>
+      <div class="logo-tl">Himalayan Natural Store</div>
+    </div>
+  </a>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="position:relative;display:inline-flex">
+      <button onclick="(function(){var p=document.getElementById('ocThemePanel');p.style.display=p.style.display==='block'?'none':'block'})()" title="Switch theme" style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.25);border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:#fff;transition:all .2s">🎨</button>
+      <div id="ocThemePanel" style="display:none;position:absolute;top:calc(100% + 10px);right:0;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.2);padding:16px;width:260px;z-index:9999">
+        <div style="font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#999;margin-bottom:12px">Choose Theme</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="theme-opt" data-theme="pahadi" onclick="applyTheme('dukan');document.getElementById('ocThemePanel').style.display='none'" style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);width:100%;text-align:left"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#006d77 50%,#bf4e2c 50%);flex-shrink:0"></div><div><div style="font-size:12px;font-weight:800;color:#1a1a1a">Pahadi Dukkan ✦</div><div style="font-size:10px;color:#999">Default</div></div><span class="theme-check" style="margin-left:auto;color:#006d77;opacity:0">✓</span></button>
+          <button class="theme-opt" data-theme="pahadi" onclick="applyTheme('pahadi');document.getElementById('ocThemePanel').style.display='none'" style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);width:100%;text-align:left"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1a3a1e 50%,#c8920a 50%);flex-shrink:0"></div><div><div style="font-size:12px;font-weight:800;color:#1a1a1a">Pahadi Roots</div><div style="font-size:10px;color:#999">Forest green · Gold</div></div><span class="theme-check" style="margin-left:auto;color:#1a3a1e;opacity:0">✓</span></button>
+          <button class="theme-opt" data-theme="saffron" onclick="applyTheme('saffron');document.getElementById('ocThemePanel').style.display='none'" style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);width:100%;text-align:left"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#8B1A1A 50%,#c8920a 50%);flex-shrink:0"></div><div><div style="font-size:12px;font-weight:800;color:#1a1a1a">Saffron Gold ✦</div><div style="font-size:10px;color:#999">Premium</div></div><span class="theme-check" style="margin-left:auto;color:#8B1A1A;opacity:0">✓</span></button>
+          <button class="theme-opt" data-theme="midnight" onclick="applyTheme('midnight');document.getElementById('ocThemePanel').style.display='none'" style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);width:100%;text-align:left"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#0d1117 50%,#d4a843 50%);flex-shrink:0"></div><div><div style="font-size:12px;font-weight:800;color:#1a1a1a">Midnight Cedar ✦</div><div style="font-size:10px;color:#999">Premium</div></div><span class="theme-check" style="margin-left:auto;color:#d4a843;opacity:0">✓</span></button>
+          <button class="theme-opt" data-theme="valley" onclick="applyTheme('valley');document.getElementById('ocThemePanel').style.display='none'" style="display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);width:100%;text-align:left"><div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#4a7c59 50%,#c9676b 50%);flex-shrink:0"></div><div><div style="font-size:12px;font-weight:800;color:#1a1a1a">Valley Bloom ✦</div><div style="font-size:10px;color:#999">Premium</div></div><span class="theme-check" style="margin-left:auto;color:#4a7c59;opacity:0">✓</span></button>
+        </div>
+      </div>
+    </div>
+    <a href="/" class="nav-back">← Continue Shopping</a>
+  </div>
+</nav>
+
+<!-- HERO (shown after data loads) -->
+<div id="confirmHero" class="confirm-hero" style="display:none">
+  <div class="check-circle">✅</div>
+  <div class="confirm-title">Order Confirmed!</div>
+  <div class="confirm-sub">Thank you! Your mountain goodness is on its way 🌿</div>
+  <div class="order-num-badge" id="heroOrderNum">Loading...</div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="mainContent">
+  <!-- Loading skeleton -->
+  <div id="loadingState">
+    <div class="card">
+      <div class="skeleton" style="height:16px;width:40%;margin-bottom:16px"></div>
+      <div style="display:flex;gap:16px">
+        <div class="skeleton" style="width:54px;height:54px;border-radius:10px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div class="skeleton" style="height:14px;width:70%;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:12px;width:40%"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="skeleton" style="height:16px;width:40%;margin-bottom:16px"></div>
+      <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
+      <div class="skeleton" style="height:12px;width:80%"></div>
+    </div>
+  </div>
+
+  <!-- Actual content (populated by JS) -->
+  <div id="orderContent" style="display:none"></div>
+
+  <!-- Error state -->
+  <div id="errorState" class="error-box" style="display:none">
+    <div class="err-icon">📦</div>
+    <h2>Order placed!</h2>
+    <p>We couldn't load your order details right now.<br>Check your email or WhatsApp for confirmation.</p>
+    <a href="/" class="btn-primary" style="max-width:220px;margin:0 auto">← Back to Store</a>
+  </div>
+</div>
+
+<!-- UPSELL SECTION -->
+<div id="upsellSection" class="main" style="display:none;margin-top:0;padding-top:0">
+  <div class="card" style="background:#f8f9f5;border:none;padding:20px 16px">
+    <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#1a3a1e;margin-bottom:4px">You Might Also Love 🌿</div>
+    <div style="font-size:12px;color:#888;margin-bottom:14px">Handpicked from the Himalayas</div>
+    <div class="upsell-grid" id="upsellGrid"></div>
+  </div>
+</div>
+
+
+<script>
+// ── CONFIG ──
+var ADMIN_API = '/api/admin-api';
+var WHATSAPP_NUMBER = '919899984895'; // fallback
+
+// ── GET URL PARAMS ──
+var params   = new URLSearchParams(window.location.search);
+var orderId  = params.get('id')  || '';
+var orderNum = params.get('num') || '';
+var total    = params.get('total') || '';
+var payId    = params.get('payment') || '';
+
+// ── COURIER TRACKING URLS ──
+var courierUrls = {
+  'delhivery':   'https://www.delhivery.com/track/package/',
+  'bluedart':    'https://www.bluedart.com/tracking',
+  'dtdc':        'https://www.dtdc.in/tracking.asp',
+  'ecom':        'https://ecomexpress.in/tracking/',
+  'xpressbees':  'https://www.xpressbees.com/shipment/tracking',
+  'shadowfax':   'https://track.shadowfax.in/',
+  'shiprocket':  'https://shiprocket.co/tracking/',
+};
+
+function getTrackingUrl(courier, trackingNum) {
+  if (!courier || !trackingNum) return null;
+  var base = courierUrls[courier.toLowerCase().replace(/\s/g,'')] || null;
+  if (!base) return null;
+  return base + trackingNum;
+}
+
+// ── RENDER DELIVERY ESTIMATE ──
+function getDeliveryEstimate(createdAt) {
+  // Always calculate from order date (not current date)
+  var d = createdAt ? new Date(createdAt) : new Date();
+  var lo = new Date(d); lo.setDate(lo.getDate() + 5);
+  var hi = new Date(d); hi.setDate(hi.getDate() + 7);
+  var fmt = function(dt) { return dt.toLocaleDateString('en-IN', {day:'numeric', month:'short'}); };
+  return fmt(lo) + ' – ' + fmt(hi) + ', ' + hi.getFullYear();
+}
+
+// ── RENDER ORDER ──
+function renderOrder(order) {
+  var items   = order.items || [];
+  var status  = order.order_status || 'confirmed';
+  var paymentStatus = order.payment_status || 'pending';
+  var total   = order.total_amount || 0;
+  var sub     = order.subtotal || total;
+  var ship    = order.shipping_charge || 0;
+  var disc    = order.discount_amount || 0;
+  var date    = order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}) : '';
+  var trackNum = order.tracking_number || '';
+  var courier  = order.courier || '';
+  var trackUrl = getTrackingUrl(courier, trackNum);
+  var estimate = getDeliveryEstimate(order.created_at);
+
+  // Show hero
+  document.getElementById('confirmHero').style.display = 'block';
+  document.getElementById('heroOrderNum').textContent = '📋 ' + (order.order_number || 'Order #' + orderId.slice(0,8));
+
+  // Stepper
+  var steps = [
+    {key:'confirmed',  icon:'✅', label:'Confirmed'},
+    {key:'processing', icon:'📦', label:'Processing'},
+    {key:'shipped',    icon:'🚚', label:'Shipped'},
+    {key:'delivered',  icon:'🎉', label:'Delivered'},
+  ];
+  var statusOrder = ['pending','confirmed','processing','shipped','delivered'];
+  var curIdx = statusOrder.indexOf(status);
+
+  var stepperHtml = '<div class="stepper">' + steps.map(function(s,i) {
+    var sIdx = statusOrder.indexOf(s.key);
+    var cls  = sIdx < curIdx ? 'step done' : sIdx === curIdx ? 'step active' : 'step';
+    return '<div class="' + cls + '"><div class="step-dot">' + s.icon + '</div><div class="step-label">' + s.label + '</div></div>';
+  }).join('') + '</div>';
+
+  // Items
+  var itemsHtml = items.map(function(i) {
+    var img = i.image_url ? '<img src="' + i.image_url + '" alt="' + (i.name||'') + '">' : '<span>' + (i.emoji||'🌿') + '</span>';
+    return '<div class="order-item">' +
+      '<div class="item-img">' + img + '</div>' +
+      '<div class="item-info"><div class="item-name">' + (i.name||'Product') + '</div>' +
+      '<div class="item-meta">Qty: ' + (i.qty||i.quantity||1) + (i.variant_value ? ' · ' + i.variant_value : '') + '</div></div>' +
+      '<div class="item-price">₹' + ((i.price||i.price_at_time||0) * (i.qty||i.quantity||1)).toLocaleString('en-IN') + '</div>' +
+    '</div>';
+  }).join('') || '<div style="color:#888;font-size:13px;padding:8px 0">Items loading…</div>';
+
+  // Summary
+  var tax = order.tax || 0;
+  var sumHtml =
+    '<div class="sum-row"><span class="lbl">Subtotal (incl. GST)</span><span class="val">₹' + sub.toLocaleString('en-IN') + '</span></div>' +
+    (disc > 0 ? '<div class="sum-row"><span class="lbl" style="color:#2d6a4f">Discount</span><span class="val" style="color:#2d6a4f">−₹' + disc.toLocaleString('en-IN') + '</span></div>' : '') +
+    (tax > 0 ? '<div class="sum-row"><span class="lbl" style="color:var(--tx3);font-size:13px">↳ GST included</span><span class="val" style="color:var(--tx3);font-size:13px">₹' + tax.toLocaleString('en-IN') + '</span></div>' : '') +
+    '<div class="sum-row"><span class="lbl">Shipping</span><span class="val ' + (ship===0?'free-ship':'') + '">' + (ship===0?'🎉 FREE':'₹'+ship) + '</span></div>' +
+    '<div class="sum-row total"><span>Total Paid</span><span>₹' + total.toLocaleString('en-IN') + '</span></div>';
+
+  // Delivery info
+  var addr = [order.delivery_address, order.city, order.state, order.pincode].filter(Boolean).join(', ');
+  var delHtml =
+    '<div class="del-info">' +
+    '<div class="del-field"><label>Name</label><span>' + (order.customer_name||'—') + '</span></div>' +
+    '<div class="del-field"><label>Phone</label><span>' + (order.customer_phone||'—') + '</span></div>' +
+    '<div class="del-field" style="grid-column:1/-1"><label>Address</label><span>' + (addr||'—') + '</span></div>' +
+    '<div class="del-field"><label>Estimated Delivery</label><span>🗓 ' + estimate + '</span></div>' +
+    '<div class="del-field"><label>Payment</label><span>' + (order.payment_method === 'razorpay_online' ? '💳 Online' : '📱 COD + WhatsApp') + '</span></div>' +
+    '</div>';
+
+  // Tracking section
+  var trackHtml = '';
+  if (trackNum) {
+    trackHtml = '<div class="track-box"><span class="track-icon">🚚</span><div class="track-info"><div class="track-label">Tracking Number</div><div class="track-val">' + trackNum + (courier ? ' · ' + courier : '') + '</div>' +
+      (trackUrl ? '<a href="' + trackUrl + '" target="_blank" class="track-link">Track your order →</a>' : '') +
+    '</div></div>';
+  } else {
+    trackHtml = '<div class="track-box"><span class="track-icon">📦</span><div class="track-info"><div class="track-label">Tracking</div><div class="track-val" style="font-size:13px;color:#666;font-weight:500">Tracking details will be shared on WhatsApp once your order ships.</div></div></div>';
+  }
+
+  // Full HTML
+  return '<div class="card">' +
+      '<div class="card-title">📊 Order Status</div>' +
+      stepperHtml +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title">🛒 Order Items</div>' +
+      itemsHtml +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title">💰 Price Summary</div>' +
+      sumHtml +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title">📍 Delivery Details</div>' +
+      delHtml +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-title">🚚 Tracking</div>' +
+      trackHtml +
+    '</div>' +
+    '<div id="reviewPrompt" class="review-prompt" style="margin-top:8px">' +
+      '<div style="font-family:Playfair Display,serif;font-size:18px;font-weight:900;color:#1a3a1e;margin-bottom:6px">How was your experience? 🌿</div>' +
+      '<div style="font-size:13px;color:#888;margin-bottom:4px">Rate your order — takes 2 seconds!</div>' +
+      '<div class="review-stars" id="reviewStars">' +
+        [1,2,3,4,5].map(function(n){ return '<span class="review-star" onclick="rateOrder(' + n + ')" title="' + n + ' star">⭐</span>'; }).join('') +
+      '</div>' +
+      '<div id="reviewThanks" style="display:none;color:#2e7d32;font-weight:700;font-size:14px;margin-top:8px">🙏 Thanks for your feedback!</div>' +
+    '</div>' +
+    '<div class="actions">' +
+      '<a href="/account" class="btn-primary">📦 View All Orders</a>' +
+      '<button onclick="window.print()" class="btn-print">🧾 Print Invoice</button>' +
+      '<a href="/" class="btn-secondary">🌿 Continue Shopping</a>' +
+    '</div>';
+}
+
+// ── REVIEW RATING ──
+function rateOrder(n) {
+  var stars = document.querySelectorAll('.review-star');
+  stars.forEach(function(s,i){ s.classList.toggle('sel', i < n); s.style.filter = i < n ? 'none' : 'grayscale(1)'; });
+  document.getElementById('reviewStars').style.pointerEvents = 'none';
+  document.getElementById('reviewThanks').style.display = 'block';
+  // Save rating (non-blocking)
+  try {
+    fetch('/api/admin-api', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'save_row', table:'order_ratings', data:{ order_id: orderId, rating: n, created_at: new Date().toISOString() } })
+    });
+  } catch(e) {}
+}
+
+// ── FETCH ORDER DATA ──
+async function loadOrder() {
+  if (!orderId && !orderNum) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('confirmHero').style.display  = 'block';
+    document.getElementById('heroOrderNum').textContent   = total ? 'Total Paid: ₹' + total : '✅ Order Placed';
+    document.getElementById('errorState').style.display   = 'block';
+    return;
+  }
+
+  // 5 second timeout — skeleton nahi rukne dega
+  var controller = new AbortController();
+  var _timer = setTimeout(function() { controller.abort(); }, 5000);
+
+  try {
+    var res = await fetch(ADMIN_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'public_get_order', order_id: orderId, orderNumber: orderNum }),
+      signal: controller.signal
+    });
+    clearTimeout(_timer);
+
+    var data = await res.json();
+    if (!res.ok || !data.order) throw new Error(data.error || 'Order not found');
+
+    document.getElementById('loadingState').style.display  = 'none';
+    document.getElementById('orderContent').style.display  = 'block';
+    document.getElementById('orderContent').innerHTML = renderOrder(data.order);
+
+  } catch(e) {
+    clearTimeout(_timer);
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('confirmHero').style.display  = 'block';
+    document.getElementById('heroOrderNum').textContent   = orderNum ? '📋 ' + orderNum : (total ? 'Total: ₹' + total : '✅ Order Placed');
+    document.getElementById('errorState').style.display   = 'block';
+  }
+}
+
+
+loadOrder();
+// ── Load upsell products ──
+async function loadUpsellProducts() {
+  try {
+    var res = await fetch('/api/store-data');
+    if (!res.ok) return;
+    var data = await res.json();
+    var products = (data.products || []).filter(function(p){ return p.status === 'active' && !p.is_deleted; });
+    if (!products.length) return;
+    products = products.sort(function(){ return Math.random() - 0.5; }).slice(0, 6);
+    var grid = document.getElementById('upsellGrid');
+    if (!grid) return;
+    grid.innerHTML = products.map(function(p) {
+      var slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+      var url = '/products/' + slug;
+      return '<div class="upsell-card" onclick="window.location.href=\'' + url + '\'">' +
+        (p.image_url ? '<img src="' + p.image_url + '" alt="' + p.name + '" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:8px">' :
+          '<div class="upsell-emoji">' + (p.emoji || '\U0001F33F') + '</div>') +
+        '<div class="upsell-name">' + p.name + '</div>' +
+        '<div class="upsell-price">\u20B9' + p.price + '</div>' +
+        '<button class="upsell-add" onclick="event.stopPropagation();window.location.href=\'' + url + '\'">View \u2192</button>' +
+        '</div>';
+    }).join('');
+    document.getElementById('upsellSection').style.display = 'block';
+  } catch(e) {}
+}
+loadUpsellProducts();
+
+</script>
+
+<section class="newsletter-bridge">
+  <div class="f-newsletter">
+    <div class="f-nl-inner">
+      <div class="f-nl-text">
+        <h4>🌿 Join the Pahadi Family</h4>
+        <p>Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox</p>
+      </div>
+      <div class="f-nl-form">
+        <input type="email" class="f-nl-inp" id="nlEmail" placeholder="Enter your email address" autocomplete="email">
+        <button class="f-nl-btn" onclick="subscribe()">Subscribe</button>
+      </div>
+    </div>
+  </div>
+</section>
+<footer id="contact">
+
+  <!-- ① HIMACHALI CHAMBA RUMAL FRIEZE (horizontal dancer band) -->
+  <div class="f-art-frieze">
+    <svg width="100%" viewBox="0 0 1440 68" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1440" height="68" fill="#1a0d2e"/>
+      <line x1="0" y1="2.5" x2="1440" y2="2.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <line x1="0" y1="65.5" x2="1440" y2="65.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <defs>
+        <g id="fu1">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><line x1="7" y1="-2" x2="13" y2="-6" stroke="#e87c3e" stroke-width="1.2"/><polygon points="-8,2 -14,8 -5,6" fill="#c85020" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#d4186c" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#a0104a"/><polygon points="0,0 9,-18 13,-7" fill="#f050a0"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#1e6bb0"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#2d0a6e" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#f0a020" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#b07010"/><polygon points="0,0 5,-16 9,-5" fill="#f8c050"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#c8340c"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#56b848" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#56b848"/><polygon points="-8,2 -14,8 -5,6" fill="#2d8020" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#c8920a"/><circle cx="0" cy="-7" r="2.5" fill="#e8b050"/><circle cx="7" cy="0" r="2.5" fill="#e8b050"/><circle cx="0" cy="7" r="2.5" fill="#e8b050"/><circle cx="-7" cy="0" r="2.5" fill="#e8b050"/></g>
+        </g>
+        <g id="fu2">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#c84090" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#c84090"/><polygon points="-8,2 -14,8 -5,6" fill="#902060" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#1e6bb0" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#154f8a"/><polygon points="0,0 9,-18 13,-7" fill="#3090d8"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#d4186c"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#8b0040" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#56b848" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#2d8020"/><polygon points="0,0 5,-16 9,-5" fill="#78d060"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#6a3090"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><polygon points="-8,2 -14,8 -5,6" fill="#d4522a" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#d4186c"/><circle cx="0" cy="-7" r="2.5" fill="#f050a0"/><circle cx="7" cy="0" r="2.5" fill="#f050a0"/><circle cx="0" cy="7" r="2.5" fill="#f050a0"/><circle cx="-7" cy="0" r="2.5" fill="#f050a0"/></g>
+        </g>
+      </defs>
+      <!-- 13 units across 1440px width -->
+      <use href="#fu1" x="0"/><use href="#fu2" x="112"/><use href="#fu1" x="224"/><use href="#fu2" x="336"/>
+      <use href="#fu1" x="448"/><use href="#fu2" x="560"/><use href="#fu1" x="672"/><use href="#fu2" x="784"/>
+      <use href="#fu1" x="896"/><use href="#fu2" x="1008"/><use href="#fu1" x="1120"/><use href="#fu2" x="1232"/>
+      <use href="#fu1" x="1344"/>
+    </svg>
+  </div>
+
+  <!-- ② BRAND ROW: full-width spread -->
+  <div class="f-brand-row">
+    <!-- Left vine panel (mirror of right) -->
+    <div class="f-vine-panel f-vine-panel--left">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg" style="transform:scaleX(-1)">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+    <!-- Medallion shifted slightly right -->
+    <div style="flex-shrink:0;margin-left:20px">
+      <svg width="104" height="104" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="55" cy="55" r="52" fill="none" stroke="#c8920a" stroke-width="1.5" opacity=".6"/>
+        <circle cx="55" cy="55" r="48" fill="#1a0400" opacity=".95"/>
+        <g opacity=".7">
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(0 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(45 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(90 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(135 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(180 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(225 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(270 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(315 55 55)"/>
+        </g>
+        <g transform="translate(55,22)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(45 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(90 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(135 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(180 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(225 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(270 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(315 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(22.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(67.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(112.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(157.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(202.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(247.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(292.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(337.5 55 55)"/>
+        <circle cx="55" cy="55" r="12" fill="#0b160d"/>
+        <circle cx="55" cy="55" r="9" fill="none" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="55" y1="47" x2="55" y2="63" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="47" y1="55" x2="63" y2="55" stroke="#c8920a" stroke-width="1.5"/>
+        <circle cx="55" cy="55" r="3" fill="#c8920a"/>
+      </svg>
+    </div>
+    <div class="f-brand-col">
+      <div class="f-brand-name">5 Pahadi Roots</div>
+      <div class="f-brand-sub">Himalayan Natural Store</div>
+      <p class="f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
+    </div>
+    <div class="f-vine-panel">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ④ LINKS GRID -->
+  <div class="f-main">
+    <div>
+      <div class="fh">Quick Selects</div>
+      <ul class="ful">
+        <li><a href="/#products">🍯 Wild Honey</a></li>
+        <li><a href="/#products">🧈 A2 Bilona Ghee</a></li>
+        <li><a href="/#products">🌸 Kashmiri Saffron</a></li>
+        <li><a href="/#products">🪨 Ladakhi Shilajit</a></li>
+        <li><a href="/#products">🍃 Himalayan Teas</a></li>
+        <li><a href="/#products">🌾 Ancient Grains</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Company</div>
+      <ul class="ful">
+        <li><a href="/our-story">Our Story</a></li>
+        <li><a href="/#states">By Region</a></li>
+        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
+        <li><a href="/terms#shipping">Shipping Policy</a></li>
+        <li><a href="/terms#privacy">Privacy Policy</a></li>
+        <li><a href="/terms">Terms &amp; Conditions</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Connect With Us</div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">🌐</span>
+        <div class="f-contact-text"><a href="https://pahadiroots.com">pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📧</span>
+        <div class="f-contact-text"><a id="footer-email" href="mailto:hello@pahadiroots.com">hello@pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📞</span>
+        <div class="f-contact-text"><a id="footer-phone" href="tel:+919899984895">+91 98999 84895</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📍</span>
+        <div id="footer-address" class="f-contact-text">Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ SOCIAL + FSSAI BAR (moved below links) -->
+  <div class="f-social-bar">
+    <div class="f-social-bar-inner">
+      <div class="f-soc-row f-soc-row--lg">
+        <a id="social-instagram" href="https://www.instagram.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Instagram">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        </a>
+        <a id="social-facebook" href="https://www.facebook.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Facebook">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </a>
+        <a id="social-twitter" href="https://twitter.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="X">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a id="social-youtube" href="https://www.youtube.com/@pahadiroots" target="_blank" rel="noopener" class="f-soc" title="YouTube">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+        </a>
+        <a href="https://www.linkedin.com/company/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="LinkedIn">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
+      <div class="f-fssai">
+        <div class="f-fssai-badge">FSSAI</div>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700">Licensed</div>
+          <div class="f-fssai-num">Lic. No. — update karein</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ DIAMOND VINE DIVIDER -->
+  <svg class="f-vine-divider" viewBox="0 0 1440 22" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <line x1="0" y1="11" x2="1440" y2="11" stroke="#c8920a" stroke-width=".5" opacity=".18"/>
+    <g opacity=".45">
+      <polygon points="18,11 24,5 30,11 24,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="56,11 62,5 68,11 62,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="94,11 100,5 106,11 100,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="132,11 138,5 144,11 138,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="170,11 176,5 182,11 176,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="208,11 214,5 220,11 214,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="246,11 252,5 258,11 252,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="284,11 290,5 296,11 290,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="322,11 328,5 334,11 328,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="360,11 366,5 372,11 366,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="398,11 404,5 410,11 404,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="436,11 442,5 448,11 442,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="474,11 480,5 486,11 480,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="512,11 518,5 524,11 518,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="550,11 556,5 562,11 556,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="588,11 594,5 600,11 594,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="626,11 632,5 638,11 632,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="664,11 670,5 676,11 670,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="702,11 708,5 714,11 708,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="740,11 746,5 752,11 746,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="778,11 784,5 790,11 784,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="816,11 822,5 828,11 822,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="854,11 860,5 866,11 860,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="892,11 898,5 904,11 898,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="930,11 936,5 942,11 936,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="968,11 974,5 980,11 974,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1006,11 1012,5 1018,11 1012,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1044,11 1050,5 1056,11 1050,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1082,11 1088,5 1094,11 1088,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1120,11 1126,5 1132,11 1126,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1158,11 1164,5 1170,11 1164,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1196,11 1202,5 1208,11 1202,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1234,11 1240,5 1246,11 1240,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1272,11 1278,5 1284,11 1278,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1310,11 1316,5 1322,11 1316,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1348,11 1354,5 1360,11 1354,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1386,11 1392,5 1398,11 1392,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1420,11 1426,5 1432,11 1426,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+    </g>
+  </svg>
+
+  <!-- ⑥ COPYRIGHT BAR -->
+  <div class="f-bot">
+    <div class="f-bot-left">© 2026 <strong class="fd">5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
+    <div class="f-bot-tag">Making India eat clean</div>
+  </div>
+
+</footer>
+</body>
+</html>

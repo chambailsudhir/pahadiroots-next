@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pahadi Roots — Himalayan Natural Store</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--forest:#1a3a2a;--fmid:#2d5a3d;--flight:#4a8a5a;--gold:#c8922a;--goldl:#e8b84a;--cream:#f5f0e8;--warm:#faf6f0;--td:#1a1a14;--tm:#4a4a3a;--tmu:#7a7a6a}
+body{font-family:'DM Sans',sans-serif;background:var(--warm);color:var(--td)}
+
+/* NAV */
+.nav{background:var(--forest);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:62px;position:sticky;top:0;z-index:200}
+.brand{font-family:'Playfair Display',serif;font-size:18px;color:#fff;font-weight:700;cursor:pointer;text-decoration:none}
+.brand span{font-size:9px;color:var(--goldl);letter-spacing:1.5px;text-transform:uppercase;display:block;margin-top:1px}
+.nav-links{display:flex;gap:1.5rem;list-style:none}
+.nav-links a{color:rgba(255,255,255,.75);text-decoration:none;font-size:13px;cursor:pointer;transition:color .2s}
+.nav-links a:hover,.nav-links a.active-nav{color:var(--goldl)}
+.nav-right{display:flex;align-items:center;gap:10px}
+.user-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:5px 12px 5px 6px;cursor:pointer}
+.av{width:28px;height:28px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.ut .hi{font-size:9px;color:rgba(255,255,255,.55);display:block}
+.ut .nm{font-size:13px;font-weight:500;color:#fff}
+.cart-btn{display:flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;border-radius:24px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .2s}
+.cart-btn:hover{background:var(--goldl);color:var(--td)}
+.cbadge{background:#fff;color:var(--forest);border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+/* TICKER */
+.ticker{background:#2d5a3d;padding:6px 0;overflow:hidden;white-space:nowrap}
+.ticker-inner{display:inline-flex;gap:3rem;animation:tick 30s linear infinite;font-size:11px;color:rgba(255,255,255,.85);font-weight:500}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ticker-item::before{content:'🌿 '}
+
+/* PAGES */
+.page{display:none}.page.active{display:block}
+
+/* ===== SHOP PAGE ===== */
+.shop-hero{background:linear-gradient(135deg,var(--forest) 0%,var(--fmid) 60%,#1a3a2a 100%);padding:2.5rem 2rem 2rem;text-align:center;position:relative;overflow:hidden}
+.shop-hero::before{content:'⛰️';position:absolute;right:5%;top:50%;transform:translateY(-50%);font-size:120px;opacity:.08}
+.shop-hero::after{content:'🌿';position:absolute;left:5%;top:50%;transform:translateY(-50%);font-size:100px;opacity:.08}
+.shop-hero h2{font-family:'Playfair Display',serif;font-size:30px;color:#fff;margin-bottom:8px;font-weight:700}
+.shop-hero p{font-size:13px;color:rgba(255,255,255,.7);margin-bottom:1.2rem}
+.search-bar{display:flex;gap:9px;max-width:500px;margin:0 auto}
+.search-input{flex:1;padding:11px 16px;border-radius:9px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;outline:none;color:var(--td);box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.search-go{padding:11px 18px;background:var(--gold);color:#fff;border:none;border-radius:9px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;white-space:nowrap;transition:background .2s}
+.search-go:hover{background:var(--goldl);color:var(--td)}
+
+.filters{display:flex;gap:8px;padding:12px 2rem;background:#fff;border-bottom:1px solid rgba(0,0,0,.07);flex-wrap:wrap;align-items:center}
+.filter-label{font-size:11px;font-weight:700;color:var(--tmu);text-transform:uppercase;letter-spacing:.5px}
+.ftag{padding:5px 13px;border:1.5px solid rgba(0,0,0,.12);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;color:var(--tm);background:#fff;transition:all .2s;font-family:'DM Sans',sans-serif}
+.ftag:hover,.ftag.on{background:var(--forest);color:#fff;border-color:var(--forest)}
+
+.catalog{padding:1.5rem 2rem;max-width:1200px;margin:0 auto}
+.catalog-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.catalog-count{font-size:12px;color:var(--tmu);font-weight:500}
+.sort-sel{padding:6px 11px;border:1.5px solid rgba(0,0,0,.12);border-radius:7px;font-size:12px;font-family:'DM Sans',sans-serif;color:var(--tm);background:#fff;cursor:pointer;outline:none}
+
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+.pcard{background:#fff;border-radius:14px;border:1px solid rgba(0,0,0,.07);overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
+.pcard:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.pcard-img{height:170px;background:linear-gradient(135deg,var(--forest) 0%,var(--fmid) 100%);display:flex;align-items:center;justify-content:center;font-size:60px;position:relative}
+.pcard-badge{position:absolute;top:10px;left:10px;background:var(--gold);color:#fff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:10px;letter-spacing:.3px}
+.pcard-disc{position:absolute;top:10px;right:10px;background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:3px 8px;border-radius:10px}
+.pcard-body{padding:12px 14px}
+.pcard-cat{font-size:9px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px}
+.pcard-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:var(--td);margin-bottom:4px;line-height:1.25}
+.pcard-tag{font-size:10px;color:var(--tmu);margin-bottom:9px}
+.pcard-price-row{display:flex;align-items:baseline;gap:7px;margin-bottom:9px}
+.pcard-price{font-size:17px;font-weight:700;color:var(--forest)}
+.pcard-orig{font-size:12px;color:var(--tmu);text-decoration:line-through}
+.pcard-actions{display:flex;gap:7px}
+.pca-cart{flex:1;padding:7px;background:#f0f7f2;border:1.5px solid var(--forest);border-radius:7px;color:var(--forest);font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.pca-cart:hover{background:var(--forest);color:#fff}
+.pca-buy{flex:1;padding:7px;background:var(--gold);border:1.5px solid var(--gold);border-radius:7px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .2s}
+.pca-buy:hover{background:#a87820}
+
+/* ADD CARD */
+.add-card{background:#fff;border-radius:14px;border:2px dashed rgba(0,0,0,.15);display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;padding:1.2rem;transition:border-color .2s;position:relative}
+.add-card:hover{border-color:var(--forest)}
+.add-icon{width:52px;height:52px;background:var(--cream);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:10px}
+.add-card h3{font-size:14px;font-weight:700;color:var(--td);margin-bottom:5px;text-align:center}
+.add-card p{font-size:11px;color:var(--tmu);text-align:center;line-height:1.5}
+.add-input{width:100%;margin-top:12px;padding:9px 12px;border:1.5px solid rgba(0,0,0,.15);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--td);outline:none}
+.add-input:focus{border-color:var(--forest)}
+.add-gen-btn{width:100%;margin-top:8px;padding:9px;background:var(--forest);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .2s}
+.add-gen-btn:hover{background:var(--fmid)}
+.add-gen-btn:disabled{opacity:.6;cursor:not-allowed}
+
+/* ===== PRODUCT DETAIL PAGE ===== */
+.pdp-wrap{max-width:1080px;margin:0 auto;padding:0 2rem 2rem}
+.breadcrumb{padding:.9rem 2rem;font-size:12px;color:var(--tmu);max-width:1080px;margin:0 auto}
+.breadcrumb a{color:var(--gold);cursor:pointer;text-decoration:none}
+.breadcrumb a:hover{text-decoration:underline}
+
+.pdp{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start}
+.gallery{position:sticky;top:72px}
+.main-img-box{width:100%;aspect-ratio:1;background:linear-gradient(135deg,var(--forest) 0%,var(--fmid) 100%);border-radius:16px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;font-size:100px}
+.ibadge{position:absolute;top:14px;left:14px;background:var(--gold);color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:18px}
+.thumbs{display:flex;gap:8px;margin-top:10px}
+.thumb{width:58px;height:58px;border-radius:9px;border:2px solid transparent;cursor:pointer;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:22px;transition:border-color .2s}
+.thumb:hover{border-color:rgba(0,0,0,.2)}
+.thumb.active{border-color:var(--gold)}
+
+.pinfo{padding:.3rem 0}
+.pvendor{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.ptitle{font-family:'Playfair Display',serif;font-size:27px;font-weight:700;color:var(--td);line-height:1.25;margin-bottom:8px}
+.ptag{font-size:13px;color:var(--tmu);font-style:italic;margin-bottom:12px}
+.rrow{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.stars{color:var(--gold);font-size:14px;letter-spacing:.5px}
+.rc{font-size:12px;color:var(--tmu)}
+.sbadge{background:#e8f5e9;color:#2e7d32;font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px}
+.price-row{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+.pcurr{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:var(--forest)}
+.porig{font-size:18px;color:var(--tmu);text-decoration:line-through}
+.dbadge{background:var(--forest);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px}
+.psub{font-size:12px;color:var(--tmu);margin-bottom:16px}
+.warn{background:#fff8e1;border:1px solid #ffe082;border-radius:9px;padding:10px 13px;font-size:12px;color:#7a6a20;margin-bottom:14px;line-height:1.5}
+.hdiv{border:none;border-top:1px solid rgba(0,0,0,.08);margin:14px 0}
+.slabel{font-size:11px;font-weight:700;color:var(--tm);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.sgrid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.sbtn{padding:7px 13px;border:1.5px solid rgba(0,0,0,.15);border-radius:8px;background:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--tm);transition:all .2s;text-align:left;position:relative}
+.sbtn .sn{font-weight:600;display:block;font-size:11px}
+.sbtn .sp{font-size:13px;font-weight:700;color:var(--forest)}
+.sbtn .ss{font-size:10px;color:var(--gold)}
+.sbtn.active{border-color:var(--forest);background:#f0f7f2}
+.sbtn.featured,.sbtn.deal{position:relative;margin-top:10px}
+.sbtn.featured::before{content:'Best Value';position:absolute;top:-10px;left:7px;background:var(--forest);color:#fff;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700}
+.sbtn.deal::before{content:'Steal Deal';position:absolute;top:-10px;left:7px;background:var(--gold);color:#fff;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700}
+.qrow{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.qctrl{display:flex;align-items:center;border:1.5px solid rgba(0,0,0,.15);border-radius:8px;overflow:hidden}
+.qb{width:36px;height:36px;border:none;background:#f5f5f0;font-size:18px;cursor:pointer;color:var(--tm);font-family:'DM Sans',sans-serif;transition:background .15s}
+.qb:hover{background:var(--cream)}
+.qn{width:40px;height:36px;border:none;border-left:1.5px solid rgba(0,0,0,.1);border-right:1.5px solid rgba(0,0,0,.1);text-align:center;font-size:14px;font-weight:700;background:#fff;color:var(--td);font-family:'DM Sans',sans-serif}
+.cta-row{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+.btn-ac{width:100%;padding:14px;background:#fff;border:2px solid var(--forest);border-radius:10px;color:var(--forest);font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-ac:hover,.btn-ac.added{background:var(--forest);color:#fff}
+.btn-bn{width:100%;padding:14px;background:var(--gold);border:2px solid var(--gold);border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-bn:hover{background:#a87820}
+.trust-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+.ti{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--tmu);background:var(--cream);padding:4px 9px;border-radius:18px}
+.tdot{width:5px;height:5px;border-radius:50%;background:var(--flight);flex-shrink:0}
+
+/* TABS */
+.tabs{display:flex;gap:0;border-bottom:2px solid rgba(0,0,0,.08);margin-bottom:14px}
+.tab{padding:8px 14px;font-size:12px;font-weight:700;color:var(--tmu);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;text-transform:uppercase;letter-spacing:.5px}
+.tab.active{color:var(--forest);border-bottom-color:var(--forest)}
+.tc{display:none}.tc.active{display:block}
+.bi{display:flex;align-items:flex-start;gap:7px;margin-bottom:8px;font-size:13px;color:var(--tm);line-height:1.4}
+.bck{color:var(--flight);font-size:13px;margin-top:1px;flex-shrink:0}
+.dr{display:flex;gap:8px;margin-bottom:6px;font-size:13px}
+.dk{color:var(--tmu);min-width:100px;flex-shrink:0}.dv{color:var(--td);font-weight:500}
+
+/* CART SIDEBAR */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:flex-end;justify-content:flex-end}
+.overlay.show{display:flex}
+.cpanel{background:#fff;width:380px;height:100vh;display:flex;flex-direction:column;animation:si .3s ease;box-shadow:-4px 0 20px rgba(0,0,0,.15)}
+@keyframes si{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.ch{background:var(--forest);padding:1rem 1.3rem;display:flex;align-items:center;justify-content:space-between}
+.ch h3{color:#fff;font-family:'Playfair Display',serif;font-size:18px}
+.xb{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1}
+.cbody{flex:1;overflow-y:auto;padding:1rem 1.3rem}
+.ci{display:flex;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.06)}
+.ci-img{width:54px;height:54px;border-radius:8px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ci-info{flex:1}
+.ci-name{font-size:12px;font-weight:700;margin-bottom:2px;color:var(--td)}
+.ci-size{font-size:11px;color:var(--tmu);margin-bottom:5px}
+.ci-qty{display:flex;align-items:center;gap:6px}
+.cqb{width:22px;height:22px;border:1px solid rgba(0,0,0,.2);border-radius:4px;background:#f5f5f0;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.cqb:hover{background:var(--cream)}
+.ci-price{font-size:13px;font-weight:700;color:var(--forest);align-self:center}
+.ec{text-align:center;padding:3rem 1rem;color:var(--tmu)}
+.cfoot{padding:1rem 1.3rem;border-top:1px solid rgba(0,0,0,.08)}
+.ctrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ctl{font-size:13px;color:var(--tm)}.ctv{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--forest)}
+.csav{font-size:11px;color:#2e7d32;background:#e8f5e9;padding:4px 10px;border-radius:18px;margin-bottom:10px;text-align:center}
+.btn-co{width:100%;padding:13px;background:var(--forest);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .2s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-co:hover{background:var(--fmid)}
+.pm-chips{display:flex;gap:6px;justify-content:center;margin-top:8px}
+.pmc{font-size:10px;background:var(--cream);color:var(--tmu);padding:3px 7px;border-radius:4px;font-weight:600}
+
+/* PAYMENT MODAL */
+.pov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center}
+.pov.show{display:flex}
+.pmod{background:#fff;border-radius:16px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;animation:fu .3s ease;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+@keyframes fu{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.phead{background:var(--forest);padding:1rem 1.5rem;border-radius:16px 16px 0 0;display:flex;align-items:center;justify-content:space-between}
+.phead h3{color:#fff;font-family:'Playfair Display',serif;font-size:18px}
+.pbdy{padding:1.4rem}
+.psec{margin-bottom:18px}
+.pst{font-size:11px;font-weight:700;color:var(--tmu);text-transform:uppercase;letter-spacing:.7px;margin-bottom:9px}
+.poi{display:flex;justify-content:space-between;font-size:13px;color:var(--tm);margin-bottom:5px}
+.pdiv{border:none;border-top:1px dashed rgba(0,0,0,.12);margin:10px 0}
+.ptr{display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--forest)}
+.pmths{display:flex;flex-direction:column;gap:7px}
+.pm{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid rgba(0,0,0,.1);border-radius:10px;cursor:pointer;transition:all .2s}
+.pm:hover,.pm.sel{border-color:var(--forest);background:#f0f7f2}
+.pmi{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.pmn{font-size:13px;font-weight:600;color:var(--td)}.pmd{font-size:11px;color:var(--tmu)}
+.pck{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;margin-left:auto;font-size:9px}
+.pm.sel .pck{border-color:var(--forest);background:var(--forest);color:#fff}
+.ain{width:100%;padding:9px 12px;border:1.5px solid rgba(0,0,0,.15);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--td);margin-bottom:7px;outline:none}
+.ain:focus{border-color:var(--forest)}
+.btn-po{width:100%;padding:14px;background:var(--gold);border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .2s;letter-spacing:.3px}
+.btn-po:hover{background:#a87820}
+
+/* ORDER SUCCESS */
+.success-screen{display:none;text-align:center;padding:2rem;position:fixed;inset:0;background:#fff;z-index:600;flex-direction:column;align-items:center;justify-content:center}
+.success-screen.show{display:flex}
+.success-icon{font-size:72px;margin-bottom:1rem}
+.success-screen h2{font-family:'Playfair Display',serif;font-size:28px;color:var(--forest);margin-bottom:.5rem}
+.success-screen p{color:var(--tmu);font-size:14px;margin-bottom:1.5rem}
+.btn-continue{padding:12px 28px;background:var(--forest);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+/* AI */
+.skel{background:linear-gradient(90deg,rgba(0,0,0,.06) 25%,rgba(0,0,0,.10) 50%,rgba(0,0,0,.06) 75%);background-size:200% 100%;animation:sh 1.5s infinite;border-radius:6px;height:14px;margin-bottom:9px}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.aitag{font-size:9px;background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:8px;margin-left:5px;font-weight:700;vertical-align:middle}
+.spin{display:inline-block;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.gen-ov{position:absolute;inset:0;background:rgba(26,58,42,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:14px;z-index:10}
+.gen-ov p{color:#fff;font-size:13px;margin-top:10px;font-weight:600}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--forest);color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.toast.show{opacity:1}
+
+/* FOOTER */
+.footer{background:var(--forest);color:rgba(255,255,255,.7);text-align:center;padding:1.5rem 2rem;font-size:12px;margin-top:3rem}
+.footer strong{color:var(--goldl)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .pdp{grid-template-columns:1fr}
+  .gallery{position:static}
+  .nav-links{display:none}
+  .product-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .cpanel{width:100%}
+}
+</style>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body data-theme="pahadi">
+<script src="/js/theme.js"></script>
+
+<!-- NAV -->
+<nav class="nav">
+  <a class="brand" onclick="showPage('shop')">Pahadi Roots<span>Himalayan Natural Store</span></a>
+  <ul class="nav-links">
+    <li><a onclick="showPage('shop')" id="nl-shop" class="active-nav">Shop</a></li>
+    <li><a href="#">By State</a></li>
+    <li><a href="#">Our Story</a></li>
+    <li><a href="#">Contact</a></li>
+  </ul>
+  <div class="nav-right">
+    <div class="user-chip">
+      <div class="av">S</div>
+      <div class="ut"><span class="hi">Welcome back</span><span class="nm">Sudhir</span></div>
+    </div>
+    <button class="cart-btn" onclick="openCart()">🛒 Cart <span class="cbadge" id="cart-count">0</span></button>
+  </div>
+</nav>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span class="ticker-item">Free Shipping above ₹500</span>
+    <span class="ticker-item">100% Natural · Lab-tested · Pure</span>
+    <span class="ticker-item">Direct from 200+ Mountain Families</span>
+    <span class="ticker-item">Rated 4.9/5 · 10,000+ Happy Customers</span>
+    <span class="ticker-item">Use code WELCOME50 · ₹50 off first order</span>
+    <span class="ticker-item">Free Shipping above ₹500</span>
+    <span class="ticker-item">100% Natural · Lab-tested · Pure</span>
+    <span class="ticker-item">Direct from 200+ Mountain Families</span>
+    <span class="ticker-item">Rated 4.9/5 · 10,000+ Happy Customers</span>
+    <span class="ticker-item">Use code WELCOME50 · ₹50 off first order</span>
+  </div>
+</div>
+
+<!-- ===== SHOP PAGE ===== -->
+<div class="page active" id="page-shop">
+  <div class="shop-hero">
+    <h2>Pure Himalayan Products</h2>
+    <p>Sourced directly from 200+ mountain families across 10 Himalayan states</p>
+    <div class="search-bar">
+      <input class="search-input" id="search-input" type="text" placeholder="Search products..." oninput="filterProducts()">
+      <button class="search-go" onclick="filterProducts()">Search</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">Category:</span>
+    <button class="ftag on" onclick="setFilter(this,'all')">All</button>
+    <button class="ftag" onclick="setFilter(this,'juice')">Juices</button>
+    <button class="ftag" onclick="setFilter(this,'oil')">Oils</button>
+    <button class="ftag" onclick="setFilter(this,'honey')">Honey</button>
+    <button class="ftag" onclick="setFilter(this,'spice')">Spices</button>
+    <button class="ftag" onclick="setFilter(this,'tea')">Teas</button>
+    <button class="ftag" onclick="setFilter(this,'other')">Other</button>
+  </div>
+
+  <div class="catalog">
+    <div class="catalog-header">
+      <span class="catalog-count" id="catalog-count">Showing all products</span>
+      <select class="sort-sel" onchange="sortProducts(this.value)">
+        <option value="default">Sort: Default</option>
+        <option value="price-low">Price: Low to High</option>
+        <option value="price-high">Price: High to Low</option>
+        <option value="discount">Highest Discount</option>
+      </select>
+    </div>
+    <div class="product-grid" id="product-grid"></div>
+  </div>
+</div>
+
+<!-- ===== PRODUCT DETAIL PAGE ===== -->
+<div class="page" id="page-pdp">
+  <div class="breadcrumb"><a onclick="showPage('shop')">← Back to Shop</a> › <span id="pdp-breadcrumb">Product</span></div>
+  <div class="pdp-wrap">
+    <div class="pdp">
+      <div class="gallery">
+        <div class="main-img-box" id="pdp-img">
+          <span class="ibadge" id="pdp-badge">100% Natural</span>
+          <span id="pdp-emoji">🍊</span>
+        </div>
+        <div class="thumbs" id="pdp-thumbs">
+          <div class="thumb active">🍊</div>
+          <div class="thumb">🌿</div>
+          <div class="thumb">⛰️</div>
+          <div class="thumb">🧪</div>
+        </div>
+      </div>
+      <div class="pinfo" id="pdp-info">
+        <div class="skel" style="width:40%;height:12px"></div>
+        <div class="skel" style="width:80%;height:24px;margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CART SIDEBAR -->
+<div class="overlay" id="cart-overlay" onclick="if(event.target===this)closeCart()">
+  <div class="cpanel">
+    <div class="ch"><h3>Your Cart</h3><button class="xb" onclick="closeCart()">×</button></div>
+    <div class="cbody" id="cart-body">
+      <div class="ec"><div style="font-size:42px;margin-bottom:10px">🛒</div><p style="font-size:13px">Your cart is empty</p></div>
+    </div>
+    <div class="cfoot">
+      <div class="ctrow"><span class="ctl">Total</span><span class="ctv" id="cart-total">₹0</span></div>
+      <div class="csav" id="cart-sav" style="display:none"></div>
+      <button class="btn-co" onclick="openPayment()">🔒 Proceed to Payment</button>
+      <div class="pm-chips">
+        <span class="pmc">UPI</span><span class="pmc">Cards</span><span class="pmc">COD</span><span class="pmc">Net Banking</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="pov" id="pay-ov" onclick="if(event.target===this)closePay()">
+  <div class="pmod">
+    <div class="phead"><h3>🔒 Secure Checkout</h3><button class="xb" onclick="closePay()">×</button></div>
+    <div class="pbdy">
+      <div class="psec">
+        <p class="pst">Order Summary</p>
+        <div id="pay-sum"></div>
+        <div class="pdiv"></div>
+        <div class="ptr"><span>Total</span><span id="pay-tot">₹0</span></div>
+      </div>
+      <div class="psec">
+        <p class="pst">Delivery Address</p>
+        <input class="ain" type="text" placeholder="Full Name" value="Sudhir">
+        <input class="ain" type="text" placeholder="Phone Number">
+        <input class="ain" type="text" placeholder="Address Line 1">
+        <input class="ain" type="text" placeholder="City, State, PIN">
+      </div>
+      <div class="psec">
+        <p class="pst">Payment Method</p>
+        <div class="pmths">
+          <div class="pm sel" onclick="selPay(this)"><div class="pmi" style="background:#f0f7f2">💳</div><div><div class="pmn">UPI / QR Code</div><div class="pmd">PhonePe, GPay, Paytm, BHIM</div></div><div class="pck">✓</div></div>
+          <div class="pm" onclick="selPay(this)"><div class="pmi" style="background:#fff3e0">🏦</div><div><div class="pmn">Credit / Debit Card</div><div class="pmd">Visa, Mastercard, RuPay</div></div><div class="pck"></div></div>
+          <div class="pm" onclick="selPay(this)"><div class="pmi" style="background:#e8f5e9">🚚</div><div><div class="pmn">Cash on Delivery</div><div class="pmd">Pay when your order arrives</div></div><div class="pck"></div></div>
+          <div class="pm" onclick="selPay(this)"><div class="pmi" style="background:#e3f2fd">🏛️</div><div><div class="pmn">Net Banking</div><div class="pmd">All major Indian banks</div></div><div class="pck"></div></div>
+        </div>
+      </div>
+      <button class="btn-po" onclick="placeOrder()">Place Order Securely 🔒</button>
+    </div>
+  </div>
+</div>
+
+<!-- ORDER SUCCESS -->
+<div class="success-screen" id="success-screen">
+  <div class="success-icon">🎉</div>
+  <h2>Order Placed!</h2>
+  <p>Thank you, Sudhir! Your Himalayan products are on their way.<br>You'll receive a confirmation shortly.</p>
+  <button class="btn-continue" onclick="document.getElementById('success-screen').classList.remove('show');showPage('shop')">Continue Shopping</button>
+</div>
+
+
+<section class="newsletter-bridge">
+  <div class="f-newsletter">
+    <div class="f-nl-inner">
+      <div class="f-nl-text">
+        <h4>🌿 Join the Pahadi Family</h4>
+        <p>Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox</p>
+      </div>
+      <div class="f-nl-form">
+        <input type="email" class="f-nl-inp" id="nlEmail" placeholder="Enter your email address" autocomplete="email">
+        <button class="f-nl-btn" onclick="subscribe()">Subscribe</button>
+      </div>
+    </div>
+  </div>
+</section>
+<footer id="contact">
+
+  <!-- ① HIMACHALI CHAMBA RUMAL FRIEZE (horizontal dancer band) -->
+  <div class="f-art-frieze">
+    <svg width="100%" viewBox="0 0 1440 68" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1440" height="68" fill="#1a0d2e"/>
+      <line x1="0" y1="2.5" x2="1440" y2="2.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <line x1="0" y1="65.5" x2="1440" y2="65.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <defs>
+        <g id="fu1">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><line x1="7" y1="-2" x2="13" y2="-6" stroke="#e87c3e" stroke-width="1.2"/><polygon points="-8,2 -14,8 -5,6" fill="#c85020" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#d4186c" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#a0104a"/><polygon points="0,0 9,-18 13,-7" fill="#f050a0"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#1e6bb0"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#2d0a6e" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#f0a020" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#b07010"/><polygon points="0,0 5,-16 9,-5" fill="#f8c050"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#c8340c"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#56b848" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#56b848"/><polygon points="-8,2 -14,8 -5,6" fill="#2d8020" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#c8920a"/><circle cx="0" cy="-7" r="2.5" fill="#e8b050"/><circle cx="7" cy="0" r="2.5" fill="#e8b050"/><circle cx="0" cy="7" r="2.5" fill="#e8b050"/><circle cx="-7" cy="0" r="2.5" fill="#e8b050"/></g>
+        </g>
+        <g id="fu2">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#c84090" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#c84090"/><polygon points="-8,2 -14,8 -5,6" fill="#902060" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#1e6bb0" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#154f8a"/><polygon points="0,0 9,-18 13,-7" fill="#3090d8"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#d4186c"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#8b0040" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#56b848" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#2d8020"/><polygon points="0,0 5,-16 9,-5" fill="#78d060"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#6a3090"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><polygon points="-8,2 -14,8 -5,6" fill="#d4522a" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#d4186c"/><circle cx="0" cy="-7" r="2.5" fill="#f050a0"/><circle cx="7" cy="0" r="2.5" fill="#f050a0"/><circle cx="0" cy="7" r="2.5" fill="#f050a0"/><circle cx="-7" cy="0" r="2.5" fill="#f050a0"/></g>
+        </g>
+      </defs>
+      <!-- 13 units across 1440px width -->
+      <use href="#fu1" x="0"/><use href="#fu2" x="112"/><use href="#fu1" x="224"/><use href="#fu2" x="336"/>
+      <use href="#fu1" x="448"/><use href="#fu2" x="560"/><use href="#fu1" x="672"/><use href="#fu2" x="784"/>
+      <use href="#fu1" x="896"/><use href="#fu2" x="1008"/><use href="#fu1" x="1120"/><use href="#fu2" x="1232"/>
+      <use href="#fu1" x="1344"/>
+    </svg>
+  </div>
+
+  <!-- ② BRAND ROW: full-width spread -->
+  <div class="f-brand-row">
+    <!-- Left vine panel (mirror of right) -->
+    <div class="f-vine-panel f-vine-panel--left">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg" style="transform:scaleX(-1)">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+    <!-- Medallion shifted slightly right -->
+    <div style="flex-shrink:0;margin-left:20px">
+      <svg width="104" height="104" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="55" cy="55" r="52" fill="none" stroke="#c8920a" stroke-width="1.5" opacity=".6"/>
+        <circle cx="55" cy="55" r="48" fill="#1a0400" opacity=".95"/>
+        <g opacity=".7">
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(0 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(45 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(90 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(135 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(180 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(225 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(270 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(315 55 55)"/>
+        </g>
+        <g transform="translate(55,22)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(45 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(90 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(135 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(180 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(225 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(270 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(315 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(22.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(67.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(112.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(157.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(202.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(247.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(292.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(337.5 55 55)"/>
+        <circle cx="55" cy="55" r="12" fill="#0b160d"/>
+        <circle cx="55" cy="55" r="9" fill="none" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="55" y1="47" x2="55" y2="63" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="47" y1="55" x2="63" y2="55" stroke="#c8920a" stroke-width="1.5"/>
+        <circle cx="55" cy="55" r="3" fill="#c8920a"/>
+      </svg>
+    </div>
+    <div class="f-brand-col">
+      <div class="f-brand-name">5 Pahadi Roots</div>
+      <div class="f-brand-sub">Himalayan Natural Store</div>
+      <p class="f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
+    </div>
+    <div class="f-vine-panel">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ④ LINKS GRID -->
+  <div class="f-main">
+    <div>
+      <div class="fh">Quick Selects</div>
+      <ul class="ful">
+        <li><a href="/#products">🍯 Wild Honey</a></li>
+        <li><a href="/#products">🧈 A2 Bilona Ghee</a></li>
+        <li><a href="/#products">🌸 Kashmiri Saffron</a></li>
+        <li><a href="/#products">🪨 Ladakhi Shilajit</a></li>
+        <li><a href="/#products">🍃 Himalayan Teas</a></li>
+        <li><a href="/#products">🌾 Ancient Grains</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Company</div>
+      <ul class="ful">
+        <li><a href="/our-story">Our Story</a></li>
+        <li><a href="/#states">By Region</a></li>
+        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
+        <li><a href="/terms#shipping">Shipping Policy</a></li>
+        <li><a href="/terms#privacy">Privacy Policy</a></li>
+        <li><a href="/terms">Terms &amp; Conditions</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Connect With Us</div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">🌐</span>
+        <div class="f-contact-text"><a href="https://pahadiroots.com">pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📧</span>
+        <div class="f-contact-text"><a id="footer-email" href="mailto:hello@pahadiroots.com">hello@pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📞</span>
+        <div class="f-contact-text"><a id="footer-phone" href="tel:+919899984895">+91 98999 84895</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📍</span>
+        <div id="footer-address" class="f-contact-text">Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ SOCIAL + FSSAI BAR (moved below links) -->
+  <div class="f-social-bar">
+    <div class="f-social-bar-inner">
+      <div class="f-soc-row f-soc-row--lg">
+        <a id="social-instagram" href="https://www.instagram.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Instagram">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        </a>
+        <a id="social-facebook" href="https://www.facebook.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Facebook">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </a>
+        <a id="social-twitter" href="https://twitter.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="X">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a id="social-youtube" href="https://www.youtube.com/@pahadiroots" target="_blank" rel="noopener" class="f-soc" title="YouTube">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+        </a>
+        <a href="https://www.linkedin.com/company/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="LinkedIn">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
+      <div class="f-fssai">
+        <div class="f-fssai-badge">FSSAI</div>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700">Licensed</div>
+          <div class="f-fssai-num">Lic. No. — update karein</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ DIAMOND VINE DIVIDER -->
+  <svg class="f-vine-divider" viewBox="0 0 1440 22" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <line x1="0" y1="11" x2="1440" y2="11" stroke="#c8920a" stroke-width=".5" opacity=".18"/>
+    <g opacity=".45">
+      <polygon points="18,11 24,5 30,11 24,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="56,11 62,5 68,11 62,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="94,11 100,5 106,11 100,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="132,11 138,5 144,11 138,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="170,11 176,5 182,11 176,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="208,11 214,5 220,11 214,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="246,11 252,5 258,11 252,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="284,11 290,5 296,11 290,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="322,11 328,5 334,11 328,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="360,11 366,5 372,11 366,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="398,11 404,5 410,11 404,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="436,11 442,5 448,11 442,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="474,11 480,5 486,11 480,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="512,11 518,5 524,11 518,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="550,11 556,5 562,11 556,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="588,11 594,5 600,11 594,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="626,11 632,5 638,11 632,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="664,11 670,5 676,11 670,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="702,11 708,5 714,11 708,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="740,11 746,5 752,11 746,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="778,11 784,5 790,11 784,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="816,11 822,5 828,11 822,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="854,11 860,5 866,11 860,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="892,11 898,5 904,11 898,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="930,11 936,5 942,11 936,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="968,11 974,5 980,11 974,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1006,11 1012,5 1018,11 1012,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1044,11 1050,5 1056,11 1050,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1082,11 1088,5 1094,11 1088,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1120,11 1126,5 1132,11 1126,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1158,11 1164,5 1170,11 1164,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1196,11 1202,5 1208,11 1202,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1234,11 1240,5 1246,11 1240,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1272,11 1278,5 1284,11 1278,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1310,11 1316,5 1322,11 1316,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1348,11 1354,5 1360,11 1354,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1386,11 1392,5 1398,11 1392,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1420,11 1426,5 1432,11 1426,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+    </g>
+  </svg>
+
+  <!-- ⑥ COPYRIGHT BAR -->
+  <div class="f-bot">
+    <div class="f-bot-left">© 2026 <strong class="fd">5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
+    <div class="f-bot-tag">Making India eat clean</div>
+  </div>
+
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+let cart = [];
+let products = [
+  {id:1,name:'Sea Buckthorn Juice',cat:'juice',emoji:'🍊',badge:'Wild Harvested',tagline:'Pure nectar from the valleys of Leh-Ladakh',rating:'4.8',reviews:'1,239',sold:'1,00,000+',warn:'Not recommended for pregnant women or those with low blood pressure.',sizes:[{label:'300ml',price:699,save:22},{label:'600ml',price:1199,save:33},{label:'1200ml',price:2069,save:42,featured:true},{label:'3600ml',price:5599,save:48,deal:true}],benefits:['Boosts Immunity — High Vitamin C strengthens defense against illness','Improves Skin Health — Heals acne and promotes glowing skin','Supports Heart Health — Rich in omega fatty acids','Aids Digestion — Better gut and liver function','Reduces Inflammation — Fights chronic inflammation and related issues'],ingredients:'Seabuckthorn Pulp 99.99%, Permitted Class 2 Preservatives (E211)',origin:'Leh-Ladakh, Himachal Pradesh',shelf:'12 months',storage:'Store in a cool, dry place away from sunlight',certs:'FSSAI Certified · Lab Tested',usage:['Mix 1 tbsp (10ml) in a glass of warm water','Best consumed in the morning on an empty stomach','Can be diluted with juice or smoothie for better taste','Do not heat — consume at room temperature or chilled'],discount:42},
+  {id:2,name:'Himalayan Pink Salt',cat:'spice',emoji:'🧂',badge:'Mineral Rich',tagline:'Ancient crystal salt from deep Himalayan rock beds',rating:'4.7',reviews:'3,412',sold:'5,00,000+',warn:'',sizes:[{label:'250g',price:149,save:15},{label:'500g',price:249,save:25,featured:true},{label:'1kg',price:399,save:35},{label:'5kg',price:1499,save:45,deal:true}],benefits:['84+ Trace Minerals — Natural mineral composition unmatched by table salt','Regulates Hydration — Balances body electrolytes effectively','Better Digestion — Stimulates natural digestive enzymes','Supports Thyroid — Natural iodine content for thyroid function','No Additives — 100% unprocessed, chemical-free salt'],ingredients:'100% Himalayan Rock Salt (Sodium Chloride)',origin:'Himachal Pradesh',shelf:'Indefinite',storage:'Store in airtight container away from moisture',certs:'FSSAI Certified · Mineral Lab Tested',usage:['Use as a direct replacement for regular table salt','Add a pinch to your drinking water for electrolytes','Use in cooking for mineral-rich flavour','Dissolve in bath water for a relaxing skin detox'],discount:35},
+  {id:3,name:'Wild Pahadi Honey',cat:'honey',emoji:'🍯',badge:'Raw & Unfiltered',tagline:'Hand-harvested wild honey from pristine Himalayan meadows',rating:'4.9',reviews:'2,108',sold:'2,00,000+',warn:'Not suitable for children under 1 year of age.',sizes:[{label:'250g',price:399,save:10},{label:'500g',price:699,save:22,featured:true},{label:'1kg',price:1199,save:33},{label:'2kg',price:2099,save:40,deal:true}],benefits:['Rich in Antioxidants — Fights free radicals and slows aging','Natural Antibacterial — Kills harmful bacteria naturally','Instant Energy Boost — Natural sugars for quick energy','Soothes Throat & Cough — Time-tested natural remedy','Skin Nourishment — Applied topically for glowing skin'],ingredients:'100% Raw Wild Honey (Multifloral)',origin:'Uttarakhand · Himachal Pradesh',shelf:'24 months',storage:'Store at room temperature, away from heat and sunlight',certs:'FSSAI Certified · NMR Tested · No Added Sugar',usage:['Take 1 tsp daily dissolved in warm water','Use as a natural sweetener in place of sugar','Apply a thin layer on skin for a natural glow','Mix with lemon juice for an immunity-boosting drink'],discount:33},
+  {id:4,name:'Cold Pressed Walnut Oil',cat:'oil',emoji:'🫙',badge:'Cold Pressed',tagline:'Stone-cold pressed from premium Kashmiri hill walnuts',rating:'4.6',reviews:'876',sold:'30,000+',warn:'',sizes:[{label:'100ml',price:299,save:10},{label:'250ml',price:599,save:22,featured:true},{label:'500ml',price:999,save:33},{label:'1L',price:1699,save:40,deal:true}],benefits:['Brain Health — Rich in Omega-3 DHA and ALA fatty acids','Heart Protective — Reduces bad LDL cholesterol levels','Anti-Inflammatory — Natural ALA content fights inflammation','Skin & Hair Nourishment — Deep conditioning from the inside out','Antioxidant Rich — Vitamin E protects cells from damage'],ingredients:'100% Cold Pressed Walnut Oil (Juglans Regia)',origin:'Jammu & Kashmir',shelf:'18 months',storage:'Refrigerate after opening, use within 6 months',certs:'FSSAI Certified · Lab Tested · No Additives',usage:['Take 1 tsp daily on empty stomach for best results','Use as a salad dressing or drizzle on pasta','Replace refined oil in low-heat cooking','Massage into hair and scalp for deep conditioning'],discount:33},
+  {id:5,name:'Rhododendron Buransh Juice',cat:'juice',emoji:'🌸',badge:'Rare & Pure',tagline:'Rare buransh flower juice from the peaks of Uttarakhand',rating:'4.7',reviews:'654',sold:'25,000+',warn:'Consult a doctor before use if you are on blood pressure medication.',sizes:[{label:'500ml',price:349,save:20},{label:'1L',price:599,save:30,featured:true},{label:'2L',price:999,save:40,deal:true}],benefits:['Heart Tonic — Traditionally used to strengthen cardiac muscles','Antioxidant Powerhouse — Rich in natural polyphenols','Anti-Inflammatory — Used in Ayurveda for centuries','Liver Support — Helps detoxify and cleanse the liver','Blood Pressure — Helps regulate blood pressure naturally'],ingredients:'Rhododendron Arboreum Flower Extract, Water, E211',origin:'Uttarakhand',shelf:'12 months',storage:'Refrigerate after opening, consume within 30 days',certs:'FSSAI Certified · Ayurvedic Lab Tested',usage:['Dilute 30ml in 200ml of water or juice','Consume twice daily, preferably before meals','Add a teaspoon of honey to balance the tartness','Shake the bottle well before each use'],discount:30},
+  {id:6,name:'Himalayan Green Tea',cat:'tea',emoji:'🍵',badge:'First Flush',tagline:'First flush full-leaf green tea from Darjeeling and Sikkim',rating:'4.8',reviews:'1,987',sold:'1,50,000+',warn:'',sizes:[{label:'50g',price:199,save:10},{label:'100g',price:349,save:20,featured:true},{label:'250g',price:749,save:32},{label:'500g',price:1299,save:40,deal:true}],benefits:['Powerful Antioxidants — EGCG catechins fight aging and disease','Boosts Metabolism — Natural support for healthy weight management','Mental Clarity — L-theanine and caffeine work in synergy','Heart Health — Lowers bad LDL cholesterol naturally','Anti-Cancer Properties — High polyphenol concentration'],ingredients:'100% Himalayan Green Tea Leaves (Camellia Sinensis)',origin:'Darjeeling · Sikkim',shelf:'24 months',storage:'Airtight container, away from moisture, heat and light',certs:'FSSAI Certified · Organic Certified · Lab Tested',usage:['Use 2g of leaves per 200ml of water at 80°C','Never use boiling water — it makes the tea bitter','Steep for 2–3 minutes for the perfect cup','Enjoy 2–3 cups daily; add honey or lemon to taste'],discount:32},
+];
+
+let activeFilter = 'all';
+let currentPdp = null;
+let pdpSelPrice = 0, pdpSelSize = '', pdpQty = 1;
+
+// ============================================================
+// PAGES
+// ============================================================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active-nav'));
+  if (id === 'shop') document.getElementById('nl-shop').classList.add('active-nav');
+  window.scrollTo(0, 0);
+}
+
+// ============================================================
+// SHOP PAGE
+// ============================================================
+function renderShop() {
+  let list = [...products];
+  const q = document.getElementById('search-input').value.toLowerCase();
+  if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || p.cat.includes(q));
+  if (activeFilter !== 'all') list = list.filter(p => p.cat === activeFilter);
+  document.getElementById('catalog-count').textContent = `Showing ${list.length} product${list.length !== 1 ? 's' : ''}`;
+
+  const getFeat = p => p.sizes.find(s => s.featured) || p.sizes[0];
+
+  const grid = document.getElementById('product-grid');
+  grid.innerHTML = list.map(p => {
+    const fs = getFeat(p);
+    const orig = Math.round(fs.price / (1 - fs.save / 100));
+    return `
+    <div class="pcard" id="pcard-${p.id}">
+      <div class="pcard-img" onclick="openPdp(${p.id})">
+        <span class="pcard-badge">${p.badge}</span>
+        <span class="pcard-disc">-${p.discount}%</span>
+        <span style="font-size:58px">${p.emoji}</span>
+      </div>
+      <div class="pcard-body">
+        <div class="pcard-cat">${p.cat}</div>
+        <div class="pcard-name" onclick="openPdp(${p.id})">${p.name}</div>
+        <div class="pcard-tag">⭐ ${p.rating} · ${p.reviews} reviews</div>
+        <div class="pcard-price-row">
+          <span class="pcard-price">₹${fs.price.toLocaleString('en-IN')}</span>
+          <span class="pcard-orig">₹${orig.toLocaleString('en-IN')}</span>
+        </div>
+        <div class="pcard-actions">
+          <button class="pca-cart" onclick="quickAdd(${p.id},event)">🛒 Add</button>
+          <button class="pca-buy" onclick="quickBuy(${p.id},event)">⚡ Buy Now</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('') + `
+  <div class="add-card" id="add-card">
+    <div class="add-icon">✨</div>
+    <h3>Add New Product with AI</h3>
+    <p>Type any Himalayan product — AI auto-generates the full product page, benefits, sizes & pricing instantly</p>
+    <input class="add-input" id="new-prod-input" type="text" placeholder="e.g. Moringa Powder, Saffron, Chyawanprash..." onkeydown="if(event.key==='Enter')genNewProduct()">
+    <button class="add-gen-btn" id="new-gen-btn" onclick="genNewProduct()">✨ Generate with AI</button>
+  </div>`;
+}
+
+function setFilter(btn, cat) {
+  document.querySelectorAll('.ftag').forEach(f => f.classList.remove('on'));
+  btn.classList.add('on');
+  activeFilter = cat;
+  renderShop();
+}
+
+function filterProducts() { renderShop(); }
+
+function sortProducts(v) {
+  const feat = p => p.sizes.find(s => s.featured) || p.sizes[0];
+  if (v === 'price-low') products.sort((a, b) => feat(a).price - feat(b).price);
+  else if (v === 'price-high') products.sort((a, b) => feat(b).price - feat(a).price);
+  else if (v === 'discount') products.sort((a, b) => b.discount - a.discount);
+  else products.sort((a, b) => a.id - b.id);
+  renderShop();
+}
+
+function quickAdd(id, e) {
+  e.stopPropagation();
+  const p = products.find(x => x.id === id);
+  const fs = p.sizes.find(s => s.featured) || p.sizes[0];
+  addItem(p, fs.label, fs.price, 1);
+  showToast(`${p.name} added to cart! 🛒`);
+}
+
+function quickBuy(id, e) {
+  e.stopPropagation();
+  const p = products.find(x => x.id === id);
+  const fs = p.sizes.find(s => s.featured) || p.sizes[0];
+  addItem(p, fs.label, fs.price, 1);
+  openCart();
+  showToast('Review cart & checkout!');
+}
+
+// ============================================================
+// PRODUCT DETAIL PAGE
+// ============================================================
+function openPdp(id) {
+  currentPdp = products.find(p => p.id === id);
+  pdpQty = 1;
+  const feat = currentPdp.sizes.find(s => s.featured) || currentPdp.sizes[0];
+  pdpSelPrice = feat.price;
+  pdpSelSize = feat.label;
+  document.getElementById('pdp-breadcrumb').textContent = currentPdp.name;
+  document.getElementById('pdp-emoji').textContent = currentPdp.emoji;
+  document.getElementById('pdp-badge').textContent = currentPdp.badge;
+  renderPdpInfo();
+  showPage('pdp');
+}
+
+function renderPdpInfo() {
+  const p = currentPdp;
+  const feat = p.sizes.find(s => s.featured) || p.sizes[0];
+  const orig = Math.round(feat.price / (1 - feat.save / 100));
+
+  const sizeHTML = p.sizes.map(s => `
+    <button class="sbtn ${s.featured ? 'featured' : ''} ${s.deal ? 'deal' : ''} ${s.featured ? 'active' : ''}"
+      onclick="pdpSelSize='${s.label}';pdpSelPrice=${s.price};document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">
+      <span class="sn">${s.label}</span>
+      <span class="sp">₹${s.price.toLocaleString('en-IN')}</span>
+      <span class="ss">Save ${s.save}%</span>
+    </button>`).join('');
+
+  const bHTML = p.benefits.map(b => {
+    const [t, d] = b.split(' — ');
+    return `<div class="bi"><span class="bck">✔</span><span><strong>${t}</strong>${d ? ' — ' + d : ''}</span></div>`;
+  }).join('');
+
+  const uHTML = p.usage.map((u, i) =>
+    `<div class="bi"><span class="bck">${i + 1}.</span><span>${u}</span></div>`
+  ).join('');
+
+  document.getElementById('pdp-info').innerHTML = `
+    <p class="pvendor">Pahadi Roots</p>
+    <h1 class="ptitle">${p.name}</h1>
+    <p class="ptag">${p.tagline}</p>
+    <div class="rrow">
+      <span class="stars">★★★★★</span>
+      <span class="rc">${p.reviews} reviews</span>
+      <span class="sbadge">${p.sold} sold</span>
+    </div>
+    <div class="price-row">
+      <span class="pcurr">₹${feat.price.toLocaleString('en-IN')}</span>
+      <span class="porig">₹${orig.toLocaleString('en-IN')}</span>
+      <span class="dbadge">SAVE ${feat.save}%</span>
+    </div>
+    <p class="psub">MRP inclusive of all taxes · ${feat.label}</p>
+    ${p.warn ? `<div class="warn">⚠️ ${p.warn}</div>` : ''}
+    <hr class="hdiv">
+    <p class="slabel">Select Size</p>
+    <div class="sgrid">${sizeHTML}</div>
+    <div class="qrow">
+      <div class="qctrl">
+        <button class="qb" onclick="pdpQty=Math.max(1,pdpQty-1);document.getElementById('pdp-qty').value=pdpQty">−</button>
+        <input class="qn" type="text" id="pdp-qty" value="1" readonly>
+        <button class="qb" onclick="pdpQty++;document.getElementById('pdp-qty').value=pdpQty">+</button>
+      </div>
+      <span style="font-size:12px;color:var(--tmu)">Quantity</span>
+    </div>
+    <div class="cta-row">
+      <button class="btn-ac" id="pdp-add-btn" onclick="pdpAddCart()">🛒 Add to Cart</button>
+      <button class="btn-bn" onclick="pdpBuyNow()">⚡ Buy Now</button>
+    </div>
+    <div class="trust-row">
+      <div class="ti"><div class="tdot"></div>Free delivery above ₹500</div>
+      <div class="ti"><div class="tdot"></div>Lab-tested & pure</div>
+      <div class="ti"><div class="tdot"></div>Direct from farmers</div>
+      <div class="ti"><div class="tdot"></div>UPI · Cards · COD</div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="swTab('ben',this)">Benefits</div>
+      <div class="tab" onclick="swTab('det',this)">Details</div>
+      <div class="tab" onclick="swTab('use',this)">How to Use</div>
+    </div>
+    <div class="tc active" id="tc-ben">${bHTML}</div>
+    <div class="tc" id="tc-det">
+      <div class="dr"><span class="dk">Ingredients</span><span class="dv">${p.ingredients}</span></div>
+      <div class="dr"><span class="dk">Origin</span><span class="dv">${p.origin}</span></div>
+      <div class="dr"><span class="dk">Shelf Life</span><span class="dv">${p.shelf}</span></div>
+      <div class="dr"><span class="dk">Storage</span><span class="dv">${p.storage}</span></div>
+      <div class="dr"><span class="dk">Certifications</span><span class="dv">${p.certs}</span></div>
+    </div>
+    <div class="tc" id="tc-use">${uHTML}</div>`;
+}
+
+function swTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tc-' + id).classList.add('active');
+}
+
+function pdpAddCart() {
+  addItem(currentPdp, pdpSelSize, pdpSelPrice, pdpQty);
+  showToast('Added to cart!');
+  const b = document.getElementById('pdp-add-btn');
+  b.innerHTML = '✓ Added to Cart'; b.classList.add('added');
+  setTimeout(() => { b.innerHTML = '🛒 Add to Cart'; b.classList.remove('added'); }, 1800);
+}
+
+function pdpBuyNow() {
+  addItem(currentPdp, pdpSelSize, pdpSelPrice, pdpQty);
+  openCart();
+  showToast('Review your cart & checkout!');
+}
+
+// ============================================================
+// CART
+// ============================================================
+function addItem(p, size, price, q) {
+  const key = p.name + '|' + size;
+  const ex = cart.find(i => i.key === key);
+  if (ex) ex.qty += q;
+  else cart.push({ key, name: p.name, emoji: p.emoji, size, price, qty: q });
+  updateCartUI();
+}
+
+function updateCartUI() {
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  document.getElementById('cart-count').textContent = cart.reduce((s, i) => s + i.qty, 0);
+  document.getElementById('cart-total').textContent = '₹' + total.toLocaleString('en-IN');
+
+  const savEl = document.getElementById('cart-sav');
+  savEl.style.display = total > 0 ? 'block' : 'none';
+  savEl.textContent = total >= 500
+    ? '🎉 Free delivery on this order!'
+    : `Add ₹${(500 - total).toLocaleString('en-IN')} more for free delivery`;
+
+  const body = document.getElementById('cart-body');
+  if (!cart.length) {
+    body.innerHTML = '<div class="ec"><div style="font-size:42px;margin-bottom:10px">🛒</div><p style="font-size:13px">Your cart is empty</p></div>';
+    return;
+  }
+  body.innerHTML = cart.map((item, idx) => `
+    <div class="ci">
+      <div class="ci-img">${item.emoji}</div>
+      <div class="ci-info">
+        <div class="ci-name">${item.name}</div>
+        <div class="ci-size">${item.size}</div>
+        <div class="ci-qty">
+          <button class="cqb" onclick="adjQty(${idx},-1)">−</button>
+          <span style="font-size:12px;font-weight:700;min-width:18px;text-align:center">${item.qty}</span>
+          <button class="cqb" onclick="adjQty(${idx},1)">+</button>
+          <button onclick="removeItem(${idx})" style="margin-left:8px;background:none;border:none;color:#c0392b;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600">Remove</button>
+        </div>
+      </div>
+      <div class="ci-price">₹${(item.price * item.qty).toLocaleString('en-IN')}</div>
+    </div>`).join('');
+}
+
+function adjQty(idx, d) { cart[idx].qty += d; if (cart[idx].qty <= 0) cart.splice(idx, 1); updateCartUI(); }
+function removeItem(idx) { cart.splice(idx, 1); updateCartUI(); }
+function openCart() { document.getElementById('cart-overlay').classList.add('show'); }
+function closeCart() { document.getElementById('cart-overlay').classList.remove('show'); }
+
+// ============================================================
+// PAYMENT
+// ============================================================
+function openPayment() {
+  closeCart();
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  document.getElementById('pay-tot').textContent = '₹' + total.toLocaleString('en-IN');
+  document.getElementById('pay-sum').innerHTML = cart.length
+    ? cart.map(i => `<div class="poi"><span>${i.name} — ${i.size} ×${i.qty}</span><span>₹${(i.price * i.qty).toLocaleString('en-IN')}</span></div>`).join('')
+    : '<div class="poi"><span style="color:var(--tmu)">No items in cart</span></div>';
+  document.getElementById('pay-ov').classList.add('show');
+}
+function closePay() { document.getElementById('pay-ov').classList.remove('show'); }
+
+function selPay(el) {
+  document.querySelectorAll('.pm').forEach(m => { m.classList.remove('sel'); m.querySelector('.pck').textContent = ''; });
+  el.classList.add('sel'); el.querySelector('.pck').textContent = '✓';
+}
+
+function placeOrder() {
+  closePay();
+  cart = [];
+  updateCartUI();
+  document.getElementById('success-screen').classList.add('show');
+}
+
+// ============================================================
+// AI PRODUCT GENERATOR
+// ============================================================
+async function genNewProduct() {
+  const input = document.getElementById('new-prod-input').value.trim();
+  if (!input) { showToast('Please enter a product name'); return; }
+
+  const btn = document.getElementById('new-gen-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="width:13px;height:13px;border-width:2px"></span> Generating...';
+
+  const card = document.getElementById('add-card');
+  const ov = document.createElement('div');
+  ov.className = 'gen-ov';
+  ov.innerHTML = `<span class="spin" style="width:28px;height:28px;border-width:3px"></span><p>AI generating "${input}"...</p>`;
+  card.appendChild(ov);
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Generate product data for "Pahadi Roots" Himalayan natural store. Product: "${input}". Return ONLY valid JSON (no markdown, no backticks):
+{"name":"product display name 4-6 words","cat":"juice|oil|honey|spice|tea|other","emoji":"single most relevant emoji","badge":"2-word quality badge","tagline":"8-10 word romantic Himalayan tagline","rating":"4.7","reviews":"800","sold":"40,000+","warn":"brief health warning if relevant else empty string","sizes":[{"label":"100g","price":199,"save":15},{"label":"250g","price":349,"save":22,"featured":true},{"label":"500g","price":599,"save":33},{"label":"1kg","price":999,"save":42,"deal":true}],"benefits":["Benefit Title — explanation","Benefit Title — explanation","Benefit Title — explanation","Benefit Title — explanation","Benefit Title — explanation"],"ingredients":"ingredients list","origin":"Himalayan region/state","shelf":"X months","storage":"storage instructions","certs":"certifications","usage":["Step 1 instruction","Step 2 instruction","Step 3 instruction","Step 4 instruction"],"discount":33}`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const text = data.content.map(c => c.text || '').join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    const p = JSON.parse(clean);
+    const newId = products.length + 1;
+    const feat = p.sizes.find(s => s.featured) || p.sizes[0];
+    products.push({ id: newId, ...p, discount: p.discount || feat.save });
+    renderShop();
+    showToast(`✨ ${p.name} added to catalog!`);
+    document.getElementById('new-prod-input').value = '';
+  } catch (e) {
+    showToast('AI generation failed — please try again');
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '✨ Generate with AI';
+  const ovEl = card.querySelector('.gen-ov');
+  if (ovEl) card.removeChild(ovEl);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// INIT
+renderShop();
+</script>
+<script 
+  src="/js/ai-assistant.js"
+  data-name="Pahadi_AI"
+  data-tagline="Himalayan Shopping Guide · Online"
+  data-whatsapp="919XXXXXXXXX">
+</script>
+</body>
+</html>

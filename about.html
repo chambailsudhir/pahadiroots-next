@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Our Story — 5 Pahadi Roots | Pure Himalayan Natural Products</title>
+<meta name="description" content="The story of 5 Pahadi Roots — founded by Sudhir Chambail, born in the mountains of Himachal Pradesh, built on the belief that the purest things come from the highest places.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://pahadiroots.com/our-story">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://ulyrhnpoiypuvaurlqqi.supabase.co" crossorigin>
+<!-- Prefetch home + products for instant back-navigation -->
+<link rel="prefetch" href="/">
+<link rel="prefetch" href="/all-products.html">
+<link rel="prefetch" href="/js/main.js">
+<link rel="prefetch" href="/css/main.css">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Lato:wght@300;400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* ── VARIABLES ── */
+:root {
+  --g: #1a3a1e;
+  --g2: #2d6a4f;
+  --g3: #3d8b5f;
+  --gold: #c8a45a;
+  --gold2: #e8c87a;
+  --cream: #f8f4ed;
+  --cream2: #f0e8d8;
+  --tx: #1a1a1a;
+  --tx2: #4a4a4a;
+  --tx3: #8a8a8a;
+  --white: #ffffff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Lato', sans-serif;
+  background: var(--cream);
+  color: var(--tx);
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; }
+
+/* ── NAV ── */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(26,58,30,0.96);
+  backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px; height: 64px;
+  border-bottom: 1px solid rgba(200,164,90,0.2);
+}
+.nav-logo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 600; color: var(--cream);
+  letter-spacing: 0.5px;
+}
+.nav-logo span { color: var(--gold); }
+.nav-links { display: flex; gap: 32px; }
+.nav-links a {
+  font-size: 13px; font-weight: 400; color: rgba(248,244,237,0.8);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  transition: color 0.2s;
+}
+.nav-links a:hover, .nav-links a.active { color: var(--gold); }
+.nav-cta {
+  background: var(--gold); color: var(--g);
+  padding: 9px 20px; border-radius: 2px;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; transition: background 0.2s;
+}
+.nav-cta:hover { background: var(--gold2); }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  background: linear-gradient(160deg, var(--g) 0%, #0f2410 50%, #1a2f1a 100%);
+  display: flex; align-items: center;
+  position: relative; overflow: hidden;
+  padding: 100px 40px 80px;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.015'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.hero-inner {
+  max-width: 1200px; margin: 0 auto; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+  position: relative; z-index: 1;
+}
+.hero-tag {
+  display: inline-block;
+  font-size: 11px; font-weight: 700; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--gold);
+  border: 1px solid rgba(200,164,90,0.4);
+  padding: 6px 16px; margin-bottom: 28px;
+}
+.hero-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(52px, 6vw, 80px);
+  font-weight: 300; line-height: 1.05;
+  color: var(--cream); margin-bottom: 28px;
+}
+.hero-title em { font-style: italic; color: var(--gold); }
+.hero-desc {
+  font-size: 16px; line-height: 1.8; color: rgba(248,244,237,0.75);
+  max-width: 480px; margin-bottom: 40px;
+}
+.hero-stats {
+  display: flex; gap: 40px;
+}
+.stat-item { }
+.stat-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px; font-weight: 600; color: var(--gold);
+  line-height: 1;
+}
+.stat-label {
+  font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(248,244,237,0.5); margin-top: 4px;
+}
+.hero-image-wrap {
+  position: relative;
+}
+.hero-img-frame {
+  width: 100%; aspect-ratio: 3/4; max-width: 420px; margin: 0 auto;
+  background: linear-gradient(135deg, rgba(45,106,79,0.3), rgba(26,58,30,0.8));
+  border: 1px solid rgba(200,164,90,0.2);
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.upload-btn-wrap {
+  position: absolute; bottom: 20px; right: 20px;
+}
+.upload-hint {
+  background: rgba(200,164,90,0.9);
+  color: var(--g); font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; padding: 6px 12px;
+  cursor: pointer; display: none;
+}
+.hero-corner-text {
+  position: absolute; bottom: -20px; left: -20px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 120px; font-weight: 700;
+  color: rgba(200,164,90,0.06); line-height: 1;
+  pointer-events: none; user-select: none;
+}
+
+
+/* ── TEAM ── */
+.team-card {
+  text-align: center;
+}
+.team-photo {
+  width: 160px; height: 160px; border-radius: 50%;
+  margin: 0 auto 16px;
+  background: var(--cream2);
+  border: 3px solid rgba(200,164,90,0.3);
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 56px;
+}
+.team-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: top;
+}
+.team-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px; font-weight: 600;
+  color: var(--g); margin-bottom: 4px;
+}
+.team-role {
+  font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 10px;
+}
+.team-bio {
+  font-size: 13px; line-height: 1.7; color: var(--tx2);
+}
+.team-founder-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--g);
+  background: rgba(200,164,90,0.2);
+  border: 1px solid rgba(200,164,90,0.4);
+  padding: 3px 10px; margin-bottom: 10px;
+}
+
+/* ── SCROLL LINE ── */
+.scroll-line {
+  width: 1px; height: 60px;
+  background: linear-gradient(to bottom, transparent, var(--gold), transparent);
+  margin: 0 auto; display: block;
+}
+
+/* ── SECTION BASE ── */
+.section { padding: 100px 40px; }
+.section-inner { max-width: 1200px; margin: 0 auto; }
+.section-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--g2);
+  margin-bottom: 16px; display: block;
+}
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(36px, 4vw, 56px);
+  font-weight: 400; line-height: 1.1;
+  margin-bottom: 24px;
+}
+.section-title em { font-style: italic; color: var(--g2); }
+.divider-gold {
+  width: 60px; height: 2px;
+  background: linear-gradient(to right, var(--gold), transparent);
+  margin-bottom: 40px;
+}
+
+/* ── STORY SECTION ── */
+.story-sec { background: var(--white); }
+.story-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 80px; align-items: start;
+}
+.story-text p {
+  font-size: 16px; line-height: 1.9; color: var(--tx2);
+  margin-bottom: 24px;
+}
+.story-text p:last-child { margin-bottom: 0; }
+.story-pullquote {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-style: italic;
+  color: var(--g); line-height: 1.5;
+  border-left: 3px solid var(--gold);
+  padding-left: 24px; margin: 32px 0;
+}
+
+.tl-dot {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--cream2); border: 2px solid var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.tl-content { }
+.tl-year {
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  color: var(--gold); text-transform: uppercase; margin-bottom: 4px;
+}
+.tl-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px; font-weight: 600; color: var(--g);
+  margin-bottom: 6px;
+}
+.tl-desc { font-size: 14px; line-height: 1.7; color: var(--tx2); }
+
+/* ── VALUES SECTION ── */
+.values-sec { background: var(--cream); }
+.values-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 40px; margin-top: 60px;
+}
+.value-card {
+  padding: 40px 32px;
+  background: var(--white);
+  border: 1px solid rgba(200,164,90,0.2);
+  position: relative; overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.value-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(26,58,30,0.1);
+}
+.value-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(to right, var(--gold), var(--g2));
+}
+.value-icon { font-size: 40px; margin-bottom: 20px; }
+.value-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 24px; font-weight: 600; color: var(--g);
+  margin-bottom: 12px;
+}
+.value-desc { font-size: 14px; line-height: 1.8; color: var(--tx2); }
+
+/* ── FOUNDER SECTION ── */
+.founder-sec { background: var(--g); color: var(--cream); }
+.founder-grid {
+  display: grid; grid-template-columns: 400px 1fr;
+  gap: 80px; align-items: start;
+}
+.founder-photo-wrap {
+  position: relative;
+}
+.founder-photo {
+  width: 100%; aspect-ratio: 3/4;
+  background: linear-gradient(135deg, rgba(45,106,79,0.4), rgba(15,36,16,0.9));
+  border: 1px solid rgba(200,164,90,0.25);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.founder-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: top;
+}
+.founder-photo-placeholder {
+  text-align: center;
+}
+.founder-photo-placeholder .ph-icon { font-size: 80px; margin-bottom: 12px; }
+.founder-photo-placeholder p {
+  font-size: 12px; color: rgba(248,244,237,0.3);
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.founder-badge {
+  position: absolute; bottom: 20px; left: 20px;
+  background: var(--gold); color: var(--g);
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; padding: 8px 16px;
+}
+.upload-photo-btn {
+  position: absolute; bottom: 20px; right: 20px;
+  background: rgba(200,164,90,0.9); color: var(--g);
+  font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  padding: 8px 14px; cursor: pointer;
+  border: none; display: none;
+}
+.founder-info { padding-top: 20px; }
+.founder-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--gold);
+  margin-bottom: 16px; display: block;
+}
+.founder-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(42px, 5vw, 64px);
+  font-weight: 300; line-height: 1.05;
+  color: var(--cream); margin-bottom: 8px;
+}
+.founder-name span { color: var(--gold); }
+.founder-origin {
+  font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(248,244,237,0.5); margin-bottom: 32px;
+}
+.founder-divider {
+  width: 50px; height: 1px;
+  background: linear-gradient(to right, var(--gold), transparent);
+  margin-bottom: 32px;
+}
+.founder-bio p {
+  font-size: 16px; line-height: 1.9;
+  color: rgba(248,244,237,0.8); margin-bottom: 20px;
+}
+.founder-quote {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-style: italic;
+  color: var(--gold2); line-height: 1.6;
+  border-left: 2px solid rgba(200,164,90,0.4);
+  padding-left: 20px; margin: 32px 0;
+}
+.founder-social {
+  display: flex; gap: 16px; margin-top: 32px;
+}
+.social-link {
+  width: 40px; height: 40px;
+  border: 1px solid rgba(200,164,90,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transition: all 0.2s; color: var(--cream);
+}
+.social-link:hover {
+  background: var(--gold); border-color: var(--gold); color: var(--g);
+}
+
+/* ── MISSION SECTION ── */
+
+
+
+
+
+/* ── CTA SECTION ── */
+.cta-sec { background: var(--cream2); text-align: center; padding: 100px 40px; }
+.cta-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(36px, 4vw, 52px); font-weight: 400;
+  color: var(--g); margin-bottom: 16px;
+}
+.cta-desc { font-size: 16px; color: var(--tx2); margin-bottom: 40px; }
+.cta-btn {
+  display: inline-block;
+  background: var(--g); color: var(--cream);
+  padding: 16px 48px; font-size: 13px;
+  font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  transition: background 0.2s; margin: 0 8px;
+}
+.cta-btn:hover { background: var(--g2); }
+.cta-btn-outline {
+  display: inline-block;
+  border: 2px solid var(--g); color: var(--g);
+  padding: 14px 48px; font-size: 13px;
+  font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  transition: all 0.2s; margin: 0 8px;
+}
+.cta-btn-outline:hover { background: var(--g); color: var(--cream); }
+
+/* ── FOOTER ── */
+.footer {
+  background: #0f1f10; color: rgba(248,244,237,0.5);
+  text-align: center; padding: 32px 40px;
+  font-size: 13px; letter-spacing: 0.5px;
+}
+.footer a { color: var(--gold); }
+
+/* ── MOBILE NAV ── */
+.mob-menu-btn {
+  display: none; background: none; border: none;
+  color: var(--cream); font-size: 22px; cursor: pointer;
+}
+
+/* ── ANIMATIONS ── */
+.fade-up {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.fade-up.visible { opacity: 1; transform: translateY(0); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .nav-links, .nav-cta { display: none; }
+  .mob-menu-btn { display: block; }
+  .hero-inner { grid-template-columns: 1fr; gap: 48px; }
+  .hero-image-wrap { order: -1; }
+  .hero-img-frame { max-width: 280px; }
+  .story-grid { grid-template-columns: 1fr; gap: 48px; }
+  .values-grid { grid-template-columns: 1fr; }
+  .founder-grid { grid-template-columns: 1fr; gap: 48px; }
+  .founder-photo { max-width: 320px; }
+  .section { padding: 60px 20px; }
+  .hero { padding: 100px 20px 60px; }
+  .nav { padding: 0 20px; }
+}
+/* ── THEME SWITCHER (shared) ── */
+.theme-panel{position:absolute;top:calc(100% + 10px);right:0;background:#fff;border:1px solid rgba(26,58,30,.14);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.16);padding:16px;width:268px;z-index:9999;display:none}
+.theme-panel.open{display:block;animation:themeIn .18s ease}
+@keyframes themeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.theme-panel-title{font-size:9.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#999;margin-bottom:12px}
+.theme-opts{display:flex;flex-direction:column;gap:8px}
+.theme-opt{display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:12px;border:2px solid transparent;cursor:pointer;background:rgba(0,0,0,.03);transition:all .18s;font-family:inherit;text-align:left;width:100%}
+.theme-opt:hover{border-color:rgba(26,58,30,.3);background:rgba(26,58,30,.04)}
+.theme-opt.active{border-color:var(--g);background:rgba(26,58,30,.07)}
+.theme-swatch{width:34px;height:34px;border-radius:50%;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.swatch-pahadi{background:linear-gradient(135deg,#1a3a1e 50%,#c8920a 50%)}
+.swatch-dukan{background:linear-gradient(135deg,#006d77 50%,#bf4e2c 50%)}
+.swatch-saffron{background:linear-gradient(135deg,#8B1A1A 50%,#c8920a 50%)}
+.swatch-midnight{background:linear-gradient(135deg,#0d1117 50%,#d4a843 50%)}
+.swatch-valley{background:linear-gradient(135deg,#4a7c59 50%,#c9676b 50%)}
+.theme-opt-info{display:flex;flex-direction:column;gap:2px}
+.theme-opt-label{font-size:13px;font-weight:800;color:#1a1a1a;line-height:1.2}
+.theme-opt-sub{font-size:10.5px;color:#999}
+.theme-check{margin-left:auto;color:var(--g);font-size:16px;opacity:0}
+.theme-opt.active .theme-check{opacity:1}
+/* Logo overrides for about page */
+.logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:var(--g);line-height:1.1;display:block}
+.logo-tl{font-size:9px;color:var(--gold,#c8a45a);font-weight:700;letter-spacing:1.2px;text-transform:uppercase;display:block}
+</style>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body data-theme="pahadi">
+<script src="/js/theme.js"></script>
+<!-- ANNOUNCEMENT BAR -->
+<div class="ann" id="annBar">🌿 <span id="annText">Free Shipping above ₹<span id="annShipAmt">799</span> &nbsp;|&nbsp; <a href="/">UPI · Cards · COD</a> &nbsp;|&nbsp; 10 Himalayan States Covered</span></div>
+<!-- TICKER BAR -->
+<div class="ticker-wrap" id="tickerWrap" aria-label="Announcements">
+  <div class="ticker-track" id="tickerTrack">
+    <span class="ticker-item" data-ticker="1">🎁 Use code <strong>WELCOME50</strong> <span>·</span> ₹50 off your first order</span>
+    <span class="ticker-item" data-ticker="2">🚚 Free shipping <span>·</span> On orders above ₹<span class="dynShipAmt">799</span> — Pan India</span>
+    <span class="ticker-item" data-ticker="3">🌿 100% Natural <span>·</span> Lab-tested, pure</span>
+    <span class="ticker-item" data-ticker="4">🏔️ Direct from farmers <span>·</span> 200+ mountain families</span>
+    <span class="ticker-item" data-ticker="5">⭐ Rated 4.9/5 <span>·</span> 10,000+ happy customers</span>
+    <span class="ticker-item" data-ticker="1">🎁 Use code <strong>WELCOME50</strong> <span>·</span> ₹50 off your first order</span>
+    <span class="ticker-item" data-ticker="2">🚚 Free shipping <span>·</span> On orders above ₹<span class="dynShipAmt">799</span> — Pan India</span>
+    <span class="ticker-item" data-ticker="3">🌿 100% Natural <span>·</span> Lab-tested, pure</span>
+    <span class="ticker-item" data-ticker="4">🏔️ Direct from farmers <span>·</span> 200+ mountain families</span>
+    <span class="ticker-item" data-ticker="5">⭐ Rated 4.9/5 <span>·</span> 10,000+ happy customers</span>
+  </div>
+</div>
+<nav class="nav">
+  <a href="/" class="logo" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+    <div class="logo-icon" style="width:40px;height:40px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--g)">
+      <img src="https://ulyrhnpoiypuvaurlqqi.supabase.co/storage/v1/object/public/pahadi-images/5%20pahadi%20roots.png" alt="5 Pahadi Roots" style="width:40px;height:40px;object-fit:contain" onerror="this.style.display='none';this.parentElement.textContent='🌿'">
+    </div>
+    <div class="logo-words">
+      <span class="logo-name">5 Pahadi Roots</span>
+      <span class="logo-tl">Himalayan Natural Store</span>
+    </div>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/our-story" class="active">Our Story</a>
+    <a href="/#shop">Shop</a>
+    <a href="/#states">By State</a>
+    <a href="/#contact">Contact</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="theme-switcher-wrap" style="position:relative;display:inline-flex">
+      <button onclick="openThemeSwitcher()" title="Switch colour theme" style="background:none;border:1.5px solid var(--bd,rgba(26,58,30,.14));border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--tx2,#3a5c3e);transition:all .2s;white-space:nowrap">🎨</button>
+      <div class="theme-panel" id="themeSwitcherPanel">
+        <div class="theme-panel-title">Choose Theme</div>
+        <div class="theme-opts">
+          <button class="theme-opt" data-theme="pahadi" onclick="applyTheme('dukan');closeThemeSwitcher()"><div class="theme-swatch swatch-dukan"></div><div class="theme-opt-info"><div class="theme-opt-label">Pahadi Dukkan ✦</div><div class="theme-opt-sub">Ocean teal · Warm orange · Default</div></div><span class="theme-check">✓</span></button>
+          <button class="theme-opt" data-theme="pahadi" onclick="applyTheme('pahadi');closeThemeSwitcher()"><div class="theme-swatch swatch-pahadi"></div><div class="theme-opt-info"><div class="theme-opt-label">Pahadi Roots</div><div class="theme-opt-sub">Forest green · Gold · Serif</div></div><span class="theme-check">✓</span></button>
+          <button class="theme-opt" data-theme="saffron" onclick="applyTheme('saffron');closeThemeSwitcher()"><div class="theme-swatch swatch-saffron"></div><div class="theme-opt-info"><div class="theme-opt-label">Saffron Gold ✦ Premium</div><div class="theme-opt-sub">Deep burgundy · Saffron · Editorial</div></div><span class="theme-check">✓</span></button>
+          <button class="theme-opt" data-theme="midnight" onclick="applyTheme('midnight');closeThemeSwitcher()"><div class="theme-swatch swatch-midnight"></div><div class="theme-opt-info"><div class="theme-opt-label">Midnight Cedar ✦ Premium</div><div class="theme-opt-sub">Dark luxury · Gold · Night mode</div></div><span class="theme-check">✓</span></button>
+          <button class="theme-opt" data-theme="valley" onclick="applyTheme('valley');closeThemeSwitcher()"><div class="theme-swatch swatch-valley"></div><div class="theme-opt-info"><div class="theme-opt-label">Valley Bloom ✦ Premium</div><div class="theme-opt-sub">Sage green · Blush rose · Airy</div></div><span class="theme-check">✓</span></button>
+        </div>
+      </div>
+    </div>
+    <a href="/#shop" class="nav-cta">Shop Now</a>
+    <button class="mob-menu-btn" onclick="this.textContent = this.textContent === '☰' ? '✕' : '☰'">☰</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-text fade-up">
+      <div class="hero-tag">Est. 2019 · Himachal Pradesh</div>
+      <h1 class="hero-title">
+        Born in the<br>
+        <em>Mountains,</em><br>
+        Built on Trust
+      </h1>
+      <p class="hero-desc">
+        5 Pahadi Roots started with one simple question — why is it so hard to find food that is truly pure? The answer led us deep into the Himalayas, to farmers who had been doing it right for generations.
+      </p>
+      <div class="hero-stats">
+        <div class="stat-item">
+          <div class="stat-num">10+</div>
+          <div class="stat-label">Himalayan States</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">200+</div>
+          <div class="stat-label">Farmer Families</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num">2019</div>
+          <div class="stat-label">Founded</div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-image-wrap fade-up" style="transition-delay:0.2s">
+      <div class="hero-img-frame" id="heroImgFrame">
+        <svg viewBox="0 0 400 520" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;position:absolute;inset:0">
+          <!-- Sky gradient -->
+          <defs>
+            <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0a1f0c"/>
+              <stop offset="100%" stop-color="#1a3a1e"/>
+            </linearGradient>
+            <linearGradient id="mtn1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2d5233"/>
+              <stop offset="100%" stop-color="#1a3a1e"/>
+            </linearGradient>
+            <linearGradient id="mtn2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3d6b45"/>
+              <stop offset="100%" stop-color="#2d5233"/>
+            </linearGradient>
+            <linearGradient id="goldGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#e8c87a" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#c8a45a" stop-opacity="0.3"/>
+            </linearGradient>
+          </defs>
+          <!-- Background -->
+          <rect width="400" height="520" fill="url(#skyGrad)"/>
+          <!-- Stars -->
+          <circle cx="60" cy="40" r="1.5" fill="#c8a45a" opacity="0.6"/>
+          <circle cx="180" cy="25" r="1" fill="#c8a45a" opacity="0.5"/>
+          <circle cx="310" cy="55" r="1.5" fill="#c8a45a" opacity="0.4"/>
+          <circle cx="340" cy="30" r="1" fill="#c8a45a" opacity="0.6"/>
+          <circle cx="90" cy="70" r="1" fill="#fff" opacity="0.3"/>
+          <circle cx="250" cy="45" r="1.2" fill="#fff" opacity="0.3"/>
+          <!-- Moon -->
+          <circle cx="320" cy="60" r="18" fill="#c8a45a" opacity="0.15"/>
+          <circle cx="330" cy="54" r="14" fill="#0a1f0c" opacity="0.9"/>
+          <!-- Back mountains -->
+          <polygon points="0,280 80,140 160,220 240,120 320,200 400,160 400,340 0,340" fill="url(#mtn1)" opacity="0.5"/>
+          <!-- Snow caps back -->
+          <polygon points="80,140 65,175 95,175" fill="white" opacity="0.3"/>
+          <polygon points="240,120 225,158 255,158" fill="white" opacity="0.3"/>
+          <!-- Front mountains -->
+          <polygon points="0,340 60,200 130,260 200,160 270,240 340,180 400,220 400,400 0,400" fill="url(#mtn2)"/>
+          <!-- Snow caps front -->
+          <polygon points="200,160 183,202 217,202" fill="white" opacity="0.5"/>
+          <polygon points="340,180 326,212 354,212" fill="white" opacity="0.4"/>
+          <!-- Ground/forest -->
+          <rect x="0" y="390" width="400" height="130" fill="#0f2410"/>
+          <!-- Trees -->
+          <polygon points="40,390 52,350 64,390" fill="#1a3a1e"/>
+          <polygon points="80,390 92,345 104,390" fill="#1a3a1e"/>
+          <polygon points="290,390 302,348 314,390" fill="#1a3a1e"/>
+          <polygon points="330,390 345,352 360,390" fill="#1a3a1e"/>
+          <!-- Gold line accent -->
+          <line x1="0" y1="400" x2="400" y2="400" stroke="#c8a45a" stroke-width="1" opacity="0.3"/>
+          <!-- Text overlay -->
+          <text x="200" y="455" text-anchor="middle" font-family="Georgia, serif" font-size="13" fill="#c8a45a" opacity="0.7" letter-spacing="4">PAHADI ROOTS</text>
+          <text x="200" y="478" text-anchor="middle" font-family="Georgia, serif" font-size="10" fill="#c8a45a" opacity="0.4" letter-spacing="2">EST. 2019</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<span class="scroll-line" style="margin: 0 auto; display: block; background: linear-gradient(to bottom, #1a3a1e, transparent);"></span>
+
+<!-- OUR STORY -->
+<section class="section story-sec">
+  <div class="section-inner">
+    <div class="story-grid" style="grid-template-columns:1fr;max-width:720px;margin:0 auto">
+      <div class="fade-up">
+        <span class="section-tag">The Beginning</span>
+        <h2 class="section-title">How <em>5 Pahadi Roots</em> Came to Be</h2>
+        <div class="divider-gold"></div>
+        <div class="story-text">
+          <p>
+            5 Pahadi Roots started with a simple frustration — good food existed, but finding it was too hard. The real stuff was buried in the mountains, made by farmers who had no way to reach anyone beyond their hillside.
+          </p>
+          <p>
+            Sudhir Chambail had been making sourcing trips into the mountains for years — not looking for a business idea, just looking for good food. What he kept finding were farmers with extraordinary products and no platform to sell them honestly.
+          </p>
+          <blockquote class="story-pullquote">
+            "These farmers weren't selling a product. They were sharing a practice — one that had no room for shortcuts."
+          </blockquote>
+          <p>
+            So he built one. No middlemen. No inflated claims. Just a direct line between the people who grow it and the people who eat it.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- VALUES -->
+<section class="section values-sec">
+  <div class="section-inner">
+    <div class="fade-up" style="text-align:center; max-width: 600px; margin: 0 auto 0;">
+      <span class="section-tag">What We Stand For</span>
+      <h2 class="section-title">Our <em>Values</em></h2>
+      <div class="divider-gold" style="margin: 0 auto 0;"></div>
+    </div>
+    <div class="values-grid">
+      <div class="value-card fade-up">
+        <div class="value-icon">🔬</div>
+        <div class="value-title">Tested for Purity</div>
+        <div class="value-desc">Our products are tested for quality and purity. No adulteration, no shortcuts — what you see on the label is what's inside.</div>
+      </div>
+      <div class="value-card fade-up" style="transition-delay:0.1s">
+        <div class="value-icon">🤝</div>
+        <div class="value-title">Direct from Farmers</div>
+        <div class="value-desc">We buy directly from farming families. No middlemen means better prices for them, better quality for you.</div>
+      </div>
+      <div class="value-card fade-up" style="transition-delay:0.2s">
+        <div class="value-icon">🌍</div>
+        <div class="value-title">Eco Packaging</div>
+        <div class="value-desc">Glass jars, kraft labels, minimal plastic. We believe the packaging should respect the product inside it.</div>
+      </div>
+      <div class="value-card fade-up" style="transition-delay:0.3s">
+        <div class="value-icon">🌱</div>
+        <div class="value-title">100% Natural</div>
+        <div class="value-desc">No chemicals, no preservatives, no artificial flavours. Just food the way it has always been made — by hand, with patience.</div>
+      </div>
+      <div class="value-card fade-up" style="transition-delay:0.4s">
+        <div class="value-icon">🗺️</div>
+        <div class="value-title">Rooted in India</div>
+        <div class="value-desc">From the Himalayas to the Western Ghats — we source from wherever India's finest food is grown, not just one region.</div>
+      </div>
+      <div class="value-card fade-up" style="transition-delay:0.5s">
+        <div class="value-icon">🚫</div>
+        <div class="value-title">No False Claims</div>
+        <div class="value-desc">We don't over-promise. If we say it's natural, it is. If we say direct from farmers, it is. Honesty is the only policy we know.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOUNDER -->
+<section class="section founder-sec" id="founder">
+  <div class="section-inner">
+    <div class="founder-grid">
+      <div class="founder-photo-wrap fade-up">
+        <div class="founder-photo" id="founderPhotoWrap">
+          <div class="founder-photo-placeholder" id="founderPlaceholder">
+            <div class="ph-icon">👤</div>
+            <p>Photo coming soon</p>
+          </div>
+          <img src="" alt="Sudhir Chambail — Founder, 5 Pahadi Roots" id="founderImg" style="display:none; position:absolute; inset:0;">
+          <div class="founder-badge">Founder</div>
+        </div>
+        <!-- Admin upload option - hidden by default -->
+        <input type="file" id="founderPhotoInput" accept="image/*" style="display:none" onchange="previewFounderPhoto(this)">
+      </div>
+      <div class="founder-info fade-up" style="transition-delay:0.15s">
+        <span class="founder-tag">The Person Behind 5 Pahadi Roots</span>
+        <h2 class="founder-name">Sudhir <span>Chambail</span></h2>
+        <div class="founder-origin">Kangra, Himachal Pradesh · Delhi</div>
+        <div class="founder-divider"></div>
+        <div class="founder-bio">
+          <p>
+            Sudhir Chambail grew up between Kangra in Himachal Pradesh and Delhi. The mountains were always home — not just a place to visit, but a way of thinking about what matters.
+          </p>
+          <p>
+            5 Pahadi Roots started simply: he kept finding extraordinary food in the hills that no one outside knew about. Farmers doing things the right way — not because it was trendy, but because it was the only way they knew. He wanted to connect them directly with people who would care.
+          </p>
+
+        </div>
+        <div class="founder-social">
+          <a href="https://www.instagram.com/pahadiroots" class="social-link" target="_blank" title="Instagram">📷</a>
+          <a href="https://wa.me/919899984895" class="social-link" target="_blank" title="WhatsApp">💬</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- MEET THE TEAM -->
+<section class="section" id="team" style="background: var(--white);">
+  <div class="section-inner">
+    <div class="fade-up" style="text-align:center; max-width:600px; margin: 0 auto 60px;">
+      <span class="section-tag">The People Behind It</span>
+      <h2 class="section-title">Meet the <em>Team</em></h2>
+      <div class="divider-gold" style="margin: 0 auto;"></div>
+    </div>
+    <div id="team-grid-about" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:32px; max-width:1000px; margin:0 auto;">
+      <!-- Loaded from Supabase -->
+      <div style="text-align:center;color:#888;padding:40px;grid-column:1/-1">Loading team…</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-sec fade-up">
+  <div class="section-inner">
+    <h2 class="cta-title">Experience the Mountains in Every Bite</h2>
+    <p class="cta-desc">From Himalayan wildflower honey to saffron from Kashmir — pure, tested, direct from farmers.</p>
+    <a href="/#shop" class="cta-btn">Shop Now</a>
+    <a href="/#contact" class="cta-btn-outline">Get in Touch</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+
+<section class="newsletter-bridge">
+  <div class="f-newsletter">
+    <div class="f-nl-inner">
+      <div class="f-nl-text">
+        <h4>🌿 Join the Pahadi Family</h4>
+        <p>Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox</p>
+      </div>
+      <div class="f-nl-form">
+        <input type="email" class="f-nl-inp" id="nlEmail" placeholder="Enter your email address" autocomplete="email">
+        <button class="f-nl-btn" onclick="subscribe()">Subscribe</button>
+      </div>
+    </div>
+  </div>
+</section>
+<footer id="contact">
+
+  <!-- ① HIMACHALI CHAMBA RUMAL FRIEZE (horizontal dancer band) -->
+  <div class="f-art-frieze">
+    <svg width="100%" viewBox="0 0 1440 68" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1440" height="68" fill="#1a0d2e"/>
+      <line x1="0" y1="2.5" x2="1440" y2="2.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <line x1="0" y1="65.5" x2="1440" y2="65.5" stroke="#c8920a" stroke-width="0.6" opacity="0.45"/>
+      <defs>
+        <g id="fu1">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><line x1="7" y1="-2" x2="13" y2="-6" stroke="#e87c3e" stroke-width="1.2"/><polygon points="-8,2 -14,8 -5,6" fill="#c85020" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#d4186c" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#a0104a"/><polygon points="0,0 9,-18 13,-7" fill="#f050a0"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#1e6bb0"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#2d0a6e" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#f0a020" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#b07010"/><polygon points="0,0 5,-16 9,-5" fill="#f8c050"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#c8340c"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#56b848" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#56b848"/><polygon points="-8,2 -14,8 -5,6" fill="#2d8020" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#c8920a"/><circle cx="0" cy="-7" r="2.5" fill="#e8b050"/><circle cx="7" cy="0" r="2.5" fill="#e8b050"/><circle cx="0" cy="7" r="2.5" fill="#e8b050"/><circle cx="-7" cy="0" r="2.5" fill="#e8b050"/></g>
+        </g>
+        <g id="fu2">
+          <g transform="translate(10,26)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#c84090" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#c84090"/><polygon points="-8,2 -14,8 -5,6" fill="#902060" opacity=".8"/></g>
+          <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#1e6bb0" opacity=".85"/><polygon points="0,0 -13,-7 -9,-18 0,-22" fill="#154f8a"/><polygon points="0,0 9,-18 13,-7" fill="#3090d8"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#d4186c"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><path d="M-3.5,-31 Q-9,-27 -11,-22" stroke="#8b0040" stroke-width="1.8" fill="none"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" stroke-width="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" stroke-width="1.3"/></g>
+          <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#56b848" opacity=".85"/><polygon points="0,0 -9,-5 -5,-16 0,-14" fill="#2d8020"/><polygon points="0,0 5,-16 9,-5" fill="#78d060"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#6a3090"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" stroke-width="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" stroke-width="1.3"/></g>
+          <g transform="translate(79,24) scale(-1,1)"><ellipse cx="0" cy="0" rx="7" ry="4" fill="#e87c3e" opacity=".9"/><circle cx="7" cy="-2" r="3" fill="#e87c3e"/><polygon points="-8,2 -14,8 -5,6" fill="#d4522a" opacity=".8"/></g>
+          <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#d4186c"/><circle cx="0" cy="-7" r="2.5" fill="#f050a0"/><circle cx="7" cy="0" r="2.5" fill="#f050a0"/><circle cx="0" cy="7" r="2.5" fill="#f050a0"/><circle cx="-7" cy="0" r="2.5" fill="#f050a0"/></g>
+        </g>
+      </defs>
+      <!-- 13 units across 1440px width -->
+      <use href="#fu1" x="0"/><use href="#fu2" x="112"/><use href="#fu1" x="224"/><use href="#fu2" x="336"/>
+      <use href="#fu1" x="448"/><use href="#fu2" x="560"/><use href="#fu1" x="672"/><use href="#fu2" x="784"/>
+      <use href="#fu1" x="896"/><use href="#fu2" x="1008"/><use href="#fu1" x="1120"/><use href="#fu2" x="1232"/>
+      <use href="#fu1" x="1344"/>
+    </svg>
+  </div>
+
+  <!-- ② BRAND ROW: full-width spread -->
+  <div class="f-brand-row">
+    <!-- Left vine panel (mirror of right) -->
+    <div class="f-vine-panel f-vine-panel--left">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg" style="transform:scaleX(-1)">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+    <!-- Medallion shifted slightly right -->
+    <div style="flex-shrink:0;margin-left:20px">
+      <svg width="104" height="104" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="55" cy="55" r="52" fill="none" stroke="#c8920a" stroke-width="1.5" opacity=".6"/>
+        <circle cx="55" cy="55" r="48" fill="#1a0400" opacity=".95"/>
+        <g opacity=".7">
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(0 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(45 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(90 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(135 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#d4186c" transform="rotate(180 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#e87c3e" transform="rotate(225 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#1e6bb0" transform="rotate(270 55 55)"/>
+          <ellipse cx="55" cy="13" rx="5" ry="9" fill="#56b848" transform="rotate(315 55 55)"/>
+        </g>
+        <g transform="translate(55,22)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(45 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(90 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(135 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(180 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#d4186c"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#1e6bb0"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(225 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#f0a020"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#c8340c"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(270 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#1e6bb0"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#d4186c"/><circle cx="0" cy="-16" r="2.5" fill="#d4956a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#d4956a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#d4956a" stroke-width="1"/></g>
+        <g transform="translate(55,22) rotate(315 0 33)"><polygon points="0,6 -5,0 -3,-6 0,-8 3,-6 5,0" fill="#56b848"/><rect x="-2.5" y="-13" width="5" height="5" rx="1" fill="#6a3090"/><circle cx="0" cy="-16" r="2.5" fill="#c8905a"/><line x1="-2.5" y1="-11" x2="-6" y2="-7" stroke="#c8905a" stroke-width="1"/><line x1="2.5" y1="-11" x2="6" y2="-7" stroke="#c8905a" stroke-width="1"/></g>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(22.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(67.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(112.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(157.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(202.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(247.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(292.5 55 55)"/>
+        <circle cx="55" cy="30" r="1.5" fill="#fff" opacity=".3" transform="rotate(337.5 55 55)"/>
+        <circle cx="55" cy="55" r="12" fill="#0b160d"/>
+        <circle cx="55" cy="55" r="9" fill="none" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="55" y1="47" x2="55" y2="63" stroke="#c8920a" stroke-width="1.5"/>
+        <line x1="47" y1="55" x2="63" y2="55" stroke="#c8920a" stroke-width="1.5"/>
+        <circle cx="55" cy="55" r="3" fill="#c8920a"/>
+      </svg>
+    </div>
+    <div class="f-brand-col">
+      <div class="f-brand-name">5 Pahadi Roots</div>
+      <div class="f-brand-sub">Himalayan Natural Store</div>
+      <p class="f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
+    </div>
+    <div class="f-vine-panel">
+      <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg">
+        <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" stroke-width=".7" opacity=".25"/>
+        <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="0" cy="-8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,36)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#e87c3e" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#f0c030" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#c8340c" opacity=".55"/></g>
+        <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="0" cy="8" r="3" fill="#56b848" opacity=".65"/></g>
+        <g transform="translate(26,80)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#56b848" opacity=".75"/><circle cx="7" cy="-2" r="2" fill="#c8920a" opacity=".65"/><polygon points="-8,2 -12,7 -5,5" fill="#2d8020" opacity=".55"/></g>
+        <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ④ LINKS GRID -->
+  <div class="f-main">
+    <div>
+      <div class="fh">Quick Selects</div>
+      <ul class="ful">
+        <li><a href="/#products">🍯 Wild Honey</a></li>
+        <li><a href="/#products">🧈 A2 Bilona Ghee</a></li>
+        <li><a href="/#products">🌸 Kashmiri Saffron</a></li>
+        <li><a href="/#products">🪨 Ladakhi Shilajit</a></li>
+        <li><a href="/#products">🍃 Himalayan Teas</a></li>
+        <li><a href="/#products">🌾 Ancient Grains</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Company</div>
+      <ul class="ful">
+        <li><a href="/our-story">Our Story</a></li>
+        <li><a href="/#states">By Region</a></li>
+        <li><a href="/terms#returns">Returns &amp; Refunds</a></li>
+        <li><a href="/terms#shipping">Shipping Policy</a></li>
+        <li><a href="/terms#privacy">Privacy Policy</a></li>
+        <li><a href="/terms">Terms &amp; Conditions</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="fh">Connect With Us</div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">🌐</span>
+        <div class="f-contact-text"><a href="https://pahadiroots.com">pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📧</span>
+        <div class="f-contact-text"><a id="footer-email" href="mailto:hello@pahadiroots.com">hello@pahadiroots.com</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📞</span>
+        <div class="f-contact-text"><a id="footer-phone" href="tel:+919899984895">+91 98999 84895</a></div>
+      </div>
+      <div class="f-contact-item">
+        <span class="f-contact-icon">📍</span>
+        <div id="footer-address" class="f-contact-text">Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ SOCIAL + FSSAI BAR (moved below links) -->
+  <div class="f-social-bar">
+    <div class="f-social-bar-inner">
+      <div class="f-soc-row f-soc-row--lg">
+        <a id="social-instagram" href="https://www.instagram.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Instagram">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+        </a>
+        <a id="social-facebook" href="https://www.facebook.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="Facebook">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        </a>
+        <a id="social-twitter" href="https://twitter.com/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="X">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a id="social-youtube" href="https://www.youtube.com/@pahadiroots" target="_blank" rel="noopener" class="f-soc" title="YouTube">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+        </a>
+        <a href="https://www.linkedin.com/company/pahadiroots" target="_blank" rel="noopener" class="f-soc" title="LinkedIn">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
+      <div class="f-fssai">
+        <div class="f-fssai-badge">FSSAI</div>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700">Licensed</div>
+          <div class="f-fssai-num">Lic. No. — update karein</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ DIAMOND VINE DIVIDER -->
+  <svg class="f-vine-divider" viewBox="0 0 1440 22" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <line x1="0" y1="11" x2="1440" y2="11" stroke="#c8920a" stroke-width=".5" opacity=".18"/>
+    <g opacity=".45">
+      <polygon points="18,11 24,5 30,11 24,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="56,11 62,5 68,11 62,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="94,11 100,5 106,11 100,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="132,11 138,5 144,11 138,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="170,11 176,5 182,11 176,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="208,11 214,5 220,11 214,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="246,11 252,5 258,11 252,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="284,11 290,5 296,11 290,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="322,11 328,5 334,11 328,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="360,11 366,5 372,11 366,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="398,11 404,5 410,11 404,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="436,11 442,5 448,11 442,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="474,11 480,5 486,11 480,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="512,11 518,5 524,11 518,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="550,11 556,5 562,11 556,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="588,11 594,5 600,11 594,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="626,11 632,5 638,11 632,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="664,11 670,5 676,11 670,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="702,11 708,5 714,11 708,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="740,11 746,5 752,11 746,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="778,11 784,5 790,11 784,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="816,11 822,5 828,11 822,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="854,11 860,5 866,11 860,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="892,11 898,5 904,11 898,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="930,11 936,5 942,11 936,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="968,11 974,5 980,11 974,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1006,11 1012,5 1018,11 1012,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1044,11 1050,5 1056,11 1050,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1082,11 1088,5 1094,11 1088,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1120,11 1126,5 1132,11 1126,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1158,11 1164,5 1170,11 1164,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1196,11 1202,5 1208,11 1202,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1234,11 1240,5 1246,11 1240,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1272,11 1278,5 1284,11 1278,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1310,11 1316,5 1322,11 1316,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1348,11 1354,5 1360,11 1354,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1386,11 1392,5 1398,11 1392,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+      <polygon points="1420,11 1426,5 1432,11 1426,17" fill="none" stroke="#c8920a" stroke-width=".8"/>
+    </g>
+  </svg>
+
+  <!-- ⑥ COPYRIGHT BAR -->
+  <div class="f-bot">
+    <div class="f-bot-left">© 2026 <strong class="fd">5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
+    <div class="f-bot-tag">Making India eat clean</div>
+  </div>
+
+</footer>
+
+<script>
+// Scroll animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+// Trigger hero immediately
+setTimeout(() => {
+  document.querySelectorAll('.hero .fade-up').forEach(el => el.classList.add('visible'));
+}, 100);
+
+// Founder photo preview (for admin use)
+function previewFounderPhoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById('founderImg');
+      img.src = e.target.result;
+      img.style.display = 'block';
+      document.getElementById('founderPlaceholder').style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+// Load team from store-data API
+function initAnnBar(s) {
+  if (!s) return;
+  var bar = document.getElementById('annBar');
+  if (!bar) return;
+  if (s.ann_hide === 'true') { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  if (s.ann_text) { var span = document.getElementById('annText'); if (span) span.innerHTML = s.ann_text; }
+}
+function initTickerBar(s) {
+  if (!s) return;
+  var wrap = document.getElementById('tickerWrap');
+  if (!wrap) return;
+  if (s.ticker_hide === 'true') { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  for (var n = 1; n <= 5; n++) {
+    var items = document.querySelectorAll('[data-ticker="' + n + '"]');
+    var hide = s['ticker_' + n + '_hide'] === 'true';
+    var text = s['ticker_' + n + '_text'];
+    items.forEach(function(el) {
+      if (hide) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      if (text) el.innerHTML = text;
+    });
+  }
+}
+
+async function loadTeamSection() {
+  const grid = document.getElementById('team-grid-about');
+  if (!grid) return;
+  try {
+    const res = await fetch('/api/store-data');
+    const data = await res.json();
+    // Apply ann bar + ticker from admin settings
+    if (data.settings) { initAnnBar(data.settings); initTickerBar(data.settings); }
+    const members = data.team_members || [];
+    if (!members.length) {
+      grid.innerHTML = '<div style="text-align:center;color:#888;padding:40px;grid-column:1/-1">Team profiles coming soon.</div>';
+      return;
+    }
+    grid.innerHTML = members.map(m => `
+      <div class="team-card fade-up">
+        <div class="team-photo">
+          ${m.image_url
+            ? `<img src="${m.image_url}" alt="${m.name||''}" loading="lazy" onerror="this.style.display='none';this.parentElement.textContent='👤'">`
+            : '👤'}
+        </div>
+        ${m.is_founder ? '<div class="team-founder-badge">Founder</div>' : ''}
+        <div class="team-name">${m.name || '—'}</div>
+        <div class="team-role">${m.role || 'Co-Founder'}</div>
+        ${m.bio ? `<div class="team-bio">${m.bio}</div>` : ''}
+      </div>
+    `).join('');
+    // Trigger animations
+    grid.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+  } catch(e) {
+    grid.innerHTML = '<div style="text-align:center;color:#888;padding:40px;grid-column:1/-1">Team profiles coming soon.</div>';
+    console.warn('Team load failed:', e);
+  }
+}
+loadTeamSection();
+</script>
+<script 
+  src="/js/ai-assistant.js"
+  data-name="Pahadi_AI"
+  data-tagline="Himalayan Shopping Guide · Online"
+  data-whatsapp="919XXXXXXXXX">
+</script>
+</body>
+</html>
