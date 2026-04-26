@@ -106,7 +106,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     const params = new URLSearchParams()
     const vals = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
     Object.entries(vals).forEach(([k, v]) => { if (v) params.set(k, v) })
-    return `/collections/${cat.slug}?${params.toString()}`
+    return `/collections/${cat!.slug}?${params.toString()}`
   }
 
   const jsonLd = {
