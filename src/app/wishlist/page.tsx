@@ -27,7 +27,6 @@ export default function WishlistPublicPage() {
         `)
         .in('id', wishlist)
         .eq('is_deleted', false)
-        .eq('status', 'active')
       return normalizeProducts(data ?? [])
     }
   )

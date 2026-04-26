@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { formatPrice, savingsPercent, parseJsonArray, catSlug } from '@/lib/utils'
+import { formatPrice, savingsPercent, parseJsonArray } from '@/lib/utils'
 import type { Product } from '@/types'
 import ProductGallery from '@/components/product/ProductGallery'
 import AddToCartSection from '@/components/product/AddToCartSection'
@@ -67,7 +67,7 @@ export default async function ProductPage({ params }: Props) {
   // Breadcrumb
   const crumbs = [
     { label: 'Home', href: '/' },
-    { label: product.categories?.name || 'Products', href: product.categories ? `/collections/${catSlug(product.categories)}` : '/products' },
+    { label: product.categories?.name || 'Products', href: product.categories ? `/collections/${product.categories.slug}` : '/products' },
     { label: product.name },
   ]
 
@@ -115,7 +115,7 @@ export default async function ProductPage({ params }: Props) {
             {/* Category + badges */}
             <div className="flex items-center gap-2 flex-wrap mb-3">
               {product.categories && (
-                <a href={`/collections/${catSlug(product.categories)}`}
+                <a href={`/collections/${product.categories.slug}`}
                   className="text-xs font-semibold text-forest-700 bg-forest-50 hover:bg-forest-100 px-2.5 py-1 rounded-full transition-colors">
                   {product.categories.name}
                 </a>
@@ -249,7 +249,6 @@ async function fetchProduct(slug: string): Promise<Product | null> {
       `)
       .eq('slug', slug)
       .eq('is_deleted', false)
-      .eq('status', 'active')
       .single()
 
     if (error || !data) return null
@@ -273,6 +272,6 @@ async function fetchProduct(slug: string): Promise<Product | null> {
 // Generate static params for all active products (ISR)
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('products').select('slug').eq('is_deleted', false).eq('status', 'active'); data = r.data } catch {}
+  try { const r = await supabase.from('products').select('slug').eq('is_deleted', false); data = r.data } catch {}
   return (data || []).map((p: any) => ({ slug: p.slug }))
 }

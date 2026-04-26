@@ -84,8 +84,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     `, { count: 'exact' })
     .eq('category_id', cat.id)
     .eq('is_deleted', false)
-    .or('status.eq.active,status.is.null')
-    .range(offset, offset + PAGE_SIZE - 1)
+        .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock) query = query.gt('available_stock', 0)
 

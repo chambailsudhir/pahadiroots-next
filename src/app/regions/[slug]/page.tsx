@@ -36,7 +36,6 @@ export default async function RegionPage({ params }: Props) {
       `)
       .eq('state_id', state.id)   // state.id is the text code e.g. "hp"
       .eq('is_deleted', false)
-      .eq('status', 'active')
       .order('name')
       .limit(24)
     products = normalizeProducts(data ?? [])

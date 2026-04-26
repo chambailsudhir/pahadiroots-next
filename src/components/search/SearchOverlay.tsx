@@ -56,8 +56,7 @@ export default function SearchOverlay() {
         .from('products')
         .select('id, name, slug, emoji, price, mrp, image_url, available_stock, status, is_deleted')
         .eq('is_deleted', false)
-        .eq('status', 'active')
-        .ilike('name', `%${debouncedQ}%`)
+                .ilike('name', `%${debouncedQ}%`)
         .limit(6)
       return normalizeProducts(data ?? [])
     }
