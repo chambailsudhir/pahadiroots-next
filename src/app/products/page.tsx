@@ -47,12 +47,20 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
   // Fetch categories for filter bar
   let categories: { id: number; name: string; slug: string }[] = []
   try {
-    const { data } = await supabase
+    const { data: cats } = await supabase
       .from('categories')
       .select('id, name, slug')
       .eq('is_active', true)
       .order('name')
-    categories = data || []
+    if (cats?.length) {
+      const { data: settings } = await supabase
+        .from('site_settings')
+        .select('key, value')
+        .or(cats.map(c => `key.eq.coll_hidden_${c.slug}`).join(','))
+      const sMap: Record<string, string> = {}
+      ;(settings || []).forEach((r: any) => { sMap[r.key] = r.value })
+      categories = cats.filter(c => sMap[`coll_hidden_${c.slug}`] !== 'true')
+    }
   } catch { categories = [] }
 
   // Build product query
@@ -60,7 +68,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
     .from('products')
     .select(PRODUCT_SELECT, { count: 'exact' })
     .eq('is_deleted', false)
-    .eq('status', 'active')
+    .or('status.eq.active,status.is.null')
     .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock) query = query.gt('available_stock', 0)

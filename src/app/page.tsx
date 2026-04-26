@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
 }
 
-export const revalidate = 300
+export const revalidate = 30  // Revalidate every 30 seconds — admin changes reflect quickly
 
 export default async function HomePage() {
   const settings = await getSiteSettings()
@@ -94,49 +94,31 @@ async function fetchHeroImages(settings: any) {
 
 async function fetchCategories() {
   try {
-    const [{ data: cats }, { data: settings }] = await Promise.all([
-      supabase
-        .from('categories')
-        .select('id, name, slug, description, image_url, is_active')
-        .eq('is_active', true)
-        .order('name'),
-      supabase
-        .from('site_settings')
-        .select('key, value')
-        .like('key', 'coll_img_%'),
-    ])
+    // Fetch categories from DB
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, name, slug, description, image_url, is_active')
+      .eq('is_active', true)
+      .order('name')
+    if (!cats?.length) return []
 
-    // Build lookup: coll_img_{slug} → url  (matches exactly what admin saves)
-    const imgMap: Record<string, string> = {}
-    for (const row of settings ?? []) {
-      imgMap[row.key] = row.value ?? ''
-    }
-
-    // Also fetch hidden flags from site_settings
-    const { data: hiddenSettings } = await supabase
+    // Fetch category images & hidden flags from site_settings
+    // Admin stores them as: coll_img_{slug} and coll_hidden_{slug}
+    const { data: settings } = await supabase
       .from('site_settings')
       .select('key, value')
-      .like('key', 'coll_hidden_%')
+      .or(cats.map(c => `key.eq.coll_img_${c.slug},key.eq.coll_hidden_${c.slug}`).join(','))
 
-    const hiddenMap: Record<string, boolean> = {}
-    for (const row of hiddenSettings ?? []) {
-      hiddenMap[row.key] = row.value === 'true'
-    }
+    const settingsMap: Record<string, string> = {}
+    ;(settings || []).forEach((r: any) => { settingsMap[r.key] = r.value })
 
-    // Merge: prefer site_settings image, filter hidden categories
-    return (cats ?? [])
-      .filter(cat => {
-        const hkey = `coll_hidden_${cat.slug || String(cat.id)}`
-        return !hiddenMap[hkey]
-      })
-      .map(cat => {
-        const key = `coll_img_${cat.slug || String(cat.id)}`
-        const settingsImg = (imgMap[key] || '').trim()
-        return {
-          ...cat,
-          image_url: settingsImg || cat.image_url || '',
-        }
-      })
+    return cats
+      .filter(c => settingsMap[`coll_hidden_${c.slug}`] !== 'true')  // hide if admin hid it
+      .map(c => ({
+        ...c,
+        // Prefer admin-uploaded image from site_settings; fall back to DB image_url
+        image_url: settingsMap[`coll_img_${c.slug}`] || c.image_url || null,
+      }))
   } catch { return [] }
 }
 

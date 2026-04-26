@@ -84,7 +84,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     `, { count: 'exact' })
     .eq('category_id', cat.id)
     .eq('is_deleted', false)
-    .eq('status', 'active')
+    .or('status.eq.active,status.is.null')
     .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock) query = query.gt('available_stock', 0)
@@ -297,18 +297,35 @@ async function fetchCategory(slug: string): Promise<Category | null> {
       .eq('slug', slug)
       .eq('is_active', true)
       .single()
-    return error ? null : data
+    if (error || !data) return null
+    // Merge admin-uploaded image from site_settings
+    const { data: setting } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', `coll_img_${slug}`)
+      .single()
+    return { ...data, image_url: (setting as any)?.value || data.image_url || null }
   } catch { return null }
 }
 
 async function fetchAllCategories(): Promise<Category[]> {
   try {
-    const { data } = await supabase
+    const { data: cats } = await supabase
       .from('categories')
       .select('id, name, slug, description, image_url, is_active')
       .eq('is_active', true)
       .order('name')
-    return data || []
+    if (!cats?.length) return []
+    // Fetch hidden flags & images from site_settings
+    const { data: settings } = await supabase
+      .from('site_settings')
+      .select('key, value')
+      .or(cats.map(c => `key.eq.coll_img_${c.slug},key.eq.coll_hidden_${c.slug}`).join(','))
+    const sMap: Record<string, string> = {}
+    ;(settings || []).forEach((r: any) => { sMap[r.key] = r.value })
+    return cats
+      .filter(c => sMap[`coll_hidden_${c.slug}`] !== 'true')
+      .map(c => ({ ...c, image_url: sMap[`coll_img_${c.slug}`] || c.image_url || null }))
   } catch { return [] }
 }
 
