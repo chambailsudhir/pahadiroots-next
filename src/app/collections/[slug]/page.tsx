@@ -102,11 +102,12 @@ export default async function CollectionPage({ params, searchParams }: Props) {
 
   const emoji = emojiFor(cat.name)
 
+  const catSlug = cat!.slug
   function url(overrides: Record<string, string | undefined>) {
     const params = new URLSearchParams()
     const vals = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
     Object.entries(vals).forEach(([k, v]) => { if (v) params.set(k, v) })
-    return `/collections/${cat.slug}?${params.toString()}`
+    return `/collections/${catSlug}?${params.toString()}`
   }
 
   const jsonLd = {
