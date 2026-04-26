@@ -35,8 +35,8 @@ export default function CategoryTiles({ categories }: Props) {
   const animRef   = useRef(false)
 
   useEffect(() => {
-    const cgrid = gridRef.current
-    if (!cgrid || active.length < 2) return
+    if (!gridRef.current || active.length < 2) return
+    const cgrid: HTMLDivElement = gridRef.current
 
     const VISIBLE = window.innerWidth < 640 ? 2 : window.innerWidth < 960 ? 4 : 6
 
