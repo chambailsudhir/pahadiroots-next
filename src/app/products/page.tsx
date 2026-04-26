@@ -68,6 +68,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
     .from('products')
     .select(PRODUCT_SELECT, { count: 'exact' })
     .eq('is_deleted', false)
+    .eq('status', 'active')
         .range(offset, offset + PAGE_SIZE - 1)
 
   if (instock) query = query.gt('available_stock', 0)

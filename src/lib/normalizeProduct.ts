@@ -16,7 +16,8 @@ export const PRODUCT_SELECT = `
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
-  product_variants(id, price, mrp, variant_value, available_stock, is_active)
+  product_variants(id, price, mrp, variant_value, available_stock, is_active),
+  product_images(image_url, sort_order)
 `
 
 /**
@@ -26,8 +27,19 @@ export const PRODUCT_SELECT = `
  */
 export function normalizeProduct(p: any): Product {
   const badges: string[] = Array.isArray(p.badges) ? p.badges : []
+
+  // product_images table is the source of truth for images (same as old site)
+  // Sort by sort_order, take first image, override products.image_url
+  const productImgs: { image_url: string; sort_order: number }[] =
+    Array.isArray(p.product_images) ? p.product_images : []
+  const sortedImgs = productImgs
+    .filter((i: any) => i.image_url)
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const resolvedImageUrl = sortedImgs[0]?.image_url || p.image_url || null
+
   return {
     ...p,
+    image_url:         resolvedImageUrl,
     badges_bestseller: badges.includes('bestseller'),
     badges_new:        badges.includes('new'),
     badges_organic:    badges.includes('organic'),

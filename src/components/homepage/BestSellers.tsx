@@ -31,6 +31,7 @@ async function fetchProducts(): Promise<Product[]> {
       .from('products')
       .select(PRODUCT_SELECT)
       .eq('is_deleted', false)
+    .eq('status', 'active')
             .limit(20)
     // Filter bestsellers client-side since badges is a jsonb array (can't .eq on array element)
     const all = normalizeProducts(data ?? [])

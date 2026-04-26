@@ -249,6 +249,7 @@ async function fetchProduct(slug: string): Promise<Product | null> {
       `)
       .eq('slug', slug)
       .eq('is_deleted', false)
+    .eq('status', 'active')
       .single()
 
     if (error || !data) return null
