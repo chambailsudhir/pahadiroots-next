@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { catSlug } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
@@ -107,7 +106,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     const params = new URLSearchParams()
     const vals = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
     Object.entries(vals).forEach(([k, v]) => { if (v) params.set(k, v) })
-    return `/collections/${cat!.slug}?${params.toString()}`
+    return `/collections/${cat.slug}?${params.toString()}`
   }
 
   const jsonLd = {
@@ -184,7 +183,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
                 border: '1.5px solid #c8d8ca', whiteSpace: 'nowrap',
               }}>🌿 All</Link>
               {allCategories.map(c => (
-                <Link key={c.id} href={`/collections/${catSlug(c)}`} style={{
+                <Link key={c.id} href={`/collections/${c.slug}`} style={{
                   padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 700,
                   textDecoration: 'none', whiteSpace: 'nowrap',
                   background: c.slug === cat.slug ? '#1a3a1e' : 'transparent',
@@ -236,7 +235,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 20px', textAlign: 'center' }}>
               <div style={{ fontSize: '52px', marginBottom: '16px' }}>🔍</div>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>No products found</h3>
-              <Link href={`/collections/${catSlug(cat)}`} style={{
+              <Link href={`/collections/${cat.slug}`} style={{
                 background: '#1a3a1e', color: '#fff', borderRadius: '20px',
                 padding: '10px 24px', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
                 marginTop: '12px', display: 'inline-block',

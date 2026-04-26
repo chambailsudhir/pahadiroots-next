@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import type { Category } from '@/types'
 
@@ -41,11 +40,11 @@ export default function CategoryTiles({ categories }: Props) {
 
     const VISIBLE = window.innerWidth < 640 ? 2 : window.innerWidth < 960 ? 4 : 6
 
-    function cellW() { return cgrid!.getBoundingClientRect().width / VISIBLE }
+    function cellW() { return cgrid.getBoundingClientRect().width / VISIBLE }
 
-    const allCells = Array.from(cgrid!.querySelectorAll<HTMLElement>('.cc-cell'))
+    const allCells = Array.from(cgrid.querySelectorAll<HTMLElement>('.cc-cell'))
     function setWidths() {
-      const w = cgrid!.getBoundingClientRect().width / VISIBLE
+      const w = cgrid.getBoundingClientRect().width / VISIBLE
       allCells.forEach(c => { c.style.width = w + 'px'; c.style.minWidth = w + 'px'; c.style.flex = 'none' })
     }
     setWidths()
@@ -59,9 +58,9 @@ export default function CategoryTiles({ categories }: Props) {
       const frame = (ts: number) => {
         if (!t0) t0 = ts
         const p = Math.min((ts - t0) / dur, 1)
-        cgrid!.scrollLeft = from + (to - from) * ease(p)
+        cgrid.scrollLeft = from + (to - from) * ease(p)
         if (p < 1) requestAnimationFrame(frame)
-        else { cgrid!.scrollLeft = to; animRef.current = false; done?.() }
+        else { cgrid.scrollLeft = to; animRef.current = false; done?.() }
       }
       requestAnimationFrame(frame)
     }
@@ -71,20 +70,20 @@ export default function CategoryTiles({ categories }: Props) {
     function goNext() {
       if (animRef.current) return
       const w = cellW()
-      const from = cgrid!.scrollLeft
+      const from = cgrid.scrollLeft
       animScroll(from, from + w, () => {
-        if (cgrid!.scrollLeft >= origCount * w) cgrid!.scrollLeft = 0
+        if (cgrid.scrollLeft >= origCount * w) cgrid.scrollLeft = 0
       })
     }
     function goPrev() {
       if (animRef.current) return
       const w = cellW()
-      if (cgrid!.scrollLeft <= 0) cgrid!.scrollLeft = origCount * w
-      const from = cgrid!.scrollLeft
+      if (cgrid.scrollLeft <= 0) cgrid.scrollLeft = origCount * w
+      const from = cgrid.scrollLeft
       animScroll(from, from - w)
     }
 
-    const wrap = cgrid!.parentElement!
+    const wrap = cgrid.parentElement!
     const lb = wrap.querySelector<HTMLButtonElement>('.cgrid-arrow.left')
     const rb = wrap.querySelector<HTMLButtonElement>('.cgrid-arrow.right')
     if (lb) lb.onclick = () => { pausedRef.current = true; goPrev(); setTimeout(() => { pausedRef.current = false }, 1000) }
@@ -96,7 +95,7 @@ export default function CategoryTiles({ categories }: Props) {
     wrap.addEventListener('touchstart', () => { pausedRef.current = true }, { passive: true })
     wrap.addEventListener('touchend', () => { setTimeout(() => { pausedRef.current = false }, 1800) }, { passive: true })
 
-    const onResize = () => { setWidths(); cgrid!.scrollLeft = 0 }
+    const onResize = () => { setWidths(); cgrid.scrollLeft = 0 }
     window.addEventListener('resize', onResize)
 
     return () => { clearInterval(timer); window.removeEventListener('resize', onResize) }
@@ -173,7 +172,7 @@ export default function CategoryTiles({ categories }: Props) {
                   transition: 'transform .25s',
                 }}
               >
-                <Link href={`/collections/${catSlug(cat)}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
+                <Link href={`/collections/${cat.slug}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
                   <div className="cc-box" style={{
                     width: '100%', aspectRatio: '1/1', borderRadius: '16px',
                     border: '2px solid #c9a84c', background: '#fafaf8',
@@ -212,7 +211,7 @@ export default function CategoryTiles({ categories }: Props) {
                   </div>
                 </Link>
 
-                <Link href={`/collections/${catSlug(cat)}`} style={{
+                <Link href={`/collections/${cat.slug}`} style={{
                   fontFamily: '"Playfair Display",serif',
                   fontSize: '14px', fontWeight: 700, color: '#1a3a1e',
                   textAlign: 'center', lineHeight: 1.3, width: '100%',
