@@ -3,11 +3,12 @@ import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import Link from 'next/link'
 import type { Product } from '@/types'
 
 export const metadata: Metadata = {
-  title: 'All Products — Natural Himalayan Foods',
-  description: 'Browse our complete range of natural Himalayan products — honey, spices, grains, oils and more.',
+  title: 'All Products — Natural Himalayan Foods | Pahadi Roots',
+  description: 'Browse our complete range of natural Himalayan products — honey, spices, grains, oils and more. Sourced directly from 200+ mountain families.',
 }
 
 export const revalidate = 300
@@ -15,27 +16,23 @@ export const revalidate = 300
 const PAGE_SIZE = 24
 
 const SORT_OPTIONS = [
-  { value: 'newest',     label: 'Newest First' },
-  { value: 'price_asc',  label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
-  { value: 'popular',    label: 'Best Sellers' },
+  { value: 'newest',     label: 'Newest First',         icon: '🆕' },
+  { value: 'price_asc',  label: 'Price: Low to High',   icon: '↑' },
+  { value: 'price_desc', label: 'Price: High to Low',   icon: '↓' },
+  { value: 'popular',    label: 'Best Sellers',          icon: '⭐' },
 ]
 
 interface SearchParams { sort?: string; category?: string; page?: string; instock?: string }
 
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams: SearchParams
-}) {
+export default async function ProductsPage({ searchParams }: { searchParams: SearchParams }) {
   const settings = await getSiteSettings()
   if (settings.catalogue_visible === 'false') {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🌿</div>
-          <h1 className="text-xl font-bold text-stone-800 mb-2">Catalogue Coming Soon</h1>
-          <p className="text-stone-500">We're adding new products. Check back soon!</p>
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f4ec' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌿</div>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>Catalogue Coming Soon</h1>
+          <p style={{ color: '#7a7a7a' }}>We're adding new products. Check back soon!</p>
         </div>
       </div>
     )
@@ -47,7 +44,18 @@ export default async function ProductsPage({
   const instock  = searchParams.instock === 'true'
   const offset   = (page - 1) * PAGE_SIZE
 
-  // Build query
+  // Fetch categories for filter bar
+  let categories: { id: number; name: string; slug: string }[] = []
+  try {
+    const { data } = await supabase
+      .from('categories')
+      .select('id, name, slug')
+      .eq('is_active', true)
+      .order('name')
+    categories = data || []
+  } catch { categories = [] }
+
+  // Build product query
   let query = supabase
     .from('products')
     .select(PRODUCT_SELECT, { count: 'exact' })
@@ -55,140 +63,208 @@ export default async function ProductsPage({
     .eq('status', 'active')
     .range(offset, offset + PAGE_SIZE - 1)
 
-  if (instock)  query = query.gt('available_stock', 0)
+  if (instock) query = query.gt('available_stock', 0)
   if (catSlug) {
-    try { const { data: cat } = await supabase.from('categories').select('id').eq('slug', catSlug).single(); if (cat) query = query.eq('category_id', (cat as any).id) } catch {}
+    const cat = categories.find(c => c.slug === catSlug)
+    if (cat) query = query.eq('category_id', cat.id)
   }
 
-  // Sort — badges_bestseller doesn't exist as a column; filter client-side after fetch
   switch (sort) {
     case 'price_asc':  query = query.order('price', { ascending: true });  break
     case 'price_desc': query = query.order('price', { ascending: false }); break
-    case 'popular':    query = query.order('name'); break   // normalized below
+    case 'popular':    query = query.order('name'); break
     default:           query = query.order('created_at', { ascending: false })
   }
 
   const { data, count } = await query
   let products = normalizeProducts(data ?? [])
-  // For 'popular' sort, filter to bestsellers first then fall back to all
   if (sort === 'popular') {
     const bs = products.filter(p => p.badges_bestseller)
     if (bs.length > 0) products = bs
   }
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
+  const activeCat = categories.find(c => c.slug === catSlug)
 
-  // Fetch categories for filter
-  let categories = null
-  try {
-    const { data } = await supabase
-      .from('categories')
-      .select('id, name, slug')
-      .eq('is_active', true)
-      .order('name')
-    categories = data
-  } catch { categories = null }
+  function url(overrides: Record<string, string | undefined>) {
+    const params = new URLSearchParams()
+    const vals = { sort, category: catSlug || undefined, instock: instock ? 'true' : undefined, page: '1', ...overrides }
+    Object.entries(vals).forEach(([k, v]) => { if (v) params.set(k, v) })
+    return `/products?${params.toString()}`
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
 
-      {/* Header */}
-      <div className="mb-7">
-        <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-1">
-          All Products
-        </h1>
-        <p className="text-sm text-stone-500">
-          {count || 0} natural Himalayan products
-        </p>
+      {/* Hero */}
+      <div style={{
+        background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',
+        padding: '40px 40px 36px', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)', backgroundSize: '30px 30px' }} />
+        <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+          {/* Breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
+            <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
+            <span>/</span>
+            {activeCat ? (
+              <>
+                <Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link>
+                <span>/</span>
+                <span style={{ color: '#fff' }}>{activeCat.name}</span>
+              </>
+            ) : (
+              <span style={{ color: '#fff' }}>All Products</span>
+            )}
+          </div>
+          <h1 style={{
+            fontFamily: '"Playfair Display",serif',
+            fontSize: 'clamp(26px,4vw,44px)', fontWeight: 700, color: '#fff',
+            margin: '0 0 8px', fontStyle: 'italic',
+          }}>
+            {activeCat ? activeCat.name : 'All Products'}
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,.75)', fontSize: '14px', margin: 0 }}>
+            {count || 0} natural Himalayan products{activeCat ? ` in ${activeCat.name}` : ''} • Sourced from 200+ mountain families
+          </p>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px 60px', display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
 
-        {/* Sidebar filters */}
-        <aside className="lg:w-52 shrink-0">
-          <div className="bg-stone-50 rounded-2xl p-4 space-y-5">
+        {/* Sidebar */}
+        <aside style={{
+          width: '220px', flexShrink: 0, background: '#fff',
+          borderRadius: '20px', padding: '20px', position: 'sticky',
+          top: '80px', boxShadow: '0 2px 16px rgba(0,0,0,.06)',
+          border: '1px solid rgba(0,0,0,.06)',
+        }}>
 
-            <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Sort By</div>
-              <div className="space-y-1">
-                {SORT_OPTIONS.map(opt => (
-                  <a
-                    key={opt.value}
-                    href={`/products?sort=${opt.value}${catSlug ? `&category=${catSlug}` : ''}${instock ? '&instock=true' : ''}`}
-                    className={`block text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                      sort === opt.value
-                        ? 'bg-forest-700 text-white font-semibold'
-                        : 'text-stone-600 hover:bg-stone-200'
-                    }`}
-                  >
-                    {opt.label}
-                  </a>
-                ))}
-              </div>
+          {/* Categories */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>
+              Collections
             </div>
-
-            <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Category</div>
-              <div className="space-y-1">
-                <a
-                  href={`/products?sort=${sort}${instock ? '&instock=true' : ''}`}
-                  className={`block text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                    !catSlug ? 'bg-forest-700 text-white font-semibold' : 'text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  All
-                </a>
-                {(categories || []).map(cat => (
-                  <a
-                    key={cat.id}
-                    href={`/products?sort=${sort}&category=${cat.slug}${instock ? '&instock=true' : ''}`}
-                    className={`block text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                      catSlug === cat.slug
-                        ? 'bg-forest-700 text-white font-semibold'
-                        : 'text-stone-600 hover:bg-stone-200'
-                    }`}
-                  >
-                    {cat.name}
-                  </a>
-                ))}
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <Link href={url({ category: undefined })} style={{
+                display: 'block', fontSize: '13px', padding: '7px 10px',
+                borderRadius: '10px', textDecoration: 'none', fontWeight: !catSlug ? 700 : 500,
+                background: !catSlug ? '#1a3a1e' : 'transparent',
+                color: !catSlug ? '#fff' : '#444',
+                transition: 'all .15s',
+              }}>🌿 All Products</Link>
+              {categories.map(cat => (
+                <Link key={cat.id} href={url({ category: cat.slug })} style={{
+                  display: 'block', fontSize: '13px', padding: '7px 10px',
+                  borderRadius: '10px', textDecoration: 'none', fontWeight: catSlug === cat.slug ? 700 : 500,
+                  background: catSlug === cat.slug ? '#1a3a1e' : 'transparent',
+                  color: catSlug === cat.slug ? '#fff' : '#444',
+                  transition: 'all .15s',
+                }}>{cat.name}</Link>
+              ))}
             </div>
+          </div>
 
-            <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Availability</div>
-              <a
-                href={`/products?sort=${sort}${catSlug ? `&category=${catSlug}` : ''}&instock=${instock ? 'false' : 'true'}`}
-                className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                  instock ? 'bg-forest-700 text-white font-semibold' : 'text-stone-600 hover:bg-stone-200'
-                }`}
-              >
-                <span className={`w-4 h-4 border-2 rounded flex items-center justify-center ${instock ? 'border-white' : 'border-stone-400'}`}>
-                  {instock && <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 12 12"><path d="M10 3L5 8.5 2 5.5"/></svg>}
-                </span>
-                In Stock Only
-              </a>
+          {/* Sort */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>
+              Sort By
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {SORT_OPTIONS.map(opt => (
+                <Link key={opt.value} href={url({ sort: opt.value })} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
+                  textDecoration: 'none', fontWeight: sort === opt.value ? 700 : 500,
+                  background: sort === opt.value ? '#f0f7f1' : 'transparent',
+                  color: sort === opt.value ? '#1a3a1e' : '#444',
+                  transition: 'all .15s',
+                }}>
+                  <span>{opt.icon}</span> {opt.label}
+                </Link>
+              ))}
+            </div>
+          </div>
 
+          {/* Stock */}
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>
+              Availability
+            </div>
+            <Link href={url({ instock: instock ? 'false' : 'true' })} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
+              textDecoration: 'none', fontWeight: 500,
+              background: instock ? '#1a3a1e' : 'transparent', color: instock ? '#fff' : '#444',
+              transition: 'all .15s',
+            }}>
+              <span style={{
+                width: '16px', height: '16px', border: `2px solid ${instock ? '#fff' : '#999'}`,
+                borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                {instock && <span style={{ color: '#fff', fontSize: '10px', lineHeight: 1 }}>✓</span>}
+              </span>
+              In Stock Only
+            </Link>
           </div>
         </aside>
 
         {/* Product grid */}
-        <div className="flex-1">
+        <div style={{ flex: 1, minWidth: 0 }}>
+
+          {/* Active filters strip */}
+          {(catSlug || instock || sort !== 'newest') && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', color: '#7a7a7a', fontWeight: 600 }}>Filters:</span>
+              {activeCat && (
+                <Link href={url({ category: undefined })} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#1a3a1e', color: '#fff', borderRadius: '20px',
+                  padding: '4px 12px', fontSize: '12px', fontWeight: 700, textDecoration: 'none',
+                }}>{activeCat.name} ×</Link>
+              )}
+              {instock && (
+                <Link href={url({ instock: 'false' })} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#1a3a1e', color: '#fff', borderRadius: '20px',
+                  padding: '4px 12px', fontSize: '12px', fontWeight: 700, textDecoration: 'none',
+                }}>In Stock ×</Link>
+              )}
+              {sort !== 'newest' && (
+                <Link href={url({ sort: 'newest' })} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#c8920a', color: '#fff', borderRadius: '20px',
+                  padding: '4px 12px', fontSize: '12px', fontWeight: 700, textDecoration: 'none',
+                }}>{SORT_OPTIONS.find(o => o.value === sort)?.label} ×</Link>
+              )}
+              <Link href="/products" style={{
+                fontSize: '12px', color: '#c8920a', fontWeight: 700, textDecoration: 'underline',
+              }}>Clear all</Link>
+            </div>
+          )}
+
+          {/* Count + range */}
+          <div style={{ fontSize: '12px', color: '#9a9a9a', marginBottom: '16px' }}>
+            Showing {Math.min(offset + 1, count || 0)}–{Math.min(offset + PAGE_SIZE, count || 0)} of {count || 0} products
+          </div>
+
           {products.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="text-5xl mb-4">🔍</div>
-              <h3 className="text-lg font-semibold text-stone-700 mb-2">No products found</h3>
-              <p className="text-stone-400 text-sm">Try changing your filters</p>
-              <a href="/products" className="mt-4 text-forest-700 text-sm font-semibold hover:underline">
-                Clear all filters
-              </a>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>No products found</h3>
+              <p style={{ color: '#7a7a7a', fontSize: '14px', marginBottom: '20px' }}>Try changing your filters</p>
+              <Link href="/products" style={{
+                background: '#1a3a1e', color: '#fff', borderRadius: '20px',
+                padding: '10px 24px', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+              }}>Clear all filters</Link>
             </div>
           ) : (
             <>
-              <div className="text-xs text-stone-400 mb-4">
-                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, count || 0)} of {count || 0} products
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))',
+                gap: '16px',
+              }}>
                 {products.map((p, i) => (
                   <ProductCard key={p.id} product={p} priority={i < 4} />
                 ))}
@@ -196,26 +272,43 @@ export default async function ProductsPage({
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex justify-center gap-1 mt-10">
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
+                  {page > 1 && (
+                    <Link href={url({ page: String(page - 1) })} style={paginationStyle(false)}>← Prev</Link>
+                  )}
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(pg => (
-                    <a
-                      key={pg}
-                      href={`/products?sort=${sort}${catSlug ? `&category=${catSlug}` : ''}${instock ? '&instock=true' : ''}&page=${pg}`}
-                      className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
-                        pg === page
-                          ? 'bg-forest-700 text-white'
-                          : 'text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
+                    <Link key={pg} href={url({ page: String(pg) })} style={paginationStyle(pg === page)}>
                       {pg}
-                    </a>
+                    </Link>
                   ))}
+                  {page < totalPages && (
+                    <Link href={url({ page: String(page + 1) })} style={paginationStyle(false)}>Next →</Link>
+                  )}
                 </div>
               )}
             </>
           )}
         </div>
       </div>
+
+      <style>{`
+        @media(max-width:768px) {
+          aside { display: none !important; }
+        }
+      `}</style>
     </div>
   )
+}
+
+function paginationStyle(active: boolean): React.CSSProperties {
+  return {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    minWidth: '36px', height: '36px', padding: '0 10px',
+    borderRadius: '10px', fontSize: '13px', fontWeight: active ? 700 : 500,
+    textDecoration: 'none',
+    background: active ? '#1a3a1e' : '#fff',
+    color: active ? '#fff' : '#444',
+    border: `1.5px solid ${active ? '#1a3a1e' : '#e0e0e0'}`,
+    transition: 'all .15s',
+  }
 }
