@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
 import type { SiteSettings, Category, State } from '@/types'
@@ -64,7 +65,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
               By Category
             </div>
             {categories.filter(c => c.is_active).map(cat => (
-              <Link key={cat.id} href={`/collections/${cat.slug}`} onClick={closeMobileMenu}>
+              <Link key={cat.id} href={`/collections/${catSlug(cat)}`} onClick={closeMobileMenu}>
                 {cat.name}
               </Link>
             ))}

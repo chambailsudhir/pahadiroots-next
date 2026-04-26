@@ -94,12 +94,49 @@ async function fetchHeroImages(settings: any) {
 
 async function fetchCategories() {
   try {
-    const { data } = await supabase
-      .from('categories')
-      .select('id, name, slug, description, image_url, is_active')
-      .eq('is_active', true)
-      .order('name')
-    return data || []
+    const [{ data: cats }, { data: settings }] = await Promise.all([
+      supabase
+        .from('categories')
+        .select('id, name, slug, description, image_url, is_active')
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('site_settings')
+        .select('key, value')
+        .like('key', 'coll_img_%'),
+    ])
+
+    // Build lookup: coll_img_{slug} → url  (matches exactly what admin saves)
+    const imgMap: Record<string, string> = {}
+    for (const row of settings ?? []) {
+      imgMap[row.key] = row.value ?? ''
+    }
+
+    // Also fetch hidden flags from site_settings
+    const { data: hiddenSettings } = await supabase
+      .from('site_settings')
+      .select('key, value')
+      .like('key', 'coll_hidden_%')
+
+    const hiddenMap: Record<string, boolean> = {}
+    for (const row of hiddenSettings ?? []) {
+      hiddenMap[row.key] = row.value === 'true'
+    }
+
+    // Merge: prefer site_settings image, filter hidden categories
+    return (cats ?? [])
+      .filter(cat => {
+        const hkey = `coll_hidden_${cat.slug || String(cat.id)}`
+        return !hiddenMap[hkey]
+      })
+      .map(cat => {
+        const key = `coll_img_${cat.slug || String(cat.id)}`
+        const settingsImg = (imgMap[key] || '').trim()
+        return {
+          ...cat,
+          image_url: settingsImg || cat.image_url || '',
+        }
+      })
   } catch { return [] }
 }
 

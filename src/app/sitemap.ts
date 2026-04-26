@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next'
+import { catSlug } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
@@ -30,7 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try { const { data } = await supabase.from('categories').select('slug').eq('is_active', true); categories = data } catch {}
 
   const collectionPages: MetadataRoute.Sitemap = (categories || []).map(c => ({
-    url:             `${BASE}/collections/${c.slug}`,
+    url:             `${BASE}/collections/${catSlug(c)}`,
     lastModified:    now,
     changeFrequency: 'daily' as const,
     priority:        0.75,

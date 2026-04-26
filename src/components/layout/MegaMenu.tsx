@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { catSlug } from '@/lib/utils'
 import { useState } from 'react'
 import type { Category, State } from '@/types'
 
@@ -40,7 +41,7 @@ export default function MegaMenu({ categories, states }: Props) {
                 <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {categories.filter(c => c.is_active).map(cat => (
                     <li key={cat.id}>
-                      <Link href={`/collections/${cat.slug}`} onClick={() => setOpen(false)}
+                      <Link href={`/collections/${catSlug(cat)}`} onClick={() => setOpen(false)}
                         style={{ fontSize: 13, color: 'var(--tx2)', display: 'block', transition: 'color .15s, paddingLeft .15s' }}
                         onMouseEnter={e => { (e.target as HTMLElement).style.color = 'var(--g)'; (e.target as HTMLElement).style.paddingLeft = '4px'; }}
                         onMouseLeave={e => { (e.target as HTMLElement).style.color = 'var(--tx2)'; (e.target as HTMLElement).style.paddingLeft = '0'; }}>

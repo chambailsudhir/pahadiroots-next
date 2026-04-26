@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import type { Category } from '@/types'
 
@@ -172,7 +173,7 @@ export default function CategoryTiles({ categories }: Props) {
                   transition: 'transform .25s',
                 }}
               >
-                <Link href={`/collections/${cat.slug}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
+                <Link href={`/collections/${catSlug(cat)}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
                   <div className="cc-box" style={{
                     width: '100%', aspectRatio: '1/1', borderRadius: '16px',
                     border: '2px solid #c9a84c', background: '#fafaf8',
@@ -211,7 +212,7 @@ export default function CategoryTiles({ categories }: Props) {
                   </div>
                 </Link>
 
-                <Link href={`/collections/${cat.slug}`} style={{
+                <Link href={`/collections/${catSlug(cat)}`} style={{
                   fontFamily: '"Playfair Display",serif',
                   fontSize: '14px', fontWeight: 700, color: '#1a3a1e',
                   textAlign: 'center', lineHeight: 1.3, width: '100%',

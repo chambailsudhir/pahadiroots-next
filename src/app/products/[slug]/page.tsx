@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { formatPrice, savingsPercent, parseJsonArray } from '@/lib/utils'
+import { formatPrice, savingsPercent, parseJsonArray, catSlug } from '@/lib/utils'
 import type { Product } from '@/types'
 import ProductGallery from '@/components/product/ProductGallery'
 import AddToCartSection from '@/components/product/AddToCartSection'
@@ -67,7 +67,7 @@ export default async function ProductPage({ params }: Props) {
   // Breadcrumb
   const crumbs = [
     { label: 'Home', href: '/' },
-    { label: product.categories?.name || 'Products', href: product.categories ? `/collections/${product.categories.slug}` : '/products' },
+    { label: product.categories?.name || 'Products', href: product.categories ? `/collections/${catSlug(product.categories)}` : '/products' },
     { label: product.name },
   ]
 
@@ -115,7 +115,7 @@ export default async function ProductPage({ params }: Props) {
             {/* Category + badges */}
             <div className="flex items-center gap-2 flex-wrap mb-3">
               {product.categories && (
-                <a href={`/collections/${product.categories.slug}`}
+                <a href={`/collections/${catSlug(product.categories)}`}
                   className="text-xs font-semibold text-forest-700 bg-forest-50 hover:bg-forest-100 px-2.5 py-1 rounded-full transition-colors">
                   {product.categories.name}
                 </a>
