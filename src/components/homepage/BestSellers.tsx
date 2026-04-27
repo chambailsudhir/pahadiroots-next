@@ -69,8 +69,10 @@ export default function BestSellers() {
     case 'price_asc':  filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));  break
     case 'price_desc': filtered.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));  break
     case 'discount':   filtered.sort((a, b) => {
-      const da = a.mrp > a.price ? ((a.mrp - a.price) / a.mrp) : 0
-      const db_ = b.mrp > b.price ? ((b.mrp - b.price) / b.mrp) : 0
+      const am = a.mrp ?? 0; const ap = a.price ?? 0
+      const bm = b.mrp ?? 0; const bp = b.price ?? 0
+      const da = am > ap ? ((am - ap) / am) : 0
+      const db_ = bm > bp ? ((bm - bp) / bm) : 0
       return db_ - da
     }); break
     case 'name':       filtered.sort((a, b) => a.name.localeCompare(b.name)); break
