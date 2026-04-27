@@ -1,21 +1,15 @@
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
 import ProductCard from '@/components/product/ProductCard'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { getStoreData, getProductsWithImages } from '@/lib/storeData'
+import { normalizeProducts } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
 export default async function NewArrivals() {
   let products: Product[] = []
   try {
-    // Use store-data API (SERVICE KEY) so product_images are included
-    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/v1/store-data`, { next: { revalidate: 60 } })
-    if (!res.ok) throw new Error('store-data failed')
-    const sd = await res.json()
-    const { applyProductImages } = await import('@/lib/normalizeProduct')
-    const withImgs = applyProductImages(sd.products ?? [], sd.product_images ?? [])
-    const all = normalizeProducts(withImgs)
-    // New arrivals = sort by created_at desc, take 4
+    const storeData = await getStoreData()
+    const withImgs  = getProductsWithImages(storeData)
+    const all       = normalizeProducts(withImgs)
     products = all
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
       .slice(0, 4)
