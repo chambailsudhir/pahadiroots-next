@@ -184,10 +184,55 @@ section.sec { padding: 52px 40px; }
 
 /* ── PRODUCT CARDS ── */
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 28px; max-width: 1400px; margin: 0 auto; }
-.pcard { background: #fff; border: 1px solid #e8e0d0; border-radius: 16px; overflow: hidden; transition: transform .3s,box-shadow .3s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,.06); display: flex; flex-direction: column; }
-.pcard:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,.14); }
-.piw { position: relative; aspect-ratio: 4/5; width: 100%; overflow: hidden; background: #f5f0e8; }
-.piw img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* ═══════════════════════════════════════════════════════
+   PREMIUM PRODUCT CARD — copied from pahadiroots.com CSS
+   ═══════════════════════════════════════════════════════ */
+.pcard { background:#fff; border:1px solid rgba(0,0,0,.07); border-radius:18px; overflow:visible; transition:transform .3s ease,box-shadow .3s ease; position:relative; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; }
+.pcard:hover { transform:translateY(-7px); box-shadow:0 20px 48px rgba(26,58,30,.13); }
+.pcard > .piw { border-radius:18px 18px 0 0; overflow:hidden; }
+
+/* Image wrapper */
+.piw { position:relative; aspect-ratio:4/5; width:100%; background:#f5f0e8; }
+.piw img { transition:transform .5s ease; }
+.pcard:hover .piw img { transform:scale(1.06); }
+
+/* Emoji fallback */
+.pemo { font-size:54px; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:0; transition:opacity .3s; pointer-events:none; }
+.pcard:hover .pemo { opacity:0; }
+
+/* Hover overlay — pointer-events:none so it never intercepts clicks */
+.piw-hover-overlay { position:absolute; inset:0; background:rgba(15,40,18,0); transition:background .3s ease; pointer-events:none; z-index:4; display:flex; align-items:flex-end; justify-content:center; padding-bottom:14px; }
+.pcard:hover .piw-hover-overlay { background:rgba(15,40,18,.45); }
+
+/* QV button inside overlay */
+.piw-qv-btn { pointer-events:all; background:rgba(255,255,255,.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.35); color:#fff; font-size:12px; font-weight:700; letter-spacing:.3px; padding:7px 18px; border-radius:22px; cursor:pointer; font-family:'Lato',sans-serif; opacity:0; transform:translateY(10px); transition:opacity .25s ease,transform .25s ease,background .2s; }
+.pcard:hover .piw-qv-btn { opacity:1; transform:translateY(0); }
+.piw-qv-btn:hover { background:rgba(255,255,255,.28); }
+
+/* Wishlist heart — bottom-right, shows on hover */
+.piw-wl-btn { position:absolute; bottom:10px; right:10px; z-index:5; pointer-events:all; background:rgba(255,255,255,.9); backdrop-filter:blur(4px); border:none; border-radius:50%; width:32px; height:32px; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15); opacity:0; transform:scale(.8); transition:opacity .22s ease,transform .22s ease; }
+.pcard:hover .piw-wl-btn { opacity:1; transform:scale(1); }
+.piw-wl-btn:hover { background:#fff; transform:scale(1.12) !important; }
+.piw-wl-btn.active { opacity:1 !important; transform:scale(1) !important; }
+
+/* Premium badge — dot + text, top-left */
+.pbadge-wrap { position:absolute; top:12px; left:12px; z-index:6; display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.92); backdrop-filter:blur(4px); border-radius:20px; padding:4px 10px 4px 7px; box-shadow:0 1px 6px rgba(0,0,0,.12); }
+.pbadge-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.pbd-bs { background:#22c55e; }
+.pbd-og { background:#16a34a; }
+.pbd-pm { background:#f59e0b; }
+.pbd-nw { background:#3b82f6; }
+.pbadge-text { font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#1a1a1a; line-height:1; }
+
+/* Discount ribbon — top-right corner */
+.pdisc-ribbon { position:absolute; top:0; right:0; z-index:6; background:#1b4332; color:#fff; font-size:10px; font-weight:800; padding:5px 10px 5px 12px; border-radius:0 18px 0 12px; letter-spacing:.3px; box-shadow:-2px 2px 6px rgba(0,0,0,.15); }
+
+/* Checkout offer tag */
+.pcard-checkout-tag { position:absolute; top:44px; left:12px; z-index:6; background:#bc4749; color:#fff; font-size:9px; font-weight:800; letter-spacing:.5px; padding:3px 9px; border-radius:20px; text-transform:uppercase; }
+
+/* Card body */
+.pbody { padding:14px 15px 16px; display:flex; flex-direction:column; flex:1; }
+.pregion { font-size:10px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; color:var(--gd); margin-bottom:4px; opacity:.85; }
 .pemo { font-size: 54px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
 .pbadge { position: absolute; top: 10px; left: 10px; font-size: 9.5px; font-weight: 800; padding: 4px 10px; border-radius: 12px; letter-spacing: .4px; z-index: 2; }
 .bbs { background: #e8f5e8; color: #1a5c1a; }
@@ -380,3 +425,25 @@ body.dark .pcard { background: #1a2b1c; border-color: rgba(255,255,255,.06); }
 
 /* ── MEGA MENU ── */
 .mega-menu-panel { background: #fff; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.15); border: 1px solid var(--bd); overflow: hidden; }
+
+/* ── pname/prating/stock/price/atc ── */
+.pname { font-family:'Playfair Display',serif; font-size:15.5px; font-weight:700; color:var(--g); line-height:1.28; margin-bottom:5px; }
+.prating { display:flex; align-items:center; gap:4px; margin-bottom:6px; }
+.pstars { font-size:11px; color:#f59e0b; letter-spacing:-.5px; }
+.prc { font-size:10.5px; color:var(--tx3); }
+.stock-bar { height:2px; background:rgba(0,0,0,.07); border-radius:2px; margin-bottom:3px; overflow:hidden; }
+.stock-fill { height:100%; border-radius:2px; transition:width .4s; }
+.stock-fill.high { background:#22c55e; } .stock-fill.mid { background:#f59e0b; } .stock-fill.low { background:#ef4444; }
+.stock-label { font-size:10px; font-weight:700; margin-bottom:8px; }
+.stock-label.high { color:#16a34a; } .stock-label.mid { color:#d97706; } .stock-label.low { color:#dc2626; }
+.pfoot { display:flex; flex-direction:column; align-items:stretch; gap:0; margin-top:8px; }
+.pnow { font-size:17px; font-weight:900; color:var(--g); }
+.pwas { font-size:11.5px; color:var(--tx3); text-decoration:line-through; }
+.punt { font-size:10.5px; color:var(--tx3); }
+.atc { background:var(--g); color:#fff; border:none; border-radius:24px; padding:11px 16px; font-size:14px; font-weight:800; transition:background .2s,transform .15s; font-family:'Lato',sans-serif; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; width:100%; box-sizing:border-box; white-space:nowrap; }
+.atc:hover { background:var(--g2); }
+.pcard-atc-full { width:100%; }
+.pcard-actions { display:flex; flex-direction:column; gap:8px; }
+.atc-hint { font-size:12px; font-weight:700; color:var(--g); opacity:.7; cursor:pointer; text-align:center; display:block; transition:opacity .2s; white-space:nowrap; }
+.pcard:hover .atc-hint { opacity:1; }
+.filter-sort { margin-left:auto; background:#fff; border:1.5px solid var(--bd); border-radius:20px; padding:7px 16px; font-size:12.5px; font-weight:700; color:var(--tx2); font-family:'Lato',sans-serif; cursor:pointer; outline:none; }
