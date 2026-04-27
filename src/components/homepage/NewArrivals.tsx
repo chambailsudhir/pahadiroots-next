@@ -7,14 +7,18 @@ import type { Product } from '@/types'
 export default async function NewArrivals() {
   let products: Product[] = []
   try {
-    const { data } = await supabase
-      .from('products')
-      .select(PRODUCT_SELECT)
-      .eq('is_deleted', false)
-    .eq('status', 'active')
-            .order('created_at', { ascending: false })
-      .limit(4)
-    products = normalizeProducts(data ?? [])
+    // Use store-data API (SERVICE KEY) so product_images are included
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/v1/store-data`, { next: { revalidate: 60 } })
+    if (!res.ok) throw new Error('store-data failed')
+    const sd = await res.json()
+    const { applyProductImages } = await import('@/lib/normalizeProduct')
+    const withImgs = applyProductImages(sd.products ?? [], sd.product_images ?? [])
+    const all = normalizeProducts(withImgs)
+    // New arrivals = sort by created_at desc, take 4
+    products = all
+      .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, 4)
   } catch { return null }
 
   if (!products.length) return null

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { supabase } from '@/lib/supabase'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, applyProductImages } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -20,60 +20,60 @@ export const metadata: Metadata = {
   description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
 }
 
-export const revalidate = 30  // Revalidate every 30 seconds — admin changes reflect quickly
+export const revalidate = 60
 
 export default async function HomePage() {
   const settings = await getSiteSettings()
-  const [heroImages, categories, states] = await Promise.all([
-    fetchHeroImages(settings),
-    fetchCategories(),
-    fetchStates(),
-  ])
+
+  // ── Fetch everything from store-data API (uses SERVICE KEY — bypasses RLS)
+  // This is exactly how old pahadiroots.com api/store-data.js works
+  const storeData = await fetchStoreData()
+
+  const categories = buildCategories(storeData.categories, storeData.settings)
+  const heroImages = fetchHeroImages(settings)
+  const states     = buildStates(storeData)
 
   const showTrustBar     = isEnabled(settings.show_trust_bar)
-  const showBestSellers  = isEnabled(settings.show_best_sellers)
   const showNewArrivals  = isEnabled(settings.show_new_arrivals)
-  const showStateStories = isEnabled(settings.show_state_stories)
   const showReviews      = isEnabled(settings.show_reviews_section)
   const showNewsletter   = isEnabled(settings.show_newsletter_bar)
   const featuredSlug     = settings.featured_collection_slug?.trim()
 
   return (
     <>
-      {/* 1. Hero slider */}
       <HeroBanner images={heroImages} settings={settings} />
-
-      {/* 2. Trust bar */}
       {showTrustBar && <TrustBar settings={settings} />}
-
-      {/* 3. Browse Collections — "What the Mountains Offer" */}
       <CategoryTiles categories={categories} />
-
-      {/* 4. Bestsellers — "Our Finest Offerings" with filters + sort */}
       <BestSellers />
-
-      {/* 5. New Arrivals */}
       {showNewArrivals && <NewArrivals />}
-
-      {/* 6. Featured collection banner (if set in admin) */}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
-
-      {/* 7. Explore by Region — "Discover the Himalayas" — always show if states exist */}
       {states.length > 0 && <ExploreByRegion states={states} />}
-
-      {/* 8. Why 5 Pahadi Roots — "Our Promise" */}
       <WhySection />
-
-      {/* 9. Reviews — "What Our Community Says" */}
       {showReviews && <ReviewsPreview />}
-
-      {/* 10. Newsletter */}
       {showNewsletter && <NewsletterBar />}
     </>
   )
 }
 
-async function fetchHeroImages(settings: any) {
+// ── Fetch from our store-data API route (SERVICE KEY, bypasses RLS) ──────────
+async function fetchStoreData() {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/v1/store-data`, {
+      next: { revalidate: 60 },
+    })
+    if (!res.ok) throw new Error(`store-data: ${res.status}`)
+    return await res.json()
+  } catch (e) {
+    console.error('fetchStoreData error:', e)
+    return { products: [], product_images: [], product_variants: [], categories: [], settings: {}, states: [], state_images: [] }
+  }
+}
+
+// ── Hero images from site_settings ───────────────────────────────────────────
+function fetchHeroImages(settings: any) {
   const slides: any[] = []
   for (let i = 1; i <= 5; i++) {
     const img = settings[`hero_slide_${i}_img`]
@@ -92,99 +92,53 @@ async function fetchHeroImages(settings: any) {
   return slides
 }
 
-async function fetchCategories() {
-  try {
-    // Fetch categories from DB
-    const { data: cats } = await supabase
-      .from('categories')
-      .select('id, name, slug, description, image_url, is_active')
-      .eq('is_active', true)
-      .order('name')
-    if (!cats?.length) return []
-
-    // Fetch category images & hidden flags from site_settings
-    // Admin stores them as: coll_img_{slug} and coll_hidden_{slug}
-    const { data: settings } = await supabase
-      .from('site_settings')
-      .select('key, value')
-      .or(cats.map(c => `key.eq.coll_img_${c.slug},key.eq.coll_hidden_${c.slug}`).join(','))
-
-    const settingsMap: Record<string, string> = {}
-    ;(settings || []).forEach((r: any) => { settingsMap[r.key] = r.value })
-
-    return cats
-      .filter(c => settingsMap[`coll_hidden_${c.slug}`] !== 'true')  // hide if admin hid it
-      .map(c => ({
-        ...c,
-        // Prefer admin-uploaded image from site_settings; fall back to DB image_url
-        image_url: settingsMap[`coll_img_${c.slug}`] || c.image_url || null,
-      }))
-  } catch { return [] }
+// ── Categories with images from site_settings (coll_img_{slug}) ──────────────
+// Old site main.js imgFor() function: tries coll_img_{slug}, coll_img_{name},
+// coll_img_{name.toLowerCase()}, coll_img_{id}, then falls back to cat.image_url
+function buildCategories(cats: any[], settings: Record<string, string>) {
+  if (!cats?.length) return []
+  return cats
+    .filter(c => settings[`coll_hidden_${c.slug || c.id}`] !== 'true')
+    .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
+    .map(c => {
+      const keysToTry = [
+        c.slug,
+        c.name,
+        (c.name || '').toLowerCase(),
+        String(c.id),
+      ].filter(Boolean)
+      let imgUrl = c.image_url || null
+      for (const k of keysToTry) {
+        const v = (settings[`coll_img_${k}`] || '').trim()
+        if (v) { imgUrl = v; break }
+      }
+      return { ...c, image_url: imgUrl }
+    })
 }
 
-async function fetchStates(): Promise<RichState[]> {
-  // DB schema (verified from admin catalogue & Supabase screenshots):
-  // states:           id(text e.g. "hp"), name, description, image_path, is_active(bool)
-  // state_images:     state_id, image_url, sort_order
-  // products:         status('active'|'inactive'), is_deleted(bool), badges(jsonb array),
-  //                   state_id(text), variant column is variant_value (NOT size)
-  // product_variants: variant_value, is_active(bool)
-  try {
-    const { data: statesData, error } = await supabase
-      .from('states')
-      .select('id, name, description, image_path, is_active')
-      .eq('is_active', true)
-      .order('name')
-      .limit(15)
+// ── States with products (images applied from product_images) ─────────────────
+function buildStates(storeData: any): RichState[] {
+  const { states = [], state_images = [], products = [], product_images = [] } = storeData
+  if (!states?.length) return []
 
-    if (error || !statesData?.length) {
-      console.error('fetchStates: states query error', error)
-      return []
+  // Apply product_images exactly as old site does
+  const productsWithImages = applyProductImages(products, product_images)
+  const normalized = normalizeProducts(productsWithImages) as (Product & { state_id: string })[]
+
+  return states.map((s: any) => {
+    const imgs = (state_images as any[])
+      .filter(i => String(i.state_id) === String(s.id))
+      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    const primaryImg = imgs[0]?.image_url ?? s.image_path ?? null
+    const stateProds = normalized.filter(p => String(p.state_id) === String(s.id)).slice(0, 4)
+    return {
+      id:          s.id,
+      name:        s.name,
+      slug:        s.id,
+      description: s.description ?? null,
+      image_url:   primaryImg,
+      region:      null,
+      products:    stateProds,
     }
-
-    const stateIds = statesData.map(s => s.id)
-
-    // Fetch per-state gallery images
-    const { data: stateImagesData } = await supabase
-      .from('state_images')
-      .select('state_id, image_url, sort_order')
-      .in('state_id', stateIds)
-      .order('sort_order')
-
-    // Fetch products — use correct column names from actual DB schema:
-    // - badges is a jsonb array, NOT separate badges_bestseller / badges_new / badges_organic booleans
-    // - status is 'active'|'inactive' string (NOT is_active boolean on products table)
-    // - product_variants uses variant_value NOT size
-    const { data: productsData, error: prodError } = await supabase
-      .from('products')
-      .select(PRODUCT_SELECT)
-      .eq('is_deleted', false)
-    .eq('status', 'active')
-            .in('state_id', stateIds)
-      .limit(60)
-
-    if (prodError) console.error('fetchStates: products query error', prodError)
-
-    const products = normalizeProducts(productsData ?? []) as (Product & { state_id: string })[]
-
-    const stateImages = (stateImagesData ?? []) as { state_id: string; image_url: string; sort_order: number }[]
-
-    return statesData.map(s => {
-      const galleryImages = stateImages.filter(img => String(img.state_id) === String(s.id))
-      const primaryImage  = galleryImages[0]?.image_url ?? s.image_path ?? null
-
-      return {
-        id:          s.id,
-        name:        s.name,
-        slug:        s.id,
-        description: s.description ?? null,
-        image_url:   primaryImage,
-        region:      null,
-        products:    products.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
-      }
-    }) as unknown as RichState[]
-  } catch (e) {
-    console.error('fetchStates error:', e)
-    return []
-  }
+  }) as unknown as RichState[]
 }

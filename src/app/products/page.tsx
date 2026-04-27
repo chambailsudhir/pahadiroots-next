@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { PRODUCT_SELECT, normalizeProducts, applyProductImages } from '@/lib/normalizeProduct'
 import Link from 'next/link'
 import type { Product } from '@/types'
 
@@ -85,7 +85,19 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
   }
 
   const { data, count } = await query
+  // Apply product_images from store-data API (SERVICE KEY bypasses RLS)
   let products = normalizeProducts(data ?? [])
+  try {
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    const sdRes = await fetch(`${baseUrl}/api/v1/store-data`, { next: { revalidate: 60 } })
+    if (sdRes.ok) {
+      const sd = await sdRes.json()
+      if (sd.product_images?.length) {
+        const withImgs = applyProductImages(data ?? [], sd.product_images)
+        products = normalizeProducts(withImgs)
+      }
+    }
+  } catch {}
   if (sort === 'popular') {
     const bs = products.filter(p => p.badges_bestseller)
     if (bs.length > 0) products = bs

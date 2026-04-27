@@ -27,14 +27,14 @@ const SORTS = [
 
 async function fetchProducts(): Promise<Product[]> {
   try {
-    const { data } = await supabase
-      .from('products')
-      .select(PRODUCT_SELECT)
-      .eq('is_deleted', false)
-    .eq('status', 'active')
-            .limit(20)
-    // Filter bestsellers client-side since badges is a jsonb array (can't .eq on array element)
-    const all = normalizeProducts(data ?? [])
+    // Use store-data API (SERVICE KEY) — same as old pahadiroots.com
+    // This bypasses RLS and returns product_images for correct image_url
+    const res = await fetch('/api/v1/store-data')
+    if (!res.ok) throw new Error('store-data failed')
+    const sd = await res.json()
+    const { applyProductImages } = await import('@/lib/normalizeProduct')
+    const withImgs = applyProductImages(sd.products ?? [], sd.product_images ?? [])
+    const all = normalizeProducts(withImgs)
     const bs = all.filter(p => p.badges_bestseller)
     return bs.length > 0 ? bs : all
   } catch { return [] }

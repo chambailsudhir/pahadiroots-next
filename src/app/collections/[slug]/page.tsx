@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { PRODUCT_SELECT, normalizeProducts, applyProductImages } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product, Category } from '@/types'
@@ -98,7 +98,20 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   }
 
   const { data, count } = await query
-  const products   = normalizeProducts(data ?? [])
+  // Apply product_images from store-data API (SERVICE KEY bypasses RLS — same as old site)
+  let products = normalizeProducts(data ?? [])
+  try {
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    const sdRes = await fetch(`${baseUrl}/api/v1/store-data`, { next: { revalidate: 60 } })
+    if (sdRes.ok) {
+      const sd = await sdRes.json()
+      if (sd.product_images?.length) {
+        const raw = (data ?? []).map((p: any) => p)
+        const withImgs = applyProductImages(raw, sd.product_images)
+        products = normalizeProducts(withImgs)
+      }
+    }
+  } catch {}
   const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   const emoji = emojiFor(cat.name)
