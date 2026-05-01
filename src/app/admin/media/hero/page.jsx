@@ -60,7 +60,7 @@ async function uploadVideoToSupabase(file, folder = 'media') {
   return (await res.json()).url;
 }
 
-
+async function loadSettings() {
   const rows = await api.get('site_settings', 'select=key,value').catch(() => []);
   return Object.fromEntries((rows || []).map(r => [r.key, r.value]));
 }
