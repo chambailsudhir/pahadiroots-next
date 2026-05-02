@@ -35,19 +35,28 @@ export interface ProductVariant {
   is_active: boolean
 }
 
+export interface Vendor {
+  id: number
+  business_name: string
+  region: string | null
+  state_id: string | null
+}
+
 export interface Product {
   id: number
   name: string
   slug: string
   emoji: string | null
   sku: string | null
+  sku_backup: string | null      // fallback SKU used in structured data / schema.org
   category_id: number
   state_id: string | null
+  vendor_id: number | null       // FK to vendors table
   is_active: boolean
-  status?: 'active' | 'inactive' | 'draft' // legacy, use is_active
+  status?: string                // 'active' | 'inactive' | 'draft'
   unit_label: string | null
   gst_rate: number
-  price: number           // base selling price
+  price: number                  // base selling price
   selling: number | null
   mrp: number | null
   cost_price: number | null
@@ -57,6 +66,7 @@ export interface Product {
   long_description: string | null
   image_url: string | null
   tags: string | null
+  badges: string | null          // raw DB column (comma-sep or JSON)
   badges_bestseller: boolean
   badges_organic: boolean
   badges_new: boolean
@@ -72,6 +82,7 @@ export interface Product {
   // Relations (when joined)
   categories?: Category
   states?: State
+  vendors?: Vendor
   product_variants?: ProductVariant[]
   product_images?: ProductImage[]
 }
