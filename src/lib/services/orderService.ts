@@ -57,24 +57,13 @@ export async function createOrder(
   if (existing) return { order: existing, alreadyExists: true }
 
   // Fetch real prices from DB
-  // product_variants columns: id, price, original_price, available_stock, product_id, variant_value, is_active, sku
-  // NOTE: mrp does NOT exist on variants — it's 'original_price'. gst_rate is on products, not variants.
   const variantIds = input.items.map(i => i.variantId)
   const { data: variants, error: varErr } = await db
     .from('product_variants')
-    .select('id, price, original_price, available_stock, product_id, variant_value, is_active')
+    .select('id, price, mrp, gst_rate, available_stock, product_id, variant_value, is_active')
     .in('id', variantIds)
   if (varErr || !variants?.length) throw new Error('Failed to fetch product data')
   const variantMap = new Map(variants.map(v => [String(v.id), v]))
-
-  // Also fetch gst_rate from products table (not on variants)
-  const productIds = [...new Set(variants.map((v: any) => v.product_id))]
-  const { data: productsData } = await db
-    .from('products')
-    .select('id, gst_rate, vendor_id')
-    .in('id', productIds)
-  const productGstMap    = new Map((productsData || []).map((p: any) => [String(p.id), p.gst_rate || 5]))
-  const productVendorMap = new Map((productsData || []).map((p: any) => [String(p.id), p.vendor_id || null]))
 
   const serverItems: CartItem[] = input.items.map(item => {
     const v = variantMap.get(item.variantId)
@@ -82,8 +71,8 @@ export async function createOrder(
     return {
       productId: item.productId, variantId: item.variantId,
       name: '', slug: '', image: null, emoji: null,
-      size: v.variant_value || '', price: v.price, mrp: v.original_price,
-      gstRate: productGstMap.get(String(v.product_id)) || 5, qty: item.qty, maxQty: v.available_stock,
+      size: v.variant_value || '', price: v.price, mrp: v.mrp,
+      gstRate: v.gst_rate || 0, qty: item.qty, maxQty: v.available_stock,
     }
   })
 
@@ -151,13 +140,7 @@ export async function createOrder(
     p_idempotency_key:  input.idempotencyKey,
     p_items: JSON.stringify(input.items.map(item => {
       const v = variantMap.get(item.variantId)!
-      return {
-        product_id: item.productId,
-        variant_id: item.variantId,
-        quantity:   item.qty,
-        price:      v.price,
-        vendor_id:  productVendorMap.get(String(v.product_id)) || null,
-      }
+      return { product_id: item.productId, variant_id: item.variantId, quantity: item.qty, price: v.price }
     })),
   })
   if (orderErr) throw new Error('Order creation failed: ' + orderErr.message)

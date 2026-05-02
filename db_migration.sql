@@ -165,21 +165,19 @@ BEGIN
   RETURNING * INTO v_order;
 
   -- Insert order items
-  -- Actual order_items columns: id, order_id, product_id, variant_id, quantity, price_at_time, vendor_id
-  -- product_id and variant_id are bigint in this DB (not UUID)
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
     INSERT INTO order_items (
-      order_id, product_id, variant_id, quantity, price_at_time, vendor_id
+      order_id, product_id, variant_id, quantity, price, mrp, gst_rate, size
     ) VALUES (
       v_order.id,
-      (v_item->>'product_id')::BIGINT,
-      (v_item->>'variant_id')::BIGINT,
+      (v_item->>'product_id')::UUID,
+      (v_item->>'variant_id')::UUID,
       (v_item->>'quantity')::INTEGER,
       (v_item->>'price')::NUMERIC,
-      CASE WHEN v_item->>'vendor_id' IS NOT NULL
-           THEN (v_item->>'vendor_id')::BIGINT
-           ELSE NULL END
+      (v_item->>'mrp')::NUMERIC,
+      (v_item->>'gst_rate')::NUMERIC,
+      v_item->>'size'
     );
   END LOOP;
 

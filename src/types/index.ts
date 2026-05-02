@@ -24,22 +24,13 @@ export interface State {
 export interface ProductVariant {
   id: number
   product_id: number
-  size: string             // normalized from variant_value
-  variant_value?: string   // raw DB column
-  sku?: string
-  price: number            // selling price
-  mrp?: number             // alias used in some queries
-  original_price?: number  // actual DB column for MRP
-  cost_price?: number | null
+  size: string           // e.g. "250g", "500ml"
+  sku: string
+  price: number          // selling price
+  mrp: number
+  cost_price: number | null
   available_stock: number
   is_active: boolean
-}
-
-export interface Vendor {
-  id: number
-  business_name: string
-  region: string | null
-  state_id: string | null
 }
 
 export interface Product {
@@ -48,15 +39,13 @@ export interface Product {
   slug: string
   emoji: string | null
   sku: string | null
-  sku_backup: string | null      // fallback SKU used in structured data / schema.org
   category_id: number
   state_id: string | null
-  vendor_id: number | null       // FK to vendors table
   is_active: boolean
-  status?: string                // 'active' | 'inactive' | 'draft'
+  status?: 'active' | 'inactive' | 'draft' // legacy, use is_active
   unit_label: string | null
   gst_rate: number
-  price: number                  // base selling price
+  price: number           // base selling price
   selling: number | null
   mrp: number | null
   cost_price: number | null
@@ -66,7 +55,6 @@ export interface Product {
   long_description: string | null
   image_url: string | null
   tags: string | null
-  badges: string | null          // raw DB column (comma-sep or JSON)
   badges_bestseller: boolean
   badges_organic: boolean
   badges_new: boolean
@@ -82,7 +70,6 @@ export interface Product {
   // Relations (when joined)
   categories?: Category
   states?: State
-  vendors?: Vendor
   product_variants?: ProductVariant[]
   product_images?: ProductImage[]
 }
