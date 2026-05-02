@@ -52,7 +52,7 @@ export default async function ProductPage({ params }: Props) {
     ? variants.reduce((min, v) => v.price < min.price ? v : min, variants[0])
     : null
   const displayPrice   = baseVariant?.price ?? product.price
-  const displayMRP     = baseVariant?.mrp   ?? product.mrp ?? product.price
+  const displayMRP     = baseVariant?.original_price ?? product.mrp ?? product.price
   const savings        = savingsPercent(displayMRP, displayPrice)
   const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
 
@@ -78,7 +78,7 @@ export default async function ProductPage({ params }: Props) {
     name:           product.name,
     description:    product.ai_description || product.short_description || '',
     image:          allImages.map(i => i.url),
-    sku:            product.sku || product.id,
+    sku:            product.sku_backup || product.id,
     brand:          { '@type': 'Brand', name: 'Pahadi Roots' },
     offers: {
       '@type':       'Offer',
@@ -138,7 +138,22 @@ export default async function ProductPage({ params }: Props) {
               {product.name}
             </h1>
 
-            {/* Short description */}
+            {/* Vendor / sourced from */}
+            {(product as any).vendors ? (
+              <div className="flex items-center gap-2 mb-3 mt-1">
+                <span className="text-[11px] font-black uppercase tracking-widest text-amber-700">🏪 {(product as any).vendors.business_name}</span>
+                <span className="text-stone-300">·</span>
+                <span className="text-[11px] text-stone-500 font-medium">
+                  Sourced from {(product as any).vendors.region || (product as any).states?.name || 'Himalayan Region'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 mb-3 mt-1">
+                <span className="text-[11px] font-black uppercase tracking-widest text-amber-700">
+                  📍 {(product as any).states?.name || 'Himalayan Region'}
+                </span>
+              </div>
+            )}            {/* Short description */}
             {product.short_description && (
               <p className="text-stone-500 text-sm leading-relaxed mb-4">
                 {product.short_description}
@@ -237,14 +252,16 @@ async function fetchProduct(slug: string): Promise<Product | null> {
     const { data, error } = await supabase
       .from('products')
       .select(`
-        id, name, slug, emoji, sku, category_id, state_id, status, unit_label,
+        id, name, slug, emoji, sku_backup, category_id, state_id, vendor_id, status, unit_label,
         gst_rate, price, mrp, cost_price, available_stock, initial_stock,
         short_description, long_description, image_url, tags,
         badges, is_deleted, created_at,
         ai_description, ai_health_benefits, ai_how_to_use, ai_storage_tips,
         ai_who_should_buy, ai_generated_at,
         categories:categories(id, name, slug),
-        product_variants(id, price, mrp, variant_value, sku, available_stock, is_active),
+        vendors:vendors(id, business_name, region, state_id),
+        states:states(id, name),
+        product_variants(id, price, original_price, variant_value, sku, available_stock, is_active),
         product_images(id, url, sort_order, alt_text)
       `)
       .eq('slug', slug)
