@@ -9,12 +9,17 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "swr": "^2.3.0",
+    "@supabase/supabase-js": "^2.49.4",
+    "date-fns": "^4.1.0",
+    "isomorphic-dompurify": "^2.23.0",
     "next": "^14.2.29",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "recharts": "^2.15.0",
-    "date-fns": "^4.1.0"
+    "resend": "^4.5.1",
+    "swr": "^2.3.0",
+    "zod": "^3.24.3",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
