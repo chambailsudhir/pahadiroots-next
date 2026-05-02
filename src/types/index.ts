@@ -24,11 +24,13 @@ export interface State {
 export interface ProductVariant {
   id: number
   product_id: number
-  size: string           // e.g. "250g", "500ml"
-  sku: string
-  price: number          // selling price
-  mrp: number
-  cost_price: number | null
+  size: string             // normalized from variant_value
+  variant_value?: string   // raw DB column
+  sku?: string
+  price: number            // selling price
+  mrp?: number             // alias used in some queries
+  original_price?: number  // actual DB column for MRP
+  cost_price?: number | null
   available_stock: number
   is_active: boolean
 }
