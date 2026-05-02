@@ -95,7 +95,7 @@ function AdminLayoutInner({ children }) {
   }
 
   return (
-    <div className="fixed inset-0 flex" style={{background:"var(--bg,#0d1117)", fontFamily:"'Inter', sans-serif"}}>
+    <div className="admin-root fixed inset-0 flex" style={{background:"var(--bg,#0d1117)", fontFamily:"'Inter', sans-serif"}}>
       <Sidebar role={role} onLogout={logout} pendingOrders={pendingOrders} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar

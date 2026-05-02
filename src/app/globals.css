@@ -514,3 +514,49 @@ button { font-family: inherit; cursor: pointer; }
   #mob-menu-btn { display: flex !important; }
 }
 @media (max-width: 520px) { .ship-badge { display: none !important; } }
+
+/* ════════════════════════════════════════════════════════════════════
+   ADMIN PANEL — Dark theme CSS vars scoped to .admin-root
+   Keeps admin styles completely isolated from the storefront.
+   ════════════════════════════════════════════════════════════════════ */
+.admin-root {
+  --accent:     #1a5c2a;
+  --bg:         #0d1117;
+  --bg2:        #161b22;
+  --bd:         #30363d;
+  --tx:         #e6edf3;
+  --tx2:        #8b949e;
+  --tx3:        #6e7681;
+  --input-bg:   #21262d;
+  --blue:       #58a6ff;
+  --blue-bg:    rgba(88,166,255,0.15);
+  --blue-bd:    rgba(88,166,255,0.3);
+  --purple:     #8957e5;
+  --purple-bg:  rgba(137,87,229,0.15);
+  --yellow:     #d29922;
+  --yellow-bg:  rgba(210,153,34,0.15);
+  --chart-grid: rgba(255,255,255,0.06);
+  --chart-axis: #6e7681;
+  --tooltip-bg: #161b22;
+  --tooltip-bd: #30363d;
+
+  color: var(--tx);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Admin: Recharts inside .admin-root */
+.admin-root .recharts-cartesian-axis-tick-value { fill: var(--chart-axis, #6e7681) !important; }
+.admin-root .recharts-legend-item-text          { color: var(--chart-axis, #6e7681) !important; }
+.admin-root .recharts-tooltip-wrapper           { z-index: 50; }
+.admin-root .recharts-cartesian-grid-horizontal line,
+.admin-root .recharts-cartesian-grid-vertical line { stroke: var(--chart-grid) !important; }
+.admin-root .recharts-default-tooltip {
+  background: var(--tooltip-bg) !important;
+  border: 1px solid var(--tooltip-bd) !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  color: var(--tx) !important;
+}
+.admin-root .recharts-tooltip-label { color: var(--tx) !important; }
+.admin-root .recharts-tooltip-item  { color: var(--tx2) !important; }
+.admin-root .recharts-pie-label-text { fill: var(--chart-axis) !important; }
