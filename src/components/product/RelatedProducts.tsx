@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { normalizeProducts } from '@/lib/normalizeProduct'
+import ProductCard from './ProductCard'
 import type { Product } from '@/types'
-import RelatedCard from './RelatedCard'
 
 interface Props { categoryId: string | number; excludeId: string | number }
 
@@ -28,11 +28,10 @@ export default async function RelatedProducts({ categoryId, excludeId }: Props) 
   if (!products.length) return null
 
   return (
-    <section>
-      <h2 className="section-title">You May Also Like</h2>
-      <p className="section-sub">Handpicked from the same Himalayan region</p>
-      <div className="related-grid">
-        {products.map(p => <RelatedCard key={p.id} product={p} />)}
+    <section className="border-t border-stone-100 pt-10">
+      <h2 className="text-xl font-bold text-stone-900 mb-6">You Might Also Like</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        {products.map(p => <ProductCard key={p.id} product={p} />)}
       </div>
     </section>
   )

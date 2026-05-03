@@ -671,3 +671,298 @@ details.acc-item[open] .acc-chevron{transform:rotate(180deg);background:#fde8b8}
 .btn-buy-now::after{content:'Skip cart — instant checkout';position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--tx3,#7a7a7a);white-space:nowrap;letter-spacing:.2px;font-weight:500}
 .btn-buy-now:hover:not(:disabled){background:linear-gradient(135deg,#2d5a32,#3a7042);transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,58,30,.45)}
 .btn-buy-now:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
+/* ═══════════════════════════════════════════════════════════
+   PRODUCT DETAIL PAGE — Visual overrides to match pahadiroots.com
+   Applied via globals.css only (no inline styles / no JSX changes)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Page background ── */
+.pdp-bg { background: #faf6ee; }
+
+/* ── Gallery: aspect-square → 4/5, rounded, shadow, zoom-effect ── */
+.pdp-page .relative.aspect-square.rounded-2xl.overflow-hidden.bg-stone-50 {
+  aspect-ratio: 4 / 5 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,.14) !important;
+  background: #f8f5f0 !important;
+}
+.pdp-page .relative.aspect-square.rounded-2xl.overflow-hidden.bg-stone-50 img {
+  transition: transform .55s cubic-bezier(.25,.46,.45,.94) !important;
+}
+.pdp-page .relative.aspect-square.rounded-2xl.overflow-hidden.bg-stone-50:hover img {
+  transform: scale(1.07) !important;
+}
+
+/* ── Thumbnail strip ── */
+.pdp-page .flex.gap-2.overflow-x-auto button {
+  border-radius: 12px !important;
+  width: 72px !important;
+  height: 72px !important;
+  border-width: 2.5px !important;
+}
+.pdp-page .flex.gap-2.overflow-x-auto button.border-forest-600 {
+  border-color: #1a3a1e !important;
+  box-shadow: 0 0 0 3px rgba(26,58,30,.1) !important;
+  opacity: 1 !important;
+}
+
+/* ── Product title ── */
+.pdp-page h1 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: clamp(26px, 3.5vw, 40px) !important;
+  font-weight: 900 !important;
+  color: #1a3a1e !important;
+  letter-spacing: -.4px !important;
+  line-height: 1.12 !important;
+}
+
+/* ── Category badge ── */
+.pdp-page a[href*="/collections/"] {
+  background: rgba(200,146,10,.12) !important;
+  color: #8a6010 !important;
+  font-weight: 800 !important;
+  letter-spacing: .5px !important;
+  text-transform: uppercase !important;
+  font-size: 10px !important;
+}
+
+/* ── Bestseller / New badge ── */
+.pdp-page span.text-earth-700 {
+  background: linear-gradient(135deg,#c0392b,#e74c3c) !important;
+  color: #fff !important;
+  font-weight: 900 !important;
+}
+.pdp-page span.text-forest-700.bg-forest-50 {
+  background: rgba(26,58,30,.08) !important;
+  color: #1a3a1e !important;
+}
+
+/* ── Short description ── */
+.pdp-page .text-stone-500.text-sm.leading-relaxed {
+  font-family: 'Cormorant Garamond', serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  font-style: italic !important;
+  color: #3a3030 !important;
+  line-height: 1.75 !important;
+}
+
+/* ── Price ── */
+.pdp-page .text-3xl.font-bold.text-stone-900 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: 42px !important;
+  font-weight: 900 !important;
+  color: #1a3a1e !important;
+  letter-spacing: -1.5px !important;
+  line-height: 1 !important;
+}
+.pdp-page .text-lg.text-stone-400.line-through {
+  font-size: 20px !important;
+  color: #7a7a7a !important;
+}
+.pdp-page .text-sm.font-bold.text-red-600 {
+  background: linear-gradient(135deg,#c0392b,#e74c3c) !important;
+  color: #fff !important;
+  font-weight: 900 !important;
+  padding: 5px 13px !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  box-shadow: 0 2px 8px rgba(192,57,43,.3) !important;
+}
+
+/* ── GST note ── */
+.pdp-page .text-\[11px\].text-stone-400 {
+  font-size: 12px !important;
+  color: #7a7a7a !important;
+}
+
+/* ── Prepaid badge ── */
+.pdp-page .bg-earth-50.text-earth-700 {
+  background: linear-gradient(135deg,#fff9ee,#fdf0d8) !important;
+  color: #8a6010 !important;
+  border-color: rgba(200,146,10,.3) !important;
+  font-weight: 700 !important;
+}
+
+/* ── Variant selector ── */
+.pdp-page .text-sm.font-semibold.text-stone-700 {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  color: #7a7a7a !important;
+  letter-spacing: 1.5px !important;
+  text-transform: uppercase !important;
+}
+.pdp-page button.border-forest-600.bg-forest-50 {
+  border-color: #1a3a1e !important;
+  background: linear-gradient(135deg,#f0f7f0,#e8f5e9) !important;
+  color: #1a3a1e !important;
+  box-shadow: 0 0 0 3px rgba(26,58,30,.08) !important;
+}
+.pdp-page button.border-stone-200:not(.border-forest-600):not([disabled]) {
+  border-color: #e0d8cc !important;
+  border-radius: 12px !important;
+}
+.pdp-page button.border-stone-200:hover:not([disabled]) {
+  border-color: #1a3a1e !important;
+  background: linear-gradient(135deg,#f5faf5,#edf5ee) !important;
+}
+.pdp-page button[disabled].border-stone-100 {
+  opacity: .4 !important;
+}
+
+/* ── Add to Cart button ── */
+.pdp-page button.border-forest-600.text-forest-700:not(.bg-forest-600) {
+  background: #c0392b !important;
+  border-color: #c0392b !important;
+  color: #fff !important;
+  border-radius: 12px !important;
+  height: 52px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(192,57,43,.3) !important;
+  transition: all .25s !important;
+}
+.pdp-page button.border-forest-600.text-forest-700:not(.bg-forest-600):hover {
+  background: #a93226 !important;
+  box-shadow: 0 6px 20px rgba(192,57,43,.4) !important;
+  transform: translateY(-1px) !important;
+}
+.pdp-page button.border-forest-600.bg-forest-600 {
+  background: #922b21 !important;
+  border-color: #922b21 !important;
+  color: #fff !important;
+  border-radius: 12px !important;
+  height: 52px !important;
+  font-size: 15px !important;
+}
+
+/* ── Buy Now button ── */
+.pdp-page button.bg-earth-500 {
+  background: linear-gradient(135deg,#1a3a1e,#2d5a32) !important;
+  border-radius: 12px !important;
+  height: 52px !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(26,58,30,.35) !important;
+}
+.pdp-page button.bg-earth-500:hover {
+  background: linear-gradient(135deg,#2d5a32,#3a7042) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(26,58,30,.45) !important;
+}
+
+/* ── Qty controls ── */
+.pdp-page .border-2.border-stone-200.rounded-xl.overflow-hidden {
+  border-radius: 10px !important;
+  border-color: #e8e0d0 !important;
+  border-width: 2px !important;
+}
+.pdp-page .w-10.h-10.flex.items-center.justify-center.text-stone-500 {
+  color: #1a3a1e !important;
+  font-size: 18px !important;
+}
+
+/* ── Delivery bar ── */
+.pdp-page .flex.items-center.gap-2.mt-4.p-3.bg-stone-50.rounded-xl {
+  background: linear-gradient(135deg,#e8f5e9,#f0f9f0) !important;
+  border: 1px solid rgba(26,58,30,.12) !important;
+  border-radius: 12px !important;
+}
+.pdp-page .flex.items-center.gap-2.mt-4.p-3.bg-stone-50.rounded-xl .text-xs.font-semibold.text-stone-700 {
+  color: #1a3a1e !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+
+/* ── Trust row ── */
+.pdp-page .grid.grid-cols-3.gap-2.mt-4 > div {
+  background: linear-gradient(160deg,#f8f9f5,#eef1e8) !important;
+  border: 1px solid rgba(26,58,30,.09) !important;
+  border-radius: 12px !important;
+  transition: all .22s !important;
+}
+.pdp-page .grid.grid-cols-3.gap-2.mt-4 > div:hover {
+  border-color: rgba(26,58,30,.22) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 14px rgba(26,58,30,.09) !important;
+}
+.pdp-page .grid.grid-cols-3.gap-2.mt-4 .text-\[11px\].font-medium.text-stone-600 {
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  font-size: 10px !important;
+  letter-spacing: .3px !important;
+}
+
+/* ── AI Content tabs ── */
+.pdp-page section.border-t.border-stone-100.pt-10.mb-12 h2 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  color: #1a3a1e !important;
+}
+.pdp-page .flex.gap-1.border-b.border-stone-100 button {
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+  padding: 10px 20px !important;
+}
+.pdp-page .flex.gap-1.border-b.border-stone-100 button.border-forest-600 {
+  border-bottom-color: #c8920a !important;
+  color: #1a3a1e !important;
+}
+.pdp-page .flex.gap-1.border-b.border-stone-100 button:not(.border-forest-600):hover {
+  color: #1a3a1e !important;
+}
+
+/* ── Benefits list ── */
+.pdp-page .w-5.h-5.bg-forest-100 {
+  background: rgba(26,58,30,.08) !important;
+  color: #1a3a1e !important;
+  border: 1px solid rgba(26,58,30,.2) !important;
+}
+
+/* ── Who should buy card ── */
+.pdp-page .p-4.bg-forest-50.rounded-xl.border.border-forest-100 {
+  background: linear-gradient(135deg,#f0f7f0,#e8f5e9) !important;
+  border-color: rgba(26,58,30,.15) !important;
+}
+
+/* ── Reviews section ── */
+.pdp-page .bg-stone-50.rounded-xl.p-4.border.border-stone-100 {
+  background: #fff !important;
+  border: 1.5px solid #e8e0d0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04) !important;
+  transition: all .22s !important;
+}
+.pdp-page .bg-stone-50.rounded-xl.p-4.border.border-stone-100:hover {
+  border-color: rgba(26,58,30,.2) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,.08) !important;
+}
+
+/* ── Related products heading ── */
+.pdp-page section.border-t.border-stone-100.pt-10:not(.mb-12) h2 {
+  font-family: 'Playfair Display', serif !important;
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  color: #1a3a1e !important;
+}
+
+/* ── Sticky image column ── */
+@media(min-width: 1024px) {
+  .pdp-page .flex.flex-col.gap-3 {
+    position: sticky;
+    top: 80px;
+  }
+}
+
+/* ── Breadcrumb ── */
+.pdp-page nav[aria-label="Breadcrumb"] a {
+  color: #3d6b42 !important;
+  font-weight: 700 !important;
+}
+.pdp-page nav[aria-label="Breadcrumb"] span.text-stone-600 {
+  color: #1a1a1a !important;
+  font-weight: 600 !important;
+}
+

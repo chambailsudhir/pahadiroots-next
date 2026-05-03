@@ -4,121 +4,94 @@ import { useState } from 'react'
 import Image from 'next/image'
 
 interface GalleryImage { url: string; alt: string }
-interface Props { images: GalleryImage[]; productName: string; savings?: number }
+interface Props { images: GalleryImage[]; productName: string }
 
-export default function ProductGallery({ images, productName, savings = 0 }: Props) {
-  const [active, setActive] = useState(0)
-  const [zoomed, setZoomed] = useState(false)
+export default function ProductGallery({ images, productName }: Props) {
+  const [active, setActive]   = useState(0)
+  const [zoomed, setZoomed]   = useState(false)
 
   if (!images.length) {
     return (
-      <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', background: 'var(--bg2)', aspectRatio: '4/5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '120px' }}>
-        🌿
+      <div className="aspect-square rounded-2xl bg-stone-100 flex items-center justify-center">
+        <span className="text-7xl">🌿</span>
       </div>
     )
   }
 
-  const prev = () => setActive(i => (i - 1 + images.length) % images.length)
-  const next = () => setActive(i => (i + 1) % images.length)
-
   return (
-    <div>
-      {/* Main Image */}
+    <div className="flex flex-col gap-3">
+
+      {/* Main image */}
       <div
-        className="main-img-wrap"
+        className="relative aspect-square rounded-2xl overflow-hidden bg-stone-50 cursor-zoom-in"
         onClick={() => setZoomed(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && setZoomed(true)}
       >
-        {/* Discount badge */}
-        {savings >= 5 && (
-          <div className="disc-badge">-{savings}%</div>
-        )}
-
-        <div className="img-zoom-icon">
-          <svg viewBox="0 0 24 24" style={{ width: '24px', height: '24px', stroke: '#1a3a1e', strokeWidth: 2, fill: 'none' }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-        </div>
-
         <Image
           src={images[active].url}
           alt={images[active].alt}
           fill
-          sizes="(max-width: 900px) 100vw, 50vw"
-          className="main-img"
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          className="object-cover"
           priority
         />
-
-        {/* Left/Right arrows */}
-        {images.length > 1 && (
-          <>
-            <button
-              className="img-arrow img-arrow-prev"
-              onClick={e => { e.stopPropagation(); prev() }}
-              aria-label="Previous image"
-            >
-              ‹
-            </button>
-            <button
-              className="img-arrow img-arrow-next"
-              onClick={e => { e.stopPropagation(); next() }}
-              aria-label="Next image"
-            >
-              ›
-            </button>
-            <div className="img-counter">{active + 1} / {images.length}</div>
-          </>
-        )}
+        <button
+          className="absolute top-3 right-3 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow"
+          aria-label="Zoom image"
+          onClick={e => { e.stopPropagation(); setZoomed(true) }}
+        >
+          <svg className="w-4 h-4 text-stone-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+          </svg>
+        </button>
       </div>
 
-      {/* Thumbnails */}
+      {/* Thumbnail strip */}
       {images.length > 1 && (
-        <div className="thumb-row">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {images.map((img, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
-              className={`thumb ${i === active ? 'active' : ''}`}
+              className={`relative w-16 h-16 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${
+                i === active
+                  ? 'border-forest-600 opacity-100'
+                  : 'border-transparent opacity-60 hover:opacity-90'
+              }`}
               aria-label={`View image ${i + 1}`}
             >
               <Image
                 src={img.url}
                 alt={img.alt}
                 fill
-                sizes="80px"
-                style={{ objectFit: 'cover' }}
+                sizes="64px"
+                className="object-cover"
               />
             </button>
           ))}
         </div>
       )}
 
-      {/* Zoom Lightbox */}
+      {/* Zoom lightbox */}
       {zoomed && (
         <div
-          className="zoom-overlay open"
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setZoomed(false)}
-          role="dialog"
-          aria-modal
         >
           <button
-            className="zoom-close"
-            onClick={() => setZoomed(false)}
-            aria-label="Close"
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
+            aria-label="Close zoom"
           >
-            ×
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
-          <div style={{ position: 'relative', width: '90vw', maxWidth: '800px', aspectRatio: '1' }}
-            onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-2xl aspect-square">
             <Image
               src={images[active].url}
               alt={images[active].alt}
               fill
               sizes="90vw"
-              style={{ objectFit: 'contain' }}
+              className="object-contain"
               priority
             />
           </div>
