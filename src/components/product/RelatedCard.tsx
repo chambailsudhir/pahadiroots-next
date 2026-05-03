@@ -55,26 +55,6 @@ export default function RelatedCard({ product: p }: { product: Product }) {
         </div>
         <button className="rel-atc" onClick={handleATC} type="button">{btnText}</button>
       </div>
-      <style>{`
-        .rel-card{border:1.5px solid #e8e0d0;border-radius:16px;overflow:hidden;transition:all .25s;background:#fff}
-        .rel-card:hover{border-color:var(--g3,#3d6b42);box-shadow:0 12px 40px rgba(0,0,0,.14);transform:translateY(-4px)}
-        .rel-img{position:relative;aspect-ratio:1;overflow:hidden;background:var(--bg2,#f8f9f5)}
-        .rel-img img{transition:transform .4s}
-        .rel-card:hover .rel-img img{transform:scale(1.07)}
-        .rel-disc{position:absolute;top:10px;right:10px;background:#c0392b;color:#fff;
-          font-size:10px;font-weight:900;padding:3px 8px;border-radius:12px}
-        .rel-body{padding:13px}
-        .rel-brand{font-size:10px;font-weight:900;color:var(--gd,#c8920a);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px}
-        .rel-name{font-size:13px;font-weight:800;color:var(--tx,#1a1a1a);margin-bottom:8px;line-height:1.35;cursor:pointer}
-        .rel-name:hover{color:var(--g,#1a3a1e)}
-        .rel-price-row{display:flex;align-items:baseline;gap:7px;margin-bottom:10px}
-        .rel-price{font-size:15px;font-weight:900;color:var(--g,#1a3a1e)}
-        .rel-orig{font-size:12px;color:var(--tx3,#7a7a7a);text-decoration:line-through}
-        .rel-atc{width:100%;padding:9px 0;background:var(--g,#1a3a1e);color:#fff;border:none;
-          border-radius:9px;font-size:12.5px;font-weight:800;cursor:pointer;
-          transition:all .2s;letter-spacing:.2px;font-family:inherit}
-        .rel-atc:hover{background:var(--g2,#2d5233);transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,58,30,.25)}
-      `}</style>
     </div>
   )
 }

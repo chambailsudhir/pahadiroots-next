@@ -34,12 +34,6 @@ export default async function RelatedProducts({ categoryId, excludeId }: Props) 
       <div className="related-grid">
         {products.map(p => <RelatedCard key={p.id} product={p} />)}
       </div>
-      <style>{`
-        .section-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;color:var(--g,#1a3a1e);margin-bottom:4px}
-        .section-sub{font-size:13px;color:var(--tx3,#7a7a7a);margin-bottom:20px}
-        .related-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-        @media(max-width:880px){.related-grid{grid-template-columns:repeat(2,1fr)}}
-      `}</style>
     </section>
   )
 }
