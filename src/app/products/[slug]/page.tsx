@@ -589,6 +589,7 @@ details.acc-item[open] .acc-chevron{transform:rotate(180deg);background:#fde8b8}
 
 async function fetchProduct(slug: string): Promise<Product | null> {
   try {
+    // Same query as original — NO states join (avoids FK failure if relationship not set up)
     const { data, error } = await supabase
       .from('products')
       .select(`
@@ -599,7 +600,6 @@ async function fetchProduct(slug: string): Promise<Product | null> {
         ai_description, ai_health_benefits, ai_how_to_use, ai_storage_tips,
         ai_who_should_buy, ai_generated_at,
         categories:categories(id, name, slug),
-        states:states(id, name, slug, image_url, image_path),
         product_variants(id, price, mrp, variant_value, sku, available_stock, is_active),
         product_images(id, url, sort_order, alt_text)
       `)
@@ -612,8 +612,23 @@ async function fetchProduct(slug: string): Promise<Product | null> {
 
     const raw = data as any
     const badges: string[] = Array.isArray(raw.badges) ? raw.badges : []
+
+    // Fetch state separately — avoids breaking if FK not configured in Supabase
+    let stateData: any = null
+    if (raw.state_id) {
+      try {
+        const { data: sd } = await supabase
+          .from('states')
+          .select('id, name, slug, image_url, image_path')
+          .eq('id', raw.state_id)
+          .single()
+        stateData = sd
+      } catch { /* state is optional */ }
+    }
+
     return {
       ...raw,
+      states: stateData,
       badges_bestseller: badges.includes('bestseller'),
       badges_new:        badges.includes('new'),
       badges_organic:    badges.includes('organic'),
