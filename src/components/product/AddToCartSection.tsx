@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
-import { formatPrice } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 
 interface Props {
@@ -13,93 +13,108 @@ interface Props {
 }
 
 export default function AddToCartSection({ product, variants, settings }: Props) {
-  const addItem  = useCartStore(s => s.addItem)
-  const openCart = useUIStore(s => s.openCart)
+  const router    = useRouter()
+  const addItem   = useCartStore(s => s.addItem)
+  const openCart  = useUIStore(s => s.openCart)
 
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
     variants.length > 0 ? variants[0] : null
   )
-  const [qty, setQty]       = useState(1)
-  const [added, setAdded]   = useState(false)
+  const [qty, setQty]         = useState(1)
+  const [added, setAdded]     = useState(false)
+  const [buying, setBuying]   = useState(false)
+  const [wishlisted, setWL]   = useState(false)
 
-  const price    = selectedVariant?.price ?? product.price
-  const mrp      = selectedVariant?.mrp   ?? product.mrp ?? product.price
-  const maxStock = selectedVariant?.available_stock ?? product.available_stock
+  const price    = selectedVariant?.price   ?? product.price
+  const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.price
+  const maxStock = selectedVariant?.available_stock ?? product.available_stock ?? 0
   const inStock  = maxStock > 0
 
-  function handleAdd() {
+  function selectVariant(v: ProductVariant) {
+    if (v.available_stock <= 0) return
+    setSelectedVariant(v)
+    setQty(1)
+  }
+
+  function changeQty(d: number) {
+    setQty(q => Math.max(1, Math.min(q + d, maxStock || 99)))
+  }
+
+  function handleAdd(mode: 'add' | 'buy') {
     if (!inStock) return
+    const variantId = selectedVariant
+      ? String(selectedVariant.id)
+      : String(product.id)
+    const size = selectedVariant?.size
+      || (selectedVariant as any)?.variant_value
+      || product.unit_label
+      || ''
 
     addItem({
       productId: String(product.id),
-      variantId: String(selectedVariant?.id ?? product.id),
-      name:      product.name,
+      variantId,
+      name:      product.name + (size ? ` (${size})` : ''),
       slug:      product.slug,
       image:     product.image_url,
       emoji:     product.emoji,
-      size:      selectedVariant?.size ?? product.unit_label ?? '',
+      size,
       price,
-      mrp,
-      gstRate:   product.gst_rate,
-      maxQty:    maxStock,
+      mrp:    mrp ?? price,
+      gstRate: product.gst_rate,
+      maxQty:  maxStock,
       qty,
     })
 
-    setAdded(true)
-    openCart()
-    setTimeout(() => setAdded(false), 2000)
+    if (mode === 'buy') {
+      setBuying(true)
+      setTimeout(() => router.push('/checkout'), 300)
+    } else {
+      setAdded(true)
+      openCart()
+      setQty(1)
+      setTimeout(() => setAdded(false), 2200)
+    }
   }
 
-  function handleBuyNow() {
-    handleAdd()
-    // Slight delay so cart opens first, then navigate
-    setTimeout(() => {
-      window.location.href = '/checkout'
-    }, 300)
-  }
+  const hasMore = variants.length > 3
 
   return (
-    <div className="space-y-4">
+    <div style={{ marginTop: '20px', position: 'relative', zIndex: 2 }}>
 
-      {/* Variant selector */}
+      {/* ── Variant selector ── */}
       {variants.length > 0 && (
-        <div>
-          <div className="text-sm font-semibold text-stone-700 mb-2">
-            Size / Weight
-            {selectedVariant && (
-              <span className="ml-2 font-normal text-stone-500">
-                — {selectedVariant.size}
-              </span>
-            )}
+        <div style={{ marginBottom: '4px', paddingTop: '14px' }}>
+          <div className="pdp-variants-label">
+            Select Size: <span id="var-label-display">{selectedVariant?.size || variants[0]?.size}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {variants.map(v => {
-              const isSelected = selectedVariant?.id === v.id
-              const outOfStock = v.available_stock === 0
+          <div className={`pdp-variant-grid${hasMore ? ' has-more' : ''}`}>
+            {variants.map((v, i) => {
+              const savePct = v.mrp && v.mrp > v.price ? Math.round((1 - v.price / v.mrp) * 100) : 0
+              const isActive = selectedVariant?.id === v.id
+              const oos = v.available_stock <= 0
               return (
                 <button
                   key={v.id}
-                  onClick={() => !outOfStock && setSelectedVariant(v)}
-                  disabled={outOfStock}
-                  className={`relative px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all
-                    ${isSelected
-                      ? 'border-forest-600 bg-forest-50 text-forest-800'
-                      : outOfStock
-                        ? 'border-stone-100 text-stone-300 cursor-not-allowed bg-stone-50'
-                        : 'border-stone-200 text-stone-700 hover:border-forest-400 hover:bg-forest-50'
-                    }`}
+                  type="button"
+                  className={`pdp-vcard${isActive ? ' active' : ''}`}
+                  onClick={() => selectVariant(v)}
+                  disabled={oos}
+                  aria-pressed={isActive}
                 >
-                  {v.size}
-                  {outOfStock && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-stone-400 text-white text-[8px] font-bold px-1 rounded-full">
-                      OOS
-                    </span>
+                  {i === 1 && variants.length >= 3 && (
+                    <span className="pdp-vcard-tag best">Best Value</span>
                   )}
-                  {!outOfStock && v.price !== price && isSelected && (
-                    <span className="block text-[10px] font-medium text-forest-600 mt-0.5">
-                      {formatPrice(v.price)}
-                    </span>
+                  {i === variants.length - 1 && variants.length >= 3 && i !== 1 && (
+                    <span className="pdp-vcard-tag deal">Steal Deal</span>
                   )}
+                  <span className="pdp-vc-size">{v.size}</span>
+                  <span className="pdp-vc-price">
+                    ₹{v.price}
+                    {v.mrp && v.mrp > v.price && (
+                      <span className="pdp-vc-orig"> ₹{v.mrp}</span>
+                    )}
+                  </span>
+                  {savePct > 0 && <span className="pdp-vc-save">Save {savePct}%</span>}
                 </button>
               )
             })}
@@ -107,62 +122,63 @@ export default function AddToCartSection({ product, variants, settings }: Props)
         </div>
       )}
 
-      {/* Quantity */}
-      {inStock && (
-        <div>
-          <div className="text-sm font-semibold text-stone-700 mb-2">Quantity</div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center border-2 border-stone-200 rounded-xl overflow-hidden">
+      {/* ── Qty + Cart row ── */}
+      <div className="pdp-qty-atc">
+        <div className="pdp-qty-row">
+          {/* Qty control */}
+          <div className="pdp-qty-ctrl">
+            <div className="pdp-qty-above">Qty</div>
+            <div className="pdp-qty-inner">
               <button
-                onClick={() => setQty(q => Math.max(1, q - 1))}
-                className="w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-50 transition-colors text-lg font-bold"
+                type="button"
+                className="pdp-qty-btn"
+                onClick={() => changeQty(-1)}
+                disabled={qty <= 1}
                 aria-label="Decrease quantity"
-              >
-                −
-              </button>
-              <span className="w-10 text-center text-sm font-bold text-stone-800">{qty}</span>
+              >−</button>
+              <span className="pdp-qty-num">{qty}</span>
               <button
-                onClick={() => setQty(q => Math.min(maxStock, q + 1))}
-                className="w-10 h-10 flex items-center justify-center text-stone-500 hover:bg-stone-50 transition-colors text-lg font-bold"
+                type="button"
+                className="pdp-qty-btn"
+                onClick={() => changeQty(1)}
+                disabled={qty >= (maxStock || 99)}
                 aria-label="Increase quantity"
-              >
-                +
-              </button>
+              >+</button>
             </div>
-            {maxStock <= 5 && maxStock > 0 && (
-              <span className="text-xs text-red-500 font-semibold">
-                Only {maxStock} left!
-              </span>
-            )}
           </div>
-        </div>
-      )}
 
-      {/* CTA buttons */}
-      <div className="flex gap-3 pt-1">
-        {inStock ? (
-          <>
-            <button
-              onClick={handleAdd}
-              className={`flex-1 py-3.5 rounded-xl font-bold text-sm border-2 transition-all
-                ${added
-                  ? 'border-forest-600 bg-forest-600 text-white'
-                  : 'border-forest-600 text-forest-700 hover:bg-forest-600 hover:text-white'
-                }`}
-            >
-              {added ? '✓ Added to Cart' : '+ Add to Cart'}
-            </button>
-            <button
-              onClick={handleBuyNow}
-              className="flex-1 py-3.5 rounded-xl font-bold text-sm bg-earth-500 hover:bg-earth-600 text-white transition-colors"
-            >
-              Buy Now
-            </button>
-          </>
-        ) : (
-          <div className="flex-1 py-3.5 rounded-xl font-bold text-sm bg-stone-100 text-stone-400 text-center border-2 border-stone-200">
-            Out of Stock
-          </div>
+          {/* Wishlist */}
+          <button
+            type="button"
+            className={`pdp-wl-btn${wishlisted ? ' active' : ''}`}
+            onClick={() => setWL(w => !w)}
+            title="Save to Wishlist"
+            aria-label="Add to Wishlist"
+          >
+            {wishlisted ? '❤️' : '🤍'}
+          </button>
+
+          {/* Add to Cart */}
+          <button
+            type="button"
+            className={`pdp-btn-atc${added ? ' added' : ''}`}
+            onClick={() => handleAdd('add')}
+            disabled={!inStock || added}
+          >
+            {added ? '✅ Added to Cart!' : !inStock ? 'Out of Stock' : '🛒 Add to Cart'}
+          </button>
+        </div>
+
+        {/* Buy Now */}
+        {inStock && (
+          <button
+            type="button"
+            className="pdp-btn-buy"
+            onClick={() => handleAdd('buy')}
+            disabled={buying}
+          >
+            {buying ? '⚡ Processing…' : '⚡ Buy Now'}
+          </button>
         )}
       </div>
 
