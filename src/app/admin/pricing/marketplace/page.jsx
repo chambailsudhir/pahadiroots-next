@@ -94,7 +94,7 @@ const PLATFORMS = {
 
 const r  = (n) => Math.round(n * 100) / 100;
 const ri = (n) => Math.round(n);
-const ₹  = (n) => '₹' + ri(n).toLocaleString('en-IN');
+const fmt_inr = (n) => '\u20B9' + ri(n).toLocaleString('en-IN');
 
 // ── Core marketplace calc ─────────────────────────────────────────────────────
 function calcMarketplace(inp) {
@@ -389,9 +389,9 @@ export default function MarketplacePricingPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
                   {[
-                    { label: 'Selling Price (incl. GST)', val: ₹(calc.sp), color: plat.color, sub: 'List at this price on platform' },
-                    { label: 'Base Price (excl. GST)',    val: ₹(calc.spExcl), color: 'var(--tx)', sub: 'For your records / invoice' },
-                    { label: 'MRP Suggestion',            val: ₹(calc.mrpSuggested), color: 'var(--tx3)', sub: 'Strikethrough price (1.8× sell)' },
+                    { label: 'Selling Price (incl. GST)', val: fmt_inr(calc.sp), color: plat.color, sub: 'List at this price on platform' },
+                    { label: 'Base Price (excl. GST)',    val: fmt_inr(calc.spExcl), color: 'var(--tx)', sub: 'For your records / invoice' },
+                    { label: 'MRP Suggestion',            val: fmt_inr(calc.mrpSuggested), color: 'var(--tx3)', sub: 'Strikethrough price (1.8× sell)' },
                   ].map(({ label, val, color, sub }) => (
                     <div key={label} style={{ textAlign: 'center', padding: '12px 10px', background: 'var(--bg2,#161b22)', borderRadius: 12 }}>
                       <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 4 }}>{label}</div>
@@ -404,7 +404,7 @@ export default function MarketplacePricingPage() {
                   <div style={{ padding: '10px 12px', background: 'rgba(63,185,80,0.08)', borderRadius: 10, border: '1px solid rgba(63,185,80,0.2)', textAlign: 'center' }}>
                     <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 2 }}>Gross Profit / order</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: calc.grossProfit >= 0 ? '#3fb950' : '#f85149', fontFamily: 'monospace' }}>
-                      {₹(calc.grossProfit)}
+                      {fmt_inr(calc.grossProfit)}
                     </div>
                   </div>
                   <div style={{ padding: '10px 12px', background: 'rgba(210,153,34,0.08)', borderRadius: 10, border: '1px solid rgba(210,153,34,0.2)', textAlign: 'center' }}>
@@ -421,18 +421,18 @@ export default function MarketplacePricingPage() {
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--tx2)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
                   Per-Order P&L Breakdown
                 </div>
-                <Row label="Selling Price (incl. GST)" val={₹(calc.sp)} bold />
-                <Row label="  − GST collected (govt)" val={₹(calc.gstCollected)} color="#58a6ff" minus sub={`CGST ₹${ri(calc.cgst)} + SGST ₹${ri(calc.sgst)}`} />
-                <Row label="Net Revenue (ex-GST)" val={₹(calc.spExcl)} color="var(--tx)" bold />
+                <Row label="Selling Price (incl. GST)" val={fmt_inr(calc.sp)} bold />
+                <Row label="  − GST collected (govt)" val={fmt_inr(calc.gstCollected)} color="#58a6ff" minus sub={`CGST ₹${ri(calc.cgst)} + SGST ₹${ri(calc.sgst)}`} />
+                <Row label="Net Revenue (ex-GST)" val={fmt_inr(calc.spExcl)} color="var(--tx)" bold />
                 <div style={{ height: 6 }} />
-                <Row label="  − Cost Price (landed)" val={₹(calc.costBeforeFees)} color="#f85149" minus
+                <Row label="  − Cost Price (landed)" val={fmt_inr(calc.costBeforeFees)} color="#f85149" minus
                   sub={`COGS ₹${calc.costPrice} + packaging ₹${f.packaging} + inbound ₹${f.inboundShipping} + returns ₹${ri(calc.returnImpact)}`} />
-                <Row label={`  − Referral fee (${f.referralPct}%)`} val={₹(calc.referral)} color="#f85149" minus sub={`+ GST on fee ₹${ri(calc.gstOnRef)}`} />
-                <Row label="  − Closing + Logistics fees" val={₹(calc.fixedFees)} color="#f85149" minus sub={`₹${f.closingFee} + ₹${f.logisticsFee} incl. 18% GST`} />
-                <Row label={`  − TDS (${plat.tds}%)`} val={₹(calc.tdsAmt)} color="#f85149" minus sub="Tax Deducted at Source by platform" />
-                <Row label="Total Deductions" val={₹(calc.totalCost)} color="#f85149" minus bold />
+                <Row label={`  − Referral fee (${f.referralPct}%)`} val={fmt_inr(calc.referral)} color="#f85149" minus sub={`+ GST on fee ₹${ri(calc.gstOnRef)}`} />
+                <Row label="  − Closing + Logistics fees" val={fmt_inr(calc.fixedFees)} color="#f85149" minus sub={`₹${f.closingFee} + ₹${f.logisticsFee} incl. 18% GST`} />
+                <Row label={`  − TDS (${plat.tds}%)`} val={fmt_inr(calc.tdsAmt)} color="#f85149" minus sub="Tax Deducted at Source by platform" />
+                <Row label="Total Deductions" val={fmt_inr(calc.totalCost)} color="#f85149" minus bold />
                 <div style={{ height: 6 }} />
-                <Row label="Gross Profit" val={₹(calc.grossProfit)} color={calc.grossProfit >= 0 ? '#3fb950' : '#f85149'} bold />
+                <Row label="Gross Profit" val={fmt_inr(calc.grossProfit)} color={calc.grossProfit >= 0 ? '#3fb950' : '#f85149'} bold />
                 <Row label="Gross Margin %" val={ri(calc.actualMargin) + '%'} color="#d29922" bold />
               </div>
 
@@ -475,12 +475,12 @@ export default function MarketplacePricingPage() {
                       `MARKETPLACE: ${plat.name}`,
                       `Product: ${f.productName || 'Unnamed'}`,
                       `Category: ${cat.label}`,
-                      `Selling Price (list): ${₹(calc.sp)}`,
-                      `Base Price (ex-GST): ${₹(calc.spExcl)}`,
-                      `MRP (strikethrough): ${₹(calc.mrpSuggested)}`,
-                      `Gross Profit/order: ${₹(calc.grossProfit)}`,
+                      `Selling Price (list): ${fmt_inr(calc.sp)}`,
+                      `Base Price (ex-GST): ${fmt_inr(calc.spExcl)}`,
+                      `MRP (strikethrough): ${fmt_inr(calc.mrpSuggested)}`,
+                      `Gross Profit/order: ${fmt_inr(calc.grossProfit)}`,
                       `Gross Margin: ${ri(calc.actualMargin)}%`,
-                      `Platform fees total: ${₹(calc.totalFees)}`,
+                      `Platform fees total: ${fmt_inr(calc.totalFees)}`,
                     ].join('\n');
                     navigator.clipboard.writeText(text).catch(() => {});
                     setSaved(true);

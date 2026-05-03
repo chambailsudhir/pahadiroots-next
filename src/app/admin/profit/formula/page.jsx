@@ -74,7 +74,7 @@ function calcSteps(inp) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-const ₹ = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+const fmt_inr = (n) => '\u20B9' + Math.round(n).toLocaleString('en-IN');
 
 function StepRow({ num, label, value, sub, type = 'normal', indent = false, animate = false }) {
   const colors = {
@@ -191,14 +191,14 @@ export default function ProfitFormulaExplainer() {
 
             <StepRow
               num="1" label="Customer paid (incl. GST)"
-              value={₹(s.grossRevenue)} type="normal"
+              value={fmt_inr(s.grossRevenue)} type="normal"
               sub={`price_at_time in order_items = ₹${ex.inputs.sellingPrice}`}
             />
 
             {s.isRefunded ? (
               <StepRow
                 num="2" label="Refund issued — order returned"
-                value={`−${₹(s.refundDeduction)}`} type="negative" indent
+                value={`−${fmt_inr(s.refundDeduction)}`} type="negative" indent
                 sub="returns.status = 'refunded' → full amount back to customer"
               />
             ) : (
@@ -211,7 +211,7 @@ export default function ProfitFormulaExplainer() {
 
             <StepRow
               num="3" label="Net Revenue (collected)"
-              value={₹(s.netCollected)}
+              value={fmt_inr(s.netCollected)}
               type={s.netCollected > 0 ? 'total' : 'negative'}
               sub={`Step 1 ${s.isRefunded ? `− Step 2 = ₹${s.grossRevenue} − ₹${s.refundDeduction}` : '(no refund)'}`}
             />
@@ -223,12 +223,12 @@ export default function ProfitFormulaExplainer() {
             </div>
             <StepRow
               num="4" label={`GST @ ${ex.inputs.gstRate}% (govt liability)`}
-              value={`−${₹(s.gstAmount)}`} type="negative" indent
+              value={`−${fmt_inr(s.gstAmount)}`} type="negative" indent
               sub={`Formula: ₹${s.netCollected} − (₹${s.netCollected} ÷ ${1 + ex.inputs.gstRate/100})`}
             />
             <StepRow
               num="5" label="Net Revenue ex-GST ← YOUR real top line"
-              value={₹(s.netRevExGST)} type="total"
+              value={fmt_inr(s.netRevExGST)} type="total"
               sub="This is what you actually earned. Everything below is from this."
             />
 
@@ -239,12 +239,12 @@ export default function ProfitFormulaExplainer() {
             </div>
             <StepRow
               num="6" label="COGS — what you paid for this product"
-              value={`−${₹(s.cogs)}`} type="negative" indent
+              value={`−${fmt_inr(s.cogs)}`} type="negative" indent
               sub={`products.cost_price = ₹${ex.inputs.costPrice} × 1 unit`}
             />
             <StepRow
               num="7" label="Gross Profit"
-              value={s.grossProfit >= 0 ? ₹(s.grossProfit) : `−${₹(Math.abs(s.grossProfit))}`}
+              value={s.grossProfit >= 0 ? fmt_inr(s.grossProfit) : `−${fmt_inr(Math.abs(s.grossProfit))}`}
               type={s.grossProfit >= 0 ? 'total' : 'negative'}
               sub={`Step 5 − Step 6 = ₹${s.netRevExGST} − ₹${s.cogs}`}
             />
@@ -268,7 +268,7 @@ export default function ProfitFormulaExplainer() {
               {s.isRefunded ? 'After this return, your pocket got:' : 'From this 1 order, your pocket got:'}
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: s.grossProfit >= 0 && !s.isRefunded ? '#3fb950' : '#f85149' }}>
-              {s.isRefunded ? '₹0 (refunded)' : ₹(s.grossProfit)}
+              {s.isRefunded ? '₹0 (refunded)' : fmt_inr(s.grossProfit)}
             </div>
             {!s.isRefunded && s.grossProfit > 0 && (
               <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 4 }}>
@@ -360,7 +360,7 @@ export default function ProfitFormulaExplainer() {
             </div>
             <div style={{ fontSize: 13, lineHeight: 1.8 }}>
               {[
-                { label: 'Gross Profit (now)',          val: ₹(s.grossProfit),  color: '#3fb950' },
+                { label: 'Gross Profit (now)',          val: fmt_inr(s.grossProfit),  color: '#3fb950' },
                 { label: '− Shipping cost (per order)', val: '~₹80–120',       color: '#f85149' },
                 { label: '− Packaging material',        val: '~₹15–30',        color: '#f85149' },
                 { label: '− Return loss (12% rate)',     val: `~₹${Math.round(ex.inputs.sellingPrice * 0.12)}`, color: '#f85149' },
