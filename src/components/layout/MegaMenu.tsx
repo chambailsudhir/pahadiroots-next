@@ -18,82 +18,131 @@ const CURATED = [
 
 export default function MegaMenu({ categories, states }: Props) {
   const [open, setOpen] = useState(false)
+
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button
-        className="flex items-center gap-1"
-        aria-expanded={open}
-        style={{ fontSize: 14, fontWeight: 700, color: 'var(--tx2)', padding: '6px 14px', borderRadius: 20, background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '.3px', transition: 'all .2s' }}
-      >
+    <li
+      style={{ listStyle: 'none', position: 'relative' }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button className="mm-trigger" aria-expanded={open}>
         Shop
-        <svg className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg
+          width="11" height="11" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth={2.5}
+          style={{ transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3 z-50" style={{ width: 760 }}>
-          <div className="mega-menu-panel">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
-              {/* All Collections */}
-              <div style={{ padding: '24px', borderRight: '1px solid var(--bd)' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>All Collections</div>
-                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {categories.filter(c => c.is_active).map(cat => (
-                    <li key={cat.id}>
-                      <Link href={`/collections/${catSlug(cat)}`} onClick={() => setOpen(false)}
-                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'block', transition: 'color .15s, paddingLeft .15s' }}
-                        onMouseEnter={e => { (e.target as HTMLElement).style.color = 'var(--g)'; (e.target as HTMLElement).style.paddingLeft = '4px'; }}
-                        onMouseLeave={e => { (e.target as HTMLElement).style.color = 'var(--tx2)'; (e.target as HTMLElement).style.paddingLeft = '0'; }}>
-                        {cat.name}
-                      </Link>
-                    </li>
-                  ))}
-                  <li style={{ paddingTop: 4, borderTop: '1px solid var(--bd)' }}>
-                    <Link href="/products" onClick={() => setOpen(false)} style={{ fontSize: 13, fontWeight: 700, color: 'var(--g)' }}>
-                      View All Products →
+        <div className="mm-panel-wrap">
+          <div className="mm-panel">
+            {/* ── All Collections ── */}
+            <div className="mm-col mm-col-border">
+              <div className="mm-col-head">All Collections</div>
+              <ul className="mm-list">
+                {categories.filter(c => c.is_active).map(cat => (
+                  <li key={cat.id}>
+                    <Link href={`/collections/${catSlug(cat)}`} className="mm-link" onClick={() => setOpen(false)}>
+                      {cat.name}
                     </Link>
                   </li>
-                </ul>
-              </div>
+                ))}
+                <li className="mm-view-all">
+                  <Link href="/products" className="mm-view-link" onClick={() => setOpen(false)}>
+                    View All Products →
+                  </Link>
+                </li>
+              </ul>
+            </div>
 
-              {/* Shop by Region */}
-              <div style={{ padding: '24px', borderRight: '1px solid var(--bd)' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>Shop by Region</div>
-                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {states.slice(0, 10).map(s => (
-                    <li key={s.id}>
-                      <Link href={`/regions/${s.slug}`} onClick={() => setOpen(false)}
-                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .15s' }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--g)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--tx2)')}>
-                        <span>🏔️</span>{s.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+            {/* ── Shop by Region ── */}
+            <div className="mm-col mm-col-border">
+              <div className="mm-col-head">Shop by Region</div>
+              <ul className="mm-list mm-list-2col">
+                {states.slice(0, 12).map(s => (
+                  <li key={s.id}>
+                    <Link href={`/regions/${s.slug}`} className="mm-link" onClick={() => setOpen(false)}>
+                      {s.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <div className="mm-view-all" style={{ marginTop: '12px' }}>
+                <Link href="/regions" className="mm-view-link" onClick={() => setOpen(false)}>
+                  View All Regions →
+                </Link>
               </div>
+            </div>
 
-              {/* Curated */}
-              <div style={{ padding: '24px', background: 'linear-gradient(135deg,#f9f5ee,#f2ead8)' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--tx3)', textTransform: 'uppercase', marginBottom: 12 }}>Curated Picks</div>
-                <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {CURATED.map(l => (
-                    <li key={l.href}>
-                      <Link href={l.href} onClick={() => setOpen(false)}
-                        style={{ fontSize: 13, color: 'var(--tx2)', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .15s' }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--g)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--tx2)')}>
-                        ✦ {l.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* ── Curated Picks ── */}
+            <div className="mm-col mm-col-cream">
+              <div className="mm-col-head">Curated Picks</div>
+              <ul className="mm-list">
+                {CURATED.map(l => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="mm-link" onClick={() => setOpen(false)}>
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
       )}
-    </div>
+
+      <style>{`
+        .mm-trigger {
+          background: none; border: none; cursor: pointer;
+          font-family: inherit; font-size: 13px; font-weight: 600;
+          color: rgba(255,255,255,.82); letter-spacing: .2px;
+          display: flex; align-items: center; gap: 5px;
+          padding: 0 14px; height: 62px;
+          transition: color .2s;
+        }
+        .mm-trigger:hover { color: #c8920a; }
+        .mm-panel-wrap {
+          position: absolute; top: 100%; left: 50%;
+          transform: translateX(-50%);
+          width: 760px; padding-top: 8px; z-index: 9999;
+        }
+        .mm-panel {
+          background: #fff;
+          border-radius: 16px;
+          box-shadow: 0 20px 60px rgba(0,0,0,.16), 0 4px 20px rgba(0,0,0,.08);
+          border: 1px solid rgba(0,0,0,.06);
+          display: grid; grid-template-columns: 1fr 1fr 1fr;
+          overflow: hidden;
+        }
+        .mm-col { padding: 24px 22px; }
+        .mm-col-border { border-right: 1px solid #f0ece4; }
+        .mm-col-cream { background: linear-gradient(160deg,#fdf9f2,#f5ede0); }
+        .mm-col-head {
+          font-size: 10px; font-weight: 900; letter-spacing: 2.5px;
+          text-transform: uppercase; color: #9a9080;
+          margin-bottom: 14px; padding-bottom: 10px;
+          border-bottom: 1.5px solid #f0ece4;
+        }
+        .mm-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+        .mm-list-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 0; }
+        .mm-link {
+          display: block; padding: 6px 4px;
+          font-size: 13.5px; font-weight: 500; color: #2a2a2a;
+          text-decoration: none; border-radius: 6px;
+          transition: color .15s, background .15s, padding-left .15s;
+        }
+        .mm-link:hover { color: #1a3a1e; background: #f0f7f0; padding-left: 10px; }
+        .mm-view-all { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0ece4; }
+        .mm-view-link {
+          font-size: 13px; font-weight: 700; color: #1a3a1e;
+          text-decoration: none; transition: color .15s;
+        }
+        .mm-view-link:hover { color: #c8920a; }
+        @media(max-width:900px){ .mm-panel-wrap { display: none; } }
+      `}</style>
+    </li>
   )
 }

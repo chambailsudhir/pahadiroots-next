@@ -21,7 +21,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const cartCount  = useCartStore(s => s.cartCount)()
   const wishlist   = useUserStore(s => s.wishlist)
   const user       = useUserStore(s => s.user)
-  const { openCart, openSearch, openMobileMenu } = useUIStore()
+  const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
 
   const [scrolled, setScrolled] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
@@ -64,7 +64,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         <ul className="old-nav-links">
           <li><Link href="/">Home</Link></li>
           <li><Link href="/about">Our Story</Link></li>
-          <li><MegaMenu categories={categories} states={states} /></li>
+          <MegaMenu categories={categories} states={states} />
           {showTrack && <li><Link href="/track">Track Order</Link></li>}
           <li><Link href="/payment">Payment</Link></li>
           <li><Link href="/contact">Contact</Link></li>
@@ -117,7 +117,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
                 <div className="old-dd-foot">
                   {user
                     ? <Link href="/account" className="old-dd-btn" style={{ background: '#fdecea', color: '#c0392b' }} onClick={() => setAcctOpen(false)}>Logout</Link>
-                    : <button className="old-dd-btn" onClick={() => { setAcctOpen(false); window.location.href='/?login=1' }}>Login / Sign Up</button>}
+                    : <button className="old-dd-btn" onClick={() => { setAcctOpen(false); openAuth() }}>Login / Sign Up</button>}
                 </div>
               </div>
             )}
@@ -150,33 +150,33 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <style>{`
         /* ── Old-site nav styles ── */
         .old-nav{
-          background:#1a3a1e;padding:0 24px;
+          background:#fff;padding:0 32px;border-bottom:1px solid rgba(26,58,30,.12);
           display:flex;align-items:center;justify-content:space-between;
-          height:62px;position:relative;transition:box-shadow .2s;
+          height:64px;position:relative;transition:box-shadow .2s;
         }
-        .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.3)}
+        .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
         .old-logo{display:flex;align-items:center;gap:10px;text-decoration:none;flex-shrink:0}
         .old-logo-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
         .old-logo-words{}
-        .old-logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#fff;line-height:1.1}
+        .old-logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#1a3a1e;line-height:1.1}
         .old-logo-tl{font-size:9px;color:#c8920a;font-weight:800;letter-spacing:1px;text-transform:uppercase}
         .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0}
         .old-nav-links li a,.old-nav-links li button{
-          color:rgba(255,255,255,.75);text-decoration:none;font-size:13px;
-          font-weight:600;padding:0 14px;height:62px;display:flex;align-items:center;
+          color:#2a2a2a;text-decoration:none;font-size:13.5px;
+          font-weight:600;padding:0 14px;height:64px;display:flex;align-items:center;
           transition:color .2s,background .2s;border:none;background:none;cursor:pointer;
           font-family:inherit;white-space:nowrap;
         }
-        .old-nav-links li a:hover,.old-nav-links li button:hover{color:#c8920a;background:rgba(255,255,255,.04)}
-        .old-nav-links li a.active-nav{color:#c8920a}
+        .old-nav-links li a:hover,.old-nav-links li button:hover{color:#1a3a1e;background:rgba(26,58,30,.04)}
+        .old-nav-links li a.active-nav{color:#1a3a1e}
         .old-nav-right{display:flex;align-items:center;gap:2px;flex-shrink:0}
         .old-nib{
           width:38px;height:38px;border-radius:50%;border:none;
-          background:transparent;color:rgba(255,255,255,.8);font-size:17px;
+          background:transparent;color:#555;font-size:18px;
           cursor:pointer;display:flex;align-items:center;justify-content:center;
           transition:background .2s,color .2s;text-decoration:none;position:relative;
         }
-        .old-nib:hover{background:rgba(255,255,255,.1);color:#fff}
+        .old-nib:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-acct-av{
           width:28px;height:28px;border-radius:50%;
           background:#c8920a;color:#fff;font-size:12px;font-weight:900;
@@ -184,20 +184,20 @@ export default function Header({ settings, categories = [], states = [] }: Props
         }
         .old-acct-dot{
           position:absolute;top:5px;right:4px;
-          width:7px;height:7px;background:#4caf50;border-radius:50%;border:1.5px solid #1a3a1e;
+          width:7px;height:7px;background:#4caf50;border-radius:50%;border:1.5px solid #fff;
         }
         .old-wl-badge{
           position:absolute;top:2px;right:2px;
           background:#c0392b;color:#fff;border-radius:50%;
           width:16px;height:16px;font-size:9px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;border:1.5px solid #1a3a1e;
+          display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;
         }
         .old-dark-btn{
-          background:transparent;border:none;color:rgba(255,255,255,.7);
+          background:transparent;border:none;color:#888;
           font-size:17px;cursor:pointer;padding:8px;border-radius:8px;
           transition:all .2s;
         }
-        .old-dark-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+        .old-dark-btn:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-cart-btn{
           display:flex;align-items:center;gap:7px;
           background:#c8920a;color:#fff;border:none;border-radius:24px;

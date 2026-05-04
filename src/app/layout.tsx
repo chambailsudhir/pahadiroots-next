@@ -9,6 +9,7 @@ import MobileMenu from '@/components/layout/MobileMenu'
 import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
+import AuthModal from '@/components/auth/AuthModal'
 
 const inter = Inter({ variable: '--font-geist-sans', subsets: ['latin'] })
 const playfair = Playfair_Display({
@@ -123,6 +124,7 @@ export default async function RootLayout({
           <CartDrawer settings={settings} />
           <SearchOverlay />
           <MobileMenu settings={settings} categories={categories} states={states} />
+          <AuthModal />
         </Providers>
       </body>
     </html>

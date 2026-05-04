@@ -881,3 +881,8 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-wl-btn{width:44px;height:44px;border:2px solid rgba(26,58,30,.12);border-radius:50%;background:#fff;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .pdp-wl-btn:hover{border-color:#2d5233}
 .pdp-wl-btn.active{border-color:#e74c3c;background:#fff5f5}
+
+/* ── Products grid: 3 columns ── */
+.prod-grid-3 { grid-template-columns: repeat(3,1fr) !important; }
+@media(max-width:900px)  { .prod-grid-3 { grid-template-columns: repeat(2,1fr) !important; } }
+@media(max-width:560px)  { .prod-grid-3 { grid-template-columns: repeat(1,1fr) !important; } }
