@@ -343,7 +343,7 @@ export async function POST(req: NextRequest) {
   if (action === 'update_profile') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
-    const { first_name, last_name, address_line1, city, state, postal_code, saved_addresses } = body
+    const { first_name, last_name, address_line1, city, state, postal_code, phone: phoneUpdate, saved_addresses } = body
     try {
       const user    = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
@@ -355,6 +355,7 @@ export async function POST(req: NextRequest) {
       if (city            !== undefined) updates.city            = city
       if (state           !== undefined) updates.state           = state
       if (postal_code     !== undefined) updates.postal_code     = postal_code
+      if (phoneUpdate     !== undefined) updates.phone           = phoneUpdate
       if (saved_addresses !== undefined) updates.saved_addresses = typeof saved_addresses === 'string' ? saved_addresses : JSON.stringify(saved_addresses)
       await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, updates)
       return ok({ success: true, profile: { ...profile, ...updates } })

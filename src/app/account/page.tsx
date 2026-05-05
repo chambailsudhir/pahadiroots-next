@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUserStore } from '@/store/userStore'
@@ -67,7 +67,9 @@ async function callAuth(action: string, body: any = {}, token?: string | null) {
 export default function AccountPage() {
   const router      = useRouter()
   const storeLogout = useUserStore(s => s.logout)
+  const storeSetUser = useUserStore(s => s.setUser)
 
+  const initDone = useRef(false)
   const [tab,      setTab]      = useState<Tab>('orders')
   const [loaded,   setLoaded]   = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
@@ -84,6 +86,7 @@ export default function AccountPage() {
   const [pw,  setPw]  = useState({ newp:'', conf:'', showNew:false, showConf:false })
   const [msg, setMsg] = useState<Record<string,string>>({})
   const [busy, setBusy] = useState<Record<string,boolean>>({})
+  const [mounted, setMounted] = useState(false)
   const [showAddAddr, setShowAddAddr] = useState(false)
   const [newAddr, setNewAddr] = useState({ label:'', name:'', flat:'', city:'', state:'', pin:'' })
   const [newAddrErr, setNewAddrErr] = useState<Record<string,string>>({})
@@ -92,16 +95,20 @@ export default function AccountPage() {
   const setMsg$ = (k: string, v: string) => { setMsg(m => ({...m,[k]:v})); setTimeout(() => setMsg(m => ({...m,[k]:''})), 2500) }
 
   const doInit = useCallback(async () => {
+    if (initDone.current) return
+    initDone.current = true
     const tk = getToken(); const cached = getProfile()
     if (!tk) { setLoaded(true); setLoggedIn(false); return }
     if (cached) {
       setProfile(cached); setLoggedIn(true); pfFrom(cached); setToken(tk); setLoaded(true)
+      storeSetUser({ id: cached.id||'', phone: (cached.phone||'').replace(/^\+91/,''), email: cached.email||'', name: cached.first_name||'' })
       fetchOrders(tk); refreshProf(tk); return
     }
     try {
       const d = await callAuth('get_profile', {}, tk)
       if (!d.profile) { setLoaded(true); setLoggedIn(false); return }
       setProfile(d.profile); setAuthUser(d.user); saveProfile(d.profile); pfFrom(d.profile)
+      storeSetUser({ id: d.profile?.id||d.user?.id||'', phone: (d.profile?.phone||d.user?.phone||'').replace(/^\+91/,''), email: d.user?.email||d.profile?.email||'', name: d.profile?.first_name||'' })
       setLoggedIn(true); setToken(tk); setLoaded(true); fetchOrders(tk)
     } catch {
       const rt = getRefresh()
@@ -111,6 +118,7 @@ export default function AccountPage() {
           saveToken(r.access_token); if (r.refresh_token) saveRefresh(r.refresh_token)
           const d = await callAuth('get_profile', {}, r.access_token)
           setProfile(d.profile); saveProfile(d.profile); pfFrom(d.profile)
+          storeSetUser({ id: d.profile?.id||d.user?.id||'', phone: (d.profile?.phone||d.user?.phone||'').replace(/^\+91/,''), email: d.user?.email||d.profile?.email||'', name: d.profile?.first_name||'' })
           setAuthUser(d.user); setLoggedIn(true); setToken(r.access_token); setLoaded(true); fetchOrders(r.access_token); return
         }
       } catch {} }
@@ -130,7 +138,7 @@ export default function AccountPage() {
     setPf({ fname:p.first_name||'', lname:p.last_name||'', addr:p.address_line1||'', city:p.city||'', state:p.state||'', pin:p.postal_code||'', phone:(p.phone||'').replace(/^\+91/,'') })
   }
 
-  useEffect(() => { doInit() }, [doInit])
+  useEffect(() => { setMounted(true); doInit() }, [doInit])
 
   async function doLogout() {
     try { await callAuth('logout',{},token) } catch {}
@@ -198,8 +206,9 @@ export default function AccountPage() {
   }
 
   const savedAddrs = getSavedAddresses(profile)
-  async function deleteAddr(idx: number) {
-    const updated = savedAddrs.filter((_:any,i:number)=>i!==idx)
+  async function deleteAddr(addrLabel: string) {
+    const all = getSavedAddresses(profile)
+    const updated = all.filter((a:any) => a.label !== addrLabel)
     try { await callAuth('update_profile',{saved_addresses:JSON.stringify(updated)},token); const np={...profile,saved_addresses:JSON.stringify(updated)}; setProfile(np); saveProfile(np); toast$('Address removed') }
     catch { toast$('Failed to remove address','error') }
   }
@@ -278,7 +287,7 @@ export default function AccountPage() {
           </div>
 
           {/* Order quick stats */}
-          {orders !== null && (
+          {mounted && orders !== null && (
             <div className="sb-stats">
               <div className="sb-stat">
                 <div className="sb-stat-val">{totalOrders}</div>
@@ -330,11 +339,11 @@ export default function AccountPage() {
             <div className="panel-section">
               <div className="panel-header">
                 <div className="panel-title">My Orders</div>
-                {orders !== null && <div className="panel-count">{totalOrders} orders</div>}
+                {mounted && orders !== null && <div className="panel-count">{totalOrders} orders</div>}
               </div>
 
               {/* Order summary pills */}
-              {orders !== null && totalOrders > 0 && (
+              {mounted && orders !== null && totalOrders > 0 && (
                 <div className="order-summary-strip">
                   <div className="oss-item oss-delivered">
                     <span className="oss-num">{delivered}</span>
@@ -450,8 +459,8 @@ export default function AccountPage() {
 
                             <div className="oc-actions">
                               <div className="oc-actions-left">
-                                <Link href={`/order-confirmation?id=${o.id}&num=${encodeURIComponent(o.order_number||'')}`} className="action-btn action-view">View Details</Link>
-                                <Link href={`/order-confirmation?id=${o.id}&num=${encodeURIComponent(o.order_number||'')}&print=1`} className="action-btn action-invoice" target="_blank">Invoice</Link>
+                                <Link href={`/account/orders/${o.id}`} className="action-btn action-view">View Details</Link>
+                                <Link href={`/account/orders/${o.id}?print=1`} className="action-btn action-invoice" target="_blank">Invoice</Link>
                                 {canReturn(o) && (
                                   <button className="action-btn action-return" onClick={()=>toast$('Please contact support to initiate a return')}>Return</button>
                                 )}
@@ -491,6 +500,7 @@ export default function AccountPage() {
                     </div>
                   </div>
                 )}
+
                 {savedAddrs.filter((a:any)=>a.label!=='Default').map((a:any,i:number)=>(
                   <div key={i} className="addr-card">
                     <div className="addr-header">
@@ -501,17 +511,65 @@ export default function AccountPage() {
                       {[a.addr||a.flat,a.city,a.state,a.pin||a.pincode].filter(Boolean).join(', ')}
                     </div>
                     <div className="addr-actions">
-                      <button className="addr-btn addr-del" onClick={()=>deleteAddr(i)}>🗑 Remove</button>
+                      <button className="addr-btn addr-del" onClick={()=>deleteAddr(a.label)}>🗑 Remove</button>
                     </div>
                   </div>
                 ))}
-                {!profile?.address_line1 && savedAddrs.length===0 && (
+
+                {!profile?.address_line1 && savedAddrs.length===0 && !showAddAddr && (
                   <div className="empty-state">
                     <div className="empty-icon">📍</div>
                     <div className="empty-title">No addresses saved</div>
-                    <p className="empty-sub">Add your delivery address in your profile to checkout faster.</p>
-                    <button className="btn-primary" onClick={()=>setTab('profile')}>Add Address →</button>
+                    <p className="empty-sub">Add a delivery address to checkout faster.</p>
                   </div>
+                )}
+
+                {showAddAddr ? (
+                  <div className="addr-add-form">
+                    <div className="addr-add-title">Add New Address</div>
+                    <div className="form-grid">
+                      <div>
+                        <div className="f-lbl">Label * (e.g. Home, Office)</div>
+                        <input className={`f-inp${newAddrErr.label?' f-err':''}`} value={newAddr.label} onChange={e=>{setNewAddr(a=>({...a,label:e.target.value}));setNewAddrErr(er=>({...er,label:''}))}} placeholder="Home / Office / Parents"/>
+                        {newAddrErr.label&&<div className="err-txt">{newAddrErr.label}</div>}
+                      </div>
+                      <div>
+                        <div className="f-lbl">Contact Name</div>
+                        <input className="f-inp" value={newAddr.name} onChange={e=>setNewAddr(a=>({...a,name:e.target.value}))} placeholder="Full name"/>
+                      </div>
+                      <div className="form-full">
+                        <div className="f-lbl">Street / Flat / Colony *</div>
+                        <input className={`f-inp${newAddrErr.flat?' f-err':''}`} value={newAddr.flat} onChange={e=>{setNewAddr(a=>({...a,flat:e.target.value}));setNewAddrErr(er=>({...er,flat:''}))}} placeholder="House no., Street, Colony"/>
+                        {newAddrErr.flat&&<div className="err-txt">{newAddrErr.flat}</div>}
+                      </div>
+                      <div>
+                        <div className="f-lbl">City *</div>
+                        <input className={`f-inp${newAddrErr.city?' f-err':''}`} value={newAddr.city} onChange={e=>{setNewAddr(a=>({...a,city:e.target.value}));setNewAddrErr(er=>({...er,city:''}))}} placeholder="City"/>
+                        {newAddrErr.city&&<div className="err-txt">{newAddrErr.city}</div>}
+                      </div>
+                      <div>
+                        <div className="f-lbl">State *</div>
+                        <select className={`f-inp${newAddrErr.state?' f-err':''}`} value={newAddr.state} onChange={e=>{setNewAddr(a=>({...a,state:e.target.value}));setNewAddrErr(er=>({...er,state:''}))}}>
+                          <option value="">Select State / UT</option>
+                          {INDIA_STATES.map(s=><option key={s}>{s}</option>)}
+                        </select>
+                        {newAddrErr.state&&<div className="err-txt">{newAddrErr.state}</div>}
+                      </div>
+                      <div>
+                        <div className="f-lbl">Pincode</div>
+                        <input className={`f-inp${newAddrErr.pin?' f-err':''}`} value={newAddr.pin} onChange={e=>{setNewAddr(a=>({...a,pin:e.target.value.replace(/\D/g,'')}));setNewAddrErr(er=>({...er,pin:''}))}} placeholder="110001" maxLength={6} inputMode="numeric"/>
+                        {newAddrErr.pin&&<div className="err-txt">{newAddrErr.pin}</div>}
+                      </div>
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn-primary" onClick={saveNewAddr} disabled={!!busy.newAddr}>{busy.newAddr?'Saving…':'Save Address'}</button>
+                      <button className="btn-secondary" onClick={()=>{setShowAddAddr(false);setNewAddrErr({})}}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="add-addr-btn" onClick={()=>setShowAddAddr(true)}>
+                    <span style={{fontSize:'18px',lineHeight:1}}>+</span> Add New Address
+                  </button>
                 )}
               </div>
             </div>
