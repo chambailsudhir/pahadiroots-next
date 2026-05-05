@@ -299,11 +299,11 @@ export default function AccountPage() {
 
           <div className="sb-nav">
             {([
-              {key:'orders',    icon:'📦', label:'My Orders',       badge: activeCount>0?activeCount:null},
-              {key:'addresses', icon:'📍', label:'Addresses'},
-              {key:'profile',   icon:'👤', label:'Profile'},
-              {key:'password',  icon:'🔒', label:'Change Password'},
-            ] as const).map(it => (
+              {key:'orders'    as Tab, icon:'📦', label:'My Orders',       badge: activeCount>0?activeCount:null as number|null},
+              {key:'addresses' as Tab, icon:'📍', label:'Addresses',       badge: null as number|null},
+              {key:'profile'   as Tab, icon:'👤', label:'Profile',         badge: null as number|null},
+              {key:'password'  as Tab, icon:'🔒', label:'Change Password', badge: null as number|null},
+            ]).map(it => (
               <button key={it.key} className={`sb-item${tab===it.key?' active':''}`} onClick={()=>{setTab(it.key as Tab);if(it.key==='orders'&&!orders&&token)fetchOrders(token)}}>
                 <span className="sb-icon">{it.icon}</span>
                 <span className="sb-label">{it.label}</span>
