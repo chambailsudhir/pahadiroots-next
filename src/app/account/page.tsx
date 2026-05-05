@@ -462,8 +462,8 @@ export default function AccountPage() {
       {toast&&<div className="acc-toast">{toast}</div>}
 
       <style>{`
-        .acc-wrap{background:#f7f3ee;min-height:100vh;padding:28px 20px 80px}
-        .acc-page{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:280px 1fr;gap:28px;align-items:start}
+        .acc-wrap{background:#f7f3ee;min-height:100vh;padding:32px 28px 80px}
+        .acc-page{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:32px;align-items:start}
         @media(max-width:768px){.acc-page{grid-template-columns:1fr}.acc-wrap{padding:12px 12px 80px}}
 
         /* Sidebar */

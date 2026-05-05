@@ -144,45 +144,6 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     )
   }
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex flex-col sm:flex-row gap-6">
+  return <>{children}</>
 
-        {/* Sidebar */}
-        <aside className="sm:w-52 shrink-0">
-          <div className="bg-stone-50 rounded-2xl p-4">
-            <div className="mb-4 pb-4 border-b border-stone-200">
-              <div className="text-sm font-bold text-stone-800">{user.name || 'My Account'}</div>
-              <div className="text-xs text-stone-400 mt-0.5">+91 {user.phone}</div>
-            </div>
-            <nav className="space-y-1">
-              {NAV_ITEMS.map(item => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2.5 text-sm px-3 py-2 rounded-xl transition-colors ${
-                    pathname === item.href
-                      ? 'bg-forest-700 text-white font-semibold'
-                      : 'text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  <span>{item.icon}</span>
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                onClick={() => { logout(); supabase.auth.signOut() }}
-                className="flex items-center gap-2.5 text-sm px-3 py-2 rounded-xl text-stone-500 hover:bg-red-50 hover:text-red-600 w-full text-left transition-colors mt-2"
-              >
-                <span>🚪</span> Sign Out
-              </button>
-            </nav>
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 min-w-0">{children}</main>
-      </div>
-    </div>
-  )
 }
