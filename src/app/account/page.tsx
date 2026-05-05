@@ -84,6 +84,9 @@ export default function AccountPage() {
   const [pw,  setPw]  = useState({ newp:'', conf:'', showNew:false, showConf:false })
   const [msg, setMsg] = useState<Record<string,string>>({})
   const [busy, setBusy] = useState<Record<string,boolean>>({})
+  const [showAddAddr, setShowAddAddr] = useState(false)
+  const [newAddr, setNewAddr] = useState({ label:'', name:'', flat:'', city:'', state:'', pin:'' })
+  const [newAddrErr, setNewAddrErr] = useState<Record<string,string>>({})
 
   const toast$ = (m: string, type: 'success'|'error' = 'success') => { setToast(m); setToastType(type); setTimeout(() => setToast(''), 3000) }
   const setMsg$ = (k: string, v: string) => { setMsg(m => ({...m,[k]:v})); setTimeout(() => setMsg(m => ({...m,[k]:''})), 2500) }
@@ -170,6 +173,30 @@ export default function AccountPage() {
     catch(e:any) { toast$(e.message||'Failed to update password','error') } finally { setBusy(b=>({...b,pw:false})) }
   }
 
+
+  async function saveNewAddr() {
+    const e: Record<string,string> = {}
+    if (!newAddr.label.trim()) e.label = 'Label required (e.g. Home, Office)'
+    if (!newAddr.flat.trim())  e.flat  = 'Address line required'
+    if (!newAddr.city.trim())  e.city  = 'City required'
+    if (!newAddr.state)        e.state = 'State required'
+    if (newAddr.pin && !isValidPin(newAddr.pin)) e.pin = 'Enter valid 6-digit pincode'
+    if (Object.keys(e).length) { setNewAddrErr(e); return }
+    setNewAddrErr({})
+    setBusy(b=>({...b,newAddr:true}))
+    try {
+      const existing = getSavedAddresses(profile)
+      const updated = [...existing, { label:newAddr.label.trim(), name:newAddr.name.trim(), addr:newAddr.flat.trim(), city:newAddr.city.trim(), state:newAddr.state, pin:newAddr.pin }]
+      await callAuth('update_profile',{saved_addresses:JSON.stringify(updated)},token)
+      const np={...profile,saved_addresses:JSON.stringify(updated)}
+      setProfile(np); saveProfile(np)
+      setNewAddr({ label:'', name:'', flat:'', city:'', state:'', pin:'' })
+      setShowAddAddr(false)
+      toast$('✅ Address saved!')
+    } catch(e:any) { toast$(e.message||'Failed to save address','error') }
+    finally { setBusy(b=>({...b,newAddr:false})) }
+  }
+
   const savedAddrs = getSavedAddresses(profile)
   async function deleteAddr(idx: number) {
     const updated = savedAddrs.filter((_:any,i:number)=>i!==idx)
@@ -188,7 +215,7 @@ export default function AccountPage() {
   )
 
   if (!loggedIn) return (
-    <div className="acc-wrap">
+    <div className="acc-wrap" suppressHydrationWarning>
       <div className="login-wall">
         <div className="lw-icon">🔐</div>
         <div className="lw-title">Welcome Back</div>
@@ -392,7 +419,7 @@ export default function AccountPage() {
                               <div className="oc-hdr-right">
                                 <span className={`oc-badge ${badge}`}>{label}</span>
                                 <span className="oc-total">₹{(o.total_amount||0).toLocaleString('en-IN')}</span>
-                                {o.payment_method && <span className="oc-pay">{o.payment_method==='cod'?'💵 COD':'💳 Prepaid'}</span>}
+                                {o.payment_method && <span className="oc-pay">{o.payment_method==='cod'?'💵 COD':o.payment_method==='razorpay_online'?'💳 Online':o.payment_method==='razorpay'?'💳 Online':'💳 Prepaid'}</span>}
                               </div>
                             </div>
 
@@ -635,8 +662,6 @@ export default function AccountPage() {
       {toast && <div className={`acc-toast ${toastType==='error'?'acc-toast-error':''}`}>{toast}</div>}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:wght@400;500;600;700&display=swap');
-
         *, *::before, *::after { box-sizing: border-box; }
 
         /* ── Wrap & Layout ── */
@@ -651,24 +676,24 @@ export default function AccountPage() {
         .sb-avatar-ring { width: 72px; height: 72px; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, rgba(255,255,255,.5), rgba(255,255,255,.1)); margin: 0 auto 12px; }
         .sb-avatar { width: 100%; height: 100%; background: rgba(255,255,255,.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 900; color: #fff; }
         .sb-name { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; }
-        .sb-sub { font-size: 12px; color: rgba(255,255,255,.6); font-family: 'DM Sans', sans-serif; word-break: break-all; }
-        .sb-member { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 6px; font-family: 'DM Sans', sans-serif; }
+        .sb-sub { font-size: 12px; color: rgba(255,255,255,.6); font-family: var(--font-dm-sans, 'DM Sans', sans-serif); word-break: break-all; }
+        .sb-member { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 6px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
 
         /* Sidebar stats */
         .sb-stats { display: flex; align-items: center; justify-content: space-around; padding: 14px 12px; border-bottom: 1px solid #f0ece6; margin-top: -4px; }
         .sb-stat { text-align: center; flex: 1; }
         .sb-stat-val { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: #1a3a1e; }
-        .sb-stat-lbl { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .4px; font-family: 'DM Sans', sans-serif; margin-top: 2px; }
+        .sb-stat-lbl { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .4px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); margin-top: 2px; }
         .sb-stat-div { width: 1px; height: 32px; background: #eee; }
 
         /* Sidebar nav */
         .sb-nav { padding: 6px 0 8px; }
-        .sb-item { display: flex; align-items: center; gap: 11px; padding: 12px 20px; cursor: pointer; transition: all .2s; border: none; background: none; width: 100%; text-align: left; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; color: #555; border-left: 3px solid transparent; position: relative; text-decoration: none; }
+        .sb-item { display: flex; align-items: center; gap: 11px; padding: 12px 20px; cursor: pointer; transition: all .2s; border: none; background: none; width: 100%; text-align: left; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); font-size: 14px; font-weight: 600; color: #555; border-left: 3px solid transparent; position: relative; text-decoration: none; }
         .sb-item:hover { background: rgba(26,58,30,.05); color: #1a3a1e; }
         .sb-item.active { background: linear-gradient(90deg, rgba(26,58,30,.08), transparent); color: #1a3a1e; border-left-color: #1a3a1e; }
         .sb-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
         .sb-label { flex: 1; }
-        .sb-badge { background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; font-family: 'DM Sans', sans-serif; }
+        .sb-badge { background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .sb-div { height: 1px; background: #f0ece6; margin: 6px 0; }
         .sb-wishlist { color: #c0392b; }
         .sb-wishlist:hover { background: rgba(192,57,43,.05); color: #c0392b; }
@@ -681,14 +706,14 @@ export default function AccountPage() {
         .panel-section { display: flex; flex-direction: column; gap: 16px; }
         .panel-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
         .panel-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: #1a3a1e; }
-        .panel-count { font-size: 14px; color: #aaa; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+        .panel-count { font-size: 14px; color: #aaa; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); font-weight: 500; }
 
         /* Order summary strip */
         .order-summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
         @media(max-width: 600px) { .order-summary-strip { grid-template-columns: repeat(2, 1fr); } }
         .oss-item { background: #fff; border-radius: 14px; padding: 14px 16px; border: 1px solid #ede9e3; display: flex; flex-direction: column; gap: 4px; }
         .oss-num { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; }
-        .oss-lbl { font-size: 11px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .4px; font-family: 'DM Sans', sans-serif; }
+        .oss-lbl { font-size: 11px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .4px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .oss-delivered .oss-num { color: #2e7d32; }
         .oss-active .oss-num { color: #5e35b1; }
         .oss-cancelled .oss-num { color: #c0392b; }
@@ -696,19 +721,19 @@ export default function AccountPage() {
 
         /* Card */
         .card { background: #fff; border-radius: 20px; padding: 28px; box-shadow: 0 2px 20px rgba(26,58,30,.07); border: 1px solid #ede9e3; }
-        .card-section-title { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #b8a882; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #f5f0e8; }
+        .card-section-title { font-family: var(--font-dm-sans, 'DM Sans', sans-serif); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #b8a882; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #f5f0e8; }
 
         /* Orders toolbar */
         .orders-toolbar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
         .search-wrap { position: relative; display: flex; align-items: center; }
         .search-icon { position: absolute; left: 14px; font-size: 14px; }
-        .orders-search { width: 100%; padding: 11px 40px 11px 40px; border: 1.5px solid #e8e3db; border-radius: 12px; font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none; transition: border-color .2s; background: #fafaf8; color: #1a1a1a; }
+        .orders-search { width: 100%; padding: 11px 40px 11px 40px; border: 1.5px solid #e8e3db; border-radius: 12px; font-size: 14px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); outline: none; transition: border-color .2s; background: #fafaf8; color: #1a1a1a; }
         .orders-search:focus { border-color: #1a3a1e; background: #fff; }
         .orders-search::placeholder { color: #bbb; }
         .search-clear { position: absolute; right: 12px; background: none; border: none; cursor: pointer; font-size: 13px; color: #aaa; padding: 4px; }
         .search-clear:hover { color: #555; }
         .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
-        .filter-btn { padding: 8px 16px; border-radius: 10px; border: 1.5px solid #e8e3db; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; color: #666; }
+        .filter-btn { padding: 8px 16px; border-radius: 10px; border: 1.5px solid #e8e3db; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: all .2s; color: #666; }
         .filter-btn:hover { border-color: #1a3a1e; color: #1a3a1e; }
         .filter-btn.active { background: #1a3a1e; color: #fff; border-color: #1a3a1e; }
 
@@ -728,9 +753,9 @@ export default function AccountPage() {
         .oc-hdr { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #f0ece6; margin-bottom: 14px; }
         .oc-hdr-left {}
         .oc-num { font-weight: 700; font-size: 13px; color: #1a3a1e; font-family: 'DM Mono', monospace; letter-spacing: .5px; }
-        .oc-date { font-size: 12px; color: #aaa; margin-top: 3px; font-family: 'DM Sans', sans-serif; }
+        .oc-date { font-size: 12px; color: #aaa; margin-top: 3px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .oc-hdr-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .oc-badge { padding: 4px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; font-family: 'DM Sans', sans-serif; }
+        .oc-badge { padding: 4px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .badge-confirmed,.badge-processing { background: #e8f5e9; color: #1b5e20; border: 1px solid #c8e6c9; }
         .badge-packed { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
         .badge-shipped { background: #ede7f6; color: #4527a0; border: 1px solid #d1c4e9; }
@@ -739,18 +764,18 @@ export default function AccountPage() {
         .badge-cancelled { background: #fdecea; color: #b71c1c; border: 1px solid #ffcdd2; }
         .badge-returned,.badge-return_requested,.badge-return_approved,.badge-return_received,.badge-refunded,.badge-refund_initiated,.badge-refund_completed,.badge-return_rejected { background: #fce4ec; color: #880e4f; border: 1px solid #f8bbd0; }
         .oc-total { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 18px; color: #1a3a1e; }
-        .oc-pay { font-size: 12px; color: #999; font-family: 'DM Sans', sans-serif; }
+        .oc-pay { font-size: 12px; color: #999; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .oc-items-row { margin-bottom: 12px; }
         .oc-imgs { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
         .oc-img-box { width: 56px; height: 56px; border-radius: 10px; border: 1.5px solid #ede9e3; overflow: hidden; background: #f5f0e8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .oc-img-more { width: 56px; height: 56px; border-radius: 10px; background: #f5f0e8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #888; border: 1.5px solid #ede9e3; }
-        .oc-items-names { font-size: 13px; color: #666; line-height: 1.5; font-family: 'DM Sans', sans-serif; }
-        .oc-status-msg { font-size: 12px; font-weight: 600; color: #2e7d32; margin-bottom: 10px; font-family: 'DM Sans', sans-serif; background: #f0faf0; padding: 7px 12px; border-radius: 8px; display: inline-block; }
-        .track-chip { display: inline-flex; align-items: center; gap: 6px; background: #1a3a1e; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-bottom: 12px; font-family: 'DM Sans', sans-serif; transition: background .2s; }
+        .oc-items-names { font-size: 13px; color: #666; line-height: 1.5; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .oc-status-msg { font-size: 12px; font-weight: 600; color: #2e7d32; margin-bottom: 10px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); background: #f0faf0; padding: 7px 12px; border-radius: 8px; display: inline-block; }
+        .track-chip { display: inline-flex; align-items: center; gap: 6px; background: #1a3a1e; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-bottom: 12px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: background .2s; }
         .track-chip:hover { background: #2d5233; }
         .oc-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0ece6; }
         .oc-actions-left { display: flex; gap: 8px; flex-wrap: wrap; }
-        .action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 9px; font-size: 12px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s; text-decoration: none; border: 1.5px solid transparent; }
+        .action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 9px; font-size: 12px; font-weight: 600; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); cursor: pointer; transition: all .2s; text-decoration: none; border: 1.5px solid transparent; }
         .action-view { background: #f0f7f4; color: #1a3a1e; border-color: #c8e6c9; }
         .action-view:hover { background: #1a3a1e; color: #fff; border-color: #1a3a1e; }
         .action-invoice { background: #fafafa; color: #555; border-color: #e0e0e0; }
@@ -764,11 +789,11 @@ export default function AccountPage() {
         .addr-card { border: 1.5px solid #ede9e3; border-radius: 14px; padding: 18px; margin-bottom: 12px; }
         .addr-default { border-color: #a5d6a7; background: #f6fbf6; }
         .addr-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .addr-label { font-weight: 700; font-size: 13px; color: #1a3a1e; font-family: 'DM Sans', sans-serif; }
+        .addr-label { font-weight: 700; font-size: 13px; color: #1a3a1e; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .addr-tag { background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .5px; }
-        .addr-line { font-size: 13px; color: #555; line-height: 1.8; font-family: 'DM Sans', sans-serif; }
+        .addr-line { font-size: 13px; color: #555; line-height: 1.8; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .addr-actions { display: flex; gap: 8px; margin-top: 12px; }
-        .addr-btn { padding: 7px 16px; border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #c8e6c9; color: #1a3a1e; background: #fff; font-family: 'DM Sans', sans-serif; transition: all .2s; }
+        .addr-btn { padding: 7px 16px; border-radius: 9px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #c8e6c9; color: #1a3a1e; background: #fff; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: all .2s; }
         .addr-btn:hover { background: #1a3a1e; color: #fff; border-color: #1a3a1e; }
         .addr-del { border-color: #ffcdd2; color: #c0392b; }
         .addr-del:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
@@ -778,14 +803,14 @@ export default function AccountPage() {
         .form-full { grid-column: 1/-1; }
         @media(max-width: 500px) { .form-grid { grid-template-columns: 1fr; } }
         .form-actions { display: flex; align-items: center; gap: 14px; }
-        .f-lbl { font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; font-family: 'DM Sans', sans-serif; }
-        .f-inp { width: 100%; padding: 12px 14px; border: 1.5px solid #e8e3db; border-radius: 11px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: #1a1a1a; transition: border-color .2s, box-shadow .2s; outline: none; background: #fafaf8; }
+        .f-lbl { font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .f-inp { width: 100%; padding: 12px 14px; border: 1.5px solid #e8e3db; border-radius: 11px; font-size: 14px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); color: #1a1a1a; transition: border-color .2s, box-shadow .2s; outline: none; background: #fafaf8; }
         .f-inp:focus { border-color: #1a3a1e; background: #fff; box-shadow: 0 0 0 3px rgba(26,58,30,.08); }
         .f-err { border-color: #e74c3c !important; background: #fff9f9; }
         .f-disabled { opacity: .55; cursor: not-allowed; background: #f5f5f5 !important; }
-        .f-hint { font-size: 11px; color: #bbb; margin-top: 5px; font-family: 'DM Sans', sans-serif; }
-        .err-txt { font-size: 11px; color: #e74c3c; margin-top: 5px; font-weight: 600; font-family: 'DM Sans', sans-serif; }
-        .save-msg { font-size: 13px; color: #2d6a4f; font-weight: 600; font-family: 'DM Sans', sans-serif; }
+        .f-hint { font-size: 11px; color: #bbb; margin-top: 5px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .err-txt { font-size: 11px; color: #e74c3c; margin-top: 5px; font-weight: 600; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .save-msg { font-size: 13px; color: #2d6a4f; font-weight: 600; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .phone-prefix { padding: 12px 13px; background: #f5f0e8; border-radius: 11px; font-size: 14px; font-weight: 700; color: #666; flex-shrink: 0; border: 1.5px solid #e8e3db; }
 
         /* Password */
@@ -797,31 +822,31 @@ export default function AccountPage() {
         .pw-weak { background: #ef5350; width: 33%; }
         .pw-medium { background: #ffa726; width: 66%; }
         .pw-strong { background: #43a047; width: 100%; }
-        .pw-strength-lbl { font-size: 11px; font-weight: 700; color: #888; font-family: 'DM Sans', sans-serif; }
-        .match-msg { font-size: 12px; color: #2e7d32; font-weight: 600; margin-top: 5px; font-family: 'DM Sans', sans-serif; }
+        .pw-strength-lbl { font-size: 11px; font-weight: 700; color: #888; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .match-msg { font-size: 12px; color: #2e7d32; font-weight: 600; margin-top: 5px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
 
         /* Buttons */
-        .btn-primary { background: linear-gradient(135deg, #1a3a1e, #2d5233); color: #fff; border: none; padding: 12px 26px; border-radius: 11px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .btn-primary { background: linear-gradient(135deg, #1a3a1e, #2d5233); color: #fff; border: none; padding: 12px 26px; border-radius: 11px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: all .2s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
         .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(26,58,30,.28); }
         .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-        .btn-secondary { background: #fff; color: #1a3a1e; border: 1.5px solid #c8e6c9; padding: 11px 22px; border-radius: 11px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; }
+        .btn-secondary { background: #fff; color: #1a3a1e; border: 1.5px solid #c8e6c9; padding: 11px 22px; border-radius: 11px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: all .2s; }
         .btn-secondary:hover { background: #f0f7f4; }
 
         /* Empty & login */
         .empty-state { text-align: center; padding: 52px 20px; }
         .empty-icon { font-size: 52px; margin-bottom: 16px; }
         .empty-title { font-family: 'Playfair Display', serif; font-size: 22px; color: #1a3a1e; margin-bottom: 8px; font-weight: 700; }
-        .empty-sub { font-size: 14px; color: #999; margin-bottom: 24px; font-family: 'DM Sans', sans-serif; line-height: 1.6; }
+        .empty-sub { font-size: 14px; color: #999; margin-bottom: 24px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); line-height: 1.6; }
         .login-wall { max-width: 440px; margin: 80px auto; background: #fff; border-radius: 24px; padding: 52px 36px; text-align: center; box-shadow: 0 4px 32px rgba(0,0,0,.07); border: 1px solid #ede9e3; }
         .lw-icon { font-size: 52px; margin-bottom: 16px; }
         .lw-title { font-family: 'Playfair Display', serif; font-size: 28px; color: #1a3a1e; margin-bottom: 10px; font-weight: 900; }
-        .lw-sub { font-size: 14px; color: #999; margin-bottom: 28px; line-height: 1.7; font-family: 'DM Sans', sans-serif; }
+        .lw-sub { font-size: 14px; color: #999; margin-bottom: 28px; line-height: 1.7; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
 
         /* Loading */
         .acc-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f4f0eb; }
         .loading-inner { text-align: center; }
-        .loading-text { color: #aaa; font-size: 14px; margin-top: 12px; font-family: 'DM Sans', sans-serif; }
-        .loading-orders { text-align: center; padding: 48px 20px; color: #aaa; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+        .loading-text { color: #aaa; font-size: 14px; margin-top: 12px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
+        .loading-orders { text-align: center; padding: 48px 20px; color: #aaa; font-size: 14px; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .loading-orders .acc-spinner { margin: 0 auto 12px; }
         .acc-spinner { width: 28px; height: 28px; border: 2.5px solid #e8e3db; border-top-color: #1a3a1e; border-radius: 50%; animation: acc-spin 1s linear infinite; margin: 0 auto 12px; }
         @keyframes acc-spin { to { transform: rotate(360deg); } }
@@ -830,13 +855,20 @@ export default function AccountPage() {
         .mob-tabs { display: none; }
         @media(max-width: 900px) {
           .mob-tabs { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ede9e3; z-index: 100; box-shadow: 0 -2px 20px rgba(0,0,0,.08); }
-          .mob-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 4px; border: none; background: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 9px; font-weight: 700; color: #bbb; gap: 3px; transition: color .2s; }
+          .mob-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 4px; border: none; background: none; cursor: pointer; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); font-size: 9px; font-weight: 700; color: #bbb; gap: 3px; transition: color .2s; }
           .mob-tab.active { color: #1a3a1e; }
           .mt-icon { font-size: 19px; }
         }
 
+
+        /* Add address */
+        .add-addr-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 14px 18px; border: 2px dashed #c8e6c9; border-radius: 14px; background: #f6fbf6; color: #2e7d32; font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); transition: all .2s; margin-top: 4px; }
+        .add-addr-btn:hover { border-color: #1a3a1e; background: #f0f7f4; color: #1a3a1e; }
+        .addr-add-form { border: 1.5px solid #c8e6c9; border-radius: 16px; padding: 20px; background: #f6fbf6; margin-top: 8px; }
+        .addr-add-title { font-family: var(--font-dm-sans, 'DM Sans', sans-serif); font-size: 14px; font-weight: 700; color: #1a3a1e; margin-bottom: 18px; }
+
         /* Toast */
-        .acc-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1a3a1e; color: #fff; padding: 11px 22px; border-radius: 12px; font-size: 13px; font-weight: 600; z-index: 9999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,.18); animation: toast-in .25s ease; font-family: 'DM Sans', sans-serif; }
+        .acc-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1a3a1e; color: #fff; padding: 11px 22px; border-radius: 12px; font-size: 13px; font-weight: 600; z-index: 9999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,.18); animation: toast-in .25s ease; font-family: var(--font-dm-sans, 'DM Sans', sans-serif); }
         .acc-toast-error { background: #c0392b; }
         @keyframes toast-in { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @media(max-width: 768px) { .acc-toast { bottom: 72px; font-size: 12px; max-width: 88vw; white-space: normal; text-align: center; } }

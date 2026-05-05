@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Playfair_Display, Lato } from 'next/font/google'
+import { Inter, Playfair_Display, Lato, DM_Sans } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { supabase } from '@/lib/supabase'
@@ -23,6 +23,12 @@ const lato = Lato({
   variable: '--font-lato',
   subsets: ['latin'],
   weight: ['300', '400', '700', '900'],
+})
+
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -114,7 +120,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
+      <body className={`${inter.variable} ${playfair.variable} ${lato.variable} ${dmSans.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         <Providers>
           <Header settings={settings} categories={categories} states={states} />
           <main className="min-h-screen">
