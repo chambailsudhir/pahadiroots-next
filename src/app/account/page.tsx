@@ -213,6 +213,11 @@ export default function AccountPage() {
     catch { toast$('Failed to remove address','error') }
   }
 
+  // ── Render: mounted guard — prevents ALL hydration mismatches ──────────
+  // Zustand persist reads localStorage which doesn't exist on server.
+  // Returning null until client mount eliminates React errors #418/#423/#425.
+  if (!mounted) return null
+
   // ── Render: Loading ────────────────────────────────────────────────────
   if (!loaded) return (
     <div className="acc-loading">
@@ -530,7 +535,10 @@ export default function AccountPage() {
                     <div className="form-grid">
                       <div>
                         <div className="f-lbl">Label * (e.g. Home, Office)</div>
-                        <input className={`f-inp${newAddrErr.label?' f-err':''}`} value={newAddr.label} onChange={e=>{setNewAddr(a=>({...a,label:e.target.value}));setNewAddrErr(er=>({...er,label:''}))}} placeholder="Home / Office / Parents"/>
+                        <select className={`f-inp${newAddrErr.label?' f-err':''}`} value={newAddr.label} onChange={e=>{setNewAddr(a=>({...a,label:e.target.value}));setNewAddrErr(er=>({...er,label:''}))}}>
+                          <option value="">Select label…</option>
+                          {['Home','Office','Parents','Friends','Partner','Warehouse','Other'].map(l=><option key={l} value={l}>{l}</option>)}
+                        </select>
                         {newAddrErr.label&&<div className="err-txt">{newAddrErr.label}</div>}
                       </div>
                       <div>
