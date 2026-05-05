@@ -6,15 +6,48 @@ import { useUserStore } from '@/store/userStore'
 
 type AuthTab = 'email' | 'signup'
 
-async function callAuth(action: string, body: any = {}) {
+async function callAuth(action: string, body: any = {}, token?: string | null) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = 'Bearer ' + token
   const res  = await fetch('/api/auth', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ action, ...body }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || 'Auth error')
   return data
+}
+
+// Handle Google OAuth tokens from URL hash (PKCE callback)
+async function handleGoogleHashTokens(hash: string, setUser: any, closeAuth: () => void) {
+  const params = new URLSearchParams(hash.replace(/^#/, ''))
+  const accessToken  = params.get('access_token')
+  const refreshToken = params.get('refresh_token')
+  if (!accessToken) return false
+
+  try {
+    // Clean the URL immediately
+    window.history.replaceState({}, '', window.location.pathname + window.location.search)
+
+    const data = await callAuth('google_callback', { access_token: accessToken, refresh_token: refreshToken })
+    if (data.access_token) {
+      try { localStorage.setItem('pr_auth_token', data.access_token) } catch {}
+      if (data.refresh_token) { try { localStorage.setItem('pr_auth_refresh', data.refresh_token) } catch {} }
+      if (data.profile) { try { localStorage.setItem('pr_auth_profile', JSON.stringify(data.profile)) } catch {} }
+    }
+    setUser({
+      id:    data.user?.id || '',
+      email: data.user?.email || '',
+      name:  data.profile?.first_name || '',
+      phone: data.profile?.phone || '',
+    })
+    closeAuth()
+    return true
+  } catch (e) {
+    console.error('Google token exchange failed:', e)
+    return false
+  }
 }
 
 export default function AuthModal() {
@@ -34,6 +67,14 @@ export default function AuthModal() {
   const [fpEmail, setFPEmail] = useState('')
   const [fpSent,  setFPSent]  = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
+
+  // Handle Google OAuth PKCE tokens in URL hash after redirect
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token=') && hash.includes('token_type=bearer')) {
+      handleGoogleHashTokens(hash, setUser, closeAuth)
+    }
+  }, []) // eslint-disable-line
 
   useEffect(() => {
     if (isAuthOpen) {
@@ -55,7 +96,7 @@ export default function AuthModal() {
     if (!email.trim() || !pass.trim()) { setError('Please enter email and password'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      const data = await callAuth('login_email', { email: email.trim(), password: pass })
+      const data = await callAuth('email_login', { email: email.trim(), password: pass })
       if (data.access_token) {
         try { localStorage.setItem('pr_auth_token', data.access_token) } catch {}
         if (data.refresh_token) { try { localStorage.setItem('pr_auth_refresh', data.refresh_token) } catch {} }
@@ -79,9 +120,9 @@ export default function AuthModal() {
     if (pass.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      await callAuth('register_email', {
+      await callAuth('email_signup', {
         email: email.trim(), password: pass,
-        name: [fname, lname].filter(Boolean).join(' '),
+        full_name: [fname, lname].filter(Boolean).join(' '),
         phone: phone ? '+91' + phone.replace(/\D/g,'') : '',
       })
       setSuccess('✅ Account created! Check your email to verify.')
