@@ -10,6 +10,7 @@ import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
 import AuthModal from '@/components/auth/AuthModal'
+import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 
 const inter = Inter({ variable: '--font-geist-sans', subsets: ['latin'] })
 const playfair = Playfair_Display({
@@ -125,6 +126,7 @@ export default async function RootLayout({
           <SearchOverlay />
           <MobileMenu settings={settings} categories={categories} states={states} />
           <AuthModal />
+          <GoogleAuthHandler />
         </Providers>
       </body>
     </html>

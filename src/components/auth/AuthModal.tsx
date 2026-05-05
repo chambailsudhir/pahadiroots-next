@@ -19,35 +19,17 @@ async function callAuth(action: string, body: any = {}, token?: string | null) {
   return data
 }
 
-// Handle Google OAuth tokens from URL hash (PKCE callback)
-async function handleGoogleHashTokens(hash: string, setUser: any, closeAuth: () => void) {
-  const params = new URLSearchParams(hash.replace(/^#/, ''))
-  const accessToken  = params.get('access_token')
-  const refreshToken = params.get('refresh_token')
-  if (!accessToken) return false
-
-  try {
-    // Clean the URL immediately
-    window.history.replaceState({}, '', window.location.pathname + window.location.search)
-
-    const data = await callAuth('google_callback', { access_token: accessToken, refresh_token: refreshToken })
-    if (data.access_token) {
-      try { localStorage.setItem('pr_auth_token', data.access_token) } catch {}
-      if (data.refresh_token) { try { localStorage.setItem('pr_auth_refresh', data.refresh_token) } catch {} }
-      if (data.profile) { try { localStorage.setItem('pr_auth_profile', JSON.stringify(data.profile)) } catch {} }
-    }
-    setUser({
-      id:    data.user?.id || '',
-      email: data.user?.email || '',
-      name:  data.profile?.first_name || '',
-      phone: data.profile?.phone || '',
-    })
-    closeAuth()
-    return true
-  } catch (e) {
-    console.error('Google token exchange failed:', e)
-    return false
-  }
+// PKCE helpers — same as old site's auth-frontend.js
+function genVerifier(): string {
+  const arr = new Uint8Array(32)
+  crypto.getRandomValues(arr)
+  return btoa(String.fromCharCode(...Array.from(arr)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+async function genChallenge(v: string): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))
+  return btoa(String.fromCharCode(...Array.from(new Uint8Array(hash))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 export default function AuthModal() {
@@ -67,14 +49,6 @@ export default function AuthModal() {
   const [fpEmail, setFPEmail] = useState('')
   const [fpSent,  setFPSent]  = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
-
-  // Handle Google OAuth PKCE tokens in URL hash after redirect
-  useEffect(() => {
-    const hash = window.location.hash
-    if (hash && hash.includes('access_token=') && hash.includes('token_type=bearer')) {
-      handleGoogleHashTokens(hash, setUser, closeAuth)
-    }
-  }, []) // eslint-disable-line
 
   useEffect(() => {
     if (isAuthOpen) {
@@ -134,8 +108,20 @@ export default function AuthModal() {
   async function handleGoogle() {
     setLoading(true); setError('')
     try {
-      const data = await callAuth('google_oauth')
-      if (data.url) window.location.href = data.url
+      // Full PKCE flow client-side — mirrors old site's loginWithGoogle()
+      const verifier   = genVerifier()
+      const challenge  = await genChallenge(verifier)
+      localStorage.setItem('pr_pkce_verifier', verifier)
+
+      const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+      const redirectTo    = window.location.origin + '/'
+      const url = SUPABASE_URL + '/auth/v1/authorize'
+        + '?provider=google'
+        + '&redirect_to=' + encodeURIComponent(redirectTo)
+        + '&code_challenge=' + challenge
+        + '&code_challenge_method=S256'
+
+      window.location.href = url
     } catch (err: any) { setError(err.message || 'Google login failed'); setLoading(false) }
   }
 
