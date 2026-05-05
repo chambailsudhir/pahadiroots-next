@@ -44,6 +44,7 @@ export default function AuthModal() {
   const [phone,   setPhone]   = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
+  const [fieldErr, setFieldErr] = useState<Record<string,string>>({})
   const [success, setSuccess] = useState('')
   const [showFP,  setShowFP]  = useState(false)
   const [fpEmail, setFPEmail] = useState('')
@@ -65,12 +66,20 @@ export default function AuthModal() {
 
   if (!isAuthOpen) return null
 
+  // ── Validation helpers ──────────────────────────────────────────────
+  function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim()) }
+  function isValidPhone(p: string) { return /^[6-9]\d{9}$/.test(p.replace(/\D/g,'')) }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim() || !pass.trim()) { setError('Please enter email and password'); return }
+    const em = email.trim()
+    if (!em)         { setError('Please enter your email address'); return }
+    if (!isValidEmail(em)) { setError('Please enter a valid email address (e.g. you@example.com)'); return }
+    if (!pass)       { setError('Please enter your password'); return }
+    if (pass.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
-      const data = await callAuth('email_login', { email: email.trim(), password: pass })
+      const data = await callAuth('email_login', { email: em, password: pass })
       if (data.access_token) {
         try { localStorage.setItem('pr_auth_token', data.access_token) } catch {}
         if (data.refresh_token) { try { localStorage.setItem('pr_auth_refresh', data.refresh_token) } catch {} }
@@ -78,30 +87,49 @@ export default function AuthModal() {
       }
       setUser({
         id:    data.user?.id || '',
-        email: data.user?.email || email,
+        email: data.user?.email || em,
         name:  data.profile?.first_name || data.user?.user_metadata?.full_name || '',
         phone: data.profile?.phone || '',
       })
       setSuccess('✅ Welcome back!')
       setTimeout(() => { closeAuth(); window.location.reload() }, 700)
-    } catch (err: any) { setError(err.message || 'Login failed.') }
+    } catch (err: any) {
+      const msg = err.message || ''
+      if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('wrong')) {
+        setError('❌ Incorrect email or password. Please try again.')
+      } else {
+        setError(msg || 'Login failed. Please try again.')
+      }
+    }
     finally { setLoading(false) }
   }
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim() || !pass.trim() || !fname.trim()) { setError('Please fill all required fields'); return }
-    if (pass.length < 6) { setError('Password must be at least 6 characters'); return }
+    const em = email.trim()
+    if (!fname.trim())    { setError('Please enter your first name'); return }
+    if (!em)              { setError('Please enter your email address'); return }
+    if (!isValidEmail(em)) { setError('Please enter a valid email (e.g. you@example.com)'); return }
+    if (!pass)            { setError('Please enter a password'); return }
+    if (pass.length < 6)  { setError('Password must be at least 6 characters'); return }
+    if (phone && !isValidPhone(phone)) { setError('Enter a valid 10-digit Indian mobile number (starts with 6-9)'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
       await callAuth('email_signup', {
-        email: email.trim(), password: pass,
-        full_name: [fname, lname].filter(Boolean).join(' '),
+        email: em, password: pass,
+        full_name: [fname.trim(), lname.trim()].filter(Boolean).join(' '),
         phone: phone ? '+91' + phone.replace(/\D/g,'') : '',
       })
       setSuccess('✅ Account created! Check your email to verify.')
       setTimeout(() => setTab('email'), 2000)
-    } catch (err: any) { setError(err.message || 'Registration failed.') }
+    } catch (err: any) {
+      const msg = err.message || ''
+      if (msg.toLowerCase().includes('already')) {
+        setError('An account with this email already exists. Please login instead.')
+      } else {
+        setError(msg || 'Registration failed. Please try again.')
+      }
+    }
     finally { setLoading(false) }
   }
 
@@ -185,11 +213,12 @@ export default function AuthModal() {
                     <div className="am-greeting-sub">Login to manage your orders &amp; account</div>
                     <div className="am-field">
                       <label className="am-lbl">Email Address</label>
-                      <input ref={emailRef} className="am-inp" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+                      <input ref={emailRef} className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
+                      {fieldErr.email && <span className="am-field-err">{fieldErr.email}</span>}
                     </div>
                     <div className="am-field" style={{ position: 'relative' }}>
                       <label className="am-lbl">Password</label>
-                      <input className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Your password" />
+                      <input className={`am-inp${fieldErr.pass?' am-inp-err':''}`} type="password" value={pass} onChange={e => { setPass(e.target.value); setFieldErr(f=>({...f,pass:''})) }} placeholder="Your password" autoComplete="current-password" />
                       <button type="button" className="am-fp-link" onClick={() => { setShowFP(true); setError(''); setFPEmail(email) }}>Forgot Password?</button>
                     </div>
                     {error   && <div className="am-err">{error}</div>}
@@ -212,7 +241,8 @@ export default function AuthModal() {
                     </div>
                     <div className="am-field">
                       <label className="am-lbl">Email Address *</label>
-                      <input className="am-inp" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+                      <input className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
+                      {fieldErr.email && <span className="am-field-err">{fieldErr.email}</span>}
                     </div>
                     <div className="am-field">
                       <label className="am-lbl">Phone (Optional)</label>
@@ -275,6 +305,8 @@ export default function AuthModal() {
           .am-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:#eee}
           .am-divider span{background:#fff;padding:0 12px;font-size:11px;color:#bbb;position:relative;font-weight:600}
           .am-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+          .am-inp-err{border-color:#e74c3c!important;background:#fff9f9}
+          .am-field-err{font-size:11px;color:#e74c3c;font-weight:700;margin-top:2px}
           .am-lbl{font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.5px}
           .am-inp{padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;font-family:inherit;color:#1a1a1a;transition:border-color .2s;outline:none;width:100%;box-sizing:border-box}
           .am-inp:focus{border-color:#1a3a1e}
