@@ -25,8 +25,12 @@ export default function Header({ settings, categories = [], states = [] }: Props
 
   const [scrolled, setScrolled] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
+  // ── Mount guard: Zustand persist reads localStorage which doesn't exist on server.
+  // Rendering persisted values before mount causes React hydration errors #418/#423/#425.
+  const [mounted,  setMounted]  = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -79,7 +83,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           {showWishlist && (
             <Link href="/wishlist" aria-label="Wishlist" className="old-nib" style={{ position: 'relative' }}>
               ❤️
-              {wishlist.length > 0 && (
+              {mounted && wishlist.length > 0 && (
                 <span className="old-wl-badge">{wishlist.length > 9 ? '9+' : wishlist.length}</span>
               )}
             </Link>
@@ -92,16 +96,16 @@ export default function Header({ settings, categories = [], states = [] }: Props
             onMouseLeave={() => setAcctOpen(false)}
           >
             <Link href="/account" className="old-nib" aria-label="My Account" style={{ position: 'relative' }}>
-              {user && initials
+              {mounted && user && initials
                 ? <span className="old-acct-av">{initials}</span>
                 : <span>👤</span>}
-              {user && <span className="old-acct-dot" />}
+              {mounted && user && <span className="old-acct-dot" />}
             </Link>
 
             {acctOpen && (
               <div className="old-acct-dd">
                 <div className="old-dd-head">
-                  {user
+                  {mounted && user
                     ? <><div className="old-dd-name">Hi, {firstName}!</div><div className="old-dd-sub">{user.email || ''}</div></>
                     : <><div className="old-dd-name">Welcome!</div><div className="old-dd-sub">Login to manage your account</div></>}
                 </div>
@@ -115,7 +119,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
                   <span>👤</span> Profile &amp; Address
                 </Link>
                 <div className="old-dd-foot">
-                  {user
+                  {mounted && user
                     ? <Link href="/account" className="old-dd-btn" style={{ background: '#fdecea', color: '#c0392b' }} onClick={() => setAcctOpen(false)}>Logout</Link>
                     : <button className="old-dd-btn" onClick={() => { setAcctOpen(false); openAuth() }}>Login / Sign Up</button>}
                 </div>
@@ -133,7 +137,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           {/* Cart */}
           <button onClick={openCart} aria-label="Cart" className="old-cart-btn">
             🛒 Cart
-            {cartCount > 0 && (
+            {mounted && cartCount > 0 && (
               <span className="old-cbadge">{cartCount > 9 ? '9+' : cartCount}</span>
             )}
           </button>

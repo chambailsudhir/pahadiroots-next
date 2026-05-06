@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useAuth }    from './hooks/useAuth'
 import { useOrders }  from './hooks/useOrders'
@@ -13,13 +13,15 @@ import { getSavedAddresses, formatCurrency } from '@/lib/account/utils'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
 
-// ── Toast hook ────────────────────────────────────────────────
+// ── Toast hook — no memory leak, clears previous timer ───────
 function useToast() {
   const [toast,     setToast]     = useState('')
   const [toastType, setToastType] = useState<'success' | 'error'>('success')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   function show(msg: string, type: 'success' | 'error' = 'success') {
+    if (timerRef.current) clearTimeout(timerRef.current)
     setToast(msg); setToastType(type)
-    setTimeout(() => setToast(''), 3500)
+    timerRef.current = setTimeout(() => setToast(''), 3500)
   }
   return { toast, toastType, show }
 }
@@ -211,8 +213,8 @@ export default function AccountPage() {
                 )}
 
                 {/* Saved addresses */}
-                {savedAddrs.filter((a: any) => a.label !== 'Default').map((a: any) => (
-                  <div key={a.label} className="addr-card">
+                {savedAddrs.filter((a: any) => a.label !== 'Default').map((a: any, i: number) => (
+                  <div key={`${a.label}-${a.city || i}`} className="addr-card">
                     <div className="addr-header">
                       <div className="addr-label">📍 {a.label || 'Saved Address'}</div>
                     </div>
