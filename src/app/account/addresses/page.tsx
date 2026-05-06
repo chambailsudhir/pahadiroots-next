@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect} from 'react'
 import { useUserStore } from '@/store/userStore'
 import type { AddressLabel } from '@/types'
 
@@ -10,6 +10,9 @@ const INDIA_STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chha
 const EMPTY = { flat: '', area: '', city: '', state: 'Uttarakhand', pincode: '', label: 'Home' as AddressLabel }
 
 export default function AddressesPage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const user           = useUserStore(s => s.user)
   const savedAddresses = useUserStore(s => s.savedAddresses)
   const setAddresses   = useUserStore(s => s.setAddresses)
@@ -69,6 +72,8 @@ export default function AddressesPage() {
     } catch { /* local fallback */ }
     setAddresses(updated as any)
   }
+
+  if (!mounted) return null
 
   return (
     <div>

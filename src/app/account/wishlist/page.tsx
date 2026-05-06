@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { useUserStore } from '@/store/userStore'
@@ -10,6 +11,9 @@ import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product } from '@/types'
 
 export default function WishlistPage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const wishlist          = useUserStore(s => s.wishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
@@ -31,6 +35,8 @@ export default function WishlistPage() {
       return normalizeProducts(data ?? [])
     }
   )
+
+  if (!mounted) return null
 
   return (
     <div>

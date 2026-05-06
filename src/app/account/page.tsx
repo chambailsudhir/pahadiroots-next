@@ -45,6 +45,13 @@ export default function AccountPage() {
     if (auth.profile) profile.initFromProfile(auth.profile)
   }, [auth.profile]) // eslint-disable-line
 
+  // Auto-fetch orders once we have a token (no manual button needed)
+  useEffect(() => {
+    if (auth.token && auth.loggedIn && orders.orders === null && !orders.loading) {
+      orders.fetchOrders()
+    }
+  }, [auth.token, auth.loggedIn]) // eslint-disable-line
+
   if (!mounted) return null
 
   // ── Loading state ──────────────────────────────────────────
@@ -71,7 +78,7 @@ export default function AccountPage() {
 
   // ─────────────────────────────────────────────────────────
   return (
-    <div className="acc-wrap" suppressHydrationWarning>
+    <div className="acc-wrap">
       <div className="acc-page">
 
         {/* ── SIDEBAR ── */}
@@ -114,15 +121,7 @@ export default function AccountPage() {
               )}
 
               <div className="card">
-                {orders.loading ? <OrdersSkeleton /> : orders.orders === null ? (
-                  /* First load — trigger fetch */
-                  <div className="empty-state">
-                    <div className="empty-icon">📦</div>
-                    <div className="empty-title">Your orders</div>
-                    <p className="empty-sub">Loading your order history…</p>
-                    <button className="btn-primary" onClick={orders.fetchOrders}>Load Orders</button>
-                  </div>
-                ) : (
+                {(orders.loading || orders.orders === null) ? <OrdersSkeleton /> : (
                   <>
                     {/* Toolbar */}
                     <div className="orders-toolbar">

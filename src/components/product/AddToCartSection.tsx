@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect} from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useRouter } from 'next/navigation'
@@ -13,6 +13,9 @@ interface Props {
 }
 
 export default function AddToCartSection({ product, variants, settings }: Props) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const router    = useRouter()
   const addItem   = useCartStore(s => s.addItem)
   const openCart  = useUIStore(s => s.openCart)
@@ -77,6 +80,8 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   }
 
   const hasMore = variants.length > 3
+
+  if (!mounted) return null
 
   return (
     <div style={{ marginTop: '20px', position: 'relative', zIndex: 2 }}>

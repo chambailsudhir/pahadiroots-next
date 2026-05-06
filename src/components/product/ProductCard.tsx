@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
@@ -14,6 +15,9 @@ interface Props {
 }
 
 export default function ProductCard({ product, showWishlist = true, priority = false }: Props) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
   const isInWishlist       = useUserStore(s => s.isInWishlist)
@@ -81,6 +85,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     e.stopPropagation()
     inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
   }
+
+  if (!mounted) return null
 
   return (
     <Link

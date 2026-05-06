@@ -1,12 +1,15 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect} from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 
 export default function RelatedCard({ product: p }: { product: any }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const router   = useRouter()
   const addItem  = useCartStore(s => s.addItem)
   const openCart = useUIStore(s => s.openCart)
@@ -39,6 +42,8 @@ export default function RelatedCard({ product: p }: { product: any }) {
     setBtnText('✅ Added!')
     setTimeout(() => setBtnText('+ Add to Cart'), 1500)
   }
+
+  if (!mounted) return null
 
   return (
     <div
