@@ -37,6 +37,13 @@ export default function AccountPage() {
   const orders  = useOrders(auth.token, auth.setToken)
   const profile = useProfile(auth.token, auth.profile, auth.updateLocalProfile, showToast)
 
+  // All hooks MUST be declared before any early returns (Rules of Hooks)
+  const savedAddrs     = getSavedAddresses(auth.profile)
+  const savedAddrsList = useMemo(
+    () => savedAddrs.filter((a: any) => a.label !== 'Default'),
+    [auth.profile] // eslint-disable-line
+  )
+
   // ── Mount guard — eliminates ALL hydration errors ─────────
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { if (mounted) auth.init() }, [mounted]) // eslint-disable-line
@@ -73,13 +80,6 @@ export default function AccountPage() {
         <Link href="/?login=1" className="btn-primary">Sign In to Continue</Link>
       </div>
     </div>
-  )
-
-  const savedAddrs = getSavedAddresses(auth.profile)
-  // Memoized so filter doesn't run on every keystroke/state update
-  const savedAddrsList = useMemo(
-    () => savedAddrs.filter((a: any) => a.label !== 'Default'),
-    [auth.profile] // eslint-disable-line
   )
 
   // ─────────────────────────────────────────────────────────
