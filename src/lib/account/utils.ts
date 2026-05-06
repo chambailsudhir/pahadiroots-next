@@ -42,8 +42,15 @@ export function getOrderStatusMessage(o: any): string {
   return ''
 }
 
-export function getPaymentLabel(method: string | undefined): { label: string; cls: string } {
-  if (!method) return { label: '', cls: '' }
-  if (method === 'cod') return { label: '💵 COD', cls: 'oc-pay-cod' }
-  return { label: '💳 Online', cls: 'oc-pay-online' }
+export function getPaymentLabel(method: string | undefined | null): { label: string; cls: string } {
+  if (!method || method.trim() === '') return { label: '', cls: '' }
+  const m = method.toLowerCase().trim()
+  if (m === 'cod' || m === 'cash_on_delivery' || m === 'cash on delivery') {
+    return { label: '💵 COD', cls: 'oc-pay-cod' }
+  }
+  if (m === 'razorpay' || m === 'razorpay_online' || m === 'upi' || m === 'card' || m === 'online') {
+    return { label: '💳 Online', cls: 'oc-pay-online' }
+  }
+  // Unknown value — show nothing rather than wrong label
+  return { label: '', cls: '' }
 }

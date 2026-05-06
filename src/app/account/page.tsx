@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useAuth }    from './hooks/useAuth'
 import { useOrders }  from './hooks/useOrders'
@@ -8,6 +8,7 @@ import { useProfile } from './hooks/useProfile'
 import Sidebar        from './_components/Sidebar'
 import OrderCard      from './_components/OrderCard'
 import OrdersSkeleton from './_components/OrdersSkeleton'
+import ErrorBoundary  from '@/components/ui/ErrorBoundary'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import { getSavedAddresses, formatCurrency } from '@/lib/account/utils'
 
@@ -45,9 +46,9 @@ export default function AccountPage() {
     if (auth.profile) profile.initFromProfile(auth.profile)
   }, [auth.profile]) // eslint-disable-line
 
-  // Auto-fetch orders once we have a token (no manual button needed)
+  // Auto-fetch orders once we have a token — hasFetched prevents retry loops
   useEffect(() => {
-    if (auth.token && auth.loggedIn && orders.orders === null && !orders.loading) {
+    if (auth.token && auth.loggedIn && !orders.hasFetched && !orders.loading) {
       orders.fetchOrders()
     }
   }, [auth.token, auth.loggedIn]) // eslint-disable-line
@@ -75,6 +76,11 @@ export default function AccountPage() {
   )
 
   const savedAddrs = getSavedAddresses(auth.profile)
+  // Memoized so filter doesn't run on every keystroke/state update
+  const savedAddrsList = useMemo(
+    () => savedAddrs.filter((a: any) => a.label !== 'Default'),
+    [auth.profile] // eslint-disable-line
+  )
 
   // ─────────────────────────────────────────────────────────
   return (
@@ -89,7 +95,7 @@ export default function AccountPage() {
           authUser={auth.authUser}
           stats={orders.stats}
           onLogout={auth.logout}
-          onOrdersClick={() => { if (!orders.orders && auth.token) orders.fetchOrders() }}
+          onOrdersClick={() => { if (!orders.hasFetched && !orders.loading && auth.token) orders.fetchOrders() }}
         />
 
         {/* ── MAIN PANEL ── */}
@@ -97,6 +103,7 @@ export default function AccountPage() {
 
           {/* ══ ORDERS ══════════════════════════════════════ */}
           {tab === 'orders' && (
+            <ErrorBoundary section="Orders">
             <div className="panel-section">
               <div className="panel-header">
                 <div className="panel-title">My Orders</div>
@@ -139,13 +146,13 @@ export default function AccountPage() {
                         )}
                       </div>
                       <div className="filter-row">
-                        {[
-                          { key: 'all',       label: 'All' },
-                          { key: 'active',    label: 'Active' },
-                          { key: 'delivered', label: 'Delivered' },
-                          { key: 'returns',   label: 'Returns' },
-                          { key: 'cancelled', label: 'Cancelled' },
-                        ].map(f => (
+                        {([
+                          { key: 'all'       as const, label: 'All' },
+                          { key: 'active'    as const, label: 'Active' },
+                          { key: 'delivered' as const, label: 'Delivered' },
+                          { key: 'returns'   as const, label: 'Returns' },
+                          { key: 'cancelled' as const, label: 'Cancelled' },
+                        ] as const).map(f => (
                           <button
                             key={f.key}
                             className={`filter-btn${orders.filter === f.key ? ' active' : ''}`}
@@ -184,6 +191,7 @@ export default function AccountPage() {
                 )}
               </div>
             </div>
+            </ErrorBoundary>
           )}
 
           {/* ══ ADDRESSES ════════════════════════════════════ */}
@@ -212,8 +220,8 @@ export default function AccountPage() {
                 )}
 
                 {/* Saved addresses */}
-                {savedAddrs.filter((a: any) => a.label !== 'Default').map((a: any, i: number) => (
-                  <div key={`${a.label}-${a.city || i}`} className="addr-card">
+                {savedAddrsList.map((a: any, i: number) => (
+                  <div key={`${a.label}-${a.name || ''}-${a.city || ''}-${i}`} className="addr-card">
                     <div className="addr-header">
                       <div className="addr-label">📍 {a.label || 'Saved Address'}</div>
                     </div>
@@ -447,7 +455,7 @@ export default function AccountPage() {
           { key: 'profile',  icon: '👤', label: 'Profile'   },
           { key: 'password', icon: '🔒', label: 'Password'  },
         ] as const).map(it => (
-          <button key={it.key} className={`mob-tab${tab === it.key ? ' active' : ''}`} onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.orders && auth.token) orders.fetchOrders() }}>
+          <button key={it.key} className={`mob-tab${tab === it.key ? ' active' : ''}`} onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched && !orders.loading && auth.token) orders.fetchOrders() }}>
             <span className="mt-icon">{it.icon}</span>{it.label}
           </button>
         ))}

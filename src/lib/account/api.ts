@@ -22,7 +22,11 @@ async function callAuth(action: string, body: Record<string,unknown> = {}, token
     })
     clearTimeout(tid)
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `API error ${res.status}`)
+    if (!res.ok) {
+      const err = new Error(data.error || `API error ${res.status}`) as Error & { status?: number }
+      err.status = res.status
+      throw err
+    }
     return data
   } catch (e) {
     clearTimeout(tid)

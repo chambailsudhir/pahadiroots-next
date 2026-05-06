@@ -81,6 +81,7 @@ export const useCartStore = create<CartStore>()(
     {
       name:    'pr-cart',
       version: 1,
+      skipHydration: true,  // Prevent SSR/client mismatch — rehydrated manually in providers
     }
   )
 )

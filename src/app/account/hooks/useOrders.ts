@@ -3,27 +3,66 @@
 // ─────────────────────────────────────────────────────────────
 'use client'
 
-import { useState, useMemo } from 'react'
-import { accountApi, storage } from '@/lib/account/api'
+import { useState, useMemo, useRef } from 'react'
+import { accountApi } from '@/lib/account/api'
 import { ACTIVE_STATUSES, RETURN_STATUSES } from '@/lib/account/constants'
 
+// Typed filter — prevents silent string mismatch bugs
+export type OrderFilter = 'all' | 'active' | 'delivered' | 'returns' | 'cancelled'
+
+// Order types
+export interface OrderItem {
+  qty:       number
+  price:     number
+  name:      string
+  emoji:     string
+  image_url: string | null
+}
+
+export interface Order {
+  id:              string | number
+  order_number:    string
+  order_status:    string
+  _displayStatus:  string
+  payment_method:  string | null
+  payment_status:  string | null
+  total_amount:    number
+  created_at:      string
+  tracking_number: string | null
+  courier:         string | null
+  shipped_at:      string | null
+  delivered_at:    string | null
+  items:           OrderItem[]
+  _return:         unknown | null
+}
+
 export function useOrders(token: string | null, setToken: (t: string) => void) {
-  const [orders,  setOrders]  = useState<any[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [filter,  setFilter]  = useState('all')
-  const [search,  setSearch]  = useState('')
+  const [orders,       setOrders]     = useState<Order[] | null>(null)
+  const [loading,      setLoading]    = useState(false)
+  const [hasFetched,   setHasFetched] = useState(false)  // prevents infinite retry loop
+  const [filter,       setFilter]     = useState<OrderFilter>('all')
+  const [search,       setSearch]     = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function setSearchDebounced(val: string) {
+    setSearch(val)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(val), 300)
+  }
 
   async function fetchOrders() {
-    if (!token) return
+    if (!token || loading) return
     setLoading(true)
     try {
       const d = await accountApi.getOrders(token, (newTk) => setToken(newTk))
       setOrders(d.orders || [])
     } catch (e: any) {
       console.error('[useOrders] fetch failed:', e.message)
-      setOrders([])
+      setOrders([])  // set to empty array so UI shows "no orders" not infinite loader
     } finally {
       setLoading(false)
+      setHasFetched(true)
     }
   }
 
@@ -51,13 +90,13 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
         || (filter === 'delivered'  && s === 'delivered')
         || (filter === 'returns'    && RETURN_STATUSES.includes(s))
         || (filter === 'cancelled'  && s === 'cancelled')
-      const q  = search.toLowerCase().trim()
+      const q  = debouncedSearch.toLowerCase().trim()
       const mQ = !q
         || (o.order_number || '').toLowerCase().includes(q)
         || (o.items || []).some((i: any) => (i.name || '').toLowerCase().includes(q))
       return mF && mQ
     })
-  }, [orders, filter, search])
+  }, [orders, filter, debouncedSearch])
 
   function canReturn(o: any) {
     if ((o._displayStatus || o.order_status) !== 'delivered') return false
@@ -66,5 +105,5 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
     return days <= 7
   }
 
-  return { orders, loading, filter, setFilter, search, setSearch, filtered, stats, fetchOrders, canReturn }
+  return { orders, loading, hasFetched, filter, setFilter: setFilter as (f: OrderFilter) => void, search, setSearch: setSearchDebounced, filtered, stats, fetchOrders, canReturn }
 }

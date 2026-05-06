@@ -54,6 +54,7 @@ export const useUserStore = create<UserStore>()(
     {
       name:    'pr-user',
       version: 1,
+      skipHydration: true,  // Prevent SSR/client mismatch — rehydrated manually in providers
     }
   )
 )
