@@ -88,7 +88,7 @@ export default async function RootLayout({
     <html lang="en-IN" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a3a1e" />
-        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v5" />
+        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v6" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
@@ -130,9 +130,8 @@ export default async function RootLayout({
           <main className="min-h-screen">
             {children}
           </main>
-          <Footer settings={settings} />
-          {/* Global overlays — rendered once at root */}
           <ClientOnly>
+            <Footer settings={settings} />
             <CartDrawer settings={settings} />
             <SearchOverlay />
             <MobileMenu settings={settings} categories={categories} states={states} />
