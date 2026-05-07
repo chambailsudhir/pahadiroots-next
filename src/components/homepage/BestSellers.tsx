@@ -8,28 +8,37 @@ import type { Product } from '@/types'
 
 const SORTS = [
   { val: 'default',    label: 'Sort: Featured'     },
-  { val: 'price_asc',  label: 'Price: Low → High'  },
-  { val: 'price_desc', label: 'Price: High → Low'  },
+  { val: 'price_asc',  label: 'Price: Low -> High'  },
+  { val: 'price_desc', label: 'Price: High -> Low'  },
   { val: 'discount',   label: 'Best Discount'       },
-  { val: 'name',       label: 'Name A–Z'            },
+  { val: 'name',       label: 'Name A-Z'            },
 ]
 
 interface Cat { id: number; name: string; slug: string; emoji?: string }
 
+function shuffleProducts(products: Product[]): Product[] {
+  const copy = [...products]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
 function catEmoji(name: string): string {
   const n = name.toLowerCase()
-  if (n.includes('honey'))                        return '🍯'
-  if (n.includes('ghee'))                         return '🥛'
-  if (n.includes('herb') || n.includes('spice'))  return '🌿'
-  if (n.includes('tea'))                          return '🍵'
-  if (n.includes('rice') || n.includes('grain'))  return '🌾'
-  if (n.includes('oil'))                          return '🫚'
-  if (n.includes('juice'))                        return '🧃'
-  if (n.includes('shilajit'))                     return '🪨'
-  if (n.includes('jam') || n.includes('preserve')) return '🍓'
-  if (n.includes('pulse') || n.includes('dal'))   return '🫘'
-  if (n.includes('saffron'))                      return '🌸'
-  return '🌿'
+  if (n.includes('honey')) return 'Honey'
+  if (n.includes('ghee')) return 'Ghee'
+  if (n.includes('herb') || n.includes('spice')) return 'Spice'
+  if (n.includes('tea')) return 'Tea'
+  if (n.includes('rice') || n.includes('grain')) return 'Grain'
+  if (n.includes('oil')) return 'Oil'
+  if (n.includes('juice')) return 'Juice'
+  if (n.includes('shilajit')) return 'Shilajit'
+  if (n.includes('jam') || n.includes('preserve')) return 'Jam'
+  if (n.includes('pulse') || n.includes('dal')) return 'Dal'
+  if (n.includes('saffron')) return 'Saffron'
+  return 'Pure'
 }
 
 export default function BestSellers() {
@@ -41,14 +50,12 @@ export default function BestSellers() {
 
   useEffect(() => {
     setMounted(true)
-    // Fetch from store-data API (SERVICE KEY — bypasses RLS, returns product_images)
     fetch('/api/v1/store-data')
       .then(r => r.json())
       .then(sd => {
         const withImgs = applyProductImages(sd.products ?? [], sd.product_images ?? [])
-        const all = normalizeProducts(withImgs)
+        const all = shuffleProducts(normalizeProducts(withImgs))
         setAllProducts(all)
-        // Build category pills from REAL DB categories (same as old site buildFilterPills)
         const cats: Cat[] = (sd.categories ?? []).filter((c: any) => c.is_active !== false)
         setCategories(cats)
       })
@@ -57,14 +64,12 @@ export default function BestSellers() {
 
   if (!mounted) return null
 
-  // Filter by category
   let filtered = [...allProducts]
   if (activeCat !== 'all') {
     const cat = categories.find(c => c.slug === activeCat)
     if (cat) filtered = filtered.filter((p: any) => String(p.category_id) === String(cat.id))
   }
 
-  // Sort
   switch (sort) {
     case 'price_asc':  filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));  break
     case 'price_desc': filtered.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));  break
@@ -76,23 +81,19 @@ export default function BestSellers() {
       return db_ - da
     }); break
     case 'name':       filtered.sort((a, b) => a.name.localeCompare(b.name)); break
-    default: {
-      // featured: bestsellers first
+    default:
       filtered.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0))
-    }
   }
 
-  const shown = filtered.slice(0, 12)
+  const shown = filtered.slice(0, 8)
 
   return (
     <section className="sec" id="products" style={{ background: '#f5f0e8', padding: '36px 40px 48px' }}>
-
-      {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 0 }}>
         <div className="ct rv" style={{ marginBottom: 0, textAlign: 'left' }}>
           <div className="chip">Bestsellers</div>
           <h2 className="sh2">Our Finest Offerings</h2>
-          <p className="ssub">Curated from 10 Himalayan states — the products our customers love most.</p>
+          <p className="ssub">A fresh edit of eight Himalayan favorites, reshuffled every visit.</p>
         </div>
         <Link
           href="/products"
@@ -105,16 +106,15 @@ export default function BestSellers() {
             transition: 'all .2s', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >
-          🌿 Show All Products <span style={{ fontSize: 16, lineHeight: 1 }}>→</span>
+          Show All Products <span style={{ fontSize: 16, lineHeight: 1 }}>-></span>
         </Link>
       </div>
 
-      {/* Filter bar — REAL DB categories (same as old site buildFilterPills) */}
       <div className="filter-bar" id="filterBar" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '20px 0 16px' }}>
         <button
           className={`filter-btn${activeCat === 'all' ? ' active' : ''}`}
           onClick={() => setActiveCat('all')}
-        >🌿 All</button>
+        >All</button>
 
         {categories.map(cat => (
           <button
@@ -126,7 +126,6 @@ export default function BestSellers() {
           </button>
         ))}
 
-        {/* Sort dropdown — right side */}
         <select
           className="filter-sort"
           value={sort}
@@ -137,7 +136,6 @@ export default function BestSellers() {
         </select>
       </div>
 
-      {/* Product grid */}
       {shown.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#7a7a7a' }}>
           No products found
