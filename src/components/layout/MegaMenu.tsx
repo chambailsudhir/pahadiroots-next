@@ -100,7 +100,7 @@ export default function MegaMenu({ categories, states }: Props) {
           border: none;
           cursor: pointer;
           font-family: inherit;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: rgba(255,255,255,.82);
           letter-spacing: .2px;
@@ -121,7 +121,7 @@ export default function MegaMenu({ categories, states }: Props) {
           top: 100%;
           left: 50%;
           transform: translateX(-50%);
-          width: 720px;
+          width: 650px;
           padding-top: 6px;
           z-index: 9999;
         }
@@ -137,7 +137,7 @@ export default function MegaMenu({ categories, states }: Props) {
         }
 
         .mm-col {
-          padding: 20px 18px;
+          padding: 14px 14px;
         }
 
         .mm-col-border {
@@ -154,8 +154,8 @@ export default function MegaMenu({ categories, states }: Props) {
           letter-spacing: 2px;
           text-transform: uppercase;
           color: #9a9080;
-          margin-bottom: 10px;
-          padding-bottom: 8px;
+          margin-bottom: 6px;
+          padding-bottom: 5px;
           border-bottom: 1px solid #f0ece4;
         }
 
@@ -171,14 +171,14 @@ export default function MegaMenu({ categories, states }: Props) {
         .mm-list-2col {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          column-gap: 12px;
+          column-gap: 8px;
           row-gap: 0;
         }
 
         .mm-link {
           display: block;
-          padding: 4px 6px;
-          font-size: 13px;
+          padding: 2px 4px;
+          font-size: 12px;
           font-weight: 500;
           line-height: 1.2;
           color: #2a2a2a;
@@ -194,8 +194,8 @@ export default function MegaMenu({ categories, states }: Props) {
         }
 
         .mm-view-all {
-          margin-top: 10px;
-          padding-top: 10px;
+          margin-top: 6px;
+          padding-top: 6px;
           border-top: 1px solid #f0ece4;
         }
 
