@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, startTransition } from 'react'
+import { useEffect } from 'react'
 import { SWRConfig } from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { useCartStore } from '@/store/cartStore'
@@ -8,17 +8,19 @@ import { useCartStore } from '@/store/cartStore'
 // ── StoreHydrator ─────────────────────────────────────────────
 // Both stores use skipHydration:true — they start with empty defaults
 // on BOTH server and client, eliminating SSR/client HTML mismatch.
-// After mount (client only), we manually trigger rehydration from
-// localStorage so the UI gets the real persisted data.
+// After mount, we defer rehydration to after the first paint so React
+// has fully committed the server HTML before any state updates occur.
+// This is the correct fix for React errors #425, #418, and #423.
 function StoreHydrator() {
   useEffect(() => {
-    // startTransition defers rehydration to a non-urgent update.
-    // This prevents #425 by ensuring rehydrate()'s synchronous set() calls
-    // don't interrupt React's current render/effect processing cycle.
-    startTransition(() => {
+    // requestAnimationFrame defers past React's commit phase.
+    // This ensures rehydrate()'s synchronous set() calls never interrupt
+    // React's render/commit cycle, eliminating errors #425/#418/#423.
+    const raf = requestAnimationFrame(() => {
       void useUserStore.persist.rehydrate()
       void useCartStore.persist.rehydrate()
     })
+    return () => cancelAnimationFrame(raf)
   }, [])
   return null
 }

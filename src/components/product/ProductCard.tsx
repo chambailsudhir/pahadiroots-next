@@ -20,11 +20,16 @@ export default function ProductCard({ product, showWishlist = true, priority = f
 
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
-  const isInWishlist       = useUserStore(s => s.isInWishlist)
+  // Use a direct selector (not a function call) so Zustand can track changes
+  // without triggering React error #418 (state update during render).
+  // With skipHydration:true, calling isInWishlist() during render can cause
+  // a synchronous re-render before the component is fully mounted.
+  const wishlist           = useUserStore(s => s.wishlist)
   const addToWishlist      = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  const inWishlist = isInWishlist(String(product.id))
+  // Safe wishlist check — only after mount so SSR never sees persisted data
+  const inWishlist = mounted && wishlist.includes(String(product.id))
 
   const variants    = product.product_variants?.filter(v => v.is_active) || []
   const baseVariant = variants.length > 0

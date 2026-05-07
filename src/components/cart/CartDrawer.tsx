@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
@@ -12,6 +12,12 @@ import type { SiteSettings } from '@/types'
 interface Props { settings: SiteSettings }
 
 export default function CartDrawer({ settings }: Props) {
+  // ── Mount guard: cartStore uses skipHydration:true — reads from localStorage
+  // only on client. Rendering persisted values before mount causes React
+  // hydration errors #425 / #418 (server=[] vs client=realCart mismatch).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const isOpen   = useUIStore(s => s.isCartOpen)
   const closeCart = useUIStore(s => s.closeCart)
   const items    = useCartStore(s => s.items)
@@ -19,6 +25,10 @@ export default function CartDrawer({ settings }: Props) {
   const removeItem = useCartStore(s => s.removeItem)
   const updateQty  = useCartStore(s => s.updateQty)
   const drawerRef  = useRef<HTMLDivElement>(null)
+
+  // Snapshot persisted values only after mount to avoid mismatch
+  const safeItems  = mounted ? items  : []
+  const safeCoupon = mounted ? coupon : null
 
   // Close on Escape
   useEffect(() => {
@@ -33,7 +43,7 @@ export default function CartDrawer({ settings }: Props) {
     return () => { document.body.style.overflow = '' }
   }, [isOpen])
 
-  const pricing = calcPriceSummary(items, settings, coupon, 'cod')
+  const pricing = calcPriceSummary(safeItems, settings, safeCoupon, 'cod')
 
   return (
     <>
@@ -61,9 +71,9 @@ export default function CartDrawer({ settings }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>🛒</span>
             <h2 style={{ fontSize: 16, fontWeight: 900, color: '#fff', fontFamily: '"Playfair Display", Georgia, serif' }}>Your Cart</h2>
-            {items.length > 0 && (
+            {safeItems.length > 0 && (
               <span style={{ background: 'var(--gd)', color: '#1a0800', fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 12 }}>
-                {items.reduce((s, i) => s + i.qty, 0)}
+                {safeItems.reduce((s, i) => s + i.qty, 0)}
               </span>
             )}
           </div>
@@ -78,7 +88,7 @@ export default function CartDrawer({ settings }: Props) {
 
         {/* Items */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {items.length === 0 ? (
+          {safeItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10">
               <div className="text-5xl mb-4">🛒</div>
               <h3 className="text-base font-semibold text-stone-700 mb-1">Your cart is empty</h3>
@@ -91,7 +101,7 @@ export default function CartDrawer({ settings }: Props) {
               </button>
             </div>
           ) : (
-            items.map(item => (
+            safeItems.map(item => (
               <div key={item.variantId} className="flex gap-3">
                 {/* Image */}
                 <div className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-stone-50 border border-stone-100">
@@ -153,7 +163,7 @@ export default function CartDrawer({ settings }: Props) {
         </div>
 
         {/* Footer with totals + CTA */}
-        {items.length > 0 && (
+        {safeItems.length > 0 && (
           <div className="border-t border-stone-100 px-5 py-4 space-y-3">
 
             {/* Free shipping progress */}
@@ -177,9 +187,9 @@ export default function CartDrawer({ settings }: Props) {
                 <span>Subtotal</span>
                 <span>{formatPrice(pricing.subtotal)}</span>
               </div>
-              {coupon && (
+              {safeCoupon && (
                 <div className="flex justify-between text-forest-600">
-                  <span>Discount ({coupon.code})</span>
+                  <span>Discount ({safeCoupon.code})</span>
                   <span>−{formatPrice(pricing.discount)}</span>
                 </div>
               )}
