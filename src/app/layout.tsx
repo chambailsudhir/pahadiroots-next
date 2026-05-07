@@ -88,7 +88,7 @@ export default async function RootLayout({
     <html lang="en-IN" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a3a1e" />
-        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v2" />
+        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v3" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
