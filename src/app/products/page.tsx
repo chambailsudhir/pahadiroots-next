@@ -21,28 +21,35 @@ const SORT_OPTIONS = [
   { value: 'popular',    label: 'Best Sellers',        icon: '⭐' },
 ]
 
-interface SP { sort?: string; category?: string; page?: string; instock?: string }
+interface SP { sort?: string; category?: string; page?: string; instock?: string; state?: string }
 
 export default async function ProductsPage({ searchParams }: { searchParams: SP }) {
   const storeData = await getStoreData()
 
-  const sort     = searchParams.sort     || 'newest'
-  const catSlug  = searchParams.category || ''
-  const page     = Math.max(1, parseInt(searchParams.page || '1'))
-  const instock  = searchParams.instock  === 'true'
-  const offset   = (page - 1) * PAGE_SIZE
+  const sort      = searchParams.sort     || 'newest'
+  const catSlug   = searchParams.category || ''
+  const stateId   = searchParams.state    || ''
+  const page      = Math.max(1, parseInt(searchParams.page || '1'))
+  const instock   = searchParams.instock  === 'true'
+  const offset    = (page - 1) * PAGE_SIZE
 
   const categories  = buildCategories(storeData)
   const activeCat   = categories.find(c => c.slug === catSlug)
 
-  // Get all products with images via SERVICE KEY
+  // Resolve state name for display
+  const activeState = stateId
+    ? (storeData.states || []).find((s: any) => String(s.id) === String(stateId))
+    : null
+
   const withImages  = applyProductImages(storeData.products, storeData.product_images)
   let   products    = normalizeProducts(withImages)
 
   // Filter by category
-  if (activeCat) products = products.filter((p: any) => String(p.category_id) === String(activeCat.id))
+  if (activeCat)   products = products.filter((p: any) => String(p.category_id) === String(activeCat.id))
+  // Filter by state
+  if (stateId)     products = products.filter((p: any) => String(p.state_id) === String(stateId))
   // Filter in-stock
-  if (instock)   products = products.filter((p: any) => (p.available_stock ?? 0) > 0)
+  if (instock)     products = products.filter((p: any) => (p.available_stock ?? 0) > 0)
 
   // Sort
   switch (sort) {
@@ -58,11 +65,22 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
 
   function url(overrides: Record<string, string | undefined>) {
     const p = new URLSearchParams()
-    const vals = { sort, category: catSlug || undefined, instock: instock ? 'true' : undefined, page: '1', ...overrides }
+    const vals = {
+      sort,
+      category: catSlug   || undefined,
+      state:    stateId   || undefined,
+      instock:  instock ? 'true' : undefined,
+      page:     '1',
+      ...overrides
+    }
     Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v) })
     const q = p.toString()
     return `/products${q ? '?' + q : ''}`
   }
+
+  const pageTitle = activeState ? `${activeState.name} Products`
+    : activeCat ? activeCat.name
+    : 'All Products'
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
@@ -73,45 +91,47 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
         <div style={{ position: 'absolute', inset: 0, opacity: 0.04,
           backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)',
           backgroundSize: '30px 30px' }} />
-        <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
             color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
-            {activeCat
-              ? <><Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link><span>/</span><span style={{ color: '#fff' }}>{activeCat.name}</span></>
+            {(activeCat || activeState)
+              ? <><Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link><span>/</span><span style={{ color: '#fff' }}>{pageTitle}</span></>
               : <span style={{ color: '#fff' }}>All Products</span>
             }
           </div>
           <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
             fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
-            {activeCat ? activeCat.name : 'All Products'}
+            {pageTitle}
           </h1>
           <p style={{ color: 'rgba(255,255,255,.75)', fontSize: '14px', margin: 0 }}>
-            {count} natural Himalayan products{activeCat ? ` in ${activeCat.name}` : ''} • Sourced from 200+ mountain families
+            {count} natural Himalayan products{activeCat ? ` in ${activeCat.name}` : activeState ? ` from ${activeState.name}` : ''} • Sourced from 200+ mountain families
           </p>
         </div>
       </div>
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px 60px',
-        display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
+      {/* Main layout — full width with sticky sidebar */}
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 40px 60px',
+        display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
         {/* ── Sidebar ── */}
-        <aside style={{ width: '220px', flexShrink: 0, background: '#fff', borderRadius: '20px',
-          padding: '20px', position: 'sticky', top: '80px',
+        <aside style={{ width: '200px', flexShrink: 0, background: '#fff', borderRadius: '20px',
+          padding: '18px', position: 'sticky', top: '80px',
           boxShadow: '0 2px 16px rgba(0,0,0,.06)', border: '1px solid rgba(0,0,0,.06)' }}>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Collections</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
-            <Link href={url({ category: undefined })} style={{
+            <Link href={url({ category: undefined, state: undefined })} style={{
               display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
-              textDecoration: 'none', fontWeight: !catSlug ? 700 : 500,
-              background: !catSlug ? '#1a3a1e' : 'transparent', color: !catSlug ? '#fff' : '#444' }}>
+              textDecoration: 'none', fontWeight: (!catSlug && !stateId) ? 700 : 500,
+              background: (!catSlug && !stateId) ? '#1a3a1e' : 'transparent',
+              color: (!catSlug && !stateId) ? '#fff' : '#444' }}>
               🌿 All Products
             </Link>
             {categories.map(cat => (
-              <Link key={cat.id} href={url({ category: cat.slug })} style={{
+              <Link key={cat.id} href={url({ category: cat.slug, state: undefined })} style={{
                 display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
                 textDecoration: 'none', fontWeight: catSlug === cat.slug ? 700 : 500,
                 background: catSlug === cat.slug ? '#1a3a1e' : 'transparent',
@@ -154,13 +174,18 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
         <div style={{ flex: 1, minWidth: 0 }}>
 
           {/* Active filters */}
-          {(catSlug || instock || sort !== 'newest') && (
+          {(catSlug || stateId || instock || sort !== 'newest') && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#7a7a7a', fontWeight: 600 }}>Filters:</span>
               {activeCat && (
                 <Link href={url({ category: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>{activeCat.name} ×</Link>
+              )}
+              {activeState && (
+                <Link href={url({ state: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
+                  fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>📍 {activeState.name} ×</Link>
               )}
               {instock && (
                 <Link href={url({ instock: 'false' })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
@@ -197,7 +222,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
             </div>
           ) : (
             <>
-              <div className="pgrid prod-grid-all">
+              <div className="prod-page-grid">
                 {paged.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
               </div>
               {totalPages > 1 && (
@@ -214,7 +239,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
         </div>
       </div>
 
-      <style>{`@media(max-width:768px){ aside{display:none!important} }`}</style>
+      <style>{`
+        @media(max-width:768px){ aside{display:none!important} }
+      `}</style>
     </div>
   )
 }
