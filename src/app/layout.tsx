@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
+import ClientOnly from '@/components/ClientOnly'
 import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
@@ -87,6 +88,7 @@ export default async function RootLayout({
     <html lang="en-IN" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a3a1e" />
+        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v2" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
@@ -122,7 +124,9 @@ export default async function RootLayout({
       </head>
       <body className={`${inter.variable} ${playfair.variable} ${lato.variable} ${dmSans.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         <Providers>
-          <Header settings={settings} categories={categories} states={states} />
+          <ClientOnly>
+            <Header settings={settings} categories={categories} states={states} />
+          </ClientOnly>
           <main className="min-h-screen">
             {children}
           </main>
