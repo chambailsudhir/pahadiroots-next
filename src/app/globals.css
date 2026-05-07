@@ -183,7 +183,8 @@ section.sec { padding: 52px 40px; }
 @media(max-width:640px) { .cgrid { grid-template-columns: repeat(2,1fr); gap: 12px; } section.sec { padding: 32px 16px; } }
 
 /* ── PRODUCT CARDS ── */
-.pgrid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 28px; max-width: 1400px; margin: 0 auto; }
+.pgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 28px; max-width: 1400px; margin: 0 auto; }
+.pgrid-new-arrivals { grid-template-columns: repeat(4,1fr) !important; max-width: 100% !important; }
 /* ═══════════════════════════════════════════════════════
    PREMIUM PRODUCT CARD — copied from pahadiroots.com CSS
    ═══════════════════════════════════════════════════════ */
@@ -255,6 +256,7 @@ section.sec { padding: 52px 40px; }
 .pwas { font-size: 12px; color: var(--tx3); text-decoration: line-through; }
 .atc { background: var(--g); color: #fff; border: none; border-radius: 24px; padding: 11px 16px; font-size: 14px; font-weight: 800; transition: background .2s,transform .15s; font-family: 'Lato', sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; width: 100%; }
 .atc:hover { background: var(--g2); }
+@media(max-width:900px) { .pgrid { grid-template-columns: repeat(2,1fr); gap: 16px; } }
 @media(max-width:600px) { .pgrid { grid-template-columns: repeat(2,1fr); gap: 10px; } }
 
 /* ── FILTER BAR ── */
@@ -887,8 +889,8 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 @media(max-width:900px)  { .prod-grid-3 { grid-template-columns: repeat(2,1fr) !important; } }
 @media(max-width:560px)  { .prod-grid-3 { grid-template-columns: repeat(1,1fr) !important; } }
 
-/* Products All page — matches BestSellers card sizing inside sidebar layout */
-.prod-grid-all { grid-template-columns: repeat(auto-fill,minmax(220px,1fr)) !important; gap: 20px !important; max-width: 100% !important; }
+/* Products All page — 3 cols inside sidebar layout, same card size as BestSellers */
+.prod-grid-all { grid-template-columns: repeat(3,1fr) !important; gap: 20px !important; max-width: 100% !important; margin: 0 !important; }
 @media(max-width:900px)  { .prod-grid-all { grid-template-columns: repeat(2,1fr) !important; } }
 @media(max-width:560px)  { .prod-grid-all { grid-template-columns: repeat(1,1fr) !important; } }
 
