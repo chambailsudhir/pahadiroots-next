@@ -40,31 +40,19 @@ export default async function HomePage() {
   const featuredSlug    = settings.featured_collection_slug?.trim()
 
   return (
-    <>
-      <ClientOnly>
-        <HeroBanner images={heroImages} settings={settings} />
-      </ClientOnly>
+    <ClientOnly>
+      <HeroBanner images={heroImages} settings={settings} />
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
-      <ClientOnly>
-        <CategoryTiles categories={categories} />
-        <BestSellers />
-      </ClientOnly>
+      <CategoryTiles categories={categories} />
+      <BestSellers />
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
-      {states.length > 0 && (
-        <ClientOnly>
-          <ExploreByRegion states={states} />
-        </ClientOnly>
-      )}
+      {states.length > 0 && <ExploreByRegion states={states} />}
       <WhySection />
       {showReviews && <ReviewsPreview />}
-      {showNewsletter && (
-        <ClientOnly>
-          <NewsletterBar />
-        </ClientOnly>
-      )}
-    </>
+      {showNewsletter && <NewsletterBar />}
+    </ClientOnly>
   )
 }
 
