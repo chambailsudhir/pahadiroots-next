@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function Header({ settings, categories = [], states = [] }: Props) {
-  const cartCount  = useCartStore(s => s.cartCount)()
+  const cartCount  = useCartStore(s => s.items.reduce((n, i) => n + i.qty, 0))
   const wishlist   = useUserStore(s => s.wishlist)
   const user       = useUserStore(s => s.user)
   const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()

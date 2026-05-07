@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, startTransition } from 'react'
 import { SWRConfig } from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { useCartStore } from '@/store/cartStore'
@@ -12,9 +12,13 @@ import { useCartStore } from '@/store/cartStore'
 // localStorage so the UI gets the real persisted data.
 function StoreHydrator() {
   useEffect(() => {
-    // Safely call rehydrate — it exists when skipHydration:true + storage provided
-    void useUserStore.persist.rehydrate()
-    void useCartStore.persist.rehydrate()
+    // startTransition defers rehydration to a non-urgent update.
+    // This prevents #425 by ensuring rehydrate()'s synchronous set() calls
+    // don't interrupt React's current render/effect processing cycle.
+    startTransition(() => {
+      void useUserStore.persist.rehydrate()
+      void useCartStore.persist.rehydrate()
+    })
   }, [])
   return null
 }
