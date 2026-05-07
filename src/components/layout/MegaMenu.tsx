@@ -100,7 +100,7 @@ export default function MegaMenu({ categories, states }: Props) {
           border: none;
           cursor: pointer;
           font-family: inherit;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 600;
           color: rgba(255,255,255,.82);
           letter-spacing: .2px;
@@ -121,14 +121,14 @@ export default function MegaMenu({ categories, states }: Props) {
           top: 100%;
           left: 50%;
           transform: translateX(-50%);
-          width: 650px;
-          padding-top: 6px;
+          width: 940px;
+          padding-top: 4px;
           z-index: 9999;
         }
 
         .mm-panel {
           background: #fff;
-          border-radius: 16px;
+          border-radius: 18px;
           box-shadow: 0 16px 40px rgba(0,0,0,.12);
           border: 1px solid rgba(0,0,0,.05);
           display: grid;
@@ -137,7 +137,7 @@ export default function MegaMenu({ categories, states }: Props) {
         }
 
         .mm-col {
-          padding: 14px 14px;
+          padding: 10px 18px;
         }
 
         .mm-col-border {
@@ -154,8 +154,8 @@ export default function MegaMenu({ categories, states }: Props) {
           letter-spacing: 2px;
           text-transform: uppercase;
           color: #9a9080;
-          margin-bottom: 6px;
-          padding-bottom: 5px;
+          margin-bottom: 4px;
+          padding-bottom: 6px;
           border-bottom: 1px solid #f0ece4;
         }
 
@@ -165,22 +165,22 @@ export default function MegaMenu({ categories, states }: Props) {
           margin: 0;
           display: flex;
           flex-direction: column;
-          gap: 0;
+          gap: 2px;
         }
 
         .mm-list-2col {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          column-gap: 8px;
-          row-gap: 0;
+          column-gap: 24px;
+          row-gap: 2px;
         }
 
         .mm-link {
           display: block;
-          padding: 2px 4px;
-          font-size: 12px;
+          padding: 1px 0px;
+          font-size: 13px;
           font-weight: 500;
-          line-height: 1.2;
+          line-height: 1.1;
           color: #2a2a2a;
           text-decoration: none;
           border-radius: 6px;
@@ -194,8 +194,8 @@ export default function MegaMenu({ categories, states }: Props) {
         }
 
         .mm-view-all {
-          margin-top: 6px;
-          padding-top: 6px;
+          margin-top: 4px;
+          padding-top: 4px;
           border-top: 1px solid #f0ece4;
         }
 
