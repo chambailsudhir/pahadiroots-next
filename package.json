@@ -1,13 +1,14 @@
 {
   "name": "pahadiroots-next",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "prebuild": "rm -rf .next/cache"
   },
   "dependencies": {
     "next": "14.2.29",
