@@ -318,8 +318,8 @@ section.sec { padding: 52px 40px; }
 .pr-panel-anim { animation: pr-spIn .35s ease; }
 @keyframes pr-spIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 .pr-shdr { display: grid; grid-template-columns: 54% 46%; height: 450px; overflow: hidden; }
-.pr-spgrid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 24px; padding: 24px 40px; background: #0d1f0e; }
-@media(max-width:640px) { .pr-shdr { grid-template-columns: 1fr !important; height: auto !important; } .pr-spgrid { grid-template-columns: 1fr 1fr !important; padding: 16px 20px !important; } }
+.pr-spgrid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 28px; padding: 24px 40px; background: #0d1f0e; }
+@media(max-width:640px) { .pr-shdr { grid-template-columns: 1fr !important; height: auto !important; } .pr-spgrid { grid-template-columns: 1fr 1fr !important; padding: 16px 20px !important; gap: 10px !important; } }
 
 /* ── CATEGORY TILES ── */
 .pr-cat-card:hover { transform: translateY(-5px) !important; box-shadow: 0 14px 36px rgba(0,0,0,.12) !important; border-color: #c8920a !important; }
@@ -886,6 +886,11 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .prod-grid-3 { grid-template-columns: repeat(3,1fr) !important; }
 @media(max-width:900px)  { .prod-grid-3 { grid-template-columns: repeat(2,1fr) !important; } }
 @media(max-width:560px)  { .prod-grid-3 { grid-template-columns: repeat(1,1fr) !important; } }
+
+/* Products All page — matches BestSellers card sizing inside sidebar layout */
+.prod-grid-all { grid-template-columns: repeat(auto-fill,minmax(220px,1fr)) !important; gap: 20px !important; max-width: 100% !important; }
+@media(max-width:900px)  { .prod-grid-all { grid-template-columns: repeat(2,1fr) !important; } }
+@media(max-width:560px)  { .prod-grid-all { grid-template-columns: repeat(1,1fr) !important; } }
 
 /* ══════════════════════════════════════════════════════════
    MEGA MENU — after @tailwind base, wins over Preflight

@@ -197,7 +197,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
             </div>
           ) : (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '20px' }} className="prod-grid-3">
+              <div className="pgrid prod-grid-all">
                 {paged.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
               </div>
               {totalPages > 1 && (
