@@ -46,9 +46,9 @@ export default async function HomePage() {
       {/* Browse Collections — "What the Mountains Offer" */}
       <CategoryTiles categories={categories} />
       <BestSellers />
+      {states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
-      {states.length > 0 && <ExploreByRegion states={states} />}
       <WhySection />
       {showReviews && <ReviewsPreview />}
       {showNewsletter && <NewsletterBar />}
