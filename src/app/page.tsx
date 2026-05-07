@@ -46,14 +46,24 @@ export default async function HomePage() {
       </ClientOnly>
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
-      <CategoryTiles categories={categories} />
-      <BestSellers />
+      <ClientOnly>
+        <CategoryTiles categories={categories} />
+        <BestSellers />
+      </ClientOnly>
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
-      {states.length > 0 && <ExploreByRegion states={states} />}
+      {states.length > 0 && (
+        <ClientOnly>
+          <ExploreByRegion states={states} />
+        </ClientOnly>
+      )}
       <WhySection />
       {showReviews && <ReviewsPreview />}
-      {showNewsletter && <NewsletterBar />}
+      {showNewsletter && (
+        <ClientOnly>
+          <NewsletterBar />
+        </ClientOnly>
+      )}
     </>
   )
 }
