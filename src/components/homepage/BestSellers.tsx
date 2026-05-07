@@ -8,8 +8,8 @@ import type { Product } from '@/types'
 
 const SORTS = [
   { val: 'default',    label: 'Sort: Featured'     },
-  { val: 'price_asc',  label: 'Price: Low -> High'  },
-  { val: 'price_desc', label: 'Price: High -> Low'  },
+  { val: 'price_asc',  label: 'Price: Low to High'  },
+  { val: 'price_desc', label: 'Price: High to Low'  },
   { val: 'discount',   label: 'Best Discount'       },
   { val: 'name',       label: 'Name A-Z'            },
 ]
@@ -106,7 +106,7 @@ export default function BestSellers() {
             transition: 'all .2s', whiteSpace: 'nowrap', flexShrink: 0,
           }}
         >
-          Show All Products <span style={{ fontSize: 16, lineHeight: 1 }}>-></span>
+          Show All Products <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>{'>'}</span>
         </Link>
       </div>
 
