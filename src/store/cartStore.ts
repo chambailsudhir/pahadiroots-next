@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { CartItem, AppliedCoupon } from '@/types'
 import { generateUUID } from '@/lib/utils'
 
@@ -81,7 +81,14 @@ export const useCartStore = create<CartStore>()(
     {
       name:    'pr-cart',
       version: 1,
-      skipHydration: true,  // Prevent SSR/client mismatch — rehydrated manually in providers
+      skipHydration: true,
+      storage: createJSONStorage(() =>
+        typeof window !== 'undefined' ? localStorage : {
+          getItem:    () => null,
+          setItem:    () => {},
+          removeItem: () => {},
+        }
+      ),
     }
   )
 )
