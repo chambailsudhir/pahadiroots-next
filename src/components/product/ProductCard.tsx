@@ -212,4 +212,3 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     </Link>
   )
 }
-
