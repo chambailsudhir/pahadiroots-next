@@ -59,7 +59,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   // Region: old site shows p.region (state name). We use categories.name as fallback
   const region = (product as any).region || product.categories?.name || ''
   const unitLabel = baseVariant?.size || (product as any).unit || product.unit_label || ''
-  const reviewCount = (product as any).review_count || Math.floor(Math.random() * 80 + 20)
+  // Deterministic fake count based on product id — no Math.random() during render
+  // (Math.random differs between server and client → React hydration error #418)
+  const _seed = typeof product.id === 'number' ? product.id : String(product.id).split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  const reviewCount = (product as any).review_count || ((_seed * 37 + 19) % 80 + 20)
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
