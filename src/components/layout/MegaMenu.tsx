@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { catSlug } from '@/lib/utils'
 import { useState } from 'react'
+import { catSlug } from '@/lib/utils'
 import type { Category, State } from '@/types'
 
 interface Props { categories: Category[]; states: State[] }
@@ -18,6 +18,8 @@ const CURATED = [
 
 export default function MegaMenu({ categories, states }: Props) {
   const [open, setOpen] = useState(false)
+  const visibleCategories = categories.filter(c => c.is_active).slice(0, 8)
+  const visibleStates = states.slice(0, 10)
 
   return (
     <li
@@ -39,11 +41,10 @@ export default function MegaMenu({ categories, states }: Props) {
       {open && (
         <div className="mm-panel-wrap">
           <div className="mm-panel">
-            {/* ── All Collections ── */}
             <div className="mm-col mm-col-border">
               <div className="mm-col-head">All Collections</div>
               <ul className="mm-list">
-                {categories.filter(c => c.is_active).map(cat => (
+                {visibleCategories.map(cat => (
                   <li key={cat.id}>
                     <Link href={`/collections/${catSlug(cat)}`} className="mm-link" onClick={() => setOpen(false)}>
                       {cat.name}
@@ -52,17 +53,16 @@ export default function MegaMenu({ categories, states }: Props) {
                 ))}
                 <li className="mm-view-all">
                   <Link href="/products" className="mm-view-link" onClick={() => setOpen(false)}>
-                    View All Products →
+                    View All Products ->
                   </Link>
                 </li>
               </ul>
             </div>
 
-            {/* ── Shop by Region ── */}
             <div className="mm-col mm-col-border">
               <div className="mm-col-head">Shop by Region</div>
               <ul className="mm-list mm-list-2col">
-                {states.slice(0, 12).map(s => (
+                {visibleStates.map(s => (
                   <li key={s.id}>
                     <Link href={`/regions/${s.slug}`} className="mm-link" onClick={() => setOpen(false)}>
                       {s.name}
@@ -70,14 +70,13 @@ export default function MegaMenu({ categories, states }: Props) {
                   </li>
                 ))}
               </ul>
-              <div className="mm-view-all" style={{ marginTop: '12px' }}>
+              <div className="mm-view-all" style={{ marginTop: '22px' }}>
                 <Link href="/regions" className="mm-view-link" onClick={() => setOpen(false)}>
-                  View All Regions →
+                  View All Regions ->
                 </Link>
               </div>
             </div>
 
-            {/* ── Curated Picks ── */}
             <div className="mm-col mm-col-cream">
               <div className="mm-col-head">Curated Picks</div>
               <ul className="mm-list">
@@ -96,126 +95,118 @@ export default function MegaMenu({ categories, states }: Props) {
 
       <style>{`
         .mm-trigger {
-          background: none;
-          border: none;
+          background: transparent;
+          border: 1.5px solid transparent;
+          border-radius: 24px;
+          color: #2a2a2a;
           cursor: pointer;
-          font-family: inherit;
-          font-size: 13px;
-          font-weight: 600;
-          color: rgba(255,255,255,.82);
-          letter-spacing: .2px;
           display: flex;
           align-items: center;
           gap: 5px;
-          padding: 0 14px;
-          height: 62px;
-          transition: color .2s;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 700;
+          height: 42px;
+          letter-spacing: 0;
+          margin-top: 11px;
+          padding: 0 16px;
+          transition: color .2s, border-color .2s, background .2s, box-shadow .2s;
         }
-
-        .mm-trigger:hover {
-          color: #c8920a;
+        .mm-trigger:hover,
+        .mm-trigger[aria-expanded="true"] {
+          background: #fff;
+          border-color: #1f1f1f;
+          box-shadow: 0 1px 5px rgba(0,0,0,.08);
+          color: #1a1a1a;
         }
-
         .mm-panel-wrap {
-          position: absolute;
-          top: 100%;
+          position: fixed;
+          top: 138px;
           left: 50%;
           transform: translateX(-50%);
-          width: 940px;
-          padding-top: 4px;
+          width: min(960px, calc(100vw - 96px));
           z-index: 9999;
         }
-
         .mm-panel {
           background: #fff;
-          border-radius: 18px;
-          box-shadow: 0 16px 40px rgba(0,0,0,.12);
-          border: 1px solid rgba(0,0,0,.05);
+          border: 1px solid rgba(0,0,0,.07);
+          border-top: none;
+          border-radius: 0 0 14px 14px;
+          box-shadow: 0 18px 50px rgba(22,20,16,.14);
           display: grid;
-          grid-template-columns: 1fr 1fr 0.9fr;
+          grid-template-columns: 1.05fr 1.45fr .95fr;
+          min-height: 380px;
           overflow: hidden;
         }
-
-        .mm-col {
-          padding: 10px 18px;
-        }
-
-        .mm-col-border {
-          border-right: 1px solid #f0ece4;
-        }
-
-        .mm-col-cream {
-          background: linear-gradient(160deg,#fdf9f2,#f5ede0);
-        }
-
+        .mm-col { padding: 30px 28px; }
+        .mm-col-border { border-right: 1px solid #f0ece4; }
+        .mm-col-cream { background: #f5f0e7; }
         .mm-col-head {
+          color: #b1a28d;
           font-size: 10px;
           font-weight: 900;
-          letter-spacing: 2px;
+          letter-spacing: 4px;
+          margin-bottom: 20px;
           text-transform: uppercase;
-          color: #9a9080;
-          margin-bottom: 4px;
-          padding-bottom: 6px;
-          border-bottom: 1px solid #f0ece4;
         }
-
         .mm-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 9px;
+          list-style: none;
+          margin: 0;
+          padding: 0;
         }
-
         .mm-list-2col {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          column-gap: 24px;
-          row-gap: 2px;
+          gap: 12px 34px;
         }
-
         .mm-link {
+          border-radius: 9px;
+          color: #2c241b;
           display: block;
-          padding: 1px 0px;
-          font-size: 13px;
+          font-size: 15px;
           font-weight: 500;
-          line-height: 1.1;
-          color: #2a2a2a;
+          line-height: 1.35;
+          padding: 3px 10px;
           text-decoration: none;
-          border-radius: 6px;
-          transition: all .15s ease;
+          transition: color .15s, background .15s, transform .15s;
         }
-
         .mm-link:hover {
+          background: #f2f7ef;
           color: #1a3a1e;
-          background: #f0f7f0;
-          padding-left: 10px;
+          transform: translateX(3px);
         }
-
         .mm-view-all {
-          margin-top: 4px;
-          padding-top: 4px;
-          border-top: 1px solid #f0ece4;
+          border-top: none;
+          margin-top: 22px;
+          padding-top: 0;
         }
-
         .mm-view-link {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: #1a3a1e;
+          align-items: center;
+          background: #fff;
+          border: 1px solid #eee7db;
+          border-radius: 999px;
+          color: #2c241b;
+          display: inline-flex;
+          font-size: 15px;
+          font-weight: 800;
+          min-width: 220px;
+          padding: 11px 16px;
           text-decoration: none;
-          transition: color .15s;
+          transition: color .15s, border-color .15s, box-shadow .15s;
         }
-
         .mm-view-link:hover {
-          color: #c8920a;
+          border-color: #d8cbb8;
+          box-shadow: 0 8px 24px rgba(0,0,0,.06);
+          color: #1a3a1e;
         }
-
-        @media(max-width:900px){
-          .mm-panel-wrap {
-            display: none;
-          }
+        @media(max-width:1100px){
+          .mm-panel-wrap { width: min(900px, calc(100vw - 48px)); }
+          .mm-col { padding: 26px 24px; }
         }
+        @media(max-width:900px){ .mm-panel-wrap { display: none; } }
       `}</style>
     </li>
   )
