@@ -53,7 +53,7 @@ export default function MegaMenu({ categories, states }: Props) {
                 ))}
                 <li className="mm-view-all">
                   <Link href="/products" className="mm-view-link" onClick={() => setOpen(false)}>
-                    View All Products ->
+                    View All Products <span aria-hidden="true">{'>'}</span>
                   </Link>
                 </li>
               </ul>
@@ -72,7 +72,7 @@ export default function MegaMenu({ categories, states }: Props) {
               </ul>
               <div className="mm-view-all" style={{ marginTop: '22px' }}>
                 <Link href="/regions" className="mm-view-link" onClick={() => setOpen(false)}>
-                  View All Regions ->
+                  View All Regions <span aria-hidden="true">{'>'}</span>
                 </Link>
               </div>
             </div>
@@ -190,6 +190,7 @@ export default function MegaMenu({ categories, states }: Props) {
           border-radius: 999px;
           color: #2c241b;
           display: inline-flex;
+          gap: 6px;
           font-size: 15px;
           font-weight: 800;
           min-width: 220px;
