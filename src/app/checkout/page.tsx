@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
-import { formatPrice, generateUUID } from '@/lib/utils'
+import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
 import type { SiteSettings, OrderAddress } from '@/types'
 import useSWR from 'swr'
@@ -23,7 +23,7 @@ const INDIA_STATES = [
 ]
 const LABEL_OPTIONS = ['Home','Office','Parents','Friends','Others'] as const
 
-function getSavedAddresses(user: any): any[] {
+function readSavedAddresses(user: any): any[] {
   try {
     const raw = user?.saved_addresses || localStorage.getItem('pr_saved_addresses') || '[]'
     return JSON.parse(raw)
@@ -35,6 +35,7 @@ export default function CheckoutPage() {
   const items          = useCartStore(s => s.items)
   const coupon         = useCartStore(s => s.coupon)
   const idempotencyKey = useCartStore(s => s.idempotencyKey)
+  const ensureIdempotencyKey = useCartStore(s => s.ensureIdempotencyKey)
   const clearCart      = useCartStore(s => s.clearCart)
   const applyCoupon    = useCartStore(s => s.applyCoupon)
   const removeCoupon   = useCartStore(s => s.removeCoupon)
@@ -56,6 +57,7 @@ export default function CheckoutPage() {
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError, setCouponError] = useState('')
   const [selectedSavedAddr, setSelectedSavedAddr] = useState<string | null>(null)
+  const [savedAddrs, setSavedAddrs] = useState<any[]>([])
 
   const [addr, setAddr] = useState<OrderAddress>({
     name:    user?.name || '',
@@ -67,10 +69,18 @@ export default function CheckoutPage() {
   const codMax       = parseFloat(settings.cod_max_value || '3000')
   const codOk        = settings.cod_enabled !== 'false' && pricing.total <= codMax
   const prepaidPct   = parseInt(settings.prepaid_discount_pct || '5')
-  const savedAddrs   = getSavedAddresses(user)
   const freeShipMin  = parseInt(settings.free_shipping_min || '0')
 
   useEffect(() => { if (items.length === 0) router.replace('/cart') }, [items, router])
+  useEffect(() => { setSavedAddrs(readSavedAddresses(user)) }, [user])
+  useEffect(() => {
+    if (!user) return
+    setAddr(a => ({
+      ...a,
+      name:  a.name  || user.name  || '',
+      phone: a.phone || user.phone || '',
+    }))
+  }, [user])
 
   function setField(field: keyof OrderAddress, value: string) {
     setAddr(a => ({ ...a, [field]: value }))
@@ -118,12 +128,13 @@ export default function CheckoutPage() {
 
     setError(''); setPlacing(true)
     try {
+      const orderKey = idempotencyKey || ensureIdempotencyKey()
       const payload = {
         name: addr.name, phone: addr.phone, email: user?.email || '',
         flat: addr.flat, area: addr.area, city: addr.city,
         state: addr.state, pincode: addr.pincode, label: addr.label,
         items: items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
-        payment_method: payMethod, coupon_code: coupon?.code, idempotency_key: idempotencyKey,
+        payment_method: payMethod, coupon_code: coupon?.code, idempotency_key: orderKey,
       }
       if (payMethod === 'cod') {
         const res  = await fetch('/api/v1/orders', {

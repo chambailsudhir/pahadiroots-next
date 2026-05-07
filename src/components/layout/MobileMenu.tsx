@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
@@ -16,12 +16,6 @@ interface Props {
 export default function MobileMenu({ settings, categories = [], states = [] }: Props) {
   const isMobileMenuOpen = useUIStore(s => s.isMobileMenuOpen)
   const closeMobileMenu  = useUIStore(s => s.closeMobileMenu)
-
-  // Mount guard: uiStore state must not affect SSR render.
-  // Without this, isMobileMenuOpen can differ between server and client
-  // causing React hydration error #423.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeMobileMenu()
@@ -51,7 +45,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   ]
 
   return (
-    <div className={`mob-nav${mounted && isMobileMenuOpen ? ' open' : ''}`} role="dialog" aria-modal="true">
+    <div className={`mob-nav${isMobileMenuOpen ? ' open' : ''}`} role="dialog" aria-modal="true">
       <div className="mob-nav-bg" onClick={closeMobileMenu} aria-hidden="true" />
       <div className="mob-nav-panel">
         <button className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>
@@ -104,7 +98,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
           </a>
         )}
 
-        <p style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 16 }} suppressHydrationWarning>© {new Date().getFullYear()} Pahadi Roots</p>
+        <p style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 16 }}>© {new Date().getFullYear()} Pahadi Roots</p>
       </div>
     </div>
   )

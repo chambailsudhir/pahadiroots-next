@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
@@ -15,21 +14,13 @@ interface Props {
 }
 
 export default function ProductCard({ product, showWishlist = true, priority = false }: Props) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
-  // Use a direct selector (not a function call) so Zustand can track changes
-  // without triggering React error #418 (state update during render).
-  // With skipHydration:true, calling isInWishlist() during render can cause
-  // a synchronous re-render before the component is fully mounted.
-  const wishlist           = useUserStore(s => s.wishlist)
+  const isInWishlist       = useUserStore(s => s.isInWishlist)
   const addToWishlist      = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  // Safe wishlist check — only after mount so SSR never sees persisted data
-  const inWishlist = mounted && wishlist.includes(String(product.id))
+  const inWishlist = isInWishlist(String(product.id))
 
   const variants    = product.product_variants?.filter(v => v.is_active) || []
   const baseVariant = variants.length > 0
@@ -93,8 +84,6 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     e.stopPropagation()
     inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
   }
-
-  if (!mounted) return null
 
   return (
     <Link

@@ -18,6 +18,7 @@ interface CartStore {
   removeCoupon:      () => void
   clearCart:         () => void
   resetIdempotencyKey: () => void
+  ensureIdempotencyKey: () => string
 
   // Derived
   cartCount:         () => number
@@ -28,13 +29,14 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items:          [],
       coupon:         null,
-      idempotencyKey: generateUUID(),
+      idempotencyKey: '',
 
       addItem: (newItem) => {
         set(state => {
           const existing = state.items.find(i => i.variantId === newItem.variantId)
           if (existing) {
             return {
+              idempotencyKey: state.idempotencyKey || generateUUID(),
               items: state.items.map(i =>
                 i.variantId === newItem.variantId
                   ? { ...i, qty: Math.min(i.qty + (newItem.qty ?? 1), i.maxQty) }
@@ -43,6 +45,7 @@ export const useCartStore = create<CartStore>()(
             }
           }
           return {
+            idempotencyKey: state.idempotencyKey || generateUUID(),
             items: [...state.items, { ...newItem, qty: newItem.qty ?? 1 }],
           }
         })
@@ -75,6 +78,13 @@ export const useCartStore = create<CartStore>()(
       }),
 
       resetIdempotencyKey: () => set({ idempotencyKey: generateUUID() }),
+      ensureIdempotencyKey: () => {
+        const current = get().idempotencyKey
+        if (current) return current
+        const next = generateUUID()
+        set({ idempotencyKey: next })
+        return next
+      },
 
       cartCount: () => get().items.reduce((sum, i) => sum + i.qty, 0),
     }),

@@ -295,7 +295,7 @@ export default function Footer({ settings }: Props) {
 
       {/* ── Copyright bar + diamond vine ─────────────────── */}
       <div style={{ maxWidth: '100%', padding: '14px 60px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'relative', zIndex: 2, background: '#0f2a14' }}>
-        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'Lato,sans-serif' }} suppressHydrationWarning>
+        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'Lato,sans-serif' }}>
           © {new Date().getFullYear()} <strong style={{ color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India
         </div>
 
