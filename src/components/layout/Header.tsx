@@ -164,7 +164,8 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-logo-words{}
         .old-logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#1a3a1e;line-height:1.1}
         .old-logo-tl{font-size:9px;color:#c8920a;font-weight:800;letter-spacing:1px;text-transform:uppercase}
-        .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0}
+        .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
+        .old-nav-links li{height:64px;display:flex;align-items:center;}
         .old-nav-links li a,.old-nav-links li button{
           color:#2a2a2a;text-decoration:none;font-size:13.5px;
           font-weight:600;padding:0 14px;height:64px;display:flex;align-items:center;

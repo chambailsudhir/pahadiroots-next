@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { catSlug } from '@/lib/utils'
 import type { Category, State } from '@/types'
 
@@ -17,197 +17,294 @@ const CURATED = [
 ]
 
 export default function MegaMenu({ categories, states }: Props) {
-  const [open, setOpen] = useState(false)
-  const visibleCategories = categories.filter(c => c.is_active).slice(0, 8)
-  const visibleStates = states.slice(0, 10)
+  const [open, setOpen]       = useState(false)
+  const [megaTop, setMegaTop] = useState(64)
+  const liRef                 = useRef<HTMLLIElement>(null)
+
+  const visibleCategories = categories.filter(c => c.is_active).slice(0, 12)
+  const visibleStates     = states.slice(0, 10)
+
+  // Keep mega panel snapped exactly below the sticky navbar
+  useEffect(() => {
+    function updateTop() {
+      const nav = document.querySelector('nav.old-nav') as HTMLElement | null
+      if (nav) {
+        const rect = nav.getBoundingClientRect()
+        setMegaTop(rect.bottom)
+      }
+    }
+    updateTop()
+    window.addEventListener('scroll', updateTop, { passive: true })
+    window.addEventListener('resize', updateTop, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', updateTop)
+      window.removeEventListener('resize', updateTop)
+    }
+  }, [])
+
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return
+    function onClickOutside(e: MouseEvent) {
+      if (liRef.current && !liRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('click', onClickOutside)
+    document.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('click', onClickOutside)
+      document.removeEventListener('keydown', onEscape)
+    }
+  }, [open])
 
   return (
-    <li
-      style={{ listStyle: 'none', position: 'relative' }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button className="mm-trigger" aria-expanded={open}>
-        Shop
-        <svg
-          width="11" height="11" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth={2.5}
-          style={{ transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'none' }}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+    <li ref={liRef} className={`mega-parent${open ? ' open' : ''}`}>
+      <button
+        className="mega-trigger"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+      >
+        Shop <span className="arr">▾</span>
       </button>
 
-      {open && (
-        <div className="mm-panel-wrap">
-          <div className="mm-panel">
-            <div className="mm-col mm-col-border">
-              <div className="mm-col-head">All Collections</div>
-              <ul className="mm-list">
-                {visibleCategories.map(cat => (
-                  <li key={cat.id}>
-                    <Link href={`/collections/${catSlug(cat)}`} className="mm-link" onClick={() => setOpen(false)}>
-                      {cat.name}
-                    </Link>
-                  </li>
-                ))}
-                <li className="mm-view-all">
-                  <Link href="/products" className="mm-view-link" onClick={() => setOpen(false)}>
-                    View All Products <span aria-hidden="true">{'>'}</span>
-                  </Link>
-                </li>
-              </ul>
-            </div>
+      {/* Backdrop */}
+      {open && <div className="mega-menu-backdrop" onClick={() => setOpen(false)} />}
 
-            <div className="mm-col mm-col-border">
-              <div className="mm-col-head">Shop by Region</div>
-              <ul className="mm-list mm-list-2col">
-                {visibleStates.map(s => (
-                  <li key={s.id}>
-                    <Link href={`/regions/${s.slug}`} className="mm-link" onClick={() => setOpen(false)}>
-                      {s.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <div className="mm-view-all" style={{ marginTop: '22px' }}>
-                <Link href="/regions" className="mm-view-link" onClick={() => setOpen(false)}>
-                  View All Regions <span aria-hidden="true">{'>'}</span>
+      {/* Panel */}
+      <div
+        className={`mega-menu${open ? ' open' : ''}`}
+        style={{ top: megaTop }}
+        role="menu"
+      >
+        {/* Column 1 — Collections */}
+        <div className="mega-col" id="megaColCollections">
+          <div className="mega-heading">ALL COLLECTIONS</div>
+          <ul className="mega-list">
+            {visibleCategories.map(cat => (
+              <li key={cat.id}>
+                <Link href={`/collections/${catSlug(cat)}`} className="mega-list-link" onClick={() => setOpen(false)}>
+                  {cat.name}
                 </Link>
-              </div>
-            </div>
-
-            <div className="mm-col mm-col-cream">
-              <div className="mm-col-head">Curated Picks</div>
-              <ul className="mm-list">
-                {CURATED.map(l => (
-                  <li key={l.href}>
-                    <Link href={l.href} className="mm-link" onClick={() => setOpen(false)}>
-                      {l.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+              </li>
+            ))}
+          </ul>
+          <Link href="/products" className="mega-view-all" onClick={() => setOpen(false)}>
+            View All Products →
+          </Link>
         </div>
-      )}
+
+        {/* Column 2 — Regions */}
+        <div className="mega-col" id="megaColStates">
+          <div className="mega-heading">SHOP BY REGION</div>
+          <ul className="mega-list mega-list-2col">
+            {visibleStates.map(s => (
+              <li key={s.id}>
+                <Link href={`/regions/${s.slug}`} className="mega-list-link" onClick={() => setOpen(false)}>
+                  {s.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <Link href="/regions" className="mega-view-all" onClick={() => setOpen(false)}>
+            View All Regions →
+          </Link>
+        </div>
+
+        {/* Column 3 — Curated */}
+        <div className="mega-col" id="megaColCurated">
+          <div className="mega-heading">CURATED PICKS</div>
+          <ul className="mega-list">
+            {CURATED.map(l => (
+              <li key={l.href}>
+                <Link href={l.href} className="mega-list-link mega-list-link-bold" onClick={() => setOpen(false)}>
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
 
       <style>{`
-        .mm-trigger {
-          background: transparent;
-          border: 1.5px solid transparent;
-          border-radius: 24px;
-          color: #2a2a2a;
+        /* ── Trigger — identical to .old-nav-links li a ── */
+        .mega-parent {
+          list-style: none;
+          position: static;
+        }
+        .mega-trigger {
+          background: none;
+          border: none;
           cursor: pointer;
+          user-select: none;
           display: flex;
           align-items: center;
-          gap: 5px;
+          gap: 3px;
+          color: #2a2a2a;
+          font-size: 13.5px;
+          font-weight: 600;
+          padding: 0 14px;
+          height: 64px;
+          margin: 0;
           font-family: inherit;
-          font-size: 14px;
-          font-weight: 700;
-          height: 42px;
+          white-space: nowrap;
           letter-spacing: 0;
-          margin-top: 11px;
-          padding: 0 16px;
-          transition: color .2s, border-color .2s, background .2s, box-shadow .2s;
+          transition: color .2s, background .2s;
+          border-radius: 0;
         }
-        .mm-trigger:hover,
-        .mm-trigger[aria-expanded="true"] {
-          background: #fff;
-          border-color: #1f1f1f;
-          box-shadow: 0 1px 5px rgba(0,0,0,.08);
-          color: #1a1a1a;
+        .mega-trigger:hover,
+        .mega-parent.open .mega-trigger {
+          color: #1a3a1e;
+          background: rgba(26,58,30,.04);
         }
-        .mm-panel-wrap {
-          position: fixed;
-          top: 138px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: min(960px, calc(100vw - 96px));
-          z-index: 9999;
-        }
-        .mm-panel {
-          background: #fff;
-          border: 1px solid rgba(0,0,0,.07);
-          border-top: none;
-          border-radius: 0 0 14px 14px;
-          box-shadow: 0 18px 50px rgba(22,20,16,.14);
-          display: grid;
-          grid-template-columns: 1.05fr 1.45fr .95fr;
-          min-height: 380px;
-          overflow: hidden;
-        }
-        .mm-col { padding: 30px 28px; }
-        .mm-col-border { border-right: 1px solid #f0ece4; }
-        .mm-col-cream { background: #f5f0e7; }
-        .mm-col-head {
-          color: #b1a28d;
+        .mega-trigger .arr {
           font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 4px;
-          margin-bottom: 20px;
-          text-transform: uppercase;
+          transition: transform .25s ease;
+          display: inline-block;
+          margin-left: 2px;
+          line-height: 1;
         }
-        .mm-list {
+        .mega-parent.open .mega-trigger .arr {
+          transform: rotate(180deg);
+        }
+
+        /* ── Backdrop ── */
+        .mega-menu-backdrop {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          z-index: 500;
+          background: transparent;
+          pointer-events: auto;
+        }
+
+        /* ── Panel ── */
+        .mega-menu {
+          position: fixed;
+          left: 50%;
+          transform: translateX(-50%) translateY(-10px);
+          width: min(960px, 92vw);
+          background: #fff;
+          border-radius: 0 0 20px 20px;
+          box-shadow: 0 20px 60px rgba(0,0,0,.14), 0 4px 16px rgba(0,0,0,.06);
+          z-index: 501;
+          display: flex;
+          gap: 0;
+          align-items: stretch;
+          overflow: hidden;
+          visibility: hidden;
+          opacity: 0;
+          pointer-events: none;
+          transition:
+            opacity .22s cubic-bezier(.4,0,.2,1),
+            transform .22s cubic-bezier(.4,0,.2,1),
+            visibility 0s linear .22s;
+        }
+        .mega-menu.open {
+          visibility: visible;
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateX(-50%) translateY(0);
+          transition:
+            opacity .22s cubic-bezier(.4,0,.2,1),
+            transform .22s cubic-bezier(.4,0,.2,1),
+            visibility 0s linear 0s;
+        }
+
+        /* ── Three columns ── */
+        .mega-col {
+          min-width: 0;
+          padding: 28px 28px 24px;
           display: flex;
           flex-direction: column;
-          gap: 9px;
-          list-style: none;
-          margin: 0;
-          padding: 0;
         }
-        .mm-list-2col {
+        #megaColCollections { flex: 1;   background: #fff; }
+        #megaColStates      { flex: 1.5; background: #fff; border-left: 1px solid #f0ede6; border-right: 1px solid #f0ede6; }
+        #megaColCurated     { flex: 1;   background: #f7f4ee; }
+
+        /* ── Column heading ── */
+        .mega-heading {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 2.4px;
+          text-transform: uppercase;
+          color: #a89f92;
+          margin-bottom: 18px;
+          flex-shrink: 0;
+        }
+
+        /* ── List ── */
+        .mega-list {
+          list-style: none;
+          padding: 0; margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+        .mega-list-2col {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 12px 34px;
+          gap: 0 4px;
         }
-        .mm-link {
-          border-radius: 9px;
-          color: #2c241b;
-          display: block;
-          font-size: 15px;
-          font-weight: 500;
-          line-height: 1.35;
-          padding: 3px 10px;
-          text-decoration: none;
-          transition: color .15s, background .15s, transform .15s;
-        }
-        .mm-link:hover {
-          background: #f2f7ef;
-          color: #1a3a1e;
-          transform: translateX(3px);
-        }
-        .mm-view-all {
-          border-top: none;
-          margin-top: 22px;
-          padding-top: 0;
-        }
-        .mm-view-link {
+
+        /* ── List links ── */
+        .mega-list-link {
+          display: flex;
           align-items: center;
-          background: #fff;
-          border: 1px solid #eee7db;
-          border-radius: 999px;
-          color: #2c241b;
-          display: inline-flex;
-          gap: 6px;
-          font-size: 15px;
-          font-weight: 800;
-          min-width: 220px;
-          padding: 11px 16px;
+          width: 100%;
+          padding: 7px 10px;
+          border-radius: 8px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: #2c2c2c;
           text-decoration: none;
-          transition: color .15s, border-color .15s, box-shadow .15s;
+          background: none;
+          cursor: pointer;
+          text-align: left;
+          transition: background .15s, color .15s;
+          white-space: nowrap;
+          letter-spacing: .1px;
+          font-family: inherit;
         }
-        .mm-view-link:hover {
-          border-color: #d8cbb8;
-          box-shadow: 0 8px 24px rgba(0,0,0,.06);
+        .mega-list-link:hover {
+          background: rgba(26,58,30,.08);
           color: #1a3a1e;
         }
-        @media(max-width:1100px){
-          .mm-panel-wrap { width: min(900px, calc(100vw - 48px)); }
-          .mm-col { padding: 26px 24px; }
+        .mega-list-link-bold { font-weight: 600; color: #2c2c2c; }
+        .mega-list-link-bold:hover { color: #1a3a1e; }
+
+        /* ── View All ── */
+        .mega-view-all {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          margin-top: 18px;
+          padding-top: 14px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #1a3a1e;
+          text-decoration: none;
+          transition: gap .15s;
+          border-top: 1px solid #edeae2;
+          letter-spacing: .1px;
         }
-        @media(max-width:900px){ .mm-panel-wrap { display: none; } }
+        .mega-view-all:hover { gap: 9px; }
+
+        /* ── Dark mode ── */
+        .dark .mega-menu          { background: #0f1f11; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+        .dark #megaColCollections { background: #0f1f11; }
+        .dark #megaColStates      { background: #0f1f11; border-color: #1e3a22; }
+        .dark #megaColCurated     { background: #0a1a0c; }
+        .dark .mega-list-link     { color: #d4e8d4; }
+        .dark .mega-list-link:hover { background: rgba(255,255,255,.06); color: #7ec87e; }
+        .dark .mega-heading       { color: #4a6b4a; }
+        .dark .mega-view-all      { color: #7ec87e; border-color: #1e3a22; }
+        .dark .mega-trigger       { color: #d4e8d4; }
+        .dark .mega-trigger:hover,
+        .dark .mega-parent.open .mega-trigger { color: #7ec87e; background: rgba(255,255,255,.04); }
+
+        /* ── Mobile — hide desktop mega ── */
+        @media (max-width: 900px) { .mega-menu { display: none !important; } }
       `}</style>
     </li>
   )
