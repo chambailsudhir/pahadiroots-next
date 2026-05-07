@@ -214,7 +214,7 @@ export default function MegaMenu({ categories, states }: Props) {
         /* ── Three columns ── */
         .mega-col {
           min-width: 0;
-          padding: 28px 28px 24px;
+          padding: 24px 24px 20px;
           display: flex;
           flex-direction: column;
         }
@@ -233,50 +233,56 @@ export default function MegaMenu({ categories, states }: Props) {
           flex-shrink: 0;
         }
 
-        /* ── List ── */
+        /* ── List — aggressive reset to fight Tailwind base + browser UA ── */
         .mega-list {
-          list-style: none;
-          padding: 0; margin: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
+          list-style: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0 !important;
         }
         .mega-list li {
-          margin: 0; padding: 0;
-          list-style: none;
+          margin: 0 !important;
+          padding: 0 !important;
+          list-style: none !important;
+          line-height: 1 !important;
+          display: block !important;
         }
         .mega-list-2col {
-          display: grid;
+          display: grid !important;
           grid-template-columns: 1fr 1fr;
           gap: 0 4px;
         }
 
         /* ── List links ── */
         .mega-list-link {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          padding: 6px 10px;
-          border-radius: 6px;
-          font-size: 13.5px;
-          font-weight: 500;
-          color: #2c2c2c;
-          text-decoration: none;
-          background: none;
-          cursor: pointer;
-          text-align: left;
-          transition: background .15s, color .15s;
-          white-space: nowrap;
-          letter-spacing: .1px;
-          font-family: inherit;
-          line-height: 1.3;
+          display: flex !important;
+          align-items: center !important;
+          width: 100% !important;
+          padding: 7px 10px !important;
+          border-radius: 8px !important;
+          font-size: 13.5px !important;
+          font-weight: 500 !important;
+          color: #2c2c2c !important;
+          text-decoration: none !important;
+          background: none !important;
+          cursor: pointer !important;
+          text-align: left !important;
+          transition: background .15s, color .15s !important;
+          white-space: nowrap !important;
+          letter-spacing: .1px !important;
+          font-family: inherit !important;
+          line-height: 1 !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
         }
         .mega-list-link:hover {
-          background: rgba(26,58,30,.08);
-          color: #1a3a1e;
+          background: rgba(26,58,30,.08) !important;
+          color: #1a3a1e !important;
         }
-        .mega-list-link-bold { font-weight: 600; color: #2c2c2c; }
-        .mega-list-link-bold:hover { color: #1a3a1e; }
+        .mega-list-link-bold { font-weight: 600 !important; color: #2c2c2c !important; }
+        .mega-list-link-bold:hover { color: #1a3a1e !important; }
 
         /* ── View All ── */
         .mega-view-all {
