@@ -239,7 +239,11 @@ export default function MegaMenu({ categories, states }: Props) {
           padding: 0; margin: 0;
           display: flex;
           flex-direction: column;
-          gap: 1px;
+          gap: 0;
+        }
+        .mega-list li {
+          margin: 0; padding: 0;
+          list-style: none;
         }
         .mega-list-2col {
           display: grid;
@@ -252,8 +256,8 @@ export default function MegaMenu({ categories, states }: Props) {
           display: flex;
           align-items: center;
           width: 100%;
-          padding: 7px 10px;
-          border-radius: 8px;
+          padding: 6px 10px;
+          border-radius: 6px;
           font-size: 13.5px;
           font-weight: 500;
           color: #2c2c2c;
@@ -265,6 +269,7 @@ export default function MegaMenu({ categories, states }: Props) {
           white-space: nowrap;
           letter-spacing: .1px;
           font-family: inherit;
+          line-height: 1.3;
         }
         .mega-list-link:hover {
           background: rgba(26,58,30,.08);
