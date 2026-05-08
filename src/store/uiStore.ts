@@ -6,6 +6,7 @@ interface UIStore {
   isCartOpen:       boolean
   isSearchOpen:     boolean
   isMobileMenuOpen: boolean
+  isAuthOpen:       boolean
   searchQuery:      string
 
   openCart:         () => void
@@ -14,6 +15,8 @@ interface UIStore {
   closeSearch:      () => void
   openMobileMenu:   () => void
   closeMobileMenu:  () => void
+  openAuth:         () => void
+  closeAuth:        () => void
   setSearchQuery:   (q: string) => void
 }
 
@@ -21,6 +24,7 @@ export const useUIStore = create<UIStore>((set) => ({
   isCartOpen:       false,
   isSearchOpen:     false,
   isMobileMenuOpen: false,
+  isAuthOpen:       false,
   searchQuery:      '',
 
   openCart:         () => set({ isCartOpen: true }),
@@ -29,5 +33,7 @@ export const useUIStore = create<UIStore>((set) => ({
   closeSearch:      () => set({ isSearchOpen: false, searchQuery: '' }),
   openMobileMenu:   () => set({ isMobileMenuOpen: true }),
   closeMobileMenu:  () => set({ isMobileMenuOpen: false }),
+  openAuth:         () => set({ isAuthOpen: true }),
+  closeAuth:        () => set({ isAuthOpen: false }),
   setSearchQuery:   (q) => set({ searchQuery: q }),
 }))
