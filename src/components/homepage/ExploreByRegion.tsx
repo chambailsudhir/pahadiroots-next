@@ -227,7 +227,7 @@ export default function ExploreByRegion({ states }: Props) {
         {/* View all */}
         {activeState.products.length > 0 && (
           <div style={{ background: '#0d1f0e', textAlign: 'center', padding: '0 0 28px' }}>
-            <Link href={`/regions/${activeState.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#e8b84b', textDecoration: 'none', border: '1px solid rgba(232,184,75,.3)', borderRadius: '24px', padding: '9px 22px', fontFamily: sans }}>
+            <Link href={`/products?state=${activeState.slug}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#e8b84b', textDecoration: 'none', border: '1px solid rgba(232,184,75,.3)', borderRadius: '24px', padding: '9px 22px', fontFamily: sans }}>
               View all {activeState.name} products →
             </Link>
           </div>

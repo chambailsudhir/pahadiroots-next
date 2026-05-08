@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import useSWR from 'swr'
-import { useState, useEffect } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { supabase } from '@/lib/supabase'
 import { formatPrice, formatDate } from '@/lib/utils'
@@ -18,11 +17,7 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 export default function OrdersPage() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
   const user = useUserStore(s => s.user)
-
-  if (!mounted) return null
 
   const { data: orders, isLoading } = useSWR<Order[]>(
     user ? `all-orders-${user.phone}` : null,

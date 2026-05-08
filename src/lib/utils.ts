@@ -101,9 +101,3 @@ export function isEnabled(value: string | undefined, defaultValue = true): boole
   if (value === undefined) return defaultValue
   return value !== 'false'
 }
-
-// ─── Safe category slug (fallback: slugify name) ─────────────────────────────
-// Prevents /collections/Wild%20Honey — always returns a clean URL slug
-export function catSlug(cat: { slug?: string | null; name?: string | null; id?: number | string }): string {
-  return (cat.slug || '').trim() || slugify(cat.name || '') || String(cat.id)
-}

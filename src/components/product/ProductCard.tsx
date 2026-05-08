@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { useUIStore } from '@/store/uiStore'
@@ -30,39 +31,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const price   = baseVariant?.price ?? product.price
   const mrp     = baseVariant?.mrp   ?? product.mrp ?? product.price
   const savings = savingsPercent(mrp, price)
-
-  const stock   = baseVariant?.available_stock ?? product.available_stock ?? 0
-  const inStock = stock > 0
-  const sClass  = stock > 20 ? 'high' : stock > 5 ? 'mid' : 'low'
-  const sPct    = Math.min(100, Math.round(stock / 50 * 100))
-  const sLbl    = !inStock ? 'Out of Stock' : stock > 20 ? 'In Stock' : `Only ${stock} left`
-
-  // Badge: use badges array — same priority as old site (badge_type: bs/og/pm/nw)
-  const badges: string[] = Array.isArray((product as any).badges) ? (product as any).badges : []
-  const isBestseller = product.badges_bestseller || badges.includes('bestseller')
-  const isOrganic    = product.badges_organic    || badges.includes('organic')
-  const isNew        = product.badges_new        || badges.includes('new')
-  const isPremium    = badges.includes('premium')
-
-  // Badge label & dot colour — same as old site pbd- classes
-  let badgeLabel = ''
-  let badgeDotClass = ''
-  if (isBestseller) { badgeLabel = 'Bestseller'; badgeDotClass = 'pbd-bs' }
-  else if (isOrganic)    { badgeLabel = 'Organic';     badgeDotClass = 'pbd-og' }
-  else if (isPremium)    { badgeLabel = 'Premium';     badgeDotClass = 'pbd-pm' }
-  else if (isNew)        { badgeLabel = 'New Arrival'; badgeDotClass = 'pbd-nw' }
-
-  // Region: old site shows p.region (state name). We use categories.name as fallback
-  const region = (product as any).region || product.categories?.name || ''
-  const unitLabel = baseVariant?.size || (product as any).unit || product.unit_label || ''
-  // Deterministic fake count based on product id — no Math.random() during render
-  // (Math.random differs between server and client → React hydration error #418)
-  const _seed = typeof product.id === 'number' ? product.id : String(product.id).split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  const reviewCount = (product as any).review_count || ((_seed * 37 + 19) % 80 + 20)
+  const inStock = (baseVariant?.available_stock ?? product.available_stock) > 0
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
-    e.stopPropagation()
     if (!inStock) return
     addItem({
       productId: String(product.id),
@@ -74,133 +46,94 @@ export default function ProductCard({ product, showWishlist = true, priority = f
       size:      baseVariant?.size ?? product.unit_label ?? '',
       price, mrp,
       gstRate:   product.gst_rate,
-      maxQty:    stock,
+      maxQty:    baseVariant?.available_stock ?? product.available_stock,
     })
     openCart()
   }
 
   function handleWishlist(e: React.MouseEvent) {
     e.preventDefault()
-    e.stopPropagation()
     inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
   }
 
   return (
-    <Link
-      href={`/products/${product.slug}`}
-      className="pcard"
-      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', position: 'relative' }}
-    >
-      {/* ── Badge — top-left, dot + text ── */}
-      {badgeLabel && (
-        <div className="pbadge-wrap">
-          <span className={`pbadge-dot ${badgeDotClass}`} />
-          <span className="pbadge-text">{badgeLabel}</span>
-        </div>
-      )}
-
-      {/* ── Discount ribbon — top-right corner ── */}
-      {savings >= 5 && inStock && (
-        <div className="pdisc-ribbon">-{savings}%</div>
-      )}
-
-      {/* ── Image wrapper ── */}
-      <div className="piw" style={{ background: (product as any).card_bg || '#f5f0e8' }}>
-
-        {/* Emoji fallback (behind image) */}
-        <span className="pemo">{product.emoji || '🌿'}</span>
-
-        {/* Real image */}
-        {product.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+    <Link href={`/products/${product.slug}`} className="pcard" style={{ textDecoration: 'none' }}>
+      {/* Image area */}
+      <div className="piw">
+        {product.image_url ? (
+          <Image
             src={product.image_url}
             alt={product.name}
-            loading={priority ? 'eager' : 'lazy'}
-            fetchPriority={priority ? 'high' : 'auto'}
-            decoding="async"
-            width={400}
-            height={500}
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', zIndex: 1, opacity: 0, transition: 'opacity .45s',
-            }}
-            onLoad={e => {
-              const img = e.currentTarget
-              img.style.opacity = '1'
-              const emo = img.previousElementSibling as HTMLElement | null
-              if (emo?.classList.contains('pemo')) emo.style.opacity = '0'
-              img.closest('.piw')?.classList.add('img-ready')
-            }}
-            onError={e => { e.currentTarget.style.display = 'none' }}
+            fill
+            sizes="(max-width:640px) 50vw, (max-width:1024px) 33vw, 25vw"
+            className="object-cover"
+            style={{ transition: 'transform .4s' }}
+            priority={priority}
           />
+        ) : (
+          <div className="pemo">{product.emoji || '🌿'}</div>
         )}
 
-        {/* Hover overlay with Quick View */}
-        <div className="piw-hover-overlay">
-          <button
-            className="piw-qv-btn"
-            onClick={e => { e.preventDefault(); e.stopPropagation() }}
-            aria-label="Quick view"
-          >
-            👁 Quick View
-          </button>
+        {/* Badges */}
+        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 2 }}>
+          {!inStock && <span className="pbadge" style={{ background: '#555', color: '#fff' }}>Out of Stock</span>}
+          {inStock && product.badges_bestseller && <span className="pbadge bbs">Best Seller</span>}
+          {inStock && product.badges_organic    && <span className="pbadge bog">Organic</span>}
+          {inStock && product.badges_new        && <span className="pbadge bnw">New</span>}
+          {savings >= 5 && inStock              && <span className="pbadge bpm">{savings}% off</span>}
         </div>
 
-        {/* Wishlist heart — bottom-right, shows on hover */}
+        {/* Wishlist */}
         {showWishlist && (
           <button
-            className={`piw-wl-btn${inWishlist ? ' active' : ''}`}
             onClick={handleWishlist}
             aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            className={`wl-btn${inWishlist ? ' active' : ''}`}
           >
             {inWishlist ? '❤️' : '🤍'}
           </button>
         )}
+
+        {/* Social proof */}
+        {inStock && product.badges_bestseller && (
+          <div className="soc-proof">
+            <div className="soc-dot" />
+            <span>Popular pick</span>
+          </div>
+        )}
       </div>
 
-      {/* ── Card body ── */}
+      {/* Body */}
       <div className="pbody">
-
-        {/* Region / category label */}
-        {region && <div className="pregion">📍 {region}</div>}
-
-        {/* Name */}
+        {product.categories?.name && (
+          <div className="pregion">{product.categories.name}</div>
+        )}
         <div className="pname">{product.name}</div>
 
-        {/* Rating — same as old site: always 5 stars */}
+        {/* Rating */}
         <div className="prating">
           <span className="pstars">★★★★★</span>
-          <span className="prc">({reviewCount})</span>
+          <span className="prc">(4.9)</span>
         </div>
 
-        {/* Stock bar + label */}
-        <div className="stock-bar">
-          <div className={`stock-fill ${sClass}`} style={{ width: `${sPct}%` }} />
-        </div>
-        <div className={`stock-label ${sClass}`}>{sLbl}</div>
+        {variants.length > 1 && (
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 4 }}>{variants.length} sizes available</div>
+        )}
 
-        {/* Price + ATC */}
-        <div className="pfoot" style={{ marginTop: 8 }}>
-          <div className="prow" style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
-            <span className="pnow">₹{price}</span>
-            {mrp > price && <span className="pwas">₹{mrp}</span>}
-            {unitLabel && <span className="punt">{unitLabel}</span>}
+        <div className="pfoot">
+          <div className="prow">
+            <span className="pnow">{formatPrice(price)}</span>
+            {mrp > price && <span className="pwas">{formatPrice(mrp)}</span>}
           </div>
-
-          {/* ATC / Notify */}
-          <div className="pcard-actions">
-            {inStock ? (
-              <button className="atc pcard-atc-full" onClick={handleAddToCart}>
-                🛒 Add to Cart
-              </button>
-            ) : (
-              <button className="atc pcard-atc-full" disabled style={{ opacity: .5, cursor: 'not-allowed' }}>
-                🔔 Notify Me
-              </button>
-            )}
-            <span className="atc-hint">View Details →</span>
-          </div>
+          {inStock ? (
+            <button onClick={handleAddToCart} className="atc">
+              🛒 Add to Cart
+            </button>
+          ) : (
+            <button disabled className="atc" style={{ opacity: .5, cursor: 'not-allowed' }}>
+              Out of Stock
+            </button>
+          )}
         </div>
       </div>
     </Link>

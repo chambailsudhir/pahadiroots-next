@@ -1,5 +1,4 @@
 'use client'
-import { useState, useEffect } from 'react'
 
 import { useParams, useRouter } from 'next/navigation'
 import useSWR from 'swr'
@@ -22,8 +21,6 @@ const STATUS_INDEX: Partial<Record<OrderStatus, number>> = {
 }
 
 export default function OrderDetailPage() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
   const { id }   = useParams<{ id: string }>()
   const user     = useUserStore(s => s.user)
   const router   = useRouter()
@@ -60,8 +57,6 @@ export default function OrderDetailPage() {
 
   const currentStep = STATUS_INDEX[order.order_status] ?? -1
   const isCancelled = ['cancelled', 'returned', 'refunded', 'return_requested'].includes(order.order_status)
-
-  if (!mounted) return null
 
   return (
     <div className="space-y-5">

@@ -1,52 +1,38 @@
-import { getStoreData } from '@/lib/storeData'
-import RelatedCard from './RelatedCard'
+import { supabase } from '@/lib/supabase'
+import { normalizeProducts } from '@/lib/normalizeProduct'
+import ProductCard from './ProductCard'
+import type { Product } from '@/types'
 
-interface Props { categoryId: number | string; excludeId: number | string }
+interface Props { categoryId: string | number; excludeId: string | number }
 
 export default async function RelatedProducts({ categoryId, excludeId }: Props) {
-  let products: any[] = []
+  let products: Product[] = []
   try {
-    const storeData = await getStoreData()
-    products = storeData.products
-      .filter((p: any) =>
-        p.id !== excludeId &&
-        String(p.category_id) === String(categoryId)
-      )
-      .slice(0, 4)
-
-    // Attach images
-    products = products.map((p: any) => {
-      const imgs = storeData.product_images
-        .filter((i: any) => String(i.product_id) === String(p.id))
-        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      return { ...p, _firstImage: imgs[0]?.image_url || imgs[0]?.url || p.image_url || '' }
-    })
-
-    // Attach variants
-    products = products.map((p: any) => {
-      const vars = storeData.product_variants
-        .filter((v: any) => String(v.product_id) === String(p.id) && v.is_active)
-        .sort((a: any, b: any) => a.price - b.price)
-      return { ...p, _variants: vars }
-    })
+    const { data } = await supabase
+      .from('products')
+      .select(`
+        id, name, slug, emoji, price, mrp, available_stock, gst_rate,
+        image_url, unit_label, badges, category_id,
+        is_deleted, status,
+        categories:categories(id, name, slug),
+        product_variants(id, price, mrp, variant_value, available_stock, is_active)
+      `)
+      .eq('category_id', categoryId)
+      .eq('is_deleted', false)
+      .eq('status', 'active')
+      .neq('id', excludeId)
+      .limit(4)
+    products = normalizeProducts(data ?? [])
   } catch { return null }
 
   if (!products.length) return null
 
   return (
-    <section>
-      <h2 className="pdp-related-title">You May Also Like</h2>
-      <p className="pdp-related-sub">Handpicked from the same Himalayan region</p>
-      <div className="pdp-related-grid">
-        {products.map((p: any) => <RelatedCard key={p.id} product={p} />)}
+    <section className="border-t border-stone-100 pt-10">
+      <h2 className="text-xl font-bold text-stone-900 mb-6">You Might Also Like</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        {products.map(p => <ProductCard key={p.id} product={p} />)}
       </div>
-      <style>{`
-        .pdp-related-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;color:#1a3a1e;margin-bottom:4px}
-        .pdp-related-sub{font-size:13px;color:#7a7a7a;margin-bottom:20px}
-        .pdp-related-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-        @media(max-width:880px){.pdp-related-grid{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:480px){.pdp-related-grid{grid-template-columns:1fr 1fr}}
-      `}</style>
     </section>
   )
 }
