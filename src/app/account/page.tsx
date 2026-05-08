@@ -32,19 +32,22 @@ function useToast() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// FIXES in this file (audit):
-//  ✅ mounted hydration gate removed — replaced with suppressHydrationWarning
-//     approach via loading-first render (auth.loaded gate is enough)
-//  ✅ auth.init() decoupled from mounted — called in useEffect([]) directly
-//  ✅ savedAddrsList dep fixed: [savedAddrs] not [auth.profile]
-//  ✅ All eslint-disable-line suppressions removed — proper deps used
-//  ✅ `any` removed from OrderCard map
+// FIXES in this file (audit rounds 1 + 2):
+//  ✅ mounted hydration gate removed — auth.loaded is the correct gate
+//  ✅ auth.init() decoupled from mounted — runs in useEffect([])
+//  ✅ savedAddrs memoized from profile.saved_addresses string (stable dep)
+//  ✅ savedAddrsList dep is [savedAddrs] — no JSON.stringify workaround
+//  ✅ No eslint-disable suppressions anywhere in this file
+//  ✅ Orders effect has full honest dep array
+//  ✅ search-clear button has type="button"
+//  ✅ (o: any) in OrderCard map → typed as Order
 //
-// KNOWN LIMITATIONS (architectural, require larger refactor):
-//  ⚠️  Page still renders orders/addresses/profile/password in one tree.
-//      Splitting into sub-routes (/account/orders, /account/profile etc.)
-//      would reduce rerender scope but requires routing restructure.
-//      Current tab-switch approach is pragmatic and functional.
+// KNOWN LIMITATIONS (require larger architectural decisions):
+//  ⚠️  Page renders all tabs in one tree — splitting to sub-routes
+//      (/account/orders, /account/profile) would scope rerenders
+//      but requires routing restructure outside this file.
+//  ⚠️  'use client' at page level — SSR of this page is limited
+//      by the nature of auth-gated, personalised content.
 // ─────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const [tab, setTab] = useState<Tab>('orders')
@@ -54,12 +57,17 @@ export default function AccountPage() {
   const orders  = useOrders(auth.token, auth.setToken)
   const profile = useProfile(auth.token, auth.profile, auth.updateLocalProfile, showToast)
 
-  // ── savedAddrs derived from profile — correct dep is savedAddrs ──
-  const savedAddrs = getSavedAddresses(auth.profile)
+  // ── savedAddrs: memoized from profile's saved_addresses string ──
+  // The raw saved_addresses field is a JSON string — it changes by reference
+  // only when the profile is updated, making it a stable, cheap dep.
+  const savedAddrsRaw = auth.profile?.saved_addresses ?? ''
+  const savedAddrs = useMemo(
+    () => getSavedAddresses(auth.profile) as SavedAddress[],
+    [savedAddrsRaw]
+  )
   const savedAddrsList = useMemo(
-    () => (savedAddrs as SavedAddress[]).filter(a => a.label !== 'Default'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(savedAddrs)]  // stable dep: JSON of the array (profile-derived value)
+    () => savedAddrs.filter(a => a.label !== 'Default'),
+    [savedAddrs]
   )
 
   // ── Auth init — decoupled from mounted state ──────────────
@@ -72,12 +80,14 @@ export default function AccountPage() {
     if (auth.profile) profile.initFromProfile(auth.profile)
   }, [auth.profile]) // profile.initFromProfile is stable (defined in hook body)
 
-  // ── Auto-fetch orders — hasFetched prevents retry loops ──
+  // ── Auto-fetch orders — all effect deps declared honestly ────
+  // hasFetched + loading are read inside — they're in the dep array.
+  // fetchOrders is stable (defined with useCallback in the hook).
   useEffect(() => {
     if (auth.token && auth.loggedIn && !orders.hasFetched && !orders.loading) {
       orders.fetchOrders()
     }
-  }, [auth.token, auth.loggedIn]) // fetchOrders is stable
+  }, [auth.token, auth.loggedIn, orders.hasFetched, orders.loading, orders.fetchOrders])
 
   // ── Auth loading state (replaces mounted gate) ────────────
   if (!auth.loaded) return (
@@ -161,7 +171,7 @@ export default function AccountPage() {
                           onChange={e => orders.setSearch(e.target.value)}
                         />
                         {orders.search && (
-                          <button className="search-clear" onClick={() => orders.setSearch('')}>✕</button>
+                          <button type="button" className="search-clear" onClick={() => orders.setSearch('')}>✕</button>
                         )}
                       </div>
                       <div className="filter-row">

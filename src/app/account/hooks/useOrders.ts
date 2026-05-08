@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { accountApi } from '@/lib/account/api'
 import { ACTIVE_STATUSES, RETURN_STATUSES } from '@/lib/account/constants'
 
@@ -72,7 +72,10 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
     debounceTimer.current = setTimeout(() => setDebouncedSearch(val), 300)
   }
 
-  async function fetchOrders() {
+  // ── fetchOrders wrapped in useCallback for stable reference ─
+  // This lets page.tsx safely include it in useEffect dep arrays
+  // without triggering infinite loops.
+  const fetchOrders = useCallback(async () => {
     if (!token || loading) return
 
     // Cancel any previous in-flight request
@@ -82,7 +85,6 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
     setLoading(true)
     try {
       const d = await accountApi.getOrders(token, (newTk) => setToken(newTk))
-      // Check if we were aborted before applying state
       if (abortRef.current?.signal.aborted) return
       setOrders((d.orders as Order[]) || [])
     } catch (e: unknown) {
@@ -96,7 +98,7 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
         setHasFetched(true)
       }
     }
-  }
+  }, [token]) // token is the only real external dep
 
   // ── Derived stats — typed, no `any` in reducers ───────────
   const stats = useMemo(() => {

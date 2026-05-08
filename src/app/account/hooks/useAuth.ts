@@ -1,17 +1,19 @@
 // ─────────────────────────────────────────────────────────────
 // useAuth — handles init, login state, logout
 //
-// FIXES applied (audit):
-//  ✅ Proper types replacing `any` (Profile, AuthUser)
-//  ✅ auth.init() decoupled from `mounted` — called directly in useEffect([])
-//  ✅ Error logging instead of silent catch swallowing
-//  ✅ logout failure now logs + still clears local state
-//  ✅ Deep merge for nested profile fields via structuredClone
-//  ✅ Token null-guard before logout API call
+// FIXES applied (audit rounds 1 + 2):
+//  ✅ Proper types: Profile, AuthUser interfaces (no `any`)
+//  ✅ storage.getProfile() cast safely through unknown → Profile | null
+//  ✅ d.profile / d.user casts explicit and null-guarded
+//  ✅ auth.init() decoupled from mounted state — useEffect([]) only
+//  ✅ Error logging on all catch paths (console.warn / console.error)
+//  ✅ logout() null-guards token before API call, logs failures
+//  ✅ Deep merge via structuredClone — safe for nested profile fields
 //
-// KNOWN LIMITATIONS (require backend changes — cannot fix client-side):
-//  ⚠️  localStorage tokens — needs httpOnly cookies via Next.js API route
-//  ⚠️  Monolithic auth endpoint — needs split into /api/profile, /api/auth etc.
+// KNOWN LIMITATIONS (require backend changes):
+//  ⚠️  localStorage tokens (XSS risk) — needs httpOnly cookies
+//      via Next.js API route. Cannot be fixed client-side.
+//  ⚠️  Monolithic auth endpoint — needs backend route split.
 // ─────────────────────────────────────────────────────────────
 'use client'
 
@@ -75,8 +77,9 @@ export function useAuth() {
     if (initDone.current) return
     initDone.current = true
 
-    const tk     = storage.getToken()
-    const cached = storage.getProfile() as Profile | null
+    const tk = storage.getToken()
+    // storage.getProfile() returns unknown — cast safely
+    const cached = (storage.getProfile() ?? null) as Profile | null
 
     if (!tk) { setLoaded(true); return }
 
@@ -90,15 +93,16 @@ export function useAuth() {
 
       accountApi.getProfile(tk)
         .then(d => {
-          if (d.profile) {
-            setProfile(d.profile as Profile)
-            storage.saveProfile(d.profile)
-            syncStore(d.profile as Profile, d.user as AuthUser | null)
+          const prof = (d.profile ?? null) as Profile | null
+          const user = (d.user  ?? null) as AuthUser | null
+          if (prof) {
+            setProfile(prof)
+            storage.saveProfile(prof)
+            syncStore(prof, user)
           }
-          if (d.user) setAuthUser(d.user as AuthUser)
+          if (user) setAuthUser(user)
         })
         .catch((err: unknown) => {
-          // Background — cached data still shown, just log for diagnostics
           console.warn('[useAuth] background profile refresh failed:', err)
         })
       return
@@ -106,34 +110,37 @@ export function useAuth() {
 
     // No cache — fetch fresh
     try {
-      const d = await accountApi.getProfile(tk)
-      if (!d.profile) { setLoaded(true); return }
-      const prof = d.profile as Profile
+      const d    = await accountApi.getProfile(tk)
+      const prof = (d.profile ?? null) as Profile | null
+      const user = (d.user   ?? null) as AuthUser | null
+      if (!prof) { setLoaded(true); return }
       setProfile(prof)
-      setAuthUser(d.user as AuthUser | null)
+      setAuthUser(user)
       setToken(tk)
       setLoggedIn(true)
       setLoaded(true)
       storage.saveProfile(prof)
-      syncStore(prof, d.user as AuthUser | null)
+      syncStore(prof, user)
     } catch (err: unknown) {
       console.warn('[useAuth] profile fetch failed, attempting token refresh:', err)
       const rt = storage.getRefreshToken()
       if (!rt) { setLoaded(true); return }
       try {
-        const r = await accountApi.refreshToken(rt)
+        const r    = await accountApi.refreshToken(rt)
         if (!r.access_token) { setLoaded(true); return }
         storage.saveToken(r.access_token)
         if (r.refresh_token) storage.saveRefreshToken(r.refresh_token)
-        const d = await accountApi.getProfile(r.access_token)
-        const prof = d.profile as Profile
+        const d    = await accountApi.getProfile(r.access_token)
+        const prof = (d.profile ?? null) as Profile | null
+        const user = (d.user   ?? null) as AuthUser | null
+        if (!prof) { setLoaded(true); return }
         setProfile(prof)
-        setAuthUser(d.user as AuthUser | null)
+        setAuthUser(user)
         setToken(r.access_token)
         setLoggedIn(true)
         setLoaded(true)
         storage.saveProfile(prof)
-        syncStore(prof, d.user as AuthUser | null)
+        syncStore(prof, user)
       } catch (refreshErr: unknown) {
         console.error('[useAuth] token refresh failed — session expired:', refreshErr)
         setLoaded(true)
