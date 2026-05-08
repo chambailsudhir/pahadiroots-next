@@ -103,8 +103,8 @@ nav.main-nav.shadow { box-shadow: 0 2px 16px rgba(0,0,0,.08); }
 .logo-name { font-family: 'Playfair Display', serif; font-size: 19px; font-weight: 900; color: var(--g); line-height: 1.1; }
 .logo-tagline { font-size: 10.5px; color: var(--gd); font-weight: 600; letter-spacing: .5px; }
 .nav-links { display: flex; list-style: none; gap: 0; align-items: center; }
-.nav-links a { font-size: 14px; font-weight: 700; color: var(--tx2); padding: 6px 14px; border-radius: 20px; transition: all .2s; letter-spacing: .3px; white-space: nowrap; }
-.nav-links a:hover { color: var(--g); background: rgba(26,58,30,.06); }
+.nav-links > li > a { font-size: 14px; font-weight: 700; color: var(--tx2); padding: 6px 14px; border-radius: 20px; transition: all .2s; letter-spacing: .3px; white-space: nowrap; }
+.nav-links > li > a:hover { color: var(--g); background: rgba(26,58,30,.06); }
 .nav-right { display: flex; align-items: center; gap: 6px; }
 .nib { background: none; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background .2s; position: relative; }
 .nib:hover { background: rgba(26,58,30,.07); }
@@ -954,9 +954,9 @@ ul.mega-list.mega-list-2col {
 /* ── Each link: exact old-site row = ~24px total ── */
 .mega-list-link {
   display: block !important;
-  padding: 3px 8px !important;       /* 3+3 = 6px vertical + 13px font ≈ 22px row */
+  padding: 7px 10px !important;      /* exact copy from pahadiroots-main */
   border-radius: 6px !important;
-  font-size: 13px !important;
+  font-size: 13.5px !important;
   font-weight: 500 !important;
   color: #2c2c2c !important;
   text-decoration: none !important;
@@ -966,7 +966,7 @@ ul.mega-list.mega-list-2col {
   white-space: nowrap !important;
   letter-spacing: .1px !important;
   font-family: inherit !important;
-  line-height: 1.5 !important;       /* 13 * 1.5 = ~19.5px + 6px padding = ~26px */
+  line-height: 1 !important;         /* prevent body line-height:1.5 inflation */
   margin: 0 !important;
   box-sizing: border-box !important;
 }
@@ -978,7 +978,7 @@ ul.mega-list.mega-list-2col {
 .mega-view-all {
   display: inline-flex !important; align-items: center !important; gap: 5px !important;
   margin-top: 12px !important; padding-top: 10px !important; padding-bottom: 0 !important;
-  font-size: 13px !important; font-weight: 600 !important; color: #1a3a1e !important;
+  font-size: 13.5px !important; font-weight: 600 !important; color: #1a3a1e !important;
   text-decoration: none !important; transition: gap .15s !important;
   border-top: 1px solid #edeae2 !important; letter-spacing: .1px !important; line-height: 1 !important;
 }
