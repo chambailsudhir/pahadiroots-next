@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
-import { Inter, Playfair_Display, Lato } from 'next/font/google'
+import { Inter, Playfair_Display, Lato, DM_Sans } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
+import ClientOnly from '@/components/ClientOnly'
 import { Providers } from './providers'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
+import AuthModal from '@/components/auth/AuthModal'
+import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 
 const inter = Inter({ variable: '--font-geist-sans', subsets: ['latin'] })
 const playfair = Playfair_Display({
@@ -21,6 +24,12 @@ const lato = Lato({
   variable: '--font-lato',
   subsets: ['latin'],
   weight: ['300', '400', '700', '900'],
+})
+
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -79,6 +88,7 @@ export default async function RootLayout({
     <html lang="en-IN" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a3a1e" />
+        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v6" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
@@ -112,17 +122,22 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
+      <body className={`${inter.variable} ${playfair.variable} ${lato.variable} ${dmSans.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         <Providers>
-          <Header settings={settings} categories={categories} states={states} />
+          <ClientOnly>
+            <Header settings={settings} categories={categories} states={states} />
+          </ClientOnly>
           <main className="min-h-screen">
             {children}
           </main>
-          <Footer settings={settings} />
-          {/* Global overlays — rendered once at root */}
-          <CartDrawer settings={settings} />
-          <SearchOverlay />
-          <MobileMenu settings={settings} categories={categories} states={states} />
+          <ClientOnly>
+            <Footer settings={settings} />
+            <CartDrawer settings={settings} />
+            <SearchOverlay />
+            <MobileMenu settings={settings} categories={categories} states={states} />
+            <AuthModal />
+            <GoogleAuthHandler />
+          </ClientOnly>
         </Providers>
       </body>
     </html>

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { catSlug } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 
 interface Props { slug: string }
@@ -19,7 +20,7 @@ export default async function FeaturedBanner({ slug }: Props) {
   return (
     <section style={{ padding: '24px 40px', background: '#fff' }}>
       <div style={{ maxWidth: 1300, margin: '0 auto' }}>
-        <Link href={`/collections/${cat.slug}`} className="group" style={{ display: 'block' }}>
+        <Link href={`/collections/${catSlug(cat)}`} className="group" style={{ display: 'block' }}>
           <div style={{
             position: 'relative', overflow: 'hidden', borderRadius: 20,
             background: 'linear-gradient(135deg,#071a09,#1a3a1e)',

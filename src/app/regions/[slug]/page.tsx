@@ -2,95 +2,128 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 
-export const revalidate = 21600 // 6hr
+export const revalidate = 300 // 5 min
 
 interface Props { params: { slug: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const state = await fetchState(params.slug)
+  const storeData = await getStoreData()
+  const state = (storeData.states || []).find((s: any) => String(s.id) === params.slug)
   if (!state) return { title: 'Region Not Found' }
   return {
-    title:       `${state.name} Products — Shop Authentic Himalayan Products`,
+    title:       `${state.name} Products — Shop Authentic Himalayan Products | Pahadi Roots`,
     description: state.description?.slice(0, 155) || `Explore pure natural products from ${state.name}, sourced directly from mountain farming communities.`,
   }
 }
 
 export default async function RegionPage({ params }: Props) {
-  const state = await fetchState(params.slug)
+  const storeData = await getStoreData()
+
+  // Find state by id (e.g. "hp", "uk")
+  const state = (storeData.states || []).find((s: any) => String(s.id) === params.slug)
   if (!state) notFound()
 
-  let products = null
-  try {
-    const { data } = await supabase
-      .from('products')
-      .select(`
-        id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-        image_url, unit_label, badges, category_id, is_deleted, status,
-        categories:categories(id, name, slug),
-        product_variants(id, price, mrp, variant_value, available_stock, is_active)
-      `)
-      .eq('state_id', state.id)   // state.id is the text code e.g. "hp"
-      .eq('is_deleted', false)
-      .eq('status', 'active')
-      .order('name')
-      .limit(24)
-    products = normalizeProducts(data ?? [])
-  } catch { products = null }
+  // Get state image
+  const stateImages = (storeData.state_images || [])
+    .filter((i: any) => String(i.state_id) === String(state.id))
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
 
-  const stateProducts = (products as Product[]) || []
+  // Get products for this state using service key data (bypasses RLS)
+  const withImages = getProductsWithImages(storeData)
+  const allProducts = normalizeProducts(withImages)
+
+  // Filter by state_id — try both string match and numeric match
+  const stateProducts = allProducts.filter((p: any) => {
+    const pid = String(p.state_id ?? '')
+    return pid === String(state.id) || pid === String(state.id).toLowerCase()
+  }) as Product[]
 
   return (
-    <div>
+    <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
+
       {/* Hero */}
-      <div className="relative h-64 sm:h-80 bg-forest-900 overflow-hidden">
-        {state.image_path && (
-          <Image src={state.image_path} alt={state.name} fill sizes="100vw" className="object-cover opacity-50" />
+      <div style={{
+        position: 'relative', height: '280px', background: 'linear-gradient(135deg,#1a3a1e,#2d5a35)',
+        overflow: 'hidden'
+      }}>
+        {stateImageUrl && (
+          <Image
+            src={stateImageUrl}
+            alt={state.name}
+            fill
+            sizes="100vw"
+            style={{ objectFit: 'cover', objectPosition: 'center 30%', opacity: 0.55 }}
+            priority
+          />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-forest-950/80 to-transparent" />
-        <div className="absolute inset-0 flex flex-col justify-end px-6 sm:px-12 lg:px-20 pb-8">
-          <div className="flex items-center gap-2 text-xs text-forest-300 mb-2">
-            <Link href="/" className="hover:text-white">Home</Link>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 60%)' }} />
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '10px' }}>
+            <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
-            <span className="text-white">Regions</span>
+            <Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link>
             <span>/</span>
-            <span className="text-white">{state.name}</span>
+            <span style={{ color: '#fff' }}>Regions</span>
+            <span>/</span>
+            <span style={{ color: '#fff' }}>{state.name}</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white">{state.name}</h1>
+          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>
+            {state.name}
+          </h1>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px 40px 60px' }}>
 
-        {/* Story */}
+        {/* State description */}
         {state.description && (
-          <div className="max-w-2xl mb-10">
-            <h2 className="text-lg font-bold text-stone-900 mb-3">About {state.name}</h2>
-            <p className="text-stone-600 leading-relaxed text-sm">{state.description}</p>
+          <div style={{ maxWidth: '700px', marginBottom: '36px' }}>
+            <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '20px', fontWeight: 700, color: '#1a3a1e', marginBottom: '10px' }}>
+              About {state.name}
+            </h2>
+            <p style={{ color: '#555', lineHeight: 1.8, fontSize: '14px' }}>{state.description}</p>
           </div>
         )}
 
-        {/* Products */}
+        {/* Products section */}
         <div>
-          <h2 className="text-xl font-bold text-stone-900 mb-6">
-            Products from {state.name}
-            <span className="ml-2 text-sm font-normal text-stone-400">({stateProducts.length})</span>
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
+              Products from {state.name}
+              <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#999', fontStyle: 'normal' }}>
+                ({stateProducts.length})
+              </span>
+            </h2>
+            <Link href="/products" style={{
+              fontSize: '13px', fontWeight: 700, color: '#1a3a1e', textDecoration: 'none',
+              border: '1.5px solid #1a3a1e', borderRadius: '20px', padding: '8px 18px'
+            }}>
+              All Products →
+            </Link>
+          </div>
 
           {stateProducts.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-4xl mb-3">🏔️</div>
-              <p className="text-stone-400">Products from this region coming soon.</p>
-              <Link href="/products" className="mt-4 inline-block text-forest-700 text-sm font-semibold hover:underline">
-                Browse all products →
+            <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏔️</div>
+              <p style={{ color: '#999', fontSize: '15px', marginBottom: '16px' }}>
+                Products from {state.name} coming soon.
+              </p>
+              <Link href="/products" style={{
+                display: 'inline-block', background: '#1a3a1e', color: '#fff',
+                borderRadius: '24px', padding: '10px 24px', fontSize: '13px',
+                fontWeight: 700, textDecoration: 'none'
+              }}>
+                Browse all products
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+            <div className="pgrid">
               {stateProducts.map((p, i) => (
                 <ProductCard key={p.id} product={p} priority={i < 4} />
               ))}
@@ -102,24 +135,9 @@ export default async function RegionPage({ params }: Props) {
   )
 }
 
-// states table: id=text (e.g. "hp"), name, description, is_active, image_path
-// The URL /regions/hp → params.slug = "hp" → match states.id = "hp"
-async function fetchState(slug: string) {
-  try {
-    const { data, error } = await supabase
-      .from('states')
-      .select('id, name, description, image_path, is_active')
-      .eq('id', slug)   // ← FIX: states uses "id" as the slug, not a separate "slug" column
-      .single()
-    return error ? null : data
-  } catch { return null }
-}
-
 export async function generateStaticParams() {
-  let data = null
   try {
-    const r = await supabase.from('states').select('id')  // ← FIX: select "id" not "slug"
-    data = r.data
-  } catch {}
-  return (data || []).map((s: any) => ({ slug: s.id }))  // ← FIX: use s.id not s.slug
+    const storeData = await getStoreData()
+    return (storeData.states || []).map((s: any) => ({ slug: String(s.id) }))
+  } catch { return [] }
 }
