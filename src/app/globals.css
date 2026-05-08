@@ -105,6 +105,41 @@ nav.main-nav.shadow { box-shadow: 0 2px 16px rgba(0,0,0,.08); }
 .nav-links { display: flex; list-style: none; gap: 0; align-items: center; }
 .nav-links > li > a { font-size: 14px; font-weight: 700; color: var(--tx2); padding: 6px 14px; border-radius: 20px; transition: all .2s; letter-spacing: .3px; white-space: nowrap; }
 .nav-links > li > a:hover { color: var(--g); background: rgba(26,58,30,.06); }
+/* ── Mega menu link isolation: prevent ANY nav-links a styles leaking in ── */
+.nav-links .mega-link {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  padding: 7px 10px !important;
+  border-radius: 8px !important;
+  color: #4a4a4a !important;
+  background: transparent !important;
+  letter-spacing: .1px !important;
+  line-height: 1 !important;
+  display: block !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  transition: background .15s, color .15s !important;
+}
+.nav-links .mega-link:hover {
+  background: rgba(26,58,30,.08) !important;
+  color: #1a3a1e !important;
+  border-radius: 8px !important;
+}
+.nav-links .mega-li {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+  list-style: none !important;
+}
+.nav-links .mega-ul {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
 .nav-right { display: flex; align-items: center; gap: 6px; }
 .nib { background: none; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: background .2s; position: relative; }
 .nib:hover { background: rgba(26,58,30,.07); }
