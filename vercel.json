@@ -1,6 +1,17 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "devCommand": "next dev",
-  "installCommand": "npm install"
+  "functions": {
+    "src/app/api/v1/orders/route.ts":               { "maxDuration": 15 },
+    "src/app/api/v1/payments/route.ts":             { "maxDuration": 15 },
+    "src/app/api/v1/webhook/razorpay/route.ts":     { "maxDuration": 10 }
+  },
+  "headers": [
+    {
+      "source": "/api/v1/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "DENY" },
+        { "key": "X-XSS-Protection",       "value": "1; mode=block" }
+      ]
+    }
+  ]
 }

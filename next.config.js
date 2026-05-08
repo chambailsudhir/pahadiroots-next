@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-// Build: 2026-05-07 08:51 — cache bust
 const nextConfig = {
   images: {
     remotePatterns: [
