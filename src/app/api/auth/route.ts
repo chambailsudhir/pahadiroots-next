@@ -124,7 +124,9 @@ async function syncCustomerProfile(user: { id: string; phone?: string; email?: s
       if (match.auth_user_id !== user.id) {
         const patch: Record<string, unknown> = { auth_user_id: user.id }
         if (phone && !match.phone) patch.phone = phone
-        await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch(() => {})
+        await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch((e: unknown) => {
+          console.warn('[syncCustomerProfile] patch failed — proceeding with stale match:', e)
+        })
         match = { ...match, ...patch }
       }
       return match
@@ -459,7 +461,10 @@ export async function POST(req: NextRequest) {
   // ── Logout ──
   if (action === 'logout') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    if (token) { try { await sbAuth('/logout', {}, token) } catch {} }
+    if (token) {
+      try { await sbAuth('/logout', {}, token) }
+      catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed — local session still cleared:', e) }
+    }
     return ok({ success: true })
   }
 
@@ -487,7 +492,8 @@ export async function POST(req: NextRequest) {
         [key: string]: unknown
       }
       let genData: GenLinkResponse = {}
-      try { genData = JSON.parse(genText) as GenLinkResponse } catch {}
+      try { genData = JSON.parse(genText) as GenLinkResponse }
+      catch (e: unknown) { console.warn('[forgot_password] failed to parse generate_link response:', e) }
       if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return ok({ success: true }) }
       const finalResetUrl = genData.action_link || genData.properties?.action_link || genData.data?.action_link || ''
       if (!finalResetUrl) return err(500, 'Could not generate reset link — please try again')

@@ -434,6 +434,7 @@ export default function AccountPage() {
 
           {/* ══ ADDRESSES ════════════════════════════════════ */}
           {tab === 'addresses' && (
+            <ErrorBoundary section="Addresses">
             <div className="panel-section">
               <div className="panel-header">
                 <div className="panel-title">Delivery Addresses</div>
@@ -545,10 +546,12 @@ export default function AccountPage() {
                 )}
               </div>
             </div>
+            </ErrorBoundary>
           )}
 
           {/* ══ PROFILE ══════════════════════════════════════ */}
           {tab === 'profile' && (
+            <ErrorBoundary section="Profile">
             <div className="panel-section">
               <div className="panel-header">
                 <div className="panel-title">My Profile</div>
@@ -638,10 +641,12 @@ export default function AccountPage() {
                 </div>
               </div>
             </div>
+            </ErrorBoundary>
           )}
 
           {/* ══ PASSWORD ═════════════════════════════════════ */}
           {tab === 'password' && (
+            <ErrorBoundary section="Password">
             <div className="panel-section">
               <div className="panel-header">
                 <div className="panel-title">Change Password</div>
@@ -688,6 +693,7 @@ export default function AccountPage() {
                 </div>
               </div>
             </div>
+            </ErrorBoundary>
           )}
 
         </div>{/* main-panel */}
