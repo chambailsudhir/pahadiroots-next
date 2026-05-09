@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       const msg = e2.message || ''
-      if (msg.toLowerCase().includes('unsupported') || msg.toLowerCase().includes('provider') || e.status === 422) {
+      if (msg.toLowerCase().includes('unsupported') || msg.toLowerCase().includes('provider') || e2.status === 422) {
         return err(422, 'SMS_NOT_CONFIGURED')
       }
       return err(e2.status || 500, e2.message || 'Failed to send OTP')
