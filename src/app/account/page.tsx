@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useAuth }    from './hooks/useAuth'
+import { useUIStore } from '@/store/uiStore'
 import { useOrders }  from './hooks/useOrders'
 import { useProfile } from './hooks/useProfile'
 import Sidebar        from './_components/Sidebar'
@@ -256,6 +257,7 @@ export default function AccountPage() {
   const [tab, setTab] = useState<Tab>('orders')
 
   const { toast, toastType, show: showToast } = useToast()
+  const { openAuth } = useUIStore()
   const auth    = useAuth()
   const orders  = useOrders()
   const profile = useProfile(auth.profile, auth.updateLocalProfile, showToast)
@@ -310,7 +312,7 @@ export default function AccountPage() {
           <div className="lw-icon">🔐</div>
           <div className="lw-title">Welcome Back</div>
           <p className="lw-sub">Please login to view your orders and manage your account.</p>
-          <Link href="/?login=1" className="btn-primary">Sign In to Continue</Link>
+          <button className="btn-primary" onClick={openAuth}>Sign In to Continue</button>
         </div>
       </div>
     </>
