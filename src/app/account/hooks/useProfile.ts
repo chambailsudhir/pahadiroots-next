@@ -27,6 +27,7 @@ async function apiProfile(updates: Record<string, unknown>) {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(updates),
+    signal:  AbortSignal.timeout(10000),
   })
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
@@ -44,6 +45,7 @@ async function apiChangePassword(currentPassword: string, newPassword: string) {
       current_password: currentPassword,
       new_password:     newPassword,
     }),
+    signal: AbortSignal.timeout(10000),
   })
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string }
@@ -119,12 +121,15 @@ export function useProfile(
     if (Object.keys(errors).length) { setPfErr(errors); return }
     setPfErr({})
     setBusy(b => ({ ...b, name: true }))
+    const up = { first_name: pf.fname.trim(), last_name: pf.lname.trim() }
+    // Optimistic update
+    updateLocalProfile(up)
     try {
-      const up = { first_name: pf.fname.trim(), last_name: pf.lname.trim() }
       await apiProfile(up)
-      updateLocalProfile(up)
       setMsg$('name', '✅ Name saved!')
     } catch (e: unknown) {
+      // Rollback on failure
+      if (profile) updateLocalProfile({ first_name: profile.first_name, last_name: profile.last_name })
       const msg = e instanceof Error ? e.message : 'Failed to save name'
       console.error('[useProfile] saveName:', e)
       toast(msg, 'error')
@@ -138,12 +143,15 @@ export function useProfile(
     if (Object.keys(errors).length) { setPfErr(errors); return }
     setPfErr({})
     setBusy(b => ({ ...b, addr: true }))
+    const up = { address_line1: pf.addr.trim(), city: pf.city.trim(), state: pf.state, postal_code: pf.pin }
+    // Optimistic update
+    updateLocalProfile(up)
     try {
-      const up = { address_line1: pf.addr.trim(), city: pf.city.trim(), state: pf.state, postal_code: pf.pin }
       await apiProfile(up)
-      updateLocalProfile(up)
       setMsg$('addr', '✅ Address saved!')
     } catch (e: unknown) {
+      // Rollback on failure
+      if (profile) updateLocalProfile({ address_line1: profile.address_line1, city: profile.city, state: profile.state, postal_code: profile.postal_code })
       const msg = e instanceof Error ? e.message : 'Failed to save address'
       console.error('[useProfile] saveAddress:', e)
       toast(msg, 'error')
@@ -157,12 +165,15 @@ export function useProfile(
     if (Object.keys(errors).length) { setPfErr(errors); return }
     setPfErr({})
     setBusy(b => ({ ...b, phone: true }))
+    const normalized = '+91' + pf.phone.replace(/\D/g, '')
+    // Optimistic update
+    updateLocalProfile({ phone: normalized })
     try {
-      const normalized = '+91' + pf.phone.replace(/\D/g, '')
       await apiProfile({ phone: normalized })
-      updateLocalProfile({ phone: normalized })
       setMsg$('phone', '✅ Phone saved!')
     } catch (e: unknown) {
+      // Rollback on failure
+      if (profile) updateLocalProfile({ phone: profile.phone })
       const msg = e instanceof Error ? e.message : 'Failed to save phone'
       console.error('[useProfile] savePhone:', e)
       toast(msg, 'error')
@@ -198,8 +209,28 @@ export function useProfile(
     setBusy(b => ({ ...b, newAddr: true }))
     try {
       const existing = getSavedAddresses(profile)
+
+      // Enforce max address limit
+      if (existing.length >= 10) {
+        toast('Maximum of 10 saved addresses allowed. Please remove one first.', 'error')
+        setBusy(b => ({ ...b, newAddr: false }))
+        return
+      }
+
+      // Detect duplicate addresses (same street + city + pin)
+      const isDuplicate = existing.some((a: SavedAddress) =>
+        a.addr.trim().toLowerCase() === newAddr.flat.trim().toLowerCase() &&
+        a.city.trim().toLowerCase() === newAddr.city.trim().toLowerCase() &&
+        a.pin === newAddr.pin
+      )
+      if (isDuplicate) {
+        toast('This address already exists in your saved addresses.', 'error')
+        setBusy(b => ({ ...b, newAddr: false }))
+        return
+      }
+
       const newEntry: SavedAddress = {
-        id:    `addr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id:    crypto.randomUUID(),
         label: newAddr.label,
         name:  newAddr.name.trim(),
         addr:  newAddr.flat.trim(),
@@ -223,9 +254,9 @@ export function useProfile(
     }
   }
 
-  async function deleteAddress(label: string) {
+  async function deleteAddress(id: string) {
     try {
-      const updated = getSavedAddresses(profile).filter((a: SavedAddress) => a.label !== label)
+      const updated = getSavedAddresses(profile).filter((a: SavedAddress) => a.id !== id)
       const saved   = JSON.stringify(updated)
       await apiProfile({ saved_addresses: saved })
       updateLocalProfile({ saved_addresses: saved })

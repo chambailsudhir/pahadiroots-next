@@ -59,7 +59,7 @@ export function useAuth() {
   }
 
   function mergeProfile(current: Profile | null, updates: Partial<Profile>): Profile {
-    const base: Profile = current ? JSON.parse(JSON.stringify(current)) : {}
+    const base: Profile = current ? { ...current } : {}
     return { ...base, ...updates }
   }
 
@@ -68,13 +68,17 @@ export function useAuth() {
     initDone.current = true
 
     try {
-      // Step 1: check if httpOnly cookie session exists
-      const sessionRes = await fetch('/api/auth/session')
+      // Step 1: check if httpOnly cookie session exists (8s timeout)
+      const sessionRes = await fetch('/api/auth/session', {
+        signal: AbortSignal.timeout(8000),
+      })
       const session    = await sessionRes.json() as { loggedIn: boolean }
       if (!session.loggedIn) { setLoaded(true); return }
 
       // Step 2: fetch profile via dedicated route (reads cookie server-side)
-      const profileRes  = await fetch('/api/profile')
+      const profileRes  = await fetch('/api/profile', {
+        signal: AbortSignal.timeout(8000),
+      })
       if (!profileRes.ok) { setLoaded(true); return }
       const profileData = await profileRes.json() as { profile?: Profile; user?: AuthUser }
 
@@ -115,8 +119,8 @@ export function useAuth() {
   }
 
   async function updateLocalProfile(updates: Partial<Profile>) {
-    const np = mergeProfile(profile, updates)
-    setProfile(np)
+    // Use functional update to avoid stale closure overwriting newer state
+    setProfile(prev => mergeProfile(prev, updates))
     // Also persist to server
     try {
       await fetch('/api/profile', {

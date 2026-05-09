@@ -71,19 +71,27 @@ export function useOrders() {
     debounceTimer.current = setTimeout(() => setDebouncedSearch(val), 300)
   }
 
+  const loadingRef = useRef(false)
+
   // ── fetchOrders wrapped in useCallback for stable reference ─
-  // This lets page.tsx safely include it in useEffect dep arrays
-  // without triggering infinite loops.
+  // Uses loadingRef instead of `loading` state to avoid unnecessary
+  // callback recreation that can trigger re-renders.
   const fetchOrders = useCallback(async () => {
-    if (loading) return
+    if (loadingRef.current) return
 
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     const signal = abortRef.current.signal
 
+    loadingRef.current = true
     setLoading(true)
     try {
-      const res = await fetch('/api/orders', { signal })
+      // Combine manual abort signal with 15s timeout
+      const timeoutController = new AbortController()
+      const timeoutId = setTimeout(() => timeoutController.abort(new Error('Timeout')), 15000)
+      signal.addEventListener('abort', () => timeoutController.abort(signal.reason))
+      const res = await fetch('/api/orders', { signal: timeoutController.signal })
+      clearTimeout(timeoutId)
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(data.error || `Orders fetch failed (${res.status})`)
@@ -98,11 +106,12 @@ export function useOrders() {
       setOrders([])
     } finally {
       if (!abortRef.current?.signal.aborted) {
+        loadingRef.current = false
         setLoading(false)
         setHasFetched(true)
       }
     }
-  }, [loading])
+  }, []) // stable — uses loadingRef instead of `loading` state
 
   // ── Derived stats — typed, no `any` in reducers ───────────
   const stats = useMemo(() => {
@@ -121,6 +130,8 @@ export function useOrders() {
   // ── Filtered + searched orders ────────────────────────────
   const filtered = useMemo(() => {
     if (!orders) return []
+    // Pre-compute search term once instead of per item
+    const q = debouncedSearch.toLowerCase().trim()
     return orders.filter(o => {
       const s  = o._displayStatus || o.order_status || ''
       const mF = filter === 'all'
@@ -128,7 +139,6 @@ export function useOrders() {
         || (filter === 'delivered'  && s === 'delivered')
         || (filter === 'returns'    && RETURN_STATUSES.includes(s))
         || (filter === 'cancelled'  && s === 'cancelled')
-      const q  = debouncedSearch.toLowerCase().trim()
       const mQ = !q
         || (o.order_number || '').toLowerCase().includes(q)
         || (o.items || []).some((i: OrderItem) => (i.name || '').toLowerCase().includes(q))

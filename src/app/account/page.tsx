@@ -469,7 +469,7 @@ export default function AccountPage() {
                       {[a.addr, a.city, a.state, a.pin].filter(Boolean).join(', ')}
                     </div>
                     <div className="addr-actions">
-                      <button className="addr-btn addr-del" onClick={() => profile.deleteAddress(a.label)}>
+                      <button className="addr-btn addr-del" onClick={() => profile.deleteAddress(a.id)}>
                         🗑 Remove
                       </button>
                     </div>
