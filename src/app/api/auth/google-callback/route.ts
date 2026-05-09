@@ -1,14 +1,21 @@
 // ═══════════════════════════════════════════════════════════════
-// Google OAuth PKCE callback handler
+// Google OAuth callback handler
 // Supabase redirects here after Google login with ?code=...
-// We exchange the code for tokens, then redirect user to homepage.
+// We exchange the code for tokens, write httpOnly cookies,
+// then redirect user directly to /account.
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server'
+import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SITE_URL      = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const IS_PROD       = process.env.NODE_ENV === 'production'
+
+function cookieBase() {
+  return { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -16,11 +23,11 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (error) {
-    return NextResponse.redirect(`${SITE_URL}/?auth_error=${encodeURIComponent(error)}`)
+    return NextResponse.redirect(`${SITE_URL}/account?auth_error=${encodeURIComponent(error)}`)
   }
 
   if (!code) {
-    return NextResponse.redirect(`${SITE_URL}/`)
+    return NextResponse.redirect(`${SITE_URL}/account`)
   }
 
   try {
@@ -38,15 +45,19 @@ export async function GET(req: NextRequest) {
 
     if (!tokenData.access_token) {
       console.error('Google PKCE exchange failed:', tokenData)
-      return NextResponse.redirect(`${SITE_URL}/?auth_error=google_failed`)
+      return NextResponse.redirect(`${SITE_URL}/account?auth_error=google_failed`)
     }
 
-    // Redirect to homepage with tokens in hash (client picks them up)
-    // Using fragment so tokens never hit server logs
-    const redirectUrl = `${SITE_URL}/?google_auth=1#access_token=${tokenData.access_token}&refresh_token=${tokenData.refresh_token || ''}&token_type=bearer`
-    return NextResponse.redirect(redirectUrl)
+    // ✅ Write httpOnly cookies server-side so /api/auth/session sees them immediately
+    const res = NextResponse.redirect(`${SITE_URL}/account`)
+    res.cookies.set(COOKIE_TOKEN,   tokenData.access_token,          { ...cookieBase(), maxAge: 60 * 60 })
+    if (tokenData.refresh_token) {
+      res.cookies.set(COOKIE_REFRESH, tokenData.refresh_token,       { ...cookieBase(), maxAge: 60 * 60 * 24 * 30 })
+    }
+    return res
+
   } catch (e) {
     console.error('Google callback error:', e)
-    return NextResponse.redirect(`${SITE_URL}/?auth_error=google_failed`)
+    return NextResponse.redirect(`${SITE_URL}/account?auth_error=google_failed`)
   }
 }

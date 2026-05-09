@@ -2,9 +2,15 @@
 
 // ═══════════════════════════════════════════════════════════════
 // GoogleAuthHandler — runs on every page, invisible component.
-// Catches ?code= from Supabase PKCE redirect and exchanges it
-// for tokens, then saves session exactly like the old site did.
-// Must be rendered inside layout.tsx (already done via Providers).
+//
+// Handles two fallback cases for Google OAuth tokens that arrive
+// client-side (e.g. old links, Supabase implicit flow):
+//   1. ?code= in query string  → PKCE exchange + set cookie
+//   2. #access_token= in hash  → call google_callback + set cookie
+//
+// The primary path (server-side callback) now writes cookies
+// directly in /api/auth/google-callback and redirects to /account,
+// so this handler is only a safety net.
 // ═══════════════════════════════════════════════════════════════
 
 import { useEffect } from 'react'
@@ -13,68 +19,102 @@ import { useUserStore } from '@/store/userStore'
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+async function writeSessionCookie(accessToken: string, refreshToken?: string) {
+  try {
+    await fetch('/api/auth/session', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ action: 'set', access_token: accessToken, refresh_token: refreshToken }),
+    })
+  } catch (e) {
+    console.warn('[GoogleAuth] Could not write session cookie:', e)
+  }
+}
+
 export default function GoogleAuthHandler() {
   const setUser = useUserStore(s => s.setUser)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code   = params.get('code')
-    if (!code) return
-
-    // Only handle if this looks like an OAuth code (not some other ?code= usage)
+    // ── Case 1: ?code= PKCE flow ─────────────────────────────
+    const params   = new URLSearchParams(window.location.search)
+    const code     = params.get('code')
     const verifier = localStorage.getItem('pr_pkce_verifier') || ''
 
-    // Clean URL immediately so no re-run on refresh
-    const cleanUrl = window.location.pathname
-    window.history.replaceState({}, '', cleanUrl)
+    // ── Case 2: #access_token= implicit / hash flow ──────────
+    const hash        = window.location.hash
+    const hashParams  = new URLSearchParams(hash.replace(/^#/, ''))
+    const hashToken   = hashParams.get('access_token')
+    const hashRefresh = hashParams.get('refresh_token') || ''
+
+    if (!code && !hashToken) return
+
+    // Clean URL immediately to prevent re-runs on refresh
+    window.history.replaceState({}, '', window.location.pathname)
     localStorage.removeItem('pr_pkce_verifier')
 
     ;(async () => {
       try {
-        // Exchange code + verifier for tokens via Supabase PKCE
-        const tokenRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
-          body:    JSON.stringify({ auth_code: code, code_verifier: verifier }),
-        })
-        const tokenData = await tokenRes.json()
-        if (!tokenData.access_token) {
-          console.error('[GoogleAuth] PKCE exchange failed:', tokenData)
+        let accessToken  = ''
+        let refreshToken = ''
+
+        if (hashToken) {
+          // ── Hash token path: call google_callback to sync profile + set cookie ──
+          accessToken  = hashToken
+          refreshToken = hashRefresh
+
+          const cbRes  = await fetch('/api/auth', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ action: 'google_callback', access_token: accessToken, refresh_token: refreshToken }),
+          })
+          const cbData = await cbRes.json()
+
+          if (cbData.success) {
+            // Cookie is set by google_callback via withAuthCookies
+            setUser({
+              id:    cbData.user?.id    || '',
+              email: cbData.user?.email || '',
+              name:  cbData.profile?.first_name || '',
+              phone: cbData.profile?.phone      || '',
+            })
+            window.location.href = '/account'
+            return
+          }
+          console.error('[GoogleAuth] google_callback failed:', cbData)
           return
         }
 
-        // Sync profile via our /api/auth endpoint
-        const profileRes = await fetch('/api/auth', {
-          method:  'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': 'Bearer ' + tokenData.access_token,
-          },
-          body: JSON.stringify({ action: 'get_profile' }),
-        })
-        const profileData = await profileRes.json()
+        if (code) {
+          // ── Code path: PKCE exchange ──────────────────────────
+          const tokenRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
+            body:    JSON.stringify({ auth_code: code, code_verifier: verifier }),
+          })
+          const tokenData = await tokenRes.json()
+          if (!tokenData.access_token) {
+            console.error('[GoogleAuth] PKCE exchange failed:', tokenData)
+            return
+          }
+          accessToken  = tokenData.access_token
+          refreshToken = tokenData.refresh_token || ''
 
-        // Save session to localStorage (same keys as old site)
-        try { localStorage.setItem('pr_auth_token',   tokenData.access_token) } catch {}
-        try { localStorage.setItem('pr_auth_refresh', tokenData.refresh_token || '') } catch {}
-        if (profileData.profile) {
-          try { localStorage.setItem('pr_auth_profile', JSON.stringify(profileData.profile)) } catch {}
+          // Write httpOnly cookie
+          await writeSessionCookie(accessToken, refreshToken)
+
+          // Sync profile
+          const profileRes  = await fetch('/api/profile')
+          const profileData = await profileRes.json()
+
+          setUser({
+            id:    profileData.user?.id    || '',
+            email: profileData.user?.email || '',
+            name:  profileData.profile?.first_name || '',
+            phone: profileData.profile?.phone      || '',
+          })
+
+          window.location.href = '/account'
         }
-
-        // Update Zustand store
-        setUser({
-          id:    profileData.user?.id    || tokenData.user?.id    || '',
-          email: profileData.user?.email || tokenData.user?.email || '',
-          name:  profileData.profile?.first_name || '',
-          phone: profileData.profile?.phone      || '',
-        })
-
-        // Show welcome toast if available
-        const firstName = profileData.profile?.first_name || 'there'
-        console.log(`✅ Google login success — Welcome ${firstName}!`)
-
-        // Reload to refresh server components (header avatar etc.)
-        window.location.reload()
       } catch (e) {
         console.error('[GoogleAuth] Error:', e)
       }

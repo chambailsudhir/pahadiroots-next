@@ -136,21 +136,17 @@ export default function AuthModal() {
   async function handleGoogle() {
     setLoading(true); setError('')
     try {
-      // Full PKCE flow client-side — mirrors old site's loginWithGoogle()
-      const verifier   = genVerifier()
-      const challenge  = await genChallenge(verifier)
-      localStorage.setItem('pr_pkce_verifier', verifier)
-
-      const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-      const redirectTo    = window.location.origin + '/'
-      const url = SUPABASE_URL + '/auth/v1/authorize'
-        + '?provider=google'
-        + '&redirect_to=' + encodeURIComponent(redirectTo)
-        + '&code_challenge=' + challenge
-        + '&code_challenge_method=S256'
-
-      window.location.href = url
-    } catch (err: any) { setError(err.message || 'Google login failed'); setLoading(false) }
+      // Use server-side callback — sets httpOnly cookie and redirects to /account
+      const res  = await fetch('/api/auth', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'google_oauth' }),
+      })
+      const data = await res.json() as { url?: string; error?: string }
+      if (data.url) { window.location.href = data.url; return }
+      setError(data.error || 'Google login unavailable')
+    } catch (err: any) { setError(err.message || 'Google login failed') }
+    setLoading(false)
   }
 
   async function handleFP(e: React.FormEvent) {
