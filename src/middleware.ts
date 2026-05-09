@@ -41,6 +41,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/maintenance') ||
+    pathname.startsWith('/auth/') ||   // ← auth callbacks must never be intercepted
     pathname === '/favicon.ico' ||
     pathname.endsWith('.png') ||
     pathname.endsWith('.jpg') ||
