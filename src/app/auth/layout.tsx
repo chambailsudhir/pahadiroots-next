@@ -1,5 +1,5 @@
-// Bare layout for /auth/* routes — no Header, Footer, or CartDrawer
-// This prevents the store maintenance check and layout flash during OAuth redirect
+// Bare layout for /auth/* — no Header/Footer/CartDrawer
+// Prevents store maintenance check from blocking OAuth callback
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }

@@ -7,22 +7,22 @@
 // This page reads the hash client-side, writes the httpOnly cookie
 // via /api/auth/session, then redirects to /account.
 //
-// ✅ Supabase Google redirect URL must be set to:
+// Set your Supabase Google redirect URL to:
 //   https://pahadiroots.com/auth/google-callback
 // ═══════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from 'react'
 
 export default function GoogleCallbackPage() {
-  const [status, setStatus]   = useState<'loading' | 'error'>('loading')
-  const [errMsg, setErrMsg]   = useState('')
+  const [status, setStatus] = useState<'loading' | 'error'>('loading')
+  const [errMsg, setErrMsg] = useState('')
 
   useEffect(() => {
     ;(async () => {
       try {
         // Read tokens from URL hash (implicit flow)
-        const hash         = window.location.hash.replace(/^#/, '')
-        const params       = new URLSearchParams(hash)
+        const hash        = window.location.hash.replace(/^#/, '')
+        const params      = new URLSearchParams(hash)
         const accessToken  = params.get('access_token')
         const refreshToken = params.get('refresh_token') || ''
         const hashError    = params.get('error_description') || params.get('error')
