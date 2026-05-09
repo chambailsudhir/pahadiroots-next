@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
 
   // ── OTP ──
   if (action === 'send_otp') {
-    const { phone } = body
+    const { phone } = body as { phone?: string }
     if (!phone) return err(400, 'Phone required')
     const normalised = phone.startsWith('+') ? phone : '+91' + phone.replace(/\D/g, '').slice(-10)
     try {
@@ -409,7 +409,7 @@ export async function POST(req: NextRequest) {
   // ── Link Phone ──
   if (action === 'link_phone') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { phone } = body
+    const { phone } = body as { phone?: string }
     if (!token) return err(401, 'Not logged in')
     if (!phone) return err(400, 'Phone required')
     try {
@@ -429,7 +429,10 @@ export async function POST(req: NextRequest) {
   if (action === 'update_profile') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
-    const { first_name, last_name, address_line1, city, state, postal_code, phone: phoneUpdate, saved_addresses } = body
+    const { first_name, last_name, address_line1, city, state, postal_code, phone: phoneUpdate, saved_addresses } = body as {
+      first_name?: string; last_name?: string; address_line1?: string; city?: string
+      state?: string; postal_code?: string; phone?: string; saved_addresses?: string
+    }
     try {
       const user    = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
@@ -460,7 +463,7 @@ export async function POST(req: NextRequest) {
 
   // ── Forgot Password ──
   if (action === 'forgot_password') {
-    const { email } = body
+    const { email } = body as { email?: string }
     if (!email) return err(400, 'Email required')
     const RESEND_KEY = process.env.RESEND_API_KEY
     const SITE_URL   = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
@@ -500,7 +503,7 @@ export async function POST(req: NextRequest) {
   // ── Reset Password ──
   if (action === 'reset_password') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { password } = body
+    const { password } = body as { password?: string }
     if (!token)   return err(401, 'Invalid or expired reset link')
     if (!password || password.length < 6) return err(400, 'Password must be at least 6 characters')
     try {
@@ -560,7 +563,10 @@ export async function POST(req: NextRequest) {
   if (action === 'create_return') {
     const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
-    const { order_id, order_number, customer_name, reason, description, refund_amount, selected_items, is_partial } = body
+    const { order_id, order_number, customer_name, reason, description, refund_amount, selected_items, is_partial } = body as {
+      order_id?: string | number; order_number?: string; customer_name?: string; reason?: string
+      description?: string; refund_amount?: string; selected_items?: Array<{ name?: string }>; is_partial?: boolean
+    }
     if (!order_id || !reason) return err(400, 'order_id and reason required')
     try {
       const user = await sbAuth('/user', null, token)
@@ -579,7 +585,7 @@ export async function POST(req: NextRequest) {
       const returnRecord = await sbAdmin('POST', '/rest/v1/returns', {
         order_id: Number(order_id), order_number: order_number || order.order_number,
         customer_name: customer_name || null, reason,
-        description: description ? description : (is_partial && selected_items?.length) ? `Partial return: ${(selected_items as Array<{ name?: string }>).map(i => i.name).join(', ')}` : null,
+        description: description ? description : (is_partial && selected_items?.length) ? `Partial return: ${selected_items.map(i => i.name).join(', ')}` : null,
         refund_amount: refund_amount ? parseFloat(refund_amount) : null,
         status: 'requested', restock: true,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
