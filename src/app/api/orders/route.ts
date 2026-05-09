@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// /api/orders — dedicated orders route (split from monolith)
-//
+// /api/orders — dedicated orders route
 // GET → fetch orders for authenticated user (reads httpOnly cookie)
 // ─────────────────────────────────────────────────────────────
 
@@ -82,7 +81,7 @@ export async function GET(req: NextRequest) {
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
-    const orders  = await getCustomerOrders(profile.id)
+    const orders = await getCustomerOrders(profile.id)
     const res = ok({ success: true, orders })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
@@ -117,15 +116,37 @@ async function getCustomerOrders(customerId: string | number) {
     refund_completed: 'refund_completed', return_rejected: 'return_rejected',
   }
 
+  // ✅ Using actual order_items columns verified from DB:
+  // quantity, price_at_time, product_name_snapshot, variant_value_snapshot
+  // + JOIN products for emoji and image_url
   const rows = await sbAdmin(
     'GET',
-    `/rest/v1/orders?customer_id=eq.${customerId}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(qty,price,name,emoji,image_url),returns(id,status,reason,created_at)&order=created_at.desc&limit=100`
+    `/rest/v1/orders?customer_id=eq.${customerId}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=100`
   ).catch(() => [])
 
   return (rows || []).map((o: Record<string, unknown>) => {
-    const items   = (o.order_items as unknown[]) || []
-    const ret     = Array.isArray(o.returns) && o.returns.length > 0 ? o.returns[0] : null
-    const rawSt   = String(o.order_status || '')
+    const rawItems = (o.order_items as Array<{
+      quantity:               number
+      price_at_time:          number
+      product_name_snapshot:  string | null
+      variant_value_snapshot: string | null
+      product_id:             string | null
+      products?: { emoji?: string; image_url?: string }
+    }>) || []
+
+    const items = rawItems.map(i => ({
+      qty:       i.quantity,
+      price:     i.price_at_time,
+      // use snapshot name (always available even if product deleted)
+      name:      i.product_name_snapshot || 'Product',
+      variant:   i.variant_value_snapshot || null,
+      emoji:     i.products?.emoji     || '🌿',
+      image_url: i.products?.image_url || null,
+    }))
+
+    const ret   = Array.isArray(o.returns) && o.returns.length > 0 ? o.returns[0] : null
+    const rawSt = String(o.order_status || '')
+
     return {
       id:              o.id,
       order_number:    o.order_number,
