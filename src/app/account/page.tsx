@@ -54,8 +54,8 @@ export default function AccountPage() {
 
   const { toast, toastType, show: showToast } = useToast()
   const auth    = useAuth()
-  const orders  = useOrders(auth.token, auth.setToken)
-  const profile = useProfile(auth.token, auth.profile, auth.updateLocalProfile, showToast)
+  const orders  = useOrders()
+  const profile = useProfile(auth.profile, auth.updateLocalProfile, showToast)
 
   // ── savedAddrs: memoized from profile's saved_addresses string ──
   // The raw saved_addresses field is a JSON string — it changes by reference
@@ -80,14 +80,12 @@ export default function AccountPage() {
     if (auth.profile) profile.initFromProfile(auth.profile)
   }, [auth.profile]) // profile.initFromProfile is stable (defined in hook body)
 
-  // ── Auto-fetch orders — all effect deps declared honestly ────
-  // hasFetched + loading are read inside — they're in the dep array.
-  // fetchOrders is stable (defined with useCallback in the hook).
+  // ── Auto-fetch orders when logged in ─────────────────────
   useEffect(() => {
-    if (auth.token && auth.loggedIn && !orders.hasFetched && !orders.loading) {
+    if (auth.loggedIn && !orders.hasFetched && !orders.loading) {
       orders.fetchOrders()
     }
-  }, [auth.token, auth.loggedIn, orders.hasFetched, orders.loading, orders.fetchOrders])
+  }, [auth.loggedIn, orders.hasFetched, orders.loading, orders.fetchOrders])
 
   // ── Auth loading state (replaces mounted gate) ────────────
   if (!auth.loaded) return (
@@ -123,7 +121,7 @@ export default function AccountPage() {
           stats={orders.stats}
           onLogout={auth.logout}
           onOrdersClick={() => {
-            if (!orders.hasFetched && !orders.loading && auth.token) orders.fetchOrders()
+            if (!orders.hasFetched && !orders.loading) orders.fetchOrders()
           }}
         />
 
@@ -441,6 +439,13 @@ export default function AccountPage() {
                 <div className="card-section-title">Set New Password</div>
                 <div className="form-grid" style={{ maxWidth: '480px' }}>
                   <div className="form-full">
+                    <div className="f-lbl">Current Password *</div>
+                    <div className="pw-wrap">
+                      <input className={`f-inp${profile.pfErr.curp ? ' f-err' : ''}`} type={profile.pw.showCur ? 'text' : 'password'} value={profile.pw.curp} onChange={e => { profile.setPw(p => ({ ...p, curp: e.target.value })); profile.setPfErr(er => ({ ...er, curp: '' })) }} placeholder="Your current password" />
+                      <button type="button" className="pw-eye" onClick={() => profile.setPw(p => ({ ...p, showCur: !p.showCur }))}>{profile.pw.showCur ? '🙈' : '👁'}</button>
+                    </div>
+                    {profile.pfErr.curp && <div className="err-txt">{profile.pfErr.curp}</div>}
+                  </div>
                     <div className="f-lbl">New Password *</div>
                     <div className="pw-wrap">
                       <input className={`f-inp${profile.pfErr.newp ? ' f-err' : ''}`} type={profile.pw.showNew ? 'text' : 'password'} value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Minimum 6 characters" />
@@ -484,7 +489,7 @@ export default function AccountPage() {
           { key: 'profile',   icon: '👤', label: 'Profile'   },
           { key: 'password',  icon: '🔒', label: 'Password'  },
         ] as const).map(it => (
-          <button key={it.key} className={`mob-tab${tab === it.key ? ' active' : ''}`} onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched && !orders.loading && auth.token) orders.fetchOrders() }}>
+          <button key={it.key} className={`mob-tab${tab === it.key ? ' active' : ''}`} onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched && !orders.loading) orders.fetchOrders() }}>
             <span className="mt-icon">{it.icon}</span>{it.label}
           </button>
         ))}

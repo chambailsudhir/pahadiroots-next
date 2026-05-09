@@ -1,22 +1,68 @@
 // ═══════════════════════════════════════════════════════════════
 // 5 Pahadi Roots — Customer Auth API (Next.js App Router)
-// Mirrors old api/auth.js 100% — same actions, same logic.
+//
+// CHANGES (security audit):
+//  ✅ In-process rate limiter — protects OTP, login, change_password
+//  ✅ httpOnly cookies written on every login action (verify_otp,
+//     email_login, email_signup, refresh_token, google_callback)
+//  ✅ change_password now requires current_password verification
+//  ✅ `any` removed — typed helpers throughout
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server'
+import { COOKIE_TOKEN, COOKIE_REFRESH } from './session/route'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-function ok(data: any) {
-  return NextResponse.json(data, { status: 200 })
-}
-function err(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status })
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+// ── Response helpers ─────────────────────────────────────────
+function ok(data: unknown)                 { return NextResponse.json(data, { status: 200 }) }
+function fail(status: number, msg: string) { return NextResponse.json({ error: msg }, { status }) }
+// Legacy alias — keeps all existing `err(...)` calls working
+const err = fail
+
+// ── httpOnly cookie writer ────────────────────────────────────
+// Called after every successful login to move tokens off localStorage
+function withAuthCookies(res: NextResponse, accessToken: string, refreshToken?: string | null): NextResponse {
+  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'strict' as const, path: '/' }
+  res.cookies.set(COOKIE_TOKEN,   accessToken,  { ...base, maxAge: 60 * 60 })
+  if (refreshToken) {
+    res.cookies.set(COOKIE_REFRESH, refreshToken, { ...base, maxAge: 60 * 60 * 24 * 30 })
+  }
+  return res
 }
 
-async function sbAuth(path: string, body: any = null, token?: string) {
+// ── In-process rate limiter ───────────────────────────────────
+// Runs inside the Next.js process — no Redis/infra needed.
+// Limits sensitive actions per IP: max 5 attempts / 60s window.
+// For multi-instance deployments, swap `rateLimitMap` for a Redis store.
+type RateEntry = { count: number; reset: number }
+const rateLimitMap = new Map<string, RateEntry>()
+
+function rateLimit(key: string, maxHits = 5, windowMs = 60_000): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(key)
+  if (!entry || now > entry.reset) {
+    rateLimitMap.set(key, { count: 1, reset: now + windowMs })
+    return true  // allowed
+  }
+  if (entry.count >= maxHits) return false  // blocked
+  entry.count++
+  return true  // allowed
+}
+
+// Clean up stale rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (now > entry.reset) rateLimitMap.delete(key)
+  }
+}, 5 * 60_000)
+
+async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {
   const url = `${SUPABASE_URL}/auth/v1${path}`
   const headers: Record<string, string> = {
     'Content-Type':  'application/json',
@@ -34,7 +80,7 @@ async function sbAuth(path: string, body: any = null, token?: string) {
   return data
 }
 
-async function sbAdmin(method: string, path: string, body: any = null) {
+async function sbAdmin(method: string, path: string, body: Record<string, unknown> | null = null) {
   const url = `${SUPABASE_URL}${path}`
   const res = await fetch(url, {
     method,
@@ -51,7 +97,12 @@ async function sbAdmin(method: string, path: string, body: any = null) {
   return text ? JSON.parse(text) : null
 }
 
-async function syncCustomerProfile(user: any) {
+type CustomerRow = Record<string, unknown>
+type OrderRow    = Record<string, unknown>
+type ItemRow     = { order_id: unknown; quantity: number; price_at_time: number; products?: { name?: string; emoji?: string; image_url?: string } }
+type ReturnRow   = { order_id: unknown; id: unknown; status: string; reason?: string; created_at?: string; updated_at?: string }
+
+async function syncCustomerProfile(user: { id: string; phone?: string; email?: string; user_metadata?: Record<string, string> }) {
   const phone = user.phone || ''
   const email = user.email || ''
   try {
@@ -62,15 +113,15 @@ async function syncCustomerProfile(user: any) {
     const rows = await sbAdmin(
       'GET',
       `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`
-    ).catch(() => null)
+    ).catch(() => null) as CustomerRow[] | null
 
     if (rows && rows.length > 0) {
-      let match = rows.find((r: any) => r.auth_user_id === user.id)
-        || rows.find((r: any) => phone && r.phone === phone)
+      let match = rows.find(r => r.auth_user_id === user.id)
+        || rows.find(r => phone && r.phone === phone)
         || rows[0]
 
       if (match.auth_user_id !== user.id) {
-        const patch: any = { auth_user_id: user.id }
+        const patch: Record<string, unknown> = { auth_user_id: user.id }
         if (phone && !match.phone) patch.phone = phone
         await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch(() => {})
         match = { ...match, ...patch }
@@ -78,17 +129,18 @@ async function syncCustomerProfile(user: any) {
       return match
     }
 
-    const nameParts = (user.user_metadata?.full_name || '').trim().split(' ')
+    const fullName  = user.user_metadata?.full_name || ''
+    const nameParts = fullName.trim().split(' ')
     const newCustomer = await sbAdmin('POST', '/rest/v1/customers', {
       auth_user_id: user.id,
       first_name:   nameParts[0] || (email ? email.split('@')[0] : 'Customer'),
       last_name:    nameParts.slice(1).join(' ') || null,
       phone:        phone || null,
       email:        email || null,
-    })
+    }) as CustomerRow[] | null
     return newCustomer && newCustomer[0] ? newCustomer[0] : null
-  } catch (e) {
-    console.warn('syncCustomerProfile failed:', e)
+  } catch (e: unknown) {
+    console.warn('[syncCustomerProfile] failed:', e)
     return null
   }
 }
@@ -97,51 +149,50 @@ async function getCustomerOrders(customerId: string) {
   try {
     const orders = await sbAdmin('GET',
       `/rest/v1/orders?customer_id=eq.${customerId}&order=created_at.desc&limit=20&select=id,order_number,total_amount,order_status,payment_status,payment_method,created_at,tracking_number,courier,shipped_at,delivered_at`
-    )
+    ) as OrderRow[] | null
     if (!orders || !orders.length) return []
-    const orderIds = orders.map((o: any) => o.id)
+
+    const orderIds = orders.map(o => o.id)
 
     const [items, returns] = await Promise.all([
       sbAdmin('GET',
         `/rest/v1/order_items?order_id=in.(${orderIds.join(',')})&select=order_id,quantity,price_at_time,product_id,products(name,emoji,image_url)`
-      ).catch(() => []),
+      ).catch(() => []) as Promise<ItemRow[]>,
       sbAdmin('GET',
         `/rest/v1/returns?order_id=in.(${orderIds.join(',')})&select=order_id,id,status,reason,created_at,updated_at`
-      ).catch(() => []),
+      ).catch(() => []) as Promise<ReturnRow[]>,
     ])
 
-    const returnMap: Record<string, any> = {}
-    ;(returns || []).forEach((r: any) => { returnMap[String(r.order_id)] = r })
+    const returnMap: Record<string, ReturnRow> = {}
+    ;(returns || []).forEach(r => { returnMap[String(r.order_id)] = r })
 
-    return orders.map((o: any) => {
+    const STATUS_MAP: Record<string, string> = {
+      requested: 'return_requested', approved: 'return_approved',
+      received: 'return_received', refunded: 'refunded',
+      refund_initiated: 'refund_initiated', refund_completed: 'refund_completed',
+      rejected: 'return_rejected',
+    }
+
+    return orders.map(o => {
       const ret = returnMap[String(o.id)]
-      let displayStatus = o.order_status
-      if (ret) {
-        const statusMap: Record<string, string> = {
-          requested:        'return_requested',
-          approved:         'return_approved',
-          received:         'return_received',
-          refunded:         'refunded',
-          refund_initiated: 'refund_initiated',
-          refund_completed: 'refund_completed',
-          rejected:         'return_rejected',
-        }
-        displayStatus = statusMap[ret.status] || 'return_requested'
-      }
+      const displayStatus = ret ? (STATUS_MAP[ret.status] || 'return_requested') : String(o.order_status)
       return {
         ...o,
         _return: ret || null,
         _displayStatus: displayStatus,
-        items: (items || []).filter((i: any) => String(i.order_id) === String(o.id)).map((i: any) => ({
-          qty:       i.quantity,
-          price:     i.price_at_time,
-          name:      i.products?.name || 'Product',
-          emoji:     i.products?.emoji || '🌿',
-          image_url: i.products?.image_url || null,
-        }))
+        items: (items || [])
+          .filter(i => String(i.order_id) === String(o.id))
+          .map(i => ({
+            qty:       i.quantity,
+            price:     i.price_at_time,
+            name:      i.products?.name      || 'Product',
+            emoji:     i.products?.emoji     || '🌿',
+            image_url: i.products?.image_url || null,
+          }))
       }
     })
-  } catch (e) {
+  } catch (e: unknown) {
+    console.error('[getCustomerOrders] failed:', e)
     return []
   }
 }
@@ -155,17 +206,34 @@ export async function POST(req: NextRequest) {
     return err(500, 'Server misconfigured — check env vars')
   }
 
-  let body: any = {}
+  let body: Record<string, unknown> = {}
   try {
     body = await req.json()
   } catch {
     return err(400, 'Invalid JSON')
   }
 
-  const { action } = body
+  const { action } = body as { action?: string }
 
   // ── Keep-warm ping ──
   if (action === '_ping') return ok({ ok: true })
+
+  // ── Rate limiting — applied to sensitive actions ──────────
+  const RATE_LIMITED_ACTIONS = new Set([
+    'send_otp', 'verify_otp', 'email_login', 'email_signup', 'change_password'
+  ])
+  if (RATE_LIMITED_ACTIONS.has(action || '')) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+              || req.headers.get('x-real-ip')
+              || 'unknown'
+    const rateLimitKey = `${action}:${ip}`
+    if (!rateLimit(rateLimitKey)) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please wait a minute before trying again.' },
+        { status: 429, headers: { 'Retry-After': '60' } }
+      )
+    }
+  }
 
   // ── OTP ──
   if (action === 'send_otp') {
@@ -175,36 +243,40 @@ export async function POST(req: NextRequest) {
     try {
       await sbAuth('/otp', { phone: normalised, channel: 'sms' })
       return ok({ success: true, message: 'OTP sent' })
-    } catch (e: any) {
-      const msg = e.message || ''
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      const msg = e2.message || ''
       if (msg.toLowerCase().includes('unsupported') || msg.toLowerCase().includes('provider') || e.status === 422) {
         return err(422, 'SMS_NOT_CONFIGURED')
       }
-      return err(e.status || 500, e.message || 'Failed to send OTP')
+      return err(e2.status || 500, e2.message || 'Failed to send OTP')
     }
   }
 
   if (action === 'verify_otp') {
-    const { phone, token } = body
+    const { phone, token } = body as { phone?: string; token?: string }
     if (!phone || !token) return err(400, 'Phone and OTP required')
-    const normalised = phone.startsWith('+') ? phone : '+91' + phone.replace(/\D/g, '').slice(-10)
+    const normalised = (phone as string).startsWith('+') ? phone as string : '+91' + (phone as string).replace(/\D/g, '').slice(-10)
     try {
-      const data = await sbAuth('/verify', { phone: normalised, token, type: 'sms' })
+      const data = await sbAuth('/verify', { phone: normalised, token: token as string, type: 'sms' })
       const user = data.user || data
       if (!user || !user.id) return err(400, 'Verification failed')
       const profile = await syncCustomerProfile(user)
-      return ok({
-        success: true, access_token: data.access_token, refresh_token: data.refresh_token,
+      // ✅ Set httpOnly cookies so tokens never touch localStorage
+      const res = ok({
+        success: true,
         user: { id: user.id, phone: user.phone || normalised, email: user.email || null }, profile,
       })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Invalid OTP')
+      return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Invalid OTP')
     }
   }
 
   // ── Email Signup — supports both old action name and new ──
   if (action === 'email_signup' || action === 'register_email') {
-    const { email, password, full_name, name } = body
+    const { email, password, full_name, name } = body as Record<string, string>
     const resolvedName = full_name || name || ''
     if (!email || !password) return err(400, 'Email and password required')
     if (password.length < 6)  return err(400, 'Password must be at least 6 characters')
@@ -213,48 +285,55 @@ export async function POST(req: NextRequest) {
       const user = data.user || data
       if (!user || !user.id) return err(400, 'Signup failed — could not create user')
       const profile = await syncCustomerProfile(user)
-      return ok({
-        success: true, access_token: data.access_token || null, refresh_token: data.refresh_token || null,
+      const res = ok({
+        success: true,
         user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile,
       })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Signup failed')
+      if (data.access_token) return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
+      return res
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Signup failed')
     }
   }
 
   // ── Email Login — supports both old action name and new ──
   if (action === 'email_login' || action === 'login_email') {
-    const { email, password } = body
+    const { email, password } = body as { email?: string; password?: string }
     if (!email || !password) return err(400, 'Email and password required')
     try {
-      const data = await sbAuth('/token?grant_type=password', { email, password })
+      const data = await sbAuth('/token?grant_type=password', { email: email as string, password: password as string })
       const user = data.user || data
       if (!user || !user.id) return err(401, 'Invalid email or password')
       const profile = await syncCustomerProfile(user)
-      return ok({
-        success: true, access_token: data.access_token, refresh_token: data.refresh_token,
+      const res = ok({
+        success: true,
         user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile,
       })
-    } catch (e: any) {
-      return err(e.status || 401, e.message || 'Invalid email or password')
+      return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 401, e2.message || 'Invalid email or password')
     }
   }
 
   // ── Refresh Token ──
   if (action === 'refresh_token') {
-    const { refresh_token } = body
+    const { refresh_token } = body as { refresh_token?: string }
     if (!refresh_token) return err(400, 'refresh_token required')
     try {
-      const data = await sbAuth('/token?grant_type=refresh_token', { refresh_token })
-      return ok({ success: true, access_token: data.access_token, refresh_token: data.refresh_token })
+      const data = await sbAuth('/token?grant_type=refresh_token', { refresh_token: refresh_token as string })
+      const res = ok({ success: true })
+      return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch {
       return err(401, 'Session expired — please login again')
     }
   }
 
-  // ── Get Profile ──
+  // ── Get Profile (legacy — prefer GET /api/profile) ──
   if (action === 'get_profile') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get('pr_token')?.value
+              || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     try {
       const user    = await sbAuth('/user', null, token)
@@ -265,14 +344,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Get Orders ──
+  // ── Get Orders (legacy — prefer GET /api/orders) ──
   if (action === 'get_orders') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get('pr_token')?.value
+              || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     try {
       const user    = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
-      const orders  = profile ? await getCustomerOrders(profile.id) : []
+      const orders  = profile ? await getCustomerOrders(String(profile.id)) : []
       return ok({ success: true, orders })
     } catch {
       return err(401, 'Session expired — please login again')
@@ -290,24 +370,27 @@ export async function POST(req: NextRequest) {
 
   // ── Google Callback (token exchange) ──
   if (action === 'google_callback') {
-    const { access_token, refresh_token } = body
+    const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string }
     if (!access_token) return err(400, 'No access_token provided')
     try {
-      const user = await sbAuth('/user', null, access_token)
+      const user = await sbAuth('/user', null, access_token as string)
       const profile = await syncCustomerProfile(user)
-      return ok({
-        success: true, access_token, refresh_token: refresh_token || null,
+      const res = ok({
+        success: true,
         user: { id: user.id, email: user.email, phone: user.phone || null }, profile,
       })
-    } catch (e: any) {
-      return err(401, 'Google login failed: ' + (e.message || 'Unknown error'))
+      return withAuthCookies(res as NextResponse, access_token as string, refresh_token)
+    } catch (e: unknown) {
+      const e2 = e as { message?: string }
+      return err(401, 'Google login failed: ' + (e2.message || 'Unknown error'))
     }
   }
 
   // ── Link Email ──
   if (action === 'link_email') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { email, password } = body
+    const token = req.cookies.get('pr_token')?.value
+              || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const { email, password } = body as { email?: string; password?: string }
     if (!token)              return err(401, 'Not logged in')
     if (!email || !password) return err(400, 'Email and password required')
     try {
@@ -316,8 +399,9 @@ export async function POST(req: NextRequest) {
       const profile = await syncCustomerProfile(user)
       if (profile) await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, { email })
       return ok({ success: true, message: 'Email linked successfully' })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Failed to link email')
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Failed to link email')
     }
   }
 
@@ -334,8 +418,9 @@ export async function POST(req: NextRequest) {
       const profile = await syncCustomerProfile(user)
       if (profile) await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, { phone: normalised })
       return ok({ success: true, message: 'Phone linked successfully' })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Failed to link phone')
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Failed to link phone')
     }
   }
 
@@ -348,7 +433,7 @@ export async function POST(req: NextRequest) {
       const user    = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
       if (!profile) return err(404, 'Profile not found')
-      const updates: any = {}
+      const updates: Record<string, unknown> = {}
       if (first_name      !== undefined) updates.first_name      = first_name
       if (last_name       !== undefined) updates.last_name       = last_name
       if (address_line1   !== undefined) updates.address_line1   = address_line1
@@ -359,8 +444,9 @@ export async function POST(req: NextRequest) {
       if (saved_addresses !== undefined) updates.saved_addresses = typeof saved_addresses === 'string' ? saved_addresses : JSON.stringify(saved_addresses)
       await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, updates)
       return ok({ success: true, profile: { ...profile, ...updates } })
-    } catch (e: any) {
-      return err(e.status || 500, e.message || 'Update failed')
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 500, e2.message || 'Update failed')
     }
   }
 
@@ -388,7 +474,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
       })
       const genText = await genRes.text()
-      let genData: any = {}
+      let genData: Record<string, unknown> = {}
       try { genData = JSON.parse(genText) } catch {}
       if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return ok({ success: true }) }
       const finalResetUrl = genData.action_link || (genData.properties?.action_link) || (genData.data?.action_link) || ''
@@ -404,7 +490,8 @@ export async function POST(req: NextRequest) {
       })
       if (!resendRes.ok) { const t = await resendRes.text(); console.error('[forgot_password] Resend failed:', resendRes.status, t); return err(500, 'Could not send email — please try again') }
       return ok({ success: true })
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
       return err(500, 'Something went wrong — please try again')
     }
   }
@@ -424,23 +511,47 @@ export async function POST(req: NextRequest) {
       const data = await res.json()
       if (!res.ok) throw { status: res.status, message: data.msg || data.message || 'Reset failed' }
       return ok({ success: true })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Reset failed — link expired')
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Reset failed — link expired')
     }
   }
 
-  // ── Change Password ──
+  // ── Change Password — requires current_password for verification ──
   if (action === 'change_password') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { new_password } = body
-    if (!token) return err(401, 'Not logged in')
-    if (!new_password || new_password.length < 6) return err(400, 'Password min 6 characters')
+    // Read token from httpOnly cookie first, fall back to Authorization header
+    const token = req.cookies.get('pr_token')?.value
+              || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const { current_password, new_password } = body as { current_password?: string; new_password?: string }
+
+    if (!token)            return err(401, 'Not logged in')
+    if (!current_password) return err(400, 'Current password is required')
+    if (!new_password || (new_password as string).length < 6) return err(400, 'New password must be at least 6 characters')
+    if (current_password === new_password) return err(400, 'New password must be different from current password')
+
     try {
+      // Step 1: verify identity — get user to find their email
       const user = await sbAuth('/user', null, token)
-      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { password: new_password })
-      return ok({ success: true })
-    } catch (e: any) {
-      return err(e.status || 400, e.message || 'Password update failed')
+      if (!user?.email) return err(400, 'Cannot verify identity — no email on account')
+
+      // Step 2: reauthenticate with current_password to prove ownership
+      // This is the server-side equivalent of "verify current password"
+      try {
+        await sbAuth('/token?grant_type=password', {
+          email:    user.email,
+          password: current_password as string,
+        })
+      } catch {
+        // Intentionally vague to avoid leaking whether account exists
+        return err(401, 'Current password is incorrect')
+      }
+
+      // Step 3: update password via admin API (bypasses email confirmation)
+      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { password: new_password as string })
+      return ok({ success: true, message: 'Password updated successfully' })
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 400, e2.message || 'Password update failed')
     }
   }
 
@@ -467,14 +578,15 @@ export async function POST(req: NextRequest) {
       const returnRecord = await sbAdmin('POST', '/rest/v1/returns', {
         order_id: Number(order_id), order_number: order_number || order.order_number,
         customer_name: customer_name || null, reason,
-        description: description ? description : (is_partial && selected_items?.length) ? `Partial return: ${selected_items.map((i: any) => i.name).join(', ')}` : null,
+        description: description ? description : (is_partial && selected_items?.length) ? `Partial return: ${(selected_items as Array<{ name?: string }>).map(i => i.name).join(', ')}` : null,
         refund_amount: refund_amount ? parseFloat(refund_amount) : null,
         status: 'requested', restock: true,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       })
       return ok({ success: true, return: returnRecord })
-    } catch (e: any) {
-      return err(e.status || 500, e.message || 'Return request failed')
+    } catch (e: unknown) {
+      const e2 = e as { status?: number; message?: string }
+      return err(e2.status || 500, e2.message || 'Return request failed')
     }
   }
 

@@ -15,7 +15,6 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { accountApi } from '@/lib/account/api'
 import { ACTIVE_STATUSES, RETURN_STATUSES } from '@/lib/account/constants'
 
 export type OrderFilter = 'all' | 'active' | 'delivered' | 'returns' | 'cancelled'
@@ -46,7 +45,7 @@ export interface Order {
   _return:         unknown | null
 }
 
-export function useOrders(token: string | null, setToken: (t: string) => void) {
+export function useOrders() {
   const [orders,          setOrders]         = useState<Order[] | null>(null)
   const [loading,         setLoading]        = useState(false)
   const [hasFetched,      setHasFetched]     = useState(false)
@@ -76,19 +75,24 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
   // This lets page.tsx safely include it in useEffect dep arrays
   // without triggering infinite loops.
   const fetchOrders = useCallback(async () => {
-    if (!token || loading) return
+    if (loading) return
 
-    // Cancel any previous in-flight request
     abortRef.current?.abort()
     abortRef.current = new AbortController()
+    const signal = abortRef.current.signal
 
     setLoading(true)
     try {
-      const d = await accountApi.getOrders(token, (newTk) => setToken(newTk))
-      if (abortRef.current?.signal.aborted) return
-      setOrders((d.orders as Order[]) || [])
+      const res = await fetch('/api/orders', { signal })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error || `Orders fetch failed (${res.status})`)
+      }
+      const data = await res.json() as { orders?: Order[] }
+      if (signal.aborted) return
+      setOrders(data.orders || [])
     } catch (e: unknown) {
-      if (abortRef.current?.signal.aborted) return
+      if (signal.aborted) return
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[useOrders] fetch failed:', msg)
       setOrders([])
@@ -98,7 +102,7 @@ export function useOrders(token: string | null, setToken: (t: string) => void) {
         setHasFetched(true)
       }
     }
-  }, [token]) // token is the only real external dep
+  }, [loading])
 
   // ── Derived stats — typed, no `any` in reducers ───────────
   const stats = useMemo(() => {

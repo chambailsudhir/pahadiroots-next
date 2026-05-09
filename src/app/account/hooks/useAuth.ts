@@ -1,28 +1,21 @@
 // ─────────────────────────────────────────────────────────────
-// useAuth — handles init, login state, logout
+// useAuth — auth init, session state, logout
 //
-// FIXES applied (audit rounds 1 + 2):
-//  ✅ Proper types: Profile, AuthUser interfaces (no `any`)
-//  ✅ storage.getProfile() cast safely through unknown → Profile | null
-//  ✅ d.profile / d.user casts explicit and null-guarded
-//  ✅ auth.init() decoupled from mounted state — useEffect([]) only
-//  ✅ Error logging on all catch paths (console.warn / console.error)
-//  ✅ logout() null-guards token before API call, logs failures
-//  ✅ Deep merge via structuredClone — safe for nested profile fields
+// Token storage: httpOnly cookies (set by /api/auth/* routes)
+// The client never sees or stores tokens.
+// storage.getToken() / storage.saveToken() calls REMOVED.
 //
-// KNOWN LIMITATIONS (require backend changes):
-//  ⚠️  localStorage tokens (XSS risk) — needs httpOnly cookies
-//      via Next.js API route. Cannot be fixed client-side.
-//  ⚠️  Monolithic auth endpoint — needs backend route split.
+// Flow:
+//   1. On mount → GET /api/auth/session to check if cookie exists
+//   2. If logged in → GET /api/profile to fetch profile data
+//   3. On logout → POST /api/auth/session { action:'clear' } + POST /api/auth { action:'logout' }
 // ─────────────────────────────────────────────────────────────
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
-import { accountApi, storage } from '@/lib/account/api'
 
-// ── Proper types (replaces `any`) ────────────────────────────
 export interface Profile {
   id?:             string | number
   first_name?:     string
@@ -34,7 +27,7 @@ export interface Profile {
   state?:          string
   postal_code?:    string
   saved_addresses?: string
-  [key: string]: unknown  // allow additional API fields
+  [key: string]: unknown
 }
 
 export interface AuthUser {
@@ -51,7 +44,6 @@ export function useAuth() {
 
   const initDone = useRef(false)
 
-  const [token,    setToken]    = useState<string | null>(null)
   const [profile,  setProfile]  = useState<Profile | null>(null)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [loaded,   setLoaded]   = useState(false)
@@ -66,108 +58,81 @@ export function useAuth() {
     })
   }
 
-  // ── Safe deep merge — prevents shallow spread clobbering nested fields ──
   function mergeProfile(current: Profile | null, updates: Partial<Profile>): Profile {
     const base = current ? structuredClone(current) : {}
     return { ...base, ...updates }
   }
 
   const init = useCallback(async () => {
-    // Guard: only init once — safe against React StrictMode double-invoke
     if (initDone.current) return
     initDone.current = true
 
-    const tk = storage.getToken()
-    // storage.getProfile() returns unknown — cast safely
-    const cached = (storage.getProfile() ?? null) as Profile | null
-
-    if (!tk) { setLoaded(true); return }
-
-    // Fast path: render cached data immediately, refresh in background
-    if (cached) {
-      setProfile(cached)
-      setToken(tk)
-      setLoggedIn(true)
-      setLoaded(true)
-      syncStore(cached, null)
-
-      accountApi.getProfile(tk)
-        .then(d => {
-          const prof = (d.profile ?? null) as Profile | null
-          const user = (d.user  ?? null) as AuthUser | null
-          if (prof) {
-            setProfile(prof)
-            storage.saveProfile(prof)
-            syncStore(prof, user)
-          }
-          if (user) setAuthUser(user)
-        })
-        .catch((err: unknown) => {
-          console.warn('[useAuth] background profile refresh failed:', err)
-        })
-      return
-    }
-
-    // No cache — fetch fresh
     try {
-      const d    = await accountApi.getProfile(tk)
-      const prof = (d.profile ?? null) as Profile | null
-      const user = (d.user   ?? null) as AuthUser | null
-      if (!prof) { setLoaded(true); return }
-      setProfile(prof)
-      setAuthUser(user)
-      setToken(tk)
+      // Step 1: check if httpOnly cookie session exists
+      const sessionRes = await fetch('/api/auth/session')
+      const session    = await sessionRes.json() as { loggedIn: boolean }
+      if (!session.loggedIn) { setLoaded(true); return }
+
+      // Step 2: fetch profile via dedicated route (reads cookie server-side)
+      const profileRes  = await fetch('/api/profile')
+      if (!profileRes.ok) { setLoaded(true); return }
+      const profileData = await profileRes.json() as { profile?: Profile; user?: AuthUser }
+
+      if (!profileData.profile) { setLoaded(true); return }
+      setProfile(profileData.profile)
+      setAuthUser((profileData.user ?? null) as AuthUser | null)
       setLoggedIn(true)
       setLoaded(true)
-      storage.saveProfile(prof)
-      syncStore(prof, user)
+      syncStore(profileData.profile, (profileData.user ?? null) as AuthUser | null)
     } catch (err: unknown) {
-      console.warn('[useAuth] profile fetch failed, attempting token refresh:', err)
-      const rt = storage.getRefreshToken()
-      if (!rt) { setLoaded(true); return }
-      try {
-        const r    = await accountApi.refreshToken(rt)
-        if (!r.access_token) { setLoaded(true); return }
-        storage.saveToken(r.access_token)
-        if (r.refresh_token) storage.saveRefreshToken(r.refresh_token)
-        const d    = await accountApi.getProfile(r.access_token)
-        const prof = (d.profile ?? null) as Profile | null
-        const user = (d.user   ?? null) as AuthUser | null
-        if (!prof) { setLoaded(true); return }
-        setProfile(prof)
-        setAuthUser(user)
-        setToken(r.access_token)
-        setLoggedIn(true)
-        setLoaded(true)
-        storage.saveProfile(prof)
-        syncStore(prof, user)
-      } catch (refreshErr: unknown) {
-        console.error('[useAuth] token refresh failed — session expired:', refreshErr)
-        setLoaded(true)
-      }
+      console.error('[useAuth] init failed:', err)
+      setLoaded(true)
     }
   }, [])
 
   async function logout() {
-    // Guard: only call API if token exists
-    if (token) {
-      try {
-        await accountApi.logout(token)
-      } catch (err: unknown) {
-        // Log but don't block — local session must still be cleared
-        console.error('[useAuth] logout API call failed:', err)
-      }
+    try {
+      // Clear httpOnly cookies server-side
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear' }),
+      })
+      // Also call Supabase logout to invalidate the token
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      })
+    } catch (err: unknown) {
+      console.error('[useAuth] logout failed:', err)
     }
-    storage.clearAll()
+    setProfile(null)
+    setAuthUser(null)
+    setLoggedIn(false)
     storeLogout()
     router.push('/')
   }
 
-  function updateLocalProfile(updates: Partial<Profile>) {
+  async function updateLocalProfile(updates: Partial<Profile>) {
     const np = mergeProfile(profile, updates)
     setProfile(np)
-    storage.saveProfile(np)
+    // Also persist to server
+    try {
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+    } catch (err: unknown) {
+      console.warn('[useAuth] background profile sync failed:', err)
+    }
   }
+
+  // token prop kept for backward compat with useOrders/useProfile
+  // but it's now a sentinel — actual auth is cookie-based
+  const token = loggedIn ? '__cookie__' : null
+  function setToken(_t: string) { /* no-op: tokens managed server-side */ }
 
   return { token, profile, authUser, loaded, loggedIn, init, logout, updateLocalProfile, setToken }
 }
