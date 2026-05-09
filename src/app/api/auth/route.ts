@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server'
-import { COOKIE_TOKEN, COOKIE_REFRESH } from './session/route'
+import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
