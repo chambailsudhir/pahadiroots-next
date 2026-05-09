@@ -57,9 +57,10 @@ function rateLimit(key: string, maxHits = 5, windowMs = 60_000): boolean {
 // Clean up stale rate limit entries every 5 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [key, entry] of rateLimitMap.entries()) {
-    if (now > entry.reset) rateLimitMap.delete(key)
-  }
+  Array.from(rateLimitMap.keys()).forEach(key => {
+    const entry = rateLimitMap.get(key)
+    if (entry && now > entry.reset) rateLimitMap.delete(key)
+  })
 }, 5 * 60_000)
 
 async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {

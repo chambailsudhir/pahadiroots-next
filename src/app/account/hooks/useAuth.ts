@@ -59,7 +59,7 @@ export function useAuth() {
   }
 
   function mergeProfile(current: Profile | null, updates: Partial<Profile>): Profile {
-    const base = current ? structuredClone(current) : {}
+    const base: Profile = current ? JSON.parse(JSON.stringify(current)) : {}
     return { ...base, ...updates }
   }
 
