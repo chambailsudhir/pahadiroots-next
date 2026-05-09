@@ -446,6 +446,7 @@ export default function AccountPage() {
                     </div>
                     {profile.pfErr.curp && <div className="err-txt">{profile.pfErr.curp}</div>}
                   </div>
+                  <div className="form-full">
                     <div className="f-lbl">New Password *</div>
                     <div className="pw-wrap">
                       <input className={`f-inp${profile.pfErr.newp ? ' f-err' : ''}`} type={profile.pw.showNew ? 'text' : 'password'} value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Minimum 6 characters" />
