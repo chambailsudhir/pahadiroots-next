@@ -362,9 +362,11 @@ export async function POST(req: NextRequest) {
 
   // ── Google OAuth — initiate ──
   if (action === 'google_oauth') {
+    // Redirect to /auth/google-callback (a Next.js page) — more reliably deployed than an API route.
+    // Also add this URL to your Supabase Google OAuth Authorized Redirect URLs.
     const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
-      ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/google-callback`
-      : 'https://pahadiroots.com/api/auth/google-callback'
+      ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/google-callback`
+      : 'https://pahadiroots.com/auth/google-callback'
     const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
     return ok({ url })
   }
