@@ -478,10 +478,16 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
       })
       const genText = await genRes.text()
-      let genData: Record<string, unknown> = {}
-      try { genData = JSON.parse(genText) } catch {}
+      interface GenLinkResponse {
+        action_link?: string
+        properties?: { action_link?: string }
+        data?: { action_link?: string }
+        [key: string]: unknown
+      }
+      let genData: GenLinkResponse = {}
+      try { genData = JSON.parse(genText) as GenLinkResponse } catch {}
       if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return ok({ success: true }) }
-      const finalResetUrl = genData.action_link || (genData.properties?.action_link) || (genData.data?.action_link) || ''
+      const finalResetUrl = genData.action_link || genData.properties?.action_link || genData.data?.action_link || ''
       if (!finalResetUrl) return err(500, 'Could not generate reset link — please try again')
       const resendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
