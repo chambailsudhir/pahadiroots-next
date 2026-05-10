@@ -188,9 +188,16 @@ export async function createOrder(
 
   if (varErr || !variants?.length) throw new Error('Could not fetch product details')
 
+  // Helper to safely extract product from Supabase join (can be object or array)
+  type ProductRow = { id: unknown; name: unknown; emoji: unknown; gst_rate: unknown; is_deleted: unknown; status: unknown }
+  function getProduct(raw: unknown): ProductRow {
+    if (Array.isArray(raw)) return (raw[0] ?? {}) as ProductRow
+    return (raw ?? {}) as ProductRow
+  }
+
   // Validate all products are active
   for (const v of variants) {
-    const p = v.products as Record<string, unknown>
+    const p = getProduct(v.products as unknown)
     if (p?.is_deleted || p?.status !== 'active' || !v.is_active) {
       throw new Error(`Product no longer available`)
     }
@@ -199,7 +206,7 @@ export async function createOrder(
   // Build CartItem array for pricing
   const cartItems = input.items.map(i => {
     const v = variants.find(vv => vv.id === i.variantId)!
-    const p = v.products as Record<string, unknown>
+    const p = getProduct(v.products as unknown)
     return {
       id:              `${i.productId}_${i.variantId}`,
       productId:       i.productId,
