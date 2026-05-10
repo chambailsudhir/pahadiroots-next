@@ -109,3 +109,236 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
     signal?.removeEventListener('abort', onCallerAbort)
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// SERVER-SIDE ORDER FUNCTIONS
+// Used by: /api/v1/orders, /api/v1/payments, /api/v1/webhook
+// These run only on the server (Node.js) — not in the browser
+// ─────────────────────────────────────────────────────────────
+import type { SiteSettings } from '@/types'
+import { getServiceClient } from '@/lib/supabase'
+import { checkStockAvailability } from './inventoryService'
+import { calcPriceSummary } from './pricingService'
+
+export interface CreateOrderInput {
+  customerName:   string
+  customerPhone:  string
+  customerEmail?: string
+  flat:           string
+  area:           string
+  city:           string
+  state:          string
+  pincode:        string
+  label?:         string
+  items:          Array<{ productId: string; variantId: string; qty: number }>
+  paymentMethod:  'cod' | 'razorpay'
+  couponCode?:    string
+  idempotencyKey: string
+}
+
+export interface CreatedOrder {
+  id:           string
+  order_number: string
+  total_amount: number
+  total:        number
+  status:       string
+}
+
+export async function createOrder(
+  input: CreateOrderInput,
+  settings: SiteSettings,
+): Promise<{ order: CreatedOrder; alreadyExists: boolean }> {
+  const db = getServiceClient()
+
+  // 1. Idempotency check — return existing order if same key
+  const { data: existing } = await db
+    .from('orders')
+    .select('id, order_number, total_amount, order_status')
+    .eq('idempotency_key', input.idempotencyKey)
+    .maybeSingle()
+
+  if (existing) {
+    return {
+      order: {
+        id:           existing.id,
+        order_number: existing.order_number,
+        total_amount: existing.total_amount,
+        total:        existing.total_amount,
+        status:       existing.order_status,
+      },
+      alreadyExists: true,
+    }
+  }
+
+  // 2. Stock check
+  const stockCheck = await checkStockAvailability(
+    input.items.map(i => ({ variantId: i.variantId, qty: i.qty }))
+  )
+  if (!stockCheck.ok) {
+    const failed = stockCheck.failedItems.map(f => `variantId:${f.variantId} (req:${f.requested} avail:${f.available})`).join(', ')
+    throw new Error(`Insufficient stock: ${failed}`)
+  }
+
+  // 3. Fetch product/variant prices from DB (never trust client prices)
+  const variantIds = input.items.map(i => i.variantId)
+  const { data: variants, error: varErr } = await db
+    .from('product_variants')
+    .select('id, price, mrp, is_active, available_stock, products(id, name, emoji, gst_rate, is_deleted, status)')
+    .in('id', variantIds)
+
+  if (varErr || !variants?.length) throw new Error('Could not fetch product details')
+
+  // Validate all products are active
+  for (const v of variants) {
+    const p = v.products as Record<string, unknown>
+    if (p?.is_deleted || p?.status !== 'active' || !v.is_active) {
+      throw new Error(`Product no longer available`)
+    }
+  }
+
+  // Build CartItem array for pricing
+  const cartItems = input.items.map(i => {
+    const v = variants.find(vv => vv.id === i.variantId)!
+    const p = v.products as Record<string, unknown>
+    return {
+      id:              `${i.productId}_${i.variantId}`,
+      productId:       i.productId,
+      variantId:       i.variantId,
+      name:            String(p?.name ?? ''),
+      emoji:           String(p?.emoji ?? '🌿'),
+      price:           v.price,
+      mrp:             v.mrp,
+      qty:             i.qty,
+      gst_rate:        Number(p?.gst_rate ?? 0),
+      available_stock: v.available_stock,
+    }
+  })
+
+  // 4. Resolve coupon (optional — non-fatal if coupon not found)
+  let appliedCoupon = null
+  if (input.couponCode) {
+    const { data: coupon } = await db
+      .from('coupons')
+      .select('*')
+      .eq('code', input.couponCode.toUpperCase())
+      .eq('is_active', true)
+      .maybeSingle()
+    if (coupon) appliedCoupon = coupon
+  }
+
+  // 5. Calculate final price server-side
+  const pricing = calcPriceSummary(cartItems as Parameters<typeof calcPriceSummary>[0], settings, appliedCoupon)
+
+  // 6. COD availability check
+  if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {
+    throw new Error('COD is not available at this time')
+  }
+
+  // 7. Generate order number
+  const orderNumber = `PR${Date.now().toString(36).toUpperCase()}`
+
+  // 8. Create order record
+  const shippingAddress = {
+    name:    input.customerName,
+    phone:   input.customerPhone,
+    flat:    input.flat,
+    area:    input.area,
+    city:    input.city,
+    state:   input.state,
+    pincode: input.pincode,
+    label:   input.label ?? 'Home',
+  }
+
+  const { data: newOrder, error: orderErr } = await db
+    .from('orders')
+    .insert({
+      order_number:     orderNumber,
+      order_status:     input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
+      payment_method:   input.paymentMethod,
+      payment_status:   input.paymentMethod === 'cod' ? 'pending' : 'awaiting_payment',
+      subtotal:         pricing.subtotal,
+      coupon_discount:  pricing.discount,
+      coupon_code:      input.couponCode ?? null,
+      shipping_charge:  pricing.shipping,
+      tax:              pricing.gstTotal,
+      total_amount:     pricing.total,
+      shipping_address: shippingAddress,
+      customer_name:    input.customerName,
+      customer_phone:   input.customerPhone,
+      customer_email:   input.customerEmail ?? null,
+      idempotency_key:  input.idempotencyKey,
+      created_at:       new Date().toISOString(),
+      updated_at:       new Date().toISOString(),
+    })
+    .select('id, order_number, total_amount, order_status')
+    .single()
+
+  if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
+
+  // 9. Insert order items
+  const orderItems = input.items.map(i => {
+    const v = variants.find(vv => vv.id === i.variantId)!
+    const p = v.products as Record<string, unknown>
+    return {
+      order_id:                 newOrder.id,
+      product_id:               i.productId,
+      variant_id:               i.variantId,
+      quantity:                 i.qty,
+      price_at_time:            v.price,
+      mrp_at_time:              v.mrp,
+      product_name_snapshot:    String(p?.name ?? ''),
+      variant_value_snapshot:   null,
+    }
+  })
+
+  await db.from('order_items').insert(orderItems)
+
+  // 10. Log creation event
+  await logOrderEvent(newOrder.id, 'order_created', 'system', {
+    payment_method: input.paymentMethod,
+    total:          pricing.total,
+    items:          input.items.length,
+  })
+
+  return {
+    order: {
+      id:           newOrder.id,
+      order_number: newOrder.order_number,
+      total_amount: newOrder.total_amount,
+      total:        newOrder.total_amount,
+      status:       newOrder.order_status,
+    },
+    alreadyExists: false,
+  }
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status:  string,
+  extra:   Record<string, unknown> = {},
+): Promise<void> {
+  const db = getServiceClient()
+  await db.from('orders').update({
+    order_status: status,
+    updated_at:   new Date().toISOString(),
+    ...extra,
+  }).eq('id', orderId)
+}
+
+export async function logOrderEvent(
+  orderId:  string,
+  event:    string,
+  actor:    string,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
+  const db = getServiceClient()
+  await db.from('order_events').insert({
+    order_id:   orderId,
+    event,
+    actor,
+    metadata,
+    created_at: new Date().toISOString(),
+  })
+  // Non-fatal — if order_events table doesn't exist yet, silently continue
+  // .then() not needed — fire and forget pattern for audit log
+}
