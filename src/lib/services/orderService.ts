@@ -1,3 +1,4 @@
+import { captureError } from '@/lib/logger'
 // ─────────────────────────────────────────────────────────────
 // orderService — orders API calls
 //
@@ -100,7 +101,7 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
 
     const parsed = OrdersResponseSchema.safeParse(raw)
     if (!parsed.success) {
-      console.error('[orderService] Invalid /api/orders response:', parsed.error.flatten())
+      captureError(parsed.error, { action: 'orderService/fetchOrders', validation: true })
       return { success: true, orders: [], total: 0, page: 1, pages: 0 }
     }
     return parsed.data

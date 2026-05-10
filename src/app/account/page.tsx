@@ -1,65 +1,55 @@
 'use client'
 // ─────────────────────────────────────────────────────────────
-// AccountPage — orchestrator only (~100 lines)
-//
-//  ✅ No inline styles — uses account.module.css
-//  ✅ No business logic — delegated to hooks + sections
-//  ✅ Auth state machine (idle/loading/authenticated/expired)
-//  ✅ Session expired banner with re-login CTA
-//  ✅ Suspense-ready section structure
+// AccountPage — lean orchestrator
+//  ✅ CSS Module (no inline styles)
+//  ✅ Auth state machine (guest/loading/authenticated/expired/failed)
+//  ✅ Session expired banner
+//  ✅ All logic delegated to hooks + sections
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { useAuth }     from './hooks/useAuth'
-import { useUIStore }  from '@/store/uiStore'
-import { useOrders }   from './hooks/useOrders'
-import { useProfile }  from './hooks/useProfile'
-import Sidebar          from './_components/Sidebar'
-import OrdersSection    from './_sections/OrdersSection'
-import AddressSection   from './_sections/AddressSection'
-import ProfileSection   from './_sections/ProfileSection'
-import PasswordSection  from './_sections/PasswordSection'
+import { useState, useEffect, useMemo } from 'react'
+import { useAuth }       from './hooks/useAuth'
+import { useUIStore }    from '@/store/uiStore'
+import { useOrders }     from './hooks/useOrders'
+import { useProfile }    from './hooks/useProfile'
+import { useToast }      from './hooks/useToast'
+import Sidebar           from './_components/Sidebar'
+import OrdersSection     from './_sections/OrdersSection'
+import AddressSection    from './_sections/AddressSection'
+import ProfileSection    from './_sections/ProfileSection'
+import PasswordSection   from './_sections/PasswordSection'
 import { getSavedAddresses } from '@/lib/account/utils'
 import type { SavedAddress } from './hooks/useProfile'
 import styles from './styles/account.module.css'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
 
-function useToast() {
-  const [toast,     setToast]     = useState('')
-  const [toastType, setToastType] = useState<'success' | 'error'>('success')
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  function show(msg: string, type: 'success' | 'error' = 'success') {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    setToast(msg); setToastType(type)
-    timerRef.current = setTimeout(() => setToast(''), 3500)
-  }
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-  return { toast, toastType, show }
-}
-
 export default function AccountPage() {
-  const [tab, setTab] = useState<Tab>('orders')
+  const [tab, setTab]      = useState<Tab>('orders')
   const { toast, toastType, show: showToast } = useToast()
-  const { openAuth } = useUIStore()
-  const auth    = useAuth()
-  const orders  = useOrders()
-  const profile = useProfile(auth.profile, auth.updateLocalProfile, showToast)
+  const { openAuth }       = useUIStore()
+  const auth               = useAuth()
+  const orders             = useOrders()
+  const profile            = useProfile(auth.profile, auth.updateLocalProfile, showToast)
 
-  const savedAddrsRaw  = auth.profile?.saved_addresses ?? ''
-  const savedAddrs     = useMemo(() => getSavedAddresses(auth.profile) as SavedAddress[], [savedAddrsRaw])
+  const savedAddrs = useMemo(
+    () => getSavedAddresses(auth.profile) as SavedAddress[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth.profile?.saved_addresses]
+  )
 
-  // Auth init
+  // Auth init — single API call
   useEffect(() => { auth.init() }, [])
 
-  // Populate forms when profile loads
-  useEffect(() => { if (auth.profile) profile.initFromProfile(auth.profile) }, [auth.profile])
-
-  // Auto-fetch orders on login
+  // Populate forms once profile is loaded
   useEffect(() => {
-    if (auth.loggedIn && !orders.hasFetched && !orders.loading) orders.fetchOrders()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.loggedIn, orders.hasFetched, orders.loading, orders.fetchOrders])
+    if (auth.profile) profile.initFromProfile(auth.profile)
+  }, [auth.profile, profile.initFromProfile])
+
+  // Trigger order fetch after auth confirmed
+  useEffect(() => {
+    if (auth.loggedIn && !orders.hasFetched) orders.fetchOrders()
+  }, [auth.loggedIn, orders.hasFetched])
 
   // ── Loading ───────────────────────────────────────────────
   if (!auth.loaded) return (
@@ -69,19 +59,19 @@ export default function AccountPage() {
     </div>
   )
 
-  // ── API error during init ─────────────────────────────────
+  // ── API error ─────────────────────────────────────────────
   if (auth.authState === 'failed') return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
         <div className={styles.lwIcon}>⚠️</div>
         <div className={styles.lwTitle}>Something went wrong</div>
-        <p className={styles.lwSub}>Could not connect to the server. Please check your connection and try again.</p>
+        <p className={styles.lwSub}>Could not connect. Please check your connection and try again.</p>
         <button className={styles.btnPrimary} onClick={() => window.location.reload()}>Try Again</button>
       </div>
     </div>
   )
 
-  // ── Not logged in (guest) ─────────────────────────────────
+  // ── Guest (not logged in) ─────────────────────────────────
   if (!auth.loggedIn) return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
@@ -92,6 +82,13 @@ export default function AccountPage() {
       </div>
     </div>
   )
+
+  const NAV_TABS = [
+    { key: 'orders'    as const, icon: '📦', label: 'Orders'   },
+    { key: 'addresses' as const, icon: '📍', label: 'Addresses'},
+    { key: 'profile'   as const, icon: '👤', label: 'Profile'  },
+    { key: 'password'  as const, icon: '🔒', label: 'Password' },
+  ]
 
   return (
     <div className={styles.accWrap}>
@@ -105,8 +102,6 @@ export default function AccountPage() {
       )}
 
       <div className={styles.accPage}>
-
-        {/* Sidebar */}
         <Sidebar
           tab={tab}
           setTab={setTab}
@@ -114,32 +109,27 @@ export default function AccountPage() {
           authUser={auth.authUser}
           stats={orders.stats}
           onLogout={auth.logout}
-          onOrdersClick={() => { if (!orders.hasFetched && !orders.loading) orders.fetchOrders() }}
+          onOrdersClick={() => { if (!orders.hasFetched) orders.fetchOrders() }}
         />
 
-        {/* Main Panel */}
         <div className={styles.mainPanel}>
           {tab === 'orders'    && <OrdersSection   orders={orders} showToast={showToast} />}
           {tab === 'addresses' && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => setTab('profile')} />}
           {tab === 'profile'   && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
           {tab === 'password'  && <PasswordSection profile={profile} />}
         </div>
-
       </div>
 
-      {/* Mobile nav */}
+      {/* Mobile tabs */}
       <div className={styles.mobTabs}>
-        {([
-          { key: 'orders',    icon: '📦', label: 'Orders'    },
-          { key: 'addresses', icon: '📍', label: 'Addresses' },
-          { key: 'profile',   icon: '👤', label: 'Profile'   },
-          { key: 'password',  icon: '🔒', label: 'Password'  },
-        ] as const).map(it => (
-          <button key={it.key}
+        {NAV_TABS.map(it => (
+          <button
+            key={it.key}
             className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
-            onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched && !orders.loading) orders.fetchOrders() }}
+            onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
           >
-            <span className={styles.mtIcon}>{it.icon}</span>{it.label}
+            <span className={styles.mtIcon}>{it.icon}</span>
+            {it.label}
           </button>
         ))}
         <button className={styles.mobTab} onClick={auth.logout}>

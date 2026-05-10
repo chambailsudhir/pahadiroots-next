@@ -1,3 +1,4 @@
+import { captureError } from '@/lib/logger'
 // ─────────────────────────────────────────────────────────────
 // profileService — all profile API calls in one place
 //
@@ -103,7 +104,7 @@ export async function fetchProfile(): Promise<ProfileResp> {
   const raw = await withRetry(() => apiFetch('/api/profile'))
   const parsed = ProfileResponseSchema.safeParse(raw)
   if (!parsed.success) {
-    console.error('[profileService] Invalid /api/profile response:', parsed.error.flatten())
+    captureError(parsed.error, { action: 'profileService/fetchProfile', validation: true })
     throw new ServiceError('Unexpected response from server')
   }
   return parsed.data

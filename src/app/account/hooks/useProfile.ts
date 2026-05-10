@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { captureError } from '@/lib/logger'
 import {
   validateProfileName, validateAddress, validatePhone,
   validatePassword, validateNewAddress, FormErrors,

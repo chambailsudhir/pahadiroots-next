@@ -91,7 +91,26 @@ export async function GET(req: NextRequest) {
   try {
     const user    = await sbAuth('/user', null, token)
     const profile = await syncCustomerProfile(user)
-    const res = ok({ success: true, user: { id: user.id, email: user.email, phone: user.phone }, profile })
+
+    // Fetch saved addresses from normalized table
+    let savedAddresses: unknown[] = []
+    if (profile?.id) {
+      const rows = await sbAdmin('GET',
+        `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=id,label,name,addr,city,state,pin&order=created_at.asc`
+      ).catch(() => [])
+      savedAddresses = Array.isArray(rows) ? rows : []
+    }
+
+    // Return saved_addresses as JSON string to keep frontend shape unchanged
+    const profileWithAddresses = profile
+      ? { ...profile, saved_addresses: JSON.stringify(savedAddresses) }
+      : null
+
+    const res = ok({
+      success: true,
+      user:    { id: user.id, email: user.email, phone: user.phone },
+      profile: profileWithAddresses,
+    })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.newCookies)
     return res
   } catch (e: unknown) {
@@ -114,18 +133,49 @@ export async function POST(req: NextRequest) {
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
-    const allowed = ['first_name','last_name','address_line1','city','state','postal_code','phone','saved_addresses']
+    // ── saved_addresses → normalized table (not JSON blob) ────
+    if ('saved_addresses' in body) {
+      const incoming = body.saved_addresses
+      let addresses: Array<Record<string, unknown>> = []
+      try {
+        addresses = typeof incoming === 'string'
+          ? JSON.parse(incoming)
+          : (incoming as typeof addresses)
+      } catch { return fail(400, 'Invalid saved_addresses format') }
+
+      if (addresses.length > 10) return fail(400, 'Maximum 10 addresses allowed')
+
+      // Full replace: delete all then re-insert
+      await sbAdmin('DELETE', `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`)
+      if (addresses.length > 0) {
+        const rows = addresses.map((a: Record<string, unknown>) => ({
+          ...(a.id ? { id: a.id } : {}),
+          customer_id: profile.id,
+          label: a.label  || 'Home',
+          name:  a.name   || null,
+          addr:  a.addr   || '',
+          city:  a.city   || '',
+          state: a.state  || '',
+          pin:   a.pin    || null,
+        }))
+        await sbAdmin('POST', `/rest/v1/saved_addresses`, rows)
+      }
+      delete body.saved_addresses
+    }
+
+    // ── Scalar profile fields → customers table ────────────────
+    const allowed = ['first_name','last_name','address_line1','city','state','postal_code','phone']
     const patch: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) patch[key] = body[key]
     }
+    if (Object.keys(patch).length > 0) {
+      await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, {
+        ...patch,
+        updated_at: new Date().toISOString(),
+      })
+    }
 
-    if (Object.keys(patch).length === 0) return fail(400, 'No valid fields to update')
-
-    await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, {
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
     return ok({ success: true })
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
