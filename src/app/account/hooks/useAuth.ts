@@ -2,11 +2,13 @@
 // ─────────────────────────────────────────────────────────────
 // useAuth — auth state machine + session management
 //
-// States: idle → loading → authenticated | failed | expired
-//  ✅ Proper state machine (not raw booleans)
-//  ✅ Session expiry detection
-//  ✅ Uses profileService (retry, timeout, zod)
-//  ✅ Functional setProfile (no stale closure)
+// States:
+//  idle      → init not called yet
+//  loading   → checking session / fetching profile
+//  guest     → session checked, not logged in  ← FIXED (was 'idle' causing infinite spinner)
+//  authenticated → logged in, profile loaded
+//  expired   → session expired mid-session
+//  failed    → API error during init
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef } from 'react'
@@ -14,7 +16,7 @@ import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
 import { fetchProfile, checkSession, type Profile } from '@/lib/services/profileService'
 
-export type AuthState = 'idle' | 'loading' | 'authenticated' | 'expired' | 'failed'
+export type AuthState = 'idle' | 'loading' | 'guest' | 'authenticated' | 'expired' | 'failed'
 
 export interface AuthUser {
   id?:    string | number
@@ -35,7 +37,8 @@ export function useAuth() {
   const [profile,   setProfile]   = useState<Profile | null>(null)
   const [authUser,  setAuthUser]  = useState<AuthUser | null>(null)
 
-  const loaded   = authState !== 'idle' && authState !== 'loading'
+  // loaded = init has completed (any terminal state)
+  const loaded   = authState === 'guest' || authState === 'authenticated' || authState === 'expired' || authState === 'failed'
   const loggedIn = authState === 'authenticated'
   const expired  = authState === 'expired'
 
@@ -58,9 +61,15 @@ export function useAuth() {
     setAuthState('loading')
     try {
       const session = await checkSession()
-      if (!session.loggedIn) { setAuthState('idle'); return }
+      if (!session.loggedIn) {
+        setAuthState('guest')   // ← was 'idle' — caused infinite spinner
+        return
+      }
       const data = await fetchProfile()
-      if (!data.profile) { setAuthState('failed'); return }
+      if (!data.profile) {
+        setAuthState('guest')   // profile not found = treat as guest
+        return
+      }
       setProfile(data.profile)
       setAuthUser((data.user ?? null) as AuthUser | null)
       setAuthState('authenticated')
@@ -74,25 +83,24 @@ export function useAuth() {
     try {
       await Promise.allSettled([
         fetch('/api/auth/session', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:   JSON.stringify({ action: 'clear' }),
-          signal: AbortSignal.timeout(5000),
+          body:    JSON.stringify({ action: 'clear' }),
+          signal:  AbortSignal.timeout(5000),
         }),
         fetch('/api/auth', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:   JSON.stringify({ action: 'logout' }),
-          signal: AbortSignal.timeout(5000),
+          body:    JSON.stringify({ action: 'logout' }),
+          signal:  AbortSignal.timeout(5000),
         }),
       ])
     } catch (err) {
       console.error('[useAuth] logout error:', err)
     }
-    // Always clear local state regardless of server response
     setProfile(null)
     setAuthUser(null)
-    setAuthState('idle')
+    setAuthState('guest')
     storeLogout()
     router.push('/')
   }
@@ -104,7 +112,13 @@ export function useAuth() {
   }
 
   const token = loggedIn ? '__cookie__' : null
-  function setToken(_t: string) { /* no-op */ }
+  function setToken(_t: string) { /* no-op — cookies managed server-side */ }
 
-  return { authState, loaded, loggedIn, expired, profile, authUser, init, logout, markExpired, updateLocalProfile, token, setToken }
+  return {
+    authState, loaded, loggedIn, expired,
+    profile, authUser,
+    init, logout, markExpired,
+    updateLocalProfile, token, setToken,
+  }
 }
+

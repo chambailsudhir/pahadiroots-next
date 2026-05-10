@@ -69,7 +69,19 @@ export default function AccountPage() {
     </div>
   )
 
-  // ── Not logged in ─────────────────────────────────────────
+  // ── API error during init ─────────────────────────────────
+  if (auth.authState === 'failed') return (
+    <div className={styles.accWrap}>
+      <div className={styles.loginWall}>
+        <div className={styles.lwIcon}>⚠️</div>
+        <div className={styles.lwTitle}>Something went wrong</div>
+        <p className={styles.lwSub}>Could not connect to the server. Please check your connection and try again.</p>
+        <button className={styles.btnPrimary} onClick={() => window.location.reload()}>Try Again</button>
+      </div>
+    </div>
+  )
+
+  // ── Not logged in (guest) ─────────────────────────────────
   if (!auth.loggedIn) return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
