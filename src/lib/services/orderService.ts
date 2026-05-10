@@ -203,21 +203,23 @@ export async function createOrder(
     }
   }
 
-  // Build CartItem array for pricing
-  const cartItems = input.items.map(i => {
+  // Build CartItem array for pricing — map our DB fields to CartItem shape
+  const cartItems: import('@/types').CartItem[] = input.items.map(i => {
     const v = variants.find(vv => vv.id === i.variantId)!
     const p = getProduct(v.products as unknown)
     return {
-      id:              `${i.productId}_${i.variantId}`,
-      productId:       i.productId,
-      variantId:       i.variantId,
-      name:            String(p?.name ?? ''),
-      emoji:           String(p?.emoji ?? '🌿'),
-      price:           v.price,
-      mrp:             v.mrp,
-      qty:             i.qty,
-      gst_rate:        Number(p?.gst_rate ?? 0),
-      available_stock: v.available_stock,
+      productId:  i.productId,
+      variantId:  i.variantId,
+      name:       String(p?.name  ?? ''),
+      slug:       '',                          // not needed for price calc
+      image:      null,                        // not needed for price calc
+      emoji:      String(p?.emoji ?? '🌿'),
+      size:       '',                          // not needed for price calc
+      price:      Number(v.price)  || 0,
+      mrp:        Number(v.mrp)    || 0,
+      gstRate:    Number(p?.gst_rate ?? 0),   // CartItem uses gstRate not gst_rate
+      qty:        i.qty,
+      maxQty:     Number(v.available_stock) || 999,
     }
   })
 
@@ -234,7 +236,7 @@ export async function createOrder(
   }
 
   // 5. Calculate final price server-side
-  const pricing = calcPriceSummary(cartItems as Parameters<typeof calcPriceSummary>[0], settings, appliedCoupon)
+  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon)
 
   // 6. COD availability check
   if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {
@@ -285,16 +287,16 @@ export async function createOrder(
   // 9. Insert order items
   const orderItems = input.items.map(i => {
     const v = variants.find(vv => vv.id === i.variantId)!
-    const p = v.products as Record<string, unknown>
+    const p = getProduct(v.products as unknown)
     return {
-      order_id:                 newOrder.id,
-      product_id:               i.productId,
-      variant_id:               i.variantId,
-      quantity:                 i.qty,
-      price_at_time:            v.price,
-      mrp_at_time:              v.mrp,
-      product_name_snapshot:    String(p?.name ?? ''),
-      variant_value_snapshot:   null,
+      order_id:               newOrder.id,
+      product_id:             i.productId,
+      variant_id:             i.variantId,
+      quantity:               i.qty,
+      price_at_time:          Number(v.price) || 0,
+      mrp_at_time:            Number(v.mrp)   || 0,
+      product_name_snapshot:  String(p?.name  ?? ''),
+      variant_value_snapshot: null,
     }
   })
 
