@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────────────────────
-// /api/orders — dedicated orders route
-// GET → fetch orders for authenticated user (reads httpOnly cookie)
+// /api/orders — paginated + searchable orders route
+//
+//  ✅ GET ?page=&limit=&search=&status=
+//  ✅ Returns { success, orders, total, page, pages }
+//  ✅ Token refresh on expiry
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,11 +19,8 @@ function fail(status: number, msg: string) { return NextResponse.json({ error: m
 async function sbAuth(path: string, body: unknown = null, token?: string) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
     method:  body !== null ? 'POST' : 'GET',
-    headers: {
-      'Content-Type':  'application/json',
-      'apikey':        SUPABASE_ANON,
-      'Authorization': token ? `Bearer ${token}` : `Bearer ${SUPABASE_ANON}`,
-    },
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON,
+               'Authorization': token ? `Bearer ${token}` : `Bearer ${SUPABASE_ANON}` },
     body: body !== null ? JSON.stringify(body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
@@ -31,12 +31,8 @@ async function sbAuth(path: string, body: unknown = null, token?: string) {
 async function sbAdmin(method: string, path: string, body: unknown = null) {
   const res = await fetch(`${SUPABASE_URL}${path}`, {
     method,
-    headers: {
-      'Content-Type':  'application/json',
-      'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer':        'return=representation',
-    },
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY,
+               'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' },
     body: body ? JSON.stringify(body) : undefined,
   })
   const text = await res.text()
@@ -44,9 +40,7 @@ async function sbAdmin(method: string, path: string, body: unknown = null) {
   return text ? JSON.parse(text) : null
 }
 
-function getToken(req: NextRequest): string | null {
-  return req.cookies.get(COOKIE_TOKEN)?.value ?? null
-}
+function getToken(req: NextRequest) { return req.cookies.get(COOKIE_TOKEN)?.value ?? null }
 
 async function tryRefresh(req: NextRequest) {
   const rt = req.cookies.get(COOKIE_REFRESH)?.value
@@ -65,7 +59,85 @@ function applyNewCookies(res: NextResponse, access: string, refresh: string) {
   res.cookies.set(COOKIE_REFRESH, refresh, { ...base, maxAge: 60 * 60 * 24 * 30 })
 }
 
-// ── GET /api/orders ──────────────────────────────────────────
+async function syncCustomerProfile(user: { id: string; phone?: string; email?: string }) {
+  const orParts = [`auth_user_id.eq.${user.id}`]
+  if (user.phone) orParts.push(`phone.eq.${encodeURIComponent(user.phone)}`)
+  if (user.email) orParts.push(`email.eq.${encodeURIComponent(user.email)}`)
+  const rows = await sbAdmin('GET', `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`).catch(() => null)
+  if (!rows?.length) return null
+  return rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) || rows[0]
+}
+
+const STATUS_MAP: Record<string, string> = {
+  pending:'pending', confirmed:'confirmed', processing:'processing', packed:'packed',
+  shipped:'shipped', delivered:'delivered', cancelled:'cancelled', returned:'returned',
+  refunded:'refunded', return_requested:'return_requested', return_approved:'return_approved',
+  return_received:'return_received', refund_initiated:'refund_initiated',
+  refund_completed:'refund_completed', return_rejected:'return_rejected',
+}
+
+async function getCustomerOrders(
+  customerId: string | number,
+  { page, limit, search, status }: { page: number; limit: number; search: string; status: string }
+) {
+  const offset = (page - 1) * limit
+
+  // Build status filter
+  let statusFilter = ''
+  if (status) {
+    const statuses = status.split(',').map(s => `order_status.eq.${s.trim()}`).join(',')
+    statusFilter = `&or=(${statuses})`
+  }
+
+  // Build search filter (order_number contains)
+  let searchFilter = ''
+  if (search) {
+    searchFilter = `&order_number=ilike.*${encodeURIComponent(search)}*`
+  }
+
+  // Get total count first (for pagination metadata)
+  const countRes = await sbAdmin(
+    'GET',
+    `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}&select=id`
+  ).catch(() => [])
+  const total = Array.isArray(countRes) ? countRes.length : 0
+
+  // Get paginated rows
+  const rows = await sbAdmin(
+    'GET',
+    `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`
+  ).catch(() => [])
+
+  const orders = (rows || []).map((o: Record<string, unknown>) => {
+    const rawItems = (o.order_items as Array<{
+      quantity: number; price_at_time: number; product_name_snapshot: string | null;
+      variant_value_snapshot: string | null; product_id: string | null;
+      products?: { emoji?: string; image_url?: string }
+    }>) || []
+    const items = rawItems.map(i => ({
+      qty: i.quantity, price: i.price_at_time,
+      name: i.product_name_snapshot || 'Product',
+      variant: i.variant_value_snapshot || null,
+      emoji: i.products?.emoji || '🌿',
+      image_url: i.products?.image_url || null,
+    }))
+    const ret   = Array.isArray(o.returns) && o.returns.length > 0 ? o.returns[0] : null
+    const rawSt = String(o.order_status || '')
+    return {
+      id: o.id, order_number: o.order_number, order_status: rawSt,
+      _displayStatus: STATUS_MAP[rawSt] || rawSt,
+      payment_method: o.payment_method || null, payment_status: o.payment_status || null,
+      total_amount: Number(o.total_amount) || 0, created_at: o.created_at,
+      tracking_number: o.tracking_number || null, courier: o.courier || null,
+      shipped_at: o.shipped_at || null, delivered_at: o.delivered_at || null,
+      updated_at: o.updated_at || null, items, _return: ret,
+    }
+  })
+
+  return { orders, total, page, pages: Math.ceil(total / limit) }
+}
+
+// ── GET /api/orders?page=1&limit=20&search=&status= ──────────
 export async function GET(req: NextRequest) {
   let token = getToken(req)
   let refreshed: { token: string; refresh: string } | null = null
@@ -76,13 +148,38 @@ export async function GET(req: NextRequest) {
     token = refreshed.token
   }
 
+  const { searchParams } = req.nextUrl
+  const page   = Math.max(1, parseInt(searchParams.get('page')  || '1', 10))
+  const limit  = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
+  const search = (searchParams.get('search') || '').trim()
+  const status = (searchParams.get('status') || '').trim()
+
   try {
     const user    = await sbAuth('/user', null, token)
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
-    const orders = await getCustomerOrders(profile.id)
-    const res = ok({ success: true, orders })
+    const result = await getCustomerOrders(profile.id, { page, limit, search, status })
+
+    // Fetch summary stats (all-time, unfiltered) only on first page with no filters
+    let stats = null
+    if (page === 1 && !search && !status) {
+      const allRows = await sbAdmin('GET',
+        `/rest/v1/orders?customer_id=eq.${profile.id}&select=order_status,total_amount`
+      ).catch(() => [])
+      if (Array.isArray(allRows)) {
+        stats = {
+          delivered: allRows.filter((o: Record<string, string>) => o.order_status === 'delivered').length,
+          active:    allRows.filter((o: Record<string, string>) => ['confirmed','processing','packed','shipped'].includes(o.order_status)).length,
+          cancelled: allRows.filter((o: Record<string, string>) => o.order_status === 'cancelled').length,
+          spent:     allRows
+            .filter((o: Record<string, string>) => o.order_status !== 'cancelled')
+            .reduce((s: number, o: Record<string, unknown>) => s + (Number(o.total_amount) || 0), 0),
+        }
+      }
+    }
+
+    const res = ok({ success: true, ...result, ...(stats ? { stats } : {}) })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
   } catch (e: unknown) {
@@ -90,79 +187,4 @@ export async function GET(req: NextRequest) {
     if (err.status === 401) return fail(401, 'Session expired — please login again')
     return fail(500, err.message || 'Orders fetch failed')
   }
-}
-
-// ── syncCustomerProfile ──────────────────────────────────────
-async function syncCustomerProfile(user: { id: string; phone?: string; email?: string }) {
-  const phone = user.phone || ''
-  const email = user.email || ''
-  const orParts = [`auth_user_id.eq.${user.id}`]
-  if (phone) orParts.push(`phone.eq.${encodeURIComponent(phone)}`)
-  if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
-  const rows = await sbAdmin('GET', `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`).catch(() => null)
-  if (!rows || !rows.length) return null
-  const match = rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) || rows[0]
-  return match
-}
-
-// ── getCustomerOrders ────────────────────────────────────────
-async function getCustomerOrders(customerId: string | number) {
-  const STATUS_MAP: Record<string, string> = {
-    pending: 'pending', confirmed: 'confirmed', processing: 'processing',
-    packed: 'packed', shipped: 'shipped', delivered: 'delivered',
-    cancelled: 'cancelled', returned: 'returned', refunded: 'refunded',
-    return_requested: 'return_requested', return_approved: 'return_approved',
-    return_received: 'return_received', refund_initiated: 'refund_initiated',
-    refund_completed: 'refund_completed', return_rejected: 'return_rejected',
-  }
-
-  // ✅ Using actual order_items columns verified from DB:
-  // quantity, price_at_time, product_name_snapshot, variant_value_snapshot
-  // + JOIN products for emoji and image_url
-  const rows = await sbAdmin(
-    'GET',
-    `/rest/v1/orders?customer_id=eq.${customerId}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=100`
-  ).catch(() => [])
-
-  return (rows || []).map((o: Record<string, unknown>) => {
-    const rawItems = (o.order_items as Array<{
-      quantity:               number
-      price_at_time:          number
-      product_name_snapshot:  string | null
-      variant_value_snapshot: string | null
-      product_id:             string | null
-      products?: { emoji?: string; image_url?: string }
-    }>) || []
-
-    const items = rawItems.map(i => ({
-      qty:       i.quantity,
-      price:     i.price_at_time,
-      // use snapshot name (always available even if product deleted)
-      name:      i.product_name_snapshot || 'Product',
-      variant:   i.variant_value_snapshot || null,
-      emoji:     i.products?.emoji     || '🌿',
-      image_url: i.products?.image_url || null,
-    }))
-
-    const ret   = Array.isArray(o.returns) && o.returns.length > 0 ? o.returns[0] : null
-    const rawSt = String(o.order_status || '')
-
-    return {
-      id:              o.id,
-      order_number:    o.order_number,
-      order_status:    rawSt,
-      _displayStatus:  STATUS_MAP[rawSt] || rawSt,
-      payment_method:  o.payment_method  || null,
-      payment_status:  o.payment_status  || null,
-      total_amount:    Number(o.total_amount) || 0,
-      created_at:      o.created_at,
-      tracking_number: o.tracking_number || null,
-      courier:         o.courier         || null,
-      shipped_at:      o.shipped_at      || null,
-      delivered_at:    o.delivered_at    || null,
-      updated_at:      o.updated_at      || null,
-      items,
-      _return: ret,
-    }
-  })
 }

@@ -1,34 +1,20 @@
-// ─────────────────────────────────────────────────────────────
-// useAuth — auth init, session state, logout
-//
-// Token storage: httpOnly cookies (set by /api/auth/* routes)
-// The client never sees or stores tokens.
-// storage.getToken() / storage.saveToken() calls REMOVED.
-//
-// Flow:
-//   1. On mount → GET /api/auth/session to check if cookie exists
-//   2. If logged in → GET /api/profile to fetch profile data
-//   3. On logout → POST /api/auth/session { action:'clear' } + POST /api/auth { action:'logout' }
-// ─────────────────────────────────────────────────────────────
 'use client'
+// ─────────────────────────────────────────────────────────────
+// useAuth — auth state machine + session management
+//
+// States: idle → loading → authenticated | failed | expired
+//  ✅ Proper state machine (not raw booleans)
+//  ✅ Session expiry detection
+//  ✅ Uses profileService (retry, timeout, zod)
+//  ✅ Functional setProfile (no stale closure)
+// ─────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
+import { fetchProfile, checkSession, type Profile } from '@/lib/services/profileService'
 
-export interface Profile {
-  id?:             string | number
-  first_name?:     string
-  last_name?:      string
-  phone?:          string
-  email?:          string
-  address_line1?:  string
-  city?:           string
-  state?:          string
-  postal_code?:    string
-  saved_addresses?: string
-  [key: string]: unknown
-}
+export type AuthState = 'idle' | 'loading' | 'authenticated' | 'expired' | 'failed'
 
 export interface AuthUser {
   id?:    string | number
@@ -37,17 +23,25 @@ export interface AuthUser {
   [key: string]: unknown
 }
 
+export type { Profile }
+
 export function useAuth() {
   const router       = useRouter()
   const storeLogout  = useUserStore(s => s.logout)
   const storeSetUser = useUserStore(s => s.setUser)
+  const initDone     = useRef(false)
 
-  const initDone = useRef(false)
+  const [authState, setAuthState] = useState<AuthState>('idle')
+  const [profile,   setProfile]   = useState<Profile | null>(null)
+  const [authUser,  setAuthUser]  = useState<AuthUser | null>(null)
 
-  const [profile,  setProfile]  = useState<Profile | null>(null)
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [loaded,   setLoaded]   = useState(false)
-  const [loggedIn, setLoggedIn] = useState(false)
+  const loaded   = authState !== 'idle' && authState !== 'loading'
+  const loggedIn = authState === 'authenticated'
+  const expired  = authState === 'expired'
+
+  function mergeProfile(current: Profile | null, updates: Partial<Profile>): Profile {
+    return { ...(current ?? {}), ...updates }
+  }
 
   function syncStore(prof: Profile | null, user: AuthUser | null) {
     storeSetUser({
@@ -58,85 +52,59 @@ export function useAuth() {
     })
   }
 
-  function mergeProfile(current: Profile | null, updates: Partial<Profile>): Profile {
-    const base: Profile = current ? { ...current } : {}
-    return { ...base, ...updates }
-  }
-
   const init = useCallback(async () => {
     if (initDone.current) return
     initDone.current = true
-
+    setAuthState('loading')
     try {
-      // Step 1: check if httpOnly cookie session exists (8s timeout)
-      const sessionRes = await fetch('/api/auth/session', {
-        signal: AbortSignal.timeout(8000),
-      })
-      const session    = await sessionRes.json() as { loggedIn: boolean }
-      if (!session.loggedIn) { setLoaded(true); return }
-
-      // Step 2: fetch profile via dedicated route (reads cookie server-side)
-      const profileRes  = await fetch('/api/profile', {
-        signal: AbortSignal.timeout(8000),
-      })
-      if (!profileRes.ok) { setLoaded(true); return }
-      const profileData = await profileRes.json() as { profile?: Profile; user?: AuthUser }
-
-      if (!profileData.profile) { setLoaded(true); return }
-      setProfile(profileData.profile)
-      setAuthUser((profileData.user ?? null) as AuthUser | null)
-      setLoggedIn(true)
-      setLoaded(true)
-      syncStore(profileData.profile, (profileData.user ?? null) as AuthUser | null)
-    } catch (err: unknown) {
-      console.error('[useAuth] init failed:', err)
-      setLoaded(true)
+      const session = await checkSession()
+      if (!session.loggedIn) { setAuthState('idle'); return }
+      const data = await fetchProfile()
+      if (!data.profile) { setAuthState('failed'); return }
+      setProfile(data.profile)
+      setAuthUser((data.user ?? null) as AuthUser | null)
+      setAuthState('authenticated')
+      syncStore(data.profile, (data.user ?? null) as AuthUser | null)
+    } catch {
+      setAuthState('failed')
     }
   }, [])
 
   async function logout() {
     try {
-      // Clear httpOnly cookies server-side
-      await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'clear' }),
-      })
-      // Also call Supabase logout to invalidate the token
-      await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'logout' }),
-      })
-    } catch (err: unknown) {
-      console.error('[useAuth] logout failed:', err)
+      await Promise.allSettled([
+        fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:   JSON.stringify({ action: 'clear' }),
+          signal: AbortSignal.timeout(5000),
+        }),
+        fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:   JSON.stringify({ action: 'logout' }),
+          signal: AbortSignal.timeout(5000),
+        }),
+      ])
+    } catch (err) {
+      console.error('[useAuth] logout error:', err)
     }
+    // Always clear local state regardless of server response
     setProfile(null)
     setAuthUser(null)
-    setLoggedIn(false)
+    setAuthState('idle')
     storeLogout()
     router.push('/')
   }
 
-  async function updateLocalProfile(updates: Partial<Profile>) {
-    // Use functional update to avoid stale closure overwriting newer state
+  function markExpired() { setAuthState('expired') }
+
+  function updateLocalProfile(updates: Partial<Profile>) {
     setProfile(prev => mergeProfile(prev, updates))
-    // Also persist to server
-    try {
-      await fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-    } catch (err: unknown) {
-      console.warn('[useAuth] background profile sync failed:', err)
-    }
   }
 
-  // token prop kept for backward compat with useOrders/useProfile
-  // but it's now a sentinel — actual auth is cookie-based
   const token = loggedIn ? '__cookie__' : null
-  function setToken(_t: string) { /* no-op: tokens managed server-side */ }
+  function setToken(_t: string) { /* no-op */ }
 
-  return { token, profile, authUser, loaded, loggedIn, init, logout, updateLocalProfile, setToken }
+  return { authState, loaded, loggedIn, expired, profile, authUser, init, logout, markExpired, updateLocalProfile, token, setToken }
 }

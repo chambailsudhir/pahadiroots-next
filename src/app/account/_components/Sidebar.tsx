@@ -1,17 +1,18 @@
 'use client'
 import Link from 'next/link'
 import { getInitials, formatCurrency } from '@/lib/account/utils'
+import styles from '../styles/account.module.css'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
 
 interface Props {
-  tab: Tab
-  setTab: (t: Tab) => void
-  profile: any
-  authUser: any
-  stats: { total: number; delivered: number; active: number; spent: number } | null
-  onLogout: () => void
-  onOrdersClick: () => void
+  tab:          Tab
+  setTab:       (t: Tab) => void
+  profile:      any
+  authUser:     any
+  stats:        { total: number; delivered: number; active: number; spent: number } | null
+  onLogout:     () => void
+  onOrdersClick:() => void
 }
 
 export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogout, onOrdersClick }: Props) {
@@ -25,63 +26,63 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
     : null
 
   const NAV: { key: Tab; icon: string; label: string; badge?: number | null }[] = [
-    { key: 'orders',   icon: '📦', label: 'My Orders',      badge: stats?.active || null },
-    { key: 'addresses',icon: '📍', label: 'Addresses' },
-    { key: 'profile',  icon: '👤', label: 'Profile' },
-    { key: 'password', icon: '🔒', label: 'Change Password' },
+    { key: 'orders',    icon: '📦', label: 'My Orders',       badge: stats?.active || null },
+    { key: 'addresses', icon: '📍', label: 'Addresses' },
+    { key: 'profile',   icon: '👤', label: 'Profile' },
+    { key: 'password',  icon: '🔒', label: 'Change Password' },
   ]
 
   return (
-    <aside className="sidebar">
-      <div className="sb-profile">
-        <div className="sb-avatar-ring">
-          <div className="sb-avatar">{initials}</div>
+    <aside className={styles.sidebar}>
+      <div className={styles.sbProfile}>
+        <div className={styles.sbAvatarRing}>
+          <div className={styles.sbAvatar}>{initials}</div>
         </div>
-        <div className="sb-name">{fullName}</div>
-        {email  && <div className="sb-sub">{email}</div>}
-        {!email && phone && <div className="sb-sub">+91 {phone}</div>}
-        {since  && <div className="sb-member">Member since {since}</div>}
+        <div className={styles.sbName}>{fullName}</div>
+        {email  && <div className={styles.sbSub}>{email}</div>}
+        {!email && phone && <div className={styles.sbSub}>+91 {phone}</div>}
+        {since  && <div className={styles.sbMember}>Member since {since}</div>}
       </div>
 
       {stats && (
-        <div className="sb-stats">
-          <div className="sb-stat">
-            <div className="sb-stat-val">{stats.total}</div>
-            <div className="sb-stat-lbl">Orders</div>
+        <div className={styles.sbStats}>
+          <div className={styles.sbStat}>
+            <div className={styles.sbStatVal}>{stats.total}</div>
+            <div className={styles.sbStatLbl}>Orders</div>
           </div>
-          <div className="sb-stat-div" />
-          <div className="sb-stat">
-            <div className="sb-stat-val">{stats.delivered}</div>
-            <div className="sb-stat-lbl">Delivered</div>
+          <div className={styles.sbStatDiv} />
+          <div className={styles.sbStat}>
+            <div className={styles.sbStatVal}>{stats.delivered}</div>
+            <div className={styles.sbStatLbl}>Delivered</div>
           </div>
-          <div className="sb-stat-div" />
-          <div className="sb-stat">
-            <div className="sb-stat-val">{formatCurrency(stats.spent)}</div>
-            <div className="sb-stat-lbl">Spent</div>
+          <div className={styles.sbStatDiv} />
+          <div className={styles.sbStat}>
+            <div className={styles.sbStatVal}>{formatCurrency(stats.spent)}</div>
+            <div className={styles.sbStatLbl}>Spent</div>
           </div>
         </div>
       )}
 
-      <div className="sb-nav">
+      <div className={styles.sbNav}>
         {NAV.map(it => (
           <button
             key={it.key}
-            className={`sb-item${tab === it.key ? ' active' : ''}`}
+            className={`${styles.sbItem}${tab === it.key ? ' ' + styles.sbItemActive : ''}`}
             onClick={() => { setTab(it.key); if (it.key === 'orders') onOrdersClick() }}
           >
-            <span className="sb-icon">{it.icon}</span>
-            <span className="sb-label">{it.label}</span>
-            {it.badge ? <span className="sb-badge">{it.badge}</span> : null}
+            <span className={styles.sbIcon}>{it.icon}</span>
+            <span className={styles.sbLabel}>{it.label}</span>
+            {it.badge ? <span className={styles.sbBadge}>{it.badge}</span> : null}
           </button>
         ))}
-        <div className="sb-div" />
-        <Link href="/wishlist" className="sb-item sb-wishlist">
-          <span className="sb-icon">❤️</span>
-          <span className="sb-label">Wishlist</span>
+        <div className={styles.sbDiv} />
+        <Link href="/wishlist" className={`${styles.sbItem} ${styles.sbWishlist}`}>
+          <span className={styles.sbIcon}>❤️</span>
+          <span className={styles.sbLabel}>Wishlist</span>
         </Link>
-        <button className="sb-item sb-logout" onClick={onLogout}>
-          <span className="sb-icon">🚪</span>
-          <span className="sb-label">Logout</span>
+        <button className={`${styles.sbItem} ${styles.sbLogout}`} onClick={onLogout}>
+          <span className={styles.sbIcon}>🚪</span>
+          <span className={styles.sbLabel}>Logout</span>
         </button>
       </div>
     </aside>
