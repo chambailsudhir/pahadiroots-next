@@ -14,7 +14,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
-import { fetchProfile, checkSession, type Profile } from '@/lib/services/profileService'
+import { fetchProfile, ServiceError, type Profile } from '@/lib/services/profileService'
 
 export type AuthState = 'idle' | 'loading' | 'guest' | 'authenticated' | 'expired' | 'failed'
 
@@ -60,22 +60,25 @@ export function useAuth() {
     initDone.current = true
     setAuthState('loading')
     try {
-      const session = await checkSession()
-      if (!session.loggedIn) {
-        setAuthState('guest')   // ← was 'idle' — caused infinite spinner
-        return
-      }
+      // Single call — profile route handles token refresh internally.
+      // 401 = not logged in (guest), anything else = error.
       const data = await fetchProfile()
       if (!data.profile) {
-        setAuthState('guest')   // profile not found = treat as guest
+        // Logged in but no customer record yet — treat as guest
+        setAuthState('guest')
         return
       }
       setProfile(data.profile)
       setAuthUser((data.user ?? null) as AuthUser | null)
       setAuthState('authenticated')
       syncStore(data.profile, (data.user ?? null) as AuthUser | null)
-    } catch {
-      setAuthState('failed')
+    } catch (err: unknown) {
+      // 401 = no session / expired → guest (not an error)
+      if (err instanceof ServiceError && err.status === 401) {
+        setAuthState('guest')
+      } else {
+        setAuthState('failed')
+      }
     }
   }, [])
 
