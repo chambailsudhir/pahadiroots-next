@@ -1,6 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+/**
+ * checkout/page.tsx — Enterprise Checkout Page
+ *
+ * ADMIN SETTINGS THAT DIRECTLY AFFECT THIS PAGE:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * From site_settings table (real keys per types/index.ts):
+ *
+ *   free_shipping_min      → shipping threshold bar + shipping cost calculation
+ *   flat_shipping_charge   → shipping fee when below threshold
+ *   prepaid_discount_pct   → % discount shown + applied when payMethod='razorpay'
+ *   cod_enabled            → shows/hides COD option (Image 2: currently OFF)
+ *   cod_max_value          → max order total for COD eligibility
+ *   cod_max_active_orders  → fraud guard (enforced server-side in /api/v1/orders)
+ *   store_open             → if 'false', middleware redirects here before reaching page
+ *   whatsapp_number        → used in support link
+ *   order_email_enabled    → server-side only, no UI impact here
+ *   admin_notify_email     → server-side only
+ *
+ * PAYMENT TOGGLE NOTES (from Image 2):
+ *   The admin "Orders" tab has two independent toggles:
+ *   - Enable Razorpay (UPI/Cards) → maps to: we check cod_enabled='false' + razorpay key present
+ *   - Enable COD + WhatsApp       → maps to: settings.cod_enabled === 'true'
+ *   Both OFF = "customers cannot checkout" — we guard this case below.
+ *
+ * FONT: Uses CSS vars from layout.tsx next/font setup.
+ *   --font-playfair = Playfair_Display (used for headings/prices)
+ *   --font-dm-sans / --font-lato = body text
+ *   NO @import in this file.
+ *
+ * HEADER HEIGHT: sticky top = 134px max (ann + ticker + nav).
+ */
+
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -12,6 +44,8 @@ import type { SiteSettings, OrderAddress } from '@/types'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const INDIA_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
   'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
@@ -21,538 +55,876 @@ const INDIA_STATES = [
   'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
   'Ladakh','Lakshadweep','Puducherry',
 ]
-const LABEL_OPTIONS = ['Home','Office','Parents','Friends','Others'] as const
 
+const LABEL_OPTIONS = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
+const LABEL_ICONS: Record<string, string> = {
+  Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Matches exact localStorage key used by readSavedAddresses across the codebase
 function readSavedAddresses(user: any): any[] {
   try {
-    const raw = user?.saved_addresses || localStorage.getItem('pr_saved_addresses') || '[]'
+    const raw = user?.saved_addresses
+      || (typeof window !== 'undefined' ? localStorage.getItem('pr_saved_addresses') : null)
+      || '[]'
     return JSON.parse(raw)
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
+
+const settingsFetcher = async (): Promise<SiteSettings> => {
+  const { data } = await supabase.from('site_settings').select('key, value')
+  return Object.fromEntries(
+    (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
+  ) as SiteSettings
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const items          = useCartStore(s => s.items)
-  const coupon         = useCartStore(s => s.coupon)
-  const idempotencyKey = useCartStore(s => s.idempotencyKey)
+
+  // Cart store
+  const items              = useCartStore(s => s.items)
+  const coupon             = useCartStore(s => s.coupon)
+  const idempotencyKey     = useCartStore(s => s.idempotencyKey)
   const ensureIdempotencyKey = useCartStore(s => s.ensureIdempotencyKey)
-  const clearCart      = useCartStore(s => s.clearCart)
-  const applyCoupon    = useCartStore(s => s.applyCoupon)
-  const removeCoupon   = useCartStore(s => s.removeCoupon)
-  const user           = useUserStore(s => s.user)
+  const clearCart          = useCartStore(s => s.clearCart)
+  const applyCoupon        = useCartStore(s => s.applyCoupon)
+  const removeCoupon       = useCartStore(s => s.removeCoupon)
 
-  const { data: settingsRows } = useSWR('site_settings', async () => {
-    const { data } = await supabase.from('site_settings').select('key, value')
-    return Object.fromEntries((data || []).map((r: any) => [r.key, r.value])) as any
-  })
-  const settings: SiteSettings = settingsRows || {
-    free_shipping_min: '799', flat_shipping_charge: '99',
-    cod_enabled: 'true', prepaid_discount_pct: '5', cod_max_value: '3000',
-  } as any
+  // User store
+  const user = useUserStore(s => s.user)
 
+  // Settings
+  const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
+  const s = settings || {} as SiteSettings
+
+  // ── Derived from admin settings ──
+  const codEnabled    = s.cod_enabled === 'true'
+  const codMax        = parseFloat(s.cod_max_value || '3000')
+  const prepaidPct    = parseInt(s.prepaid_discount_pct || '5')
+  const freeShipMin   = parseFloat(s.free_shipping_min || '0')
+  // min_order_amount — admin sets this in Orders tab; 0 means disabled
+  const minOrderAmt   = parseFloat(s.min_order_amount || '0')
+  const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
+  const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
+  // Razorpay available when BOTH the env key is configured AND admin has not disabled it.
+  // Admin 'upi_enabled' key (Orders tab) directly controls this — same key saved by admin/settings/page.jsx
+  const upiEnabled      = s.upi_enabled !== 'false'  // default true if not set
+  const razorpayEnabled = !!razorpayKeyId && upiEnabled
+
+  // ── Local state ──
   const [payMethod, setPayMethod] = useState<'razorpay' | 'cod'>('cod')
   const [placing,   setPlacing]   = useState(false)
   const [error,     setError]     = useState('')
-  const [couponCode, setCouponCode] = useState('')
+
+  const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
-  const [couponError, setCouponError] = useState('')
-  const [selectedSavedAddr, setSelectedSavedAddr] = useState<string | null>(null)
-  const [savedAddrs, setSavedAddrs] = useState<any[]>([])
+  const [couponError,   setCouponError]   = useState('')
 
+  const [savedAddrs,       setSavedAddrs]       = useState<any[]>([])
+  const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(null)
+  const [summaryOpen,      setSummaryOpen]       = useState(true)   // open by default on mobile
+  const [touched,          setTouched]           = useState<Record<string, boolean>>({})
+
+  // Address state — all fields match OrderAddress type exactly
   const [addr, setAddr] = useState<OrderAddress>({
-    name:    user?.name || '',
-    phone:   user?.phone || '',
-    flat: '', area: '', city: '', state: 'Uttarakhand', pincode: '', label: 'Home',
+    name: '', phone: '', flat: '', area: '',
+    city: '', state: 'Uttarakhand', pincode: '', label: 'Home',
   })
+  // Email is NOT in OrderAddress type — stored separately
+  const [email, setEmail] = useState('')
 
-  const pricing      = calcPriceSummary(items, settings, coupon, payMethod)
-  const codMax       = parseFloat(settings.cod_max_value || '3000')
-  const codOk        = settings.cod_enabled !== 'false' && pricing.total <= codMax
-  const prepaidPct   = parseInt(settings.prepaid_discount_pct || '5')
-  const freeShipMin  = parseInt(settings.free_shipping_min || '0')
+  // ── Pricing — recalculates when payMethod changes (prepaid discount) ──
+  const pricing = calcPriceSummary(items, s, coupon, payMethod)
+  const codOk   = codEnabled && pricing.total <= codMax
 
-  useEffect(() => { if (items.length === 0) router.replace('/cart') }, [items, router])
-  useEffect(() => { setSavedAddrs(readSavedAddresses(user)) }, [user])
+  // ── Effects ──
+
+  // Redirect if cart becomes empty
   useEffect(() => {
-    if (!user) return
-    setAddr(a => ({
-      ...a,
-      name:  a.name  || user.name  || '',
-      phone: a.phone || user.phone || '',
-    }))
+    if (items.length === 0) router.replace('/cart')
+  }, [items, router])
+
+  // Load saved addresses (localStorage — client only)
+  useEffect(() => {
+    setSavedAddrs(readSavedAddresses(user))
   }, [user])
 
+  // Pre-fill from user profile (functional updater avoids stale closure)
+  useEffect(() => {
+    if (!user) return
+    setAddr(prev => ({
+      ...prev,
+      name:  prev.name  || user.name  || '',
+      phone: prev.phone || user.phone || '',
+    }))
+    setEmail(prev => prev || user.email || '')
+  }, [user])
+
+  // Auto-switch payment if COD becomes unavailable after settings load
+  useEffect(() => {
+    if (payMethod === 'cod' && !codOk && razorpayEnabled) {
+      setPayMethod('razorpay')
+    }
+  }, [codOk, payMethod, razorpayEnabled])
+
+  // ── Field helpers ──
+
   function setField(field: keyof OrderAddress, value: string) {
-    setAddr(a => ({ ...a, [field]: value }))
-    setSelectedSavedAddr(null)
+    setAddr(prev => ({ ...prev, [field]: value }))
+    setSelectedSavedIdx(null)
   }
 
-  function applySaved(a: any) {
-    setAddr({
-      name:    a.name    || addr.name,
-      phone:   a.phone   || addr.phone,
-      flat:    a.addr    || a.flat || '',
-      area:    a.area    || '',
-      city:    a.city    || '',
-      state:   a.state   || 'Uttarakhand',
-      pincode: a.pin     || a.pincode || '',
-      label:   a.label   || 'Home',
-    })
-    setSelectedSavedAddr(a.label)
+  function touch(field: string) {
+    setTouched(prev => ({ ...prev, [field]: true }))
   }
 
+  function fieldErr(field: keyof OrderAddress): string {
+    if (!touched[field]) return ''
+    const val = addr[field]?.toString().trim()
+    if (!val) return 'Required'
+    if (field === 'phone'   && !/^[6-9]\d{9}$/.test(addr.phone))  return 'Invalid mobile number'
+    if (field === 'pincode' && !/^\d{6}$/.test(addr.pincode))      return 'Invalid 6-digit pincode'
+    return ''
+  }
+
+  function applySaved(saved: any, idx: number) {
+    setAddr(prev => ({
+      ...prev,
+      name:    saved.name    || prev.name,
+      phone:   saved.phone   || prev.phone,
+      flat:    saved.addr    || saved.flat    || '',
+      area:    saved.area    || '',
+      city:    saved.city    || '',
+      state:   saved.state   || 'Uttarakhand',
+      pincode: saved.pin     || saved.pincode || '',
+      label:   saved.label   || 'Home',
+    }))
+    setSelectedSavedIdx(idx)
+  }
+
+  // ── Coupon ──
   async function handleCoupon() {
     if (!couponCode.trim()) return
-    setCouponLoading(true); setCouponError('')
+    setCouponLoading(true)
+    setCouponError('')
     try {
       const res  = await fetch('/api/v1/coupons', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: couponCode.trim().toUpperCase(), subtotal: pricing.subtotal }),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code: couponCode.trim().toUpperCase(), subtotal: pricing.subtotal }),
       })
       const data = await res.json()
       if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); return }
-      applyCoupon(data.coupon); setCouponCode('')
-    } catch { setCouponError('Failed to apply coupon') }
-    finally { setCouponLoading(false) }
+      applyCoupon(data.coupon)
+      setCouponCode('')
+    } catch {
+      setCouponError('Failed to apply coupon')
+    } finally {
+      setCouponLoading(false)
+    }
   }
 
-  async function handlePlace() {
-    const required = ['name','phone','flat','area','city','state','pincode'] as const
+  // ── Place order ──
+  const handlePlace = useCallback(async () => {
+    const required = ['name', 'phone', 'flat', 'area', 'city', 'state', 'pincode'] as const
+
+    // Touch all required fields (merge, don't replace)
+    setTouched(prev => {
+      const next = { ...prev }
+      required.forEach(f => { next[f] = true })
+      return next
+    })
+
+    // Validate
+    const fieldLabels: Record<string, string> = {
+      name: 'Full Name', phone: 'Mobile Number', flat: 'Address',
+      area: 'Area / Landmark', city: 'City', state: 'State', pincode: 'Pincode',
+    }
     for (const f of required) {
       if (!addr[f]?.toString().trim()) {
-        setError(`Please fill in: ${f.replace('_',' ')}`); return
+        setError(`Please fill in: ${fieldLabels[f]}`)
+        return
       }
     }
-    if (!/^[6-9]\d{9}$/.test(addr.phone)) { setError('Please enter a valid 10-digit mobile number'); return }
-    if (!/^\d{6}$/.test(addr.pincode))     { setError('Please enter a valid 6-digit pincode'); return }
+    if (!/^[6-9]\d{9}$/.test(addr.phone)) {
+      setError('Please enter a valid 10-digit mobile number')
+      return
+    }
+    if (!/^\d{6}$/.test(addr.pincode)) {
+      setError('Please enter a valid 6-digit pincode')
+      return
+    }
 
-    setError(''); setPlacing(true)
+    setError('')
+    setPlacing(true)
+
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
+
       const payload = {
-        name: addr.name, phone: addr.phone, email: user?.email || '',
-        flat: addr.flat, area: addr.area, city: addr.city,
-        state: addr.state, pincode: addr.pincode, label: addr.label,
-        items: items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
-        payment_method: payMethod, coupon_code: coupon?.code, idempotency_key: orderKey,
+        name:             addr.name,
+        phone:            addr.phone,
+        email:            email || user?.email || '',   // from own state, NOT addr.area
+        flat:             addr.flat,
+        area:             addr.area,
+        city:             addr.city,
+        state:            addr.state,
+        pincode:          addr.pincode,
+        label:            addr.label,
+        items:            items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
+        payment_method:   payMethod,
+        coupon_code:      coupon?.code,
+        idempotency_key:  orderKey,
       }
+
       if (payMethod === 'cod') {
         const res  = await fetch('/api/v1/orders', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(payload),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Order creation failed')
         clearCart()
         router.replace(`/order-success?id=${data.order_number}`)
+        // Do NOT setPlacing(false) — navigation is in progress
+
       } else {
+        // Razorpay online payment
+        const RazorpayConstructor = (window as any).Razorpay
+        if (!RazorpayConstructor) {
+          throw new Error('Payment gateway not loaded. Please refresh and try again.')
+        }
+
         const res  = await fetch('/api/v1/payments', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, action: 'create_payment' }),
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ ...payload, action: 'create_payment' }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
-        const Razorpay = (window as any).Razorpay
-        const rzp = new Razorpay({
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-          amount: data.amount, currency: 'INR',
-          name: '5 Pahadi Roots', description: 'Natural Himalayan Products',
-          order_id: data.razorpay_order_id,
-          prefill: { name: addr.name, email: user?.email || '', contact: addr.phone },
-          theme: { color: '#1a3a1e' },
+
+        const rzp = new RazorpayConstructor({
+          key:         razorpayKeyId,
+          amount:      data.amount,
+          currency:    'INR',
+          name:        'Pahadi Roots',
+          description: 'Natural Himalayan Products',
+          order_id:    data.razorpay_order_id,
+          prefill:     { name: addr.name, email: email || user?.email || '', contact: addr.phone },
+          theme:       { color: '#1a3a1e' },
+          // Errors thrown inside this async callback are NOT caught by the outer try/catch.
+          // We wrap the handler body in its own try/catch.
           handler: async (response: any) => {
-            const verRes = await fetch('/api/v1/payments', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'verify_payment',
-                razorpay_order_id:   response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature:  response.razorpay_signature,
-                order_id: data.order_id,
-              }),
-            })
-            const verData = await verRes.json()
-            if (!verRes.ok) throw new Error(verData.error || 'Payment verification failed')
-            clearCart()
-            router.replace(`/order-success?id=${verData.order_number}`)
+            try {
+              const verRes = await fetch('/api/v1/payments', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                  action:              'verify_payment',
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature:  response.razorpay_signature,
+                  order_id:            data.order_id,
+                }),
+              })
+              const verData = await verRes.json()
+              if (!verRes.ok) throw new Error(verData.error || 'Payment verification failed')
+              clearCart()
+              router.replace(`/order-success?id=${verData.order_number}`)
+            } catch (verErr: any) {
+              setError(verErr.message || 'Payment verification failed. Please contact support.')
+              setPlacing(false)
+            }
           },
-          modal: { ondismiss: () => setPlacing(false) },
+          modal: {
+            ondismiss: () => setPlacing(false),
+          },
         })
-        rzp.open(); return
+
+        rzp.open()
+        return  // placing stays true until handler resolves or modal dismissed
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')
       setPlacing(false)
     }
-  }
+  }, [
+    addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey,
+    payMethod, user, clearCart, router, razorpayKeyId,
+  ])
 
+  // ── Guard: render null while redirect fires ──
   if (items.length === 0) return null
 
   const savingsBadge = pricing.discount + pricing.prepaidDiscount
-  const LABEL_ICONS: Record<string, string> = { Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍', Default: '🏠' }
+  const bothPaymentsOff = !codOk && !razorpayEnabled
 
   return (
     <>
+      {/*
+        Razorpay script: Loaded here as a plain tag to keep it self-contained.
+        For production, move to root layout with next/script strategy="beforeInteractive".
+      */}
       <script src="https://checkout.razorpay.com/v1/checkout.js" async />
 
-      {/* Top bar */}
-      <div className="co-topbar">
-        <Link href="/cart" className="co-continue">← Continue Shopping</Link>
-        <div className="co-brand">🛒 Your Cart</div>
-        <button className="co-clear" onClick={() => { clearCart(); router.replace('/products') }}>🗑 Clear</button>
+      {/* ── Shipping ticker ─────────────────────────────── */}
+      {freeShipMin > 0 && (
+        <div className="cho-ship-tick">
+          {pricing.isFreeShipping
+            ? '🎉 Free shipping applied!'
+            : `🚚 Add ${formatPrice(pricing.remainingForFreeShip || 0)} more for free shipping`}
+        </div>
+      )}
+
+      {/* ── Progress steps ──────────────────────────────── */}
+      <div className="cho-steps">
+        <div className="cho-step cho-done"><span>✓</span> Cart</div>
+        <div className="cho-step-line cho-line-done" />
+        <div className="cho-step cho-active"><span>2</span> Checkout</div>
+        <div className="cho-step-line" />
+        <div className="cho-step"><span>3</span> Confirmation</div>
       </div>
 
-      {/* Free shipping ticker */}
-      {freeShipMin > 0 && pricing.isFreeShipping && (
-        <div className="co-ship-tick">🚚 Free shipping on all orders!</div>
-      )}
-      {freeShipMin > 0 && !pricing.isFreeShipping && (
-        <div className="co-ship-tick">
-          🚚 Add {formatPrice(pricing.remainingForFreeShip || 0)} more for <strong>free shipping!</strong>
+      {/* ── Both payments off — admin misconfiguration warning ── */}
+      {bothPaymentsOff && (
+        <div className="cho-pay-blocked" role="alert">
+          ⚠ Checkout is temporarily unavailable. Please contact support or try again later.
         </div>
       )}
 
-      <div className="co-layout">
+      <div className="cho-layout">
 
-        {/* LEFT: Cart items + You might have missed */}
-        <div className="co-left">
+        {/* ═══ LEFT ═══════════════════════════════════════ */}
+        <div className="cho-left">
 
-          {/* Cart items */}
-          <div className="co-items-list">
-            {items.map(item => (
-              <div key={item.variantId} className="co-item-row">
-                <div className="co-item-img">
-                  {item.image
-                    ? <Image src={item.image} alt={item.name} fill sizes="60px" style={{ objectFit: 'cover', borderRadius: '8px' }} />
-                    : <span style={{ fontSize: '28px' }}>{item.emoji || '🌿'}</span>}
-                </div>
-                <div className="co-item-info">
-                  <Link href={`/products/${item.slug}`} className="co-item-name">{item.name}</Link>
-                  {item.size && <div className="co-item-size">{item.size}</div>}
-                  <div className="co-item-price">₹{item.price} each</div>
-                </div>
-                <div className="co-item-right">
-                  <div className="co-qty-ctrl">
-                    <button className="co-qty-btn" onClick={() => useCartStore.getState().updateQty(item.variantId, item.qty - 1)}>−</button>
-                    <span className="co-qty-num">{item.qty}</span>
-                    <button className="co-qty-btn" onClick={() => useCartStore.getState().updateQty(item.variantId, item.qty + 1)}>+</button>
-                    <button className="co-qty-del" onClick={() => useCartStore.getState().removeItem(item.variantId)}>✕</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-
-        {/* RIGHT: Order Summary + Address + Payment */}
-        <div className="co-right">
-          <div className="co-summary-card">
-            <div className="co-summary-title">Order Summary <button className="co-edit-btn" onClick={() => router.push('/cart')}>Edit</button></div>
-
-            {/* Coupon */}
-            <div className="co-coupon-row">
-              <div className="co-coupon-label">COUPON CODE</div>
-              {coupon ? (
-                <div className="co-coupon-applied">
-                  🎉 You're saving {formatPrice(coupon.discount)}!
-                  <button className="co-coupon-remove" onClick={removeCoupon}>✕</button>
-                </div>
-              ) : (
-                <div className="co-coupon-input-row">
-                  <input
-                    className="co-coupon-input"
-                    type="text"
-                    value={couponCode}
-                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                    onKeyDown={e => e.key === 'Enter' && handleCoupon()}
-                    placeholder="Enter coupon code"
-                  />
-                  <button className="co-coupon-apply" onClick={handleCoupon} disabled={couponLoading}>
-                    {couponLoading ? '...' : 'Apply'}
-                  </button>
-                </div>
-              )}
-              {couponError && <div className="co-coupon-err">{couponError}</div>}
+          {/* ── 1. Delivery Details ──────────────────────── */}
+          <div className="cho-card">
+            <div className="cho-card-head">
+              <div className="cho-num">1</div>
+              <h2 className="cho-card-title">Delivery Details</h2>
             </div>
-
-            {/* Savings badge */}
-            {savingsBadge > 0 && (
-              <div className="co-savings-badge">
-                🏷 You're saving {formatPrice(savingsBadge)}!
-              </div>
-            )}
-
-            {/* Price rows */}
-            <div className="co-price-rows">
-              <div className="co-price-row"><span>Subtotal (incl. GST)</span><span>{formatPrice(pricing.subtotal)}</span></div>
-              {coupon && <div className="co-price-row co-price-disc"><span>Coupon ({coupon.code})</span><span>−{formatPrice(pricing.discount)}</span></div>}
-              {pricing.prepaidDiscount > 0 && (
-                <div className="co-price-row co-price-disc"><span>Prepaid discount ({prepaidPct}%)</span><span>−{formatPrice(pricing.prepaidDiscount)}</span></div>
-              )}
-              {pricing.gstTotal > 0 && <div className="co-price-row co-price-gst"><span>GST @5% (included)</span><span>₹{pricing.gstTotal}</span></div>}
-              <div className="co-price-row co-price-ship">
-                <span>Shipping</span>
-                <span>{pricing.isFreeShipping ? <span className="co-free">🚚 Free on all orders!</span> : formatPrice(pricing.shipping)}</span>
-              </div>
-              <div className="co-price-row co-price-total"><span>Total</span><span className="co-total-amt">{formatPrice(pricing.total)}</span></div>
-            </div>
-
-            {/* DELIVERY DETAILS */}
-            <div className="co-section-title">📍 DELIVERY DETAILS</div>
 
             {/* Saved addresses */}
             {savedAddrs.length > 0 && (
-              <div className="co-saved-label">📂 SAVED ADDRESSES — SELECT TO USE</div>
-            )}
-            {savedAddrs.length > 0 && (
-              <div className="co-saved-addrs">
-                {savedAddrs.map((a: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`co-saved-addr${selectedSavedAddr === a.label ? ' active' : ''}`}
-                    onClick={() => applySaved(a)}
-                  >
-                    <div className="co-saved-check">{selectedSavedAddr === a.label ? '✓' : ''}</div>
-                    <div>
-                      <div className="co-saved-tag">{LABEL_ICONS[a.label] || '📍'} {a.label}</div>
-                      <div className="co-saved-line">{[a.name, a.addr || a.flat, a.city, a.state, a.pin || a.pincode].filter(Boolean).join(', ')}</div>
+              <div className="cho-saved-section">
+                <div className="cho-saved-label">📂 Saved Addresses</div>
+                <div className="cho-saved-list">
+                  {savedAddrs.map((a: any, i: number) => (
+                    <div
+                      key={`${i}-${a.label}`}
+                      className={`cho-saved-addr${selectedSavedIdx === i ? ' selected' : ''}`}
+                      onClick={() => applySaved(a, i)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => e.key === 'Enter' && applySaved(a, i)}
+                    >
+                      <div className="cho-saved-check">{selectedSavedIdx === i ? '✓' : ''}</div>
+                      <div className="cho-saved-info">
+                        <div className="cho-saved-tag">{LABEL_ICONS[a.label] || '📍'} {a.label}</div>
+                        <div className="cho-saved-text">
+                          {[a.name, a.addr || a.flat, a.city, a.state, a.pin || a.pincode]
+                            .filter(Boolean).join(', ')}
+                        </div>
+                      </div>
                     </div>
-                    {selectedSavedAddr !== a.label && <span className="co-saved-heart">🤍</span>}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Address form */}
-            <div className="co-addr-form">
-              <div className="co-form-row">
-                <div className="co-field">
-                  <label className="co-field-label">FULL NAME *</label>
-                  <input className="co-field-input" type="text" value={addr.name} onChange={e => setField('name', e.target.value)} placeholder="Ravi Kumar" />
+            {/* Label picker */}
+            <div className="cho-label-row">
+              {LABEL_OPTIONS.map(lbl => (
+                <button
+                  key={lbl}
+                  type="button"
+                  className={`cho-label-btn${addr.label === lbl ? ' active' : ''}`}
+                  onClick={() => setField('label', lbl)}
+                >
+                  {LABEL_ICONS[lbl]} {lbl}
+                </button>
+              ))}
+            </div>
+
+            {/* Form */}
+            <div className="cho-form">
+              <div className="cho-row">
+                {/* Name */}
+                <div className={`cho-field${fieldErr('name') ? ' err' : ''}`}>
+                  <label className="cho-lbl" htmlFor="cho-name">Full Name *</label>
+                  <input id="cho-name" className="cho-input" type="text"
+                    autoComplete="name" value={addr.name}
+                    onChange={e => setField('name', e.target.value)}
+                    onBlur={() => touch('name')} placeholder="Ravi Kumar"
+                  />
+                  {fieldErr('name') && <span className="cho-ferr" role="alert">{fieldErr('name')}</span>}
                 </div>
-                <div className="co-field">
-                  <label className="co-field-label">PHONE *</label>
-                  <input className="co-field-input" type="tel" value={addr.phone} onChange={e => setField('phone', e.target.value)} placeholder="9876543210" maxLength={10} />
+
+                {/* Phone */}
+                <div className={`cho-field${fieldErr('phone') ? ' err' : ''}`}>
+                  <label className="cho-lbl" htmlFor="cho-phone">Mobile Number *</label>
+                  <div className="cho-phone-wrap">
+                    <span className="cho-phone-pre">+91</span>
+                    <input id="cho-phone" className="cho-input cho-phone-input"
+                      type="tel" autoComplete="tel-national" inputMode="numeric"
+                      value={addr.phone}
+                      onChange={e => setField('phone', e.target.value.replace(/\D/g, ''))}
+                      onBlur={() => touch('phone')} placeholder="9876543210" maxLength={10}
+                    />
+                  </div>
+                  {fieldErr('phone') && <span className="cho-ferr" role="alert">{fieldErr('phone')}</span>}
                 </div>
               </div>
-              <div className="co-field co-field-full">
-                <label className="co-field-label">ADDRESS *</label>
-                <input className="co-field-input" type="text" value={addr.flat} onChange={e => setField('flat', e.target.value)} placeholder="Flat/House No, Street, Colony" />
+
+              {/* Address */}
+              <div className={`cho-field cho-field-full${fieldErr('flat') ? ' err' : ''}`}>
+                <label className="cho-lbl" htmlFor="cho-flat">House / Flat, Street, Colony *</label>
+                <textarea id="cho-flat" className="cho-input cho-textarea"
+                  autoComplete="street-address" value={addr.flat}
+                  onChange={e => setField('flat', e.target.value)}
+                  onBlur={() => touch('flat')}
+                  placeholder="Flat 101, Shivalik Apartments, Civil Lines" rows={2}
+                />
+                {fieldErr('flat') && <span className="cho-ferr" role="alert">{fieldErr('flat')}</span>}
               </div>
-              <div className="co-form-row">
-                <div className="co-field">
-                  <label className="co-field-label">CITY *</label>
-                  <input className="co-field-input" type="text" value={addr.city} onChange={e => setField('city', e.target.value)} placeholder="Dehradun" />
+
+              {/* Area / Landmark */}
+              <div className={`cho-field cho-field-full${fieldErr('area') ? ' err' : ''}`}>
+                <label className="cho-lbl" htmlFor="cho-area">Area / Landmark *</label>
+                <input id="cho-area" className="cho-input" type="text"
+                  value={addr.area} onChange={e => setField('area', e.target.value)}
+                  onBlur={() => touch('area')} placeholder="Near ISBT, Rajpur Road"
+                />
+                {fieldErr('area') && <span className="cho-ferr" role="alert">{fieldErr('area')}</span>}
+              </div>
+
+              <div className="cho-row">
+                {/* City */}
+                <div className={`cho-field${fieldErr('city') ? ' err' : ''}`}>
+                  <label className="cho-lbl" htmlFor="cho-city">City *</label>
+                  <input id="cho-city" className="cho-input" type="text"
+                    autoComplete="address-level2" value={addr.city}
+                    onChange={e => setField('city', e.target.value)}
+                    onBlur={() => touch('city')} placeholder="Dehradun"
+                  />
+                  {fieldErr('city') && <span className="cho-ferr" role="alert">{fieldErr('city')}</span>}
                 </div>
-                <div className="co-field">
-                  <label className="co-field-label">STATE *</label>
-                  <select className="co-field-input" value={addr.state} onChange={e => setField('state', e.target.value)}>
-                    {INDIA_STATES.map(s => <option key={s}>{s}</option>)}
+
+                {/* State */}
+                <div className="cho-field">
+                  <label className="cho-lbl" htmlFor="cho-state">State *</label>
+                  <select id="cho-state" className="cho-input"
+                    autoComplete="address-level1" value={addr.state}
+                    onChange={e => setField('state', e.target.value)}
+                  >
+                    {INDIA_STATES.map(st => <option key={st} value={st}>{st}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="co-form-row">
-                <div className="co-field">
-                  <label className="co-field-label">PINCODE *</label>
-                  <input className="co-field-input" type="text" value={addr.pincode} onChange={e => setField('pincode', e.target.value)} placeholder="248001" maxLength={6} />
+
+              <div className="cho-row">
+                {/* Pincode */}
+                <div className={`cho-field${fieldErr('pincode') ? ' err' : ''}`}>
+                  <label className="cho-lbl" htmlFor="cho-pincode">Pincode *</label>
+                  <input id="cho-pincode" className="cho-input" type="text"
+                    autoComplete="postal-code" inputMode="numeric"
+                    value={addr.pincode}
+                    onChange={e => setField('pincode', e.target.value.replace(/\D/g, ''))}
+                    onBlur={() => touch('pincode')} placeholder="248001" maxLength={6}
+                  />
+                  {fieldErr('pincode') && <span className="cho-ferr" role="alert">{fieldErr('pincode')}</span>}
                 </div>
-                <div className="co-field">
-                  <label className="co-field-label">EMAIL</label>
-                  <input className="co-field-input" type="email" value={addr.area} onChange={e => setField('area', e.target.value)} placeholder="you@email.com" />
+
+                {/* Email — separate state, NOT addr.area */}
+                <div className="cho-field">
+                  <label className="cho-lbl" htmlFor="cho-email">Email (optional, for invoice)</label>
+                  <input id="cho-email" className="cho-input" type="email"
+                    autoComplete="email" value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@email.com"
+                  />
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Payment method */}
-            <div className="co-pay-section">
-              <div className="co-section-title" style={{ marginTop: '20px' }}>💳 PAYMENT METHOD</div>
+          {/* ── 2. Payment Method ───────────────────────── */}
+          <div className="cho-card">
+            <div className="cho-card-head">
+              <div className="cho-num">2</div>
+              <h2 className="cho-card-title">Payment Method</h2>
+            </div>
 
-              {/* Prepaid */}
-              <label className={`co-pay-opt${payMethod === 'razorpay' ? ' active' : ''}`}>
-                <input type="radio" name="pay" value="razorpay" checked={payMethod === 'razorpay'} onChange={() => setPayMethod('razorpay')} />
-                <div className="co-pay-icons">
-                  <span className="co-pay-chip upi">UPI</span>
-                  <span className="co-pay-chip cards">Cards</span>
-                  <span className="co-pay-chip nb">Net Banking</span>
-                </div>
-                {prepaidPct > 0 && (
-                  <div className="co-pay-badge">Save {prepaidPct}%</div>
-                )}
-              </label>
-
-              {/* COD */}
-              {codOk ? (
-                <label className={`co-pay-opt${payMethod === 'cod' ? ' active' : ''}`}>
-                  <input type="radio" name="pay" value="cod" checked={payMethod === 'cod'} onChange={() => setPayMethod('cod')} />
-                  <div>
-                    <div className="co-pay-cod-label">💵 Cash on Delivery</div>
-                    <div className="co-pay-cod-sub">Pay when your order arrives</div>
+            <div className="cho-pay-opts">
+              {/* Razorpay / Online — shown if key is configured */}
+              {razorpayEnabled && (
+                <label className={`cho-pay-opt${payMethod === 'razorpay' ? ' active' : ''}`}>
+                  <input type="radio" name="pay" value="razorpay"
+                    checked={payMethod === 'razorpay'} onChange={() => setPayMethod('razorpay')}
+                  />
+                  <div className="cho-pay-body">
+                    <div className="cho-pay-title">
+                      Online Payment
+                      {prepaidPct > 0 && <span className="cho-pay-badge">Save {prepaidPct}%</span>}
+                    </div>
+                    <div className="cho-pay-logos-row">
+                      {[['upi','UPI'],['cards','Cards'],['nb','Net Banking'],['gpay','GPay'],['phone','PhonePe']].map(([c,l]) => (
+                        <span key={c} className={`cho-pl ${c}`}>{l}</span>
+                      ))}
+                    </div>
+                    {payMethod === 'razorpay' && pricing.prepaidDiscount > 0 && (
+                      <div className="cho-pay-disc">
+                        🎉 Extra {formatPrice(pricing.prepaidDiscount)} off applied!
+                      </div>
+                    )}
                   </div>
                 </label>
-              ) : (
-                <div className="co-cod-unavail">
-                  COD not available {pricing.total > codMax ? `for orders above ₹${codMax}` : '— disabled'}
+              )}
+
+              {/* COD — shown only when admin has it ON and order is within limit */}
+              {codOk && (
+                <label className={`cho-pay-opt${payMethod === 'cod' ? ' active' : ''}`}>
+                  <input type="radio" name="pay" value="cod"
+                    checked={payMethod === 'cod'} onChange={() => setPayMethod('cod')}
+                  />
+                  <div className="cho-pay-body">
+                    <div className="cho-pay-title">💵 Cash on Delivery</div>
+                    <div className="cho-pay-sub">Pay in cash when your order arrives</div>
+                  </div>
+                </label>
+              )}
+
+              {/* COD unavailable — explain WHY (per audit) */}
+              {!codOk && codEnabled && (
+                <div className="cho-cod-off">
+                  <span>💵 Cash on Delivery</span>
+                  <span className="cho-cod-reason">
+                    {pricing.total > codMax
+                      ? `COD unavailable for orders above ₹${codMax}`
+                      : 'COD unavailable for your order'}
+                  </span>
+                </div>
+              )}
+
+              {/* COD fully disabled by admin */}
+              {!codEnabled && (
+                <div className="cho-cod-off">
+                  <span>💵 Cash on Delivery</span>
+                  <span className="cho-cod-reason">Currently unavailable</span>
                 </div>
               )}
             </div>
 
-            {/* Error */}
-            {error && <div className="co-error">{error}</div>}
+            <div className="cho-seals">
+              <span>🔒 SSL Encrypted</span>
+              <span>🏦 Razorpay Secured</span>
+              <span>✅ PCI-DSS</span>
+              <span>🇮🇳 Made for India</span>
+            </div>
+          </div>
 
-            {/* Place order button */}
-            <button className="co-place-btn" onClick={handlePlace} disabled={placing}>
-              {placing
-                ? '⏳ Placing Order…'
-                : payMethod === 'razorpay'
-                  ? `⚡ Pay ${formatPrice(pricing.total)}`
-                  : `🛒 Place COD Order — ${formatPrice(pricing.total)}`}
+          {/* ── Delivery Promise ────────────────────────── */}
+          <div className="cho-card cho-promise-card">
+            <div className="cho-promise-grid">
+              <div className="cho-promise-item">🚚 Delivered in 3–5 working days</div>
+              <div className="cho-promise-item">🔄 7-day easy returns</div>
+              <div className="cho-promise-item">🌿 100% authentic Pahadi products</div>
+              <div className="cho-promise-item">📞 WhatsApp support available</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ RIGHT — Order Summary ═══════════════════════ */}
+        <div className="cho-right">
+          <div className="cho-summary">
+
+            {/* Mobile accordion toggle */}
+            <button
+              className="cho-sum-toggle"
+              onClick={() => setSummaryOpen(o => !o)}
+              aria-expanded={summaryOpen}
+              type="button"
+            >
+              <span>🧾 Order Summary ({items.length} item{items.length > 1 ? 's' : ''})</span>
+              <span>{summaryOpen ? '▲' : '▼'} {formatPrice(pricing.total)}</span>
             </button>
 
-            <div className="co-secure">🔒 100% Secure &amp; Encrypted Checkout</div>
+            <div className={`cho-sum-body${summaryOpen ? ' open' : ''}`}>
+
+              {/* Items list */}
+              <div className="cho-sum-items">
+                {items.map(item => (
+                  <div key={item.variantId} className="cho-sum-item">
+                    {/* position:relative required for next/image fill */}
+                    <div className="cho-sum-img">
+                      {item.image
+                        ? <Image src={item.image} alt={item.name} fill sizes="52px"
+                            style={{ objectFit: 'cover', borderRadius: '8px' }} />
+                        : <span style={{ fontSize: '22px' }}>{item.emoji || '🌿'}</span>}
+                      <span className="cho-sum-qty">{item.qty}</span>
+                    </div>
+                    <div className="cho-sum-info">
+                      <div className="cho-sum-name">{item.name}</div>
+                      {item.size && <div className="cho-sum-size">{item.size}</div>}
+                    </div>
+                    <div className="cho-sum-price">{formatPrice(item.price * item.qty)}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Coupon */}
+              <div className="cho-coupon-wrap">
+                {coupon ? (
+                  <div className="cho-coupon-applied">
+                    <span>🎉 <strong>{coupon.code}</strong> — {formatPrice(coupon.discount)} off</span>
+                    <button className="cho-coupon-rm" onClick={removeCoupon} type="button" aria-label="Remove coupon">✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="cho-coupon-row">
+                      <input className="cho-coupon-input" type="text"
+                        value={couponCode}
+                        onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                        onKeyDown={e => e.key === 'Enter' && handleCoupon()}
+                        placeholder="Coupon code" aria-label="Coupon code"
+                      />
+                      <button className="cho-coupon-btn" onClick={handleCoupon}
+                        disabled={couponLoading} type="button">
+                        {couponLoading ? '...' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && <p className="cho-coupon-err" role="alert">⚠ {couponError}</p>}
+                  </>
+                )}
+              </div>
+
+              {/* Price breakdown — uses exact PriceSummary fields */}
+              <div className="cho-prices">
+                <div className="cho-pr-row"><span>Subtotal</span><span>{formatPrice(pricing.subtotal)}</span></div>
+                {coupon && pricing.discount > 0 && (
+                  <div className="cho-pr-row cho-g"><span>Coupon ({coupon.code})</span><span>−{formatPrice(pricing.discount)}</span></div>
+                )}
+                {pricing.prepaidDiscount > 0 && (
+                  <div className="cho-pr-row cho-g"><span>Prepaid discount ({prepaidPct}%)</span><span>−{formatPrice(pricing.prepaidDiscount)}</span></div>
+                )}
+                <div className="cho-pr-row">
+                  <span>Shipping</span>
+                  <span className={pricing.isFreeShipping ? 'cho-free' : ''}>
+                    {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
+                  </span>
+                </div>
+                {pricing.gstTotal > 0 && (
+                  <div className="cho-pr-row cho-sm"><span>GST @{items[0]?.gstRate || 5}% (inclusive)</span><span>₹{pricing.gstTotal}</span></div>
+                )}
+                <div className="cho-pr-divider" />
+                <div className="cho-pr-total"><span>Total</span><span>{formatPrice(pricing.total)}</span></div>
+                {savingsBadge > 0 && (
+                  <div className="cho-saving-pill">
+                    🏷 You're saving {formatPrice(savingsBadge)} on this order!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Min order warning — enforced by admin min_order_amount setting */}
+            {belowMinOrder && (
+              <div className="cho-error" role="alert">
+                🛒 Minimum order amount is {formatPrice(minOrderAmt)}. Add{' '}
+                <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more to continue.
+              </div>
+            )}
+
+            {/* Error */}
+            {error && <div className="cho-error" role="alert">⚠ {error}</div>}
+
+            {/* Place Order CTA */}
+            <button
+              className="cho-cta"
+              onClick={handlePlace}
+              disabled={placing || bothPaymentsOff || belowMinOrder}
+              type="button"
+              aria-busy={placing}
+            >
+              {placing ? (
+                <span>⏳ Placing Order…</span>
+              ) : payMethod === 'razorpay' ? (
+                <><span>⚡</span><span>Pay Securely</span><span className="cho-cta-amt">{formatPrice(pricing.total)}</span></>
+              ) : (
+                <><span>🛒</span><span>Place COD Order</span><span className="cho-cta-amt">{formatPrice(pricing.total)}</span></>
+              )}
+            </button>
+
+            <div className="cho-secure-note">🔒 100% Secure & Encrypted Checkout</div>
+
+            <div className="cho-delivery-note">
+              🚚 Estimated delivery: <strong>3–5 working days</strong> after confirmation
+            </div>
           </div>
         </div>
       </div>
 
-      <style>{`
-        .co-topbar{
-          background:#1a3a1e;padding:10px 24px;
-          display:flex;align-items:center;justify-content:space-between;
-          position:sticky;top:0;z-index:100;
-        }
-        .co-continue{color:rgba(255,255,255,.8);font-size:13px;font-weight:700;text-decoration:none;transition:color .2s}
-        .co-continue:hover{color:#c8920a}
-        .co-brand{font-family:'Playfair Display',serif;font-size:16px;font-weight:900;color:#fff}
-        .co-clear{background:none;border:1px solid rgba(255,255,255,.3);color:rgba(255,255,255,.7);font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .2s}
-        .co-clear:hover{border-color:#c0392b;color:#c0392b;background:#fdecea}
-        .co-ship-tick{
-          background:#2d5233;padding:7px 24px;font-size:12px;font-weight:700;
-          color:rgba(255,255,255,.9);text-align:center;
-        }
-        .co-layout{
-          display:grid;grid-template-columns:1fr 380px;
-          gap:0;max-width:1400px;margin:0 auto;
-          background:#f5f0e8;min-height:calc(100vh - 100px);
-          align-items:start;
-        }
-        @media(max-width:900px){.co-layout{grid-template-columns:1fr;}}
+      {/* ── Mobile sticky CTA ───────────────────────────── */}
+      <div className="cho-sticky" aria-hidden="true">
+        <div>
+          <div className="cho-sticky-total">{formatPrice(pricing.total)}</div>
+          <div className="cho-sticky-sub">Incl. taxes & shipping</div>
+        </div>
+        <button className="cho-sticky-btn" onClick={handlePlace}
+          disabled={placing || bothPaymentsOff || belowMinOrder} type="button">
+          {placing ? '⏳ Processing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : '🛒 Place Order'}
+        </button>
+      </div>
 
-        /* LEFT */
-        .co-left{padding:24px 32px;background:#f5f0e8}
-        .co-items-list{display:flex;flex-direction:column;gap:0}
-        .co-item-row{
-          display:flex;align-items:center;gap:16px;
-          padding:18px 0;border-bottom:1px solid rgba(0,0,0,.07);
-        }
-        .co-item-img{width:60px;height:60px;border-radius:10px;overflow:hidden;flex-shrink:0;position:relative;background:#f0ece4;display:flex;align-items:center;justify-content:center}
-        .co-item-info{flex:1;min-width:0}
-        .co-item-name{font-size:14px;font-weight:700;color:#1a1a1a;text-decoration:none;display:block;margin-bottom:2px}
-        .co-item-name:hover{color:#1a3a1e}
-        .co-item-size{font-size:11px;color:#888;margin-bottom:2px}
-        .co-item-price{font-size:12px;color:#555;font-weight:600}
-        .co-item-right{flex-shrink:0}
-        .co-qty-ctrl{display:flex;align-items:center;gap:0}
-        .co-qty-btn{width:28px;height:28px;border:1px solid #ddd;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;font-family:inherit;color:#333}
-        .co-qty-btn:hover{background:#f5f0e8}
-        .co-qty-num{width:36px;text-align:center;font-size:14px;font-weight:700;border-top:1px solid #ddd;border-bottom:1px solid #ddd;height:28px;display:flex;align-items:center;justify-content:center}
-        .co-qty-del{width:28px;height:28px;border:none;background:none;font-size:14px;color:#bbb;cursor:pointer;margin-left:6px;transition:color .2s}
-        .co-qty-del:hover{color:#c0392b}
-
-        /* RIGHT */
-        .co-right{background:#fff;border-left:1px solid #e8e0d0;position:sticky;top:60px;min-height:100vh;padding:0 0 40px}
-        @media(max-width:900px){.co-right{position:static;border-left:none;border-top:1px solid #e8e0d0;min-height:auto}}
-        .co-summary-card{padding:20px 24px}
-        .co-summary-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#1a1a1a;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
-        .co-edit-btn{font-size:11px;font-weight:700;color:#1a3a1e;background:#f0f7f0;border:1px solid #c8e6c9;padding:4px 10px;border-radius:10px;cursor:pointer;transition:all .15s}
-        .co-edit-btn:hover{background:#1a3a1e;color:#fff}
-
-        /* Coupon */
-        .co-coupon-row{margin-bottom:14px}
-        .co-coupon-label{font-size:10px;font-weight:800;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px}
-        .co-coupon-input-row{display:flex;gap:8px}
-        .co-coupon-input{flex:1;padding:9px 13px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
-        .co-coupon-input:focus{border-color:#1a3a1e}
-        .co-coupon-apply{background:#1a3a1e;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap}
-        .co-coupon-applied{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:9px 13px;font-size:13px;color:#2d6a4f;font-weight:700;display:flex;align-items:center;justify-content:space-between}
-        .co-coupon-remove{background:none;border:none;cursor:pointer;color:#888;font-size:16px;padding:0 4px}
-        .co-coupon-err{font-size:11px;color:#c0392b;margin-top:4px}
-        .co-savings-badge{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border:1px solid #a5d6a7;border-radius:8px;padding:8px 13px;font-size:12px;font-weight:700;color:#1b5e20;margin-bottom:12px}
-
-        /* Price rows */
-        .co-price-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #f0f0f0}
-        .co-price-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#555}
-        .co-price-disc{color:#2d6a4f;font-weight:700}
-        .co-price-gst{color:#888;font-size:12px}
-        .co-price-ship{font-weight:700;color:#1a3a1e}
-        .co-price-total{font-size:15px;font-weight:900;color:#1a1a1a;padding-top:8px;border-top:1px solid #f0f0f0;margin-top:4px}
-        .co-total-amt{font-size:18px;color:#1a3a1e}
-        .co-free{color:#2d6a4f;font-weight:700}
-
-        /* Section title */
-        .co-section-title{font-size:10px;font-weight:900;color:#888;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #f0f0f0}
-
-        /* Saved addresses */
-        .co-saved-label{font-size:9.5px;font-weight:800;color:#bbb;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
-        .co-saved-addrs{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:160px;overflow-y:auto}
-        .co-saved-addr{
-          display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
-          border:1.5px solid #e8e0d0;border-radius:10px;cursor:pointer;
-          transition:all .2s;background:#fafafa;position:relative;
-        }
-        .co-saved-addr:hover{border-color:#1a3a1e;background:#f0f7f0}
-        .co-saved-addr.active{border-color:#1a3a1e;background:#e8f5e9}
-        .co-saved-check{width:20px;height:20px;border-radius:50%;background:#1a3a1e;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-        .co-saved-addr:not(.active) .co-saved-check{background:#e8e8e8;color:transparent}
-        .co-saved-tag{font-size:12px;font-weight:800;color:#1a3a1e;margin-bottom:2px}
-        .co-saved-line{font-size:11.5px;color:#888;line-height:1.4}
-        .co-saved-heart{position:absolute;right:10px;top:10px;font-size:14px;color:#ddd}
-
-        /* Address form */
-        .co-addr-form{display:flex;flex-direction:column;gap:10px}
-        .co-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-        .co-field{display:flex;flex-direction:column;gap:4px}
-        .co-field-full{grid-column:1/-1}
-        .co-field-label{font-size:10px;font-weight:800;color:#888;letter-spacing:.6px;text-transform:uppercase}
-        .co-field-input{padding:10px 13px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:13px;font-family:inherit;color:#1a1a1a;outline:none;transition:border-color .2s;background:#fff}
-        .co-field-input:focus{border-color:#1a3a1e}
-
-        /* Payment */
-        .co-pay-opt{
-          display:flex;align-items:center;gap:10px;padding:12px 14px;
-          border:1.5px solid #e8e0d0;border-radius:10px;cursor:pointer;
-          transition:all .2s;margin-bottom:8px;background:#fafafa;
-        }
-        .co-pay-opt input[type=radio]{accent-color:#1a3a1e;width:16px;height:16px;flex-shrink:0}
-        .co-pay-opt.active{border-color:#1a3a1e;background:#f0f7f0}
-        .co-pay-icons{display:flex;gap:5px;align-items:center;flex:1}
-        .co-pay-chip{font-size:10px;font-weight:800;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
-        .co-pay-chip.upi{background:#7b1fa2;color:#fff}
-        .co-pay-chip.cards{background:#1565c0;color:#fff}
-        .co-pay-chip.nb{background:#e65100;color:#fff}
-        .co-pay-badge{background:#2e7d32;color:#fff;font-size:10px;font-weight:800;padding:3px 9px;border-radius:10px;white-space:nowrap}
-        .co-pay-cod-label{font-size:13px;font-weight:700;color:#1a1a1a}
-        .co-pay-cod-sub{font-size:11px;color:#888}
-        .co-cod-unavail{padding:10px 14px;background:#f5f5f5;border-radius:10px;font-size:12px;color:#aaa;margin-bottom:8px}
-
-        /* Error + Place btn */
-        .co-error{background:#fdecea;border:1px solid #f5c6cb;border-radius:8px;padding:10px 13px;font-size:12px;color:#c0392b;font-weight:700;margin-top:10px}
-        .co-place-btn{
-          width:100%;padding:16px;margin-top:16px;
-          background:linear-gradient(135deg,#1a3a1e,#2d5233);
-          color:#fff;border:none;border-radius:12px;
-          font-size:15px;font-weight:900;cursor:pointer;
-          font-family:'Playfair Display',serif;letter-spacing:.3px;
-          transition:all .25s;box-shadow:0 4px 16px rgba(26,58,30,.3);
-        }
-        .co-place-btn:hover:not(:disabled){background:linear-gradient(135deg,#2d5233,#3a7042);transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,58,30,.4)}
-        .co-place-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
-        .co-secure{text-align:center;font-size:11px;color:#888;margin-top:10px;font-weight:600}
-        @media(max-width:640px){
-          .co-left{padding:16px}
-          .co-summary-card{padding:16px}
-          .co-form-row{grid-template-columns:1fr}
-        }
-      `}</style>
+      <style>{CHO_CSS}</style>
     </>
   )
 }
+
+// ─── CSS — references layout.tsx font vars, no @import needed ─────────────────
+const CHO_CSS = `
+:root{
+  --forest:#1a3a1e;--forest-mid:#2d5233;--forest-lt:#e8f5e9;
+  --earth:#c8920a;--stone:#f5f0e8;--stone-mid:#ede8df;
+  --white:#fff;--ink:#1a1a1a;--muted:#7a7565;--border:#e2dbd0;
+  --r:14px;--sh:0 2px 10px rgba(0,0,0,.07);
+}
+/* Ship tick */
+.cho-ship-tick{background:var(--forest-mid);color:rgba(255,255,255,.9);text-align:center;padding:8px 16px;font-size:13px;}
+/* Steps */
+.cho-steps{display:flex;align-items:center;justify-content:center;padding:13px 16px;background:var(--white);border-bottom:1px solid var(--border);}
+.cho-step{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#bbb;}
+.cho-step span{width:22px;height:22px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+.cho-active{color:var(--forest);}.cho-active span{background:var(--forest);color:#fff;}
+.cho-done{color:var(--forest-mid);}.cho-done span{background:var(--forest-lt);color:var(--forest-mid);}
+.cho-step-line{width:44px;height:2px;background:#e8e8e8;margin:0 8px;}.cho-line-done{background:var(--forest-lt);}
+/* Payment blocked banner */
+.cho-pay-blocked{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;font-size:13px;font-weight:600;padding:12px 20px;text-align:center;}
+/* Layout */
+.cho-layout{display:grid;grid-template-columns:1fr 390px;gap:0;max-width:1380px;margin:0 auto;background:var(--stone);align-items:start;min-height:calc(100vh - 140px);}
+@media(max-width:960px){.cho-layout{grid-template-columns:1fr;padding-bottom:76px;}}
+.cho-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
+@media(max-width:640px){.cho-left{padding:16px;}}
+/* Cards */
+.cho-card{background:var(--white);border-radius:var(--r);box-shadow:var(--sh);border:1px solid var(--border);overflow:hidden;}
+.cho-card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--stone-mid);}
+.cho-num{width:27px;height:27px;border-radius:50%;background:var(--forest);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
+.cho-card-title{font-family:var(--font-playfair,'Playfair Display',serif);font-size:17px;font-weight:700;color:var(--ink);margin:0;}
+/* Saved addresses */
+.cho-saved-section{padding:14px 20px 0;}
+.cho-saved-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.cho-saved-list{display:flex;flex-direction:column;gap:7px;margin-bottom:10px;}
+.cho-saved-addr{display:flex;align-items:flex-start;gap:10px;padding:9px 13px;border:1.5px solid var(--border);border-radius:11px;cursor:pointer;transition:all .2s;background:#fafaf8;}
+.cho-saved-addr:hover,.cho-saved-addr:focus{border-color:var(--forest);background:var(--forest-lt);outline:none;}
+.cho-saved-addr.selected{border-color:var(--forest);background:var(--forest-lt);}
+.cho-saved-check{width:19px;height:19px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;transition:all .2s;}
+.cho-saved-addr.selected .cho-saved-check{background:var(--forest);color:#fff;}
+.cho-saved-tag{font-size:12px;font-weight:700;color:var(--forest);}
+.cho-saved-text{font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:2px;}
+/* Label buttons */
+.cho-label-row{display:flex;gap:7px;flex-wrap:wrap;padding:12px 20px 0;}
+.cho-label-btn{border:1.5px solid var(--border);background:var(--stone);color:var(--muted);font-size:12px;font-weight:600;padding:5px 13px;border-radius:20px;cursor:pointer;transition:all .2s;}
+.cho-label-btn:hover{border-color:var(--forest);color:var(--forest);}
+.cho-label-btn.active{border-color:var(--forest);background:var(--forest-lt);color:var(--forest);}
+/* Form */
+.cho-form{padding:14px 20px;display:flex;flex-direction:column;gap:12px;}
+.cho-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:580px){.cho-row{grid-template-columns:1fr;}}
+.cho-field{display:flex;flex-direction:column;gap:4px;}
+.cho-field-full{grid-column:1/-1;}
+.cho-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;}
+.cho-input{padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--ink);outline:none;transition:all .2s;background:var(--white);width:100%;box-sizing:border-box;font-family:inherit;}
+.cho-input:focus{border-color:var(--forest);box-shadow:0 0 0 3px rgba(26,58,30,.07);}
+.cho-field.err .cho-input,.cho-field.err .cho-phone-wrap{border-color:#c0392b !important;}
+.cho-ferr{font-size:11px;color:#c0392b;}
+.cho-textarea{resize:vertical;min-height:66px;}
+.cho-phone-wrap{display:flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;transition:all .2s;}
+.cho-phone-wrap:focus-within{border-color:var(--forest);box-shadow:0 0 0 3px rgba(26,58,30,.07);}
+.cho-phone-pre{background:var(--stone);padding:11px 11px;font-size:13px;font-weight:700;color:var(--muted);border-right:1px solid var(--border);white-space:nowrap;display:flex;align-items:center;}
+.cho-phone-input{border:none !important;box-shadow:none !important;border-radius:0 !important;flex:1;min-width:0;}
+/* Payment options */
+.cho-pay-opts{padding:14px 20px;display:flex;flex-direction:column;gap:10px;}
+.cho-pay-opt{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:all .2s;background:#fafaf8;}
+.cho-pay-opt:hover{border-color:var(--forest);background:var(--forest-lt);}
+.cho-pay-opt.active{border-color:var(--forest);background:var(--forest-lt);}
+.cho-pay-opt input[type=radio]{accent-color:var(--forest);width:16px;height:16px;flex-shrink:0;margin-top:2px;cursor:pointer;}
+.cho-pay-body{flex:1;}
+.cho-pay-title{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.cho-pay-badge{background:var(--forest);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
+.cho-pay-logos-row{display:flex;gap:5px;flex-wrap:wrap;}
+.cho-pl{font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;}
+.cho-pl.upi{background:#7b1fa2;color:#fff;}.cho-pl.cards{background:#1565c0;color:#fff;}
+.cho-pl.nb{background:#e65100;color:#fff;}.cho-pl.gpay{background:#4285f4;color:#fff;}
+.cho-pl.phone{background:#5f259f;color:#fff;}
+.cho-pay-sub{font-size:12px;color:var(--muted);margin-top:4px;}
+.cho-pay-disc{font-size:12px;color:#2d6a4f;font-weight:700;background:#e8f5e9;padding:4px 10px;border-radius:6px;margin-top:7px;display:inline-block;}
+.cho-cod-off{padding:13px 15px;background:#f5f5f5;border:1px solid #e8e8e8;border-radius:12px;font-size:13px;color:#bbb;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;}
+.cho-cod-reason{font-size:11px;color:#c0392b;font-weight:600;}
+.cho-seals{display:flex;gap:10px;flex-wrap:wrap;padding:10px 20px;background:var(--stone);border-top:1px solid var(--stone-mid);font-size:11px;color:var(--muted);}
+/* Promise */
+.cho-promise-card{padding:0;}
+.cho-promise-grid{display:grid;grid-template-columns:1fr 1fr;}
+.cho-promise-item{padding:13px 17px;font-size:12px;font-weight:600;color:var(--muted);border-right:1px solid var(--stone-mid);border-bottom:1px solid var(--stone-mid);}
+.cho-promise-item:nth-child(2n){border-right:none;}
+.cho-promise-item:nth-child(3),.cho-promise-item:nth-child(4){border-bottom:none;}
+/* Right panel */
+.cho-right{
+  background:var(--white);border-left:1px solid var(--border);
+  position:sticky;top:134px;max-height:calc(100vh - 134px);overflow-y:auto;
+}
+@media(max-width:960px){.cho-right{position:static;border-left:none;border-top:1px solid var(--border);max-height:none;}}
+.cho-summary{padding:18px 22px;display:flex;flex-direction:column;gap:13px;}
+/* Mobile summary toggle */
+.cho-sum-toggle{display:none;width:100%;background:none;border:none;padding:0;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink);justify-content:space-between;align-items:center;font-family:inherit;}
+@media(max-width:960px){.cho-sum-toggle{display:flex;}.cho-sum-body{display:none;}.cho-sum-body.open{display:block;}}
+/* Summary items */
+.cho-sum-items{display:flex;flex-direction:column;gap:9px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--stone-mid);}
+.cho-sum-item{display:flex;align-items:center;gap:9px;}
+/* position:relative for next/image fill */
+.cho-sum-img{width:50px;height:50px;border-radius:8px;overflow:hidden;background:var(--stone);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cho-sum-qty{position:absolute;top:-4px;right:-4px;width:17px;height:17px;background:var(--forest);color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.cho-sum-info{flex:1;min-width:0;}
+.cho-sum-name{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cho-sum-size{font-size:11px;color:var(--muted);}
+.cho-sum-price{font-family:var(--font-playfair,'Playfair Display',serif);font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;}
+/* Coupon */
+.cho-coupon-wrap{margin-bottom:2px;}
+.cho-coupon-row{display:flex;gap:7px;}
+.cho-coupon-input{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-weight:600;outline:none;transition:border-color .2s;min-width:0;font-family:inherit;}
+.cho-coupon-input:focus{border-color:var(--forest);}
+.cho-coupon-btn{background:var(--forest);color:#fff;border:none;padding:9px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.cho-coupon-btn:disabled{opacity:.6;cursor:not-allowed;}
+.cho-coupon-applied{background:var(--forest-lt);border:1px solid #c8e6c9;border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#2d6a4f;font-weight:600;gap:7px;}
+.cho-coupon-rm{background:none;border:none;color:#888;font-size:15px;cursor:pointer;padding:0;}
+.cho-coupon-err{font-size:11px;color:#c0392b;margin-top:3px;}
+/* Prices */
+.cho-prices{display:flex;flex-direction:column;gap:8px;}
+.cho-pr-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);}
+.cho-g{color:#2d6a4f;font-weight:700;}.cho-free{color:#2d6a4f;font-weight:700;}.cho-sm{font-size:11px;color:#bbb;}
+.cho-pr-divider{height:1px;background:var(--border);margin:4px 0;}
+.cho-pr-total{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-playfair,'Playfair Display',serif);font-size:20px;font-weight:700;color:var(--ink);}
+.cho-saving-pill{background:var(--forest-lt);border:1px solid #c8e6c9;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;color:#2d6a4f;text-align:center;}
+/* Error */
+.cho-error{background:#fdecea;border:1px solid #f5c6cb;border-radius:10px;padding:10px 13px;font-size:13px;color:#c0392b;font-weight:600;}
+/* CTA */
+.cho-cta{width:100%;padding:15px 18px;background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;border-radius:13px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(26,58,30,.32);transition:all .25s;display:flex;align-items:center;justify-content:space-between;font-family:inherit;}
+.cho-cta:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,58,30,.38);}
+.cho-cta:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.cho-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;border-radius:20px;font-size:14px;font-weight:800;}
+.cho-secure-note{text-align:center;font-size:11px;color:var(--muted);}
+.cho-delivery-note{font-size:12px;color:var(--muted);background:var(--stone);padding:9px 12px;border-radius:8px;}
+/* Mobile sticky */
+.cho-sticky{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--border);padding:10px 16px;z-index:250;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.08);}
+@media(max-width:960px){.cho-sticky{display:flex;}}
+.cho-sticky-total{font-family:var(--font-playfair,'Playfair Display',serif);font-size:17px;font-weight:700;color:var(--ink);}
+.cho-sticky-sub{font-size:11px;color:var(--muted);}
+.cho-sticky-btn{background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;padding:12px 20px;border-radius:11px;font-weight:700;font-size:14px;white-space:nowrap;cursor:pointer;font-family:inherit;}
+.cho-sticky-btn:disabled{opacity:.6;cursor:not-allowed;}
+@media(max-width:640px){.cho-form{padding:12px 16px;}.cho-row{grid-template-columns:1fr;}.cho-summary{padding:14px 16px;}}
+`
