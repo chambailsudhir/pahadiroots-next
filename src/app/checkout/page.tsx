@@ -63,16 +63,12 @@ const LABEL_ICONS: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Matches exact localStorage key used by readSavedAddresses across the codebase
-function readSavedAddresses(user: any): any[] {
-  try {
-    const raw = user?.saved_addresses
-      || (typeof window !== 'undefined' ? localStorage.getItem('pr_saved_addresses') : null)
-      || '[]'
-    return JSON.parse(raw)
-  } catch {
-    return []
-  }
+// Parse saved_addresses JSON string from the profile object.
+// The profile stores addresses as a JSON string in the 'saved_addresses' column.
+// Shape per useProfile.ts SavedAddress: { id, label, name, addr, city, state, pin }
+// The userStore.savedAddresses[] is populated by useAuth after login via setAddresses().
+function parseSavedAddresses(raw: string | undefined): any[] {
+  try { return JSON.parse(raw || '[]') } catch { return [] }
 }
 
 const settingsFetcher = async (): Promise<SiteSettings> => {
@@ -104,17 +100,20 @@ export default function CheckoutPage() {
   const s = settings || {} as SiteSettings
 
   // ── Derived from admin settings ──
-  const codEnabled    = s.cod_enabled === 'true'
-  const codMax        = parseFloat(s.cod_max_value || '3000')
-  const prepaidPct    = parseInt(s.prepaid_discount_pct || '5')
-  const freeShipMin   = parseFloat(s.free_shipping_min || '0')
-  // min_order_amount — evaluated after pricing is declared (line ~143)
-  const minOrderAmt   = parseFloat(s.min_order_amount || '0')
-  const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
-  // Razorpay available when BOTH the env key is configured AND admin has not disabled it.
-  // Admin 'upi_enabled' key (Orders tab) directly controls this — same key saved by admin/settings/page.jsx
-  const upiEnabled      = s.upi_enabled !== 'false'  // default true if not set
-  const razorpayEnabled = !!razorpayKeyId && upiEnabled
+  // DEFAULT RULE: when a key is missing from the DB (undefined), default to ENABLED.
+  // This prevents fresh installs from showing "checkout unavailable".
+  // Admin must explicitly save 'false' to disable — which only happens after visiting the Orders tab.
+  // s.cod_enabled === 'true' would be false for undefined (wrong). !== 'false' is true for undefined (correct).
+  const codEnabled      = s.cod_enabled  !== 'false'   // true unless admin explicitly turned OFF
+  const upiAdminOn      = s.upi_enabled  !== 'false'   // true unless admin explicitly turned OFF
+  const codMax          = parseFloat(s.cod_max_value || '3000')
+  const prepaidPct      = parseInt(s.prepaid_discount_pct || '5')
+  const freeShipMin     = parseFloat(s.free_shipping_min || '0')
+  // min_order_amount — evaluated after pricing is declared below
+  const minOrderAmt     = parseFloat(s.min_order_amount || '0')
+  const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
+  // Razorpay: env key must exist AND admin must not have disabled it in Orders tab
+  const razorpayEnabled = !!razorpayKeyId && upiAdminOn
 
   // ── Local state ──
   const [payMethod, setPayMethod] = useState<'razorpay' | 'cod'>('cod')
@@ -151,10 +150,24 @@ export default function CheckoutPage() {
     if (items.length === 0) router.replace('/cart')
   }, [items, router])
 
-  // Load saved addresses (localStorage — client only)
+  // Load saved addresses from Zustand userStore.
+  // userStore.savedAddresses[] is populated by useAuth after login.
+  // It comes from profile.saved_addresses (JSON string in profiles table).
+  // We also read directly from the profile's saved_addresses string as fallback
+  // for the case where setAddresses() hasn't been called yet on this render.
+  const storeAddresses = useUserStore(s => s.savedAddresses)
+
   useEffect(() => {
-    setSavedAddrs(readSavedAddresses(user))
-  }, [user])
+    // Prefer userStore.savedAddresses (populated by useAuth after login)
+    if (storeAddresses && storeAddresses.length > 0) {
+      setSavedAddrs(storeAddresses)
+      return
+    }
+    // Fallback: parse from user object if store hasn't hydrated yet
+    if (user && (user as any).saved_addresses) {
+      setSavedAddrs(parseSavedAddresses((user as any).saved_addresses))
+    }
+  }, [storeAddresses, user])
 
   // Pre-fill from user profile (functional updater avoids stale closure)
   useEffect(() => {
@@ -194,19 +207,27 @@ export default function CheckoutPage() {
     return ''
   }
 
+  // applySaved maps SavedAddress fields → OrderAddress fields:
+  //   SavedAddress.addr    → OrderAddress.flat    (street address)
+  //   SavedAddress.pin     → OrderAddress.pincode
+  //   SavedAddress.name    → contact name (not the account holder's name)
+  //   SavedAddress.phone   → may be absent; keep existing phone if so
   function applySaved(saved: any, idx: number) {
     setAddr(prev => ({
       ...prev,
+      // name from saved address is the contact at that address, not necessarily the user
       name:    saved.name    || prev.name,
       phone:   saved.phone   || prev.phone,
-      flat:    saved.addr    || saved.flat    || '',
+      flat:    saved.addr    || saved.flat    || '',   // addr = real field name in SavedAddress
       area:    saved.area    || '',
       city:    saved.city    || '',
       state:   saved.state   || 'Uttarakhand',
-      pincode: saved.pin     || saved.pincode || '',
-      label:   saved.label   || 'Home',
+      pincode: saved.pin     || saved.pincode || '',  // pin = real field name in SavedAddress
+      label:   (saved.label as OrderAddress['label']) || 'Home',
     }))
     setSelectedSavedIdx(idx)
+    // Touch all fields so validation runs immediately on a pre-filled address
+    setTouched({ name: true, phone: true, flat: true, area: true, city: true, state: true, pincode: true })
   }
 
   // ── Coupon ──
