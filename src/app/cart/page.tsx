@@ -78,6 +78,14 @@ function safeNum(val: string | undefined, fallback: number): number {
 }
 
 export default function CartPage() {
+  // ── Hydration guard ──────────────────────────────────────────────────────────
+  // Both cartStore and userStore use skipHydration:true (see providers.tsx).
+  // They start as empty on SSR AND first client render, then rehydrate in useEffect.
+  // Reading store values during render before rehydration causes React #425/#418/#423.
+  // We suppress rendering until after mount (when rehydration has fired).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   const items        = useCartStore(s => s.items)
   const coupon       = useCartStore(s => s.coupon)
   const applyCoupon  = useCartStore(s => s.applyCoupon)
@@ -133,6 +141,32 @@ export default function CartPage() {
   const totalQty = items.reduce((s, i) => s + i.qty, 0)
 
   // ── Empty cart ──
+  // Show nothing until store hydrates — prevents hydration mismatch
+  if (!mounted) return (
+    <div className="ec-skeleton">
+      <div className="ec-skeleton-bar" />
+      <div className="ec-skeleton-body">
+        <div className="ec-skeleton-left">
+          <div className="ec-skeleton-card" />
+          <div className="ec-skeleton-card" />
+        </div>
+        <div className="ec-skeleton-right">
+          <div className="ec-skeleton-card ec-skeleton-summary" />
+        </div>
+      </div>
+      <style>{`
+        .ec-skeleton{max-width:1380px;margin:0 auto;padding:24px 28px;}
+        .ec-skeleton-bar{height:44px;background:#f0ede6;border-radius:8px;margin-bottom:20px;animation:ec-pulse 1.5s ease-in-out infinite;}
+        .ec-skeleton-body{display:grid;grid-template-columns:1fr 374px;gap:20px;}
+        @media(max-width:960px){.ec-skeleton-body{grid-template-columns:1fr;}}
+        .ec-skeleton-left{display:flex;flex-direction:column;gap:16px;}
+        .ec-skeleton-card{height:220px;background:#f0ede6;border-radius:14px;animation:ec-pulse 1.5s ease-in-out infinite;}
+        .ec-skeleton-right{}.ec-skeleton-summary{height:380px;}
+        @keyframes ec-pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+      `}</style>
+    </div>
+  )
+
   if (items.length === 0) {
     return (
       <div className="ec-empty">

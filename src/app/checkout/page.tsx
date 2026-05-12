@@ -83,6 +83,13 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
 export default function CheckoutPage() {
   const router = useRouter()
 
+  // ── Hydration guard ──────────────────────────────────────────────────────────
+  // cartStore and userStore use skipHydration:true — start empty on SSR + first render.
+  // Rehydration fires in StoreHydrator useEffect (providers.tsx) after mount.
+  // We must suppress rendering until mounted to prevent React #425/#418/#423.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   // Cart store
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
@@ -380,6 +387,17 @@ export default function CheckoutPage() {
   ])
 
   // ── Guard: render null while redirect fires ──
+  // Suppress render until hydrated — same pattern as ClientOnly in layout.tsx
+  if (!mounted) return (
+    <div style={{minHeight:'60vh',background:'#f5f0e8',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{textAlign:'center',color:'#7a7565',fontSize:'13px',fontFamily:'sans-serif'}}>
+        <div style={{width:32,height:32,border:'3px solid #e2dbd0',borderTopColor:'#1a3a1e',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 12px'}} />
+        Loading checkout…
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    </div>
+  )
+
   if (items.length === 0) return null
 
   const savingsBadge = pricing.discount + pricing.prepaidDiscount
