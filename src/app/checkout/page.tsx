@@ -222,7 +222,29 @@ export default function CheckoutPage() {
         const saved = parseSavedAddresses(prof.saved_addresses)
           .filter((a: any) => a.label !== 'Default')
 
-        setSavedAddrs([...defaultAddr, ...saved])
+        const allAddrs = [...defaultAddr, ...saved]
+        setSavedAddrs(allAddrs)
+
+        // Auto-apply address[0] (default) if form is still empty on load
+        if (allAddrs.length > 0) {
+          const a = allAddrs[0]
+          setAddr(prev => {
+            const formIsEmpty = !prev.flat && !prev.city && !prev.pincode
+            if (!formIsEmpty) return prev  // user already typed — don't overwrite
+            return {
+              ...prev,
+              name:    a.name  || prev.name  || '',
+              phone:   a.phone || prev.phone || '',
+              flat:    a.addr  || a.flat     || '',
+              area:    a.area  || '',
+              city:    a.city  || '',
+              state:   matchState(a.state),
+              pincode: a.pin   || a.pincode  || '',
+              label:   (a.label as OrderAddress['label']) || 'Home',
+            }
+          })
+          setSelectedSavedIdx(0)
+        }
       })
       .catch(() => { /* non-critical — user can still type manually */ })
     return () => ctrl.abort()
