@@ -63,12 +63,12 @@ const LABEL_ICONS: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Parse saved_addresses JSON string from the profile object.
-// The profile stores addresses as a JSON string in the 'saved_addresses' column.
+// Parse saved_addresses JSON string from the profile API response.
 // Shape per useProfile.ts SavedAddress: { id, label, name, addr, city, state, pin }
-// The userStore.savedAddresses[] is populated by useAuth after login via setAddresses().
-function parseSavedAddresses(raw: string | undefined): any[] {
-  try { return JSON.parse(raw || '[]') } catch { return [] }
+// Matches getSavedAddresses() in /lib/account/utils.ts exactly.
+function parseSavedAddresses(raw: string | undefined | null): any[] {
+  if (!raw) return []
+  try { return JSON.parse(raw) } catch { return [] }
 }
 
 const settingsFetcher = async (): Promise<SiteSettings> => {
@@ -150,34 +150,31 @@ export default function CheckoutPage() {
     if (items.length === 0) router.replace('/cart')
   }, [items, router])
 
-  // Load saved addresses from Zustand userStore.
-  // userStore.savedAddresses[] is populated by useAuth after login.
-  // It comes from profile.saved_addresses (JSON string in profiles table).
-  // We also read directly from the profile's saved_addresses string as fallback
-  // for the case where setAddresses() hasn't been called yet on this render.
-  const storeAddresses = useUserStore(s => s.savedAddresses)
-
-  useEffect(() => {
-    // Prefer userStore.savedAddresses (populated by useAuth after login)
-    if (storeAddresses && storeAddresses.length > 0) {
-      setSavedAddrs(storeAddresses)
-      return
-    }
-    // Fallback: parse from user object if store hasn't hydrated yet
-    if (user && (user as any).saved_addresses) {
-      setSavedAddrs(parseSavedAddresses((user as any).saved_addresses))
-    }
-  }, [storeAddresses, user])
-
-  // Pre-fill from user profile (functional updater avoids stale closure)
+  // Fetch saved addresses and pre-fill name/phone/email from /api/profile.
+  // userStore.setAddresses() is NEVER called at checkout (only in /account/addresses).
+  // Addresses live in profile.saved_addresses (JSON string in Supabase profiles table).
+  // This is identical to how /account/addresses/page.tsx loads its addresses.
   useEffect(() => {
     if (!user) return
-    setAddr(prev => ({
-      ...prev,
-      name:  prev.name  || user.name  || '',
-      phone: prev.phone || user.phone || '',
-    }))
-    setEmail(prev => prev || user.email || '')
+    const ctrl = new AbortController()
+    fetch('/api/profile', { signal: ctrl.signal })
+      .then(async r => {
+        if (!r.ok || ctrl.signal.aborted) return
+        const data = await r.json()
+        const prof = data.profile
+        if (!prof) return
+        // Pre-fill name/phone/email from profile
+        setAddr(prev => ({
+          ...prev,
+          name:  prev.name  || [prof.first_name, prof.last_name].filter(Boolean).join(' ') || '',
+          phone: prev.phone || (prof.phone || '').replace(/^\+91/, ''),
+        }))
+        setEmail(prev => prev || prof.email || '')
+        // Load saved addresses from profile
+        setSavedAddrs(parseSavedAddresses(prof.saved_addresses))
+      })
+      .catch(() => { /* non-critical — user can still type manually */ })
+    return () => ctrl.abort()
   }, [user])
 
   // Auto-switch payment if COD becomes unavailable after settings load

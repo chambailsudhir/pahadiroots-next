@@ -365,12 +365,6 @@ export default function CartPage() {
         <div className="ec-right">
           <div className="ec-summary">
 
-            {/* Urgency nudge */}
-            <div className="ec-urgency">
-              ⚡ <strong>3,241</strong> customers ordered this month — order within{' '}
-              <strong>2 hrs</strong> for priority dispatch
-            </div>
-
             {/* Coupon */}
             <div className="ec-coupon-wrap">
               <div className="ec-coupon-head">🏷 Have a coupon code?</div>
@@ -698,10 +692,6 @@ const CART_CSS = `
 .ec-summary{padding:20px 22px;display:flex;flex-direction:column;gap:14px;}
 
 /* ── Urgency ───────────────────────────────────────── */
-.ec-urgency{
-  background:var(--earth-lt);border:1px solid #f0d080;border-radius:10px;
-  padding:10px 14px;font-size:12px;color:#7a5a00;line-height:1.5;
-}
 
 /* ── Coupon ────────────────────────────────────────── */
 .ec-coupon-wrap{border:1px dashed var(--border);border-radius:12px;padding:13px;}
