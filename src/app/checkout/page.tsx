@@ -108,9 +108,8 @@ export default function CheckoutPage() {
   const codMax        = parseFloat(s.cod_max_value || '3000')
   const prepaidPct    = parseInt(s.prepaid_discount_pct || '5')
   const freeShipMin   = parseFloat(s.free_shipping_min || '0')
-  // min_order_amount — admin sets this in Orders tab; 0 means disabled
+  // min_order_amount — evaluated after pricing is declared (line ~143)
   const minOrderAmt   = parseFloat(s.min_order_amount || '0')
-  const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
   const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
   // Razorpay available when BOTH the env key is configured AND admin has not disabled it.
   // Admin 'upi_enabled' key (Orders tab) directly controls this — same key saved by admin/settings/page.jsx
@@ -140,8 +139,10 @@ export default function CheckoutPage() {
   const [email, setEmail] = useState('')
 
   // ── Pricing — recalculates when payMethod changes (prepaid discount) ──
-  const pricing = calcPriceSummary(items, s, coupon, payMethod)
-  const codOk   = codEnabled && pricing.total <= codMax
+  const pricing       = calcPriceSummary(items, s, coupon, payMethod)
+  const codOk         = codEnabled && pricing.total <= codMax
+  // belowMinOrder declared here — after pricing — to avoid "used before declaration" TS error
+  const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
 
   // ── Effects ──
 
