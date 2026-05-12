@@ -71,6 +71,26 @@ function parseSavedAddresses(raw: string | undefined | null): any[] {
   try { return JSON.parse(raw) } catch { return [] }
 }
 
+// Match stored state string to full INDIA_STATES entry.
+// Handles short names ("Himachal" → "Himachal Pradesh"), case differences, prefix matches.
+function matchState(stored: string | undefined | null): string {
+  if (!stored) return 'Uttarakhand'
+  const s = stored.trim()
+  const exact = INDIA_STATES.find(st => st === s)
+  if (exact) return exact
+  const ci = INDIA_STATES.find(st => st.toLowerCase() === s.toLowerCase())
+  if (ci) return ci
+  const lower = s.toLowerCase()
+  const prefix = INDIA_STATES.find(st =>
+    st.toLowerCase().startsWith(lower) || lower.startsWith(st.toLowerCase())
+  )
+  if (prefix) return prefix
+  const word = lower.split(' ')[0]
+  const contains = INDIA_STATES.find(st => st.toLowerCase().includes(word) && word.length > 3)
+  if (contains) return contains
+  return s  // fallback — won't crash, just won't match in <select>
+}
+
 const settingsFetcher = async (): Promise<SiteSettings> => {
   const { data } = await supabase.from('site_settings').select('key, value')
   return Object.fromEntries(
@@ -170,15 +190,39 @@ export default function CheckoutPage() {
         const data = await r.json()
         const prof = data.profile
         if (!prof) return
-        // Pre-fill name/phone/email from profile
+        // Pre-fill name/phone/email from profile scalar fields
+        const fullName = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
+        const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
         setAddr(prev => ({
           ...prev,
-          name:  prev.name  || [prof.first_name, prof.last_name].filter(Boolean).join(' ') || '',
-          phone: prev.phone || (prof.phone || '').replace(/^\+91/, ''),
+          name:  prev.name  || fullName    || '',
+          phone: prev.phone || cleanPhone  || '',
         }))
-        setEmail(prev => prev || prof.email || '')
-        // Load saved addresses from profile
-        setSavedAddrs(parseSavedAddresses(prof.saved_addresses))
+        setEmail(prev => prev || data.user?.email || '')
+
+        // Build complete address list:
+        //
+        // 1. DEFAULT address = scalar fields on customers table (shown as PRIMARY in account)
+        //    Fields: address_line1, city, state, postal_code, first_name, last_name, phone
+        const defaultAddr = prof.address_line1 ? [{
+          _isDefault: true,
+          label:  'Home' as const,
+          name:   fullName   || '',
+          addr:   prof.address_line1 || '',
+          area:   '',
+          city:   prof.city          || '',
+          state:  prof.state         || '',
+          pin:    prof.postal_code   || '',
+          phone:  cleanPhone         || '',
+        }] : []
+
+        // 2. SAVED addresses = saved_addresses table rows (normalized, NOT the JSON blob)
+        //    The API returns them JSON-stringified in prof.saved_addresses
+        //    Filter out any legacy 'Default' label entries (replaced by scalar fields above)
+        const saved = parseSavedAddresses(prof.saved_addresses)
+          .filter((a: any) => a.label !== 'Default')
+
+        setSavedAddrs([...defaultAddr, ...saved])
       })
       .catch(() => { /* non-critical — user can still type manually */ })
     return () => ctrl.abort()
@@ -211,27 +255,23 @@ export default function CheckoutPage() {
     return ''
   }
 
-  // applySaved maps SavedAddress fields → OrderAddress fields:
-  //   SavedAddress.addr    → OrderAddress.flat    (street address)
-  //   SavedAddress.pin     → OrderAddress.pincode
-  //   SavedAddress.name    → contact name (not the account holder's name)
-  //   SavedAddress.phone   → may be absent; keep existing phone if so
+  // applySaved maps SavedAddress → OrderAddress.
+  // DB columns: addr→flat, pin→pincode, state via matchState() (handles short names)
+  // NOTE: saved_addresses table has NO 'area' field — leave blank for user to fill.
   function applySaved(saved: any, idx: number) {
     setAddr(prev => ({
       ...prev,
-      // name from saved address is the contact at that address, not necessarily the user
-      name:    saved.name    || prev.name,
-      phone:   saved.phone   || prev.phone,
-      flat:    saved.addr    || saved.flat    || '',   // addr = real field name in SavedAddress
-      area:    saved.area    || '',
-      city:    saved.city    || '',
-      state:   saved.state   || 'Uttarakhand',
-      pincode: saved.pin     || saved.pincode || '',  // pin = real field name in SavedAddress
+      name:    saved.name  || prev.name,
+      phone:   saved.phone || prev.phone,
+      flat:    saved.addr  || saved.flat    || '',
+      area:    '',                                // no area in saved_addresses table
+      city:    saved.city  || '',
+      state:   matchState(saved.state),           // handles "Himachal" → "Himachal Pradesh"
+      pincode: saved.pin   || saved.pincode || '',
       label:   (saved.label as OrderAddress['label']) || 'Home',
     }))
     setSelectedSavedIdx(idx)
-    // Touch all fields so validation runs immediately on a pre-filled address
-    setTouched({ name: true, phone: true, flat: true, area: true, city: true, state: true, pincode: true })
+    setTouched({ name: true, phone: true, flat: true, city: true, state: true, pincode: true })
   }
 
   // ── Coupon ──
