@@ -98,6 +98,9 @@ export default function CartPage() {
   const [couponError,   setCouponError]   = useState('')
   const [reviewIdx,     setReviewIdx]     = useState(0)
   const [addedUpsell,   setAddedUpsell]   = useState<string[]>([])
+  const [upsellItems,   setUpsellItems]   = useState<any[]>([])
+  const [reviews,       setReviews]        = useState(TRUST_REVIEWS)
+  const addItem = useCartStore(s => s.addItem)
 
   // ── Settings from Supabase ──
   const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
@@ -110,9 +113,52 @@ export default function CartPage() {
     ? Math.min(100, (pricing.subtotal / freeShipMin) * 100)
     : 100
 
+  // Fetch upsell products from store-data + live reviews
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetch('/api/v1/store-data', { signal: ctrl.signal })
+      .then(async r => {
+        if (!r.ok || ctrl.signal.aborted) return
+        const data = await r.json()
+        const cartVariantIds = new Set(items.map((i: any) => i.variantId))
+        const variants: any[] = data.product_variants || []
+        const products: any[] = data.products || []
+        const images: any[]   = data.product_images || []
+        const prodMap = Object.fromEntries(products.map((p: any) => [p.id, p]))
+        const imgMap: Record<string, string> = {}
+        images.forEach((img: any) => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
+        const badges = ['Bestseller','Organic','Popular','Farm Fresh','Pure','New Arrival']
+        const upsells = variants
+          .filter((v: any) => v.is_active && v.available_stock > 0 && !cartVariantIds.has(v.id))
+          .slice(0, 6)
+          .map((v: any, i: number) => {
+            const p = prodMap[v.product_id] || {}
+            return {
+              id: v.id, productId: v.product_id,
+              name: p.name || v.name || 'Product',
+              slug: p.slug || '', size: v.size || v.weight || '',
+              price: v.price, mrp: v.mrp || v.price,
+              emoji: p.emoji || null, image: imgMap[v.product_id] || null,
+              gstRate: p.gst_rate || 5, maxQty: v.available_stock || 10,
+              badge: badges[i % badges.length],
+            }
+          })
+        if (upsells.length > 0) setUpsellItems(upsells)
+        // Live reviews from settings keys
+        const s = data.settings || {}
+        const dbReviews = [1,2,3].map(n => ({
+          name:     s[`review_${n}_name`]     || TRUST_REVIEWS[n-1]?.name,
+          location: s[`review_${n}_location`] || TRUST_REVIEWS[n-1]?.location,
+          text:     s[`review_${n}_text`]     || TRUST_REVIEWS[n-1]?.text,
+        })).filter(r => r.name && r.text)
+        if (dbReviews.length > 0) setReviews(dbReviews)
+      }).catch(() => {})
+    return () => ctrl.abort()
+  }, [items.length])  // re-run when cart changes so upsells exclude new items
+
   // ── Auto-rotate reviews ──
   useEffect(() => {
-    const t = setInterval(() => setReviewIdx(i => (i + 1) % TRUST_REVIEWS.length), 3800)
+    const t = setInterval(() => setReviewIdx(i => (i + 1) % reviews.length), 3800)
     return () => clearInterval(t)
   }, [])
 
@@ -297,26 +343,44 @@ export default function CartPage() {
                   : 'Top picks for you'}
               </span>
             </div>
-            <div className="ec-upsells">
-              {UPSELL_PRODUCTS.map(p => (
-                <div key={p.id} className="ec-upsell">
-                  <span className="ec-upsell-emoji">{p.emoji}</span>
-                  <div className="ec-upsell-info">
-                    <div className="ec-upsell-badge">{p.badge}</div>
-                    <div className="ec-upsell-name">{p.name}</div>
-                    <div className="ec-upsell-size">{p.size}</div>
-                    <div className="ec-upsell-price">{formatPrice(p.price)}</div>
-                  </div>
-                  <button
-                    className={`ec-upsell-btn${addedUpsell.includes(p.id) ? ' added' : ''}`}
-                    onClick={() => setAddedUpsell(a => a.includes(p.id) ? a : [...a, p.id])}
-                    aria-label={`Add ${p.name}`}
-                  >
-                    {addedUpsell.includes(p.id) ? '✓ Added' : '+ Add'}
-                  </button>
-                </div>
-              ))}
-            </div>
+            {upsellItems.length === 0
+              ? <div className="ec-upsell-loading">Finding perfect pairings…</div>
+              : <div className="ec-upsells">
+                  {upsellItems.slice(0,4).map(p => (
+                    <div key={p.id} className={`ec-upsell${addedUpsell.includes(p.id) ? ' added' : ''}`}>
+                      <div className="ec-upsell-img-wrap">
+                        {p.image
+                          ? <Image src={p.image} alt={p.name} fill sizes="52px" style={{objectFit:'cover',borderRadius:'8px'}}/>
+                          : <span style={{fontSize:'26px'}}>{p.emoji || '🌿'}</span>}
+                      </div>
+                      <div className="ec-upsell-info">
+                        <div className="ec-upsell-badge">{p.badge}</div>
+                        <div className="ec-upsell-name">{p.name}</div>
+                        <div className="ec-upsell-size">{p.size}</div>
+                        <div className="ec-upsell-price-row">
+                          {p.mrp > p.price && <span className="ec-upsell-mrp">{formatPrice(p.mrp)}</span>}
+                          <span className="ec-upsell-price">{formatPrice(p.price)}</span>
+                        </div>
+                      </div>
+                      <button
+                        className={`ec-upsell-btn${addedUpsell.includes(p.id) ? ' added' : ''}`}
+                        onClick={() => {
+                          if (addedUpsell.includes(p.id)) return
+                          addItem({
+                            productId: p.productId, variantId: p.id,
+                            name: p.name, slug: p.slug, image: p.image, emoji: p.emoji,
+                            size: p.size, price: p.price, mrp: p.mrp,
+                            gstRate: p.gstRate, maxQty: p.maxQty,
+                          })
+                          setAddedUpsell(a => [...a, p.id])
+                        }}
+                        aria-label={`Add ${p.name} to cart`}
+                      >
+                        {addedUpsell.includes(p.id) ? '✓ Added' : '+ Add'}
+                      </button>
+                    </div>
+                  ))}
+                </div>}
           </div>
 
           {/* Brand Trust */}
@@ -342,13 +406,13 @@ export default function CartPage() {
             <h3 className="ec-review-heading">💬 What Customers Say</h3>
             <div className="ec-review-body">
               <div className="ec-review-stars">★★★★★</div>
-              <p className="ec-review-text">"{TRUST_REVIEWS[reviewIdx].text}"</p>
+              <p className="ec-review-text">"{reviews[reviewIdx].text}"</p>
               <div className="ec-review-author">
-                — {TRUST_REVIEWS[reviewIdx].name}, {TRUST_REVIEWS[reviewIdx].location}
+                — {reviews[reviewIdx].name}, {reviews[reviewIdx].location}
               </div>
             </div>
             <div className="ec-review-dots" role="tablist">
-              {TRUST_REVIEWS.map((_, i) => (
+              {reviews.map((_, i) => (
                 <button
                   key={i}
                   className={`ec-dot${i === reviewIdx ? ' active' : ''}`}
@@ -560,8 +624,10 @@ const CART_CSS = `
 /* ── Cards ─────────────────────────────────────────── */
 .ec-card{
   background:var(--white);border-radius:var(--r);
-  box-shadow:var(--sh);border:1px solid var(--border);overflow:hidden;
+  box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);
+  border:1px solid var(--border);overflow:hidden;transition:box-shadow .22s;
 }
+.ec-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.09),0 0 0 1px rgba(0,0,0,.04);}
 .ec-card-head{
   padding:16px 20px 12px;border-bottom:1px solid var(--stone-mid);
   display:flex;align-items:center;justify-content:space-between;
@@ -575,7 +641,7 @@ const CART_CSS = `
 
 /* ── Items ─────────────────────────────────────────── */
 .ec-items{padding:4px 0;}
-.ec-item{display:flex;gap:16px;padding:16px 20px;border-bottom:1px solid var(--stone-mid);transition:background .15s;}
+.ec-item{display:flex;gap:16px;padding:16px 20px;border-bottom:1px solid var(--stone-mid);transition:background .18s,transform .18s;}
 .ec-item:last-child{border-bottom:none;}
 .ec-item:hover{background:#fafaf8;}
 /* position:relative REQUIRED for next/image fill */
@@ -614,7 +680,8 @@ const CART_CSS = `
   display:flex;align-items:center;justify-content:center;
   transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.08);line-height:1;
 }
-.ec-qty-btn:hover:not(:disabled){background:var(--forest);color:#fff;}
+.ec-qty-btn:hover:not(:disabled){background:var(--forest);color:#fff;transform:scale(1.1);box-shadow:0 3px 10px rgba(26,58,30,.25);}
+.ec-qty-btn:active:not(:disabled){transform:scale(.93);}
 .ec-qty-btn:disabled{opacity:.3;cursor:not-allowed;}
 .ec-qty-num{width:34px;text-align:center;font-size:14px;font-weight:700;color:var(--ink);}
 
@@ -643,7 +710,12 @@ const CART_CSS = `
   background:var(--stone);transition:all .2s;
 }
 .ec-upsell:hover{border-color:var(--forest);background:#f0f7f1;}
-.ec-upsell-emoji{font-size:30px;flex-shrink:0;}
+.ec-upsell-img-wrap{width:50px;height:50px;border-radius:8px;overflow:hidden;background:var(--stone);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ec-upsell-emoji{font-size:26px;flex-shrink:0;}
+.ec-upsell-price-row{display:flex;align-items:center;gap:5px;margin-top:1px;}
+.ec-upsell-mrp{font-size:10px;color:#bbb;text-decoration:line-through;}
+.ec-upsell-loading{padding:16px;text-align:center;font-size:12px;color:var(--muted);font-style:italic;background:var(--stone);border-radius:8px;margin:12px 20px;}
+.ec-upsell.added{opacity:.75;}
 .ec-upsell-info{flex:1;min-width:0;}
 .ec-upsell-badge{font-size:10px;font-weight:700;color:var(--earth);text-transform:uppercase;letter-spacing:.5px;}
 .ec-upsell-name{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -775,9 +847,10 @@ const CART_CSS = `
   background:linear-gradient(135deg,var(--forest),var(--forest-mid));
   color:#fff;text-decoration:none;padding:15px 18px;border-radius:13px;
   font-size:14px;font-weight:700;
-  box-shadow:0 4px 16px rgba(26,58,30,.32);transition:all .25s;
+  box-shadow:0 4px 16px rgba(26,58,30,.32);transition:all .28s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden;
 }
-.ec-cta:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(26,58,30,.38);}
+.ec-cta:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(26,58,30,.45);}
+.ec-cta:active{transform:translateY(0);}
 .ec-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;border-radius:20px;font-size:14px;font-weight:800;}
 .ec-continue{text-align:center;display:block;font-size:12px;color:var(--muted);text-decoration:none;transition:color .2s;}
 .ec-continue:hover{color:var(--forest);}

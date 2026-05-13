@@ -150,6 +150,8 @@ export default function CheckoutPage() {
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError,   setCouponError]   = useState('')
+  const [couponHints,   setCouponHints]   = useState<Array<{code:string,label:string}>>([])
+  const [showHints,     setShowHints]     = useState(false)
 
   const [savedAddrs,       setSavedAddrs]       = useState<any[]>([])
   const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(null)
@@ -231,6 +233,8 @@ export default function CheckoutPage() {
           setAddr(prev => {
             const formIsEmpty = !prev.flat && !prev.city && !prev.pincode
             if (!formIsEmpty) return prev  // user already typed — don't overwrite
+            const validLabels = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
+            const autoLabel   = validLabels.find(l => l === a.label) || 'Home'
             return {
               ...prev,
               name:    a.name  || prev.name  || '',
@@ -240,7 +244,7 @@ export default function CheckoutPage() {
               city:    a.city  || '',
               state:   matchState(a.state),
               pincode: a.pin   || a.pincode  || '',
-              label:   (a.label as OrderAddress['label']) || 'Home',
+              label:   autoLabel,
             }
           })
           setSelectedSavedIdx(0)
@@ -249,6 +253,35 @@ export default function CheckoutPage() {
       .catch(() => { /* non-critical — user can still type manually */ })
     return () => ctrl.abort()
   }, [user])
+
+  // Fetch available public coupon hints from store-data
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetch('/api/v1/store-data', { signal: ctrl.signal })
+      .then(async r => {
+        if (!r.ok || ctrl.signal.aborted) return
+        const data = await r.json()
+        const coupons: any[] = data.coupons || []
+        // Only show coupons that are not expired and have uses remaining
+        const now = new Date()
+        const hints = coupons
+          .filter((c: any) => {
+            if (c.expires_at && new Date(c.expires_at) < now) return false
+            if (c.max_uses && c.uses_count >= c.max_uses) return false
+            return true
+          })
+          .slice(0, 3)
+          .map((c: any) => ({
+            code:  c.code,
+            label: c.type === 'percent'
+              ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
+              : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
+          }))
+        setCouponHints(hints)
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+  }, [])
 
   // Auto-switch payment if COD becomes unavailable after settings load
   useEffect(() => {
@@ -261,7 +294,8 @@ export default function CheckoutPage() {
 
   function setField(field: keyof OrderAddress, value: string) {
     setAddr(prev => ({ ...prev, [field]: value }))
-    setSelectedSavedIdx(null)
+    // Only deselect saved address when actual content fields change (not the label tag)
+    if (field !== 'label') setSelectedSavedIdx(null)
   }
 
   function touch(field: string) {
@@ -280,17 +314,23 @@ export default function CheckoutPage() {
   // applySaved maps SavedAddress → OrderAddress.
   // DB columns: addr→flat, pin→pincode, state via matchState() (handles short names)
   // NOTE: saved_addresses table has NO 'area' field — leave blank for user to fill.
+  // applySaved maps a saved address row → OrderAddress form fields.
+  // Label buttons (Home/Office/Parents etc.) independently tag the address for THIS order.
+  // The saved.label is the stored label but user can change it via label buttons after selecting.
   function applySaved(saved: any, idx: number) {
+    // Map the saved label to a valid LABEL_OPTIONS value, fallback to 'Home'
+    const validLabels = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
+    const savedLabel  = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
       ...prev,
       name:    saved.name  || prev.name,
       phone:   saved.phone || prev.phone,
       flat:    saved.addr  || saved.flat    || '',
-      area:    '',                                // no area in saved_addresses table
+      area:    saved.area  || '',
       city:    saved.city  || '',
-      state:   matchState(saved.state),           // handles "Himachal" → "Himachal Pradesh"
+      state:   matchState(saved.state),
       pincode: saved.pin   || saved.pincode || '',
-      label:   (saved.label as OrderAddress['label']) || 'Home',
+      label:   savedLabel,                        // reflect the saved address label
     }))
     setSelectedSavedIdx(idx)
     setTouched({ name: true, phone: true, flat: true, city: true, state: true, pincode: true })
@@ -320,7 +360,7 @@ export default function CheckoutPage() {
 
   // ── Place order ──
   const handlePlace = useCallback(async () => {
-    const required = ['name', 'phone', 'flat', 'area', 'city', 'state', 'pincode'] as const
+    const required = ['name', 'phone', 'flat', 'city', 'state', 'pincode'] as const  // area is optional
 
     // Touch all required fields (merge, don't replace)
     setTouched(prev => {
@@ -332,7 +372,7 @@ export default function CheckoutPage() {
     // Validate
     const fieldLabels: Record<string, string> = {
       name: 'Full Name', phone: 'Mobile Number', flat: 'Address',
-      area: 'Area / Landmark', city: 'City', state: 'State', pincode: 'Pincode',
+      city: 'City', state: 'State', pincode: 'Pincode',
     }
     for (const f of required) {
       if (!addr[f]?.toString().trim()) {
@@ -528,7 +568,8 @@ export default function CheckoutPage() {
                       <div className="cho-saved-info">
                         <div className="cho-saved-tag">{LABEL_ICONS[a.label] || '📍'} {a.label}</div>
                         <div className="cho-saved-text">
-                          {[a.name, a.addr || a.flat, a.city, a.state, a.pin || a.pincode]
+                          {[a.name, a.addr || a.flat, a.city,
+                            matchState(a.state), a.pin || a.pincode]
                             .filter(Boolean).join(', ')}
                         </div>
                       </div>
@@ -538,18 +579,23 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Label picker */}
-            <div className="cho-label-row">
-              {LABEL_OPTIONS.map(lbl => (
-                <button
-                  key={lbl}
-                  type="button"
-                  className={`cho-label-btn${addr.label === lbl ? ' active' : ''}`}
-                  onClick={() => setField('label', lbl)}
-                >
-                  {LABEL_ICONS[lbl]} {lbl}
-                </button>
-              ))}
+            {/* Label picker — tags this delivery address (Home / Office / etc.)
+                Does NOT switch saved addresses. Click a saved address card above to switch. */}
+            <div className="cho-label-section">
+              <div className="cho-label-heading">Deliver to</div>
+              <div className="cho-label-row">
+                {LABEL_OPTIONS.map(lbl => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    className={`cho-label-btn${addr.label === lbl ? ' active' : ''}`}
+                    onClick={() => setField('label', lbl)}
+                    aria-pressed={addr.label === lbl}
+                  >
+                    {LABEL_ICONS[lbl]} {lbl}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Form */}
@@ -596,7 +642,7 @@ export default function CheckoutPage() {
 
               {/* Area / Landmark */}
               <div className={`cho-field cho-field-full${fieldErr('area') ? ' err' : ''}`}>
-                <label className="cho-lbl" htmlFor="cho-area">Area / Landmark *</label>
+                <label className="cho-lbl" htmlFor="cho-area">Area / Landmark <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional)</span></label>
                 <input id="cho-area" className="cho-input" type="text"
                   value={addr.area} onChange={e => setField('area', e.target.value)}
                   onBlur={() => touch('area')} placeholder="Near ISBT, Rajpur Road"
@@ -674,9 +720,31 @@ export default function CheckoutPage() {
                       {prepaidPct > 0 && <span className="cho-pay-badge">Save {prepaidPct}%</span>}
                     </div>
                     <div className="cho-pay-logos-row">
-                      {[['upi','UPI'],['cards','Cards'],['nb','Net Banking'],['gpay','GPay'],['phone','PhonePe']].map(([c,l]) => (
-                        <span key={c} className={`cho-pl ${c}`}>{l}</span>
-                      ))}
+                      {/* UPI */}
+                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
+                        <text x="2" y="17" fontSize="11" fontWeight="800" fill="#7b1fa2">UPI</text>
+                      </svg>
+                      {/* Visa */}
+                      <svg className="cho-psvg cho-psvg-visa" viewBox="0 0 60 24">
+                        <rect width="60" height="24" rx="4" fill="#1A1F71"/>
+                        <text x="8" y="17" fontSize="13" fontWeight="800" fill="#fff" fontStyle="italic">VISA</text>
+                      </svg>
+                      {/* Mastercard */}
+                      <svg className="cho-psvg" viewBox="0 0 40 24">
+                        <circle cx="14" cy="12" r="10" fill="#EB001B"/>
+                        <circle cx="26" cy="12" r="10" fill="#F79E1B"/>
+                        <path d="M20 5.3a10 10 0 0 1 0 13.4A10 10 0 0 1 20 5.3z" fill="#FF5F00"/>
+                      </svg>
+                      {/* RuPay */}
+                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
+                        <rect width="60" height="24" rx="4" fill="#0f7b3e"/>
+                        <text x="5" y="17" fontSize="10" fontWeight="800" fill="#fff">RuPay</text>
+                      </svg>
+                      {/* GPay */}
+                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
+                        <text x="3" y="17" fontSize="11" fontWeight="700" fill="#4285F4">G</text>
+                        <text x="14" y="17" fontSize="11" fontWeight="700" fill="#333">Pay</text>
+                      </svg>
                     </div>
                     {payMethod === 'razorpay' && pricing.prepaidDiscount > 0 && (
                       <div className="cho-pay-disc">
@@ -800,6 +868,35 @@ export default function CheckoutPage() {
                       </button>
                     </div>
                     {couponError && <p className="cho-coupon-err" role="alert">⚠ {couponError}</p>}
+                    {couponHints.length > 0 && !coupon && (
+                      <div className="cho-coupon-hints">
+                        <button
+                          className="cho-hints-toggle"
+                          onClick={() => setShowHints(v => !v)}
+                          type="button"
+                        >
+                          🎟 {showHints ? 'Hide' : 'View'} available offers
+                        </button>
+                        {showHints && (
+                          <div className="cho-hints-list">
+                            {couponHints.map(h => (
+                              <button
+                                key={h.code}
+                                className="cho-hint-chip"
+                                type="button"
+                                onClick={() => {
+                                  setCouponCode(h.code)
+                                  setShowHints(false)
+                                }}
+                              >
+                                <span className="cho-hint-code">{h.code}</span>
+                                <span className="cho-hint-label">{h.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -829,6 +926,21 @@ export default function CheckoutPage() {
                     🏷 You're saving {formatPrice(savingsBadge)} on this order!
                   </div>
                 )}
+
+                {/* Loyalty points — controlled by admin Loyalty tab in settings.
+                    Keys: loyalty_enabled, loyalty_points_per_rupee, loyalty_points_label
+                    All three must be set via admin → Settings → Loyalty.
+                    Defaults: disabled (hidden unless admin explicitly enables). */}
+                {s.loyalty_enabled === 'true' && pricing.total > 0 && (() => {
+                  const rate  = parseFloat(s.loyalty_points_per_rupee || '0.1')
+                  const label = s.loyalty_points_label || 'reward points'
+                  const pts   = Math.floor(pricing.total * rate)
+                  return pts > 0 ? (
+                    <div className="cho-loyalty-pill">
+                      ⭐ You'll earn <strong>{pts} {label}</strong> on this order
+                    </div>
+                  ) : null
+                })()}
               </div>
             </div>
 
@@ -863,7 +975,25 @@ export default function CheckoutPage() {
             <div className="cho-secure-note">🔒 100% Secure & Encrypted Checkout</div>
 
             <div className="cho-delivery-note">
-              🚚 Estimated delivery: <strong>3–5 working days</strong> after confirmation
+              {(() => {
+                // ETA: orders placed before 2pm ship same day, else next day
+                const now = new Date()
+                const cutoffHour = 14  // 2pm IST cutoff for same-day dispatch
+                const istHour = (now.getUTCHours() + 5) % 24  // IST = UTC+5:30
+                const dispatchDays = istHour < cutoffHour ? 0 : 1
+                const minDays = dispatchDays + 3
+                const maxDays = dispatchDays + 5
+                const etaMin = new Date(now); etaMin.setDate(now.getDate() + minDays)
+                const etaMax = new Date(now); etaMax.setDate(now.getDate() + maxDays)
+                const fmt = (d: Date) => d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })
+                return (
+                  <span>🚚 Delivery by <strong>{fmt(etaMin)}–{fmt(etaMax)}</strong>
+                    {istHour < cutoffHour
+                      ? ' · Order in time for today's dispatch!'
+                      : ' · Order now for tomorrow's dispatch'}
+                  </span>
+                )
+              })()}
             </div>
           </div>
         </div>
@@ -911,7 +1041,7 @@ const CHO_CSS = `
 .cho-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
 @media(max-width:640px){.cho-left{padding:16px;}}
 /* Cards */
-.cho-card{background:var(--white);border-radius:var(--r);box-shadow:var(--sh);border:1px solid var(--border);overflow:hidden;}
+.cho-card{background:var(--white);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s;}
 .cho-card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--stone-mid);}
 .cho-num{width:27px;height:27px;border-radius:50%;background:var(--forest);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
 .cho-card-title{font-family:var(--font-playfair,'Playfair Display',serif);font-size:17px;font-weight:700;color:var(--ink);margin:0;}
@@ -927,7 +1057,9 @@ const CHO_CSS = `
 .cho-saved-tag{font-size:12px;font-weight:700;color:var(--forest);}
 .cho-saved-text{font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:2px;}
 /* Label buttons */
-.cho-label-row{display:flex;gap:7px;flex-wrap:wrap;padding:12px 20px 0;}
+.cho-label-section{padding:12px 20px 0;}
+.cho-label-heading{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.cho-label-row{display:flex;gap:7px;flex-wrap:wrap;}
 .cho-label-btn{border:1.5px solid var(--border);background:var(--stone);color:var(--muted);font-size:12px;font-weight:600;padding:5px 13px;border-radius:20px;cursor:pointer;transition:all .2s;}
 .cho-label-btn:hover{border-color:var(--forest);color:var(--forest);}
 .cho-label-btn.active{border-color:var(--forest);background:var(--forest-lt);color:var(--forest);}
@@ -950,13 +1082,15 @@ const CHO_CSS = `
 /* Payment options */
 .cho-pay-opts{padding:14px 20px;display:flex;flex-direction:column;gap:10px;}
 .cho-pay-opt{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:all .2s;background:#fafaf8;}
-.cho-pay-opt:hover{border-color:var(--forest);background:var(--forest-lt);}
+.cho-pay-opt:hover{border-color:var(--forest);background:var(--forest-lt);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.06);}
 .cho-pay-opt.active{border-color:var(--forest);background:var(--forest-lt);}
 .cho-pay-opt input[type=radio]{accent-color:var(--forest);width:16px;height:16px;flex-shrink:0;margin-top:2px;cursor:pointer;}
 .cho-pay-body{flex:1;}
 .cho-pay-title{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
 .cho-pay-badge{background:var(--forest);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
-.cho-pay-logos-row{display:flex;gap:5px;flex-wrap:wrap;}
+.cho-pay-logos-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.cho-psvg{height:22px;border-radius:4px;border:1px solid rgba(0,0,0,.08);background:#fff;padding:2px 4px;}
+.cho-psvg-visa{background:#1A1F71;}
 .cho-pl{font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;}
 .cho-pl.upi{background:#7b1fa2;color:#fff;}.cho-pl.cards{background:#1565c0;color:#fff;}
 .cho-pl.nb{background:#e65100;color:#fff;}.cho-pl.gpay{background:#4285f4;color:#fff;}
@@ -1009,15 +1143,23 @@ const CHO_CSS = `
 .cho-pr-divider{height:1px;background:var(--border);margin:4px 0;}
 .cho-pr-total{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-playfair,'Playfair Display',serif);font-size:20px;font-weight:700;color:var(--ink);}
 .cho-saving-pill{background:var(--forest-lt);border:1px solid #c8e6c9;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;color:#2d6a4f;text-align:center;}
+.cho-loyalty-pill{background:#fdf6e3;border:1px solid #f0d080;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5a00;text-align:center;}
+.cho-coupon-hints{margin-top:8px;}
+.cho-hints-toggle{background:none;border:none;font-size:11px;color:var(--forest);font-weight:700;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;}
+.cho-hints-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.cho-hint-chip{display:flex;align-items:center;justify-content:space-between;background:var(--stone);border:1.5px dashed var(--border);border-radius:8px;padding:8px 11px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit;width:100%;}
+.cho-hint-chip:hover{border-color:var(--forest);background:var(--forest-lt);}
+.cho-hint-code{font-size:12px;font-weight:800;color:var(--forest);letter-spacing:.5px;}
+.cho-hint-label{font-size:11px;color:var(--muted);}
 /* Error */
 .cho-error{background:#fdecea;border:1px solid #f5c6cb;border-radius:10px;padding:10px 13px;font-size:13px;color:#c0392b;font-weight:600;}
 /* CTA */
-.cho-cta{width:100%;padding:15px 18px;background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;border-radius:13px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(26,58,30,.32);transition:all .25s;display:flex;align-items:center;justify-content:space-between;font-family:inherit;}
-.cho-cta:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,58,30,.38);}
+.cho-cta{width:100%;padding:15px 18px;background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;border-radius:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(26,58,30,.32);transition:all .28s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden;}
+.cho-cta:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 28px rgba(26,58,30,.44);}
 .cho-cta:disabled{opacity:.6;cursor:not-allowed;transform:none;}
 .cho-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;border-radius:20px;font-size:14px;font-weight:800;}
 .cho-secure-note{text-align:center;font-size:11px;color:var(--muted);}
-.cho-delivery-note{font-size:12px;color:var(--muted);background:var(--stone);padding:9px 12px;border-radius:8px;}
+.cho-delivery-note{font-size:12px;color:var(--muted);background:var(--stone);padding:9px 12px;border-radius:8px;line-height:1.5;}
 /* Mobile sticky */
 .cho-sticky{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--border);padding:10px 16px;z-index:250;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.08);}
 @media(max-width:960px){.cho-sticky{display:flex;}}
