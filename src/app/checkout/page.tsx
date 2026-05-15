@@ -1,41 +1,24 @@
 'use client'
 
 /**
- * checkout/page.tsx — Enterprise Checkout Page
+ * checkout/page.tsx — Lean orchestrator (~280 lines)
  *
- * ADMIN SETTINGS THAT DIRECTLY AFFECT THIS PAGE:
- * ─────────────────────────────────────────────────────────────────────────────
- * From site_settings table (real keys per types/index.ts):
+ * All UI is delegated to:
+ *   CheckoutSkeleton     → animated skeleton while stores hydrate
+ *   ShippingProgress     → free-ship threshold bar
+ *   SavedAddressSelector → saved address cards from /api/profile
+ *   AddressForm          → form fields + pincode autofill (free API, no key)
+ *   PaymentSection       → payment options with real SVG logos
+ *   OrderSummary         → items, coupon hints, prices, loyalty, ETA, CTA
  *
- *   free_shipping_min      → shipping threshold bar + shipping cost calculation
- *   flat_shipping_charge   → shipping fee when below threshold
- *   prepaid_discount_pct   → % discount shown + applied when payMethod='razorpay'
- *   cod_enabled            → shows/hides COD option (Image 2: currently OFF)
- *   cod_max_value          → max order total for COD eligibility
- *   cod_max_active_orders  → fraud guard (enforced server-side in /api/v1/orders)
- *   store_open             → if 'false', middleware redirects here before reaching page
- *   whatsapp_number        → used in support link
- *   order_email_enabled    → server-side only, no UI impact here
- *   admin_notify_email     → server-side only
- *
- * PAYMENT TOGGLE NOTES (from Image 2):
- *   The admin "Orders" tab has two independent toggles:
- *   - Enable Razorpay (UPI/Cards) → maps to: we check cod_enabled='false' + razorpay key present
- *   - Enable COD + WhatsApp       → maps to: settings.cod_enabled === 'true'
- *   Both OFF = "customers cannot checkout" — we guard this case below.
- *
- * FONT: Uses CSS vars from layout.tsx next/font setup.
- *   --font-playfair = Playfair_Display (used for headings/prices)
- *   --font-dm-sans / --font-lato = body text
- *   NO @import in this file.
- *
- * HEADER HEIGHT: sticky top = 134px max (ann + ticker + nav).
+ * ADMIN SETTINGS CONSUMED (all from site_settings table):
+ *   free_shipping_min, flat_shipping_charge, prepaid_discount_pct
+ *   cod_enabled, cod_max_value, min_order_amount
+ *   upi_enabled, loyalty_enabled, loyalty_points_per_rupee, loyalty_points_label
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { formatPrice } from '@/lib/utils'
@@ -44,8 +27,15 @@ import type { SiteSettings, OrderAddress } from '@/types'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
+import ShippingProgress     from '@/components/checkout/ShippingProgress'
+import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
+import AddressForm          from '@/components/checkout/AddressForm'
+import PaymentSection       from '@/components/checkout/PaymentSection'
+import OrderSummary         from '@/components/checkout/OrderSummary'
+import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const INDIA_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
   'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
@@ -56,39 +46,22 @@ const INDIA_STATES = [
   'Ladakh','Lakshadweep','Puducherry',
 ]
 
-const LABEL_OPTIONS = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
-const LABEL_ICONS: Record<string, string> = {
-  Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// Parse saved_addresses JSON string from the profile API response.
-// Shape per useProfile.ts SavedAddress: { id, label, name, addr, city, state, pin }
-// Matches getSavedAddresses() in /lib/account/utils.ts exactly.
-function parseSavedAddresses(raw: string | undefined | null): any[] {
-  if (!raw) return []
-  try { return JSON.parse(raw) } catch { return [] }
-}
-
-// Match stored state string to full INDIA_STATES entry.
-// Handles short names ("Himachal" → "Himachal Pradesh"), case differences, prefix matches.
 function matchState(stored: string | undefined | null): string {
   if (!stored) return 'Uttarakhand'
   const s = stored.trim()
-  const exact = INDIA_STATES.find(st => st === s)
-  if (exact) return exact
-  const ci = INDIA_STATES.find(st => st.toLowerCase() === s.toLowerCase())
-  if (ci) return ci
+  const exact = INDIA_STATES.find(st => st === s); if (exact) return exact
+  const ci    = INDIA_STATES.find(st => st.toLowerCase() === s.toLowerCase()); if (ci) return ci
   const lower = s.toLowerCase()
-  const prefix = INDIA_STATES.find(st =>
-    st.toLowerCase().startsWith(lower) || lower.startsWith(st.toLowerCase())
-  )
+  const prefix = INDIA_STATES.find(st => st.toLowerCase().startsWith(lower) || lower.startsWith(st.toLowerCase()))
   if (prefix) return prefix
   const word = lower.split(' ')[0]
-  const contains = INDIA_STATES.find(st => st.toLowerCase().includes(word) && word.length > 3)
-  if (contains) return contains
-  return s  // fallback — won't crash, just won't match in <select>
+  const has  = INDIA_STATES.find(st => st.toLowerCase().includes(word) && word.length > 3)
+  return has || s
+}
+
+function parseSavedAddresses(raw: string | undefined | null): any[] {
+  if (!raw) return []
+  try { return JSON.parse(raw) } catch { return [] }
 }
 
 const settingsFetcher = async (): Promise<SiteSettings> => {
@@ -99,18 +72,14 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-
 export default function CheckoutPage() {
   const router = useRouter()
 
-  // ── Hydration guard ──────────────────────────────────────────────────────────
-  // cartStore and userStore use skipHydration:true — start empty on SSR + first render.
-  // Rehydration fires in StoreHydrator useEffect (providers.tsx) after mount.
-  // We must suppress rendering until mounted to prevent React #425/#418/#423.
+  // Hydration guard — stores use skipHydration:true
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  // Cart store
+  // Stores
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
   const idempotencyKey     = useCartStore(s => s.idempotencyKey)
@@ -118,71 +87,62 @@ export default function CheckoutPage() {
   const clearCart          = useCartStore(s => s.clearCart)
   const applyCoupon        = useCartStore(s => s.applyCoupon)
   const removeCoupon       = useCartStore(s => s.removeCoupon)
-
-  // User store
-  const user = useUserStore(s => s.user)
+  const user               = useUserStore(s => s.user)
 
   // Settings
   const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
   const s = settings || {} as SiteSettings
 
-  // ── Derived from admin settings ──
-  // DEFAULT RULE: when a key is missing from the DB (undefined), default to ENABLED.
-  // This prevents fresh installs from showing "checkout unavailable".
-  // Admin must explicitly save 'false' to disable — which only happens after visiting the Orders tab.
-  // s.cod_enabled === 'true' would be false for undefined (wrong). !== 'false' is true for undefined (correct).
-  const codEnabled      = s.cod_enabled  !== 'false'   // true unless admin explicitly turned OFF
-  const upiAdminOn      = s.upi_enabled  !== 'false'   // true unless admin explicitly turned OFF
-  const codMax          = parseFloat(s.cod_max_value || '3000')
-  const prepaidPct      = parseInt(s.prepaid_discount_pct || '5')
-  const freeShipMin     = parseFloat(s.free_shipping_min || '0')
-  // min_order_amount — evaluated after pricing is declared below
-  const minOrderAmt     = parseFloat(s.min_order_amount || '0')
+  // Admin-driven flags — default to ENABLED when key missing (never block on fresh install)
+  const codEnabled      = s.cod_enabled  !== 'false'
+  const upiAdminOn      = s.upi_enabled  !== 'false'
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
-  // Razorpay: env key must exist AND admin must not have disabled it in Orders tab
   const razorpayEnabled = !!razorpayKeyId && upiAdminOn
+  const codMax          = parseFloat(s.cod_max_value        || '3000')
+  const prepaidPct      = parseInt(s.prepaid_discount_pct   || '5')
+  const freeShipMin     = parseFloat(s.free_shipping_min    || '0')
+  const minOrderAmt     = parseFloat(s.min_order_amount     || '0')
 
-  // ── Local state ──
-  const [payMethod, setPayMethod] = useState<'razorpay' | 'cod'>('cod')
-  const [placing,   setPlacing]   = useState(false)
-  const [error,     setError]     = useState('')
-
+  // UI state
+  const [payMethod, setPayMethod]   = useState<'razorpay' | 'cod'>('cod')
+  const [placing,   setPlacing]     = useState(false)
+  const [error,     setError]       = useState('')
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError,   setCouponError]   = useState('')
   const [couponHints,   setCouponHints]   = useState<Array<{code:string,label:string}>>([])
-  const [showHints,     setShowHints]     = useState(false)
-
   const [savedAddrs,       setSavedAddrs]       = useState<any[]>([])
   const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(null)
-  const [summaryOpen,      setSummaryOpen]       = useState(true)   // open by default on mobile
+  const [summaryOpen,      setSummaryOpen]       = useState(true)
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
-
-  // Address state — all fields match OrderAddress type exactly
   const [addr, setAddr] = useState<OrderAddress>({
-    name: '', phone: '', flat: '', area: '',
-    city: '', state: 'Uttarakhand', pincode: '', label: 'Home',
+    name:'', phone:'', flat:'', area:'', city:'',
+    state:'Uttarakhand', pincode:'', label:'Home',
   })
-  // Email is NOT in OrderAddress type — stored separately
   const [email, setEmail] = useState('')
 
-  // ── Pricing — recalculates when payMethod changes (prepaid discount) ──
+  // Pricing
   const pricing       = calcPriceSummary(items, s, coupon, payMethod)
   const codOk         = codEnabled && pricing.total <= codMax
-  // belowMinOrder declared here — after pricing — to avoid "used before declaration" TS error
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
+  const bothPayOff    = !codOk && !razorpayEnabled
 
-  // ── Effects ──
+  // Analytics — tracks funnel events, coupon usage, payment drop-off, abandonment
+  const analytics = useCheckoutAnalytics({
+    itemCount:      items.length,
+    subtotal:       pricing.subtotal,
+    payMethod,
+    isFreeShipping: pricing.isFreeShipping,
+  })
 
-  // Redirect if cart becomes empty
+  // Effects
+  useEffect(() => { if (items.length === 0 && mounted) router.replace('/cart') }, [items, mounted, router])
+
   useEffect(() => {
-    if (items.length === 0) router.replace('/cart')
-  }, [items, router])
+    if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
+  }, [codOk, payMethod, razorpayEnabled])
 
-  // Fetch saved addresses and pre-fill name/phone/email from /api/profile.
-  // userStore.setAddresses() is NEVER called at checkout (only in /account/addresses).
-  // Addresses live in profile.saved_addresses (JSON string in Supabase profiles table).
-  // This is identical to how /account/addresses/page.tsx loads its addresses.
+  // Load profile addresses + pre-fill
   useEffect(() => {
     if (!user) return
     const ctrl = new AbortController()
@@ -192,8 +152,7 @@ export default function CheckoutPage() {
         const data = await r.json()
         const prof = data.profile
         if (!prof) return
-        // Pre-fill name/phone/email from profile scalar fields
-        const fullName = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
+        const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
         setAddr(prev => ({
           ...prev,
@@ -201,77 +160,46 @@ export default function CheckoutPage() {
           phone: prev.phone || cleanPhone  || '',
         }))
         setEmail(prev => prev || data.user?.email || '')
-
-        // Build complete address list:
-        //
-        // 1. DEFAULT address = scalar fields on customers table (shown as PRIMARY in account)
-        //    Fields: address_line1, city, state, postal_code, first_name, last_name, phone
         const defaultAddr = prof.address_line1 ? [{
-          _isDefault: true,
-          label:  'Home' as const,
-          name:   fullName   || '',
-          addr:   prof.address_line1 || '',
-          area:   '',
-          city:   prof.city          || '',
-          state:  prof.state         || '',
-          pin:    prof.postal_code   || '',
-          phone:  cleanPhone         || '',
+          _isDefault:true, label:'Home' as const,
+          name:fullName||'', addr:prof.address_line1||'', area:'',
+          city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
         }] : []
-
-        // 2. SAVED addresses = saved_addresses table rows (normalized, NOT the JSON blob)
-        //    The API returns them JSON-stringified in prof.saved_addresses
-        //    Filter out any legacy 'Default' label entries (replaced by scalar fields above)
-        const saved = parseSavedAddresses(prof.saved_addresses)
-          .filter((a: any) => a.label !== 'Default')
-
-        const allAddrs = [...defaultAddr, ...saved]
-        setSavedAddrs(allAddrs)
-
-        // Auto-apply address[0] (default) if form is still empty on load
-        if (allAddrs.length > 0) {
-          const a = allAddrs[0]
+        const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
+        const all   = [...defaultAddr, ...saved]
+        setSavedAddrs(all)
+        if (all.length > 0) {
+          const a = all[0]
+          const validLabels = ['Home','Office','Parents','Friends','Others'] as const
+          const lbl = validLabels.find(l => l === a.label) || 'Home'
           setAddr(prev => {
-            const formIsEmpty = !prev.flat && !prev.city && !prev.pincode
-            if (!formIsEmpty) return prev  // user already typed — don't overwrite
-            const validLabels = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
-            const autoLabel   = validLabels.find(l => l === a.label) || 'Home'
-            return {
-              ...prev,
-              name:    a.name  || prev.name  || '',
-              phone:   a.phone || prev.phone || '',
-              flat:    a.addr  || a.flat     || '',
-              area:    a.area  || '',
-              city:    a.city  || '',
-              state:   matchState(a.state),
-              pincode: a.pin   || a.pincode  || '',
-              label:   autoLabel,
-            }
+            if (prev.flat || prev.city || prev.pincode) return prev
+            return { ...prev, name:a.name||prev.name, phone:a.phone||prev.phone,
+              flat:a.addr||a.flat||'', area:a.area||'', city:a.city||'',
+              state:matchState(a.state), pincode:a.pin||a.pincode||'', label:lbl }
           })
           setSelectedSavedIdx(0)
         }
       })
-      .catch(() => { /* non-critical — user can still type manually */ })
+      .catch(() => {})
     return () => ctrl.abort()
   }, [user])
 
-  // Fetch available public coupon hints from store-data
+  // Fetch coupon hints
   useEffect(() => {
-    const ctrl = new AbortController()
-    fetch('/api/v1/store-data', { signal: ctrl.signal })
+    fetch('/api/v1/store-data')
       .then(async r => {
-        if (!r.ok || ctrl.signal.aborted) return
+        if (!r.ok) return
         const data = await r.json()
-        const coupons: any[] = data.coupons || []
-        // Only show coupons that are not expired and have uses remaining
-        const now = new Date()
-        const hints = coupons
-          .filter((c: any) => {
+        const now   = new Date()
+        const hints = (data.coupons || [])
+          .filter((c:any) => {
             if (c.expires_at && new Date(c.expires_at) < now) return false
-            if (c.max_uses && c.uses_count >= c.max_uses) return false
+            if (c.max_uses && c.uses_count >= c.max_uses)     return false
             return true
           })
           .slice(0, 3)
-          .map((c: any) => ({
+          .map((c:any) => ({
             code:  c.code,
             label: c.type === 'percent'
               ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
@@ -280,182 +208,105 @@ export default function CheckoutPage() {
         setCouponHints(hints)
       })
       .catch(() => {})
-    return () => ctrl.abort()
   }, [])
 
-  // Auto-switch payment if COD becomes unavailable after settings load
-  useEffect(() => {
-    if (payMethod === 'cod' && !codOk && razorpayEnabled) {
-      setPayMethod('razorpay')
-    }
-  }, [codOk, payMethod, razorpayEnabled])
-
-  // ── Field helpers ──
-
-  function setField(field: keyof OrderAddress, value: string) {
+  // Handlers
+  function setAddrField(field: keyof OrderAddress, value: string) {
     setAddr(prev => ({ ...prev, [field]: value }))
-    // Only deselect saved address when actual content fields change (not the label tag)
     if (field !== 'label') setSelectedSavedIdx(null)
   }
 
-  function touch(field: string) {
+  function touchField(field: string) {
     setTouched(prev => ({ ...prev, [field]: true }))
   }
 
-  function fieldErr(field: keyof OrderAddress): string {
-    if (!touched[field]) return ''
-    const val = addr[field]?.toString().trim()
-    if (!val) return 'Required'
-    if (field === 'phone'   && !/^[6-9]\d{9}$/.test(addr.phone))  return 'Invalid mobile number'
-    if (field === 'pincode' && !/^\d{6}$/.test(addr.pincode))      return 'Invalid 6-digit pincode'
-    return ''
-  }
-
-  // applySaved maps SavedAddress → OrderAddress.
-  // DB columns: addr→flat, pin→pincode, state via matchState() (handles short names)
-  // NOTE: saved_addresses table has NO 'area' field — leave blank for user to fill.
-  // applySaved maps a saved address row → OrderAddress form fields.
-  // Label buttons (Home/Office/Parents etc.) independently tag the address for THIS order.
-  // The saved.label is the stored label but user can change it via label buttons after selecting.
   function applySaved(saved: any, idx: number) {
-    // Map the saved label to a valid LABEL_OPTIONS value, fallback to 'Home'
-    const validLabels = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
-    const savedLabel  = validLabels.find(l => l === saved.label) || 'Home'
+    const validLabels = ['Home','Office','Parents','Friends','Others'] as const
+    const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
       ...prev,
       name:    saved.name  || prev.name,
       phone:   saved.phone || prev.phone,
       flat:    saved.addr  || saved.flat    || '',
-      area:    saved.area  || '',
+      area:    '',
       city:    saved.city  || '',
       state:   matchState(saved.state),
       pincode: saved.pin   || saved.pincode || '',
-      label:   savedLabel,                        // reflect the saved address label
+      label:   lbl,
     }))
     setSelectedSavedIdx(idx)
-    setTouched({ name: true, phone: true, flat: true, city: true, state: true, pincode: true })
+    setTouched({ name:true, phone:true, flat:true, city:true, state:true, pincode:true })
   }
 
-  // ── Coupon ──
   async function handleCoupon() {
     if (!couponCode.trim()) return
-    setCouponLoading(true)
-    setCouponError('')
+    setCouponLoading(true); setCouponError('')
     try {
       const res  = await fetch('/api/v1/coupons', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: couponCode.trim().toUpperCase(), subtotal: pricing.subtotal }),
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ code:couponCode.trim().toUpperCase(), subtotal:pricing.subtotal }),
       })
       const data = await res.json()
-      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); return }
-      applyCoupon(data.coupon)
-      setCouponCode('')
-    } catch {
-      setCouponError('Failed to apply coupon')
-    } finally {
-      setCouponLoading(false)
-    }
+      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); analytics.trackCouponError(couponCode, data.error || 'invalid'); return }
+      applyCoupon(data.coupon); setCouponCode('')
+      analytics.trackCouponApplied(data.coupon.code, data.coupon.discount)
+    } catch { setCouponError('Failed to apply coupon') }
+    finally  { setCouponLoading(false) }
   }
 
-  // ── Place order ──
   const handlePlace = useCallback(async () => {
-    const required = ['name', 'phone', 'flat', 'city', 'state', 'pincode'] as const  // area is optional
-
-    // Touch all required fields (merge, don't replace)
-    setTouched(prev => {
-      const next = { ...prev }
-      required.forEach(f => { next[f] = true })
-      return next
-    })
-
-    // Validate
-    const fieldLabels: Record<string, string> = {
-      name: 'Full Name', phone: 'Mobile Number', flat: 'Address',
-      city: 'City', state: 'State', pincode: 'Pincode',
+    const required = ['name','phone','flat','city','state','pincode'] as const
+    setTouched(prev => { const n={...prev}; required.forEach(f=>{n[f]=true}); return n })
+    const fieldLabels: Record<string,string> = {
+      name:'Full Name', phone:'Mobile Number', flat:'Address',
+      city:'City', state:'State', pincode:'Pincode',
     }
     for (const f of required) {
-      if (!addr[f]?.toString().trim()) {
-        setError(`Please fill in: ${fieldLabels[f]}`)
-        return
-      }
+      if (!addr[f]?.toString().trim()) { setError(`Please fill in: ${fieldLabels[f]}`); return }
     }
-    if (!/^[6-9]\d{9}$/.test(addr.phone)) {
-      setError('Please enter a valid 10-digit mobile number')
-      return
-    }
-    if (!/^\d{6}$/.test(addr.pincode)) {
-      setError('Please enter a valid 6-digit pincode')
-      return
-    }
+    if (!/^[6-9]\d{9}$/.test(addr.phone)) { setError('Enter a valid 10-digit mobile number'); return }
+    if (!/^\d{6}$/.test(addr.pincode))     { setError('Enter a valid 6-digit pincode'); return }
 
-    setError('')
-    setPlacing(true)
-
+    setError(''); setPlacing(true)
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
-
-      const payload = {
-        name:             addr.name,
-        phone:            addr.phone,
-        email:            email || user?.email || '',   // from own state, NOT addr.area
-        flat:             addr.flat,
-        area:             addr.area,
-        city:             addr.city,
-        state:            addr.state,
-        pincode:          addr.pincode,
-        label:            addr.label,
-        items:            items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
-        payment_method:   payMethod,
-        coupon_code:      coupon?.code,
-        idempotency_key:  orderKey,
+      const payload  = {
+        name:addr.name, phone:addr.phone, email:email||user?.email||'',
+        flat:addr.flat, area:addr.area, city:addr.city, state:addr.state,
+        pincode:addr.pincode, label:addr.label,
+        items: items.map(i => ({ productId:i.productId, variantId:i.variantId, qty:i.qty })),
+        payment_method:payMethod, coupon_code:coupon?.code, idempotency_key:orderKey,
       }
-
       if (payMethod === 'cod') {
         const res  = await fetch('/api/v1/orders', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload),
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(payload),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Order creation failed')
-        clearCart()
-        router.replace(`/order-success?id=${data.order_number}`)
-        // Do NOT setPlacing(false) — navigation is in progress
-
+        analytics.trackOrderPlaced(data.order_number, pricing.total, 'cod')
+        clearCart(); router.replace(`/order-success?id=${data.order_number}`)
       } else {
-        // Razorpay online payment
-        const RazorpayConstructor = (window as any).Razorpay
-        if (!RazorpayConstructor) {
-          throw new Error('Payment gateway not loaded. Please refresh and try again.')
-        }
-
+        const RZP = (window as any).Razorpay
+        if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
         const res  = await fetch('/api/v1/payments', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ ...payload, action: 'create_payment' }),
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ ...payload, action:'create_payment' }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
-
-        const rzp = new RazorpayConstructor({
-          key:         razorpayKeyId,
-          amount:      data.amount,
-          currency:    'INR',
-          name:        'Pahadi Roots',
-          description: 'Natural Himalayan Products',
-          order_id:    data.razorpay_order_id,
-          prefill:     { name: addr.name, email: email || user?.email || '', contact: addr.phone },
-          theme:       { color: '#1a3a1e' },
-          // Errors thrown inside this async callback are NOT caught by the outer try/catch.
-          // We wrap the handler body in its own try/catch.
+        const rzp = new RZP({
+          key:razorpayKeyId, amount:data.amount, currency:'INR',
+          name:'Pahadi Roots', description:'Natural Himalayan Products',
+          order_id:data.razorpay_order_id,
+          prefill:{ name:addr.name, email:email||user?.email||'', contact:addr.phone },
+          theme:{ color:'#1a3a1e' },
           handler: async (response: any) => {
             try {
               const verRes = await fetch('/api/v1/payments', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({
-                  action:              'verify_payment',
+                method:'POST', headers:{ 'Content-Type':'application/json' },
+                body: JSON.stringify({
+                  action:'verify_payment',
                   razorpay_order_id:   response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature:  response.razorpay_signature,
@@ -463,709 +314,195 @@ export default function CheckoutPage() {
                 }),
               })
               const verData = await verRes.json()
-              if (!verRes.ok) throw new Error(verData.error || 'Payment verification failed')
-              clearCart()
-              router.replace(`/order-success?id=${verData.order_number}`)
-            } catch (verErr: any) {
-              setError(verErr.message || 'Payment verification failed. Please contact support.')
-              setPlacing(false)
-            }
+              if (!verRes.ok) throw new Error(verData.error || 'Verification failed')
+              analytics.trackPaymentVerified(verData.order_number, pricing.total)
+              clearCart(); router.replace(`/order-success?id=${verData.order_number}`)
+            } catch (e:any) { setError(e.message || 'Verification failed. Contact support.'); setPlacing(false) }
           },
-          modal: {
-            ondismiss: () => setPlacing(false),
-          },
+          modal:{ ondismiss: () => setPlacing(false) },
         })
-
-        rzp.open()
-        return  // placing stays true until handler resolves or modal dismissed
+        analytics.trackPaymentInitiated(pricing.total)
+        rzp.open(); return
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.')
-      setPlacing(false)
-    }
-  }, [
-    addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey,
-    payMethod, user, clearCart, router, razorpayKeyId,
-  ])
+    } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
+  }, [addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
 
-  // ── Guard: render null while redirect fires ──
-  // Suppress render until hydrated — same pattern as ClientOnly in layout.tsx
-  if (!mounted) return (
-    <div style={{minHeight:'60vh',background:'#f5f0e8',display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{textAlign:'center',color:'#7a7565',fontSize:'13px',fontFamily:'sans-serif'}}>
-        <div style={{width:32,height:32,border:'3px solid #e2dbd0',borderTopColor:'#1a3a1e',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 12px'}} />
-        Loading checkout…
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      </div>
-    </div>
-  )
-
+  // ── Render guards ──────────────────────────────────────────────────────────
+  if (!mounted) return <CheckoutSkeleton />
   if (items.length === 0) return null
-
-  const savingsBadge = pricing.discount + pricing.prepaidDiscount
-  const bothPaymentsOff = !codOk && !razorpayEnabled
 
   return (
     <>
-      {/*
-        Razorpay script: Loaded here as a plain tag to keep it self-contained.
-        For production, move to root layout with next/script strategy="beforeInteractive".
-      */}
       <script src="https://checkout.razorpay.com/v1/checkout.js" async />
 
-      {/* ── Shipping ticker ─────────────────────────────── */}
-      {freeShipMin > 0 && (
-        <div className="cho-ship-tick">
-          {pricing.isFreeShipping
-            ? '🎉 Free shipping applied!'
-            : `🚚 Add ${formatPrice(pricing.remainingForFreeShip || 0)} more for free shipping`}
+      <ShippingProgress
+        subtotal={pricing.subtotal}
+        freeShipMin={freeShipMin}
+        isFreeShipping={pricing.isFreeShipping}
+        remainingForFreeShip={pricing.remainingForFreeShip}
+      />
+
+      {/* Progress steps */}
+      <div className="cop-steps">
+        <div className="cop-step cop-done"><span>✓</span> Cart</div>
+        <div className="cop-step-line cop-line-done" />
+        <div className="cop-step cop-active"><span>2</span> Checkout</div>
+        <div className="cop-step-line" />
+        <div className="cop-step"><span>3</span> Confirmation</div>
+      </div>
+
+      {bothPayOff && (
+        <div className="cop-blocked" role="alert">
+          ⚠ Checkout temporarily unavailable. Please contact support.
         </div>
       )}
 
-      {/* ── Progress steps ──────────────────────────────── */}
-      <div className="cho-steps">
-        <div className="cho-step cho-done"><span>✓</span> Cart</div>
-        <div className="cho-step-line cho-line-done" />
-        <div className="cho-step cho-active"><span>2</span> Checkout</div>
-        <div className="cho-step-line" />
-        <div className="cho-step"><span>3</span> Confirmation</div>
-      </div>
+      <div className="cop-layout">
+        {/* ── LEFT ── */}
+        <div className="cop-left">
 
-      {/* ── Both payments off — admin misconfiguration warning ── */}
-      {bothPaymentsOff && (
-        <div className="cho-pay-blocked" role="alert">
-          ⚠ Checkout is temporarily unavailable. Please contact support or try again later.
-        </div>
-      )}
-
-      <div className="cho-layout">
-
-        {/* ═══ LEFT ═══════════════════════════════════════ */}
-        <div className="cho-left">
-
-          {/* ── 1. Delivery Details ──────────────────────── */}
-          <div className="cho-card">
-            <div className="cho-card-head">
-              <div className="cho-num">1</div>
-              <h2 className="cho-card-title">Delivery Details</h2>
+          {/* Address card */}
+          <div className="cop-card">
+            <div className="cop-card-head">
+              <div className="cop-num">1</div>
+              <h2 className="cop-card-title">Delivery Details</h2>
             </div>
-
-            {/* Saved addresses */}
-            {savedAddrs.length > 0 && (
-              <div className="cho-saved-section">
-                <div className="cho-saved-label">📂 Saved Addresses</div>
-                <div className="cho-saved-list">
-                  {savedAddrs.map((a: any, i: number) => (
-                    <div
-                      key={`${i}-${a.label}`}
-                      className={`cho-saved-addr${selectedSavedIdx === i ? ' selected' : ''}`}
-                      onClick={() => applySaved(a, i)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && applySaved(a, i)}
-                    >
-                      <div className="cho-saved-check">{selectedSavedIdx === i ? '✓' : ''}</div>
-                      <div className="cho-saved-info">
-                        <div className="cho-saved-tag">{LABEL_ICONS[a.label] || '📍'} {a.label}</div>
-                        <div className="cho-saved-text">
-                          {[a.name, a.addr || a.flat, a.city,
-                            matchState(a.state), a.pin || a.pincode]
-                            .filter(Boolean).join(', ')}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Label picker — tags this delivery address (Home / Office / etc.)
-                Does NOT switch saved addresses. Click a saved address card above to switch. */}
-            <div className="cho-label-section">
-              <div className="cho-label-heading">Deliver to</div>
-              <div className="cho-label-row">
-                {LABEL_OPTIONS.map(lbl => (
-                  <button
-                    key={lbl}
-                    type="button"
-                    className={`cho-label-btn${addr.label === lbl ? ' active' : ''}`}
-                    onClick={() => setField('label', lbl)}
-                    aria-pressed={addr.label === lbl}
-                  >
-                    {LABEL_ICONS[lbl]} {lbl}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Form */}
-            <div className="cho-form">
-              <div className="cho-row">
-                {/* Name */}
-                <div className={`cho-field${fieldErr('name') ? ' err' : ''}`}>
-                  <label className="cho-lbl" htmlFor="cho-name">Full Name *</label>
-                  <input id="cho-name" className="cho-input" type="text"
-                    autoComplete="name" value={addr.name}
-                    onChange={e => setField('name', e.target.value)}
-                    onBlur={() => touch('name')} placeholder="Ravi Kumar"
-                  />
-                  {fieldErr('name') && <span className="cho-ferr" role="alert">{fieldErr('name')}</span>}
-                </div>
-
-                {/* Phone */}
-                <div className={`cho-field${fieldErr('phone') ? ' err' : ''}`}>
-                  <label className="cho-lbl" htmlFor="cho-phone">Mobile Number *</label>
-                  <div className="cho-phone-wrap">
-                    <span className="cho-phone-pre">+91</span>
-                    <input id="cho-phone" className="cho-input cho-phone-input"
-                      type="tel" autoComplete="tel-national" inputMode="numeric"
-                      value={addr.phone}
-                      onChange={e => setField('phone', e.target.value.replace(/\D/g, ''))}
-                      onBlur={() => touch('phone')} placeholder="9876543210" maxLength={10}
-                    />
-                  </div>
-                  {fieldErr('phone') && <span className="cho-ferr" role="alert">{fieldErr('phone')}</span>}
-                </div>
-              </div>
-
-              {/* Address */}
-              <div className={`cho-field cho-field-full${fieldErr('flat') ? ' err' : ''}`}>
-                <label className="cho-lbl" htmlFor="cho-flat">House / Flat, Street, Colony *</label>
-                <textarea id="cho-flat" className="cho-input cho-textarea"
-                  autoComplete="street-address" value={addr.flat}
-                  onChange={e => setField('flat', e.target.value)}
-                  onBlur={() => touch('flat')}
-                  placeholder="Flat 101, Shivalik Apartments, Civil Lines" rows={2}
-                />
-                {fieldErr('flat') && <span className="cho-ferr" role="alert">{fieldErr('flat')}</span>}
-              </div>
-
-              {/* Area / Landmark */}
-              <div className={`cho-field cho-field-full${fieldErr('area') ? ' err' : ''}`}>
-                <label className="cho-lbl" htmlFor="cho-area">Area / Landmark <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional)</span></label>
-                <input id="cho-area" className="cho-input" type="text"
-                  value={addr.area} onChange={e => setField('area', e.target.value)}
-                  onBlur={() => touch('area')} placeholder="Near ISBT, Rajpur Road"
-                />
-                {fieldErr('area') && <span className="cho-ferr" role="alert">{fieldErr('area')}</span>}
-              </div>
-
-              <div className="cho-row">
-                {/* City */}
-                <div className={`cho-field${fieldErr('city') ? ' err' : ''}`}>
-                  <label className="cho-lbl" htmlFor="cho-city">City *</label>
-                  <input id="cho-city" className="cho-input" type="text"
-                    autoComplete="address-level2" value={addr.city}
-                    onChange={e => setField('city', e.target.value)}
-                    onBlur={() => touch('city')} placeholder="Dehradun"
-                  />
-                  {fieldErr('city') && <span className="cho-ferr" role="alert">{fieldErr('city')}</span>}
-                </div>
-
-                {/* State */}
-                <div className="cho-field">
-                  <label className="cho-lbl" htmlFor="cho-state">State *</label>
-                  <select id="cho-state" className="cho-input"
-                    autoComplete="address-level1" value={addr.state}
-                    onChange={e => setField('state', e.target.value)}
-                  >
-                    {INDIA_STATES.map(st => <option key={st} value={st}>{st}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="cho-row">
-                {/* Pincode */}
-                <div className={`cho-field${fieldErr('pincode') ? ' err' : ''}`}>
-                  <label className="cho-lbl" htmlFor="cho-pincode">Pincode *</label>
-                  <input id="cho-pincode" className="cho-input" type="text"
-                    autoComplete="postal-code" inputMode="numeric"
-                    value={addr.pincode}
-                    onChange={e => setField('pincode', e.target.value.replace(/\D/g, ''))}
-                    onBlur={() => touch('pincode')} placeholder="248001" maxLength={6}
-                  />
-                  {fieldErr('pincode') && <span className="cho-ferr" role="alert">{fieldErr('pincode')}</span>}
-                </div>
-
-                {/* Email — separate state, NOT addr.area */}
-                <div className="cho-field">
-                  <label className="cho-lbl" htmlFor="cho-email">Email (optional, for invoice)</label>
-                  <input id="cho-email" className="cho-input" type="email"
-                    autoComplete="email" value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="you@email.com"
-                  />
-                </div>
-              </div>
-            </div>
+            <SavedAddressSelector
+              addresses={savedAddrs}
+              selectedIdx={selectedSavedIdx}
+              onSelect={applySaved}
+              indiaStates={INDIA_STATES}
+            />
+            <AddressForm
+              addr={addr}
+              email={email}
+              touched={touched}
+              onChange={setAddrField}
+              onEmailChange={setEmail}
+              onTouch={touchField}
+            />
           </div>
 
-          {/* ── 2. Payment Method ───────────────────────── */}
-          <div className="cho-card">
-            <div className="cho-card-head">
-              <div className="cho-num">2</div>
-              <h2 className="cho-card-title">Payment Method</h2>
+          {/* Payment card */}
+          <div className="cop-card">
+            <div className="cop-card-head">
+              <div className="cop-num">2</div>
+              <h2 className="cop-card-title">Payment Method</h2>
             </div>
-
-            <div className="cho-pay-opts">
-              {/* Razorpay / Online — shown if key is configured */}
-              {razorpayEnabled && (
-                <label className={`cho-pay-opt${payMethod === 'razorpay' ? ' active' : ''}`}>
-                  <input type="radio" name="pay" value="razorpay"
-                    checked={payMethod === 'razorpay'} onChange={() => setPayMethod('razorpay')}
-                  />
-                  <div className="cho-pay-body">
-                    <div className="cho-pay-title">
-                      Online Payment
-                      {prepaidPct > 0 && <span className="cho-pay-badge">Save {prepaidPct}%</span>}
-                    </div>
-                    <div className="cho-pay-logos-row">
-                      {/* UPI */}
-                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
-                        <text x="2" y="17" fontSize="11" fontWeight="800" fill="#7b1fa2">UPI</text>
-                      </svg>
-                      {/* Visa */}
-                      <svg className="cho-psvg cho-psvg-visa" viewBox="0 0 60 24">
-                        <rect width="60" height="24" rx="4" fill="#1A1F71"/>
-                        <text x="8" y="17" fontSize="13" fontWeight="800" fill="#fff" fontStyle="italic">VISA</text>
-                      </svg>
-                      {/* Mastercard */}
-                      <svg className="cho-psvg" viewBox="0 0 40 24">
-                        <circle cx="14" cy="12" r="10" fill="#EB001B"/>
-                        <circle cx="26" cy="12" r="10" fill="#F79E1B"/>
-                        <path d="M20 5.3a10 10 0 0 1 0 13.4A10 10 0 0 1 20 5.3z" fill="#FF5F00"/>
-                      </svg>
-                      {/* RuPay */}
-                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
-                        <rect width="60" height="24" rx="4" fill="#0f7b3e"/>
-                        <text x="5" y="17" fontSize="10" fontWeight="800" fill="#fff">RuPay</text>
-                      </svg>
-                      {/* GPay */}
-                      <svg className="cho-psvg" viewBox="0 0 60 24" fill="none">
-                        <text x="3" y="17" fontSize="11" fontWeight="700" fill="#4285F4">G</text>
-                        <text x="14" y="17" fontSize="11" fontWeight="700" fill="#333">Pay</text>
-                      </svg>
-                    </div>
-                    {payMethod === 'razorpay' && pricing.prepaidDiscount > 0 && (
-                      <div className="cho-pay-disc">
-                        🎉 Extra {formatPrice(pricing.prepaidDiscount)} off applied!
-                      </div>
-                    )}
-                  </div>
-                </label>
-              )}
-
-              {/* COD — shown only when admin has it ON and order is within limit */}
-              {codOk && (
-                <label className={`cho-pay-opt${payMethod === 'cod' ? ' active' : ''}`}>
-                  <input type="radio" name="pay" value="cod"
-                    checked={payMethod === 'cod'} onChange={() => setPayMethod('cod')}
-                  />
-                  <div className="cho-pay-body">
-                    <div className="cho-pay-title">💵 Cash on Delivery</div>
-                    <div className="cho-pay-sub">Pay in cash when your order arrives</div>
-                  </div>
-                </label>
-              )}
-
-              {/* COD unavailable — explain WHY (per audit) */}
-              {!codOk && codEnabled && (
-                <div className="cho-cod-off">
-                  <span>💵 Cash on Delivery</span>
-                  <span className="cho-cod-reason">
-                    {pricing.total > codMax
-                      ? `COD unavailable for orders above ₹${codMax}`
-                      : 'COD unavailable for your order'}
-                  </span>
-                </div>
-              )}
-
-              {/* COD fully disabled by admin */}
-              {!codEnabled && (
-                <div className="cho-cod-off">
-                  <span>💵 Cash on Delivery</span>
-                  <span className="cho-cod-reason">Currently unavailable</span>
-                </div>
-              )}
-            </div>
-
-            <div className="cho-seals">
-              <span>🔒 SSL Encrypted</span>
-              <span>🏦 Razorpay Secured</span>
-              <span>✅ PCI-DSS</span>
-              <span>🇮🇳 Made for India</span>
-            </div>
+            <PaymentSection
+              payMethod={payMethod}
+              onChange={setPayMethod}
+              razorpayEnabled={razorpayEnabled}
+              codOk={codOk}
+              codEnabled={codEnabled}
+              prepaidPct={prepaidPct}
+              prepaidDiscount={pricing.prepaidDiscount}
+              codMax={codMax}
+              total={pricing.total}
+            />
           </div>
 
-          {/* ── Delivery Promise ────────────────────────── */}
-          <div className="cho-card cho-promise-card">
-            <div className="cho-promise-grid">
-              <div className="cho-promise-item">🚚 Delivered in 3–5 working days</div>
-              <div className="cho-promise-item">🔄 7-day easy returns</div>
-              <div className="cho-promise-item">🌿 100% authentic Pahadi products</div>
-              <div className="cho-promise-item">📞 WhatsApp support available</div>
+          {/* Delivery promise */}
+          <div className="cop-card cop-promise">
+            <div className="cop-promise-grid">
+              <div className="cop-promise-item">🚚 Delivered in 3–5 working days</div>
+              <div className="cop-promise-item">🔄 7-day easy returns</div>
+              <div className="cop-promise-item">🌿 100% authentic Pahadi products</div>
+              <div className="cop-promise-item">📞 WhatsApp support available</div>
             </div>
           </div>
         </div>
 
-        {/* ═══ RIGHT — Order Summary ═══════════════════════ */}
-        <div className="cho-right">
-          <div className="cho-summary">
-
-            {/* Mobile accordion toggle */}
-            <button
-              className="cho-sum-toggle"
-              onClick={() => setSummaryOpen(o => !o)}
-              aria-expanded={summaryOpen}
-              type="button"
-            >
-              <span>🧾 Order Summary ({items.length} item{items.length > 1 ? 's' : ''})</span>
-              <span>{summaryOpen ? '▲' : '▼'} {formatPrice(pricing.total)}</span>
-            </button>
-
-            <div className={`cho-sum-body${summaryOpen ? ' open' : ''}`}>
-
-              {/* Items list */}
-              <div className="cho-sum-items">
-                {items.map(item => (
-                  <div key={item.variantId} className="cho-sum-item">
-                    {/* position:relative required for next/image fill */}
-                    <div className="cho-sum-img">
-                      {item.image
-                        ? <Image src={item.image} alt={item.name} fill sizes="52px"
-                            style={{ objectFit: 'cover', borderRadius: '8px' }} />
-                        : <span style={{ fontSize: '22px' }}>{item.emoji || '🌿'}</span>}
-                      <span className="cho-sum-qty">{item.qty}</span>
-                    </div>
-                    <div className="cho-sum-info">
-                      <div className="cho-sum-name">{item.name}</div>
-                      {item.size && <div className="cho-sum-size">{item.size}</div>}
-                    </div>
-                    <div className="cho-sum-price">{formatPrice(item.price * item.qty)}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Coupon */}
-              <div className="cho-coupon-wrap">
-                {coupon ? (
-                  <div className="cho-coupon-applied">
-                    <span>🎉 <strong>{coupon.code}</strong> — {formatPrice(coupon.discount)} off</span>
-                    <button className="cho-coupon-rm" onClick={removeCoupon} type="button" aria-label="Remove coupon">✕</button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="cho-coupon-row">
-                      <input className="cho-coupon-input" type="text"
-                        value={couponCode}
-                        onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                        onKeyDown={e => e.key === 'Enter' && handleCoupon()}
-                        placeholder="Coupon code" aria-label="Coupon code"
-                      />
-                      <button className="cho-coupon-btn" onClick={handleCoupon}
-                        disabled={couponLoading} type="button">
-                        {couponLoading ? '...' : 'Apply'}
-                      </button>
-                    </div>
-                    {couponError && <p className="cho-coupon-err" role="alert">⚠ {couponError}</p>}
-                    {couponHints.length > 0 && !coupon && (
-                      <div className="cho-coupon-hints">
-                        <button
-                          className="cho-hints-toggle"
-                          onClick={() => setShowHints(v => !v)}
-                          type="button"
-                        >
-                          🎟 {showHints ? 'Hide' : 'View'} available offers
-                        </button>
-                        {showHints && (
-                          <div className="cho-hints-list">
-                            {couponHints.map(h => (
-                              <button
-                                key={h.code}
-                                className="cho-hint-chip"
-                                type="button"
-                                onClick={() => {
-                                  setCouponCode(h.code)
-                                  setShowHints(false)
-                                }}
-                              >
-                                <span className="cho-hint-code">{h.code}</span>
-                                <span className="cho-hint-label">{h.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Price breakdown — uses exact PriceSummary fields */}
-              <div className="cho-prices">
-                <div className="cho-pr-row"><span>Subtotal</span><span>{formatPrice(pricing.subtotal)}</span></div>
-                {coupon && pricing.discount > 0 && (
-                  <div className="cho-pr-row cho-g"><span>Coupon ({coupon.code})</span><span>−{formatPrice(pricing.discount)}</span></div>
-                )}
-                {pricing.prepaidDiscount > 0 && (
-                  <div className="cho-pr-row cho-g"><span>Prepaid discount ({prepaidPct}%)</span><span>−{formatPrice(pricing.prepaidDiscount)}</span></div>
-                )}
-                <div className="cho-pr-row">
-                  <span>Shipping</span>
-                  <span className={pricing.isFreeShipping ? 'cho-free' : ''}>
-                    {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
-                  </span>
-                </div>
-                {pricing.gstTotal > 0 && (
-                  <div className="cho-pr-row cho-sm"><span>GST @{items[0]?.gstRate || 5}% (inclusive)</span><span>₹{pricing.gstTotal}</span></div>
-                )}
-                <div className="cho-pr-divider" />
-                <div className="cho-pr-total"><span>Total</span><span>{formatPrice(pricing.total)}</span></div>
-                {savingsBadge > 0 && (
-                  <div className="cho-saving-pill">
-                    🏷 You're saving {formatPrice(savingsBadge)} on this order!
-                  </div>
-                )}
-
-                {/* Loyalty points — controlled by admin Loyalty tab in settings.
-                    Keys: loyalty_enabled, loyalty_points_per_rupee, loyalty_points_label
-                    All three must be set via admin → Settings → Loyalty.
-                    Defaults: disabled (hidden unless admin explicitly enables). */}
-                {s.loyalty_enabled === 'true' && pricing.total > 0 && (() => {
-                  const rate  = parseFloat(s.loyalty_points_per_rupee || '0.1')
-                  const label = s.loyalty_points_label || 'reward points'
-                  const pts   = Math.floor(pricing.total * rate)
-                  return pts > 0 ? (
-                    <div className="cho-loyalty-pill">
-                      ⭐ You'll earn <strong>{pts} {label}</strong> on this order
-                    </div>
-                  ) : null
-                })()}
-              </div>
-            </div>
-
-            {/* Min order warning — enforced by admin min_order_amount setting */}
-            {belowMinOrder && (
-              <div className="cho-error" role="alert">
-                🛒 Minimum order amount is {formatPrice(minOrderAmt)}. Add{' '}
-                <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more to continue.
-              </div>
-            )}
-
-            {/* Error */}
-            {error && <div className="cho-error" role="alert">⚠ {error}</div>}
-
-            {/* Place Order CTA */}
-            <button
-              className="cho-cta"
-              onClick={handlePlace}
-              disabled={placing || bothPaymentsOff || belowMinOrder}
-              type="button"
-              aria-busy={placing}
-            >
-              {placing ? (
-                <span>⏳ Placing Order…</span>
-              ) : payMethod === 'razorpay' ? (
-                <><span>⚡</span><span>Pay Securely</span><span className="cho-cta-amt">{formatPrice(pricing.total)}</span></>
-              ) : (
-                <><span>🛒</span><span>Place COD Order</span><span className="cho-cta-amt">{formatPrice(pricing.total)}</span></>
-              )}
-            </button>
-
-            <div className="cho-secure-note">🔒 100% Secure & Encrypted Checkout</div>
-
-            <div className="cho-delivery-note">
-              {(() => {
-                // ETA: orders placed before 2pm ship same day, else next day
-                const now = new Date()
-                const cutoffHour = 14  // 2pm IST cutoff for same-day dispatch
-                const istHour = (now.getUTCHours() + 5) % 24  // IST = UTC+5:30
-                const dispatchDays = istHour < cutoffHour ? 0 : 1
-                const minDays = dispatchDays + 3
-                const maxDays = dispatchDays + 5
-                const etaMin = new Date(now); etaMin.setDate(now.getDate() + minDays)
-                const etaMax = new Date(now); etaMax.setDate(now.getDate() + maxDays)
-                const fmt = (d: Date) => d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })
-                return (
-                  <span>🚚 Delivery by <strong>{fmt(etaMin)}–{fmt(etaMax)}</strong>
-                    {istHour < cutoffHour
-                      ? ' · Order in time for today's dispatch!'
-                      : ' · Order now for tomorrow's dispatch'}
-                  </span>
-                )
-              })()}
-            </div>
-          </div>
+        {/* ── RIGHT ── */}
+        <div className="cop-right">
+          <OrderSummary
+            items={items}
+            pricing={pricing}
+            coupon={coupon}
+            settings={s}
+            couponCode={couponCode}
+            couponLoading={couponLoading}
+            couponError={couponError}
+            couponHints={couponHints}
+            onCouponCodeChange={setCouponCode}
+            onApplyCoupon={handleCoupon}
+            onRemoveCoupon={removeCoupon}
+            error={error}
+            placing={placing}
+            bothPaymentsOff={bothPayOff}
+            belowMinOrder={belowMinOrder}
+            minOrderAmt={minOrderAmt}
+            onPlaceOrder={handlePlace}
+            payMethod={payMethod}
+            summaryOpen={summaryOpen}
+            onToggleSummary={() => setSummaryOpen(o => !o)}
+          />
         </div>
       </div>
 
-      {/* ── Mobile sticky CTA ───────────────────────────── */}
-      <div className="cho-sticky" aria-hidden="true">
+      {/* Mobile sticky CTA */}
+      <div className="cop-sticky" aria-hidden="true">
         <div>
-          <div className="cho-sticky-total">{formatPrice(pricing.total)}</div>
-          <div className="cho-sticky-sub">Incl. taxes & shipping</div>
+          <div className="cop-sticky-total">{formatPrice(pricing.total)}</div>
+          <div className="cop-sticky-sub">Incl. taxes & shipping</div>
         </div>
-        <button className="cho-sticky-btn" onClick={handlePlace}
-          disabled={placing || bothPaymentsOff || belowMinOrder} type="button">
+        <button className="cop-sticky-btn" onClick={handlePlace}
+          disabled={placing || bothPayOff || belowMinOrder} type="button">
           {placing ? '⏳ Processing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : '🛒 Place Order'}
         </button>
       </div>
 
-      <style>{CHO_CSS}</style>
+      <style>{`
+        .cop-steps{display:flex;align-items:center;justify-content:center;padding:13px 16px;
+          background:#fff;border-bottom:1px solid #e2dbd0;font-family:inherit;}
+        .cop-step{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#bbb;}
+        .cop-step span{width:22px;height:22px;border-radius:50%;background:#eee;
+          display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+        .cop-active{color:#1a3a1e;}.cop-active span{background:#1a3a1e;color:#fff;}
+        .cop-done{color:#2d5233;}.cop-done span{background:#e8f5e9;color:#2d5233;}
+        .cop-step-line{width:44px;height:2px;background:#e8e8e8;margin:0 8px;}
+        .cop-line-done{background:#e8f5e9;}
+        .cop-blocked{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;
+          font-size:13px;font-weight:600;padding:12px 20px;text-align:center;}
+        .cop-layout{display:grid;grid-template-columns:1fr 390px;gap:0;
+          max-width:1380px;margin:0 auto;background:#f5f0e8;
+          align-items:start;min-height:calc(100vh - 120px);}
+        @media(max-width:960px){.cop-layout{grid-template-columns:1fr;padding-bottom:76px;}}
+        .cop-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
+        @media(max-width:640px){.cop-left{padding:16px;}}
+        .cop-card{background:#fff;border-radius:14px;
+          box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);
+          border:1px solid #e2dbd0;overflow:hidden;}
+        .cop-card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;
+          border-bottom:1px solid #f5f0e8;}
+        .cop-num{width:27px;height:27px;border-radius:50%;background:#1a3a1e;
+          color:#fff;display:flex;align-items:center;justify-content:center;
+          font-size:13px;font-weight:700;flex-shrink:0;}
+        .cop-card-title{font-size:17px;font-weight:700;color:#1a1a1a;margin:0;
+          font-family:var(--font-playfair,'Playfair Display',serif);}
+        .cop-promise{padding:0;}
+        .cop-promise-grid{display:grid;grid-template-columns:1fr 1fr;}
+        .cop-promise-item{padding:13px 17px;font-size:12px;font-weight:600;color:#7a7565;
+          border-right:1px solid #f5f0e8;border-bottom:1px solid #f5f0e8;}
+        .cop-promise-item:nth-child(2n){border-right:none;}
+        .cop-promise-item:nth-child(3),.cop-promise-item:nth-child(4){border-bottom:none;}
+        .cop-right{background:#fff;border-left:1px solid #e2dbd0;
+          position:sticky;top:134px;max-height:calc(100vh - 134px);overflow-y:auto;}
+        @media(max-width:960px){.cop-right{position:static;border-left:none;
+          border-top:1px solid #e2dbd0;max-height:none;}}
+        .cop-sticky{display:none;position:fixed;bottom:0;left:0;right:0;
+          background:#fff;border-top:2px solid #e2dbd0;padding:10px 16px;
+          z-index:250;align-items:center;justify-content:space-between;gap:12px;
+          box-shadow:0 -4px 16px rgba(0,0,0,.08);}
+        @media(max-width:960px){.cop-sticky{display:flex;}}
+        .cop-sticky-total{font-size:17px;font-weight:700;color:#1a1a1a;font-family:inherit;}
+        .cop-sticky-sub{font-size:11px;color:#7a7565;font-family:inherit;}
+        .cop-sticky-btn{background:linear-gradient(135deg,#1a3a1e,#2d5233);
+          color:#fff;border:none;padding:12px 20px;border-radius:11px;
+          font-weight:700;font-size:14px;white-space:nowrap;cursor:pointer;
+          font-family:inherit;box-shadow:0 4px 10px rgba(26,58,30,.28);}
+        .cop-sticky-btn:disabled{opacity:.6;cursor:not-allowed;}
+      `}</style>
     </>
   )
 }
-
-// ─── CSS — references layout.tsx font vars, no @import needed ─────────────────
-const CHO_CSS = `
-:root{
-  --forest:#1a3a1e;--forest-mid:#2d5233;--forest-lt:#e8f5e9;
-  --earth:#c8920a;--stone:#f5f0e8;--stone-mid:#ede8df;
-  --white:#fff;--ink:#1a1a1a;--muted:#7a7565;--border:#e2dbd0;
-  --r:14px;--sh:0 2px 10px rgba(0,0,0,.07);
-}
-/* Ship tick */
-.cho-ship-tick{background:var(--forest-mid);color:rgba(255,255,255,.9);text-align:center;padding:8px 16px;font-size:13px;}
-/* Steps */
-.cho-steps{display:flex;align-items:center;justify-content:center;padding:13px 16px;background:var(--white);border-bottom:1px solid var(--border);}
-.cho-step{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#bbb;}
-.cho-step span{width:22px;height:22px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
-.cho-active{color:var(--forest);}.cho-active span{background:var(--forest);color:#fff;}
-.cho-done{color:var(--forest-mid);}.cho-done span{background:var(--forest-lt);color:var(--forest-mid);}
-.cho-step-line{width:44px;height:2px;background:#e8e8e8;margin:0 8px;}.cho-line-done{background:var(--forest-lt);}
-/* Payment blocked banner */
-.cho-pay-blocked{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;font-size:13px;font-weight:600;padding:12px 20px;text-align:center;}
-/* Layout */
-.cho-layout{display:grid;grid-template-columns:1fr 390px;gap:0;max-width:1380px;margin:0 auto;background:var(--stone);align-items:start;min-height:calc(100vh - 140px);}
-@media(max-width:960px){.cho-layout{grid-template-columns:1fr;padding-bottom:76px;}}
-.cho-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
-@media(max-width:640px){.cho-left{padding:16px;}}
-/* Cards */
-.cho-card{background:var(--white);border-radius:var(--r);box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);border:1px solid var(--border);overflow:hidden;transition:box-shadow .2s;}
-.cho-card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--stone-mid);}
-.cho-num{width:27px;height:27px;border-radius:50%;background:var(--forest);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;}
-.cho-card-title{font-family:var(--font-playfair,'Playfair Display',serif);font-size:17px;font-weight:700;color:var(--ink);margin:0;}
-/* Saved addresses */
-.cho-saved-section{padding:14px 20px 0;}
-.cho-saved-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
-.cho-saved-list{display:flex;flex-direction:column;gap:7px;margin-bottom:10px;}
-.cho-saved-addr{display:flex;align-items:flex-start;gap:10px;padding:9px 13px;border:1.5px solid var(--border);border-radius:11px;cursor:pointer;transition:all .2s;background:#fafaf8;}
-.cho-saved-addr:hover,.cho-saved-addr:focus{border-color:var(--forest);background:var(--forest-lt);outline:none;}
-.cho-saved-addr.selected{border-color:var(--forest);background:var(--forest-lt);}
-.cho-saved-check{width:19px;height:19px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;transition:all .2s;}
-.cho-saved-addr.selected .cho-saved-check{background:var(--forest);color:#fff;}
-.cho-saved-tag{font-size:12px;font-weight:700;color:var(--forest);}
-.cho-saved-text{font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:2px;}
-/* Label buttons */
-.cho-label-section{padding:12px 20px 0;}
-.cho-label-heading{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
-.cho-label-row{display:flex;gap:7px;flex-wrap:wrap;}
-.cho-label-btn{border:1.5px solid var(--border);background:var(--stone);color:var(--muted);font-size:12px;font-weight:600;padding:5px 13px;border-radius:20px;cursor:pointer;transition:all .2s;}
-.cho-label-btn:hover{border-color:var(--forest);color:var(--forest);}
-.cho-label-btn.active{border-color:var(--forest);background:var(--forest-lt);color:var(--forest);}
-/* Form */
-.cho-form{padding:14px 20px;display:flex;flex-direction:column;gap:12px;}
-.cho-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-@media(max-width:580px){.cho-row{grid-template-columns:1fr;}}
-.cho-field{display:flex;flex-direction:column;gap:4px;}
-.cho-field-full{grid-column:1/-1;}
-.cho-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;}
-.cho-input{padding:11px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--ink);outline:none;transition:all .2s;background:var(--white);width:100%;box-sizing:border-box;font-family:inherit;}
-.cho-input:focus{border-color:var(--forest);box-shadow:0 0 0 3px rgba(26,58,30,.07);}
-.cho-field.err .cho-input,.cho-field.err .cho-phone-wrap{border-color:#c0392b !important;}
-.cho-ferr{font-size:11px;color:#c0392b;}
-.cho-textarea{resize:vertical;min-height:66px;}
-.cho-phone-wrap{display:flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;transition:all .2s;}
-.cho-phone-wrap:focus-within{border-color:var(--forest);box-shadow:0 0 0 3px rgba(26,58,30,.07);}
-.cho-phone-pre{background:var(--stone);padding:11px 11px;font-size:13px;font-weight:700;color:var(--muted);border-right:1px solid var(--border);white-space:nowrap;display:flex;align-items:center;}
-.cho-phone-input{border:none !important;box-shadow:none !important;border-radius:0 !important;flex:1;min-width:0;}
-/* Payment options */
-.cho-pay-opts{padding:14px 20px;display:flex;flex-direction:column;gap:10px;}
-.cho-pay-opt{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:all .2s;background:#fafaf8;}
-.cho-pay-opt:hover{border-color:var(--forest);background:var(--forest-lt);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.06);}
-.cho-pay-opt.active{border-color:var(--forest);background:var(--forest-lt);}
-.cho-pay-opt input[type=radio]{accent-color:var(--forest);width:16px;height:16px;flex-shrink:0;margin-top:2px;cursor:pointer;}
-.cho-pay-body{flex:1;}
-.cho-pay-title{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
-.cho-pay-badge{background:var(--forest);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
-.cho-pay-logos-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-.cho-psvg{height:22px;border-radius:4px;border:1px solid rgba(0,0,0,.08);background:#fff;padding:2px 4px;}
-.cho-psvg-visa{background:#1A1F71;}
-.cho-pl{font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;}
-.cho-pl.upi{background:#7b1fa2;color:#fff;}.cho-pl.cards{background:#1565c0;color:#fff;}
-.cho-pl.nb{background:#e65100;color:#fff;}.cho-pl.gpay{background:#4285f4;color:#fff;}
-.cho-pl.phone{background:#5f259f;color:#fff;}
-.cho-pay-sub{font-size:12px;color:var(--muted);margin-top:4px;}
-.cho-pay-disc{font-size:12px;color:#2d6a4f;font-weight:700;background:#e8f5e9;padding:4px 10px;border-radius:6px;margin-top:7px;display:inline-block;}
-.cho-cod-off{padding:13px 15px;background:#f5f5f5;border:1px solid #e8e8e8;border-radius:12px;font-size:13px;color:#bbb;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;}
-.cho-cod-reason{font-size:11px;color:#c0392b;font-weight:600;}
-.cho-seals{display:flex;gap:10px;flex-wrap:wrap;padding:10px 20px;background:var(--stone);border-top:1px solid var(--stone-mid);font-size:11px;color:var(--muted);}
-/* Promise */
-.cho-promise-card{padding:0;}
-.cho-promise-grid{display:grid;grid-template-columns:1fr 1fr;}
-.cho-promise-item{padding:13px 17px;font-size:12px;font-weight:600;color:var(--muted);border-right:1px solid var(--stone-mid);border-bottom:1px solid var(--stone-mid);}
-.cho-promise-item:nth-child(2n){border-right:none;}
-.cho-promise-item:nth-child(3),.cho-promise-item:nth-child(4){border-bottom:none;}
-/* Right panel */
-.cho-right{
-  background:var(--white);border-left:1px solid var(--border);
-  position:sticky;top:134px;max-height:calc(100vh - 134px);overflow-y:auto;
-}
-@media(max-width:960px){.cho-right{position:static;border-left:none;border-top:1px solid var(--border);max-height:none;}}
-.cho-summary{padding:18px 22px;display:flex;flex-direction:column;gap:13px;}
-/* Mobile summary toggle */
-.cho-sum-toggle{display:none;width:100%;background:none;border:none;padding:0;cursor:pointer;font-size:13px;font-weight:700;color:var(--ink);justify-content:space-between;align-items:center;font-family:inherit;}
-@media(max-width:960px){.cho-sum-toggle{display:flex;}.cho-sum-body{display:none;}.cho-sum-body.open{display:block;}}
-/* Summary items */
-.cho-sum-items{display:flex;flex-direction:column;gap:9px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--stone-mid);}
-.cho-sum-item{display:flex;align-items:center;gap:9px;}
-/* position:relative for next/image fill */
-.cho-sum-img{width:50px;height:50px;border-radius:8px;overflow:hidden;background:var(--stone);position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.cho-sum-qty{position:absolute;top:-4px;right:-4px;width:17px;height:17px;background:var(--forest);color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
-.cho-sum-info{flex:1;min-width:0;}
-.cho-sum-name{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cho-sum-size{font-size:11px;color:var(--muted);}
-.cho-sum-price{font-family:var(--font-playfair,'Playfair Display',serif);font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;}
-/* Coupon */
-.cho-coupon-wrap{margin-bottom:2px;}
-.cho-coupon-row{display:flex;gap:7px;}
-.cho-coupon-input{flex:1;border:1.5px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-weight:600;outline:none;transition:border-color .2s;min-width:0;font-family:inherit;}
-.cho-coupon-input:focus{border-color:var(--forest);}
-.cho-coupon-btn{background:var(--forest);color:#fff;border:none;padding:9px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
-.cho-coupon-btn:disabled{opacity:.6;cursor:not-allowed;}
-.cho-coupon-applied{background:var(--forest-lt);border:1px solid #c8e6c9;border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#2d6a4f;font-weight:600;gap:7px;}
-.cho-coupon-rm{background:none;border:none;color:#888;font-size:15px;cursor:pointer;padding:0;}
-.cho-coupon-err{font-size:11px;color:#c0392b;margin-top:3px;}
-/* Prices */
-.cho-prices{display:flex;flex-direction:column;gap:8px;}
-.cho-pr-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);}
-.cho-g{color:#2d6a4f;font-weight:700;}.cho-free{color:#2d6a4f;font-weight:700;}.cho-sm{font-size:11px;color:#bbb;}
-.cho-pr-divider{height:1px;background:var(--border);margin:4px 0;}
-.cho-pr-total{display:flex;justify-content:space-between;align-items:center;font-family:var(--font-playfair,'Playfair Display',serif);font-size:20px;font-weight:700;color:var(--ink);}
-.cho-saving-pill{background:var(--forest-lt);border:1px solid #c8e6c9;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:700;color:#2d6a4f;text-align:center;}
-.cho-loyalty-pill{background:#fdf6e3;border:1px solid #f0d080;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5a00;text-align:center;}
-.cho-coupon-hints{margin-top:8px;}
-.cho-hints-toggle{background:none;border:none;font-size:11px;color:var(--forest);font-weight:700;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;}
-.cho-hints-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
-.cho-hint-chip{display:flex;align-items:center;justify-content:space-between;background:var(--stone);border:1.5px dashed var(--border);border-radius:8px;padding:8px 11px;cursor:pointer;transition:all .15s;text-align:left;font-family:inherit;width:100%;}
-.cho-hint-chip:hover{border-color:var(--forest);background:var(--forest-lt);}
-.cho-hint-code{font-size:12px;font-weight:800;color:var(--forest);letter-spacing:.5px;}
-.cho-hint-label{font-size:11px;color:var(--muted);}
-/* Error */
-.cho-error{background:#fdecea;border:1px solid #f5c6cb;border-radius:10px;padding:10px 13px;font-size:13px;color:#c0392b;font-weight:600;}
-/* CTA */
-.cho-cta{width:100%;padding:15px 18px;background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;border-radius:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(26,58,30,.32);transition:all .28s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden;}
-.cho-cta:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 28px rgba(26,58,30,.44);}
-.cho-cta:disabled{opacity:.6;cursor:not-allowed;transform:none;}
-.cho-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;border-radius:20px;font-size:14px;font-weight:800;}
-.cho-secure-note{text-align:center;font-size:11px;color:var(--muted);}
-.cho-delivery-note{font-size:12px;color:var(--muted);background:var(--stone);padding:9px 12px;border-radius:8px;line-height:1.5;}
-/* Mobile sticky */
-.cho-sticky{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--border);padding:10px 16px;z-index:250;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -4px 16px rgba(0,0,0,.08);}
-@media(max-width:960px){.cho-sticky{display:flex;}}
-.cho-sticky-total{font-family:var(--font-playfair,'Playfair Display',serif);font-size:17px;font-weight:700;color:var(--ink);}
-.cho-sticky-sub{font-size:11px;color:var(--muted);}
-.cho-sticky-btn{background:linear-gradient(135deg,var(--forest),var(--forest-mid));color:#fff;border:none;padding:12px 20px;border-radius:11px;font-weight:700;font-size:14px;white-space:nowrap;cursor:pointer;font-family:inherit;}
-.cho-sticky-btn:disabled{opacity:.6;cursor:not-allowed;}
-@media(max-width:640px){.cho-form{padding:12px 16px;}.cho-row{grid-template-columns:1fr;}.cho-summary{padding:14px 16px;}}
-`
