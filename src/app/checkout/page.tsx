@@ -380,6 +380,7 @@ export default function CheckoutPage() {
               onChange={setAddrField}
               onEmailChange={setEmail}
               onTouch={touchField}
+              selectedSavedIdx={selectedSavedIdx}
             />
           </div>
 
@@ -466,8 +467,10 @@ export default function CheckoutPage() {
           font-size:13px;font-weight:600;padding:12px 20px;text-align:center;}
         .cop-layout{display:grid;grid-template-columns:1fr 390px;gap:0;
           max-width:1380px;margin:0 auto;background:#f5f0e8;
-          align-items:start;min-height:calc(100vh - 120px);}
-        @media(max-width:960px){.cop-layout{grid-template-columns:1fr;padding-bottom:76px;}}
+          align-items:start;min-height:calc(100vh - 120px);
+          overflow:hidden;}  /* prevent right-side bleed on narrow viewports */
+        @media(max-width:1100px){.cop-layout{grid-template-columns:1fr 340px;}}
+        @media(max-width:960px){.cop-layout{grid-template-columns:1fr;padding-bottom:76px;overflow:visible;}}
         .cop-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
         @media(max-width:640px){.cop-left{padding:16px;}}
         .cop-card{background:#fff;border-radius:14px;
@@ -487,9 +490,11 @@ export default function CheckoutPage() {
         .cop-promise-item:nth-child(2n){border-right:none;}
         .cop-promise-item:nth-child(3),.cop-promise-item:nth-child(4){border-bottom:none;}
         .cop-right{background:#fff;border-left:1px solid #e2dbd0;
-          position:sticky;top:134px;max-height:calc(100vh - 134px);overflow-y:auto;}
+          position:sticky;top:134px;max-height:calc(100vh - 134px);
+          overflow-y:auto;overflow-x:hidden;  /* prevent horizontal bleed */
+          width:100%;min-width:0;}  /* respect grid column, don't overflow */
         @media(max-width:960px){.cop-right{position:static;border-left:none;
-          border-top:1px solid #e2dbd0;max-height:none;}}
+          border-top:1px solid #e2dbd0;max-height:none;width:auto;}}
         .cop-sticky{display:none;position:fixed;bottom:0;left:0;right:0;
           background:#fff;border-top:2px solid #e2dbd0;padding:10px 16px;
           z-index:250;align-items:center;justify-content:space-between;gap:12px;

@@ -44,9 +44,12 @@ interface Props {
   onChange: (field: keyof OrderAddress, value: string) => void
   onEmailChange: (v: string) => void
   onTouch: (field: string) => void
+  // When a saved address is selected, label buttons are hidden (label comes from saved addr)
+  // When null, user is entering a new address and can pick a label tag
+  selectedSavedIdx: number | null
 }
 
-export default function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch }: Props) {
+export default function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx }: Props) {
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeMsg,     setPincodeMsg]     = useState('')
 
@@ -82,23 +85,35 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
 
   return (
     <div className="af-wrap">
-      {/* Address label selector */}
-      <div className="af-label-section">
-        <div className="af-label-heading">Deliver to</div>
-        <div className="af-label-row">
-          {LABEL_OPTIONS.map(lbl => (
-            <button
-              key={lbl}
-              type="button"
-              className={`af-label-btn${addr.label === lbl ? ' active' : ''}`}
-              onClick={() => onChange('label', lbl)}
-              aria-pressed={addr.label === lbl}
-            >
-              {LABEL_ICONS[lbl]} {lbl}
-            </button>
-          ))}
+      {/* Address label selector — only shown when typing a NEW address.
+          When a saved address card is selected, the label comes from that card.
+          This prevents the confusing state where "Office" button appears active
+          while "Home" saved address card is selected. */}
+      {selectedSavedIdx === null && (
+        <div className="af-label-section">
+          <div className="af-label-heading">Tag this address as</div>
+          <div className="af-label-row">
+            {LABEL_OPTIONS.map(lbl => (
+              <button
+                key={lbl}
+                type="button"
+                className={`af-label-btn${addr.label === lbl ? ' active' : ''}`}
+                onClick={() => onChange('label', lbl)}
+                aria-pressed={addr.label === lbl}
+              >
+                {LABEL_ICONS[lbl]} {lbl}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+      {/* When a saved address is selected, show its label as read-only badge */}
+      {selectedSavedIdx !== null && addr.label && (
+        <div className="af-selected-label">
+          {LABEL_ICONS[addr.label] || '📍'} Delivering to: <strong>{addr.label}</strong>
+          <span className="af-selected-label-hint"> · Select a different address above to change</span>
+        </div>
+      )}
 
       {/* Form fields */}
       <div className="af-form">
@@ -242,6 +257,9 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
           border-radius:0!important;flex:1;min-width:0;}
         .af-pin-loading{font-size:10px;color:#7a7565;font-weight:400;text-transform:none;letter-spacing:0;}
         .af-pin-ok{font-size:10px;color:#2d6a4f;font-weight:600;text-transform:none;letter-spacing:0;}
+        .af-selected-label{padding:10px 20px;font-size:12px;color:#2d5233;
+          background:#e8f5e9;border-bottom:1px solid #c8e6c9;font-family:inherit;}
+        .af-selected-label-hint{font-size:11px;color:#7a9a7a;font-weight:400;}
       `}</style>
     </div>
   )
