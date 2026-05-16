@@ -283,11 +283,16 @@ export default function CheckoutPage() {
     <>
       <script src="https://checkout.razorpay.com/v1/checkout.js" async />
 
-      <div className="ck-page">
+      <ShippingProgress
+        subtotal={pricing.subtotal}
+        freeShipMin={freeShipMin}
+        isFreeShipping={pricing.isFreeShipping}
+        remainingForFreeShip={pricing.remainingForFreeShip}
+      />
 
-        {/* Breadcrumb */}
-        <nav className="ck-nav">
-          <div className="ck-nav-inner">
+      {/* Breadcrumb */}
+      <nav className="ck-nav">
+        <div className="ck-nav-inner">
           <div className="ck-crumb ck-crumb--done">
             <div className="ck-crumb-dot ck-crumb-dot--done">✓</div>
             <span>Cart</span>
@@ -303,19 +308,13 @@ export default function CheckoutPage() {
             <span>Confirmation</span>
           </div>
         </div>
-        </nav>
+      </nav>
 
-        {bothPayOff && (
-          <div className="ck-alert">⚠ Checkout temporarily unavailable. Please contact support.</div>
-        )}
+      {bothPayOff && (
+        <div className="ck-alert">⚠ Checkout temporarily unavailable. Please contact support.</div>
+      )}
 
-        <ShippingProgress
-          subtotal={pricing.subtotal}
-          freeShipMin={freeShipMin}
-          isFreeShipping={pricing.isFreeShipping}
-          remainingForFreeShip={pricing.remainingForFreeShip}
-        />
-
+      <div className="ck-page">
         <div className="ck-grid">
 
           {/* ── LEFT COLUMN ── */}
@@ -434,6 +433,10 @@ export default function CheckoutPage() {
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 
         /* ── NAV ── */
+        .ck-nav {
+          background: #FDFAF5;
+          border-bottom: 1px solid #E8E0D5;
+        }
         .ck-nav-inner {
           max-width: 1440px;
           margin: 0 auto;
@@ -500,26 +503,17 @@ export default function CheckoutPage() {
         /* ── PAGE SHELL ── */
         .ck-page {
           background: #F7F2EB;
-          min-height: calc(100vh - 60px);
+          min-height: calc(100vh - 100px);
           width: 100%;
-          overflow-x: hidden;          /* prevent sidebar from bleeding right */
-        }
-        .ck-nav {
-          background: #FDFAF5;
-          border-bottom: 1px solid #E8E0D5;
         }
         .ck-grid {
+          max-width: 1440px;
+          margin: 0 auto;
           display: grid;
-          /* sidebar fixed at 400px, left column takes remaining space.
-             minmax(0,1fr) is critical — without it the left column can push
-             the grid wider than the viewport on content overflow. */
-          grid-template-columns: minmax(0, 1fr) 400px;
+          grid-template-columns: 1fr 420px;
           min-height: calc(100vh - 100px);
-          /* no max-width here — ck-page handles full bleed, grid fills it */
-          width: 100%;
         }
-        @media (max-width: 1200px) { .ck-grid { grid-template-columns: minmax(0, 1fr) 360px; } }
-        @media (max-width: 1024px) { .ck-grid { grid-template-columns: minmax(0, 1fr) 320px; } }
+        @media (max-width: 1200px) { .ck-grid { grid-template-columns: 1fr 380px; } }
         @media (max-width: 960px)  { .ck-grid { grid-template-columns: 1fr; padding-bottom: 80px; } }
 
         /* ── LEFT ── */
@@ -645,10 +639,6 @@ export default function CheckoutPage() {
           height: 100vh;
           overflow-y: auto;
           overflow-x: hidden;
-          /* min-width:0 prevents the sidebar column from expanding beyond
-             its grid track when content is wider than 400px */
-          min-width: 0;
-          width: 100%;
           scrollbar-width: thin;
           scrollbar-color: #D8D0C4 transparent;
         }
