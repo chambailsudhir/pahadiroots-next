@@ -45,7 +45,12 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
 
   return (
     <div className="cic-wrap">
-      {/* Product image */}
+      {/* Product image
+          unoptimized — prevents Next.js image optimizer 400s on hard-reload
+          when the image CDN domain isn't in next.config remotePatterns.
+          Without this, the optimizer fetches the image server-side on first
+          load (works), but on hard-refresh the CDN cache is cold and the
+          optimizer returns a 400, making the image disappear instantly. */}
       <div className="cic-img-wrap">
         {item.image
           ? <Image
@@ -54,6 +59,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               fill
               sizes="120px"
               className="cic-img"
+              unoptimized
               priority={false}
             />
           : <span className="cic-emoji">{item.emoji || '🌿'}</span>}

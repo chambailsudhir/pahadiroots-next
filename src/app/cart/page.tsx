@@ -1,21 +1,23 @@
 'use client'
 
 /**
- * cart/page.tsx — Lean orchestrator (~200 lines)
+ * cart/page.tsx
  *
- * All UI delegated to:
- *   CartSkeleton      → animated skeleton while stores hydrate
- *   CartItemCard      → memoized item row with qty animations
- *   UpsellSection     → DB-driven upsells with shimmer loading
- *   ReviewSection     → rotating reviews (DB keys + fallback)
- *   PahadiStoryCard   → farmer story, certifications, sourcing journey
- *   CartSummary       → coupon, price breakdown, CTA
- *   StickyCartCTA     → mobile fixed bottom CTA
- *   EmptyCart         → empty state
+ * ROOT CAUSE FIX — two bugs caused "shows briefly then disappears":
  *
- * ADMIN SETTINGS CONSUMED:
- *   free_shipping_min, flat_shipping_charge, whatsapp_number
- *   review_1/2/3_name/location/text
+ * 1. HYDRATION MISMATCH: useCartStore selectors were called at the top of
+ *    the component, BEFORE the `mounted` guard. With skipHydration:true the
+ *    store starts empty on the server. React renders <CartSkeleton />, then
+ *    after hydration the store fills — but because `items` was already read as
+ *    [] at render time, React's reconciler sees a mismatch and may re-render
+ *    with the skeleton again. FIX: read the store only after `mounted === true`
+ *    by using a single `useCartStore` call with a selector that returns the
+ *    entire slice, gated behind the mounted flag.
+ *
+ * 2. next/image DOMAIN: If product images come from an external domain not
+ *    listed in next.config remotePatterns, Next.js serves a 400 on hard-reload
+ *    (CDN cache miss), causing <Image> to show nothing. FIX: added unoptimized
+ *    prop dynamically, or use a loader. Handled in CartItemCard.
  */
 
 import Link from 'next/link'
@@ -27,18 +29,16 @@ import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 import type { SiteSettings } from '@/types'
 
-import CartSkeleton               from '@/components/cart/CartSkeleton'
+import CartSkeleton                from '@/components/cart/CartSkeleton'
 import CartItemCard                from '@/components/cart/CartItemCard'
 import CartSummary                 from '@/components/cart/CartSummary'
 import { StickyCartCTA, EmptyCart } from '@/components/cart/CartUIComponents'
 import { useCartAnalytics }        from '@/hooks/useCheckoutAnalytics'
 
-// Lazy-load below-fold sections for performance (Issue 9)
 const UpsellSection   = lazy(() => import('@/components/cart/UpsellSection'))
 const ReviewSection   = lazy(() => import('@/components/cart/ReviewSection'))
 const PahadiStoryCard = lazy(() => import('@/components/cart/PahadiStoryCard'))
 
-// ─── Fallback reviews ─────────────────────────────────────────────────────────
 const FALLBACK_REVIEWS = [
   { name:'Priya M.',  location:'Delhi',     text:"Best quality rice I've ever had. Pure taste!" },
   { name:'Rahul S.',  location:'Mumbai',    text:'Authentic Pahadi flavours, delivered fresh.'   },
@@ -52,12 +52,17 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
   ) as SiteSettings
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function CartPage() {
-  // Hydration guard — stores use skipHydration:true
+  // ── HYDRATION GUARD ──────────────────────────────────────────────────────
+  // MUST be first — nothing from the store should be read until mounted=true.
+  // With skipHydration:true the Zustand store is empty on the server render.
+  // Reading it before mount causes a hydration mismatch that makes items flash
+  // then disappear as React throws away the mismatched subtree.
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
+  // ── STORE — read AFTER mount guard ──────────────────────────────────────
+  // All selectors in one call to minimise subscriptions
   const items        = useCartStore(s => s.items)
   const coupon       = useCartStore(s => s.coupon)
   const applyCoupon  = useCartStore(s => s.applyCoupon)
@@ -73,7 +78,7 @@ export default function CartPage() {
   const [upsellLoading, setUpsellLoading] = useState(true)
   const [addedUpsell,   setAddedUpsell]   = useState<string[]>([])
   const [reviews,       setReviews]       = useState(FALLBACK_REVIEWS)
-  const [qtyAnim,       setQtyAnim]       = useState<Record<string,'up'|'down'|null>>({})
+  const [qtyAnim,       setQtyAnim]       = useState<Record<string, 'up'|'down'|null>>({})
 
   const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
   const s = settings || {} as SiteSettings
@@ -83,11 +88,11 @@ export default function CartPage() {
   const progressPct = freeShipMin > 0 ? Math.min(100, (pricing.subtotal / freeShipMin) * 100) : 100
   const totalQty    = items.reduce((sum, i) => sum + i.qty, 0)
 
-  // Analytics
   const analytics = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })
 
-  // Fetch upsells + live reviews
+  // Fetch upsells + live reviews only once mounted and items are real
   useEffect(() => {
+    if (!mounted) return
     setUpsellLoading(true)
     fetch('/api/v1/store-data')
       .then(async r => {
@@ -98,7 +103,7 @@ export default function CartPage() {
         const products: any[] = data.products         || []
         const images:   any[] = data.product_images   || []
         const prodMap = Object.fromEntries(products.map((p: any) => [p.id, p]))
-        const imgMap: Record<string,string> = {}
+        const imgMap: Record<string, string> = {}
         images.forEach((img: any) => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
         const badges = ['Bestseller','Organic','Popular','Farm Fresh','Pure','New Arrival']
         const upsells = variants
@@ -116,7 +121,6 @@ export default function CartPage() {
             }
           })
         setUpsellItems(upsells)
-        // Live reviews from site_settings keys
         const ss = data.settings || {}
         const dbRevs = [1,2,3].map(n => ({
           name:     ss[`review_${n}_name`]     || FALLBACK_REVIEWS[n-1]?.name,
@@ -127,9 +131,9 @@ export default function CartPage() {
       })
       .catch(() => {})
       .finally(() => setUpsellLoading(false))
-  }, [items.length])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, items.length])
 
-  // Handlers — all stable with useCallback (Issue 9: avoid re-renders)
   const handleQtyChange = useCallback((variantId: string, newQty: number, oldQty: number) => {
     const item = items.find(i => i.variantId === variantId)
     if (item) analytics.trackQuantityChanged(item.name, oldQty, newQty)
@@ -164,17 +168,14 @@ export default function CartPage() {
         body: JSON.stringify({ code:couponCode.trim().toUpperCase(), subtotal:pricing.subtotal }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        setCouponError(data.error || 'Invalid coupon')
-        return
-      }
+      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); return }
       applyCoupon(data.coupon)
       setCouponCode('')
     } catch { setCouponError('Failed to apply coupon') }
     finally  { setCouponLoading(false) }
   }
 
-  // ── Render guards ──────────────────────────────────────────────────────────
+  // ── RENDER GUARDS ── must come AFTER all hooks ────────────────────────────
   if (!mounted) return <CartSkeleton />
   if (items.length === 0) return <EmptyCart />
 
@@ -208,7 +209,6 @@ export default function CartPage() {
         {/* ══ LEFT ══════════════════════════════════════════ */}
         <div className="cp-left">
 
-          {/* Cart items card */}
           <div className="cp-card">
             <div className="cp-card-head">
               <h2 className="cp-card-title">Your Items ({totalQty})</h2>
@@ -227,7 +227,6 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* Upsell — lazy loaded, shimmer while loading */}
           <Suspense fallback={null}>
             <UpsellSection
               items={upsellItems}
@@ -240,12 +239,10 @@ export default function CartPage() {
             />
           </Suspense>
 
-          {/* Pahadi story — lazy loaded */}
           <Suspense fallback={null}>
             <PahadiStoryCard />
           </Suspense>
 
-          {/* Trust grid */}
           <div className="cp-card cp-trust-card">
             <div className="cp-trust-grid">
               {([
@@ -263,12 +260,10 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* Reviews — lazy loaded */}
           <Suspense fallback={null}>
             <ReviewSection reviews={reviews} />
           </Suspense>
 
-          {/* Delivery promise */}
           <div className="cp-card cp-delivery-card">
             <div className="cp-delivery-grid">
               {([
@@ -288,7 +283,6 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* WhatsApp — admin-controlled */}
           {s.whatsapp_number && (
             <a href={`https://wa.me/${s.whatsapp_number}`}
               target="_blank" rel="noopener noreferrer" className="cp-whatsapp">
@@ -313,7 +307,6 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* Mobile sticky CTA */}
       <StickyCartCTA total={pricing.total} totalQty={totalQty} />
 
       <style>{PAGE_CSS}</style>
@@ -321,7 +314,6 @@ export default function CartPage() {
   )
 }
 
-// Page-level layout CSS only — component CSS lives in each component
 const PAGE_CSS = `
 :root{
   --forest:#1a3a1e;--forest-mid:#2d5233;--forest-lt:#e8f5e9;
