@@ -6,7 +6,7 @@ export const addressSchema = z.object({
   name:    z.string().trim().min(2).max(100),
   phone:   z.string().trim().regex(/^[6-9]\d{9}$/, 'Invalid Indian mobile number'),
   flat:    z.string().trim().min(1).max(200),
-  area:    z.string().trim().min(2).max(200),
+  area:    z.string().trim().max(200).optional().default(''),
   city:    z.string().trim().min(2).max(100),
   state:   z.string().trim().min(2).max(100),
   pincode: z.string().trim().regex(/^\d{6}$/, 'Invalid 6-digit pincode'),
