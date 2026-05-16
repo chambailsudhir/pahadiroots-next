@@ -180,45 +180,49 @@ export async function createOrder(
     throw new Error(`Insufficient stock: ${failed}`)
   }
 
-  // 3. Fetch product/variant prices from DB (never trust client prices)
+  // 3. Fetch variant prices from DB (never trust client prices)
   const variantIds = input.items.map(i => i.variantId)
+  const numericVariantIds = variantIds.map(id => isNaN(Number(id)) ? id : Number(id))
+
   const { data: variants, error: varErr } = await db
     .from('product_variants')
-    .select('id, price, mrp, is_active, available_stock, products(id, name, emoji, gst_rate, is_deleted, status)')
-    .in('id', variantIds.map(id => isNaN(Number(id)) ? id : Number(id)))
+    .select('id, price, mrp, is_active, available_stock, product_id')
+    .in('id', numericVariantIds)
 
   if (varErr || !variants?.length) throw new Error('Could not fetch product details')
 
-  // Helper to safely extract product from Supabase join (can be object or array)
-  type ProductRow = { id: unknown; name: unknown; emoji: unknown; gst_rate: unknown; is_deleted: unknown; status: unknown }
-  function getProduct(raw: unknown): ProductRow {
-    if (Array.isArray(raw)) return (raw[0] ?? {}) as ProductRow
-    return (raw ?? {}) as ProductRow
-  }
+  // Fetch products separately (avoids foreign key join issues)
+  const productIds = [...new Set(variants.map(v => v.product_id))]
+  const { data: products } = await db
+    .from('products')
+    .select('id, name, emoji, gst_rate, is_deleted, status')
+    .in('id', productIds)
+
+  const productMap = new Map((products || []).map(p => [String(p.id), p]))
 
   // Validate all products are active
   for (const v of variants) {
-    const p = getProduct(v.products as unknown)
-    if (p?.is_deleted || p?.status !== 'active' || !v.is_active) {
+    const p = productMap.get(String(v.product_id))
+    if (!v.is_active || p?.is_deleted || p?.status !== 'active') {
       throw new Error(`Product no longer available`)
     }
   }
 
-  // Build CartItem array for pricing — map our DB fields to CartItem shape
+  // Build CartItem array for pricing
   const cartItems: import('@/types').CartItem[] = input.items.map(i => {
     const v = variants.find(vv => String(vv.id) === String(i.variantId))!
-    const p = getProduct(v.products as unknown)
+    const p = productMap.get(String(v.product_id))
     return {
       productId:  i.productId,
       variantId:  i.variantId,
       name:       String(p?.name  ?? ''),
-      slug:       '',                          // not needed for price calc
-      image:      null,                        // not needed for price calc
+      slug:       '',
+      image:      null,
       emoji:      String(p?.emoji ?? '🌿'),
-      size:       '',                          // not needed for price calc
+      size:       '',
       price:      Number(v.price)  || 0,
       mrp:        Number(v.mrp)    || 0,
-      gstRate:    Number(p?.gst_rate ?? 0),   // CartItem uses gstRate not gst_rate
+      gstRate:    Number(p?.gst_rate ?? 0),
       qty:        i.qty,
       maxQty:     Number(v.available_stock) || 999,
     }
@@ -302,7 +306,7 @@ export async function createOrder(
   // 9. Insert order items
   const orderItems = input.items.map(i => {
     const v = variants.find(vv => String(vv.id) === String(i.variantId))!
-    const p = getProduct(v.products as unknown)
+    const p = productMap.get(String(v.product_id))
     return {
       order_id:               newOrder.id,
       product_id:             i.productId,
@@ -366,4 +370,3 @@ export async function logOrderEvent(
   // Non-fatal — if order_events table doesn't exist yet, silently continue
   // .then() not needed — fire and forget pattern for audit log
 }
-
