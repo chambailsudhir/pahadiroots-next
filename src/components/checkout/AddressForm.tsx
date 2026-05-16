@@ -21,11 +21,11 @@ const LABEL_ICONS: Record<string, string> = {
 // Cache pincode results to avoid repeat API calls
 const pincodeCache = new Map<string, { city: string; state: string } | null>()
 
-async function lookupPincode(pin: string): Promise<{ city: string; state: string } | null> {
+async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city: string; state: string } | null> {
   if (!/^\d{6}$/.test(pin)) return null
   if (pincodeCache.has(pin)) return pincodeCache.get(pin)!
   try {
-    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`)
+    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal })
     const data = await res.json()
     if (!data?.[0]?.PostOffice?.length) { pincodeCache.set(pin, null); return null }
     const po = data[0].PostOffice[0]
@@ -73,12 +73,13 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
 
     // Cancel previous in-flight request
     if (pinAbortRef.current) pinAbortRef.current.abort()
-    pinAbortRef.current = new AbortController()
+    const ctrl = new AbortController()
+    pinAbortRef.current = ctrl
 
     setPincodeLoading(true)
-    const result = await lookupPincode(clean)
+    const result = await lookupPincode(clean, ctrl.signal)
+    if (ctrl.signal.aborted) return
     if (result) {
-      // Always autofill — user can correct if wrong
       onChange('city', result.city)
       onChange('state', result.state)
       setPincodeMsg(`${result.city}, ${result.state}`)
@@ -220,8 +221,6 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
       </div>
 
       <style>{`
-        .af-root {}
-
         /* Tags */
         .af-tags-wrap {
           display: flex;

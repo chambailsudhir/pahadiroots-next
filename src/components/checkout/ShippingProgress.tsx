@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function ShippingProgress({ subtotal, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
-  if (freeShipMin <= 0) {
+  if (!freeShipMin || freeShipMin <= 0) {
     return null
   }
 

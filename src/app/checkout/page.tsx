@@ -97,7 +97,7 @@ export default function CheckoutPage() {
   const [email, setEmail] = useState('')
 
   const pricing       = calcPriceSummary(items, s, coupon, payMethod)
-  const codOk         = codEnabled && pricing.total <= codMax
+  const codOk         = codEnabled && pricing.subtotal <= codMax
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
   const bothPayOff    = !codOk && !razorpayEnabled
 
@@ -109,6 +109,7 @@ export default function CheckoutPage() {
   useEffect(() => { if (items.length === 0 && mounted) router.replace('/cart') }, [items, mounted, router])
   useEffect(() => {
     if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
+    if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
   }, [codOk, payMethod, razorpayEnabled])
 
   useEffect(() => {
@@ -149,6 +150,7 @@ export default function CheckoutPage() {
   }, [user])
 
   useEffect(() => {
+    // TODO: replace with /api/v1/coupon-hints (server-filtered) to avoid exposing raw coupon data
     fetch('/api/v1/store-data').then(async r => {
       if (!r.ok) return
       const data = await r.json()
@@ -160,7 +162,8 @@ export default function CheckoutPage() {
           return true
         })
         .slice(0, 3)
-        .map((c:any) => ({
+        // Only expose code + human label — strip all internal fields
+        .map((c:any): { code: string; label: string } => ({
           code: c.code,
           label: c.type === 'percent'
             ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
@@ -181,7 +184,7 @@ export default function CheckoutPage() {
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
       ...prev, name:saved.name||prev.name, phone:saved.phone||prev.phone,
-      flat:saved.addr||saved.flat||'', area:'', city:saved.city||'',
+      flat:saved.addr||saved.flat||'', area:saved.area||'', city:saved.city||'',
       state:matchState(saved.state), pincode:saved.pin||saved.pincode||'', label:lbl,
     }))
     setSelectedSavedIdx(idx)
@@ -216,6 +219,7 @@ export default function CheckoutPage() {
     }
     if (!/^[6-9]\d{9}$/.test(addr.phone)) { setError('Enter a valid 10-digit mobile number'); return }
     if (!/^\d{6}$/.test(addr.pincode))     { setError('Enter a valid 6-digit pincode'); return }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
     setError(''); setPlacing(true)
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
@@ -260,6 +264,7 @@ export default function CheckoutPage() {
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature:  response.razorpay_signature,
                   order_id:            data.order_id,
+                  idempotency_key:     orderKey,
                 }),
               })
               const verData = await verRes.json()
@@ -268,7 +273,7 @@ export default function CheckoutPage() {
               clearCart(); router.replace(`/order-success?id=${verData.order_number}`)
             } catch (e:any) { setError(e.message || 'Verification failed. Contact support.'); setPlacing(false) }
           },
-          modal:{ ondismiss: () => setPlacing(false) },
+          modal:{ ondismiss: () => { setPlacing(false); ensureIdempotencyKey() } },
         })
         analytics.trackPaymentInitiated(pricing.total)
         rzp.open(); return
@@ -423,7 +428,15 @@ export default function CheckoutPage() {
           <span className="ck-mob-total">{formatPrice(pricing.total)}</span>
           <span className="ck-mob-sub">incl. all taxes</span>
         </div>
-        <button className="ck-mob-cta" onClick={handlePlace}
+        <button className="ck-mob-cta" onClick={() => {
+          setSummaryOpen(true)
+          handlePlace().then(() => {
+            setTimeout(() => {
+              const errEl = document.querySelector('.os-error-box')
+              if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }, 100)
+          })
+        }}
           disabled={placing || bothPayOff || belowMinOrder} type="button">
           {placing ? 'Placing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : 'Place Order →'}
         </button>

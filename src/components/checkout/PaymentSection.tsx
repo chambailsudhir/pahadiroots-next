@@ -231,7 +231,6 @@ export default function PaymentSection({
 
         .ps-seals {
           display: flex;
-          gap: 0;
           padding: 12px 28px;
           background: #F7F2EB;
           border-top: 1px solid #EDE5D8;
