@@ -180,62 +180,66 @@ export async function createOrder(
     throw new Error(`Insufficient stock: ${failed}`)
   }
 
-  // 3. Fetch prices from DB (never trust client prices)
+  // 3. Fetch prices via direct REST API (same pattern as store-data route — proven working)
   // Split items: those with a real variant ID vs those using product ID as fallback
-  // (Old site pattern: if item.variantId → use product_variants, else → use products)
+  // (variantId === productId means the product has no variants)
   const itemsWithVariant: typeof input.items = []
   const itemsNoVariant:   typeof input.items = []
-
   for (const item of input.items) {
-    // If variantId === productId the cart stored the product.id as fallback (no variants)
-    if (item.variantId === item.productId) {
-      itemsNoVariant.push(item)
-    } else {
-      itemsWithVariant.push(item)
+    if (item.variantId === item.productId) { itemsNoVariant.push(item) }
+    else                                   { itemsWithVariant.push(item) }
+  }
+
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
+  async function sbGet(table: string, query: string) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => res.status.toString())
+      throw new Error(`DB fetch ${table} failed: ${txt}`)
     }
+    return res.json()
   }
 
-  // Fetch variant rows (only for items that actually have a variant)
-  const variantRows: Array<{ id: number|string; price: number; mrp: number; is_active: boolean; available_stock: number; product_id: number|string }> = []
+  // Fetch variant rows (only for items that have a real variant ID)
+  const variantRows: any[] = []
   if (itemsWithVariant.length > 0) {
-    const numericVariantIds = itemsWithVariant.map(i => isNaN(Number(i.variantId)) ? i.variantId : Number(i.variantId))
-    const { data, error: varErr } = await db
-      .from('product_variants')
-      .select('id, price, mrp, is_active, available_stock, product_id')
-      .in('id', numericVariantIds)
-    if (varErr) throw new Error('Could not fetch product variant details: ' + varErr.message)
-    if (data) variantRows.push(...data)
+    const variantIdList = itemsWithVariant.map(i => i.variantId).join(',')
+    const data = await sbGet('product_variants',
+      `select=id,price,original_price,is_active,available_stock,product_id&id=in.(${variantIdList})`
+    )
+    variantRows.push(...(data || []))
+    if (variantRows.length === 0) throw new Error('Could not fetch product details — variant IDs not found in DB')
   }
 
-  // Collect all product IDs we need (from variants + direct product items)
+  // Collect all product IDs (from variants + direct product-only items)
   const allProductIds = Array.from(new Set([
-    ...variantRows.map(v => String(v.product_id)),
+    ...variantRows.map((v: any) => String(v.product_id)),
     ...itemsNoVariant.map(i => String(i.productId)),
   ]))
-
   if (!allProductIds.length) throw new Error('Could not fetch product details')
 
-  const numericProductIds = allProductIds.map(id => isNaN(Number(id)) ? id : Number(id))
-  const { data: products, error: prodErr } = await db
-    .from('products')
-    .select('id, name, emoji, gst_rate, is_deleted, status, price, mrp, available_stock')
-    .in('id', numericProductIds)
+  const productIdList = allProductIds.join(',')
+  const products: any[] = await sbGet('products',
+    `select=id,name,emoji,gst_rate,is_deleted,status,price,mrp,available_stock&id=in.(${productIdList})`
+  )
+  if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
 
-  if (prodErr || !products?.length) throw new Error('Could not fetch product details')
+  const productMap = new Map(products.map((p: any) => [String(p.id), p]))
 
-  const productMap = new Map((products || []).map(p => [String(p.id), p]))
-
-  // Validate all products are active
+  // Validate all products/variants are active
   for (const v of variantRows) {
     const p = productMap.get(String(v.product_id))
     if (!v.is_active || p?.is_deleted || p?.status !== 'active') {
-      throw new Error(`Product no longer available`)
+      throw new Error('Product no longer available')
     }
   }
   for (const item of itemsNoVariant) {
     const p = productMap.get(String(item.productId))
     if (!p || p.is_deleted || p.status !== 'active') {
-      throw new Error(`Product no longer available`)
+      throw new Error('Product no longer available')
     }
   }
 
@@ -259,8 +263,8 @@ export async function createOrder(
         maxQty:     Number(p?.available_stock) || 999,
       }
     } else {
-      // Variant product — price comes from product_variants table
-      const v = variantRows.find(vv => String(vv.id) === String(i.variantId))!
+      // Variant product — price from product_variants, mrp from original_price column
+      const v = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
       const p = productMap.get(String(v?.product_id ?? i.productId))
       return {
         productId:  i.productId,
@@ -271,7 +275,7 @@ export async function createOrder(
         emoji:      String(p?.emoji ?? '🌿'),
         size:       '',
         price:      Number(v?.price) || 0,
-        mrp:        Number(v?.mrp)   || 0,
+        mrp:        Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
         gstRate:    Number(p?.gst_rate ?? 0),
         qty:        i.qty,
         maxQty:     Number(v?.available_stock) || 999,
@@ -355,36 +359,42 @@ export async function createOrder(
   if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
 
   // 9. Insert order items — handles both variant and non-variant products
+  // Column names match actual DB schema (price_at_time from original, mrp_snapshot added by admin)
   const orderItems = input.items.map(i => {
     if (i.variantId === i.productId) {
-      // No-variant product
-      const p = productMap.get(String(i.productId))
+      // No-variant product — no variant_id
+      const p: any = productMap.get(String(i.productId))
+      const sellPrice = Number(p?.price) || 0
       return {
         order_id:               newOrder.id,
         product_id:             i.productId,
         variant_id:             null,
         quantity:               i.qty,
-        price_at_time:          Number(p?.price) || 0,
-        mrp_at_time:            Number((p as any)?.mrp) || Number(p?.price) || 0,
+        price_at_time:          sellPrice,
+        price_snapshot:         sellPrice,
+        mrp_snapshot:           Number(p?.mrp) || sellPrice,
         product_name_snapshot:  String(p?.name ?? ''),
         variant_value_snapshot: null,
       }
     } else {
-      const v = variantRows.find(vv => String(vv.id) === String(i.variantId))
-      const p = productMap.get(String(v?.product_id ?? i.productId))
+      const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
+      const p: any = productMap.get(String(v?.product_id ?? i.productId))
+      const sellPrice = Number(v?.price) || 0
       return {
         order_id:               newOrder.id,
         product_id:             i.productId,
         variant_id:             i.variantId,
         quantity:               i.qty,
-        price_at_time:          Number(v?.price) || 0,
-        mrp_at_time:            Number(v?.mrp)   || 0,
+        price_at_time:          sellPrice,
+        price_snapshot:         sellPrice,
+        mrp_snapshot:           Number(v?.original_price) || Number(p?.mrp) || sellPrice,
         product_name_snapshot:  String(p?.name ?? ''),
-        variant_value_snapshot: null,
+        variant_value_snapshot: v?.variant_value ?? null,
       }
     }
   })
-  await db.from('order_items').insert(orderItems)
+  const { error: itemsErr } = await db.from('order_items').insert(orderItems)
+  if (itemsErr) console.error('[createOrder] order_items insert failed:', itemsErr.message)
 
   // 10. Log creation event
   await logOrderEvent(newOrder.id, 'order_created', 'system', {
