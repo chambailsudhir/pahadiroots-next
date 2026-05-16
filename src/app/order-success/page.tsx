@@ -7,6 +7,9 @@ import { Suspense } from 'react'
 function SuccessContent() {
   const params      = useSearchParams()
   const orderNumber = params.get('id') || ''
+  const total       = params.get('total') || ''
+  const method      = params.get('method') || ''
+  const isCOD       = method === 'cod'
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
@@ -18,10 +21,15 @@ function SuccessContent() {
         </div>
 
         <h1 className="text-2xl font-bold text-stone-900 mb-2">Order Placed! 🎉</h1>
-        <p className="text-stone-500 mb-1">Your order has been confirmed.</p>
+        <p className="text-stone-500 mb-1">{isCOD ? 'WhatsApp pe confirm karein — order process ho raha hai.' : 'Your order has been confirmed.'}</p>
         {orderNumber && (
-          <p className="text-sm font-semibold text-stone-700 mb-6">
+          <p className="text-sm font-semibold text-stone-700 mb-2">
             Order #{orderNumber}
+          </p>
+        )}
+        {total && (
+          <p className="text-sm text-stone-500 mb-6">
+            Total Paid: ₹{total}
           </p>
         )}
 

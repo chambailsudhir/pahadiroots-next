@@ -258,7 +258,7 @@ export default function CheckoutPage() {
         // Open WhatsApp IMMEDIATELY — don't wait for DB (same as old site)
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
 
-        // Save to DB in background (non-blocking)
+        // Save to DB in background (non-blocking) — WhatsApp already opened
         fetch('/api/v1/orders', {
           method:'POST', headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify(payload),
@@ -268,7 +268,7 @@ export default function CheckoutPage() {
         }).catch(() => {})
 
         clearCart()
-        router.replace(`/order-success?total=${pricing.total}&method=cod`)
+        router.replace(`/order-success?total=${pricing.total}&method=cod&id=`)
       } else {
         const RZP = (window as any).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')

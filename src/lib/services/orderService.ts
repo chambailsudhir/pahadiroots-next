@@ -185,7 +185,7 @@ export async function createOrder(
   const { data: variants, error: varErr } = await db
     .from('product_variants')
     .select('id, price, mrp, is_active, available_stock, products(id, name, emoji, gst_rate, is_deleted, status)')
-    .in('id', variantIds)
+    .in('id', variantIds.map(id => isNaN(Number(id)) ? id : Number(id)))
 
   if (varErr || !variants?.length) throw new Error('Could not fetch product details')
 
@@ -206,7 +206,7 @@ export async function createOrder(
 
   // Build CartItem array for pricing — map our DB fields to CartItem shape
   const cartItems: import('@/types').CartItem[] = input.items.map(i => {
-    const v = variants.find(vv => vv.id === i.variantId)!
+    const v = variants.find(vv => String(vv.id) === String(i.variantId))!
     const p = getProduct(v.products as unknown)
     return {
       productId:  i.productId,
@@ -301,7 +301,7 @@ export async function createOrder(
 
   // 9. Insert order items
   const orderItems = input.items.map(i => {
-    const v = variants.find(vv => vv.id === i.variantId)!
+    const v = variants.find(vv => String(vv.id) === String(i.variantId))!
     const p = getProduct(v.products as unknown)
     return {
       order_id:               newOrder.id,

@@ -23,16 +23,16 @@ export async function checkStockAvailability(
   const { data: variants, error } = await db
     .from('product_variants')
     .select('id, available_stock, is_active')
-    .in('id', ids)
+    .in('id', ids.map((id: string) => isNaN(Number(id)) ? id : Number(id)))
 
   if (error) throw new Error('Stock check failed: ' + error.message)
 
   const stockMap = new Map(
-    (variants || []).map(v => [v.id, v])
+    (variants || []).map(v => [String(v.id), v])
   )
 
   for (const item of items) {
-    const variant = stockMap.get(item.variantId)
+    const variant = stockMap.get(String(item.variantId))
     if (!variant || !variant.is_active) {
       failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
       continue
