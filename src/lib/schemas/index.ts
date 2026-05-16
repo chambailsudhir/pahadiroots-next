@@ -16,8 +16,8 @@ export const addressSchema = z.object({
 // ─── Order Schema ─────────────────────────────────────────────────────────────
 
 export const orderItemSchema = z.object({
-  productId:  z.string().uuid(),
-  variantId:  z.string().uuid(),
+  productId:  z.string().min(1),   // integer or UUID — DB uses integer IDs
+  variantId:  z.string().min(1),   // integer or UUID — DB uses integer IDs
   qty:        z.number().int().min(1).max(50),
 })
 
@@ -36,7 +36,7 @@ export const verifyPaymentSchema = z.object({
   razorpay_order_id:   z.string(),
   razorpay_payment_id: z.string(),
   razorpay_signature:  z.string(),
-  order_id:            z.string().uuid(),  // our DB order id
+  order_id:            z.string().min(1),  // our DB order id (integer)
 })
 
 // ─── Coupon Schema ────────────────────────────────────────────────────────────
@@ -49,11 +49,11 @@ export const validateCouponSchema = z.object({
 // ─── Review Schema ────────────────────────────────────────────────────────────
 
 export const reviewSchema = z.object({
-  product_id:    z.string().uuid(),
+  product_id:    z.string().min(1),  // integer ID
   customer_name: z.string().trim().min(2).max(100),
   rating:        z.number().int().min(1).max(5),
   comment:       z.string().trim().max(1000).optional(),
-  order_id:      z.string().uuid().optional(),
+  order_id:      z.string().min(1).optional(),  // integer ID
 })
 
 // ─── Newsletter Schema ────────────────────────────────────────────────────────

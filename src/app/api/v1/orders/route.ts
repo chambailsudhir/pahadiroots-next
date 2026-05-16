@@ -23,7 +23,7 @@ const orderSchema = z.object({
     label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
   }),
   customer_email:  z.string().email().optional().or(z.literal('')),
-  items:           z.array(z.object({ productId: z.string().uuid(), variantId: z.string().uuid(), qty: z.number().int().min(1).max(50) })).min(1).max(30),
+  items:           z.array(z.object({ productId: z.string().min(1), variantId: z.string().min(1), qty: z.number().int().min(1).max(50) })).min(1).max(30),
   payment_method:  z.enum(['razorpay', 'cod']),
   coupon_code:     z.string().trim().max(50).optional(),
   idempotency_key: z.string().uuid(),
