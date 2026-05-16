@@ -241,14 +241,34 @@ export default function CheckoutPage() {
         idempotency_key: orderKey,
       }
       if (payMethod === 'cod') {
-        const res  = await fetch('/api/v1/orders', {
+        // Build WhatsApp message exactly like old site
+        const waNumber   = s.whatsapp_number || '919899984895'
+        const itemLines  = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
+        const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
+        const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
+        const waMsg = `*New Order — 5 Pahadi Roots* 🌿\n\n` +
+          `👤 *${addr.name}*\n` +
+          `📱 ${addr.phone}\n` +
+          (email ? `📧 ${email}\n` : '') +
+          `\n📍 *Delivery Address*\n${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
+          `🛒 *Items*\n${itemLines}` +
+          couponLine + shipLine +
+          `\n\n*Total: ₹${pricing.total}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
+
+        // Open WhatsApp IMMEDIATELY — don't wait for DB (same as old site)
+        window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
+
+        // Save to DB in background (non-blocking)
+        fetch('/api/v1/orders', {
           method:'POST', headers:{ 'Content-Type':'application/json' },
           body: JSON.stringify(payload),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Order creation failed')
-        analytics.trackOrderPlaced(data.order_number, pricing.total, 'cod')
-        clearCart(); router.replace(`/order-success?id=${data.order_number}`)
+        }).then(async res => {
+          const data = await res.json()
+          if (res.ok) analytics.trackOrderPlaced(data.order_number, pricing.total, 'cod')
+        }).catch(() => {})
+
+        clearCart()
+        router.replace(`/order-success?total=${pricing.total}&method=cod`)
       } else {
         const RZP = (window as any).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
