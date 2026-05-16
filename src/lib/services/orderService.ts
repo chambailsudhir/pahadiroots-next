@@ -173,58 +173,109 @@ export async function createOrder(
 
   // 2. Stock check
   const stockCheck = await checkStockAvailability(
-    input.items.map(i => ({ variantId: i.variantId, qty: i.qty }))
+    input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
   )
   if (!stockCheck.ok) {
     const failed = stockCheck.failedItems.map(f => `variantId:${f.variantId} (req:${f.requested} avail:${f.available})`).join(', ')
     throw new Error(`Insufficient stock: ${failed}`)
   }
 
-  // 3. Fetch variant prices from DB (never trust client prices)
-  const variantIds = input.items.map(i => i.variantId)
-  const numericVariantIds = variantIds.map(id => isNaN(Number(id)) ? id : Number(id))
+  // 3. Fetch prices from DB (never trust client prices)
+  // Split items: those with a real variant ID vs those using product ID as fallback
+  // (Old site pattern: if item.variantId → use product_variants, else → use products)
+  const itemsWithVariant: typeof input.items = []
+  const itemsNoVariant:   typeof input.items = []
 
-  const { data: variants, error: varErr } = await db
-    .from('product_variants')
-    .select('id, price, mrp, is_active, available_stock, product_id')
-    .in('id', numericVariantIds)
+  for (const item of input.items) {
+    // If variantId === productId the cart stored the product.id as fallback (no variants)
+    if (item.variantId === item.productId) {
+      itemsNoVariant.push(item)
+    } else {
+      itemsWithVariant.push(item)
+    }
+  }
 
-  if (varErr || !variants?.length) throw new Error('Could not fetch product details')
+  // Fetch variant rows (only for items that actually have a variant)
+  const variantRows: Array<{ id: number|string; price: number; mrp: number; is_active: boolean; available_stock: number; product_id: number|string }> = []
+  if (itemsWithVariant.length > 0) {
+    const numericVariantIds = itemsWithVariant.map(i => isNaN(Number(i.variantId)) ? i.variantId : Number(i.variantId))
+    const { data, error: varErr } = await db
+      .from('product_variants')
+      .select('id, price, mrp, is_active, available_stock, product_id')
+      .in('id', numericVariantIds)
+    if (varErr) throw new Error('Could not fetch product variant details: ' + varErr.message)
+    if (data) variantRows.push(...data)
+  }
 
-  // Fetch products separately (avoids foreign key join issues)
-  const productIds = [...new Set(variants.map(v => v.product_id))]
-  const { data: products } = await db
+  // Collect all product IDs we need (from variants + direct product items)
+  const allProductIds = Array.from(new Set([
+    ...variantRows.map(v => String(v.product_id)),
+    ...itemsNoVariant.map(i => String(i.productId)),
+  ]))
+
+  if (!allProductIds.length) throw new Error('Could not fetch product details')
+
+  const numericProductIds = allProductIds.map(id => isNaN(Number(id)) ? id : Number(id))
+  const { data: products, error: prodErr } = await db
     .from('products')
-    .select('id, name, emoji, gst_rate, is_deleted, status')
-    .in('id', productIds)
+    .select('id, name, emoji, gst_rate, is_deleted, status, price, mrp, available_stock')
+    .in('id', numericProductIds)
+
+  if (prodErr || !products?.length) throw new Error('Could not fetch product details')
 
   const productMap = new Map((products || []).map(p => [String(p.id), p]))
 
   // Validate all products are active
-  for (const v of variants) {
+  for (const v of variantRows) {
     const p = productMap.get(String(v.product_id))
     if (!v.is_active || p?.is_deleted || p?.status !== 'active') {
       throw new Error(`Product no longer available`)
     }
   }
+  for (const item of itemsNoVariant) {
+    const p = productMap.get(String(item.productId))
+    if (!p || p.is_deleted || p.status !== 'active') {
+      throw new Error(`Product no longer available`)
+    }
+  }
 
-  // Build CartItem array for pricing
+  // Build CartItem array for pricing — handles both variant and non-variant products
   const cartItems: import('@/types').CartItem[] = input.items.map(i => {
-    const v = variants.find(vv => String(vv.id) === String(i.variantId))!
-    const p = productMap.get(String(v.product_id))
-    return {
-      productId:  i.productId,
-      variantId:  i.variantId,
-      name:       String(p?.name  ?? ''),
-      slug:       '',
-      image:      null,
-      emoji:      String(p?.emoji ?? '🌿'),
-      size:       '',
-      price:      Number(v.price)  || 0,
-      mrp:        Number(v.mrp)    || 0,
-      gstRate:    Number(p?.gst_rate ?? 0),
-      qty:        i.qty,
-      maxQty:     Number(v.available_stock) || 999,
+    if (i.variantId === i.productId) {
+      // No-variant product — price comes from products table
+      const p = productMap.get(String(i.productId))
+      return {
+        productId:  i.productId,
+        variantId:  i.variantId,
+        name:       String(p?.name  ?? ''),
+        slug:       '',
+        image:      null,
+        emoji:      String(p?.emoji ?? '🌿'),
+        size:       '',
+        price:      Number(p?.price) || 0,
+        mrp:        Number(p?.mrp)   || Number(p?.price) || 0,
+        gstRate:    Number(p?.gst_rate ?? 0),
+        qty:        i.qty,
+        maxQty:     Number(p?.available_stock) || 999,
+      }
+    } else {
+      // Variant product — price comes from product_variants table
+      const v = variantRows.find(vv => String(vv.id) === String(i.variantId))!
+      const p = productMap.get(String(v?.product_id ?? i.productId))
+      return {
+        productId:  i.productId,
+        variantId:  i.variantId,
+        name:       String(p?.name  ?? ''),
+        slug:       '',
+        image:      null,
+        emoji:      String(p?.emoji ?? '🌿'),
+        size:       '',
+        price:      Number(v?.price) || 0,
+        mrp:        Number(v?.mrp)   || 0,
+        gstRate:    Number(p?.gst_rate ?? 0),
+        qty:        i.qty,
+        maxQty:     Number(v?.available_stock) || 999,
+      }
     }
   })
 
@@ -303,22 +354,36 @@ export async function createOrder(
 
   if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
 
-  // 9. Insert order items
+  // 9. Insert order items — handles both variant and non-variant products
   const orderItems = input.items.map(i => {
-    const v = variants.find(vv => String(vv.id) === String(i.variantId))!
-    const p = productMap.get(String(v.product_id))
-    return {
-      order_id:               newOrder.id,
-      product_id:             i.productId,
-      variant_id:             i.variantId,
-      quantity:               i.qty,
-      price_at_time:          Number(v.price) || 0,
-      mrp_at_time:            Number(v.mrp)   || 0,
-      product_name_snapshot:  String(p?.name  ?? ''),
-      variant_value_snapshot: null,
+    if (i.variantId === i.productId) {
+      // No-variant product
+      const p = productMap.get(String(i.productId))
+      return {
+        order_id:               newOrder.id,
+        product_id:             i.productId,
+        variant_id:             null,
+        quantity:               i.qty,
+        price_at_time:          Number(p?.price) || 0,
+        mrp_at_time:            Number((p as any)?.mrp) || Number(p?.price) || 0,
+        product_name_snapshot:  String(p?.name ?? ''),
+        variant_value_snapshot: null,
+      }
+    } else {
+      const v = variantRows.find(vv => String(vv.id) === String(i.variantId))
+      const p = productMap.get(String(v?.product_id ?? i.productId))
+      return {
+        order_id:               newOrder.id,
+        product_id:             i.productId,
+        variant_id:             i.variantId,
+        quantity:               i.qty,
+        price_at_time:          Number(v?.price) || 0,
+        mrp_at_time:            Number(v?.mrp)   || 0,
+        product_name_snapshot:  String(p?.name ?? ''),
+        variant_value_snapshot: null,
+      }
     }
   })
-
   await db.from('order_items').insert(orderItems)
 
   // 10. Log creation event

@@ -1,7 +1,8 @@
 import { getServiceClient } from '@/lib/supabase'
 
 export interface StockCheckItem {
-  variantId: string
+  variantId: string   // if variantId === productId → no-variant product (use products table)
+  productId?: string  // needed to detect no-variant products
   qty: number
 }
 
@@ -18,31 +19,55 @@ export async function checkStockAvailability(
   const db = getServiceClient()
   const failedItems: StockCheckResult['failedItems'] = []
 
-  // Batch fetch all variant stocks
-  const ids = items.map(i => i.variantId)
-  const { data: variants, error } = await db
-    .from('product_variants')
-    .select('id, available_stock, is_active')
-    .in('id', ids.map((id: string) => isNaN(Number(id)) ? id : Number(id)))
+  // Split: items with a real variant vs no-variant products (variantId === productId)
+  const variantItems = items.filter(i => !i.productId || i.variantId !== i.productId)
+  const productItems = items.filter(i =>  i.productId && i.variantId === i.productId)
 
-  if (error) throw new Error('Stock check failed: ' + error.message)
+  // --- Check variant stock ---
+  const variantStockMap = new Map<string, { available_stock: number; is_active: boolean }>()
+  if (variantItems.length > 0) {
+    const ids = variantItems.map(i => isNaN(Number(i.variantId)) ? i.variantId : Number(i.variantId))
+    const { data: variants, error } = await db
+      .from('product_variants')
+      .select('id, available_stock, is_active')
+      .in('id', ids)
+    if (error) throw new Error('Stock check failed: ' + error.message)
+    ;(variants || []).forEach(v => variantStockMap.set(String(v.id), v))
+  }
 
-  const stockMap = new Map(
-    (variants || []).map(v => [String(v.id), v])
-  )
+  // --- Check product stock (no-variant products) ---
+  const productStockMap = new Map<string, { available_stock: number; is_deleted: boolean; status: string }>()
+  if (productItems.length > 0) {
+    const ids = productItems.map(i => isNaN(Number(i.productId!)) ? i.productId! : Number(i.productId!))
+    const { data: prods, error } = await db
+      .from('products')
+      .select('id, available_stock, is_deleted, status')
+      .in('id', ids)
+    if (error) throw new Error('Stock check failed (products): ' + error.message)
+    ;(prods || []).forEach(p => productStockMap.set(String(p.id), p))
+  }
 
   for (const item of items) {
-    const variant = stockMap.get(String(item.variantId))
-    if (!variant || !variant.is_active) {
-      failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
-      continue
-    }
-    if (variant.available_stock < item.qty) {
-      failedItems.push({
-        variantId: item.variantId,
-        requested: item.qty,
-        available: variant.available_stock,
-      })
+    if (item.productId && item.variantId === item.productId) {
+      // No-variant product
+      const prod = productStockMap.get(String(item.productId))
+      if (!prod || prod.is_deleted || prod.status !== 'active') {
+        failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
+        continue
+      }
+      if ((prod.available_stock ?? 999) < item.qty) {
+        failedItems.push({ variantId: item.variantId, requested: item.qty, available: prod.available_stock ?? 0 })
+      }
+    } else {
+      // Variant product
+      const variant = variantStockMap.get(String(item.variantId))
+      if (!variant || !variant.is_active) {
+        failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
+        continue
+      }
+      if (variant.available_stock < item.qty) {
+        failedItems.push({ variantId: item.variantId, requested: item.qty, available: variant.available_stock })
+      }
     }
   }
 
