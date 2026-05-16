@@ -10,12 +10,7 @@ interface Props {
 
 export default function ShippingProgress({ subtotal, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
   if (freeShipMin <= 0) {
-    return (
-      <div className="sp-bar sp-bar--free">
-        <span className="sp-icon">🚚</span>
-        <span className="sp-text">Free shipping on all orders!</span>
-      </div>
-    )
+    return null
   }
 
   const pct = Math.min(100, (subtotal / freeShipMin) * 100)
