@@ -632,8 +632,8 @@ export default function CheckoutPage() {
 
         /* ── SIDEBAR ── */
         .ck-sidebar {
-          background: #FFFFFF;
-          border-left: 1px solid #E8E0D5;
+          background: transparent;
+          border-left: none;
           position: sticky;
           top: 0;
           height: 100vh;
@@ -641,6 +641,7 @@ export default function CheckoutPage() {
           overflow-x: hidden;
           scrollbar-width: thin;
           scrollbar-color: #D8D0C4 transparent;
+          padding: 40px 24px 40px 20px;
         }
         .ck-sidebar::-webkit-scrollbar { width: 3px; }
         .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
@@ -650,7 +651,7 @@ export default function CheckoutPage() {
             position: static;
             height: auto;
             border-left: none;
-            border-top: 2px solid #E8E0D5;
+            padding: 0 16px 40px;
           }
         }
 
