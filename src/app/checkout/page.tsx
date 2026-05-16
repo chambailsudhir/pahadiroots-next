@@ -642,6 +642,7 @@ export default function CheckoutPage() {
           scrollbar-width: thin;
           scrollbar-color: #D8D0C4 transparent;
           padding-top: 40px;
+        }
         .ck-sidebar::-webkit-scrollbar { width: 3px; }
         .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
         .ck-sidebar::-webkit-scrollbar-thumb { background: #D8D0C4; border-radius: 3px; }
