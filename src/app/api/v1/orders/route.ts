@@ -2,22 +2,27 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import DOMPurify from 'isomorphic-dompurify'
 import { Resend } from 'resend'
 
-// Input schema matching real checkout form
+// Lightweight server-side sanitizer — no ESM issues unlike isomorphic-dompurify
+// Input is already Zod-validated (type, length, regex) — this strips residual HTML tags
+function sanitize(str: string): string {
+  return str.replace(/<[^>]*>/g, '').trim()
+}
+
+// Input schema — address nested under 'address' key to match checkout payload
 const orderSchema = z.object({
-  // Customer + address fields
-  name:            z.string().trim().min(2).max(100),
-  phone:           z.string().trim().regex(/^[6-9]\d{9}$/, 'Invalid mobile number'),
-  email:           z.string().email().optional().or(z.literal('')),
-  flat:            z.string().trim().min(1).max(200),
-  area:            z.string().trim().min(2).max(200),
-  city:            z.string().trim().min(2).max(100),
-  state:           z.string().trim().min(2).max(100),
-  pincode:         z.string().trim().regex(/^\d{6}$/, 'Invalid pincode'),
-  label:           z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
-  // Order fields
+  address: z.object({
+    name:    z.string().trim().min(2).max(100),
+    phone:   z.string().trim().regex(/^[6-9]\d{9}$/, 'Invalid mobile number'),
+    flat:    z.string().trim().min(1).max(200),
+    area:    z.string().trim().max(200).optional().default(''),
+    city:    z.string().trim().min(2).max(100),
+    state:   z.string().trim().min(2).max(100),
+    pincode: z.string().trim().regex(/^\d{6}$/, 'Invalid pincode'),
+    label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
+  }),
+  customer_email:  z.string().email().optional().or(z.literal('')),
   items:           z.array(z.object({ productId: z.string().uuid(), variantId: z.string().uuid(), qty: z.number().int().min(1).max(50) })).min(1).max(30),
   payment_method:  z.enum(['razorpay', 'cod']),
   coupon_code:     z.string().trim().max(50).optional(),
@@ -37,22 +42,24 @@ export async function POST(req: Request) {
     }
 
     const d = parsed.data
-    // Sanitize inputs
-    const name  = DOMPurify.sanitize(d.name.trim())
-    const flat  = DOMPurify.sanitize(d.flat.trim())
-    const area  = DOMPurify.sanitize(d.area.trim())
+    const a = d.address
+
+    // Sanitize free-text fields (HTML tag stripping)
+    const name = sanitize(a.name)
+    const flat = sanitize(a.flat)
+    const area = sanitize(a.area || '')
 
     const settings = await getSiteSettings()
 
     const { order, alreadyExists } = await createOrder({
       customerName:   name,
-      customerPhone:  d.phone,
-      customerEmail:  d.email || undefined,
+      customerPhone:  a.phone,
+      customerEmail:  d.customer_email || undefined,
       flat, area,
-      city:    d.city,
-      state:   d.state,
-      pincode: d.pincode,
-      label:   d.label,
+      city:    a.city,
+      state:   a.state,
+      pincode: a.pincode,
+      label:   a.label,
       items:          d.items,
       paymentMethod:  d.payment_method,
       couponCode:     d.coupon_code,
@@ -60,12 +67,12 @@ export async function POST(req: Request) {
     }, settings)
 
     // Send confirmation email for COD orders
-    if (d.payment_method === 'cod' && settings.order_email_enabled !== 'false' && d.email && !alreadyExists) {
+    if (d.payment_method === 'cod' && settings.order_email_enabled !== 'false' && d.customer_email && !alreadyExists) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY)
         await withTimeout(resend.emails.send({
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
-          to:      [d.email],
+          to:      [d.customer_email],
           subject: `Order Confirmed — #${order.order_number}`,
           html:    `<p>Hi ${name}, your COD order <strong>#${order.order_number}</strong> is confirmed. Total: Rs.${order.total_amount}. Delivery in 3-5 days.</p>`,
         }), 5000)
@@ -80,7 +87,7 @@ export async function POST(req: Request) {
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
           to:      [settings.admin_notify_email],
           subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} — Rs.${order.total_amount}`,
-          html:    `<p>Order: <b>#${order.order_number}</b><br>Customer: ${name} (+91${d.phone})<br>City: ${d.city}, ${d.state}<br>Total: Rs.${order.total_amount}<br>Payment: ${d.payment_method}</p>`,
+          html:    `<p>Order: <b>#${order.order_number}</b><br>Customer: ${name} (+91${a.phone})<br>City: ${a.city}, ${a.state}<br>Total: Rs.${order.total_amount}<br>Payment: ${d.payment_method}</p>`,
         }), 5000)
       } catch { /* non-fatal */ }
     }
