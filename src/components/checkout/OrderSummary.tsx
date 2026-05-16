@@ -258,6 +258,7 @@ export default function OrderSummary({
           display: flex;
           flex-direction: column;
           min-height: 100%;
+          padding-top: 40px;
         }
 
         /* Header */
@@ -265,7 +266,7 @@ export default function OrderSummary({
           padding: 20px 24px 18px;
           border-bottom: 1px solid #F0E8DC;
           position: sticky;
-          top: 0;
+          top: -40px;
           background: #FFFFFF;
           z-index: 2;
         }

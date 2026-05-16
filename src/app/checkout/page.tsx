@@ -641,7 +641,6 @@ export default function CheckoutPage() {
           overflow-x: hidden;
           scrollbar-width: thin;
           scrollbar-color: #D8D0C4 transparent;
-          padding-top: 40px;
         }
         .ck-sidebar::-webkit-scrollbar { width: 3px; }
         .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
