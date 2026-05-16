@@ -224,11 +224,21 @@ export default function CheckoutPage() {
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
       const payload  = {
-        name:addr.name, phone:addr.phone, email:email||user?.email||'',
-        flat:addr.flat, area:addr.area, city:addr.city, state:addr.state,
-        pincode:addr.pincode, label:addr.label,
-        items: items.map(i => ({ productId:i.productId, variantId:i.variantId, qty:i.qty })),
-        payment_method:payMethod, coupon_code:coupon?.code, idempotency_key:orderKey,
+        address: {
+          name:    addr.name,
+          phone:   addr.phone,
+          flat:    addr.flat,
+          area:    addr.area,
+          city:    addr.city,
+          state:   addr.state,
+          pincode: addr.pincode,
+          label:   addr.label,
+        },
+        customer_email:  email || user?.email || '',
+        items:           items.map(i => ({ productId:i.productId, variantId:i.variantId, qty:i.qty })),
+        payment_method:  payMethod,
+        coupon_code:     coupon?.code,
+        idempotency_key: orderKey,
       }
       if (payMethod === 'cod') {
         const res  = await fetch('/api/v1/orders', {
