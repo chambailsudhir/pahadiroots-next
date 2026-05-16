@@ -1,12 +1,5 @@
 'use client'
 
-/**
- * checkout/page.tsx — Premium redesign
- * - Full-width cream background
- * - Right panel fully visible (no overflow clipping)
- * - Premium typography, spacing, and visual hierarchy
- */
-
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
@@ -109,10 +102,8 @@ export default function CheckoutPage() {
   const bothPayOff    = !codOk && !razorpayEnabled
 
   const analytics = useCheckoutAnalytics({
-    itemCount:      items.length,
-    subtotal:       pricing.subtotal,
-    payMethod,
-    isFreeShipping: pricing.isFreeShipping,
+    itemCount: items.length, subtotal: pricing.subtotal,
+    payMethod, isFreeShipping: pricing.isFreeShipping,
   })
 
   useEffect(() => { if (items.length === 0 && mounted) router.replace('/cart') }, [items, mounted, router])
@@ -133,9 +124,10 @@ export default function CheckoutPage() {
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
         setAddr(prev => ({ ...prev, name: prev.name || fullName || '', phone: prev.phone || cleanPhone || '' }))
         setEmail(prev => prev || data.user?.email || '')
-        const defaultAddr = prof.address_line1 ? [{ _isDefault:true, label:'Home' as const,
-          name:fullName||'', addr:prof.address_line1||'', area:'',
-          city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'' }] : []
+        const defaultAddr = prof.address_line1 ? [{
+          _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
+          area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
+        }] : []
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
         setSavedAddrs(all)
@@ -157,27 +149,25 @@ export default function CheckoutPage() {
   }, [user])
 
   useEffect(() => {
-    fetch('/api/v1/store-data')
-      .then(async r => {
-        if (!r.ok) return
-        const data = await r.json()
-        const now   = new Date()
-        const hints = (data.coupons || [])
-          .filter((c:any) => {
-            if (c.expires_at && new Date(c.expires_at) < now) return false
-            if (c.max_uses && c.uses_count >= c.max_uses)     return false
-            return true
-          })
-          .slice(0, 3)
-          .map((c:any) => ({
-            code:  c.code,
-            label: c.type === 'percent'
-              ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
-              : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
-          }))
-        setCouponHints(hints)
-      })
-      .catch(() => {})
+    fetch('/api/v1/store-data').then(async r => {
+      if (!r.ok) return
+      const data = await r.json()
+      const now = new Date()
+      const hints = (data.coupons || [])
+        .filter((c:any) => {
+          if (c.expires_at && new Date(c.expires_at) < now) return false
+          if (c.max_uses && c.uses_count >= c.max_uses) return false
+          return true
+        })
+        .slice(0, 3)
+        .map((c:any) => ({
+          code: c.code,
+          label: c.type === 'percent'
+            ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
+            : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
+        }))
+      setCouponHints(hints)
+    }).catch(() => {})
   }, [])
 
   function setAddrField(field: keyof OrderAddress, value: string) {
@@ -259,7 +249,7 @@ export default function CheckoutPage() {
           name:'Pahadi Roots', description:'Natural Himalayan Products',
           order_id:data.razorpay_order_id,
           prefill:{ name:addr.name, email:email||user?.email||'', contact:addr.phone },
-          theme:{ color:'#1a3a1e' },
+          theme:{ color:'#2C4A2E' },
           handler: async (response: any) => {
             try {
               const verRes = await fetch('/api/v1/payments', {
@@ -300,119 +290,107 @@ export default function CheckoutPage() {
         remainingForFreeShip={pricing.remainingForFreeShip}
       />
 
-      {/* Premium breadcrumb steps */}
-      <div className="cop-steps">
-        <div className="cop-step cop-done">
-          <div className="cop-step-circle">✓</div>
-          <span className="cop-step-label">Cart</span>
+      {/* Breadcrumb */}
+      <nav className="ck-nav">
+        <div className="ck-nav-inner">
+          <div className="ck-crumb ck-crumb--done">
+            <div className="ck-crumb-dot ck-crumb-dot--done">✓</div>
+            <span>Cart</span>
+          </div>
+          <div className="ck-crumb-line ck-crumb-line--done" />
+          <div className="ck-crumb ck-crumb--active">
+            <div className="ck-crumb-dot ck-crumb-dot--active">2</div>
+            <span>Checkout</span>
+          </div>
+          <div className="ck-crumb-line" />
+          <div className="ck-crumb">
+            <div className="ck-crumb-dot">3</div>
+            <span>Confirmation</span>
+          </div>
         </div>
-        <div className="cop-step-line cop-line-done" />
-        <div className="cop-step cop-active">
-          <div className="cop-step-circle">2</div>
-          <span className="cop-step-label">Checkout</span>
-        </div>
-        <div className="cop-step-line" />
-        <div className="cop-step">
-          <div className="cop-step-circle">3</div>
-          <span className="cop-step-label">Confirmation</span>
-        </div>
-      </div>
+      </nav>
 
       {bothPayOff && (
-        <div className="cop-blocked" role="alert">
-          ⚠ Checkout temporarily unavailable. Please contact support.
-        </div>
+        <div className="ck-alert">⚠ Checkout temporarily unavailable. Please contact support.</div>
       )}
 
-      {/* Full-width cream wrapper */}
-      <div className="cop-page">
-        <div className="cop-layout">
-          {/* ── LEFT ── */}
-          <div className="cop-left">
+      <div className="ck-page">
+        <div className="ck-grid">
 
-            {/* Delivery card */}
-            <div className="cop-card">
-              <div className="cop-card-head">
-                <div className="cop-num">1</div>
-                <div>
-                  <h2 className="cop-card-title">Delivery Details</h2>
-                  <p className="cop-card-sub">Where should we send your order?</p>
-                </div>
-              </div>
-              <SavedAddressSelector
-                addresses={savedAddrs}
-                selectedIdx={selectedSavedIdx}
-                onSelect={applySaved}
-                indiaStates={INDIA_STATES}
-              />
-              <AddressForm
-                addr={addr}
-                email={email}
-                touched={touched}
-                onChange={setAddrField}
-                onEmailChange={setEmail}
-                onTouch={touchField}
-                selectedSavedIdx={selectedSavedIdx}
-              />
-            </div>
+          {/* ── LEFT COLUMN ── */}
+          <div className="ck-left">
 
-            {/* Payment card */}
-            <div className="cop-card">
-              <div className="cop-card-head">
-                <div className="cop-num">2</div>
+            <section className="ck-section">
+              <div className="ck-section-header">
+                <div className="ck-step-badge">01</div>
                 <div>
-                  <h2 className="cop-card-title">Payment Method</h2>
-                  <p className="cop-card-sub">Safe, secure &amp; encrypted</p>
+                  <h2 className="ck-section-title">Delivery Details</h2>
+                  <p className="ck-section-desc">Where should we send your order?</p>
                 </div>
               </div>
-              <PaymentSection
-                payMethod={payMethod}
-                onChange={setPayMethod}
-                razorpayEnabled={razorpayEnabled}
-                codOk={codOk}
-                codEnabled={codEnabled}
-                prepaidPct={prepaidPct}
-                prepaidDiscount={pricing.prepaidDiscount}
-                codMax={codMax}
-                total={pricing.total}
-              />
-            </div>
+              <div className="ck-section-body">
+                <SavedAddressSelector
+                  addresses={savedAddrs}
+                  selectedIdx={selectedSavedIdx}
+                  onSelect={applySaved}
+                  indiaStates={INDIA_STATES}
+                />
+                <AddressForm
+                  addr={addr}
+                  email={email}
+                  touched={touched}
+                  onChange={setAddrField}
+                  onEmailChange={setEmail}
+                  onTouch={touchField}
+                  selectedSavedIdx={selectedSavedIdx}
+                />
+              </div>
+            </section>
 
-            {/* Trust badges */}
-            <div className="cop-trust">
-              <div className="cop-trust-item">
-                <span className="cop-trust-icon">🚚</span>
+            <section className="ck-section">
+              <div className="ck-section-header">
+                <div className="ck-step-badge">02</div>
                 <div>
-                  <div className="cop-trust-title">3–5 Day Delivery</div>
-                  <div className="cop-trust-desc">Across 10 Himalayan states</div>
+                  <h2 className="ck-section-title">Payment Method</h2>
+                  <p className="ck-section-desc">Secure, encrypted &amp; instant</p>
                 </div>
               </div>
-              <div className="cop-trust-item">
-                <span className="cop-trust-icon">🔄</span>
-                <div>
-                  <div className="cop-trust-title">7-Day Returns</div>
-                  <div className="cop-trust-desc">Easy hassle-free process</div>
-                </div>
+              <div className="ck-section-body">
+                <PaymentSection
+                  payMethod={payMethod}
+                  onChange={setPayMethod}
+                  razorpayEnabled={razorpayEnabled}
+                  codOk={codOk}
+                  codEnabled={codEnabled}
+                  prepaidPct={prepaidPct}
+                  prepaidDiscount={pricing.prepaidDiscount}
+                  codMax={codMax}
+                  total={pricing.total}
+                />
               </div>
-              <div className="cop-trust-item">
-                <span className="cop-trust-icon">🌿</span>
-                <div>
-                  <div className="cop-trust-title">100% Authentic</div>
-                  <div className="cop-trust-desc">Sourced from the Himalayas</div>
+            </section>
+
+            {/* Trust strip */}
+            <div className="ck-trust">
+              {[
+                { icon:'🚚', t:'3–5 Day Delivery', d:'Pan-India Himalayan dispatch' },
+                { icon:'🔄', t:'7-Day Returns',    d:'Hassle-free, no questions' },
+                { icon:'🌿', t:'100% Authentic',   d:'Straight from the mountains' },
+                { icon:'💬', t:'WhatsApp Support', d:'Real humans, always here' },
+              ].map(({ icon, t, d }) => (
+                <div key={t} className="ck-trust-card">
+                  <div className="ck-trust-icon">{icon}</div>
+                  <div className="ck-trust-text">
+                    <strong>{t}</strong>
+                    <span>{d}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="cop-trust-item">
-                <span className="cop-trust-icon">💬</span>
-                <div>
-                  <div className="cop-trust-title">WhatsApp Support</div>
-                  <div className="cop-trust-desc">We're here to help</div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* ── RIGHT ── */}
-          <div className="cop-right">
+          {/* ── RIGHT COLUMN ── */}
+          <aside className="ck-sidebar">
             <OrderSummary
               items={items}
               pricing={pricing}
@@ -435,247 +413,299 @@ export default function CheckoutPage() {
               summaryOpen={summaryOpen}
               onToggleSummary={() => setSummaryOpen(o => !o)}
             />
-          </div>
+          </aside>
         </div>
       </div>
 
-      {/* Mobile sticky CTA */}
-      <div className="cop-sticky" aria-hidden="true">
-        <div>
-          <div className="cop-sticky-total">{formatPrice(pricing.total)}</div>
-          <div className="cop-sticky-sub">Incl. taxes &amp; shipping</div>
+      {/* Mobile sticky footer */}
+      <div className="ck-mob-bar">
+        <div className="ck-mob-info">
+          <span className="ck-mob-total">{formatPrice(pricing.total)}</span>
+          <span className="ck-mob-sub">incl. all taxes</span>
         </div>
-        <button className="cop-sticky-btn" onClick={handlePlace}
+        <button className="ck-mob-cta" onClick={handlePlace}
           disabled={placing || bothPayOff || belowMinOrder} type="button">
-          {placing ? '⏳ Processing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : '🛒 Place Order'}
+          {placing ? 'Placing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : 'Place Order →'}
         </button>
       </div>
 
       <style>{`
-        /* ── Steps bar ── */
-        .cop-steps {
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+        /* ── NAV ── */
+        .ck-nav {
+          background: #FDFAF5;
+          border-bottom: 1px solid #E8E0D5;
+        }
+        .ck-nav-inner {
+          max-width: 1440px;
+          margin: 0 auto;
+          padding: 12px 40px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          padding: 14px 20px;
-          background: #fff;
-          border-bottom: 1px solid #ede8df;
           gap: 0;
         }
-        .cop-step {
+        @media (max-width: 640px) { .ck-nav-inner { padding: 12px 16px; } }
+        .ck-crumb {
           display: flex;
           align-items: center;
           gap: 8px;
+          font-family: 'DM Sans', sans-serif;
           font-size: 12px;
-          font-weight: 600;
-          color: #c4b9a8;
+          font-weight: 500;
+          color: #BDB5A8;
+          letter-spacing: 0.02em;
         }
-        .cop-step-circle {
-          width: 26px;
-          height: 26px;
+        .ck-crumb--done { color: #7A9A6A; }
+        .ck-crumb--active { color: #2C4A2E; font-weight: 600; }
+        .ck-crumb-dot {
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
-          background: #ede8df;
+          background: #E8E0D5;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 700;
           flex-shrink: 0;
-          transition: all 0.2s;
         }
-        .cop-step-label { letter-spacing: 0.3px; }
-        .cop-active { color: #1a3a1e; }
-        .cop-active .cop-step-circle { background: #1a3a1e; color: #fff; box-shadow: 0 2px 8px rgba(26,58,30,.3); }
-        .cop-done { color: #2d5233; }
-        .cop-done .cop-step-circle { background: #e8f4eb; color: #2d5233; }
-        .cop-step-line { width: 52px; height: 1.5px; background: #ede8df; margin: 0 10px; flex-shrink: 0; }
-        .cop-line-done { background: #a8d5b5; }
+        .ck-crumb-dot--done {
+          background: #D4E8C8;
+          color: #4A7A3A;
+          font-size: 11px;
+        }
+        .ck-crumb-dot--active {
+          background: #2C4A2E;
+          color: #F5F0E8;
+          box-shadow: 0 0 0 3px rgba(44,74,46,.15);
+        }
+        .ck-crumb-line {
+          flex: 0 0 40px;
+          height: 1px;
+          background: #E0D8CE;
+          margin: 0 8px;
+        }
+        .ck-crumb-line--done { background: #B8D4A8; }
 
-        /* ── Blocked ── */
-        .cop-blocked {
-          background: #fdecea;
-          border: 1px solid #f5c6cb;
-          color: #c0392b;
+        /* ── ALERT ── */
+        .ck-alert {
+          background: #FEF0EE;
+          border-bottom: 1px solid #F5C8C0;
+          color: #B03020;
+          font-family: 'DM Sans', sans-serif;
           font-size: 13px;
-          font-weight: 600;
-          padding: 12px 20px;
+          font-weight: 500;
+          padding: 10px 40px;
           text-align: center;
         }
 
-        /* ── Full-width cream page ── */
-        .cop-page {
-          background: #f5f0e8;
-          min-height: calc(100vh - 120px);
+        /* ── PAGE SHELL ── */
+        .ck-page {
+          background: #F7F2EB;
+          min-height: calc(100vh - 100px);
           width: 100%;
         }
-
-        /* ── Two-column layout ── */
-        .cop-layout {
-          display: grid;
-          grid-template-columns: 1fr 420px;
-          gap: 0;
+        .ck-grid {
           max-width: 1440px;
           margin: 0 auto;
-          align-items: start;
+          display: grid;
+          grid-template-columns: 1fr 420px;
+          min-height: calc(100vh - 100px);
         }
-        @media (max-width: 1200px) { .cop-layout { grid-template-columns: 1fr 380px; } }
-        @media (max-width: 1024px) { .cop-layout { grid-template-columns: 1fr 340px; } }
-        @media (max-width: 900px)  { .cop-layout { grid-template-columns: 1fr; padding-bottom: 80px; } }
+        @media (max-width: 1200px) { .ck-grid { grid-template-columns: 1fr 380px; } }
+        @media (max-width: 960px)  { .ck-grid { grid-template-columns: 1fr; padding-bottom: 80px; } }
 
-        /* ── Left column ── */
-        .cop-left {
-          padding: 32px 36px 40px 40px;
+        /* ── LEFT ── */
+        .ck-left {
+          padding: 40px 48px 60px 48px;
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 28px;
         }
-        @media (max-width: 1024px) { .cop-left { padding: 24px 24px 32px; } }
-        @media (max-width: 640px)  { .cop-left { padding: 16px 16px 28px; } }
+        @media (max-width: 1100px) { .ck-left { padding: 32px 32px 48px; } }
+        @media (max-width: 640px)  { .ck-left { padding: 20px 16px 40px; gap: 20px; } }
 
-        /* ── Cards ── */
-        .cop-card {
-          background: #fff;
-          border-radius: 18px;
-          box-shadow:
-            0 1px 3px rgba(0,0,0,.04),
-            0 4px 16px rgba(0,0,0,.06),
-            0 0 0 1px rgba(0,0,0,.04);
+        /* ── SECTIONS ── */
+        .ck-section {
+          background: #FFFFFF;
+          border-radius: 20px;
           overflow: hidden;
-          transition: box-shadow 0.2s;
-        }
-        .cop-card:hover {
           box-shadow:
-            0 2px 6px rgba(0,0,0,.05),
-            0 8px 24px rgba(0,0,0,.08),
-            0 0 0 1px rgba(0,0,0,.04);
+            0 1px 2px rgba(44,30,10,.04),
+            0 4px 20px rgba(44,30,10,.07),
+            inset 0 1px 0 rgba(255,255,255,.8);
+          border: 1px solid rgba(220,210,195,.6);
+          transition: box-shadow .3s ease;
         }
-        .cop-card-head {
+        .ck-section:hover {
+          box-shadow:
+            0 2px 4px rgba(44,30,10,.05),
+            0 8px 32px rgba(44,30,10,.1),
+            inset 0 1px 0 rgba(255,255,255,.8);
+        }
+        .ck-section-header {
           display: flex;
-          align-items: center;
-          gap: 14px;
-          padding: 20px 24px;
-          background: linear-gradient(to right, #faf9f6, #fff);
-          border-bottom: 1px solid #f0ebe2;
+          align-items: flex-start;
+          gap: 16px;
+          padding: 24px 28px 20px;
+          border-bottom: 1px solid #F2EDE5;
+          background: linear-gradient(180deg, #FEFCF9 0%, #FFFFFF 100%);
         }
-        .cop-num {
-          width: 32px;
-          height: 32px;
+        @media (max-width: 640px) { .ck-section-header { padding: 18px 20px 16px; } }
+        .ck-step-badge {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 13px;
+          font-weight: 600;
+          color: #F7F2EB;
+          background: #2C4A2E;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #1a3a1e, #2d5233);
-          color: #fff;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 13px;
-          font-weight: 800;
           flex-shrink: 0;
-          box-shadow: 0 3px 10px rgba(26,58,30,.28);
+          letter-spacing: 0.5px;
+          box-shadow: 0 4px 12px rgba(44,74,46,.3);
+          margin-top: 2px;
         }
-        .cop-card-title {
-          font-size: 17px;
-          font-weight: 700;
-          color: #1a1a1a;
-          margin: 0 0 2px;
-          font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
-          letter-spacing: -0.2px;
+        .ck-section-title {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 22px;
+          font-weight: 600;
+          color: #1C2B1E;
+          margin: 0 0 3px;
+          letter-spacing: -0.3px;
+          line-height: 1.2;
         }
-        .cop-card-sub {
+        .ck-section-desc {
+          font-family: 'DM Sans', sans-serif;
           font-size: 12px;
-          color: #9a9180;
+          color: #9A9080;
           margin: 0;
-          font-family: inherit;
+          font-weight: 400;
+          letter-spacing: 0.01em;
         }
+        .ck-section-body { padding: 0; }
 
-        /* ── Trust grid ── */
-        .cop-trust {
-          background: #fff;
-          border-radius: 18px;
-          box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
+        /* ── TRUST STRIP ── */
+        .ck-trust {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          overflow: hidden;
+          gap: 12px;
         }
-        .cop-trust-item {
+        @media (max-width: 480px) { .ck-trust { grid-template-columns: 1fr; } }
+        .ck-trust-card {
+          background: #FFFFFF;
+          border: 1px solid rgba(220,210,195,.6);
+          border-radius: 16px;
+          padding: 16px 18px;
           display: flex;
           align-items: flex-start;
-          gap: 10px;
-          padding: 16px 18px;
-          border-right: 1px solid #f0ebe2;
-          border-bottom: 1px solid #f0ebe2;
-          transition: background 0.15s;
+          gap: 12px;
+          box-shadow: 0 2px 8px rgba(44,30,10,.04);
+          transition: all .25s ease;
         }
-        .cop-trust-item:nth-child(2n) { border-right: none; }
-        .cop-trust-item:nth-child(3),
-        .cop-trust-item:nth-child(4) { border-bottom: none; }
-        .cop-trust-item:hover { background: #fdf9f4; }
-        .cop-trust-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-        .cop-trust-title { font-size: 12px; font-weight: 700; color: #2a2a2a; font-family: inherit; }
-        .cop-trust-desc  { font-size: 11px; color: #9a9180; margin-top: 1px; font-family: inherit; }
+        .ck-trust-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(44,30,10,.09);
+          border-color: rgba(180,210,160,.7);
+        }
+        .ck-trust-icon { font-size: 22px; flex-shrink: 0; }
+        .ck-trust-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .ck-trust-text strong {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          color: #2C3A28;
+        }
+        .ck-trust-text span {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #9A9080;
+        }
 
-        /* ── Right column (order summary) ── */
-        .cop-right {
-          background: #fff;
-          border-left: 1px solid #e8e2d8;
+        /* ── SIDEBAR ── */
+        .ck-sidebar {
+          background: #FFFFFF;
+          border-left: 1px solid #E8E0D5;
           position: sticky;
           top: 0;
-          max-height: 100vh;
+          height: 100vh;
           overflow-y: auto;
           overflow-x: hidden;
-          width: 100%;
-          min-width: 0;
           scrollbar-width: thin;
-          scrollbar-color: #d8d0c4 transparent;
+          scrollbar-color: #D8D0C4 transparent;
         }
-        .cop-right::-webkit-scrollbar { width: 4px; }
-        .cop-right::-webkit-scrollbar-track { background: transparent; }
-        .cop-right::-webkit-scrollbar-thumb { background: #d8d0c4; border-radius: 4px; }
-        @media (max-width: 900px) {
-          .cop-right {
+        .ck-sidebar::-webkit-scrollbar { width: 3px; }
+        .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
+        .ck-sidebar::-webkit-scrollbar-thumb { background: #D8D0C4; border-radius: 3px; }
+        @media (max-width: 960px) {
+          .ck-sidebar {
             position: static;
+            height: auto;
             border-left: none;
-            border-top: 2px solid #e8e2d8;
-            max-height: none;
+            border-top: 2px solid #E8E0D5;
           }
         }
 
-        /* ── Mobile sticky CTA ── */
-        .cop-sticky {
+        /* ── MOBILE BAR ── */
+        .ck-mob-bar {
           display: none;
           position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: rgba(255,255,255,.97);
-          backdrop-filter: blur(12px);
-          border-top: 1px solid #e8e2d8;
-          padding: 12px 20px;
-          z-index: 250;
+          bottom: 0; left: 0; right: 0;
+          background: rgba(255,255,255,.96);
+          backdrop-filter: blur(16px);
+          border-top: 1px solid #E8E0D5;
+          padding: 14px 20px;
+          z-index: 300;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
-          box-shadow: 0 -8px 24px rgba(0,0,0,.10);
+          gap: 16px;
+          box-shadow: 0 -8px 32px rgba(0,0,0,.08);
         }
-        @media (max-width: 900px) { .cop-sticky { display: flex; } }
-        .cop-sticky-total { font-size: 18px; font-weight: 800; color: #1a1a1a; }
-        .cop-sticky-sub   { font-size: 11px; color: #9a9180; margin-top: 1px; }
-        .cop-sticky-btn {
-          background: linear-gradient(135deg, #1a3a1e, #2d5233);
-          color: #fff;
-          border: none;
-          padding: 13px 22px;
-          border-radius: 12px;
+        @media (max-width: 960px) { .ck-mob-bar { display: flex; } }
+        .ck-mob-info { display: flex; flex-direction: column; }
+        .ck-mob-total {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 22px;
           font-weight: 700;
+          color: #1C2B1E;
+          line-height: 1;
+        }
+        .ck-mob-sub {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 10px;
+          color: #9A9080;
+          margin-top: 2px;
+          font-weight: 400;
+        }
+        .ck-mob-cta {
+          background: #2C4A2E;
+          color: #F5F0E8;
+          border: none;
+          padding: 14px 24px;
+          border-radius: 14px;
+          font-family: 'DM Sans', sans-serif;
+          font-weight: 600;
           font-size: 14px;
-          white-space: nowrap;
           cursor: pointer;
-          box-shadow: 0 4px 14px rgba(26,58,30,.32);
-          transition: all 0.2s;
+          white-space: nowrap;
+          box-shadow: 0 4px 16px rgba(44,74,46,.35);
+          transition: all .2s;
+          letter-spacing: 0.02em;
         }
-        .cop-sticky-btn:hover:not(:disabled) {
+        .ck-mob-cta:hover:not(:disabled) {
+          background: #3A6040;
+          box-shadow: 0 8px 24px rgba(44,74,46,.45);
           transform: translateY(-1px);
-          box-shadow: 0 8px 20px rgba(26,58,30,.4);
         }
-        .cop-sticky-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .ck-mob-cta:disabled { opacity: .5; cursor: not-allowed; }
       `}</style>
     </>
   )

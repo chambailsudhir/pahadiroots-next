@@ -38,81 +38,87 @@ export default function OrderSummary({
 }: Props) {
   const [showHints, setShowHints] = useState(false)
 
-  const savingsBadge    = pricing.discount + pricing.prepaidDiscount
-  const prepaidPct      = parseInt(settings.prepaid_discount_pct || '5')
-  const loyaltyEnabled  = settings.loyalty_enabled === 'true'
-  const loyaltyRate     = parseFloat(settings.loyalty_points_per_rupee || '0.1')
-  const loyaltyLabel    = settings.loyalty_points_label || 'reward points'
-  const loyaltyPts      = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
+  const savingsBadge   = pricing.discount + pricing.prepaidDiscount
+  const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
+  const loyaltyEnabled = settings.loyalty_enabled === 'true'
+  const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '0.1')
+  const loyaltyLabel   = settings.loyalty_points_label || 'reward points'
+  const loyaltyPts     = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
 
-  const now       = new Date()
-  const istHour   = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
-  const sameDay   = istHour < 14
-  const minDays   = (sameDay ? 0 : 1) + 3
-  const maxDays   = (sameDay ? 0 : 1) + 5
-  const etaMin    = new Date(now); etaMin.setDate(now.getDate() + minDays)
-  const etaMax    = new Date(now); etaMax.setDate(now.getDate() + maxDays)
-  const fmt       = (d: Date) => d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' })
-  const etaText   = `${fmt(etaMin)} – ${fmt(etaMax)}`
+  const now     = new Date()
+  const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
+  const sameDay = istHour < 14
+  const minDays = (sameDay ? 0 : 1) + 3
+  const maxDays = (sameDay ? 0 : 1) + 5
+  const etaMin  = new Date(now); etaMin.setDate(now.getDate() + minDays)
+  const etaMax  = new Date(now); etaMax.setDate(now.getDate() + maxDays)
+  const fmt     = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
-    <div className="os-wrap">
+    <div className="os-root">
 
-      {/* Header */}
-      <div className="os-header">
-        <button className="os-toggle" onClick={onToggleSummary} aria-expanded={summaryOpen} type="button">
-          <span className="os-header-title">Order Summary</span>
-          <span className="os-header-right">
-            <span className="os-item-count">{items.length} item{items.length > 1 ? 's' : ''}</span>
-            <span className="os-chevron">{summaryOpen ? '▲' : '▼'}</span>
+      {/* Sticky header inside sidebar */}
+      <div className="os-head">
+        <button className="os-head-btn" onClick={onToggleSummary} aria-expanded={summaryOpen} type="button">
+          <span className="os-head-title">Your Order</span>
+          <span className="os-head-meta">
+            <span className="os-head-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+            <svg className={`os-chevron${summaryOpen ? '' : ' os-chevron--down'}`} width="12" height="8" viewBox="0 0 12 8" fill="none">
+              <path d="M1 7L6 2L11 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
           </span>
         </button>
       </div>
 
-      <div className={`os-body${summaryOpen ? ' open' : ''}`}>
+      <div className={`os-body${summaryOpen ? ' os-body--open' : ''}`}>
 
-        {/* Items list */}
+        {/* Item list */}
         <div className="os-items">
           {items.map((item: any) => (
             <div key={item.variantId} className="os-item">
-              <div className="os-img-wrap">
+              <div className="os-img-shell">
                 <div className="os-img">
                   {item.image
-                    ? <Image src={item.image} alt={item.name} fill sizes="56px"
-                        style={{ objectFit:'cover', borderRadius:'10px' }} />
-                    : <span style={{ fontSize:'24px' }}>{item.emoji || '🌿'}</span>}
+                    ? <Image src={item.image} alt={item.name} fill sizes="60px"
+                        style={{ objectFit: 'cover', borderRadius: '10px' }} />
+                    : <span style={{ fontSize: '26px' }}>{item.emoji || '🌿'}</span>}
                 </div>
-                <span className="os-qty-badge">{item.qty}</span>
+                <span className="os-qty">{item.qty}</span>
               </div>
-              <div className="os-info">
-                <div className="os-name">{item.name}</div>
-                {item.size && <div className="os-size">{item.size}</div>}
+              <div className="os-item-info">
+                <div className="os-item-name">{item.name}</div>
+                {item.size && <div className="os-item-size">{item.size}</div>}
               </div>
-              <div className="os-price">{formatPrice(item.price * item.qty)}</div>
+              <div className="os-item-price">{formatPrice(item.price * item.qty)}</div>
             </div>
           ))}
         </div>
 
-        {/* Divider */}
-        <div className="os-divider" />
+        <div className="os-rule" />
 
-        {/* Coupon section */}
-        <div className="os-section">
+        {/* Coupon */}
+        <div className="os-coupon-area">
           {coupon ? (
             <div className="os-coupon-applied">
               <div className="os-coupon-left">
-                <span className="os-coupon-tag">🎉</span>
+                <span className="os-coupon-emoji">🎉</span>
                 <div>
-                  <div className="os-coupon-code">{coupon.code}</div>
+                  <div className="os-coupon-name">{coupon.code}</div>
                   <div className="os-coupon-saving">Saving {formatPrice(coupon.discount)}</div>
                 </div>
               </div>
-              <button className="os-coupon-rm" onClick={onRemoveCoupon} type="button" aria-label="Remove coupon">✕</button>
+              <button className="os-coupon-rm" onClick={onRemoveCoupon} type="button" aria-label="Remove coupon">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
             </div>
           ) : (
             <>
               <div className="os-coupon-row">
-                <input className="os-coupon-input" type="text"
+                <input
+                  className="os-coupon-input"
+                  type="text"
                   value={couponCode}
                   onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
                   onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
@@ -120,10 +126,10 @@ export default function OrderSummary({
                   aria-label="Coupon code"
                 />
                 <button className="os-coupon-btn" onClick={onApplyCoupon} disabled={couponLoading} type="button">
-                  {couponLoading ? '…' : 'Apply'}
+                  {couponLoading ? <span className="os-spin" /> : 'Apply'}
                 </button>
               </div>
-              {couponError && <p className="os-coupon-err" role="alert">⚠ {couponError}</p>}
+              {couponError && <p className="os-coupon-err">⚠ {couponError}</p>}
               {couponHints.length > 0 && (
                 <div className="os-hints">
                   <button className="os-hints-toggle" type="button" onClick={() => setShowHints(v => !v)}>
@@ -132,7 +138,7 @@ export default function OrderSummary({
                   {showHints && (
                     <div className="os-hints-list">
                       {couponHints.map(h => (
-                        <button key={h.code} className="os-hint-chip" type="button"
+                        <button key={h.code} className="os-hint" type="button"
                           onClick={() => { onCouponCodeChange(h.code); setShowHints(false) }}>
                           <span className="os-hint-code">{h.code}</span>
                           <span className="os-hint-label">{h.label}</span>
@@ -146,52 +152,53 @@ export default function OrderSummary({
           )}
         </div>
 
-        {/* Divider */}
-        <div className="os-divider" />
+        <div className="os-rule" />
 
-        {/* Price breakdown */}
-        <div className="os-section os-prices">
-          <div className="os-pr-row">
+        {/* Price table */}
+        <div className="os-price-table">
+          <div className="os-price-row">
             <span>Subtotal</span>
             <span>{formatPrice(pricing.subtotal)}</span>
           </div>
           {coupon && pricing.discount > 0 && (
-            <div className="os-pr-row os-g">
+            <div className="os-price-row os-price-row--green">
               <span>Coupon ({coupon.code})</span>
               <span>−{formatPrice(pricing.discount)}</span>
             </div>
           )}
           {pricing.prepaidDiscount > 0 && (
-            <div className="os-pr-row os-g">
+            <div className="os-price-row os-price-row--green">
               <span>Prepaid discount ({prepaidPct}%)</span>
               <span>−{formatPrice(pricing.prepaidDiscount)}</span>
             </div>
           )}
-          <div className="os-pr-row">
+          <div className="os-price-row">
             <span>Shipping</span>
             <span className={pricing.isFreeShipping ? 'os-free' : ''}>
               {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
             </span>
           </div>
           {pricing.gstTotal > 0 && (
-            <div className="os-pr-row os-muted">
+            <div className="os-price-row os-price-row--muted">
               <span>GST (inclusive)</span>
               <span>₹{pricing.gstTotal}</span>
             </div>
           )}
 
-          <div className="os-total-row">
-            <span>Total</span>
-            <span className="os-total-amount">{formatPrice(pricing.total)}</span>
+          {/* Total */}
+          <div className="os-total">
+            <span className="os-total-label">Total</span>
+            <span className="os-total-value">{formatPrice(pricing.total)}</span>
           </div>
 
           {savingsBadge > 0 && (
-            <div className="os-save-pill">
-              <span>🏷</span> You're saving {formatPrice(savingsBadge)} on this order!
+            <div className="os-saving-strip">
+              <span>🏷</span>
+              <span>You're saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
             </div>
           )}
           {loyaltyEnabled && loyaltyPts > 0 && (
-            <div className="os-loyalty-pill">
+            <div className="os-loyalty-strip">
               ⭐ Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
             </div>
           )}
@@ -200,71 +207,69 @@ export default function OrderSummary({
 
       {/* Errors */}
       {belowMinOrder && (
-        <div className="os-section">
-          <div className="os-error" role="alert">
-            🛒 Minimum order is {formatPrice(minOrderAmt)}. Add <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more.
-          </div>
+        <div className="os-error-box">
+          🛒 Minimum order is {formatPrice(minOrderAmt)}. Add <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more.
         </div>
       )}
-      {error && (
-        <div className="os-section">
-          <div className="os-error" role="alert">⚠ {error}</div>
-        </div>
-      )}
+      {error && <div className="os-error-box">⚠ {error}</div>}
 
-      {/* CTA button */}
-      <div className="os-cta-wrap">
-        <button className="os-cta" onClick={onPlaceOrder}
+      {/* CTA */}
+      <div className="os-cta-area">
+        <button
+          className={`os-cta${placing ? ' os-cta--loading' : ''}`}
+          onClick={onPlaceOrder}
           disabled={placing || bothPaymentsOff || belowMinOrder}
-          type="button" aria-busy={placing}>
+          type="button"
+          aria-busy={placing}
+        >
           {placing ? (
-            <span className="os-cta-inner">
-              <span className="os-cta-spinner" />
-              <span>Placing Order…</span>
-            </span>
+            <><span className="os-spin os-spin--white" /> Placing Order…</>
           ) : payMethod === 'razorpay' ? (
-            <span className="os-cta-inner">
-              <span>⚡ Pay Securely</span>
-              <span className="os-cta-amt">{formatPrice(pricing.total)}</span>
-            </span>
+            <><span>⚡ Pay Securely</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           ) : (
-            <span className="os-cta-inner">
-              <span>🛒 Place COD Order</span>
-              <span className="os-cta-amt">{formatPrice(pricing.total)}</span>
-            </span>
+            <><span>Place COD Order</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           )}
         </button>
 
-        <div className="os-secure">
-          <span>🔒</span> 100% Secure &amp; Encrypted Checkout
+        <div className="os-secure-row">
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none" className="os-lock">
+            <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.2"/>
+            <path d="M3.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+          100% Secure &amp; Encrypted Checkout
         </div>
       </div>
 
-      {/* ETA strip */}
+      {/* ETA */}
       <div className="os-eta">
         <div className="os-eta-icon">🚚</div>
         <div>
-          <div className="os-eta-main">Delivery by <strong>{etaText}</strong></div>
+          <div className="os-eta-line">
+            Delivery by <strong>{fmt(etaMin)} – {fmt(etaMax)}</strong>
+          </div>
           <div className="os-eta-sub">
-            {sameDay ? '· Order now for today\'s dispatch!' : '· Order now for tomorrow\'s dispatch'}
+            {sameDay ? 'Order now for today\'s dispatch!' : 'Order now for tomorrow\'s dispatch'}
           </div>
         </div>
       </div>
 
       <style>{`
-        /* ── Wrapper ── */
-        .os-wrap {
+        .os-root {
           display: flex;
           flex-direction: column;
+          min-height: 100%;
         }
 
-        /* ── Header ── */
-        .os-header {
-          padding: 18px 22px 16px;
-          border-bottom: 1px solid #f0ebe2;
-          background: linear-gradient(to bottom, #faf8f4, #fff);
+        /* Header */
+        .os-head {
+          padding: 20px 24px 18px;
+          border-bottom: 1px solid #F0E8DC;
+          position: sticky;
+          top: 0;
+          background: #FFFFFF;
+          z-index: 2;
         }
-        .os-toggle {
+        .os-head-btn {
           width: 100%;
           background: none;
           border: none;
@@ -275,346 +280,425 @@ export default function OrderSummary({
           justify-content: space-between;
           font-family: inherit;
         }
-        .os-header-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: #1a1a1a;
-          font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
-          letter-spacing: -0.1px;
+        .os-head-title {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 18px;
+          font-weight: 600;
+          color: #1C2B1E;
+          letter-spacing: -0.2px;
         }
-        .os-header-right {
+        .os-head-meta {
           display: flex;
           align-items: center;
           gap: 8px;
         }
-        .os-item-count {
+        .os-head-count {
+          font-family: 'DM Sans', sans-serif;
           font-size: 11px;
-          font-weight: 600;
-          color: #9a9180;
-          background: #f0ebe2;
-          padding: 3px 8px;
+          font-weight: 500;
+          color: #9A9080;
+          background: #F2EAE0;
+          padding: 3px 9px;
           border-radius: 20px;
         }
         .os-chevron {
-          font-size: 10px;
-          color: #9a9180;
+          color: #9A9080;
+          transition: transform .25s ease;
+          flex-shrink: 0;
         }
+        .os-chevron--down { transform: rotate(180deg); }
 
-        /* ── Body ── */
+        /* Body */
         .os-body { display: block; }
-        @media (max-width: 900px) {
+        @media (max-width: 960px) {
           .os-body { display: none; }
-          .os-body.open { display: block; }
+          .os-body--open { display: block; }
         }
 
-        /* ── Sections & dividers ── */
-        .os-section { padding: 16px 22px; }
-        .os-divider { height: 1px; background: #f0ebe2; }
-
-        /* ── Items ── */
+        /* Items */
         .os-items {
-          padding: 16px 22px;
+          padding: 18px 24px;
           display: flex;
           flex-direction: column;
           gap: 14px;
         }
-        .os-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .os-img-wrap {
-          position: relative;
-          flex-shrink: 0;
-        }
+        .os-item { display: flex; align-items: center; gap: 12px; }
+        .os-img-shell { position: relative; flex-shrink: 0; }
         .os-img {
-          width: 56px;
-          height: 56px;
-          border-radius: 10px;
+          width: 60px;
+          height: 60px;
+          border-radius: 12px;
           overflow: hidden;
-          background: #f5f0e8;
+          background: #F5F0E8;
           position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 1px solid #ede8df;
+          border: 1px solid #EDE5D8;
         }
-        .os-qty-badge {
+        .os-qty {
           position: absolute;
           top: -5px;
           right: -5px;
-          width: 19px;
-          height: 19px;
-          background: #1a3a1e;
+          width: 20px;
+          height: 20px;
+          background: #2C4A2E;
           color: #fff;
           border-radius: 50%;
+          font-family: 'DM Sans', sans-serif;
           font-size: 10px;
-          font-weight: 800;
+          font-weight: 700;
           display: flex;
           align-items: center;
           justify-content: center;
           box-shadow: 0 1px 4px rgba(0,0,0,.2);
+          border: 1.5px solid #fff;
         }
-        .os-info { flex: 1; min-width: 0; }
-        .os-name {
+        .os-item-info { flex: 1; min-width: 0; }
+        .os-item-name {
+          font-family: 'DM Sans', sans-serif;
           font-size: 13px;
-          font-weight: 700;
-          color: #1a1a1a;
+          font-weight: 600;
+          color: #1C2B1E;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          font-family: inherit;
           letter-spacing: -0.1px;
         }
-        .os-size { font-size: 11px; color: #9a9180; margin-top: 2px; }
-        .os-price {
+        .os-item-size {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #9A9080;
+          margin-top: 2px;
+        }
+        .os-item-price {
+          font-family: 'DM Sans', sans-serif;
           font-size: 14px;
           font-weight: 700;
-          color: #1a1a1a;
+          color: #1C2B1E;
           white-space: nowrap;
+          flex-shrink: 0;
         }
 
-        /* ── Coupon ── */
+        /* Rule */
+        .os-rule { height: 1px; background: #F0E8DC; }
+
+        /* Coupon */
+        .os-coupon-area { padding: 14px 24px; }
         .os-coupon-row { display: flex; gap: 8px; }
         .os-coupon-input {
           flex: 1;
-          border: 1.5px solid #e2dbd0;
-          border-radius: 10px;
-          padding: 10px 13px;
+          min-width: 0;
+          font-family: 'DM Sans', sans-serif;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 500;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          padding: 11px 13px;
+          border: 1.5px solid #DDD5C8;
+          border-radius: 12px;
+          background: #FDFAF6;
           outline: none;
           transition: border-color .2s, box-shadow .2s;
-          min-width: 0;
-          font-family: inherit;
-          background: #faf8f5;
-          letter-spacing: 1px;
+          color: #1C2B1E;
         }
+        .os-coupon-input::placeholder { color: #B8B0A5; letter-spacing: 0; text-transform: none; }
         .os-coupon-input:focus {
-          border-color: #1a3a1e;
-          box-shadow: 0 0 0 3px rgba(26,58,30,.08);
+          border-color: #2C4A2E;
           background: #fff;
+          box-shadow: 0 0 0 3px rgba(44,74,46,.08);
         }
         .os-coupon-btn {
-          background: #1a3a1e;
-          color: #fff;
-          border: none;
-          padding: 10px 16px;
-          border-radius: 10px;
+          font-family: 'DM Sans', sans-serif;
           font-size: 12px;
           font-weight: 700;
+          color: #fff;
+          background: #2C4A2E;
+          border: none;
+          padding: 11px 16px;
+          border-radius: 12px;
           cursor: pointer;
           white-space: nowrap;
-          font-family: inherit;
+          letter-spacing: 0.03em;
           transition: background .2s, transform .15s;
-          letter-spacing: 0.3px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 60px;
         }
-        .os-coupon-btn:hover:not(:disabled) { background: #2d5233; transform: translateY(-1px); }
+        .os-coupon-btn:hover:not(:disabled) { background: #3A6040; transform: translateY(-1px); }
         .os-coupon-btn:disabled { opacity: .6; cursor: not-allowed; }
         .os-coupon-applied {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: linear-gradient(to right, #e8f5e9, #f0faf0);
-          border: 1.5px solid #b8e0c0;
-          border-radius: 12px;
-          padding: 11px 14px;
+          padding: 12px 14px;
+          background: linear-gradient(135deg, #EEF8E8, #F5FAF0);
+          border: 1.5px solid #B8DCA8;
+          border-radius: 14px;
           gap: 8px;
         }
         .os-coupon-left { display: flex; align-items: center; gap: 10px; }
-        .os-coupon-tag { font-size: 18px; }
-        .os-coupon-code { font-size: 13px; font-weight: 800; color: #1a3a1e; letter-spacing: 0.5px; }
-        .os-coupon-saving { font-size: 11px; color: #2d6a4f; margin-top: 1px; font-weight: 600; }
+        .os-coupon-emoji { font-size: 20px; }
+        .os-coupon-name {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 700;
+          color: #2C4A2E;
+          letter-spacing: 1px;
+        }
+        .os-coupon-saving {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #4A7A40;
+          font-weight: 500;
+          margin-top: 1px;
+        }
         .os-coupon-rm {
           background: rgba(0,0,0,.06);
           border: none;
-          color: #555;
-          font-size: 13px;
-          cursor: pointer;
-          width: 24px;
-          height: 24px;
+          color: #7A7060;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
+          cursor: pointer;
           flex-shrink: 0;
           transition: background .15s;
         }
         .os-coupon-rm:hover { background: rgba(0,0,0,.12); }
-        .os-coupon-err { font-size: 11px; color: #c0392b; margin-top: 6px; }
+        .os-coupon-err {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #C04030;
+          margin-top: 6px;
+        }
         .os-hints { margin-top: 10px; }
         .os-hints-toggle {
           background: none;
           border: none;
+          font-family: 'DM Sans', sans-serif;
           font-size: 12px;
-          color: #1a3a1e;
-          font-weight: 700;
+          font-weight: 600;
+          color: #2C4A2E;
           cursor: pointer;
           padding: 0;
-          font-family: inherit;
           text-decoration: underline;
           text-underline-offset: 2px;
         }
         .os-hints-list { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
-        .os-hint-chip {
+        .os-hint {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: #faf8f5;
-          border: 1.5px dashed #d8d0c4;
-          border-radius: 10px;
+          background: #FDFAF6;
+          border: 1.5px dashed #D8D0C4;
+          border-radius: 12px;
           padding: 9px 13px;
           cursor: pointer;
-          transition: all .15s;
-          text-align: left;
+          transition: all .18s;
           font-family: inherit;
           width: 100%;
+          text-align: left;
         }
-        .os-hint-chip:hover { border-color: #1a3a1e; background: #e8f5e9; }
-        .os-hint-code { font-size: 12px; font-weight: 800; color: #1a3a1e; letter-spacing: 0.5px; }
-        .os-hint-label { font-size: 11px; color: #9a9180; }
-
-        /* ── Prices ── */
-        .os-prices { display: flex; flex-direction: column; gap: 10px; }
-        .os-pr-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 13px;
-          color: #7a7565;
-        }
-        .os-g { color: #2d6a4f; font-weight: 700; }
-        .os-free { color: #2d6a4f; font-weight: 700; }
-        .os-muted { font-size: 11px; color: #b8b0a5; }
-
-        .os-total-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding-top: 12px;
-          border-top: 2px solid #f0ebe2;
-          margin-top: 4px;
-        }
-        .os-total-row > span:first-child {
-          font-size: 16px;
-          font-weight: 700;
-          color: #1a1a1a;
-          font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
-        }
-        .os-total-amount {
-          font-size: 24px;
-          font-weight: 800;
-          color: #1a1a1a;
-          letter-spacing: -0.5px;
-        }
-        .os-save-pill {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          background: linear-gradient(to right, #e8f5e9, #f0faf0);
-          border: 1px solid #b8e0c0;
-          border-radius: 10px;
-          padding: 9px 13px;
+        .os-hint:hover { border-color: #2C4A2E; background: #EEF6EC; }
+        .os-hint-code {
+          font-family: 'DM Sans', sans-serif;
           font-size: 12px;
           font-weight: 700;
-          color: #2d6a4f;
+          color: #2C4A2E;
+          letter-spacing: 1px;
         }
-        .os-loyalty-pill {
-          background: linear-gradient(to right, #fdf6e3, #fefaf0);
-          border: 1px solid #e8d580;
-          border-radius: 10px;
-          padding: 9px 13px;
-          font-size: 12px;
-          color: #7a5a00;
+        .os-hint-label {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #9A9080;
         }
 
-        /* ── Errors ── */
-        .os-error {
-          background: #fdecea;
-          border: 1px solid #f5c6cb;
-          border-radius: 12px;
-          padding: 11px 14px;
-          font-size: 13px;
-          color: #c0392b;
-          font-weight: 600;
-        }
-
-        /* ── CTA ── */
-        .os-cta-wrap {
-          padding: 16px 22px 14px;
+        /* Price table */
+        .os-price-table {
+          padding: 16px 24px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 9px;
         }
+        .os-price-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          color: #7A7060;
+        }
+        .os-price-row--green { color: #3A7030; font-weight: 600; }
+        .os-price-row--muted { font-size: 11px; color: #B0A898; }
+        .os-free { color: #3A7030; font-weight: 600; }
+
+        .os-total {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          padding-top: 14px;
+          border-top: 1.5px solid #E8E0D5;
+          margin-top: 4px;
+        }
+        .os-total-label {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          color: #1C2B1E;
+        }
+        .os-total-value {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 30px;
+          font-weight: 700;
+          color: #1C2B1E;
+          letter-spacing: -0.5px;
+          line-height: 1;
+        }
+
+        .os-saving-strip {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          background: #EEF8E8;
+          border: 1px solid #B8DCA8;
+          border-radius: 10px;
+          padding: 9px 12px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+          color: #3A6030;
+        }
+        .os-saving-strip strong { font-weight: 700; }
+        .os-loyalty-strip {
+          background: #FEF6E0;
+          border: 1px solid #E8D070;
+          border-radius: 10px;
+          padding: 9px 12px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          color: #7A5800;
+        }
+
+        /* Errors */
+        .os-error-box {
+          margin: 0 24px 12px;
+          background: #FEF0EE;
+          border: 1px solid #F0C8C0;
+          border-radius: 12px;
+          padding: 11px 14px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          color: #B03020;
+          font-weight: 500;
+        }
+
+        /* CTA */
+        .os-cta-area { padding: 12px 24px 14px; }
         .os-cta {
           width: 100%;
-          padding: 16px 20px;
-          background: linear-gradient(135deg, #1a3a1e 0%, #2d5233 60%, #3a6b42 100%);
-          color: #fff;
+          padding: 17px 20px;
+          background: #2C4A2E;
+          color: #F5F0E8;
           border: none;
-          border-radius: 14px;
+          border-radius: 16px;
+          font-family: 'DM Sans', sans-serif;
           font-size: 15px;
-          font-weight: 700;
+          font-weight: 600;
           cursor: pointer;
-          font-family: inherit;
-          box-shadow: 0 6px 20px rgba(26,58,30,.36);
-          transition: all .25s cubic-bezier(.4,0,.2,1);
-          letter-spacing: 0.1px;
-        }
-        .os-cta:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(26,58,30,.44);
-        }
-        .os-cta:active:not(:disabled) { transform: translateY(0); }
-        .os-cta:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
-        .os-cta-inner {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          width: 100%;
+          letter-spacing: 0.01em;
+          box-shadow:
+            0 1px 2px rgba(0,0,0,.06),
+            0 6px 20px rgba(44,74,46,.35),
+            inset 0 1px 0 rgba(255,255,255,.12);
+          transition: all .25s cubic-bezier(.4,0,.2,1);
+          position: relative;
+          overflow: hidden;
         }
+        .os-cta::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(255,255,255,.08) 0%, rgba(0,0,0,.04) 100%);
+          pointer-events: none;
+        }
+        .os-cta:hover:not(:disabled) {
+          background: #3A6040;
+          transform: translateY(-2px);
+          box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 12px 32px rgba(44,74,46,.45), inset 0 1px 0 rgba(255,255,255,.14);
+        }
+        .os-cta:active:not(:disabled) { transform: translateY(0); }
+        .os-cta:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
         .os-cta-amt {
-          background: rgba(255,255,255,.18);
-          padding: 5px 13px;
-          border-radius: 20px;
-          font-size: 15px;
-          font-weight: 800;
-          border: 1px solid rgba(255,255,255,.15);
+          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: -0.3px;
+          opacity: .9;
         }
-        .os-cta-spinner {
-          width: 14px;
-          height: 14px;
-          border: 2px solid rgba(255,255,255,.4);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: spin .7s linear infinite;
-          display: inline-block;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .os-secure {
-          text-align: center;
-          font-size: 11px;
-          color: #9a9180;
+
+        .os-secure-row {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 5px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #9A9080;
+          margin-top: 8px;
+          font-weight: 400;
         }
+        .os-lock { color: #9A9080; flex-shrink: 0; }
 
-        /* ── ETA strip ── */
+        /* ETA */
         .os-eta {
           display: flex;
           align-items: flex-start;
           gap: 10px;
-          margin: 0 22px 20px;
-          background: linear-gradient(to right, #f5f0e8, #faf8f4);
-          border: 1px solid #e8e2d8;
+          margin: 0 24px 24px;
           padding: 12px 14px;
+          background: #F5F0E8;
           border-radius: 12px;
+          border: 1px solid #E8E0D5;
         }
         .os-eta-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-        .os-eta-main { font-size: 12px; color: #4a4540; font-weight: 600; line-height: 1.5; }
-        .os-eta-sub  { font-size: 11px; color: #9a9180; margin-top: 2px; }
+        .os-eta-line {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          color: #4A4238;
+          font-weight: 500;
+          line-height: 1.5;
+        }
+        .os-eta-line strong { font-weight: 700; }
+        .os-eta-sub {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #9A9080;
+          margin-top: 2px;
+        }
+
+        /* Spinner */
+        .os-spin {
+          display: inline-block;
+          width: 13px;
+          height: 13px;
+          border: 2px solid rgba(44,74,46,.2);
+          border-top-color: #2C4A2E;
+          border-radius: 50%;
+          animation: os-spin .65s linear infinite;
+        }
+        .os-spin--white {
+          border-color: rgba(255,255,255,.3);
+          border-top-color: #fff;
+          margin-right: 8px;
+        }
+        @keyframes os-spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   )
