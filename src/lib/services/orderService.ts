@@ -224,8 +224,8 @@ export async function createOrder(
     }
   })
 
-  // 4. Resolve coupon (optional — non-fatal if coupon not found)
-  let appliedCoupon = null
+  // 4. Resolve coupon — convert raw DB row to AppliedCoupon shape
+  let appliedCoupon: import('@/types').AppliedCoupon | null = null
   if (input.couponCode) {
     const { data: coupon } = await db
       .from('coupons')
@@ -233,7 +233,21 @@ export async function createOrder(
       .eq('code', input.couponCode.toUpperCase())
       .eq('is_active', true)
       .maybeSingle()
-    if (coupon) appliedCoupon = coupon
+    if (coupon) {
+      const subtotalForDiscount = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
+      const discountAmt = coupon.type === 'percent'
+        ? Math.min(
+            Math.round(subtotalForDiscount * coupon.value / 100),
+            coupon.max_discount ?? Infinity
+          )
+        : coupon.value
+      appliedCoupon = {
+        code:     coupon.code,
+        discount: Math.round(discountAmt),
+        type:     coupon.type,
+        percent:  coupon.type === 'percent' ? coupon.value : undefined,
+      }
+    }
   }
 
   // 5. Calculate final price server-side

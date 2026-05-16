@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
 
 // Default fallback values — site works even if settings are missing
@@ -63,7 +63,9 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   }
 
   try {
-    const { data, error } = await supabase
+    // Use service client server-side to bypass RLS on site_settings
+    const client = (() => { try { return getServiceClient() } catch { return supabase } })()
+    const { data, error } = await client
       .from('site_settings')
       .select('key, value')
 
