@@ -1,20 +1,10 @@
 'use client'
 
 /**
- * checkout/page.tsx — Lean orchestrator (~280 lines)
- *
- * All UI is delegated to:
- *   CheckoutSkeleton     → animated skeleton while stores hydrate
- *   ShippingProgress     → free-ship threshold bar
- *   SavedAddressSelector → saved address cards from /api/profile
- *   AddressForm          → form fields + pincode autofill (free API, no key)
- *   PaymentSection       → payment options with real SVG logos
- *   OrderSummary         → items, coupon hints, prices, loyalty, ETA, CTA
- *
- * ADMIN SETTINGS CONSUMED (all from site_settings table):
- *   free_shipping_min, flat_shipping_charge, prepaid_discount_pct
- *   cod_enabled, cod_max_value, min_order_amount
- *   upi_enabled, loyalty_enabled, loyalty_points_per_rupee, loyalty_points_label
+ * checkout/page.tsx — Premium redesign
+ * - Full-width cream background
+ * - Right panel fully visible (no overflow clipping)
+ * - Premium typography, spacing, and visual hierarchy
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -35,7 +25,6 @@ import PaymentSection       from '@/components/checkout/PaymentSection'
 import OrderSummary         from '@/components/checkout/OrderSummary'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const INDIA_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
   'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
@@ -71,15 +60,11 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
   ) as SiteSettings
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
   const router = useRouter()
-
-  // Hydration guard — stores use skipHydration:true
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  // Stores
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
   const idempotencyKey     = useCartStore(s => s.idempotencyKey)
@@ -89,11 +74,9 @@ export default function CheckoutPage() {
   const removeCoupon       = useCartStore(s => s.removeCoupon)
   const user               = useUserStore(s => s.user)
 
-  // Settings
   const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
   const s = settings || {} as SiteSettings
 
-  // Admin-driven flags — default to ENABLED when key missing (never block on fresh install)
   const codEnabled      = s.cod_enabled  !== 'false'
   const upiAdminOn      = s.upi_enabled  !== 'false'
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
@@ -103,7 +86,6 @@ export default function CheckoutPage() {
   const freeShipMin     = parseFloat(s.free_shipping_min    || '0')
   const minOrderAmt     = parseFloat(s.min_order_amount     || '0')
 
-  // UI state
   const [payMethod, setPayMethod]   = useState<'razorpay' | 'cod'>('cod')
   const [placing,   setPlacing]     = useState(false)
   const [error,     setError]       = useState('')
@@ -121,13 +103,11 @@ export default function CheckoutPage() {
   })
   const [email, setEmail] = useState('')
 
-  // Pricing
   const pricing       = calcPriceSummary(items, s, coupon, payMethod)
   const codOk         = codEnabled && pricing.total <= codMax
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
   const bothPayOff    = !codOk && !razorpayEnabled
 
-  // Analytics — tracks funnel events, coupon usage, payment drop-off, abandonment
   const analytics = useCheckoutAnalytics({
     itemCount:      items.length,
     subtotal:       pricing.subtotal,
@@ -135,14 +115,11 @@ export default function CheckoutPage() {
     isFreeShipping: pricing.isFreeShipping,
   })
 
-  // Effects
   useEffect(() => { if (items.length === 0 && mounted) router.replace('/cart') }, [items, mounted, router])
-
   useEffect(() => {
     if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
   }, [codOk, payMethod, razorpayEnabled])
 
-  // Load profile addresses + pre-fill
   useEffect(() => {
     if (!user) return
     const ctrl = new AbortController()
@@ -154,17 +131,11 @@ export default function CheckoutPage() {
         if (!prof) return
         const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
-        setAddr(prev => ({
-          ...prev,
-          name:  prev.name  || fullName    || '',
-          phone: prev.phone || cleanPhone  || '',
-        }))
+        setAddr(prev => ({ ...prev, name: prev.name || fullName || '', phone: prev.phone || cleanPhone || '' }))
         setEmail(prev => prev || data.user?.email || '')
-        const defaultAddr = prof.address_line1 ? [{
-          _isDefault:true, label:'Home' as const,
+        const defaultAddr = prof.address_line1 ? [{ _isDefault:true, label:'Home' as const,
           name:fullName||'', addr:prof.address_line1||'', area:'',
-          city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
-        }] : []
+          city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'' }] : []
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
         setSavedAddrs(all)
@@ -185,7 +156,6 @@ export default function CheckoutPage() {
     return () => ctrl.abort()
   }, [user])
 
-  // Fetch coupon hints
   useEffect(() => {
     fetch('/api/v1/store-data')
       .then(async r => {
@@ -210,29 +180,19 @@ export default function CheckoutPage() {
       .catch(() => {})
   }, [])
 
-  // Handlers
   function setAddrField(field: keyof OrderAddress, value: string) {
     setAddr(prev => ({ ...prev, [field]: value }))
     if (field !== 'label') setSelectedSavedIdx(null)
   }
-
-  function touchField(field: string) {
-    setTouched(prev => ({ ...prev, [field]: true }))
-  }
+  function touchField(field: string) { setTouched(prev => ({ ...prev, [field]: true })) }
 
   function applySaved(saved: any, idx: number) {
     const validLabels = ['Home','Office','Parents','Friends','Others'] as const
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
-      ...prev,
-      name:    saved.name  || prev.name,
-      phone:   saved.phone || prev.phone,
-      flat:    saved.addr  || saved.flat    || '',
-      area:    '',
-      city:    saved.city  || '',
-      state:   matchState(saved.state),
-      pincode: saved.pin   || saved.pincode || '',
-      label:   lbl,
+      ...prev, name:saved.name||prev.name, phone:saved.phone||prev.phone,
+      flat:saved.addr||saved.flat||'', area:'', city:saved.city||'',
+      state:matchState(saved.state), pincode:saved.pin||saved.pincode||'', label:lbl,
     }))
     setSelectedSavedIdx(idx)
     setTouched({ name:true, phone:true, flat:true, city:true, state:true, pincode:true })
@@ -266,7 +226,6 @@ export default function CheckoutPage() {
     }
     if (!/^[6-9]\d{9}$/.test(addr.phone)) { setError('Enter a valid 10-digit mobile number'); return }
     if (!/^\d{6}$/.test(addr.pincode))     { setError('Enter a valid 6-digit pincode'); return }
-
     setError(''); setPlacing(true)
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
@@ -327,7 +286,6 @@ export default function CheckoutPage() {
     } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
   }, [addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
 
-  // ── Render guards ──────────────────────────────────────────────────────────
   if (!mounted) return <CheckoutSkeleton />
   if (items.length === 0) return null
 
@@ -342,13 +300,22 @@ export default function CheckoutPage() {
         remainingForFreeShip={pricing.remainingForFreeShip}
       />
 
-      {/* Progress steps */}
+      {/* Premium breadcrumb steps */}
       <div className="cop-steps">
-        <div className="cop-step cop-done"><span>✓</span> Cart</div>
+        <div className="cop-step cop-done">
+          <div className="cop-step-circle">✓</div>
+          <span className="cop-step-label">Cart</span>
+        </div>
         <div className="cop-step-line cop-line-done" />
-        <div className="cop-step cop-active"><span>2</span> Checkout</div>
+        <div className="cop-step cop-active">
+          <div className="cop-step-circle">2</div>
+          <span className="cop-step-label">Checkout</span>
+        </div>
         <div className="cop-step-line" />
-        <div className="cop-step"><span>3</span> Confirmation</div>
+        <div className="cop-step">
+          <div className="cop-step-circle">3</div>
+          <span className="cop-step-label">Confirmation</span>
+        </div>
       </div>
 
       {bothPayOff && (
@@ -357,87 +324,118 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="cop-layout">
-        {/* ── LEFT ── */}
-        <div className="cop-left">
+      {/* Full-width cream wrapper */}
+      <div className="cop-page">
+        <div className="cop-layout">
+          {/* ── LEFT ── */}
+          <div className="cop-left">
 
-          {/* Address card */}
-          <div className="cop-card">
-            <div className="cop-card-head">
-              <div className="cop-num">1</div>
-              <h2 className="cop-card-title">Delivery Details</h2>
+            {/* Delivery card */}
+            <div className="cop-card">
+              <div className="cop-card-head">
+                <div className="cop-num">1</div>
+                <div>
+                  <h2 className="cop-card-title">Delivery Details</h2>
+                  <p className="cop-card-sub">Where should we send your order?</p>
+                </div>
+              </div>
+              <SavedAddressSelector
+                addresses={savedAddrs}
+                selectedIdx={selectedSavedIdx}
+                onSelect={applySaved}
+                indiaStates={INDIA_STATES}
+              />
+              <AddressForm
+                addr={addr}
+                email={email}
+                touched={touched}
+                onChange={setAddrField}
+                onEmailChange={setEmail}
+                onTouch={touchField}
+                selectedSavedIdx={selectedSavedIdx}
+              />
             </div>
-            <SavedAddressSelector
-              addresses={savedAddrs}
-              selectedIdx={selectedSavedIdx}
-              onSelect={applySaved}
-              indiaStates={INDIA_STATES}
-            />
-            <AddressForm
-              addr={addr}
-              email={email}
-              touched={touched}
-              onChange={setAddrField}
-              onEmailChange={setEmail}
-              onTouch={touchField}
-              selectedSavedIdx={selectedSavedIdx}
-            />
+
+            {/* Payment card */}
+            <div className="cop-card">
+              <div className="cop-card-head">
+                <div className="cop-num">2</div>
+                <div>
+                  <h2 className="cop-card-title">Payment Method</h2>
+                  <p className="cop-card-sub">Safe, secure &amp; encrypted</p>
+                </div>
+              </div>
+              <PaymentSection
+                payMethod={payMethod}
+                onChange={setPayMethod}
+                razorpayEnabled={razorpayEnabled}
+                codOk={codOk}
+                codEnabled={codEnabled}
+                prepaidPct={prepaidPct}
+                prepaidDiscount={pricing.prepaidDiscount}
+                codMax={codMax}
+                total={pricing.total}
+              />
+            </div>
+
+            {/* Trust badges */}
+            <div className="cop-trust">
+              <div className="cop-trust-item">
+                <span className="cop-trust-icon">🚚</span>
+                <div>
+                  <div className="cop-trust-title">3–5 Day Delivery</div>
+                  <div className="cop-trust-desc">Across 10 Himalayan states</div>
+                </div>
+              </div>
+              <div className="cop-trust-item">
+                <span className="cop-trust-icon">🔄</span>
+                <div>
+                  <div className="cop-trust-title">7-Day Returns</div>
+                  <div className="cop-trust-desc">Easy hassle-free process</div>
+                </div>
+              </div>
+              <div className="cop-trust-item">
+                <span className="cop-trust-icon">🌿</span>
+                <div>
+                  <div className="cop-trust-title">100% Authentic</div>
+                  <div className="cop-trust-desc">Sourced from the Himalayas</div>
+                </div>
+              </div>
+              <div className="cop-trust-item">
+                <span className="cop-trust-icon">💬</span>
+                <div>
+                  <div className="cop-trust-title">WhatsApp Support</div>
+                  <div className="cop-trust-desc">We're here to help</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Payment card */}
-          <div className="cop-card">
-            <div className="cop-card-head">
-              <div className="cop-num">2</div>
-              <h2 className="cop-card-title">Payment Method</h2>
-            </div>
-            <PaymentSection
+          {/* ── RIGHT ── */}
+          <div className="cop-right">
+            <OrderSummary
+              items={items}
+              pricing={pricing}
+              coupon={coupon}
+              settings={s}
+              couponCode={couponCode}
+              couponLoading={couponLoading}
+              couponError={couponError}
+              couponHints={couponHints}
+              onCouponCodeChange={setCouponCode}
+              onApplyCoupon={handleCoupon}
+              onRemoveCoupon={removeCoupon}
+              error={error}
+              placing={placing}
+              bothPaymentsOff={bothPayOff}
+              belowMinOrder={belowMinOrder}
+              minOrderAmt={minOrderAmt}
+              onPlaceOrder={handlePlace}
               payMethod={payMethod}
-              onChange={setPayMethod}
-              razorpayEnabled={razorpayEnabled}
-              codOk={codOk}
-              codEnabled={codEnabled}
-              prepaidPct={prepaidPct}
-              prepaidDiscount={pricing.prepaidDiscount}
-              codMax={codMax}
-              total={pricing.total}
+              summaryOpen={summaryOpen}
+              onToggleSummary={() => setSummaryOpen(o => !o)}
             />
           </div>
-
-          {/* Delivery promise */}
-          <div className="cop-card cop-promise">
-            <div className="cop-promise-grid">
-              <div className="cop-promise-item">🚚 Delivered in 3–5 working days</div>
-              <div className="cop-promise-item">🔄 7-day easy returns</div>
-              <div className="cop-promise-item">🌿 100% authentic Pahadi products</div>
-              <div className="cop-promise-item">📞 WhatsApp support available</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT ── */}
-        <div className="cop-right">
-          <OrderSummary
-            items={items}
-            pricing={pricing}
-            coupon={coupon}
-            settings={s}
-            couponCode={couponCode}
-            couponLoading={couponLoading}
-            couponError={couponError}
-            couponHints={couponHints}
-            onCouponCodeChange={setCouponCode}
-            onApplyCoupon={handleCoupon}
-            onRemoveCoupon={removeCoupon}
-            error={error}
-            placing={placing}
-            bothPaymentsOff={bothPayOff}
-            belowMinOrder={belowMinOrder}
-            minOrderAmt={minOrderAmt}
-            onPlaceOrder={handlePlace}
-            payMethod={payMethod}
-            summaryOpen={summaryOpen}
-            onToggleSummary={() => setSummaryOpen(o => !o)}
-          />
         </div>
       </div>
 
@@ -445,7 +443,7 @@ export default function CheckoutPage() {
       <div className="cop-sticky" aria-hidden="true">
         <div>
           <div className="cop-sticky-total">{formatPrice(pricing.total)}</div>
-          <div className="cop-sticky-sub">Incl. taxes & shipping</div>
+          <div className="cop-sticky-sub">Incl. taxes &amp; shipping</div>
         </div>
         <button className="cop-sticky-btn" onClick={handlePlace}
           disabled={placing || bothPayOff || belowMinOrder} type="button">
@@ -454,59 +452,230 @@ export default function CheckoutPage() {
       </div>
 
       <style>{`
-        .cop-steps{display:flex;align-items:center;justify-content:center;padding:13px 16px;
-          background:#fff;border-bottom:1px solid #e2dbd0;font-family:inherit;}
-        .cop-step{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#bbb;}
-        .cop-step span{width:22px;height:22px;border-radius:50%;background:#eee;
-          display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
-        .cop-active{color:#1a3a1e;}.cop-active span{background:#1a3a1e;color:#fff;}
-        .cop-done{color:#2d5233;}.cop-done span{background:#e8f5e9;color:#2d5233;}
-        .cop-step-line{width:44px;height:2px;background:#e8e8e8;margin:0 8px;}
-        .cop-line-done{background:#e8f5e9;}
-        .cop-blocked{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;
-          font-size:13px;font-weight:600;padding:12px 20px;text-align:center;}
-        .cop-layout{display:grid;grid-template-columns:1fr 390px;gap:0;
-          max-width:1380px;margin:0 auto;background:#f5f0e8;
-          align-items:start;min-height:calc(100vh - 120px);
-          overflow:hidden;}  /* prevent right-side bleed on narrow viewports */
-        @media(max-width:1100px){.cop-layout{grid-template-columns:1fr 340px;}}
-        @media(max-width:960px){.cop-layout{grid-template-columns:1fr;padding-bottom:76px;overflow:visible;}}
-        .cop-left{padding:24px 28px;display:flex;flex-direction:column;gap:18px;}
-        @media(max-width:640px){.cop-left{padding:16px;}}
-        .cop-card{background:#fff;border-radius:14px;
-          box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);
-          border:1px solid #e2dbd0;overflow:hidden;}
-        .cop-card-head{display:flex;align-items:center;gap:12px;padding:16px 20px;
-          border-bottom:1px solid #f5f0e8;}
-        .cop-num{width:27px;height:27px;border-radius:50%;background:#1a3a1e;
-          color:#fff;display:flex;align-items:center;justify-content:center;
-          font-size:13px;font-weight:700;flex-shrink:0;}
-        .cop-card-title{font-size:17px;font-weight:700;color:#1a1a1a;margin:0;
-          font-family:var(--font-playfair,'Playfair Display',serif);}
-        .cop-promise{padding:0;}
-        .cop-promise-grid{display:grid;grid-template-columns:1fr 1fr;}
-        .cop-promise-item{padding:13px 17px;font-size:12px;font-weight:600;color:#7a7565;
-          border-right:1px solid #f5f0e8;border-bottom:1px solid #f5f0e8;}
-        .cop-promise-item:nth-child(2n){border-right:none;}
-        .cop-promise-item:nth-child(3),.cop-promise-item:nth-child(4){border-bottom:none;}
-        .cop-right{background:#fff;border-left:1px solid #e2dbd0;
-          position:sticky;top:134px;max-height:calc(100vh - 134px);
-          overflow-y:auto;overflow-x:hidden;  /* prevent horizontal bleed */
-          width:100%;min-width:0;}  /* respect grid column, don't overflow */
-        @media(max-width:960px){.cop-right{position:static;border-left:none;
-          border-top:1px solid #e2dbd0;max-height:none;width:auto;}}
-        .cop-sticky{display:none;position:fixed;bottom:0;left:0;right:0;
-          background:#fff;border-top:2px solid #e2dbd0;padding:10px 16px;
-          z-index:250;align-items:center;justify-content:space-between;gap:12px;
-          box-shadow:0 -4px 16px rgba(0,0,0,.08);}
-        @media(max-width:960px){.cop-sticky{display:flex;}}
-        .cop-sticky-total{font-size:17px;font-weight:700;color:#1a1a1a;font-family:inherit;}
-        .cop-sticky-sub{font-size:11px;color:#7a7565;font-family:inherit;}
-        .cop-sticky-btn{background:linear-gradient(135deg,#1a3a1e,#2d5233);
-          color:#fff;border:none;padding:12px 20px;border-radius:11px;
-          font-weight:700;font-size:14px;white-space:nowrap;cursor:pointer;
-          font-family:inherit;box-shadow:0 4px 10px rgba(26,58,30,.28);}
-        .cop-sticky-btn:disabled{opacity:.6;cursor:not-allowed;}
+        /* ── Steps bar ── */
+        .cop-steps {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 14px 20px;
+          background: #fff;
+          border-bottom: 1px solid #ede8df;
+          gap: 0;
+        }
+        .cop-step {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #c4b9a8;
+        }
+        .cop-step-circle {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: #ede8df;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 700;
+          flex-shrink: 0;
+          transition: all 0.2s;
+        }
+        .cop-step-label { letter-spacing: 0.3px; }
+        .cop-active { color: #1a3a1e; }
+        .cop-active .cop-step-circle { background: #1a3a1e; color: #fff; box-shadow: 0 2px 8px rgba(26,58,30,.3); }
+        .cop-done { color: #2d5233; }
+        .cop-done .cop-step-circle { background: #e8f4eb; color: #2d5233; }
+        .cop-step-line { width: 52px; height: 1.5px; background: #ede8df; margin: 0 10px; flex-shrink: 0; }
+        .cop-line-done { background: #a8d5b5; }
+
+        /* ── Blocked ── */
+        .cop-blocked {
+          background: #fdecea;
+          border: 1px solid #f5c6cb;
+          color: #c0392b;
+          font-size: 13px;
+          font-weight: 600;
+          padding: 12px 20px;
+          text-align: center;
+        }
+
+        /* ── Full-width cream page ── */
+        .cop-page {
+          background: #f5f0e8;
+          min-height: calc(100vh - 120px);
+          width: 100%;
+        }
+
+        /* ── Two-column layout ── */
+        .cop-layout {
+          display: grid;
+          grid-template-columns: 1fr 420px;
+          gap: 0;
+          max-width: 1440px;
+          margin: 0 auto;
+          align-items: start;
+        }
+        @media (max-width: 1200px) { .cop-layout { grid-template-columns: 1fr 380px; } }
+        @media (max-width: 1024px) { .cop-layout { grid-template-columns: 1fr 340px; } }
+        @media (max-width: 900px)  { .cop-layout { grid-template-columns: 1fr; padding-bottom: 80px; } }
+
+        /* ── Left column ── */
+        .cop-left {
+          padding: 32px 36px 40px 40px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        @media (max-width: 1024px) { .cop-left { padding: 24px 24px 32px; } }
+        @media (max-width: 640px)  { .cop-left { padding: 16px 16px 28px; } }
+
+        /* ── Cards ── */
+        .cop-card {
+          background: #fff;
+          border-radius: 18px;
+          box-shadow:
+            0 1px 3px rgba(0,0,0,.04),
+            0 4px 16px rgba(0,0,0,.06),
+            0 0 0 1px rgba(0,0,0,.04);
+          overflow: hidden;
+          transition: box-shadow 0.2s;
+        }
+        .cop-card:hover {
+          box-shadow:
+            0 2px 6px rgba(0,0,0,.05),
+            0 8px 24px rgba(0,0,0,.08),
+            0 0 0 1px rgba(0,0,0,.04);
+        }
+        .cop-card-head {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 20px 24px;
+          background: linear-gradient(to right, #faf9f6, #fff);
+          border-bottom: 1px solid #f0ebe2;
+        }
+        .cop-num {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #1a3a1e, #2d5233);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          font-weight: 800;
+          flex-shrink: 0;
+          box-shadow: 0 3px 10px rgba(26,58,30,.28);
+        }
+        .cop-card-title {
+          font-size: 17px;
+          font-weight: 700;
+          color: #1a1a1a;
+          margin: 0 0 2px;
+          font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
+          letter-spacing: -0.2px;
+        }
+        .cop-card-sub {
+          font-size: 12px;
+          color: #9a9180;
+          margin: 0;
+          font-family: inherit;
+        }
+
+        /* ── Trust grid ── */
+        .cop-trust {
+          background: #fff;
+          border-radius: 18px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          overflow: hidden;
+        }
+        .cop-trust-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 16px 18px;
+          border-right: 1px solid #f0ebe2;
+          border-bottom: 1px solid #f0ebe2;
+          transition: background 0.15s;
+        }
+        .cop-trust-item:nth-child(2n) { border-right: none; }
+        .cop-trust-item:nth-child(3),
+        .cop-trust-item:nth-child(4) { border-bottom: none; }
+        .cop-trust-item:hover { background: #fdf9f4; }
+        .cop-trust-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+        .cop-trust-title { font-size: 12px; font-weight: 700; color: #2a2a2a; font-family: inherit; }
+        .cop-trust-desc  { font-size: 11px; color: #9a9180; margin-top: 1px; font-family: inherit; }
+
+        /* ── Right column (order summary) ── */
+        .cop-right {
+          background: #fff;
+          border-left: 1px solid #e8e2d8;
+          position: sticky;
+          top: 0;
+          max-height: 100vh;
+          overflow-y: auto;
+          overflow-x: hidden;
+          width: 100%;
+          min-width: 0;
+          scrollbar-width: thin;
+          scrollbar-color: #d8d0c4 transparent;
+        }
+        .cop-right::-webkit-scrollbar { width: 4px; }
+        .cop-right::-webkit-scrollbar-track { background: transparent; }
+        .cop-right::-webkit-scrollbar-thumb { background: #d8d0c4; border-radius: 4px; }
+        @media (max-width: 900px) {
+          .cop-right {
+            position: static;
+            border-left: none;
+            border-top: 2px solid #e8e2d8;
+            max-height: none;
+          }
+        }
+
+        /* ── Mobile sticky CTA ── */
+        .cop-sticky {
+          display: none;
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: rgba(255,255,255,.97);
+          backdrop-filter: blur(12px);
+          border-top: 1px solid #e8e2d8;
+          padding: 12px 20px;
+          z-index: 250;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          box-shadow: 0 -8px 24px rgba(0,0,0,.10);
+        }
+        @media (max-width: 900px) { .cop-sticky { display: flex; } }
+        .cop-sticky-total { font-size: 18px; font-weight: 800; color: #1a1a1a; }
+        .cop-sticky-sub   { font-size: 11px; color: #9a9180; margin-top: 1px; }
+        .cop-sticky-btn {
+          background: linear-gradient(135deg, #1a3a1e, #2d5233);
+          color: #fff;
+          border: none;
+          padding: 13px 22px;
+          border-radius: 12px;
+          font-weight: 700;
+          font-size: 14px;
+          white-space: nowrap;
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(26,58,30,.32);
+          transition: all 0.2s;
+        }
+        .cop-sticky-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 20px rgba(26,58,30,.4);
+        }
+        .cop-sticky-btn:disabled { opacity: .55; cursor: not-allowed; }
       `}</style>
     </>
   )
