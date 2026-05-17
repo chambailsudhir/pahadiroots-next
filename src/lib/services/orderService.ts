@@ -350,47 +350,78 @@ export async function createOrder(
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
   }
 
-  const nameParts  = input.customerName.trim().split(' ')
-  const firstName  = nameParts[0] || input.customerName.trim()
-  const lastName   = nameParts.slice(1).join(' ') || null
+  // Build customer body — exact columns from Supabase schema
+  const nameParts   = input.customerName.trim().split(' ')
+  const firstName   = nameParts[0] || input.customerName.trim()
+  const lastName    = nameParts.slice(1).join(' ') || null
   const addressLine = [input.flat, input.area].filter(Boolean).join(', ')
-  const custBody   = {
-    first_name:   firstName,
-    last_name:    lastName,
-    phone:        input.customerPhone.trim(),
-    email:        input.customerEmail ?? null,
+  const custBody = {
+    first_name:    firstName,
+    last_name:     lastName,
+    phone:         input.customerPhone.trim(),
+    email:         input.customerEmail?.trim() || null,
     address_line1: addressLine || null,
-    city:         input.city   || null,
-    state:        input.state  || null,
-    postal_code:  input.pincode || null,
+    city:          input.city    || null,
+    state:         input.state   || null,
+    postal_code:   input.pincode || null,
   }
 
+  // Lookup: phone first, then email — avoids duplicate key on idx_customers_email
   let custId: string | null = null
-  const existingCust = await sbGetOne('customers', `phone=eq.${encodeURIComponent(input.customerPhone.trim())}&select=id`)
+  let existingCust: any = null
+  existingCust = await sbGetOne('customers', `phone=eq.${encodeURIComponent(input.customerPhone.trim())}&select=id&limit=1`)
+  if (!existingCust?.id && input.customerEmail?.trim()) {
+    existingCust = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+  }
+
   if (existingCust?.id) {
+    // Existing customer — update name/address but skip email to avoid unique constraint
     custId = existingCust.id
-    await sbPost('customers', `id=eq.${custId}`, custBody, 'PATCH')
+    const { email: _e, ...patchBody } = custBody
+    await sbPost('customers', `id=eq.${custId}`, patchBody, 'PATCH').catch(() => null)
   } else {
-    const newCust: any[] = await sbPost('customers', '', custBody)
-    custId = newCust?.[0]?.id ?? null
+    // New customer — insert, fallback to null email if constraint fires
+    const rows: any[] = await sbPost('customers', '', custBody).catch(async () => {
+      return sbPost('customers', '', { ...custBody, email: null })
+    })
+    custId = rows?.[0]?.id ?? null
   }
   if (!custId) throw new Error('Could not create/find customer record')
 
-  // 8. Create order record — uses ACTUAL orders table columns (old schema + idempotency_key)
+  // 8. Create order — EXACT columns confirmed from Supabase schema export:
+  //    id, total_amount, payment_status, order_status, created_at, delivery_date,
+  //    customer_id, updated_at, subtotal, tax, shipping_charge, order_number,
+  //    payment_id, payment_method, payment_date, updated_by, is_deleted,
+  //    shipping_address, notes, admin_notes, tracking_number, courier,
+  //    coupon_discount, shipped_at, delivered_at, source, status, idempotency_key
+  const shippingAddrJson = JSON.stringify({
+    name:    input.customerName,
+    phone:   input.customerPhone,
+    flat:    input.flat,
+    area:    input.area,
+    city:    input.city,
+    state:   input.state,
+    pincode: input.pincode,
+    label:   input.label ?? 'Home',
+  })
+
   const { data: newOrder, error: orderErr } = await db
     .from('orders')
     .insert({
-      order_number:     orderNumber,
-      customer_id:      custId,
-      order_status:     input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
-      payment_method:   input.paymentMethod,
-      payment_status:   'pending',
-      subtotal:         pricing.subtotal,
-      coupon_discount:  pricing.discount,
-      shipping_charge:  pricing.shipping,
-      tax:              pricing.gstTotal,
-      total_amount:     pricing.total,
-      idempotency_key:  input.idempotencyKey,
+      order_number:    orderNumber,
+      customer_id:     custId,
+      order_status:    input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
+      status:          input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
+      payment_method:  input.paymentMethod,
+      payment_status:  'pending',
+      subtotal:        pricing.subtotal,
+      coupon_discount: pricing.discount,
+      shipping_charge: pricing.shipping,
+      tax:             pricing.gstTotal,
+      total_amount:    pricing.total,
+      shipping_address: shippingAddrJson,
+      idempotency_key: input.idempotencyKey,
+      source:          'website',
     })
     .select('id, order_number, total_amount, order_status')
     .single()
@@ -452,6 +483,8 @@ export async function updateOrderStatus(
   const db = getServiceClient()
   await db.from('orders').update({
     order_status: status,
+    status:       status,   // orders table has both columns
+    updated_at:   new Date().toISOString(),
     ...extra,
   }).eq('id', orderId)
 }
