@@ -57,9 +57,9 @@ export async function POST(req: Request) {
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && (order as any).status === 'pending_payment') {
+      if (order && (order as any).status === 'pending') {
         await db.from('orders').update({
-          order_status:        'paid',
+          order_status:        'confirmed',
           payment_status:      'paid',
           payment_id:          paymentId,
           updated_at:          new Date().toISOString(),
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && (order as any).status === 'pending_payment') {
+      if (order && (order as any).status === 'pending') {
         await db.from('orders').update({
           payment_status:      'failed',
           updated_at:     new Date().toISOString(),

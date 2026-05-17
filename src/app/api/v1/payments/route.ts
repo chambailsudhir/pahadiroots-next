@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       const db = getServiceClient()
       await db
         .from('orders')
-        .update({ payment_id: rzpOrder.id, order_status: 'pending_payment' })
+        .update({ payment_id: rzpOrder.id, order_status: 'pending' })
         .eq('id', order.id)
 
       return NextResponse.json({
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
       // Update order to paid
       const db = getServiceClient()
       await db.from('orders').update({
-        order_status:        'paid',
+        order_status:        'confirmed',
         payment_status:      'paid',
         payment_id:          razorpay_payment_id,
         updated_at:          new Date().toISOString(),

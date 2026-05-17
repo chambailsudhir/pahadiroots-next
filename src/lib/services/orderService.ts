@@ -410,10 +410,10 @@ export async function createOrder(
     .insert({
       order_number:    orderNumber,
       customer_id:     custId,
-      order_status:    input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
-      status:          input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
+      order_status:    input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
+      status:          input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
       payment_method:  input.paymentMethod,
-      payment_status:  'pending',
+      payment_status:  input.paymentMethod === 'cod' ? 'pending' : 'pending',
       subtotal:        pricing.subtotal,
       coupon_discount: pricing.discount,
       shipping_charge: pricing.shipping,
