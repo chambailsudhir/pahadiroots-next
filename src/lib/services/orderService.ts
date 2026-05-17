@@ -411,33 +411,30 @@ export async function createOrder(
 
   if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
 
-  // 9. Insert order items — uses ACTUAL order_items columns:
-  //    id, order_id, product_id, quantity, price_at_time, created_at, variant_id
-  //    (confirmed from vendor_orders_migration.sql — no snapshot columns in this DB)
+  // 9. Insert order items — order_items.variant_id is BIGINT NOT NULL (006_stock_concurrency.sql)
+  //    Columns: order_id, product_id, variant_id (bigint NOT NULL), quantity, price_at_time
   const orderItems = input.items.map(i => {
-    if (i.variantId === i.productId) {
-      // No-variant product — variant_id is null
-      const p: any = productMap.get(String(i.productId))
-      return {
-        order_id:      newOrder.id,
-        product_id:    i.productId,
-        variant_id:    null,
-        quantity:      i.qty,
-        price_at_time: Number(p?.price) || 0,
-      }
-    } else {
-      const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
-      return {
-        order_id:      newOrder.id,
-        product_id:    i.productId,
-        variant_id:    i.variantId,
-        quantity:      i.qty,
-        price_at_time: Number(v?.price) || 0,
-      }
+    const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
+      ?? variantRows.find((vv: any) => String(vv.product_id) === String(i.productId))
+    const p: any = productMap.get(String(v?.product_id ?? i.productId))
+    // variant_id must be integer (bigint) — cast from string
+    const variantIdInt = v?.id ? Number(v.id) : Number(i.variantId)
+    return {
+      order_id:      newOrder.id,
+      product_id:    Number(i.productId),
+      variant_id:    variantIdInt,
+      quantity:      i.qty,
+      price_at_time: Number(v?.price) || Number(p?.price) || 0,
     }
   })
+
   const { error: itemsErr } = await db.from('order_items').insert(orderItems)
-  if (itemsErr) console.error('[createOrder] order_items insert failed:', itemsErr.message)
+  if (itemsErr) {
+    // Cleanup orphan order then throw — matches old site error handling
+    console.error('[createOrder] order_items insert failed:', itemsErr.message)
+    await db.from('orders').delete().eq('id', newOrder.id).catch(() => null)
+    throw new Error('Order items could not be saved: ' + itemsErr.message)
+  }
 
   // 10. Log creation event
   await logOrderEvent(newOrder.id, 'order_created', 'system', {

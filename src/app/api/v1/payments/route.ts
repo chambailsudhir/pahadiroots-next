@@ -46,6 +46,11 @@ export async function POST(req: Request) {
         idempotencyKey: pd.idempotency_key,
       }, settings)
 
+      // Validate Razorpay keys are set
+      if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+        throw new Error('Razorpay keys not configured in environment variables')
+      }
+
       // Create Razorpay order
       const rzpRes = await withTimeout(
         fetch('https://api.razorpay.com/v1/orders', {
