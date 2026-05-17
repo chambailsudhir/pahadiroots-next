@@ -320,76 +320,105 @@ export async function createOrder(
   // 7. Generate order number
   const orderNumber = `PR${Date.now().toString(36).toUpperCase()}`
 
-  // 8. Create order record
-  const shippingAddress = {
-    name:    input.customerName,
-    phone:   input.customerPhone,
-    flat:    input.flat,
-    area:    input.area,
-    city:    input.city,
-    state:   input.state,
-    pincode: input.pincode,
-    label:   input.label ?? 'Home',
+  // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
+  // Matches old site pattern: lookup by phone → upsert → get custId
+  const SUPABASE_URL2 = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const SERVICE_KEY2  = process.env.SUPABASE_SERVICE_KEY!
+  async function sbPost(table: string, query: string, body: object, method = 'POST') {
+    const res = await fetch(`${SUPABASE_URL2}/rest/v1/${table}${query ? '?' + query : ''}`, {
+      method,
+      headers: {
+        apikey:         SERVICE_KEY2,
+        Authorization:  `Bearer ${SERVICE_KEY2}`,
+        'Content-Type': 'application/json',
+        Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => res.status.toString())
+      throw new Error(`DB ${method} ${table} failed: ${txt}`)
+    }
+    return method === 'POST' ? res.json() : null
+  }
+  async function sbGetOne(table: string, query: string) {
+    const res = await fetch(`${SUPABASE_URL2}/rest/v1/${table}?${query}`, {
+      headers: { apikey: SERVICE_KEY2, Authorization: `Bearer ${SERVICE_KEY2}` },
+    })
+    if (!res.ok) return null
+    const rows = await res.json()
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
   }
 
+  const nameParts  = input.customerName.trim().split(' ')
+  const firstName  = nameParts[0] || input.customerName.trim()
+  const lastName   = nameParts.slice(1).join(' ') || null
+  const addressLine = [input.flat, input.area].filter(Boolean).join(', ')
+  const custBody   = {
+    first_name:   firstName,
+    last_name:    lastName,
+    phone:        input.customerPhone.trim(),
+    email:        input.customerEmail ?? null,
+    address_line1: addressLine || null,
+    city:         input.city   || null,
+    state:        input.state  || null,
+    postal_code:  input.pincode || null,
+  }
+
+  let custId: string | null = null
+  const existingCust = await sbGetOne('customers', `phone=eq.${encodeURIComponent(input.customerPhone.trim())}&select=id`)
+  if (existingCust?.id) {
+    custId = existingCust.id
+    await sbPost('customers', `id=eq.${custId}`, custBody, 'PATCH')
+  } else {
+    const newCust: any[] = await sbPost('customers', '', custBody)
+    custId = newCust?.[0]?.id ?? null
+  }
+  if (!custId) throw new Error('Could not create/find customer record')
+
+  // 8. Create order record — uses ACTUAL orders table columns (old schema + idempotency_key)
   const { data: newOrder, error: orderErr } = await db
     .from('orders')
     .insert({
       order_number:     orderNumber,
+      customer_id:      custId,
       order_status:     input.paymentMethod === 'cod' ? 'confirmed' : 'pending_payment',
       payment_method:   input.paymentMethod,
-      payment_status:   input.paymentMethod === 'cod' ? 'pending' : 'awaiting_payment',
+      payment_status:   'pending',
       subtotal:         pricing.subtotal,
       coupon_discount:  pricing.discount,
-      coupon_code:      input.couponCode ?? null,
       shipping_charge:  pricing.shipping,
       tax:              pricing.gstTotal,
       total_amount:     pricing.total,
-      shipping_address: shippingAddress,
-      customer_name:    input.customerName,
-      customer_phone:   input.customerPhone,
-      customer_email:   input.customerEmail ?? null,
       idempotency_key:  input.idempotencyKey,
-      created_at:       new Date().toISOString(),
-      updated_at:       new Date().toISOString(),
     })
     .select('id, order_number, total_amount, order_status')
     .single()
 
   if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
 
-  // 9. Insert order items — handles both variant and non-variant products
-  // Column names match actual DB schema (price_at_time from original, mrp_snapshot added by admin)
+  // 9. Insert order items — uses ACTUAL order_items columns:
+  //    id, order_id, product_id, quantity, price_at_time, created_at, variant_id
+  //    (confirmed from vendor_orders_migration.sql — no snapshot columns in this DB)
   const orderItems = input.items.map(i => {
     if (i.variantId === i.productId) {
-      // No-variant product — no variant_id
+      // No-variant product — variant_id is null
       const p: any = productMap.get(String(i.productId))
-      const sellPrice = Number(p?.price) || 0
       return {
-        order_id:               newOrder.id,
-        product_id:             i.productId,
-        variant_id:             null,
-        quantity:               i.qty,
-        price_at_time:          sellPrice,
-        price_snapshot:         sellPrice,
-        mrp_snapshot:           Number(p?.mrp) || sellPrice,
-        product_name_snapshot:  String(p?.name ?? ''),
-        variant_value_snapshot: null,
+        order_id:      newOrder.id,
+        product_id:    i.productId,
+        variant_id:    null,
+        quantity:      i.qty,
+        price_at_time: Number(p?.price) || 0,
       }
     } else {
       const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
-      const p: any = productMap.get(String(v?.product_id ?? i.productId))
-      const sellPrice = Number(v?.price) || 0
       return {
-        order_id:               newOrder.id,
-        product_id:             i.productId,
-        variant_id:             i.variantId,
-        quantity:               i.qty,
-        price_at_time:          sellPrice,
-        price_snapshot:         sellPrice,
-        mrp_snapshot:           Number(v?.original_price) || Number(p?.mrp) || sellPrice,
-        product_name_snapshot:  String(p?.name ?? ''),
-        variant_value_snapshot: v?.variant_value ?? null,
+        order_id:      newOrder.id,
+        product_id:    i.productId,
+        variant_id:    i.variantId,
+        quantity:      i.qty,
+        price_at_time: Number(v?.price) || 0,
       }
     }
   })
@@ -423,7 +452,6 @@ export async function updateOrderStatus(
   const db = getServiceClient()
   await db.from('orders').update({
     order_status: status,
-    updated_at:   new Date().toISOString(),
     ...extra,
   }).eq('id', orderId)
 }
