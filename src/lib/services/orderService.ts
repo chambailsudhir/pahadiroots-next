@@ -432,7 +432,7 @@ export async function createOrder(
   if (itemsErr) {
     // Cleanup orphan order then throw — matches old site error handling
     console.error('[createOrder] order_items insert failed:', itemsErr.message)
-    await db.from('orders').delete().eq('id', newOrder.id).catch(() => null)
+    try { await db.from("orders").delete().eq("id", newOrder.id) } catch(_) {}
     throw new Error('Order items could not be saved: ' + itemsErr.message)
   }
 
