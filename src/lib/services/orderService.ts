@@ -388,40 +388,23 @@ export async function createOrder(
   }
   if (!custId) throw new Error('Could not create/find customer record')
 
-  // 8. Create order — EXACT columns confirmed from Supabase schema export:
-  //    id, total_amount, payment_status, order_status, created_at, delivery_date,
-  //    customer_id, updated_at, subtotal, tax, shipping_charge, order_number,
-  //    payment_id, payment_method, payment_date, updated_by, is_deleted,
-  //    shipping_address, notes, admin_notes, tracking_number, courier,
-  //    coupon_discount, shipped_at, delivered_at, source, status, idempotency_key
-  const shippingAddrJson = JSON.stringify({
-    name:    input.customerName,
-    phone:   input.customerPhone,
-    flat:    input.flat,
-    area:    input.area,
-    city:    input.city,
-    state:   input.state,
-    pincode: input.pincode,
-    label:   input.label ?? 'Home',
-  })
-
+  // 8. Create order — EXACT same columns as working old site (admin-api.js line 325-335)
+  // ONLY these columns: customer_id, total_amount, subtotal, coupon_discount, tax,
+  // shipping_charge, order_status, payment_status, payment_method, idempotency_key
+  // DO NOT add: status, shipping_address, source, order_number, updated_at — these cause constraint errors
   const { data: newOrder, error: orderErr } = await db
     .from('orders')
     .insert({
-      order_number:    orderNumber,
       customer_id:     custId,
-      order_status:    input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
-      status:          input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
-      payment_method:  input.paymentMethod,
-      payment_status:  input.paymentMethod === 'cod' ? 'pending' : 'pending',
+      total_amount:    pricing.total,
       subtotal:        pricing.subtotal,
       coupon_discount: pricing.discount,
-      shipping_charge: pricing.shipping,
       tax:             pricing.gstTotal,
-      total_amount:    pricing.total,
-      shipping_address: shippingAddrJson,
+      shipping_charge: pricing.shipping,
+      order_status:    'pending',
+      payment_status:  'pending',
+      payment_method:  input.paymentMethod,
       idempotency_key: input.idempotencyKey,
-      source:          'website',
     })
     .select('id, order_number, total_amount, order_status')
     .single()
@@ -483,8 +466,6 @@ export async function updateOrderStatus(
   const db = getServiceClient()
   await db.from('orders').update({
     order_status: status,
-    status:       status,   // orders table has both columns
-    updated_at:   new Date().toISOString(),
     ...extra,
   }).eq('id', orderId)
 }
