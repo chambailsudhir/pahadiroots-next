@@ -164,6 +164,50 @@ export async function POST(req: Request) {
         razorpay_order_id,
       }).catch(() => null)
 
+      // Send confirmation email for Razorpay orders
+      try {
+        const { data: fullOrder } = await db
+          .from('orders')
+          .select('id, order_number, total_amount, customer_id')
+          .eq('id', order_id)
+          .single()
+        const { data: customer } = await db
+          .from('customers')
+          .select('first_name, email')
+          .eq('id', fullOrder?.customer_id)
+          .single()
+
+        if (customer?.email && fullOrder) {
+          const { Resend } = await import('resend')
+          const resend = new Resend(process.env.RESEND_API_KEY)
+          await resend.emails.send({
+            from:    'Pahadi Roots <noreply@pahadiroots.com>',
+            to:      [customer.email],
+            subject: `Payment Confirmed #${fullOrder.order_number} — Pahadi Roots 🌿`,
+            html: `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
+                <div style="background:#2C4A2E;padding:24px;text-align:center">
+                  <h1 style="color:#fff;margin:0;font-size:22px">🌿 Pahadi Roots</h1>
+                  <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
+                </div>
+                <div style="padding:24px">
+                  <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
+                  <p>Hi <strong>${customer.first_name}</strong>, your payment was successful.</p>
+                  <p><strong>Order #:</strong> ${fullOrder.order_number}<br>
+                     <strong>Payment ID:</strong> ${razorpay_payment_id}<br>
+                     <strong>Amount Paid:</strong> ₹${fullOrder.total_amount}<br>
+                     <strong>Delivery:</strong> 3–5 business days</p>
+                  <p style="color:#666;font-size:14px">We'll WhatsApp you tracking details once shipped.</p>
+                  <a href="https://pahadiroots.com/track" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
+                </div>
+                <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
+                  Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
+                </div>
+              </div>`,
+          }).catch(() => null)
+        }
+      } catch (e) { console.error('[payments] Email failed:', e) }
+
       console.log(`[payments] payment verified ✓ order=${order_id} payment=${razorpay_payment_id}`)
 
       return NextResponse.json({

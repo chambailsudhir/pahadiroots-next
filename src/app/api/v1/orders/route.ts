@@ -66,17 +66,54 @@ export async function POST(req: Request) {
       idempotencyKey: d.idempotency_key,
     }, settings)
 
-    // Send confirmation email for COD orders
-    if (d.payment_method === 'cod' && settings.order_email_enabled !== 'false' && d.customer_email && !alreadyExists) {
+    // Send confirmation email — COD + Razorpay both
+    if (settings.order_email_enabled !== 'false' && d.customer_email && !alreadyExists) {
       try {
-        const resend = new Resend(process.env.RESEND_API_KEY)
+        const resend    = new Resend(process.env.RESEND_API_KEY)
+        const itemsHtml = d.items.map((i: any) =>
+          `<tr>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0">${i.name || 'Product'}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;text-align:center">${i.qty}</td>
+            <td style="padding:8px;border-bottom:1px solid #f0f0f0;text-align:right">₹${((i.price||0)*i.qty).toFixed(0)}</td>
+          </tr>`
+        ).join('')
+        const payLabel  = d.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'
+        const emailHtml = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
+            <div style="background:#2C4A2E;padding:24px;text-align:center">
+              <h1 style="color:#fff;margin:0;font-size:22px">🌿 Pahadi Roots</h1>
+              <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
+            </div>
+            <div style="padding:24px">
+              <h2 style="color:#2C4A2E">Order Confirmed! 🎉</h2>
+              <p>Hi <strong>${name}</strong>, thank you for your order.</p>
+              <p><strong>Order #:</strong> ${order.order_number}<br>
+                 <strong>Payment:</strong> ${payLabel}<br>
+                 <strong>Delivery:</strong> 3–5 business days</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                <tr style="background:#f5f5f5">
+                  <th style="padding:8px;text-align:left">Item</th>
+                  <th style="padding:8px;text-align:center">Qty</th>
+                  <th style="padding:8px;text-align:right">Amount</th>
+                </tr>
+                ${itemsHtml}
+                <tr><td colspan="2" style="padding:8px;font-weight:bold">Total</td>
+                    <td style="padding:8px;text-align:right;font-weight:bold">₹${order.total_amount}</td></tr>
+              </table>
+              <p style="color:#666;font-size:14px">We'll WhatsApp you tracking details once shipped.</p>
+              <a href="https://pahadiroots.com/track" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
+            </div>
+            <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
+              Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
+            </div>
+          </div>`
         await withTimeout(resend.emails.send({
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
           to:      [d.customer_email],
-          subject: `Order Confirmed — #${order.order_number}`,
-          html:    `<p>Hi ${name}, your COD order <strong>#${order.order_number}</strong> is confirmed. Total: Rs.${order.total_amount}. Delivery in 3-5 days.</p>`,
+          subject: `Order Confirmed #${order.order_number} — Pahadi Roots 🌿`,
+          html:    emailHtml,
         }), 5000)
-      } catch (e) { console.error('[orders] Email failed:', e) }
+      } catch (e) { console.error('[orders] Customer email failed:', e) }
     }
 
     // Notify admin

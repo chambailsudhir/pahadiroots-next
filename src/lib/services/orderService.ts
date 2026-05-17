@@ -388,13 +388,11 @@ export async function createOrder(
   }
   if (!custId) throw new Error('Could not create/find customer record')
 
-  // 8. Create order — EXACT same columns as working old site (admin-api.js line 325-335)
-  // ONLY these columns: customer_id, total_amount, subtotal, coupon_discount, tax,
-  // shipping_charge, order_status, payment_status, payment_method, idempotency_key
-  // DO NOT add: status, shipping_address, source, order_number, updated_at — these cause constraint errors
+  // 8. Create order
   const { data: newOrder, error: orderErr } = await db
     .from('orders')
     .insert({
+      order_number:    orderNumber,        // e.g. PR1A2B3C — shown to customer
       customer_id:     custId,
       total_amount:    pricing.total,
       subtotal:        pricing.subtotal,
