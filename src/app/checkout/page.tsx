@@ -279,31 +279,57 @@ export default function CheckoutPage() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
         const rzp = new RZP({
-          key:razorpayKeyId, amount:data.amount, currency:'INR',
-          name:'Pahadi Roots', description:'Natural Himalayan Products',
-          order_id:data.razorpay_order_id,
-          prefill:{ name:addr.name, email:email||user?.email||'', contact:addr.phone },
-          theme:{ color:'#2C4A2E' },
+          key:       razorpayKeyId,
+          amount:    data.amount,           // paise — from server (tamper-proof)
+          currency:  data.currency || 'INR',
+          order_id:  data.razorpay_order_id, // server-side Razorpay order_id — required for HMAC
+          name:      'Pahadi Roots',
+          description: 'Natural Himalayan Products',
+          image:     'https://pahadiroots.com/favicon.ico',
+          prefill:   { name: addr.name, email: email || user?.email || '', contact: addr.phone },
+          notes:     { db_order_id: data.order_id },
+          theme:     { color: '#2C4A2E' },
           handler: async (response: any) => {
             try {
+              // 1. Verify payment on server (HMAC check) + mark order confirmed in DB
               const verRes = await fetch('/api/v1/payments', {
-                method:'POST', headers:{ 'Content-Type':'application/json' },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  action:'verify_payment',
+                  action:              'verify_payment',
                   razorpay_order_id:   response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature:  response.razorpay_signature,
                   order_id:            data.order_id,
-                  idempotency_key:     orderKey,
                 }),
               })
               const verData = await verRes.json()
               if (!verRes.ok) throw new Error(verData.error || 'Verification failed')
+
+              // 2. Send WhatsApp confirmation (non-blocking, same as old site)
+              const waNumber  = s.whatsapp_number || '919899984895'
+              const itemLines = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
+              const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
+              const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
+              const waMsg = `✅ *Payment Confirmed — 5 Pahadi Roots* 🌿\n\n` +
+                `✅ *Payment ID:* ${response.razorpay_payment_id}\n` +
+                `👤 *${addr.name}*\n📱 ${addr.phone}\n` +
+                (email ? `📧 ${email}\n` : '') +
+                `\n📍 ${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
+                `🛒 *Items*\n${itemLines}` + couponLine + shipLine +
+                `\n\n*Total Paid: ₹${pricing.total}*`
+              window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
+
+              // 3. Redirect to success page
               analytics.trackPaymentVerified(verData.order_number, pricing.total)
-              clearCart(); router.replace(`/order-success?id=${verData.order_number}`)
-            } catch (e:any) { setError(e.message || 'Verification failed. Contact support.'); setPlacing(false) }
+              clearCart()
+              router.replace(`/order-success?id=${verData.order_number}&method=razorpay&total=${pricing.total}`)
+            } catch (e:any) {
+              setError(e.message || 'Payment verified but order save failed. Contact support with payment ID: ' + response.razorpay_payment_id)
+              setPlacing(false)
+            }
           },
-          modal:{ ondismiss: () => { setPlacing(false); ensureIdempotencyKey() } },
+          modal: { ondismiss: () => { setPlacing(false); ensureIdempotencyKey() } },
         })
         analytics.trackPaymentInitiated(pricing.total)
         rzp.open(); return
