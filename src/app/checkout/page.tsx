@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
@@ -106,7 +106,11 @@ export default function CheckoutPage() {
     payMethod, isFreeShipping: pricing.isFreeShipping,
   })
 
-  useEffect(() => { if (items.length === 0 && mounted) router.replace('/cart') }, [items, mounted, router])
+  // Track if order was just placed — prevents cart-empty redirect from firing after clearCart()
+  const orderPlacedRef = useRef(false)
+  useEffect(() => {
+    if (items.length === 0 && mounted && !orderPlacedRef.current) router.replace('/cart')
+  }, [items, mounted, router])
   useEffect(() => {
     if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
@@ -255,20 +259,27 @@ export default function CheckoutPage() {
           couponLine + shipLine +
           `\n\n*Total: ₹${pricing.total}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
 
-        // Open WhatsApp IMMEDIATELY — don't wait for DB (same as old site)
+        // 1. Save to DB first to get order_number
+        let orderNumber = ''
+        try {
+          const dbRes  = await fetch('/api/v1/orders', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const dbData = await dbRes.json()
+          if (dbRes.ok) {
+            orderNumber = dbData.order_number || ''
+            analytics.trackOrderPlaced(orderNumber, pricing.total, 'cod')
+          }
+        } catch (e) { console.error('[COD] DB save failed:', e) }
+
+        // 2. Open WhatsApp after DB save
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
 
-        // Save to DB in background (non-blocking) — WhatsApp already opened
-        fetch('/api/v1/orders', {
-          method:'POST', headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(payload),
-        }).then(async res => {
-          const data = await res.json()
-          if (res.ok) analytics.trackOrderPlaced(data.order_number, pricing.total, 'cod')
-        }).catch(() => {})
-
+        // 3. Redirect to success page
+        orderPlacedRef.current = true
         clearCart()
-        router.replace(`/order-success?total=${pricing.total}&method=cod&id=`)
+        router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricing.total}`)
       } else {
         const RZP = (window as any).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
@@ -322,8 +333,9 @@ export default function CheckoutPage() {
 
               // 3. Redirect to success page
               analytics.trackPaymentVerified(verData.order_number, pricing.total)
+              orderPlacedRef.current = true
               clearCart()
-              router.replace(`/order-success?id=${verData.order_number}&method=razorpay&total=${pricing.total}`)
+              router.replace(`/order-success?id=${verData.order_number || ''}&method=razorpay&total=${pricing.total}`)
             } catch (e:any) {
               setError(e.message || 'Payment verified but order save failed. Contact support with payment ID: ' + response.razorpay_payment_id)
               setPlacing(false)
