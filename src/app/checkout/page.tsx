@@ -90,11 +90,31 @@ export default function CheckoutPage() {
   const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(null)
   const [summaryOpen,      setSummaryOpen]       = useState(true)
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
-  const [addr, setAddr] = useState<OrderAddress>({
-    name:'', phone:'', flat:'', area:'', city:'',
-    state:'Uttarakhand', pincode:'', label:'Home',
+  // ── Instant pre-fill from localStorage ───────────────────────
+  // Read the persisted userStore (pr-user) synchronously so name/phone
+  // appear immediately — before the /api/profile network call resolves.
+  const [addr, setAddr] = useState<OrderAddress>(() => {
+    const base: OrderAddress = { name:'', phone:'', flat:'', area:'', city:'', state:'Uttarakhand', pincode:'', label:'Home' }
+    if (typeof window === 'undefined') return base
+    try {
+      const raw  = localStorage.getItem('pr-user')
+      if (!raw) return base
+      const store = JSON.parse(raw)
+      const u = store?.state?.user
+      if (!u) return base
+      const cleanPhone = (u.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
+      return { ...base, name: u.name || '', phone: cleanPhone }
+    } catch { return base }
   })
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState<string>(() => {
+    if (typeof window === 'undefined') return ''
+    try {
+      const raw = localStorage.getItem('pr-user')
+      if (!raw) return ''
+      const store = JSON.parse(raw)
+      return store?.state?.user?.email || ''
+    } catch { return '' }
+  })
 
   const pricing       = calcPriceSummary(items, s, coupon, payMethod)
   const codOk         = codEnabled && pricing.subtotal <= codMax
