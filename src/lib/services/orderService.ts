@@ -409,18 +409,33 @@ export async function createOrder(
 
   if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
 
-  // 9. Insert order items — order_items.variant_id is BIGINT NOT NULL (006_stock_concurrency.sql)
-  //    Columns: order_id, product_id, variant_id (bigint NOT NULL), quantity, price_at_time
+  // 9. Insert order items
+  //    order_items.variant_id is UUID (references product_variants.id)
+  //    For no-variant products (variantId === productId), fetch the canonical variant from DB
+  const noVariantProductIds = itemsNoVariant.map(i => i.productId)
+  const defaultVariantMap = new Map<string, string>() // productId → variantId (UUID)
+  if (noVariantProductIds.length > 0) {
+    const productIdList2 = noVariantProductIds.join(',')
+    const defaultVariants: any[] = await sbGet('product_variants',
+      `select=id,product_id,price&product_id=in.(${productIdList2})&is_active=eq.true&order=id.asc&limit=${noVariantProductIds.length * 2}`
+    ).catch(() => [])
+    for (const v of (defaultVariants || [])) {
+      const pid = String(v.product_id)
+      if (!defaultVariantMap.has(pid)) defaultVariantMap.set(pid, String(v.id))
+    }
+  }
+
   const orderItems = input.items.map(i => {
     const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
-      ?? variantRows.find((vv: any) => String(vv.product_id) === String(i.productId))
     const p: any = productMap.get(String(v?.product_id ?? i.productId))
-    // variant_id must be integer (bigint) — cast from string
-    const variantIdInt = v?.id ? Number(v.id) : Number(i.variantId)
+    // For no-variant products, resolve the real variant UUID from DB lookup
+    const resolvedVariantId = i.variantId === i.productId
+      ? (defaultVariantMap.get(String(i.productId)) ?? i.variantId)
+      : i.variantId
     return {
       order_id:      newOrder.id,
-      product_id:    Number(i.productId),
-      variant_id:    variantIdInt,
+      product_id:    i.productId,   // UUID string — keep as-is
+      variant_id:    resolvedVariantId, // UUID string — FK to product_variants(id)
       quantity:      i.qty,
       price_at_time: Number(v?.price) || Number(p?.price) || 0,
     }

@@ -116,8 +116,9 @@ export default function CheckoutPage() {
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
   }, [codOk, payMethod, razorpayEnabled])
 
+  // Fetch profile eagerly on mount — don't wait for user store to hydrate.
+  // This eliminates the visible delay where delivery details appear empty for 1–2 seconds.
   useEffect(() => {
-    if (!user) return
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
       .then(async r => {
@@ -151,7 +152,8 @@ export default function CheckoutPage() {
       })
       .catch(() => {})
     return () => ctrl.abort()
-  }, [user])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted])
 
   useEffect(() => {
     // TODO: replace with /api/v1/coupon-hints (server-filtered) to avoid exposing raw coupon data
