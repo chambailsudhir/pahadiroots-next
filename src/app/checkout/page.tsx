@@ -55,8 +55,12 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
+  // mounted starts true — the localStorage useState initializers already
+  // guard against SSR with typeof window === 'undefined' checks.
+  // Starting false causes a skeleton flash on every visit even when cache is warm.
+  const [mounted, setMounted] = useState(true)
+  // keep setMounted in scope for the profile-fetch dep
+  const _setMounted = setMounted
 
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
@@ -230,7 +234,7 @@ export default function CheckoutPage() {
       .catch(() => {})
     return () => ctrl.abort()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted])
+  }, [])
 
   useEffect(() => {
     // TODO: replace with /api/v1/coupon-hints (server-filtered) to avoid exposing raw coupon data
@@ -428,7 +432,7 @@ export default function CheckoutPage() {
     } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
   }, [addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
 
-  if (!mounted) return <CheckoutSkeleton />
+  // Skeleton guard removed — mounted always starts true; localStorage cache fills form instantly
   if (items.length === 0) return null
 
   return (
