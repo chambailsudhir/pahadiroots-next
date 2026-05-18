@@ -90,6 +90,7 @@ export default function AddressesPage() {
       }
 
       await updateProfile({ saved_addresses: JSON.stringify(updated) })
+      try { localStorage.removeItem('pr_checkout_profile') } catch {}  // invalidate checkout cache
       setAddresses(updated)
       setShowForm(false)
       setEditId(null)
@@ -107,6 +108,7 @@ export default function AddressesPage() {
     const updated = addresses.filter(a => a.id !== id)
     try {
       await updateProfile({ saved_addresses: JSON.stringify(updated) })
+      try { localStorage.removeItem('pr_checkout_profile') } catch {}  // invalidate checkout cache
       setAddresses(updated)
       showToast('Address removed')
     } catch (e: unknown) {

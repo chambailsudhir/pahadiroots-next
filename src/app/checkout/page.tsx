@@ -86,33 +86,97 @@ export default function CheckoutPage() {
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError,   setCouponError]   = useState('')
   const [couponHints,   setCouponHints]   = useState<Array<{code:string,label:string}>>([])
-  const [savedAddrs,       setSavedAddrs]       = useState<any[]>([])
-  const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(null)
+  const [savedAddrs,       setSavedAddrs]       = useState<any[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return readProfileCache()?.addresses || [] } catch { return [] }
+  })
+  const [selectedSavedIdx, setSelectedSavedIdx] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null
+    try { return (readProfileCache()?.addresses?.length || 0) > 0 ? 0 : null } catch { return null }
+  })
   const [summaryOpen,      setSummaryOpen]       = useState(true)
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
-  // ── Instant pre-fill from localStorage ───────────────────────
-  // Read the persisted userStore (pr-user) synchronously so name/phone
-  // appear immediately — before the /api/profile network call resolves.
+  // ── Cache helpers (mirrors old site's pr_auth_profile pattern) ──
+  // The old site stored the FULL profile incl. saved_addresses in localStorage
+  // so the form fills instantly with zero network calls. We do the same here.
+  const PROFILE_CACHE_KEY = 'pr_checkout_profile'
+
+  function readProfileCache(): { profile: any; addresses: any[] } | null {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      // Expire cache after 30 minutes
+      if (!parsed?.ts || Date.now() - parsed.ts > 30 * 60 * 1000) return null
+      return parsed
+    } catch { return null }
+  }
+
+  function writeProfileCache(profile: any, addresses: any[]) {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ ts: Date.now(), profile, addresses }))
+    } catch {}
+  }
+
+  function applyProfileData(prof: any, allAddrs: any[], setAddrFn: typeof setAddr, setEmailFn: typeof setEmail, setSavedFn: typeof setSavedAddrs) {
+    if (!prof) return
+    const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
+    const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
+    setAddrFn(prev => {
+      if (prev.flat || prev.city || prev.pincode) return prev // user already typed something
+      if (allAddrs.length > 0) {
+        const a = allAddrs[0]
+        const validLabels = ['Home','Office','Parents','Friends','Others'] as const
+        const lbl = validLabels.find(l => l === a.label) || 'Home'
+        return { ...prev, name: a.name||fullName||prev.name, phone: a.phone||cleanPhone||prev.phone,
+          flat: a.addr||a.flat||'', area: a.area||'', city: a.city||'',
+          state: matchState(a.state), pincode: a.pin||a.pincode||'', label: lbl }
+      }
+      return { ...prev, name: prev.name||fullName, phone: prev.phone||cleanPhone }
+    })
+    setEmailFn(prev => prev || prof.email || '')
+    setSavedFn(allAddrs)
+  }
+
+  // ── Instant pre-fill: read full profile from localStorage cache ──
+  // Runs synchronously in useState initializer — zero network wait, zero flicker
   const [addr, setAddr] = useState<OrderAddress>(() => {
     const base: OrderAddress = { name:'', phone:'', flat:'', area:'', city:'', state:'Uttarakhand', pincode:'', label:'Home' }
     if (typeof window === 'undefined') return base
     try {
-      const raw  = localStorage.getItem('pr-user')
-      if (!raw) return base
-      const store = JSON.parse(raw)
-      const u = store?.state?.user
-      if (!u) return base
-      const cleanPhone = (u.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
-      return { ...base, name: u.name || '', phone: cleanPhone }
+      const cache = readProfileCache()
+      if (!cache) {
+        // Fallback: at least get name/phone from userStore
+        const raw = localStorage.getItem('pr-user')
+        if (!raw) return base
+        const u = JSON.parse(raw)?.state?.user
+        if (!u) return base
+        const cleanPhone = (u.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
+        return { ...base, name: u.name || '', phone: cleanPhone }
+      }
+      const { profile: prof, addresses: allAddrs } = cache
+      const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
+      const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
+      if (allAddrs.length > 0) {
+        const a = allAddrs[0]
+        const validLabels = ['Home','Office','Parents','Friends','Others'] as const
+        const lbl = validLabels.find(l => l === a.label) || 'Home'
+        return { ...base, name: a.name||fullName, phone: a.phone||cleanPhone,
+          flat: a.addr||a.flat||'', area: a.area||'', city: a.city||'',
+          state: matchState(a.state), pincode: a.pin||a.pincode||'', label: lbl }
+      }
+      return { ...base, name: fullName, phone: cleanPhone }
     } catch { return base }
   })
   const [email, setEmail] = useState<string>(() => {
     if (typeof window === 'undefined') return ''
     try {
+      const cache = readProfileCache()
+      if (cache?.profile?.email) return cache.profile.email
       const raw = localStorage.getItem('pr-user')
-      if (!raw) return ''
-      const store = JSON.parse(raw)
-      return store?.state?.user?.email || ''
+      return JSON.parse(raw || '{}')?.state?.user?.email || ''
     } catch { return '' }
   })
 
@@ -136,8 +200,9 @@ export default function CheckoutPage() {
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
   }, [codOk, payMethod, razorpayEnabled])
 
-  // Fetch profile eagerly on mount — don't wait for user store to hydrate.
-  // This eliminates the visible delay where delivery details appear empty for 1–2 seconds.
+  // Background profile refresh — runs after instant cache render.
+  // Fetches fresh data from API and updates cache (stale-while-revalidate pattern,
+  // same as old site's pr_auth_profile localStorage strategy).
   useEffect(() => {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
@@ -148,27 +213,19 @@ export default function CheckoutPage() {
         if (!prof) return
         const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
-        setAddr(prev => ({ ...prev, name: prev.name || fullName || '', phone: prev.phone || cleanPhone || '' }))
-        setEmail(prev => prev || data.user?.email || '')
         const defaultAddr = prof.address_line1 ? [{
           _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
           area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
         }] : []
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
-        setSavedAddrs(all)
-        if (all.length > 0) {
-          const a = all[0]
-          const validLabels = ['Home','Office','Parents','Friends','Others'] as const
-          const lbl = validLabels.find(l => l === a.label) || 'Home'
-          setAddr(prev => {
-            if (prev.flat || prev.city || prev.pincode) return prev
-            return { ...prev, name:a.name||prev.name, phone:a.phone||prev.phone,
-              flat:a.addr||a.flat||'', area:a.area||'', city:a.city||'',
-              state:matchState(a.state), pincode:a.pin||a.pincode||'', label:lbl }
-          })
-          setSelectedSavedIdx(0)
-        }
+
+        // Write fresh data to cache — next visit will be instant
+        writeProfileCache(prof, all)
+
+        // Only update UI if cache was empty (first visit) — avoids flicker if cache already filled form
+        applyProfileData(prof, all, setAddr, setEmail, setSavedAddrs)
+        if (all.length > 0) setSelectedSavedIdx(0)
       })
       .catch(() => {})
     return () => ctrl.abort()
