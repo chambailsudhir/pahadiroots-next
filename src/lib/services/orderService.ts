@@ -150,7 +150,7 @@ export interface CreatedOrder {
   total_amount: number
   total:        number
   status:       string
-  cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
+  cartItems:    OrderEmailItem[]  // enriched items for email — has names + prices from DB
 }
 
 export async function createOrder(
@@ -174,7 +174,6 @@ export async function createOrder(
         total_amount: existing.total_amount,
         total:        existing.total_amount,
         status:       existing.order_status,
-        cartItems:    [], // not needed — email is skipped when alreadyExists is true
       },
       alreadyExists: true,
     }
@@ -466,7 +465,7 @@ export async function createOrder(
   })
 
   // Return cartItems alongside order so the email template in orders/route.ts
-  // can use real product names + prices (d.items from Zod only has productId/variantId/qty)
+  // can use real product names + prices (d.items from schema only has productId/variantId/qty)
   return {
     order: {
       id:           newOrder.id,
@@ -476,7 +475,7 @@ export async function createOrder(
       status:       newOrder.order_status,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
-        emoji: i.emoji,
+        emoji: i.emoji ?? '',
         qty:   i.qty,
         price: i.price,
       })),
