@@ -174,6 +174,7 @@ export async function createOrder(
         total_amount: existing.total_amount,
         total:        existing.total_amount,
         status:       existing.order_status,
+        cartItems:    [], // not needed — email is skipped when alreadyExists is true
       },
       alreadyExists: true,
     }
