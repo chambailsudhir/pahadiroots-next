@@ -174,6 +174,7 @@ export async function createOrder(
         total_amount: existing.total_amount,
         total:        existing.total_amount,
         status:       existing.order_status,
+        cartItems:    [],
       },
       alreadyExists: true,
     }
@@ -475,7 +476,7 @@ export async function createOrder(
       status:       newOrder.order_status,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
-        emoji: i.emoji ?? "",
+        emoji: i.emoji,
         qty:   i.qty,
         price: i.price,
       })),
