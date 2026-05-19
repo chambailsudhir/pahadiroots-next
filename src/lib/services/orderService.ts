@@ -476,7 +476,7 @@ export async function createOrder(
       status:       newOrder.order_status,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
-        emoji: i.emoji,
+        emoji: i.emoji ?? '🌿',
         qty:   i.qty,
         price: i.price,
       })),
