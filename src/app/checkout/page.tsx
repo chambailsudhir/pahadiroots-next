@@ -55,9 +55,15 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  // mounted starts true — the localStorage useState initializers already
-  // guard against SSR with typeof window === 'undefined' checks.
-  // Starting false causes a skeleton flash on every visit even when cache is warm.
+  // storeReady: guards against Zustand skipHydration gap.
+  // cartStore uses skipHydration:true so items=[] on first SSR render.
+  // Without this guard the page returns null (blank flash) until the store rehydrates.
+  // With this guard, CheckoutSkeleton shows immediately, then transitions to real content.
+  const [storeReady, setStoreReady] = useState(false)
+  useEffect(() => { setStoreReady(true) }, [])
+
+  // mounted stays true — localStorage useState initializers already guard SSR
+  // via typeof window === 'undefined' checks, so no extra skeleton is needed for form.
   const [mounted, setMounted] = useState(true)
   // keep setMounted in scope for the profile-fetch dep
   const _setMounted = setMounted
@@ -432,7 +438,9 @@ export default function CheckoutPage() {
     } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
   }, [addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
 
-  // Skeleton guard removed — mounted always starts true; localStorage cache fills form instantly
+  // Show CheckoutSkeleton while Zustand store rehydrates (skipHydration:true means items=[] on first render)
+  // This eliminates the null→content blank flash that made delivery details appear "late"
+  if (!storeReady) return <CheckoutSkeleton />
   if (items.length === 0) return null
 
   return (

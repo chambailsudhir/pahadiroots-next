@@ -101,8 +101,19 @@ export default function CartPage() {
         const imgMap: Record<string,string> = {}
         images.forEach((img: any) => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
         const badges = ['Bestseller','Organic','Popular','Farm Fresh','Pure','New Arrival']
+        // Deduplicate by product_id: pick the best-stocked variant per product.
+        // Previously all variants of the same product (e.g. 3× Himalayan Wild Honey
+        // at different sizes) were shown together — now only one card per product.
+        const seenProducts = new Set<string>()
+        const cartProductIds = new Set(items.map(i => i.productId))
         const upsells = variants
-          .filter((v: any) => v.is_active && v.available_stock > 0 && !cartIds.has(v.id))
+          .filter((v: any) => v.is_active && v.available_stock > 0 && !cartIds.has(v.id) && !cartProductIds.has(v.product_id))
+          .sort((a: any, b: any) => b.available_stock - a.available_stock) // best-stocked variant first
+          .filter((v: any) => {
+            if (seenProducts.has(v.product_id)) return false
+            seenProducts.add(v.product_id)
+            return true
+          })
           .slice(0, 6)
           .map((v: any, i: number) => {
             const p = prodMap[v.product_id] || {}
