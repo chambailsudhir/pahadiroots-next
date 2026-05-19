@@ -137,12 +137,20 @@ export interface CreateOrderInput {
   idempotencyKey: string
 }
 
+export interface OrderEmailItem {
+  name:  string
+  emoji: string
+  qty:   number
+  price: number  // price per unit
+}
+
 export interface CreatedOrder {
   id:           string
   order_number: string
   total_amount: number
   total:        number
   status:       string
+  cartItems:    OrderEmailItem[]  // enriched items for email — has names + prices from DB
 }
 
 export async function createOrder(
@@ -456,6 +464,8 @@ export async function createOrder(
     items:          input.items.length,
   })
 
+  // Return cartItems alongside order so the email template in orders/route.ts
+  // can use real product names + prices (d.items from schema only has productId/variantId/qty)
   return {
     order: {
       id:           newOrder.id,
@@ -463,6 +473,12 @@ export async function createOrder(
       total_amount: newOrder.total_amount,
       total:        newOrder.total_amount,
       status:       newOrder.order_status,
+      cartItems:    cartItems.map(i => ({
+        name:  i.name,
+        emoji: i.emoji,
+        qty:   i.qty,
+        price: i.price,
+      })),
     },
     alreadyExists: false,
   }

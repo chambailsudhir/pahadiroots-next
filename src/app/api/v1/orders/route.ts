@@ -66,51 +66,97 @@ export async function POST(req: Request) {
       idempotencyKey: d.idempotency_key,
     }, settings)
 
-    // Send confirmation email — COD + Razorpay both
-    if (settings.order_email_enabled !== 'false' && d.customer_email && !alreadyExists) {
+    // ─── Send confirmation email (COD + Razorpay) ────────────────────────────
+    // Bug fixes vs old version:
+    //  1. Use order.cartItems instead of d.items — d.items has only productId/variantId/qty,
+    //     so i.name was always 'Product' and i.price was always 0 in the old code.
+    //  2. Use customerEmail?.trim() truthy check — empty string '' passes Zod but is falsy,
+    //     so emails were silently dropped when the email field was left blank.
+    //  3. Restored the full branded email template matching the old api/send-email.js design.
+    const customerEmail = d.customer_email?.trim()
+    if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
       try {
-        const resend    = new Resend(process.env.RESEND_API_KEY)
-        const itemsHtml = d.items.map((i: any) =>
-          `<tr>
-            <td style="padding:8px;border-bottom:1px solid #f0f0f0">${i.name || 'Product'}</td>
-            <td style="padding:8px;border-bottom:1px solid #f0f0f0;text-align:center">${i.qty}</td>
-            <td style="padding:8px;border-bottom:1px solid #f0f0f0;text-align:right">₹${((i.price||0)*i.qty).toFixed(0)}</td>
-          </tr>`
+        const resend = new Resend(process.env.RESEND_API_KEY)
+
+        // Use enriched cartItems returned by createOrder — has real names + prices from DB
+        const emailItems = order.cartItems ?? []
+
+        // Delivery estimate: +5 weekdays from today (mirrors old site logic)
+        function getDeliveryEstimate(): string {
+          const d = new Date()
+          let added = 0
+          while (added < 5) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) added++ }
+          const from = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
+          d.setDate(d.getDate() + 2)
+          const to = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
+          return \`\${from} – \${to}\`
+        }
+
+        const payLabel  = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
+        const estDate   = getDeliveryEstimate()
+
+        const itemsHtml = emailItems.map(i =>
+          \`<tr>
+            <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
+              <span style="font-size:16px">\${i.emoji || '🌿'}</span>
+              <strong style="color:#1a1a1a;margin-left:8px">\${i.name}</strong>
+              <span style="color:#888;font-size:13px"> × \${i.qty}</span>
+            </td>
+            <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
+              ₹\${(i.price * i.qty).toLocaleString('en-IN')}
+            </td>
+          </tr>\`
         ).join('')
-        const payLabel  = d.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'
-        const emailHtml = `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
-            <div style="background:#2C4A2E;padding:24px;text-align:center">
-              <h1 style="color:#fff;margin:0;font-size:22px">🌿 Pahadi Roots</h1>
-              <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
-            </div>
-            <div style="padding:24px">
-              <h2 style="color:#2C4A2E">Order Confirmed! 🎉</h2>
-              <p>Hi <strong>${name}</strong>, thank you for your order.</p>
-              <p><strong>Order #:</strong> ${order.order_number}<br>
-                 <strong>Payment:</strong> ${payLabel}<br>
-                 <strong>Delivery:</strong> 3–5 business days</p>
-              <table style="width:100%;border-collapse:collapse;margin:16px 0">
-                <tr style="background:#f5f5f5">
-                  <th style="padding:8px;text-align:left">Item</th>
-                  <th style="padding:8px;text-align:center">Qty</th>
-                  <th style="padding:8px;text-align:right">Amount</th>
-                </tr>
-                ${itemsHtml}
-                <tr><td colspan="2" style="padding:8px;font-weight:bold">Total</td>
-                    <td style="padding:8px;text-align:right;font-weight:bold">₹${order.total_amount}</td></tr>
-              </table>
-              <p style="color:#666;font-size:14px">We'll WhatsApp you tracking details once shipped.</p>
-              <a href="https://pahadiroots.com/track" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
-            </div>
-            <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
-              Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
-            </div>
-          </div>`
+
+        const emailHtml = \`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
+<div style="max-width:580px;margin:0 auto;padding:24px 16px">
+  <div style="background:linear-gradient(135deg,#1a3a1e,#2d5233);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center">
+    <div style="font-size:32px;margin-bottom:6px">🌿</div>
+    <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px">5 Pahadi Roots</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.6);letter-spacing:2px;text-transform:uppercase">Himalayan Natural Store</div>
+  </div>
+  <div style="background:#fff;padding:28px 32px;text-align:center;border-left:1px solid #eee;border-right:1px solid #eee">
+    <div style="font-size:44px;margin-bottom:10px">✅</div>
+    <h1 style="font-family:Georgia,serif;font-size:24px;color:#1a3a1e;margin:0 0 8px">Order Confirmed!</h1>
+    <p style="color:#666;font-size:14px;margin:0 0 16px">Thank you \${name}! Your mountain goodness is on its way 🌿</p>
+    <div style="display:inline-block;background:#f0f7f4;border:1.5px solid #c8e6c9;border-radius:20px;padding:8px 20px">
+      <span style="font-size:13px;font-weight:700;color:#1a3a1e">📋 \${order.order_number}</span>
+    </div>
+  </div>
+  <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
+    <strong style="color:#1a3a1e">🚚 Estimated Delivery: \${estDate}</strong><br>
+    <span style="color:#888;font-size:12px">Pan India · We'll notify you when shipped</span>
+  </div>
+  <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
+    <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
+    <table style="width:100%;border-collapse:collapse">\${itemsHtml}</table>
+    <table style="width:100%;border-collapse:collapse;margin-top:12px">
+      <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">\${payLabel}</td></tr>
+      <tr><td style="padding:6px 0;font-size:17px;font-weight:900;color:#1a3a1e">Total</td>
+          <td style="text-align:right;font-size:17px;font-weight:900;color:#1a3a1e">₹\${order.total_amount.toLocaleString('en-IN')}</td></tr>
+    </table>
+  </div>
+  <div style="background:#f0f7f4;padding:16px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
+    <p style="margin:0;font-size:13px;color:#2d6a4f">
+      📍 <strong>Delivering to:</strong> \${a.flat}\${a.area ? ', ' + a.area : ''}, \${a.city}, \${a.state} – \${a.pincode}
+    </p>
+  </div>
+  <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
+    <div style="color:rgba(255,255,255,.5);font-size:12px;line-height:1.8">
+      🌿 5 Pahadi Roots — Pure Himalayan Goodness<br>
+      <a href="https://pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
+      &nbsp;·&nbsp;
+      <a href="https://wa.me/919899984895" style="color:#e8b84b;text-decoration:none">WhatsApp Us</a>
+    </div>
+  </div>
+</div>
+</body></html>\`
+
         await withTimeout(resend.emails.send({
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
-          to:      [d.customer_email],
-          subject: `Order Confirmed #${order.order_number} — Pahadi Roots 🌿`,
+          to:      [customerEmail],
+          subject: \`Order Confirmed — \${order.order_number} 🌿\`,
           html:    emailHtml,
         }), 5000)
       } catch (e) { console.error('[orders] Customer email failed:', e) }
