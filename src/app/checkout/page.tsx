@@ -17,6 +17,11 @@ import AddressForm          from '@/components/checkout/AddressForm'
 import PaymentSection       from '@/components/checkout/PaymentSection'
 import OrderSummary         from '@/components/checkout/OrderSummary'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
+import {
+  readProfileCache  as _readProfileCache,
+  writeProfileCache as _writeProfileCache,
+  prefetchProfileToCache,
+} from '@/lib/profileCache'
 
 const INDIA_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
@@ -106,28 +111,13 @@ export default function CheckoutPage() {
   })
   const [summaryOpen,      setSummaryOpen]       = useState(true)
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
-  // ── Cache helpers (mirrors old site's pr_auth_profile pattern) ──
-  // The old site stored the FULL profile incl. saved_addresses in localStorage
-  // so the form fills instantly with zero network calls. We do the same here.
-  const PROFILE_CACHE_KEY = 'pr_checkout_profile'
-
-  function readProfileCache(): { profile: any; addresses: any[] } | null {
-    if (typeof window === 'undefined') return null
-    try {
-      const raw = localStorage.getItem(PROFILE_CACHE_KEY)
-      if (!raw) return null
-      const parsed = JSON.parse(raw)
-      // Expire cache after 30 minutes
-      if (!parsed?.ts || Date.now() - parsed.ts > 30 * 60 * 1000) return null
-      return parsed
-    } catch { return null }
-  }
-
+  // ── Cache helpers — delegated to shared profileCache utility ──
+  // Profile is now pre-populated at login time (AuthModal / GoogleAuthHandler)
+  // and kept warm by ProfilePrefetcher in the root layout.
+  // These thin wrappers keep the call sites below unchanged.
+  function readProfileCache() { return _readProfileCache() }
   function writeProfileCache(profile: any, addresses: any[]) {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ ts: Date.now(), profile, addresses }))
-    } catch {}
+    _writeProfileCache({ ts: Date.now(), profile, addresses })
   }
 
   function applyProfileData(prof: any, allAddrs: any[], setAddrFn: typeof setAddr, setEmailFn: typeof setEmail, setSavedFn: typeof setSavedAddrs) {
@@ -210,9 +200,10 @@ export default function CheckoutPage() {
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
   }, [codOk, payMethod, razorpayEnabled])
 
-  // Background profile refresh — runs after instant cache render.
-  // Fetches fresh data from API and updates cache (stale-while-revalidate pattern,
-  // same as old site's pr_auth_profile localStorage strategy).
+  // Background profile refresh — stale-while-revalidate.
+  // Cache is pre-warmed at login (AuthModal/GoogleAuthHandler) and on every
+  // page load (ProfilePrefetcher). This useEffect is the final safety net for
+  // cold sessions and also updates the UI with any address changes.
   useEffect(() => {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
@@ -230,7 +221,7 @@ export default function CheckoutPage() {
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
 
-        // Write fresh data to cache — next visit will be instant
+        // Refresh the shared cache with latest data
         writeProfileCache(prof, all)
 
         // Only update UI if cache was empty (first visit) — avoids flicker if cache already filled form

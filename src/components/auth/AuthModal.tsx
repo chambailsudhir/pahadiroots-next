@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
+import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
 
 type AuthTab = 'email' | 'signup'
 
@@ -91,6 +92,17 @@ export default function AuthModal() {
         name:  data.profile?.first_name || data.user?.user_metadata?.full_name || '',
         phone: data.profile?.phone || '',
       })
+
+      // ── Pre-warm checkout cache at login (old site pattern: pr_auth_profile) ──
+      // data.profile has basic fields but may lack saved_addresses from DB.
+      // Step 1: write what we have immediately (fills name/phone/default address).
+      if (data.profile) {
+        writeProfileCache(buildCacheEntry(data.profile))
+      }
+      // Step 2: fetch full profile with all saved_addresses in background.
+      // By the time the user navigates to checkout, this is already done.
+      prefetchProfileToCache()
+
       setSuccess('✅ Welcome back!')
       setTimeout(() => { closeAuth(); window.location.reload() }, 700)
     } catch (err: any) {

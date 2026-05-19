@@ -15,6 +15,7 @@
 
 import { useEffect } from 'react'
 import { useUserStore } from '@/store/userStore'
+import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -77,6 +78,9 @@ export default function GoogleAuthHandler() {
               name:  cbData.profile?.first_name || '',
               phone: cbData.profile?.phone      || '',
             })
+            // Pre-warm checkout cache so delivery form fills instantly
+            if (cbData.profile) writeProfileCache(buildCacheEntry(cbData.profile))
+            prefetchProfileToCache() // background: get saved_addresses too
             window.location.href = '/account'
             return
           }
@@ -112,6 +116,8 @@ export default function GoogleAuthHandler() {
             name:  profileData.profile?.first_name || '',
             phone: profileData.profile?.phone      || '',
           })
+          // Pre-warm checkout cache — profile already fetched above, use it directly
+          if (profileData.profile) writeProfileCache(buildCacheEntry(profileData.profile))
 
           window.location.href = '/account'
         }
