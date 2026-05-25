@@ -15,6 +15,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import useSWR from 'swr'
 import { fetchOrders, type Order, type OrdersResponse } from '@/lib/services/orderService'
+import { ServiceError } from '@/lib/services/profileService'
 import { ACTIVE_STATUSES, RETURN_STATUSES } from '@/lib/account/constants'
 import { captureError } from '@/lib/logger'
 
@@ -43,7 +44,9 @@ async function ordersFetcher(
   return fetchOrders({ page, limit: PAGE_SIZE, search, status, signal })
 }
 
-export function useOrders() {
+// markExpired is optional so the hook stays usable in isolation (tests, Storybook).
+// page.tsx passes auth.markExpired so a mid-session 401 surfaces the expired banner.
+export function useOrders(markExpired?: () => void) {
   const [enabled,     setEnabled]     = useState(false)   // lazy — only fetch after login confirmed
   const [filter,      setFilterState] = useState<OrderFilter>('all')
   const [search,      setSearchInput] = useState('')
@@ -86,7 +89,13 @@ export function useOrders() {
         setTotalPages(res.pages ?? 1)
       },
       onError: (err) => {
-        captureError(err, { action: 'useOrders/fetchOrders', page: 1, search: serverSearch, filter })
+        // A 401 after initial auth succeeded means the session expired mid-session.
+        // Surface the session-expired banner instead of a silent/generic error.
+        if (err instanceof ServiceError && err.status === 401) {
+          markExpired?.()
+        } else {
+          captureError(err, { action: 'useOrders/fetchOrders', page: 1, search: serverSearch, filter })
+        }
       },
     }
   )
@@ -129,7 +138,11 @@ export function useOrders() {
       setExtraOrders(prev => [...prev, ...res.orders])
       setLoadedPage(next)
     } catch (err) {
-      captureError(err, { action: 'useOrders/loadMore', page: next })
+      if (err instanceof ServiceError && err.status === 401) {
+        markExpired?.()
+      } else {
+        captureError(err, { action: 'useOrders/loadMore', page: next })
+      }
     }
   }
 

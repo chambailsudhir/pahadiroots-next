@@ -29,8 +29,8 @@ export default function AccountPage() {
   const { toast, toastType, show: showToast } = useToast()
   const { openAuth }       = useUIStore()
   const auth               = useAuth()
-  const orders             = useOrders()
-  const profile            = useProfile(auth.profile, auth.updateLocalProfile, showToast)
+  const orders             = useOrders(auth.markExpired)
+  const profile            = useProfile(auth.profile, auth.updateLocalProfile, showToast, auth.markExpired)
 
   const savedAddrs = useMemo(
     () => getSavedAddresses(auth.profile) as SavedAddress[],

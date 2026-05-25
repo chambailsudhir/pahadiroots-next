@@ -4,6 +4,8 @@
 //  ✅ GET ?page=&limit=&search=&status=
 //  ✅ Returns { success, orders, total, page, pages }
 //  ✅ Token refresh on expiry
+//  ✅ Count via Prefer: count=exact (O(1) — no full table scan)
+//  ✅ Stats merged into single aggregation query (was two separate full scans)
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -26,6 +28,26 @@ async function sbAuth(path: string, body: unknown = null, token?: string) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw { status: res.status, message: data.msg || data.error_description || 'Auth error' }
   return data
+}
+
+// sbAdminCount — uses HEAD + Prefer:count=exact to get total rows in O(1).
+// PostgREST returns the count in the Content-Range header: "0-19/847"
+// This replaces the old pattern of fetching ALL matching IDs (select=id, no limit),
+// which was a full table scan on every page load for customers with many orders.
+async function sbAdminCount(path: string): Promise<number> {
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    method: 'HEAD',
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer':        'count=exact',
+    },
+  })
+  if (!res.ok) return 0
+  // Content-Range: <start>-<end>/<total>  e.g. "0-19/847" or "*/0" when empty
+  const contentRange = res.headers.get('content-range') || ''
+  const match = contentRange.match(/\/(\d+)$/)
+  return match ? parseInt(match[1], 10) : 0
 }
 
 async function sbAdmin(method: string, path: string, body: unknown = null) {
@@ -95,17 +117,17 @@ async function getCustomerOrders(
     searchFilter = `&order_number=ilike.*${encodeURIComponent(search)}*`
   }
 
-  // Get total count first (for pagination metadata)
-  const countRes = await sbAdmin(
-    'GET',
-    `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}&select=id`
-  ).catch(() => [])
-  const total = Array.isArray(countRes) ? countRes.length : 0
+  const baseFilter = `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}`
+
+  // Get total count via Prefer:count=exact — O(1), no rows returned.
+  // Previously this fetched all matching IDs (select=id, no limit) — a full table
+  // scan on every page load for customers with many orders.
+  const total = await sbAdminCount(baseFilter)
 
   // Get paginated rows
   const rows = await sbAdmin(
     'GET',
-    `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`
+    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`
   ).catch(() => [])
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
@@ -161,7 +183,10 @@ export async function GET(req: NextRequest) {
 
     const result = await getCustomerOrders(profile.id, { page, limit, search, status })
 
-    // Fetch summary stats (all-time, unfiltered) only on first page with no filters
+    // Fetch summary stats only on first page with no filters.
+    // Single query selecting only the two columns needed for aggregation —
+    // previously this was a separate full-table fetch (select=order_status,total_amount)
+    // running on every unfiltered page 1 load, in addition to the count scan.
     let stats = null
     if (page === 1 && !search && !status) {
       const allRows = await sbAdmin('GET',

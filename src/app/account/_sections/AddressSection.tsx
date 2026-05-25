@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import type { Profile }      from '../hooks/useAuth'
@@ -17,6 +18,15 @@ interface Props {
 
 export default function AddressSection({ authProfile, profile, savedAddrs, onEditAddress }: Props) {
   const savedAddrsList = savedAddrs.filter(a => a.label !== 'Default')
+  // confirmDeleteId: id of the address pending confirmation; null = none
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  function requestDelete(id: string) { setConfirmDeleteId(id) }
+  function cancelDelete()            { setConfirmDeleteId(null) }
+  async function confirmDelete(id: string) {
+    setConfirmDeleteId(null)
+    await profile.deleteAddress(id)
+  }
 
   return (
     <ErrorBoundary section="Addresses">
@@ -55,9 +65,21 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                 {[a.addr, a.city, a.state, a.pin].filter(Boolean).join(', ')}
               </div>
               <div className={styles.addrActions}>
-                <button className={`${styles.addrBtn} ${styles.addrDel}`} onClick={() => profile.deleteAddress(a.id)}>
-                  🗑 Remove
-                </button>
+                {confirmDeleteId === a.id ? (
+                  <>
+                    <span style={{ fontSize: '12px', color: '#b91c1c', marginRight: '6px' }}>Remove this address?</span>
+                    <button className={`${styles.addrBtn} ${styles.addrDel}`} onClick={() => confirmDelete(a.id)}>
+                      Yes, Remove
+                    </button>
+                    <button className={styles.addrBtn} onClick={cancelDelete} style={{ marginLeft: '6px' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button className={`${styles.addrBtn} ${styles.addrDel}`} onClick={() => requestDelete(a.id)}>
+                    🗑 Remove
+                  </button>
+                )}
               </div>
             </div>
           ))}

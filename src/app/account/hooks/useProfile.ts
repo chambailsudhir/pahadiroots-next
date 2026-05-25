@@ -17,7 +17,7 @@ import {
   validatePassword, validateNewAddress, FormErrors,
 } from '@/lib/account/validation'
 import { getSavedAddresses } from '@/lib/account/utils'
-import { updateProfile, changePassword as apiChangePassword } from '@/lib/services/profileService'
+import { updateProfile, changePassword as apiChangePassword, ServiceError } from '@/lib/services/profileService'
 import type { Profile } from './useAuth'
 
 export interface SavedAddress {
@@ -30,10 +30,13 @@ export interface SavedAddress {
   pin:   string
 }
 
+// markExpired is optional so the hook stays usable in isolation (tests, Storybook).
+// page.tsx passes auth.markExpired so a mid-session 401 surfaces the expired banner.
 export function useProfile(
   profile: Profile | null,
   updateLocalProfile: (u: Partial<Profile>) => void,
   toast: (msg: string, type?: 'success' | 'error') => void,
+  markExpired?: () => void,
 ) {
   const [pf,    setPf]    = useState({ fname: '', lname: '', addr: '', city: '', state: '', pin: '', phone: '' })
   const [pw,    setPw]    = useState({ curp: '', newp: '', conf: '', showCur: false, showNew: false, showConf: false })
@@ -53,6 +56,16 @@ export function useProfile(
     setMsg(m => ({ ...m, [key]: val }))
     const t = setTimeout(() => setMsg(m => ({ ...m, [key]: '' })), 2500)
     msgTimers.current.set(key, t)
+  }
+
+  // Centralised error handler: surfaces session-expired banner on 401,
+  // falls back to toast for all other errors.
+  function handleError(e: unknown, fallback: string) {
+    if (e instanceof ServiceError && e.status === 401) {
+      markExpired?.()
+    } else {
+      toast(e instanceof Error ? e.message : fallback, 'error')
+    }
   }
 
   const initFromProfile = useCallback((p: Profile) => {
@@ -80,7 +93,7 @@ export function useProfile(
       setMsg$('name', '✅ Name saved!')
     } catch (e: unknown) {
       if (profile) updateLocalProfile({ first_name: profile.first_name, last_name: profile.last_name }) // rollback
-      toast(e instanceof Error ? e.message : 'Failed to save name', 'error')
+      handleError(e, 'Failed to save name')
     } finally {
       setBusy(b => ({ ...b, name: false }))
     }
@@ -98,7 +111,7 @@ export function useProfile(
       setMsg$('addr', '✅ Address saved!')
     } catch (e: unknown) {
       if (profile) updateLocalProfile({ address_line1: profile.address_line1, city: profile.city, state: profile.state, postal_code: profile.postal_code }) // rollback
-      toast(e instanceof Error ? e.message : 'Failed to save address', 'error')
+      handleError(e, 'Failed to save address')
     } finally {
       setBusy(b => ({ ...b, addr: false }))
     }
@@ -116,7 +129,7 @@ export function useProfile(
       setMsg$('phone', '✅ Phone saved!')
     } catch (e: unknown) {
       if (profile) updateLocalProfile({ phone: profile.phone }) // rollback
-      toast(e instanceof Error ? e.message : 'Failed to save phone', 'error')
+      handleError(e, 'Failed to save phone')
     } finally {
       setBusy(b => ({ ...b, phone: false }))
     }
@@ -133,7 +146,7 @@ export function useProfile(
       setPw({ curp: '', newp: '', conf: '', showCur: false, showNew: false, showConf: false })
       toast('✅ Password updated!')
     } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : 'Failed to update password', 'error')
+      handleError(e, 'Failed to update password')
     } finally {
       setBusy(b => ({ ...b, pw: false }))
     }
@@ -171,7 +184,7 @@ export function useProfile(
       setShowAddAddr(false)
       toast('✅ Address saved!')
     } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : 'Failed to save address', 'error')
+      handleError(e, 'Failed to save address')
     } finally {
       setBusy(b => ({ ...b, newAddr: false }))  // always runs — covers all early returns too
     }
@@ -185,7 +198,7 @@ export function useProfile(
       updateLocalProfile({ saved_addresses: saved })
       toast('Address removed')
     } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : 'Failed to remove address', 'error')
+      handleError(e, 'Failed to remove address')
     }
   }
 

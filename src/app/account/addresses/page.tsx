@@ -28,6 +28,8 @@ export default function AddressesPage() {
   const [editId,    setEditId]    = useState<string | null>(null)
   const [form,      setForm]      = useState(EMPTY_FORM)
   const [formErr,   setFormErr]   = useState<Record<string, string>>({})
+  // confirmDeleteId: id of the address pending confirmation; null = none
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // Load addresses from profile API
   useEffect(() => {
@@ -121,6 +123,7 @@ export default function AddressesPage() {
     setEditId(addr.id)
     setShowForm(true)
     setFormErr({})
+    setConfirmDeleteId(null)
   }
 
   function cancelForm() {
@@ -128,6 +131,7 @@ export default function AddressesPage() {
     setEditId(null)
     setForm(EMPTY_FORM)
     setFormErr({})
+    setConfirmDeleteId(null)
   }
 
   function setField(field: string, value: string) {
@@ -287,19 +291,37 @@ export default function AddressesPage() {
                 <div className="text-sm text-stone-600">{addr.addr}</div>
                 <div className="text-sm text-stone-500">{[addr.city, addr.state, addr.pin].filter(Boolean).join(', ')}</div>
               </div>
-              <div className="flex gap-3 shrink-0">
+              <div className="flex gap-3 shrink-0 items-center">
                 <button
                   onClick={() => startEdit(addr)}
                   className="text-xs font-semibold text-stone-500 hover:text-green-700 transition-colors"
                 >
                   Edit
                 </button>
-                <button
-                  onClick={() => handleDelete(addr.id)}
-                  className="text-xs font-semibold text-stone-500 hover:text-red-500 transition-colors"
-                >
-                  Delete
-                </button>
+                {confirmDeleteId === addr.id ? (
+                  <>
+                    <span className="text-xs text-red-600 font-medium">Sure?</span>
+                    <button
+                      onClick={async () => { setConfirmDeleteId(null); await handleDelete(addr.id) }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-xs font-semibold text-stone-500 hover:text-stone-700 transition-colors"
+                    >
+                      No
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(addr.id)}
+                    className="text-xs font-semibold text-stone-500 hover:text-red-500 transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}
