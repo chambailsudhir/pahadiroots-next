@@ -7,7 +7,7 @@
 //  ✅ All logic delegated to hooks + sections
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth }       from './hooks/useAuth'
 import { useUIStore }    from '@/store/uiStore'
 import { useOrders }     from './hooks/useOrders'
@@ -38,13 +38,22 @@ export default function AccountPage() {
     [auth.profile?.saved_addresses]
   )
 
+  const profileInitialised = useRef(false)
+
   // Auth init — single API call
   useEffect(() => { auth.init() }, [])
 
-  // Populate forms once profile is loaded
+  // Populate forms once — only on the first time auth.profile arrives.
+  // Previously this effect watched auth.profile, which gets a new object reference
+  // on every optimistic update (saveName/saveAddress call updateLocalProfile).
+  // That caused the effect to re-fire mid-edit, wiping form fields back to server values.
+  // The ref guard ensures initFromProfile runs exactly once per page mount.
   useEffect(() => {
-    if (auth.profile) profile.initFromProfile(auth.profile)
-  }, [auth.profile, profile.initFromProfile])
+    if (auth.profile && !profileInitialised.current) {
+      profile.initFromProfile(auth.profile)
+      profileInitialised.current = true
+    }
+  }, [auth.profile])
 
   // Trigger order fetch after auth confirmed
   useEffect(() => {
