@@ -35,32 +35,67 @@ function withAuthCookies(res: NextResponse, accessToken: string, refreshToken?: 
   return res
 }
 
-// ── In-process rate limiter ───────────────────────────────────
-// Runs inside the Next.js process — no Redis/infra needed.
-// Limits sensitive actions per IP: max 5 attempts / 60s window.
-// For multi-instance deployments, swap `rateLimitMap` for a Redis store.
+// ── Distributed rate limiter ──────────────────────────────────
+// Primary:  Upstash KV REST API (works across all Vercel instances/regions).
+//           Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Vercel
+//           env vars (Vercel Dashboard → Storage → KV → Connect, or
+//           create a free Upstash account at upstash.com).
+//           Uses a sliding INCR + EXPIRE pipeline — no npm package needed.
+// Fallback: in-process Map used only when KV is not configured (local dev).
+//           ⚠️  In-process fallback is NOT reliable across Vercel instances;
+//           configure KV for production.
 type RateEntry = { count: number; reset: number }
 const rateLimitMap = new Map<string, RateEntry>()
 
-function rateLimit(key: string, maxHits = 5, windowMs = 60_000): boolean {
-  const now = Date.now()
+async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (kvUrl && kvToken) {
+    // ── Upstash KV: INCR + EXPIRE pipeline ────────────────────
+    try {
+      const rlKey     = `rl:${key}`
+      const windowSec = Math.ceil(windowMs / 1000)
+      const res = await fetch(`${kvUrl}/pipeline`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify([
+          ['INCR',   rlKey],
+          ['EXPIRE', rlKey, windowSec, 'NX'],  // NX = only set expiry on first write
+        ]),
+        signal: AbortSignal.timeout(1500),  // never stall auth for more than 1.5 s
+      })
+      if (res.ok) {
+        const result = await res.json() as [[string, number], [string, number]]
+        const count  = result[0][1]  // INCR return value
+        return count <= maxHits      // true = allowed, false = blocked
+      }
+      // KV returned an unexpected status — log and fall through to in-process
+      console.warn('[rateLimit] Upstash returned non-OK status:', res.status)
+    } catch (e) {
+      // KV unreachable (timeout / network) — fall through to in-process limiter
+      console.warn('[rateLimit] Upstash unreachable, falling back to in-process limiter:', e)
+    }
+  }
+
+  // ── In-process fallback (local dev / KV not yet configured) ─
+  const now   = Date.now()
   const entry = rateLimitMap.get(key)
   if (!entry || now > entry.reset) {
     rateLimitMap.set(key, { count: 1, reset: now + windowMs })
-    return true  // allowed
+    return true
   }
-  if (entry.count >= maxHits) return false  // blocked
+  if (entry.count >= maxHits) return false
   entry.count++
-  return true  // allowed
+  return true
 }
 
-// Clean up stale rate limit entries every 5 minutes
+// Prune stale in-process entries every 5 minutes (dev only — no-op in production with KV)
 setInterval(() => {
   const now = Date.now()
-  Array.from(rateLimitMap.keys()).forEach(key => {
-    const entry = rateLimitMap.get(key)
-    if (entry && now > entry.reset) rateLimitMap.delete(key)
-  })
+  for (const [key, entry] of rateLimitMap) {
+    if (now > entry.reset) rateLimitMap.delete(key)
+  }
 }, 5 * 60_000)
 
 async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {
@@ -230,7 +265,7 @@ export async function POST(req: NextRequest) {
               || req.headers.get('x-real-ip')
               || 'unknown'
     const rateLimitKey = `${action}:${ip}`
-    if (!rateLimit(rateLimitKey)) {
+    if (!await rateLimit(rateLimitKey)) {
       return NextResponse.json(
         { error: 'Too many attempts. Please wait a minute before trying again.' },
         { status: 429, headers: { 'Retry-After': '60' } }
