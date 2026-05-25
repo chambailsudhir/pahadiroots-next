@@ -2,6 +2,8 @@
 // Shared utility functions for account module
 // ─────────────────────────────────────────────────────────────
 
+import { COURIER_TRACKING_MAP } from './constants'
+
 export function getSavedAddresses(profile: any): any[] {
   try { return JSON.parse(profile?.saved_addresses || '[]') } catch { return [] }
 }
@@ -30,6 +32,18 @@ export function getInitials(name: string): string {
   if (parts.length === 0) return '?'
   if (parts.length === 1) return parts[0][0].toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+/**
+ * Returns the best tracking URL for a given courier + tracking number.
+ * Falls back to a Google Search URL when the courier is unknown.
+ */
+export function getCourierTrackingUrl(courier: string | null | undefined, trackingNumber: string): string {
+  const key = (courier || '').toLowerCase().replace(/\s+/g, '')
+  const template = COURIER_TRACKING_MAP[key]
+  if (template) return template.replace('{number}', encodeURIComponent(trackingNumber))
+  // Fallback: Google Search — better than nothing for unknown couriers
+  return `https://www.google.com/search?q=${encodeURIComponent((courier || '') + ' tracking ' + trackingNumber)}`
 }
 
 export function getOrderStatusMessage(o: any): string {

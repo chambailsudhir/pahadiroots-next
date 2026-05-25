@@ -8,7 +8,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { formatCurrency, formatDate } from '@/lib/account/utils'
+import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
+import { SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
 
 const STATUS_STEPS = [
   { status: 'confirmed',        icon: '✅', label: 'Order Confirmed',   desc: 'Your order has been confirmed' },
@@ -80,7 +81,7 @@ export default function OrderDetailPage() {
   const currentStep = STATUS_INDEX[order.order_status] ?? -1
   const isCancelled = CANCELLED_STATUSES.includes(order.order_status)
   const trackUrl    = order.tracking_number
-    ? `https://www.google.com/search?q=${encodeURIComponent((order.courier || '') + ' tracking ' + order.tracking_number)}`
+    ? getCourierTrackingUrl(order.courier, order.tracking_number)
     : null
 
   return (
@@ -213,7 +214,7 @@ export default function OrderDetailPage() {
       {/* Support */}
       <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5">
         <h2 className="text-sm font-bold text-stone-700 mb-3">Need Help?</h2>
-        <a href={`https://wa.me/919899984895?text=${encodeURIComponent('Hi, I need help with order ' + order.order_number)}`}
+        <a href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi, I need help with order ' + order.order_number)}`}
           target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 transition-colors">
           💬 WhatsApp Support

@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { getInitials, formatCurrency } from '@/lib/account/utils'
+import { type Profile, type AuthUser } from '../hooks/useAuth'
 import styles from '../styles/account.module.css'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
@@ -8,8 +9,8 @@ type Tab = 'orders' | 'addresses' | 'profile' | 'password'
 interface Props {
   tab:          Tab
   setTab:       (t: Tab) => void
-  profile:      any
-  authUser:     any
+  profile:      Profile | null
+  authUser:     AuthUser | null
   stats:        { total: number; delivered: number; active: number; spent: number } | null
   onLogout:     () => void
   onOrdersClick:() => void

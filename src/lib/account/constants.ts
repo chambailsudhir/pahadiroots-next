@@ -49,6 +49,26 @@ export const ACTIVE_STATUSES   = ['pending','confirmed','processing','packed','s
 export const RETURN_STATUSES   = ['return_requested','return_approved','return_received',
   'refunded','refund_initiated','refund_completed','return_rejected','returned']
 
+// ── Support contact ──────────────────────────────────────────────────────────
+// Single source of truth — update here and it reflects everywhere.
+export const SUPPORT_WHATSAPP_NUMBER = '919899984895'
+
+// ── Courier tracking URLs ────────────────────────────────────────────────────
+// Use {number} as the placeholder for the tracking/AWB number.
+// Fall back to Google Search for any courier not listed here.
+export const COURIER_TRACKING_MAP: Record<string, string> = {
+  bluedart:    'https://www.bluedart.com/ubdrecursive?trackFor=0&field1={number}',
+  delhivery:   'https://www.delhivery.com/track/package/{number}',
+  dtdc:        'https://www.dtdc.in/tracking/tracking_results.asp?Consignment_No={number}',
+  ecom:        'https://ecomexpress.in/tracking/?awb_field={number}',
+  xpressbees:  'https://www.xpressbees.com/shipment/tracking?awbNo={number}',
+  ekart:       'https://ekartlogistics.com/track?trackingId={number}',
+  shadowfax:   'https://tracker.shadowfax.in/?waybill={number}',
+  shiprocket:  'https://shiprocket.co/tracking/{number}',
+  fedex:       'https://www.fedex.com/fedextrack/?tracknumbers={number}',
+  dhl:         'https://www.dhl.com/in-en/home/tracking.html?tracking-id={number}',
+}
+
 export const AUTH_ACTIONS = {
   GET_PROFILE:      'get_profile',
   GET_ORDERS:       'get_orders',
