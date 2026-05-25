@@ -20,8 +20,16 @@ export function formatDate(iso: string): string {
   })
 }
 
+/**
+ * Returns up to two uppercase initials from a name string.
+ * "Rahul Sharma" → "RS", "Rahul" → "R", "" → "?"
+ * Handles extra whitespace and single-word names safely.
+ */
 export function getInitials(name: string): string {
-  return (name?.[0] || '?').toUpperCase()
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 export function getOrderStatusMessage(o: any): string {

@@ -20,7 +20,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
   const fullName  = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || firstName
   const email     = authUser?.email || profile?.email || ''
   const phone     = (profile?.phone || authUser?.phone || '').replace(/^\+91/, '')
-  const initials  = getInitials(firstName)
+  const initials  = getInitials(fullName)
   const since     = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : null

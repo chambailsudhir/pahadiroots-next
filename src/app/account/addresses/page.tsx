@@ -1,37 +1,29 @@
 'use client'
 // ─────────────────────────────────────────────────────────────
 // /account/addresses — standalone addresses page
-// Fixed:
-//  ✅ Uses /api/profile (cookie auth) — not /api/v1/cart
-//  ✅ crypto.randomUUID for IDs (not array index)
-//  ✅ Same field schema as main account page (addr not flat/area)
-//  ✅ Max 10 addresses (consistent with AddressSection)
-//  ✅ Duplicate detection before save
-//  ✅ No `as any` type suppression
-//  ✅ No mounted anti-pattern
-//  ✅ Proper error handling
+//  ✅ Uses /api/profile (cookie auth)
+//  ✅ All address CRUD delegated to shared useAddresses hook
+//     (form state, validation, duplicate detection, busy flags)
+//  ✅ Edit capability retained
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import { updateProfile } from '@/lib/services/profileService'
+import { useAddresses } from '@/app/account/hooks/useAddresses'
 import type { SavedAddress } from '@/app/account/hooks/useProfile'
-
-const EMPTY_FORM = { label: 'Home', name: '', addr: '', city: '', state: 'Uttarakhand', pin: '' }
 
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState('')
-  const [saving,    setSaving]    = useState(false)
-  const [toast,     setToast]     = useState('')
-  const [showForm,  setShowForm]  = useState(false)
-  const [editId,    setEditId]    = useState<string | null>(null)
-  const [form,      setForm]      = useState(EMPTY_FORM)
-  const [formErr,   setFormErr]   = useState<Record<string, string>>({})
-  // confirmDeleteId: id of the address pending confirmation; null = none
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [toastMsg,  setToastMsg]  = useState('')
 
-  // Load addresses from profile API
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(''), 3000)
+  }
+
+  // Load addresses from profile API on mount
   useEffect(() => {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
@@ -46,102 +38,22 @@ export default function AddressesPage() {
     return () => ctrl.abort()
   }, [])
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
-  }
-
-  function validate(): boolean {
-    const e: Record<string, string> = {}
-    if (!form.label)        e.label = 'Please select a label'
-    if (!form.addr.trim())  e.addr  = 'Street address is required'
-    if (!form.city.trim())  e.city  = 'City is required'
-    if (!form.state)        e.state = 'Please select a state'
-    if (form.pin && !/^\d{6}$/.test(form.pin)) e.pin = 'Enter a valid 6-digit pincode'
-    setFormErr(e)
-    return Object.keys(e).length === 0
-  }
-
-  async function handleSave() {
-    if (!validate()) return
-    setSaving(true)
-    try {
-      let updated: SavedAddress[]
-      if (editId) {
-        // Edit existing
-        updated = addresses.map(a => a.id === editId
-          ? { ...a, ...form }
-          : a
-        )
-      } else {
-        // New address
-        if (addresses.length >= 10) {
-          showToast('Maximum 10 addresses allowed. Remove one first.')
-          return
-        }
-        // Duplicate check
-        const isDuplicate = addresses.some(a =>
-          a.addr.trim().toLowerCase() === form.addr.trim().toLowerCase() &&
-          a.city.trim().toLowerCase() === form.city.trim().toLowerCase() &&
-          a.pin === form.pin
-        )
-        if (isDuplicate) { showToast('This address already exists.'); return }
-
-        const newEntry: SavedAddress = { id: crypto.randomUUID(), ...form }
-        updated = [...addresses, newEntry]
-      }
-
+  // Wire the shared hook.
+  // persist() handles the API call AND updates local state so the page
+  // re-renders immediately on success (no optimistic update needed here).
+  const addrs = useAddresses({
+    getCurrentAddresses: () => addresses,
+    persist: async (updated) => {
       await updateProfile({ saved_addresses: JSON.stringify(updated) })
       try { localStorage.removeItem('pr_checkout_profile') } catch {}  // invalidate checkout cache
       setAddresses(updated)
-      setShowForm(false)
-      setEditId(null)
-      setForm(EMPTY_FORM)
-      setFormErr({})
-      showToast(editId ? '✅ Address updated!' : '✅ Address saved!')
-    } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Failed to save address')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleDelete(id: string) {
-    const updated = addresses.filter(a => a.id !== id)
-    try {
-      await updateProfile({ saved_addresses: JSON.stringify(updated) })
-      try { localStorage.removeItem('pr_checkout_profile') } catch {}  // invalidate checkout cache
-      setAddresses(updated)
-      showToast('Address removed')
-    } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : 'Failed to remove address')
-    }
-  }
-
-  function startEdit(addr: SavedAddress) {
-    setForm({ label: addr.label, name: addr.name, addr: addr.addr, city: addr.city, state: addr.state, pin: addr.pin })
-    setEditId(addr.id)
-    setShowForm(true)
-    setFormErr({})
-    setConfirmDeleteId(null)
-  }
-
-  function cancelForm() {
-    setShowForm(false)
-    setEditId(null)
-    setForm(EMPTY_FORM)
-    setFormErr({})
-    setConfirmDeleteId(null)
-  }
-
-  function setField(field: string, value: string) {
-    setForm(f => ({ ...f, [field]: value }))
-    setFormErr(e => ({ ...e, [field]: '' }))
-  }
+    },
+    showToast: (msg, _type) => showToast(msg),
+  })
 
   if (loading) return (
     <div className="space-y-3">
-      {[1,2].map(i => <div key={i} className="h-24 bg-stone-100 animate-pulse rounded-xl" />)}
+      {[1, 2].map(i => <div key={i} className="h-24 bg-stone-100 animate-pulse rounded-xl" />)}
     </div>
   )
 
@@ -153,9 +65,9 @@ export default function AddressesPage() {
     <div>
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-bold text-stone-900">Saved Addresses</h1>
-        {!showForm && addresses.length < 10 && (
+        {!addrs.showForm && addresses.length < 10 && (
           <button
-            onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) }}
+            onClick={addrs.startAdd}
             className="text-sm font-semibold text-green-700 hover:text-green-900 flex items-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -167,32 +79,32 @@ export default function AddressesPage() {
       </div>
 
       {/* Add / Edit form */}
-      {showForm && (
+      {addrs.showForm && (
         <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-5">
           <h2 className="text-sm font-bold text-stone-800 mb-4">
-            {editId ? 'Edit Address' : 'New Address'}
+            {addrs.editId ? 'Edit Address' : 'New Address'}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Label */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-stone-600 mb-1">Label *</label>
               <select
-                value={form.label}
-                onChange={e => setField('label', e.target.value)}
+                value={addrs.form.label}
+                onChange={e => addrs.setField('label', e.target.value)}
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 bg-white"
               >
                 <option value="">Select label…</option>
                 {ADDRESS_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
-              {formErr.label && <p className="text-xs text-red-500 mt-1">{formErr.label}</p>}
+              {addrs.formErr.label && <p className="text-xs text-red-500 mt-1">{addrs.formErr.label}</p>}
             </div>
             {/* Contact name */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-stone-600 mb-1">Contact Name</label>
               <input
                 type="text"
-                value={form.name}
-                onChange={e => setField('name', e.target.value)}
+                value={addrs.form.name}
+                onChange={e => addrs.setField('name', e.target.value)}
                 placeholder="Full name at this address"
                 className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500"
               />
@@ -202,24 +114,24 @@ export default function AddressesPage() {
               <label className="block text-xs font-semibold text-stone-600 mb-1">Street / Flat / Colony *</label>
               <input
                 type="text"
-                value={form.addr}
-                onChange={e => setField('addr', e.target.value)}
+                value={addrs.form.addr}
+                onChange={e => addrs.setField('addr', e.target.value)}
                 placeholder="House no., Street, Colony"
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${formErr.addr ? 'border-red-400' : 'border-stone-200'}`}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${addrs.formErr.addr ? 'border-red-400' : 'border-stone-200'}`}
               />
-              {formErr.addr && <p className="text-xs text-red-500 mt-1">{formErr.addr}</p>}
+              {addrs.formErr.addr && <p className="text-xs text-red-500 mt-1">{addrs.formErr.addr}</p>}
             </div>
             {/* City */}
             <div>
               <label className="block text-xs font-semibold text-stone-600 mb-1">City *</label>
               <input
                 type="text"
-                value={form.city}
-                onChange={e => setField('city', e.target.value)}
+                value={addrs.form.city}
+                onChange={e => addrs.setField('city', e.target.value)}
                 placeholder="Dehradun"
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${formErr.city ? 'border-red-400' : 'border-stone-200'}`}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${addrs.formErr.city ? 'border-red-400' : 'border-stone-200'}`}
               />
-              {formErr.city && <p className="text-xs text-red-500 mt-1">{formErr.city}</p>}
+              {addrs.formErr.city && <p className="text-xs text-red-500 mt-1">{addrs.formErr.city}</p>}
             </div>
             {/* Pincode */}
             <div>
@@ -227,38 +139,38 @@ export default function AddressesPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                value={form.pin}
-                onChange={e => setField('pin', e.target.value.replace(/\D/g, ''))}
+                value={addrs.form.pin}
+                onChange={e => addrs.setField('pin', e.target.value.replace(/\D/g, ''))}
                 placeholder="248001"
                 maxLength={6}
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${formErr.pin ? 'border-red-400' : 'border-stone-200'}`}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 ${addrs.formErr.pin ? 'border-red-400' : 'border-stone-200'}`}
               />
-              {formErr.pin && <p className="text-xs text-red-500 mt-1">{formErr.pin}</p>}
+              {addrs.formErr.pin && <p className="text-xs text-red-500 mt-1">{addrs.formErr.pin}</p>}
             </div>
             {/* State */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-stone-600 mb-1">State *</label>
               <select
-                value={form.state}
-                onChange={e => setField('state', e.target.value)}
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 bg-white ${formErr.state ? 'border-red-400' : 'border-stone-200'}`}
+                value={addrs.form.state}
+                onChange={e => addrs.setField('state', e.target.value)}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-500 bg-white ${addrs.formErr.state ? 'border-red-400' : 'border-stone-200'}`}
               >
                 <option value="">Select State / UT</option>
                 {INDIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              {formErr.state && <p className="text-xs text-red-500 mt-1">{formErr.state}</p>}
+              {addrs.formErr.state && <p className="text-xs text-red-500 mt-1">{addrs.formErr.state}</p>}
             </div>
           </div>
           <div className="flex gap-3 mt-4">
             <button
-              onClick={handleSave}
-              disabled={saving}
+              onClick={addrs.save}
+              disabled={addrs.saving}
               className="flex-1 bg-green-900 hover:bg-green-800 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-60 transition-colors"
             >
-              {saving ? 'Saving…' : editId ? 'Update Address' : 'Save Address'}
+              {addrs.saving ? 'Saving…' : addrs.editId ? 'Update Address' : 'Save Address'}
             </button>
             <button
-              onClick={cancelForm}
+              onClick={addrs.cancelForm}
               className="px-5 py-2.5 border border-stone-200 text-stone-600 rounded-xl text-sm hover:bg-stone-50 transition-colors"
             >
               Cancel
@@ -268,12 +180,12 @@ export default function AddressesPage() {
       )}
 
       {/* List */}
-      {addresses.length === 0 && !showForm ? (
+      {addresses.length === 0 && !addrs.showForm ? (
         <div className="text-center py-12 border border-dashed border-stone-200 rounded-2xl">
           <div className="text-3xl mb-3">📍</div>
           <p className="text-stone-400 text-sm mb-3">No saved addresses yet</p>
           <button
-            onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) }}
+            onClick={addrs.startAdd}
             className="text-green-700 text-sm font-semibold hover:underline"
           >
             Add your first address
@@ -293,22 +205,25 @@ export default function AddressesPage() {
               </div>
               <div className="flex gap-3 shrink-0 items-center">
                 <button
-                  onClick={() => startEdit(addr)}
+                  onClick={() => addrs.startEdit(addr)}
                   className="text-xs font-semibold text-stone-500 hover:text-green-700 transition-colors"
+                  aria-label={`Edit ${addr.label || 'saved'} address`}
                 >
                   Edit
                 </button>
-                {confirmDeleteId === addr.id ? (
+                {addrs.confirmDeleteId === addr.id ? (
                   <>
                     <span className="text-xs text-red-600 font-medium">Sure?</span>
                     <button
-                      onClick={async () => { setConfirmDeleteId(null); await handleDelete(addr.id) }}
-                      className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                      onClick={() => addrs.remove(addr.id)}
+                      disabled={addrs.deletingId === addr.id}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors disabled:opacity-50"
+                      aria-label={`Confirm remove ${addr.label || 'saved'} address`}
                     >
-                      Yes
+                      {addrs.deletingId === addr.id ? '…' : 'Yes'}
                     </button>
                     <button
-                      onClick={() => setConfirmDeleteId(null)}
+                      onClick={() => addrs.setConfirmDeleteId(null)}
                       className="text-xs font-semibold text-stone-500 hover:text-stone-700 transition-colors"
                     >
                       No
@@ -316,8 +231,10 @@ export default function AddressesPage() {
                   </>
                 ) : (
                   <button
-                    onClick={() => setConfirmDeleteId(addr.id)}
-                    className="text-xs font-semibold text-stone-500 hover:text-red-500 transition-colors"
+                    onClick={() => addrs.setConfirmDeleteId(addr.id)}
+                    disabled={!!addrs.deletingId}
+                    className="text-xs font-semibold text-stone-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                    aria-label={`Remove ${addr.label || 'saved'} address`}
                   >
                     Delete
                   </button>
@@ -328,12 +245,16 @@ export default function AddressesPage() {
         </div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg z-50 whitespace-nowrap">
-          {toast}
-        </div>
-      )}
+      {/* Toast — always in DOM for aria-live */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={toastMsg ? 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg z-50 whitespace-nowrap' : undefined}
+        style={!toastMsg ? { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' } : undefined}
+      >
+        {toastMsg || ''}
+      </div>
     </div>
   )
 }

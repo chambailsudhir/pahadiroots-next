@@ -7,7 +7,27 @@ export const validate = {
   pincode:  (p: string) => /^\d{6}$/.test(p.trim()),
   name:     (n: string) => n.trim().length >= 2,
   address:  (a: string) => a.trim().length >= 5,
-  password: (p: string) => p.length >= 6,
+  // Each rule is exported so PasswordSection can drive the strength indicator
+  // from the same logic — no duplication, no drift.
+  password: {
+    minLength:   (p: string) => p.length >= 8,
+    hasUpper:    (p: string) => /[A-Z]/.test(p),
+    hasNumber:   (p: string) => /\d/.test(p),
+    hasSpecial:  (p: string) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(p),
+    /** Returns true only when ALL rules pass. */
+    isValid:     (p: string) =>
+      validate.password.minLength(p)  &&
+      validate.password.hasUpper(p)   &&
+      validate.password.hasNumber(p)  &&
+      validate.password.hasSpecial(p),
+    /** 0–4 score used by the strength bar. */
+    score:       (p: string) => [
+      validate.password.minLength(p),
+      validate.password.hasUpper(p),
+      validate.password.hasNumber(p),
+      validate.password.hasSpecial(p),
+    ].filter(Boolean).length,
+  },
 }
 
 export type FormErrors = Record<string, string>
@@ -53,7 +73,17 @@ export function validatePhone(phone: string): FormErrors {
 
 export function validatePassword(newp: string, conf: string): FormErrors {
   const e: FormErrors = {}
-  if (!newp || !validate.password(newp)) e.newp = 'Password must be at least 6 characters'
-  if (newp !== conf)                     e.conf = 'Passwords do not match'
+  if (!newp) {
+    e.newp = 'New password is required'
+  } else if (!validate.password.minLength(newp)) {
+    e.newp = 'Password must be at least 8 characters'
+  } else if (!validate.password.hasUpper(newp)) {
+    e.newp = 'Password must contain at least one uppercase letter'
+  } else if (!validate.password.hasNumber(newp)) {
+    e.newp = 'Password must contain at least one number'
+  } else if (!validate.password.hasSpecial(newp)) {
+    e.newp = 'Password must contain at least one special character (!@#$… etc.)'
+  }
+  if (newp && !e.newp && newp !== conf) e.conf = 'Passwords do not match'
   return e
 }

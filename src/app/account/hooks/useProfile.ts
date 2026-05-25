@@ -3,21 +3,19 @@
 // useProfile — form state + mutations only
 //  ✅ Uses profileService (retry, timeout, zod)
 //  ✅ Optimistic update + rollback on failure
-//  ✅ deleteAddress by ID (not label)
-//  ✅ crypto.randomUUID for address IDs
-//  ✅ Duplicate address detection
-//  ✅ Max 10 addresses limit
 //  ✅ Timer cleanup on unmount
+//  ✅ Address CRUD delegated to shared useAddresses hook
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { captureError } from '@/lib/logger'
 import {
   validateProfileName, validateAddress, validatePhone,
-  validatePassword, validateNewAddress, FormErrors,
+  validatePassword, FormErrors,
 } from '@/lib/account/validation'
 import { getSavedAddresses } from '@/lib/account/utils'
 import { updateProfile, changePassword as apiChangePassword, ServiceError } from '@/lib/services/profileService'
+import { useAddresses } from './useAddresses'
 import type { Profile } from './useAuth'
 
 export interface SavedAddress {
@@ -43,12 +41,6 @@ export function useProfile(
   const [pfErr, setPfErr] = useState<FormErrors>({})
   const [msg,   setMsg]   = useState<Record<string, string>>({})
   const [busy,  setBusy]  = useState<Record<string, boolean>>({})
-  const [showAddAddr, setShowAddAddr] = useState(false)
-  const [newAddr,     setNewAddr]     = useState({ label: '', name: '', flat: '', city: '', state: '', pin: '' })
-  const [newAddrErr,  setNewAddrErr]  = useState<FormErrors>({})
-  // Tracks which address ID is currently being deleted.
-  // Prevents concurrent deletes (double-tap) and drives the disabled state on the button.
-  const [deletingId,  setDeletingId]  = useState<string | null>(null)
 
   const msgTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   useEffect(() => () => { msgTimers.current.forEach(t => clearTimeout(t)); msgTimers.current.clear() }, [])
@@ -70,6 +62,24 @@ export function useProfile(
       toast(e instanceof Error ? e.message : fallback, 'error')
     }
   }
+
+  // ── Address CRUD — delegated to shared hook ────────────────
+  // useAddresses is the single source of truth for form state, validation,
+  // duplicate detection, and busy flags. We wire persistence here so it
+  // can perform the optimistic update + rollback pattern used elsewhere.
+  const addresses = useAddresses({
+    getCurrentAddresses: () => getSavedAddresses(profile),
+    persist: async (updated) => {
+      await updateProfile({ saved_addresses: JSON.stringify(updated) })
+    },
+    optimisticUpdate: (updated) => {
+      updateLocalProfile({ saved_addresses: JSON.stringify(updated) })
+    },
+    rollback: (previous) => {
+      updateLocalProfile({ saved_addresses: JSON.stringify(previous) })
+    },
+    showToast: toast,
+  })
 
   const initFromProfile = useCallback((p: Profile) => {
     setPf({
@@ -155,73 +165,9 @@ export function useProfile(
     }
   }
 
-  async function saveNewAddress() {
-    const errors = validateNewAddress(newAddr)
-    if (Object.keys(errors).length) { setNewAddrErr(errors); return }
-    setNewAddrErr({})
-    setBusy(b => ({ ...b, newAddr: true }))
-    try {
-      const existing = getSavedAddresses(profile)
-      if (existing.length >= 10) {
-        toast('Maximum 10 addresses allowed. Remove one first.', 'error')
-        return  // finally block resets busy ✅
-      }
-      const isDuplicate = existing.some((a: SavedAddress) =>
-        a.addr.trim().toLowerCase() === newAddr.flat.trim().toLowerCase() &&
-        a.city.trim().toLowerCase() === newAddr.city.trim().toLowerCase() &&
-        a.pin === newAddr.pin
-      )
-      if (isDuplicate) { toast('This address already exists.', 'error'); return } // finally resets busy ✅
-
-      const newEntry: SavedAddress = {
-        id: crypto.randomUUID(),
-        label: newAddr.label, name: newAddr.name.trim(),
-        addr: newAddr.flat.trim(), city: newAddr.city.trim(),
-        state: newAddr.state, pin: newAddr.pin,
-      }
-      const updated = [...existing, newEntry]
-      const saved   = JSON.stringify(updated)
-      await updateProfile({ saved_addresses: saved })
-      updateLocalProfile({ saved_addresses: saved })
-      setNewAddr({ label: '', name: '', flat: '', city: '', state: '', pin: '' })
-      setShowAddAddr(false)
-      toast('✅ Address saved!')
-    } catch (e: unknown) {
-      handleError(e, 'Failed to save address')
-    } finally {
-      setBusy(b => ({ ...b, newAddr: false }))  // always runs — covers all early returns too
-    }
-  }
-
-  async function deleteAddress(id: string) {
-    // Guard: reject if another delete is already in flight (double-tap / double-click).
-    if (deletingId) return
-    setDeletingId(id)
-
-    // Snapshot current addresses before the optimistic update so we can roll back.
-    const previous = getSavedAddresses(profile)
-    const updated  = previous.filter((a: SavedAddress) => a.id !== id)
-    const saved    = JSON.stringify(updated)
-
-    // Optimistic update — the address disappears immediately in the UI.
-    updateLocalProfile({ saved_addresses: saved })
-
-    try {
-      await updateProfile({ saved_addresses: saved })
-      toast('Address removed')
-    } catch (e: unknown) {
-      // Rollback: restore the snapshot so the UI stays consistent with the server.
-      updateLocalProfile({ saved_addresses: JSON.stringify(previous) })
-      handleError(e, 'Failed to remove address')
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
   return {
-    pf, setPf, pfErr, setPfErr, pw, setPw, msg, busy, deletingId,
-    showAddAddr, setShowAddAddr, newAddr, setNewAddr, newAddrErr, setNewAddrErr,
+    pf, setPf, pfErr, setPfErr, pw, setPw, msg, busy,
+    addresses,   // replaces showAddAddr / newAddr / newAddrErr / saveNewAddress / deleteAddress / deletingId
     initFromProfile, saveName, saveAddress, savePhone, changePassword,
-    saveNewAddress, deleteAddress,
   }
 }

@@ -1,5 +1,6 @@
 'use client'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
+import { validate }  from '@/lib/account/validation'
 import type { useProfile } from '../hooks/useProfile'
 import styles from '../styles/account.module.css'
 
@@ -26,14 +27,18 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
             <div className={styles.formFull}>
               <div className={styles.fLbl}>New Password *</div>
               <div className={styles.pwWrap}>
-                <input className={`${styles.fInp}${profile.pfErr.newp ? ' ' + styles.fErr : ''}`} type={profile.pw.showNew ? 'text' : 'password'} value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Minimum 6 characters" />
+                <input className={`${styles.fInp}${profile.pfErr.newp ? ' ' + styles.fErr : ''}`} type={profile.pw.showNew ? 'text' : 'password'} value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Min 8 chars, uppercase, number, symbol" />
                 <button type="button" className={styles.pwEye} aria-label={profile.pw.showNew ? 'Hide new password' : 'Show new password'} onClick={() => profile.setPw(p => ({ ...p, showNew: !p.showNew }))}>{profile.pw.showNew ? '🙈' : '👁'}</button>
               </div>
               {profile.pfErr.newp && <div className={styles.errTxt}>{profile.pfErr.newp}</div>}
               {profile.pw.newp.length > 0 && (
                 <div className={styles.pwStrength}>
-                  <div className={`${styles.pwBar} ${profile.pw.newp.length >= 8 ? styles.pwStrong : profile.pw.newp.length >= 6 ? styles.pwMedium : styles.pwWeak}`} />
-                  <span className={styles.pwStrengthLbl}>{profile.pw.newp.length >= 8 ? 'Strong' : profile.pw.newp.length >= 6 ? 'Medium' : 'Weak'}</span>
+                  {(() => {
+                    const score = validate.password.score(profile.pw.newp)
+                    const label = score <= 1 ? 'Weak' : score <= 2 ? 'Fair' : score === 3 ? 'Good' : 'Strong'
+                    const cls   = score <= 1 ? styles.pwWeak : score <= 2 ? styles.pwFair : score === 3 ? styles.pwMedium : styles.pwStrong
+                    return <><div className={`${styles.pwBar} ${cls}`} style={{ width: `${score * 25}%` }} /><span className={styles.pwStrengthLbl}>{label}</span></>
+                  })()}
                 </div>
               )}
             </div>

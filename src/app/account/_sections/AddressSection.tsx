@@ -1,5 +1,4 @@
 'use client'
-import { useState } from 'react'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import type { Profile }      from '../hooks/useAuth'
@@ -17,16 +16,10 @@ interface Props {
 }
 
 export default function AddressSection({ authProfile, profile, savedAddrs, onEditAddress }: Props) {
+  // All address form/CRUD state now lives in profile.addresses (useAddresses hook).
+  // confirmDeleteId, deletingId, showForm, form, formErr, saving are all from there.
+  const { addresses } = profile
   const savedAddrsList = savedAddrs.filter(a => a.label !== 'Default')
-  // confirmDeleteId: id of the address pending confirmation; null = none
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  function requestDelete(id: string) { setConfirmDeleteId(id) }
-  function cancelDelete()            { setConfirmDeleteId(null) }
-  async function confirmDelete(id: string) {
-    setConfirmDeleteId(null)
-    await profile.deleteAddress(id)
-  }
 
   return (
     <ErrorBoundary section="Addresses">
@@ -66,27 +59,31 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                 {[a.addr, a.city, a.state, a.pin].filter(Boolean).join(', ')}
               </div>
               <div className={styles.addrActions}>
-                {confirmDeleteId === a.id ? (
+                {addresses.confirmDeleteId === a.id ? (
                   <>
                     <span style={{ fontSize: '12px', color: '#b91c1c', marginRight: '6px' }}>Remove this address?</span>
                     <button
                       className={`${styles.addrBtn} ${styles.addrDel}`}
-                      onClick={() => confirmDelete(a.id)}
+                      onClick={() => addresses.remove(a.id)}
                       aria-label={`Confirm remove ${a.label || 'saved'} address`}
-                      disabled={profile.deletingId === a.id}
+                      disabled={addresses.deletingId === a.id}
                     >
-                      {profile.deletingId === a.id ? 'Removing…' : 'Yes, Remove'}
+                      {addresses.deletingId === a.id ? 'Removing…' : 'Yes, Remove'}
                     </button>
-                    <button className={styles.addrBtn} onClick={cancelDelete} style={{ marginLeft: '6px' }}>
+                    <button
+                      className={styles.addrBtn}
+                      onClick={() => addresses.setConfirmDeleteId(null)}
+                      style={{ marginLeft: '6px' }}
+                    >
                       Cancel
                     </button>
                   </>
                 ) : (
                   <button
                     className={`${styles.addrBtn} ${styles.addrDel}`}
-                    onClick={() => requestDelete(a.id)}
+                    onClick={() => addresses.setConfirmDeleteId(a.id)}
                     aria-label={`Remove ${a.label || 'saved'} address`}
-                    disabled={profile.deletingId === a.id}
+                    disabled={addresses.deletingId === a.id}
                   >
                     🗑 Remove
                   </button>
@@ -96,7 +93,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           ))}
 
           {/* Empty state */}
-          {!authProfile?.address_line1 && savedAddrs.length === 0 && !profile.showAddAddr && (
+          {!authProfile?.address_line1 && savedAddrs.length === 0 && !addresses.showForm && (
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>📍</div>
               <div className={styles.emptyTitle}>No addresses saved</div>
@@ -105,61 +102,91 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           )}
 
           {/* Add form / button */}
-          {profile.showAddAddr ? (
+          {addresses.showForm ? (
             <div className={styles.addrAddForm}>
               <div className={styles.addrAddTitle}>Add New Address</div>
               <div className={styles.formGrid}>
                 <div>
                   <div className={styles.fLbl}>Label *</div>
                   <select
-                    className={`${styles.fInp}${profile.newAddrErr.label ? ' ' + styles.fErr : ''}`}
-                    value={profile.newAddr.label}
-                    onChange={e => { profile.setNewAddr(a => ({ ...a, label: e.target.value })); profile.setNewAddrErr(er => ({ ...er, label: '' })) }}
+                    className={`${styles.fInp}${addresses.formErr.label ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.label}
+                    onChange={e => addresses.setField('label', e.target.value)}
                   >
                     <option value="">Select label…</option>
                     {ADDRESS_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
-                  {profile.newAddrErr.label && <div className={styles.errTxt}>{profile.newAddrErr.label}</div>}
+                  {addresses.formErr.label && <div className={styles.errTxt}>{addresses.formErr.label}</div>}
                 </div>
                 <div>
                   <div className={styles.fLbl}>Contact Name</div>
-                  <input className={styles.fInp} value={profile.newAddr.name} onChange={e => profile.setNewAddr(a => ({ ...a, name: e.target.value }))} placeholder="Full name" />
+                  <input
+                    className={styles.fInp}
+                    value={addresses.form.name}
+                    onChange={e => addresses.setField('name', e.target.value)}
+                    placeholder="Full name"
+                  />
                 </div>
                 <div className={styles.formFull}>
                   <div className={styles.fLbl}>Street / Flat / Colony *</div>
-                  <input className={`${styles.fInp}${profile.newAddrErr.flat ? ' ' + styles.fErr : ''}`} value={profile.newAddr.flat} onChange={e => { profile.setNewAddr(a => ({ ...a, flat: e.target.value })); profile.setNewAddrErr(er => ({ ...er, flat: '' })) }} placeholder="House no., Street, Colony" />
-                  {profile.newAddrErr.flat && <div className={styles.errTxt}>{profile.newAddrErr.flat}</div>}
+                  <input
+                    className={`${styles.fInp}${addresses.formErr.addr ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.addr}
+                    onChange={e => addresses.setField('addr', e.target.value)}
+                    placeholder="House no., Street, Colony"
+                  />
+                  {addresses.formErr.addr && <div className={styles.errTxt}>{addresses.formErr.addr}</div>}
                 </div>
                 <div>
                   <div className={styles.fLbl}>City *</div>
-                  <input className={`${styles.fInp}${profile.newAddrErr.city ? ' ' + styles.fErr : ''}`} value={profile.newAddr.city} onChange={e => { profile.setNewAddr(a => ({ ...a, city: e.target.value })); profile.setNewAddrErr(er => ({ ...er, city: '' })) }} placeholder="City" />
-                  {profile.newAddrErr.city && <div className={styles.errTxt}>{profile.newAddrErr.city}</div>}
+                  <input
+                    className={`${styles.fInp}${addresses.formErr.city ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.city}
+                    onChange={e => addresses.setField('city', e.target.value)}
+                    placeholder="City"
+                  />
+                  {addresses.formErr.city && <div className={styles.errTxt}>{addresses.formErr.city}</div>}
                 </div>
                 <div>
                   <div className={styles.fLbl}>State *</div>
-                  <select className={`${styles.fInp}${profile.newAddrErr.state ? ' ' + styles.fErr : ''}`} value={profile.newAddr.state} onChange={e => { profile.setNewAddr(a => ({ ...a, state: e.target.value })); profile.setNewAddrErr(er => ({ ...er, state: '' })) }}>
+                  <select
+                    className={`${styles.fInp}${addresses.formErr.state ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.state}
+                    onChange={e => addresses.setField('state', e.target.value)}
+                  >
                     <option value="">Select State / UT</option>
                     {INDIA_STATES.map(s => <option key={s}>{s}</option>)}
                   </select>
-                  {profile.newAddrErr.state && <div className={styles.errTxt}>{profile.newAddrErr.state}</div>}
+                  {addresses.formErr.state && <div className={styles.errTxt}>{addresses.formErr.state}</div>}
                 </div>
                 <div>
                   <div className={styles.fLbl}>Pincode</div>
-                  <input className={`${styles.fInp}${profile.newAddrErr.pin ? ' ' + styles.fErr : ''}`} value={profile.newAddr.pin} onChange={e => { profile.setNewAddr(a => ({ ...a, pin: e.target.value.replace(/\D/g, '') })); profile.setNewAddrErr(er => ({ ...er, pin: '' })) }} placeholder="110001" maxLength={6} inputMode="numeric" />
-                  {profile.newAddrErr.pin && <div className={styles.errTxt}>{profile.newAddrErr.pin}</div>}
+                  <input
+                    className={`${styles.fInp}${addresses.formErr.pin ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.pin}
+                    onChange={e => addresses.setField('pin', e.target.value.replace(/\D/g, ''))}
+                    placeholder="110001"
+                    maxLength={6}
+                    inputMode="numeric"
+                  />
+                  {addresses.formErr.pin && <div className={styles.errTxt}>{addresses.formErr.pin}</div>}
                 </div>
               </div>
               <div className={styles.formActions}>
-                <button className={styles.btnPrimary} onClick={profile.saveNewAddress} disabled={!!profile.busy.newAddr}>
-                  {profile.busy.newAddr ? 'Saving…' : 'Save Address'}
+                <button
+                  className={styles.btnPrimary}
+                  onClick={addresses.save}
+                  disabled={addresses.saving}
+                >
+                  {addresses.saving ? 'Saving…' : 'Save Address'}
                 </button>
-                <button className={styles.btnSecondary} onClick={() => { profile.setShowAddAddr(false); profile.setNewAddrErr({}) }}>
+                <button className={styles.btnSecondary} onClick={addresses.cancelForm}>
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <button className={styles.addAddrBtn} onClick={() => profile.setShowAddAddr(true)}>
+            <button className={styles.addAddrBtn} onClick={addresses.startAdd}>
               <span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> Add New Address
             </button>
           )}
