@@ -49,7 +49,8 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                 {authProfile.phone && <><br /><span style={{ color: '#888' }}>{String(authProfile.phone)}</span></>}
               </div>
               <div className={styles.addrActions}>
-                <button className={styles.addrBtn} onClick={onEditAddress}>✏️ Edit Address</button>
+                {/* aria-label gives screen readers a descriptive action name beyond the emoji */}
+                <button className={styles.addrBtn} onClick={onEditAddress} aria-label="Edit default address">✏️ Edit Address</button>
               </div>
             </div>
           )}
@@ -68,15 +69,25 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                 {confirmDeleteId === a.id ? (
                   <>
                     <span style={{ fontSize: '12px', color: '#b91c1c', marginRight: '6px' }}>Remove this address?</span>
-                    <button className={`${styles.addrBtn} ${styles.addrDel}`} onClick={() => confirmDelete(a.id)}>
-                      Yes, Remove
+                    <button
+                      className={`${styles.addrBtn} ${styles.addrDel}`}
+                      onClick={() => confirmDelete(a.id)}
+                      aria-label={`Confirm remove ${a.label || 'saved'} address`}
+                      disabled={profile.deletingId === a.id}
+                    >
+                      {profile.deletingId === a.id ? 'Removing…' : 'Yes, Remove'}
                     </button>
                     <button className={styles.addrBtn} onClick={cancelDelete} style={{ marginLeft: '6px' }}>
                       Cancel
                     </button>
                   </>
                 ) : (
-                  <button className={`${styles.addrBtn} ${styles.addrDel}`} onClick={() => requestDelete(a.id)}>
+                  <button
+                    className={`${styles.addrBtn} ${styles.addrDel}`}
+                    onClick={() => requestDelete(a.id)}
+                    aria-label={`Remove ${a.label || 'saved'} address`}
+                    disabled={profile.deletingId === a.id}
+                  >
                     🗑 Remove
                   </button>
                 )}

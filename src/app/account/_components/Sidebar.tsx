@@ -33,7 +33,9 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
   ]
 
   return (
-    <aside className={styles.sidebar}>
+    // aria-label distinguishes this landmark from any other <nav>/<aside> on the
+    // page (e.g. the site-wide header navigation).
+    <aside className={styles.sidebar} aria-label="Account navigation">
       <div className={styles.sbProfile}>
         <div className={styles.sbAvatarRing}>
           <div className={styles.sbAvatar}>{initials}</div>
@@ -69,6 +71,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
             key={it.key}
             className={`${styles.sbItem}${tab === it.key ? ' ' + styles.sbItemActive : ''}`}
             onClick={() => { setTab(it.key); if (it.key === 'orders') onOrdersClick() }}
+            aria-current={tab === it.key ? 'page' : undefined}
           >
             <span className={styles.sbIcon}>{it.icon}</span>
             <span className={styles.sbLabel}>{it.label}</span>

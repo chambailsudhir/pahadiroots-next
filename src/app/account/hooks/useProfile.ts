@@ -46,6 +46,9 @@ export function useProfile(
   const [showAddAddr, setShowAddAddr] = useState(false)
   const [newAddr,     setNewAddr]     = useState({ label: '', name: '', flat: '', city: '', state: '', pin: '' })
   const [newAddrErr,  setNewAddrErr]  = useState<FormErrors>({})
+  // Tracks which address ID is currently being deleted.
+  // Prevents concurrent deletes (double-tap) and drives the disabled state on the button.
+  const [deletingId,  setDeletingId]  = useState<string | null>(null)
 
   const msgTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   useEffect(() => () => { msgTimers.current.forEach(t => clearTimeout(t)); msgTimers.current.clear() }, [])
@@ -191,19 +194,32 @@ export function useProfile(
   }
 
   async function deleteAddress(id: string) {
+    // Guard: reject if another delete is already in flight (double-tap / double-click).
+    if (deletingId) return
+    setDeletingId(id)
+
+    // Snapshot current addresses before the optimistic update so we can roll back.
+    const previous = getSavedAddresses(profile)
+    const updated  = previous.filter((a: SavedAddress) => a.id !== id)
+    const saved    = JSON.stringify(updated)
+
+    // Optimistic update — the address disappears immediately in the UI.
+    updateLocalProfile({ saved_addresses: saved })
+
     try {
-      const updated = getSavedAddresses(profile).filter((a: SavedAddress) => a.id !== id)
-      const saved   = JSON.stringify(updated)
       await updateProfile({ saved_addresses: saved })
-      updateLocalProfile({ saved_addresses: saved })
       toast('Address removed')
     } catch (e: unknown) {
+      // Rollback: restore the snapshot so the UI stays consistent with the server.
+      updateLocalProfile({ saved_addresses: JSON.stringify(previous) })
       handleError(e, 'Failed to remove address')
+    } finally {
+      setDeletingId(null)
     }
   }
 
   return {
-    pf, setPf, pfErr, setPfErr, pw, setPw, msg, busy,
+    pf, setPf, pfErr, setPfErr, pw, setPw, msg, busy, deletingId,
     showAddAddr, setShowAddAddr, newAddr, setNewAddr, newAddrErr, setNewAddrErr,
     initFromProfile, saveName, saveAddress, savePhone, changePassword,
     saveNewAddress, deleteAddress,

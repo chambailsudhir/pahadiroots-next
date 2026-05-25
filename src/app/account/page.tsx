@@ -5,9 +5,12 @@
 //  ✅ Auth state machine (guest/loading/authenticated/expired/failed)
 //  ✅ Session expired banner
 //  ✅ All logic delegated to hooks + sections
+//  ✅ Tab state URL-synced (?tab=orders|addresses|profile|password)
+//     Suspense wrapper required for useSearchParams in App Router
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth }       from './hooks/useAuth'
 import { useUIStore }    from '@/store/uiStore'
 import { useOrders }     from './hooks/useOrders'
@@ -24,8 +27,27 @@ import styles from './styles/account.module.css'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
 
-export default function AccountPage() {
-  const [tab, setTab]      = useState<Tab>('orders')
+// All accepted tab values — used to validate the URL param on mount.
+const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password']
+
+// ─── Inner component — uses useSearchParams (needs Suspense parent) ───────────
+function AccountPageInner() {
+  const searchParams = useSearchParams()
+  const router       = useRouter()
+
+  // Initialise tab from URL on first render; fall back to 'orders'.
+  const urlTab   = searchParams.get('tab') as Tab | null
+  const [tab, setTabState] = useState<Tab>(
+    urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'orders'
+  )
+
+  // Single source of truth for tab changes: updates React state AND the URL.
+  // scroll: false prevents the page jumping to the top on every tab switch.
+  function navigateTo(newTab: Tab) {
+    setTabState(newTab)
+    router.replace(`?tab=${newTab}`, { scroll: false })
+  }
+
   const { toast, toastType, show: showToast } = useToast()
   const { openAuth }       = useUIStore()
   const auth               = useAuth()
@@ -113,7 +135,7 @@ export default function AccountPage() {
       <div className={styles.accPage}>
         <Sidebar
           tab={tab}
-          setTab={setTab}
+          setTab={navigateTo}
           profile={auth.profile}
           authUser={auth.authUser}
           stats={orders.stats}
@@ -123,7 +145,7 @@ export default function AccountPage() {
 
         <div className={styles.mainPanel}>
           {tab === 'orders'    && <OrdersSection   orders={orders} showToast={showToast} />}
-          {tab === 'addresses' && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => setTab('profile')} />}
+          {tab === 'addresses' && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
           {tab === 'profile'   && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
           {tab === 'password'  && <PasswordSection profile={profile} />}
         </div>
@@ -135,7 +157,8 @@ export default function AccountPage() {
           <button
             key={it.key}
             className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
-            onClick={() => { setTab(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
+            aria-current={tab === it.key ? 'page' : undefined}
+            onClick={() => { navigateTo(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
           >
             <span className={styles.mtIcon}>{it.icon}</span>
             {it.label}
@@ -146,12 +169,55 @@ export default function AccountPage() {
         </button>
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div className={`${styles.accToast}${toastType === 'error' ? ' ' + styles.accToastError : ''}`}>
-          {toast}
-        </div>
-      )}
+      {/*
+        Toast — always in the DOM so the aria-live region is registered before
+        any message fires. Screen readers announce changes to live regions only
+        when the element is already present; mounting it conditionally misses
+        the first announcement.  Visually hidden (1px clip) when empty.
+      */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={toast
+          ? `${styles.accToast}${toastType === 'error' ? ' ' + styles.accToastError : ''}`
+          : undefined}
+        style={!toast ? {
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          padding: 0,
+          margin: '-1px',
+          overflow: 'hidden',
+          clip: 'rect(0,0,0,0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        } : undefined}
+      >
+        {toast || ''}
+      </div>
     </div>
+  )
+}
+
+// ─── Fallback shown while useSearchParams resolves ────────────────────────────
+function AccountPageFallback() {
+  return (
+    <div className={styles.accLoading}>
+      <div className={styles.accSpinner} />
+      <p className={styles.loadingText}>Loading your account…</p>
+    </div>
+  )
+}
+
+// ─── Public export — wraps inner component in Suspense ────────────────────────
+// Next.js App Router requires any Client Component that calls useSearchParams()
+// to be wrapped in <Suspense>. The fallback matches the existing loading state
+// so there is no visual flash.
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<AccountPageFallback />}>
+      <AccountPageInner />
+    </Suspense>
   )
 }
