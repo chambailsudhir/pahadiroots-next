@@ -7,9 +7,10 @@
 //  ✅ Edit capability retained
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
-import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
+import { INDIA_STATES, ADDRESS_LABELS, CHECKOUT_PROFILE_CACHE_KEY } from '@/lib/account/constants'
 import { updateProfile } from '@/lib/services/profileService'
 import { useAddresses } from '@/app/account/hooks/useAddresses'
+import { safeLocalStorage } from '@/lib/account/utils'
 import type { SavedAddress } from '@/app/account/hooks/useProfile'
 
 export default function AddressesPage() {
@@ -48,7 +49,7 @@ export default function AddressesPage() {
     getCurrentAddresses: () => addresses,
     persist: async (updated) => {
       await updateProfile({ saved_addresses: JSON.stringify(updated) })
-      try { localStorage.removeItem('pr_checkout_profile') } catch {}  // invalidate checkout cache
+      safeLocalStorage.remove(CHECKOUT_PROFILE_CACHE_KEY)  // invalidate checkout cache
       setAddresses(updated)
     },
     showToast: (msg, _type) => showToast(msg),
@@ -258,13 +259,16 @@ export default function AddressesPage() {
         </div>
       )}
 
-      {/* Toast — always in DOM for aria-live */}
+      {/* Toast — always in DOM for aria-live; className-toggled hidden state avoids the
+          simultaneous style+text mutation that causes some screen readers to miss the
+          first announcement (same pattern as account/page.tsx). */}
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className={toastMsg ? 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg z-50 whitespace-nowrap' : undefined}
-        style={!toastMsg ? { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' } : undefined}
+        className={toastMsg
+          ? 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg z-50 whitespace-nowrap'
+          : 'sr-only'}
       >
         {toastMsg || ''}
       </div>

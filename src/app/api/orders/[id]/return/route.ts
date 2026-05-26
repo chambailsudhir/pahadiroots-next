@@ -10,18 +10,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
+import { RETURN_REASONS } from '@/lib/account/constants'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-const RETURN_REASONS = [
-  'Damaged or defective product',
-  'Wrong item received',
-  'Item not as described',
-  'Changed my mind',
-  'Other',
-] as const
 
 const RETURNABLE_WINDOW_DAYS = 7
 

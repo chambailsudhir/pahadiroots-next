@@ -168,17 +168,31 @@ export function useOrders(markExpired?: () => void) {
 
   const stats = useMemo(() => {
     if (!data) return null
+
+    // Fast path: if the server returned fully-aggregated stats, use them directly
+    // without scanning the client-side order list.  serverStats is set once on the
+    // initial page-1 fetch and doesn't change as extra pages are appended, so this
+    // prevents the memo from re-running the full reduce on every loadMore push.
+    if (serverStats) {
+      return {
+        total:     totalCount,
+        delivered: serverStats.delivered,
+        active:    serverStats.active,
+        cancelled: serverStats.cancelled,
+        spent:     serverStats.spent,
+      }
+    }
+
+    // Slow path: server didn't return stats — compute client-side from all loaded orders.
     // Compute the merged list inside the memo so we don't depend on `allOrders`,
     // which is a new array reference every render (declared in the render body).
-    // Depending on it would cause the memo to recalculate on every unrelated
-    // state change. Using `data` and `extraOrders` as primitives is stable.
     const all = [...(data?.orders ?? []), ...extraOrders]
     return {
       total:     totalCount,
-      delivered: serverStats?.delivered ?? all.filter(o => (o._displayStatus || o.order_status) === 'delivered').length,
-      active:    serverStats?.active    ?? all.filter(o => ACTIVE_STATUSES.includes(o._displayStatus || o.order_status || '')).length,
-      cancelled: serverStats?.cancelled ?? all.filter(o => (o._displayStatus || o.order_status) === 'cancelled').length,
-      spent:     serverStats?.spent     ?? all
+      delivered: all.filter(o => (o._displayStatus || o.order_status) === 'delivered').length,
+      active:    all.filter(o => ACTIVE_STATUSES.includes(o._displayStatus || o.order_status || '')).length,
+      cancelled: all.filter(o => (o._displayStatus || o.order_status) === 'cancelled').length,
+      spent:     all
         .filter(o => (o._displayStatus || o.order_status) !== 'cancelled')
         .reduce((s, o) => s + (o.total_amount || 0), 0),
     }

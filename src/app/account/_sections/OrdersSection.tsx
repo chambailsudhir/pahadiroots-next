@@ -5,6 +5,7 @@ import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
 import ErrorBoundary  from '@/components/ui/ErrorBoundary'
 import { formatCurrency } from '@/lib/account/utils'
+import { RETURN_REASONS } from '@/lib/account/constants'
 import type { useOrders } from '../hooks/useOrders'
 import type { Order }     from '../hooks/useOrders'
 import styles from '../styles/account.module.css'
@@ -15,14 +16,6 @@ interface Props {
   orders:    Orders
   showToast: (msg: string, type?: 'success' | 'error') => void
 }
-
-const RETURN_REASONS = [
-  'Damaged or defective product',
-  'Wrong item received',
-  'Item not as described',
-  'Changed my mind',
-  'Other',
-] as const
 
 export default function OrdersSection({ orders, showToast }: Props) {
   const [returnModal, setReturnModal] = useState<{ orderId: string; orderNum: string } | null>(null)
@@ -97,7 +90,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
   }
 
   return (
-    <ErrorBoundary section="Orders">
+    <ErrorBoundary section="Orders" onRetry={orders.refresh}>
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
           <div className={styles.panelTitle}>My Orders</div>

@@ -49,6 +49,26 @@ export const ACTIVE_STATUSES   = ['pending','confirmed','processing','packed','s
 export const RETURN_STATUSES   = ['return_requested','return_approved','return_received',
   'refunded','refund_initiated','refund_completed','return_rejected','returned']
 
+// ── Return reasons ───────────────────────────────────────────────────────────
+// Single source of truth used by both the UI dropdown (OrdersSection.tsx) and
+// the API validation (/api/orders/[id]/return/route.ts).  Keeping them in sync
+// here prevents silent drift where a reason added to the UI passes the frontend
+// but is rejected by the backend (or vice versa).
+export const RETURN_REASONS = [
+  'Damaged or defective product',
+  'Wrong item received',
+  'Item not as described',
+  'Changed my mind',
+  'Other',
+] as const
+
+export type ReturnReason = typeof RETURN_REASONS[number]
+
+// ── localStorage keys ────────────────────────────────────────────────────────
+// Centralised so every consumer refers to the same string literal and a typo
+// in one place cannot silently leave stale cache keys behind.
+export const CHECKOUT_PROFILE_CACHE_KEY = 'pr_checkout_profile'
+
 // ── Support contact ──────────────────────────────────────────────────────────
 // Single source of truth — update here and it reflects everywhere.
 export const SUPPORT_WHATSAPP_NUMBER = '919899984895'

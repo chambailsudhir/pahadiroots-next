@@ -121,18 +121,28 @@ export async function GET(req: NextRequest) {
     }
 
     // Step 4: strip the joined customers field if present (primary path only)
-    let savedAddresses: unknown[] = []
+    // Define the row shape returned by the PostgREST query so we avoid 'as any' casts.
+    interface SavedAddressRow {
+      id:          string
+      label:       string
+      name?:       string
+      addr:        string
+      city:        string
+      state:       string
+      pin:         string
+      customer_id: string
+      customers?:  unknown  // present only on the JOIN path; stripped before returning
+    }
+
+    let savedAddresses: SavedAddressRow[] = []
     if (Array.isArray(savedAddressRows) && savedAddressRows.length > 0) {
-      const first = savedAddressRows[0] as any
-      if (first?.customers) {
+      const first = savedAddressRows[0] as SavedAddressRow
+      if (first?.customers !== undefined) {
         // Primary JOIN succeeded — remove the embedded customers relation before returning
-        savedAddresses = savedAddressRows.map((r: any) => {
-          const { customers: _c, ...rest } = r
-          return rest
-        })
+        savedAddresses = (savedAddressRows as SavedAddressRow[]).map(({ customers: _c, ...rest }) => rest)
       } else {
         // Fallback path — rows already filtered server-side by customer_id
-        savedAddresses = savedAddressRows
+        savedAddresses = savedAddressRows as SavedAddressRow[]
       }
     }
 

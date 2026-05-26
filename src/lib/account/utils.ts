@@ -4,6 +4,24 @@
 
 import { COURIER_TRACKING_MAP } from './constants'
 
+// ── Safe localStorage wrapper ────────────────────────────────────────────────
+// Guards against SSR (window undefined), private-browsing quota errors, and
+// any other storage exceptions — all of which are non-fatal for cache keys.
+export const safeLocalStorage = {
+  remove(key: string): void {
+    if (typeof window === 'undefined') return
+    try { localStorage.removeItem(key) } catch { /* non-fatal */ }
+  },
+  get(key: string): string | null {
+    if (typeof window === 'undefined') return null
+    try { return localStorage.getItem(key) } catch { return null }
+  },
+  set(key: string, value: string): void {
+    if (typeof window === 'undefined') return
+    try { localStorage.setItem(key, value) } catch { /* non-fatal */ }
+  },
+}
+
 export function getSavedAddresses(profile: any): any[] {
   try { return JSON.parse(profile?.saved_addresses || '[]') } catch { return [] }
 }
