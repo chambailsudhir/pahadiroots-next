@@ -19,10 +19,13 @@ import { fetchProfile, ServiceError, type Profile } from '@/lib/services/profile
 export type AuthState = 'idle' | 'loading' | 'guest' | 'authenticated' | 'expired' | 'failed'
 
 export interface AuthUser {
-  id?:    string | number
-  email?: string
-  phone?: string
-  [key: string]: unknown
+  id?:             string | number
+  email?:          string
+  phone?:          string
+  // Supabase stores provider-specific profile data (e.g. Google avatar_url, full_name)
+  // under user_metadata.  Typed as a record with unknown values since the keys vary
+  // by auth provider.  Callers must narrow each field before use (see Sidebar.tsx).
+  user_metadata?:  Record<string, unknown>
 }
 
 export type { Profile }

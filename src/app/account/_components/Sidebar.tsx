@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogout, onOrdersClick }: Props) {
-  const userMeta  = (authUser?.user_metadata ?? {}) as Record<string, unknown>
+  const userMeta  = authUser?.user_metadata ?? {}
   const firstName = profile?.first_name || (typeof userMeta.full_name === 'string' ? userMeta.full_name.split(' ')[0] : '') || 'User'
   const fullName  = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || firstName
   const email     = authUser?.email || profile?.email || ''

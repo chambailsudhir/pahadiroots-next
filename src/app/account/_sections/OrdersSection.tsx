@@ -207,51 +207,30 @@ export default function OrdersSection({ orders, showToast }: Props) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="return-modal-title"
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '16px',
-          }}
+          className={styles.modalOverlay}
           onClick={e => { if (e.target === e.currentTarget) closeReturnModal() }}
         >
-          <div style={{
-            background: 'var(--color-background-primary, #fff)',
-            borderRadius: '12px',
-            padding: '24px',
-            width: '100%',
-            maxWidth: '420px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 id="return-modal-title" style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
+          <div className={styles.modalBox}>
+            <div className={styles.modalHeader}>
+              <h3 id="return-modal-title" className={styles.modalTitle}>
                 Return Order {returnModal.orderNum}
               </h3>
               <button
                 ref={closeButtonRef}
                 onClick={closeReturnModal}
                 disabled={submitting}
-                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--color-text-secondary, #666)', lineHeight: 1 }}
+                className={styles.modalCloseBtn}
                 aria-label="Close return modal"
               >✕</button>
             </div>
 
-            <p style={{ fontSize: '13px', color: 'var(--color-text-secondary, #666)', marginBottom: '16px', lineHeight: 1.5 }}>
+            <p className={styles.modalDesc}>
               Please select the reason for your return. Our team will contact you within 24–48 hours to arrange a pickup.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+            <div className={styles.modalReasons}>
               {RETURN_REASONS.map((reason, index) => (
-                <label key={reason} style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '10px 12px',
-                  border: `1.5px solid ${returnReason === reason ? 'var(--color-primary, #4a7c59)' : 'var(--color-border-tertiary, #e0e0e0)'}`,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  background: returnReason === reason ? 'var(--color-primary-light, #f0f7f2)' : 'transparent',
-                  transition: 'border-color 0.15s, background 0.15s',
-                }}>
+                <label key={reason} className={styles.modalReason}>
                   <input
                     ref={index === 0 ? firstRadioRef : undefined}
                     type="radio"
@@ -259,19 +238,18 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     value={reason}
                     checked={returnReason === reason}
                     onChange={() => setReturnReason(reason)}
-                    style={{ accentColor: 'var(--color-primary, #4a7c59)' }}
+                    className={styles.modalReasonRadio}
                   />
                   {reason}
                 </label>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div className={styles.modalFooter}>
               <button
                 onClick={closeReturnModal}
                 disabled={submitting}
                 className={styles.btnSecondary}
-                style={{ flex: 1 }}
               >
                 Cancel
               </button>
@@ -279,7 +257,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 onClick={submitReturn}
                 disabled={!returnReason || submitting}
                 className={styles.btnPrimary}
-                style={{ flex: 2, opacity: (!returnReason || submitting) ? 0.6 : 1 }}
               >
                 {submitting ? 'Submitting…' : 'Submit Return Request'}
               </button>

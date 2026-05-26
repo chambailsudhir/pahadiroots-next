@@ -230,3 +230,21 @@
 /* Session expired banner */
 .sessionBanner { position: fixed; top: 0; left: 0; right: 0; background: #c0392b; color: #fff; text-align: center; padding: 12px; font-size: 14px; font-weight: 600; z-index: 9998; display: flex; align-items: center; justify-content: center; gap: 12px; }
 .sessionBannerBtn { background: #fff; color: #c0392b; border: none; padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+/* ── Return Request Modal ─────────────────────────────────────────────────────
+   Moved from inline styles in OrdersSection.tsx so the modal is themeable
+   and consistent with the CSS Module pattern used across the account module. */
+.modalOverlay      { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modalBox          { background: var(--color-background-primary,#fff); border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); }
+.modalHeader       { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modalTitle        { font-size: 15px; font-weight: 600; margin: 0; }
+.modalCloseBtn     { background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--color-text-secondary,#666); }
+.modalCloseBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.modalDesc         { font-size: 13px; color: var(--color-text-secondary,#666); margin-bottom: 16px; line-height: 1.5; }
+.modalReasons      { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.modalReason       { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--color-border-tertiary,#e0e0e0); border-radius: 8px; cursor: pointer; font-size: 13px; background: transparent; transition: border-color 0.15s, background 0.15s; }
+.modalReason:has(input:checked) { border-color: var(--color-primary,#4a7c59); background: var(--color-primary-light,#f0f7f2); }
+.modalReasonRadio  { accent-color: var(--color-primary,#4a7c59); }
+.modalFooter       { display: flex; gap: 10px; }
+.modalFooter .btnPrimary  { flex: 2; }
+.modalFooter .btnSecondary { flex: 1; }

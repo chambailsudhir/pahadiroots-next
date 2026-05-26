@@ -114,7 +114,14 @@ export default function OrderCard({ order: o, canReturn, onReturnClick }: Props)
               {items.slice(0, 4).map((it, i) => (
                 <div key={`${it.name}-${it.variant ?? ''}-${i}`} className={styles.ocImgBox}>
                   {it.image_url
-                    ? <img src={it.image_url} alt={it.name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img
+                        src={it.image_url}
+                        alt={it.name || ''}
+                        width={64}
+                        height={64}
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
                     : <span style={{ fontSize: '22px' }}>{it.emoji || '🌿'}</span>}
                 </div>
               ))}
