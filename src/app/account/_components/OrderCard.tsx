@@ -147,7 +147,7 @@ export default function OrderCard({ order: o, canReturn, onReturnClick }: Props)
               Invoice
             </Link>
             {canReturn(o) && (
-              <button className={`${styles.actionBtn} ${styles.actionReturn}`} onClick={() => onReturnClick(o.order_number || o.id)}>
+              <button className={`${styles.actionBtn} ${styles.actionReturn}`} onClick={() => onReturnClick(o.order_number || String(o.id))}>
                 Return
               </button>
             )}
