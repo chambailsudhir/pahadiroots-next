@@ -23,12 +23,31 @@ import {
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 
+// Confirmed enum values from pg_enum — DO NOT add values not in this list
+// or PostgREST will throw "invalid input value for enum order_status_enum"
+const VALID_DB_STATUSES = new Set([
+  'pending', 'confirmed', 'packed', 'shipped',
+  'delivered', 'cancelled', 'returned',
+])
+
+// Display-label map: DB status -> UI display status
+// The extra keys (return_requested etc.) are set by the app on orders
+// that have a return record; they are display-only, never written to
+// order_status in the DB.
 const STATUS_MAP: Record<string, string> = {
-  pending:'pending', confirmed:'confirmed', processing:'processing', packed:'packed',
-  shipped:'shipped', delivered:'delivered', cancelled:'cancelled', returned:'returned',
-  refunded:'refunded', return_requested:'return_requested', return_approved:'return_approved',
-  return_received:'return_received', refund_initiated:'refund_initiated',
-  refund_completed:'refund_completed', return_rejected:'return_rejected',
+  pending:          'pending',
+  confirmed:        'confirmed',
+  packed:           'packed',
+  shipped:          'shipped',
+  delivered:        'delivered',
+  cancelled:        'cancelled',
+  returned:         'returned',
+  return_requested: 'return_requested',
+  return_approved:  'return_approved',
+  return_received:  'return_received',
+  refund_initiated: 'refund_initiated',
+  refund_completed: 'refund_completed',
+  return_rejected:  'return_rejected',
 }
 
 async function getCustomerOrders(
@@ -39,8 +58,15 @@ async function getCustomerOrders(
 
   let statusFilter = ''
   if (status) {
-    const statuses = status.split(',').map(s => `order_status.eq.${s.trim()}`).join(',')
-    statusFilter = `&or=(${statuses})`
+    // Only pass values that exist in the DB enum — unknown values would
+    // cause PostgREST to throw "invalid input value for enum order_status_enum"
+    const validStatuses = status
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => VALID_DB_STATUSES.has(s))
+      .map(s => `order_status.eq.${s}`)
+      .join(',')
+    if (validStatuses) statusFilter = `&or=(${validStatuses})`
   }
 
   let searchFilter = ''
