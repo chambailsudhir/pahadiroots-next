@@ -101,6 +101,10 @@ export async function POST(
 ) {
   const { id } = params
   if (!id) return fail(400, 'Order ID is required')
+  // Validate format before touching the DB — rejects crafted IDs like "1;--" or overlong strings.
+  // Accepts standard UUIDs (8-4-4-4-12 hex) and plain numeric IDs.
+  const isValidId = /^[0-9]+$/.test(id) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  if (!isValidId) return fail(400, 'Invalid order ID')
 
   // Parse + validate body
   let reason = ''

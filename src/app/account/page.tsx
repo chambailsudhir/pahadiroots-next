@@ -56,8 +56,7 @@ function AccountPageInner() {
 
   const savedAddrs = useMemo(
     () => getSavedAddresses(auth.profile) as SavedAddress[],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [auth.profile?.saved_addresses]
+    [auth.profile]  // depend on the whole profile object — safe and correct
   )
 
   const profileInitialised = useRef(false)
@@ -173,26 +172,20 @@ function AccountPageInner() {
         Toast — always in the DOM so the aria-live region is registered before
         any message fires. Screen readers announce changes to live regions only
         when the element is already present; mounting it conditionally misses
-        the first announcement.  Visually hidden (1px clip) when empty.
+        the first announcement.  Uses a CSS class for the visually-hidden state
+        (not inline style) so the style attribute does not mutate simultaneously
+        with textContent — that simultaneous mutation caused some screen readers
+        to silently drop the first toast announcement.
       */}
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className={toast
-          ? `${styles.accToast}${toastType === 'error' ? ' ' + styles.accToastError : ''}`
-          : undefined}
-        style={!toast ? {
-          position: 'absolute',
-          width: '1px',
-          height: '1px',
-          padding: 0,
-          margin: '-1px',
-          overflow: 'hidden',
-          clip: 'rect(0,0,0,0)',
-          whiteSpace: 'nowrap',
-          border: 0,
-        } : undefined}
+        className={
+          toast
+            ? `${styles.accToast}${toastType === 'error' ? ' ' + styles.accToastError : ''}`
+            : styles.toastHidden
+        }
       >
         {toast || ''}
       </div>

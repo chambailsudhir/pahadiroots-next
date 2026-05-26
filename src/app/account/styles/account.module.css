@@ -219,6 +219,11 @@
 @keyframes skShine { to { background-position: -200% 0; } }
 .accToast      { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1a3a1e; color: #fff; padding: 11px 22px; border-radius: 12px; font-size: 13px; font-weight: 600; z-index: 9999; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,.18); animation: toastIn .25s ease; }
 .accToastError { background: #c0392b; }
+/* Visually hides the toast live region without removing it from the DOM.
+   Using a class (not inline style) ensures only className changes when toast
+   text arrives — preventing the simultaneous style+content mutation that
+   causes some screen readers to miss the first live-region announcement. */
+.toastHidden   { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 @media (max-width: 768px) { .accToast { bottom: 72px; font-size: 12px; max-width: 88vw; white-space: normal; text-align: center; } }
 

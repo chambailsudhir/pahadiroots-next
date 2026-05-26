@@ -27,13 +27,13 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
           <div className={styles.cardSectionTitle}>Personal Information</div>
           <div className={styles.formGrid}>
             <div>
-              <div className={styles.fLbl}>First Name *</div>
-              <input className={`${styles.fInp}${profile.pfErr.fname ? ' ' + styles.fErr : ''}`} value={profile.pf.fname} onChange={e => { profile.setPf(p => ({ ...p, fname: e.target.value })); profile.setPfErr(er => ({ ...er, fname: '' })) }} placeholder="First name" />
+              <label htmlFor="pf-fname" className={styles.fLbl}>First Name *</label>
+              <input id="pf-fname" className={`${styles.fInp}${profile.pfErr.fname ? ' ' + styles.fErr : ''}`} value={profile.pf.fname} onChange={e => { profile.setPf(p => ({ ...p, fname: e.target.value })); profile.setPfErr(er => ({ ...er, fname: '' })) }} placeholder="First name" />
               {profile.pfErr.fname && <div className={styles.errTxt}>{profile.pfErr.fname}</div>}
             </div>
             <div>
-              <div className={styles.fLbl}>Last Name</div>
-              <input className={styles.fInp} value={profile.pf.lname} onChange={e => profile.setPf(p => ({ ...p, lname: e.target.value }))} placeholder="Last name" />
+              <label htmlFor="pf-lname" className={styles.fLbl}>Last Name</label>
+              <input id="pf-lname" className={styles.fInp} value={profile.pf.lname} onChange={e => profile.setPf(p => ({ ...p, lname: e.target.value }))} placeholder="Last name" />
             </div>
           </div>
           <div className={styles.formActions}>
@@ -49,26 +49,26 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
           <div className={styles.cardSectionTitle}>Default Delivery Address</div>
           <div className={styles.formGrid}>
             <div className={styles.formFull}>
-              <div className={styles.fLbl}>Street / Flat / Colony *</div>
-              <input className={`${styles.fInp}${profile.pfErr.addr ? ' ' + styles.fErr : ''}`} value={profile.pf.addr} onChange={e => { profile.setPf(p => ({ ...p, addr: e.target.value })); profile.setPfErr(er => ({ ...er, addr: '' })) }} placeholder="House no., Street, Colony" />
+              <label htmlFor="pf-addr" className={styles.fLbl}>Street / Flat / Colony *</label>
+              <input id="pf-addr" className={`${styles.fInp}${profile.pfErr.addr ? ' ' + styles.fErr : ''}`} value={profile.pf.addr} onChange={e => { profile.setPf(p => ({ ...p, addr: e.target.value })); profile.setPfErr(er => ({ ...er, addr: '' })) }} placeholder="House no., Street, Colony" />
               {profile.pfErr.addr && <div className={styles.errTxt}>{profile.pfErr.addr}</div>}
             </div>
             <div>
-              <div className={styles.fLbl}>City *</div>
-              <input className={`${styles.fInp}${profile.pfErr.city ? ' ' + styles.fErr : ''}`} value={profile.pf.city} onChange={e => { profile.setPf(p => ({ ...p, city: e.target.value })); profile.setPfErr(er => ({ ...er, city: '' })) }} placeholder="City" />
+              <label htmlFor="pf-city" className={styles.fLbl}>City *</label>
+              <input id="pf-city" className={`${styles.fInp}${profile.pfErr.city ? ' ' + styles.fErr : ''}`} value={profile.pf.city} onChange={e => { profile.setPf(p => ({ ...p, city: e.target.value })); profile.setPfErr(er => ({ ...er, city: '' })) }} placeholder="City" />
               {profile.pfErr.city && <div className={styles.errTxt}>{profile.pfErr.city}</div>}
             </div>
             <div>
-              <div className={styles.fLbl}>State *</div>
-              <select className={`${styles.fInp}${profile.pfErr.state ? ' ' + styles.fErr : ''}`} value={profile.pf.state} onChange={e => { profile.setPf(p => ({ ...p, state: e.target.value })); profile.setPfErr(er => ({ ...er, state: '' })) }}>
+              <label htmlFor="pf-state" className={styles.fLbl}>State *</label>
+              <select id="pf-state" className={`${styles.fInp}${profile.pfErr.state ? ' ' + styles.fErr : ''}`} value={profile.pf.state} onChange={e => { profile.setPf(p => ({ ...p, state: e.target.value })); profile.setPfErr(er => ({ ...er, state: '' })) }}>
                 <option value="">Select State / UT</option>
                 {INDIA_STATES.map(s => <option key={s}>{s}</option>)}
               </select>
               {profile.pfErr.state && <div className={styles.errTxt}>{profile.pfErr.state}</div>}
             </div>
             <div>
-              <div className={styles.fLbl}>Pincode *</div>
-              <input className={`${styles.fInp}${profile.pfErr.pin ? ' ' + styles.fErr : ''}`} value={profile.pf.pin} onChange={e => { profile.setPf(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') })); profile.setPfErr(er => ({ ...er, pin: '' })) }} placeholder="110001" maxLength={6} inputMode="numeric" />
+              <label htmlFor="pf-pin" className={styles.fLbl}>Pincode *</label>
+              <input id="pf-pin" className={`${styles.fInp}${profile.pfErr.pin ? ' ' + styles.fErr : ''}`} value={profile.pf.pin} onChange={e => { profile.setPf(p => ({ ...p, pin: e.target.value.replace(/\D/g, '') })); profile.setPfErr(er => ({ ...er, pin: '' })) }} placeholder="110001" maxLength={6} inputMode="numeric" />
               {profile.pfErr.pin && <div className={styles.errTxt}>{profile.pfErr.pin}</div>}
             </div>
           </div>
@@ -85,16 +85,16 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
           <div className={styles.cardSectionTitle}>Contact Information</div>
           <div className={styles.formGrid}>
             <div>
-              <div className={styles.fLbl}>Phone Number</div>
+              <label htmlFor="pf-phone" className={styles.fLbl}>Phone Number</label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span className={styles.phonePrefix}>+91</span>
-                <input className={`${styles.fInp}${profile.pfErr.phone ? ' ' + styles.fErr : ''}`} style={{ flex: 1 }} value={profile.pf.phone} onChange={e => { profile.setPf(p => ({ ...p, phone: e.target.value.replace(/\D/g, '') })); profile.setPfErr(er => ({ ...er, phone: '' })) }} placeholder="10-digit mobile" maxLength={10} inputMode="numeric" />
+                <input id="pf-phone" className={`${styles.fInp}${profile.pfErr.phone ? ' ' + styles.fErr : ''}`} style={{ flex: 1 }} value={profile.pf.phone} onChange={e => { profile.setPf(p => ({ ...p, phone: e.target.value.replace(/\D/g, '') })); profile.setPfErr(er => ({ ...er, phone: '' })) }} placeholder="10-digit mobile" maxLength={10} inputMode="numeric" />
               </div>
               {profile.pfErr.phone && <div className={styles.errTxt}>{profile.pfErr.phone}</div>}
             </div>
             <div>
-              <div className={styles.fLbl}>Email Address</div>
-              <input className={`${styles.fInp} ${styles.fDisabled}`} value={String(authUser?.email || authProfile?.email || '')} disabled />
+              <label htmlFor="pf-email" className={styles.fLbl}>Email Address</label>
+              <input id="pf-email" className={`${styles.fInp} ${styles.fDisabled}`} value={String(authUser?.email || authProfile?.email || '')} disabled />
               <div className={styles.fHint}>Email cannot be changed</div>
             </div>
           </div>

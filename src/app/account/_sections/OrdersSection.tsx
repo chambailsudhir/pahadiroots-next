@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
@@ -29,12 +29,35 @@ export default function OrdersSection({ orders, showToast }: Props) {
   const [returnReason, setReturnReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  function openReturnModal(orderNum: string) {
+  // Focus management for keyboard-accessible modal
+  const firstRadioRef  = useRef<HTMLInputElement>(null)
+  const triggerBtnRef  = useRef<HTMLButtonElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Move focus into modal when it opens; restore to trigger when it closes
+  useEffect(() => {
+    if (returnModal) {
+      firstRadioRef.current?.focus()
+    }
+  }, [returnModal])
+
+  // ESC key closes the modal
+  useEffect(() => {
+    if (!returnModal) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closeReturnModal()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [returnModal, submitting])
+
+  function openReturnModal(orderNum: string, triggerBtn?: HTMLButtonElement | null) {
     // orderNum may be the actual order_number or the id — find the order to get both
     const order = orders.filtered.find(
       (o: Order) => o.order_number === orderNum || String(o.id) === String(orderNum)
     )
     if (!order) return
+    triggerBtnRef.current = triggerBtn ?? null
     setReturnReason('')
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum })
   }
@@ -43,6 +66,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (submitting) return
     setReturnModal(null)
     setReturnReason('')
+    // Restore focus to the button that opened the modal
+    triggerBtnRef.current?.focus()
+    triggerBtnRef.current = null
   }
 
   async function submitReturn() {
@@ -169,9 +195,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
                       <button
                         className={styles.btnSecondary}
                         onClick={orders.loadMore}
-                        disabled={orders.loading}
+                        disabled={orders.loadingMore}
                       >
-                        {orders.loading ? 'Loading…' : `Load More (${orders.totalCount - orders.filtered.length} remaining)`}
+                        {orders.loadingMore ? 'Loading…' : `Load More (${orders.totalCount - orders.filtered.length} remaining)`}
                       </button>
                     </div>
                   )}
@@ -185,6 +211,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
       {/* ── Return Request Modal ── */}
       {returnModal && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="return-modal-title"
           style={{
             position: 'fixed', inset: 0, zIndex: 1000,
             background: 'rgba(0,0,0,0.45)',
@@ -202,10 +231,11 @@ export default function OrdersSection({ orders, showToast }: Props) {
             boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
+              <h3 id="return-modal-title" style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>
                 Return Order {returnModal.orderNum}
               </h3>
               <button
+                ref={closeButtonRef}
                 onClick={closeReturnModal}
                 disabled={submitting}
                 style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--color-text-secondary, #666)', lineHeight: 1 }}
@@ -218,7 +248,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-              {RETURN_REASONS.map(reason => (
+              {RETURN_REASONS.map((reason, index) => (
                 <label key={reason} style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '10px 12px',
@@ -230,6 +260,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                   transition: 'border-color 0.15s, background 0.15s',
                 }}>
                   <input
+                    ref={index === 0 ? firstRadioRef : undefined}
                     type="radio"
                     name="return-reason"
                     value={reason}

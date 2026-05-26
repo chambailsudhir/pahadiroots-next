@@ -114,14 +114,11 @@ export function useAuth() {
     setProfile(prev => mergeProfile(prev, updates))
   }
 
-  const token = loggedIn ? '__cookie__' : null
-  function setToken(_t: string) { /* no-op — cookies managed server-side */ }
-
   return {
     authState, loaded, loggedIn, expired,
     profile, authUser,
     init, logout, markExpired,
-    updateLocalProfile, token, setToken,
+    updateLocalProfile,
   }
 }
 

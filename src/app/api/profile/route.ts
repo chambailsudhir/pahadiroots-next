@@ -169,6 +169,10 @@ export async function POST(req: NextRequest) {
   }
 
   let body: Record<string, unknown> = {}
+  // Guard against oversized payloads before parsing (e.g. a multi-MB saved_addresses blob).
+  // 64 KB is generous for any legitimate profile update.
+  const contentLength = Number(req.headers.get('content-length') ?? 0)
+  if (contentLength > 65_536) return fail(413, 'Request body too large')
   try { body = await req.json() } catch { return fail(400, 'Invalid JSON') }
 
   try {
