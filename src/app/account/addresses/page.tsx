@@ -28,6 +28,9 @@ export default function AddressesPage() {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
       .then(async r => {
+        // Distinguish auth failure (401) from other errors so we can show a
+        // helpful sign-in prompt instead of a generic red error string.
+        if (r.status === 401) throw new Error('401')
         if (!r.ok) throw new Error('Could not load addresses')
         const data = await r.json()
         const raw  = data.profile?.saved_addresses
@@ -54,6 +57,16 @@ export default function AddressesPage() {
   if (loading) return (
     <div className="space-y-3">
       {[1, 2].map(i => <div key={i} className="h-24 bg-stone-100 animate-pulse rounded-xl" />)}
+    </div>
+  )
+
+  if (error === '401' || error?.includes('Unauthorized') || error?.includes('Not logged in')) return (
+    <div className="text-center py-16">
+      <div className="text-3xl mb-3">🔒</div>
+      <p className="text-stone-500 text-sm mb-4">Please sign in to view your addresses</p>
+      <a href="/account" className="inline-block bg-green-900 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-green-800 transition-colors">
+        Sign In
+      </a>
     </div>
   )
 

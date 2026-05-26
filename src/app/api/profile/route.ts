@@ -30,14 +30,14 @@ async function sbAuth(path: string, body: unknown = null, token?: string) {
   return data
 }
 
-async function sbAdmin(method: string, path: string, body: unknown = null) {
+async function sbAdmin(method: string, path: string, body: unknown = null, prefer = 'return=representation') {
   const res = await fetch(`${SUPABASE_URL}${path}`, {
     method,
     headers: {
       'Content-Type':  'application/json',
       'apikey':        SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Prefer':        'return=representation',
+      'Prefer':        prefer,
     },
     body: body ? JSON.stringify(body) : undefined,
   })
@@ -157,8 +157,16 @@ export async function GET(req: NextRequest) {
 
 // ── POST /api/profile — update fields ────────────────────────
 export async function POST(req: NextRequest) {
-  const token = getToken(req)
-  if (!token) return fail(401, 'Not logged in')
+  let token = getToken(req)
+  // Mirror the same refresh logic as GET: if the 1-hour access token has
+  // expired while the user was editing, attempt a silent refresh so their
+  // in-progress changes are not lost on Save.
+  let refreshed: Awaited<ReturnType<typeof tryRefresh>> = null
+  if (!token) {
+    refreshed = await tryRefresh(req)
+    if (!refreshed) return fail(401, 'Not logged in')
+    token = refreshed.token
+  }
 
   let body: Record<string, unknown> = {}
   try { body = await req.json() } catch { return fail(400, 'Invalid JSON') }
@@ -180,8 +188,6 @@ export async function POST(req: NextRequest) {
 
       if (addresses.length > 10) return fail(400, 'Maximum 10 addresses allowed')
 
-      // Full replace: delete all then re-insert
-      await sbAdmin('DELETE', `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`)
       if (addresses.length > 0) {
         const rows = addresses.map((a: Record<string, unknown>) => ({
           ...(a.id ? { id: a.id } : {}),
@@ -193,7 +199,29 @@ export async function POST(req: NextRequest) {
           state: a.state  || '',
           pin:   a.pin    || null,
         }))
-        await sbAdmin('POST', `/rest/v1/saved_addresses`, rows)
+        // Critical fix: upsert first so all new rows exist, THEN remove orphans.
+        // The old delete-then-insert was non-atomic: if the insert failed after
+        // the delete succeeded, all addresses were permanently lost.
+        await sbAdmin('POST', `/rest/v1/saved_addresses`, rows,
+          'resolution=merge-duplicates,return=representation')
+        // Delete any saved_addresses that were not in the incoming list.
+        // Only rows that had an existing id can be kept; the rest are orphans.
+        const keptIds = rows.map((r) => r.id).filter(Boolean) as string[]
+        if (keptIds.length > 0) {
+          await sbAdmin('DELETE',
+            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&id=not.in.(${keptIds.join(',')})`,
+            null, 'return=representation')
+        } else {
+          // No rows had a pre-existing id → this is a full replacement of all addresses
+          await sbAdmin('DELETE',
+            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`,
+            null, 'return=representation')
+        }
+      } else {
+        // Empty list → delete all
+        await sbAdmin('DELETE',
+          `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`,
+          null, 'return=representation')
       }
       delete body.saved_addresses
     }
@@ -211,13 +239,16 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return ok({ success: true })
+    const res = ok({ success: true })
+    // If the access token was silently refreshed at the top of this handler,
+    // write the new cookies so the client stays authenticated.
+    if (refreshed) applyNewCookies(res as NextResponse, refreshed.newCookies)
+    return res
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     return fail(err.status || 500, err.message || 'Profile update failed')
   }
 }
-
 // ── syncCustomerProfile (shared helper) ──────────────────────
 async function syncCustomerProfile(user: { id: string; phone?: string; email?: string }) {
   const phone = user.phone || ''
@@ -237,5 +268,16 @@ async function syncCustomerProfile(user: { id: string; phone?: string; email?: s
     }
     return match
   }
-  return null
+
+  // No existing customer found — upsert rather than plain insert to be race-safe.
+  // Two simultaneous requests (e.g. app tab + PWA background sync) could both
+  // reach this branch; using merge-duplicates on the UNIQUE auth_user_id constraint
+  // ensures only one row is ever created regardless of concurrency.
+  const created = await sbAdmin(
+    'POST',
+    '/rest/v1/customers',
+    { auth_user_id: user.id, phone: phone || null, email: email || null },
+    'resolution=merge-duplicates,return=representation',
+  ).catch(() => null)
+  return created?.[0] ?? null
 }

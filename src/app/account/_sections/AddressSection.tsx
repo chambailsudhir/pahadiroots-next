@@ -104,7 +104,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           {/* Add form / button */}
           {addresses.showForm ? (
             <div className={styles.addrAddForm}>
-              <div className={styles.addrAddTitle}>Add New Address</div>
+              <div className={styles.addrAddTitle}>{addresses.editId ? 'Edit Address' : 'Add New Address'}</div>
               <div className={styles.formGrid}>
                 <div>
                   <div className={styles.fLbl}>Label *</div>

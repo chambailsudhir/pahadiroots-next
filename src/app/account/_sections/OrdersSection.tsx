@@ -104,7 +104,10 @@ export default function OrdersSection({ orders, showToast }: Props) {
               <div className={styles.ordersToolbar}>
                 <div className={styles.searchWrap}>
                   <span className={styles.searchIcon}>🔍</span>
+                  <label htmlFor="order-search" className="sr-only">Search orders</label>
                   <input
+                    id="order-search"
+                    aria-label="Search orders by order number or product"
                     className={styles.ordersSearch}
                     type="text"
                     placeholder="Search by order # or product…"

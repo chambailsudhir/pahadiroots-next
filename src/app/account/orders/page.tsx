@@ -29,6 +29,19 @@ export default function OrdersPage() {
     </div>
   )
 
+  // Detect session expiry / unauthenticated access and show a helpful prompt
+  // instead of the raw red error string. Previously, visiting this URL from a
+  // bookmark while logged out showed only an uninformative error message.
+  if (error?.includes('401') || error?.includes('Unauthorized') || error?.includes('Not logged in')) return (
+    <div className="text-center py-16">
+      <div className="text-3xl mb-3">🔒</div>
+      <p className="text-stone-500 text-sm mb-4">Please sign in to view your orders</p>
+      <a href="/account" className="inline-block bg-green-900 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-green-800 transition-colors">
+        Sign In
+      </a>
+    </div>
+  )
+
   if (error) return (
     <div className="text-center py-16 text-red-500 text-sm">{error}</div>
   )

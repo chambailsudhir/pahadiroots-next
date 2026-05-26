@@ -59,6 +59,7 @@ export function useOrders(markExpired?: () => void) {
   const [extraOrders, setExtraOrders] = useState<Order[]>([])  // load-more appended pages
   const [loadedPage,  setLoadedPage]  = useState(1)            // tracks how many pages are loaded (for hasMore)
   const [totalPages,  setTotalPages]  = useState(1)            // kept in sync from SWR + loadMore results
+  const [loadingMore, setLoadingMore] = useState(false)        // guard against concurrent loadMore taps
   const [serverStats, setServerStats] = useState<{ delivered: number; active: number; cancelled: number; spent: number } | null>(null)
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -130,7 +131,10 @@ export function useOrders(markExpired?: () => void) {
   // page N+1 with the already-appended extraOrders — doubling every Load More.
   async function loadMore() {
     const next = loadedPage + 1
-    if (next > totalPages || isLoading) return
+    // Guard: isLoading only reflects the SWR page-1 state, NOT an in-flight loadMore.
+    // loadingMore is the correct flag to prevent duplicate concurrent fetches.
+    if (next > totalPages || isLoading || loadingMore) return
+    setLoadingMore(true)
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     try {
@@ -143,6 +147,8 @@ export function useOrders(markExpired?: () => void) {
       } else {
         captureError(err, { action: 'useOrders/loadMore', page: next })
       }
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -162,16 +168,21 @@ export function useOrders(markExpired?: () => void) {
 
   const stats = useMemo(() => {
     if (!data) return null
+    // Compute the merged list inside the memo so we don't depend on `allOrders`,
+    // which is a new array reference every render (declared in the render body).
+    // Depending on it would cause the memo to recalculate on every unrelated
+    // state change. Using `data` and `extraOrders` as primitives is stable.
+    const all = [...(data?.orders ?? []), ...extraOrders]
     return {
       total:     totalCount,
-      delivered: serverStats?.delivered ?? allOrders.filter(o => (o._displayStatus || o.order_status) === 'delivered').length,
-      active:    serverStats?.active    ?? allOrders.filter(o => ACTIVE_STATUSES.includes(o._displayStatus || o.order_status || '')).length,
-      cancelled: serverStats?.cancelled ?? allOrders.filter(o => (o._displayStatus || o.order_status) === 'cancelled').length,
-      spent:     serverStats?.spent     ?? allOrders
+      delivered: serverStats?.delivered ?? all.filter(o => (o._displayStatus || o.order_status) === 'delivered').length,
+      active:    serverStats?.active    ?? all.filter(o => ACTIVE_STATUSES.includes(o._displayStatus || o.order_status || '')).length,
+      cancelled: serverStats?.cancelled ?? all.filter(o => (o._displayStatus || o.order_status) === 'cancelled').length,
+      spent:     serverStats?.spent     ?? all
         .filter(o => (o._displayStatus || o.order_status) !== 'cancelled')
         .reduce((s, o) => s + (o.total_amount || 0), 0),
     }
-  }, [data, totalCount, serverStats, allOrders])
+  }, [data, totalCount, serverStats, extraOrders])
 
   return {
     orders:     allOrders.length > 0 ? allOrders : null,
@@ -191,6 +202,7 @@ export function useOrders(markExpired?: () => void) {
     totalPages,
     totalCount,
     loadMore,
+    loadingMore,
     hasMore: loadedPage < totalPages,
   }
 }
