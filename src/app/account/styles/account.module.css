@@ -248,3 +248,42 @@
 .modalFooter       { display: flex; gap: 10px; }
 .modalFooter .btnPrimary  { flex: 2; }
 .modalFooter .btnSecondary { flex: 1; }
+
+/* ── Forgot password link (PasswordSection) ─────────────────── */
+.forgotPwRow  { margin-top: 8px; }
+.forgotPwLink { background: none; border: none; padding: 0; color: #2d6a4f; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; transition: color .2s; }
+.forgotPwLink:hover:not(:disabled) { color: #1a3a1e; }
+.forgotPwLink:disabled { opacity: .5; cursor: not-allowed; }
+.forgotPwSent { font-size: 12px; color: #2e7d32; font-weight: 600; }
+
+/* ── Return "Other" free-text (OrdersSection) ───────────────── */
+.returnOtherWrap    { margin: 12px 0 4px; }
+.returnOtherTextarea { width: 100%; border: 1.5px solid #d0c9be; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 72px; outline: none; transition: border-color .2s; }
+.returnOtherTextarea:focus { border-color: #1a3a1e; }
+.returnOtherCount   { font-size: 11px; color: #bbb; text-align: right; margin-top: 4px; }
+
+/* ── Mobile nav updates ─────────────────────────────────────── */
+.mobTabList { display: flex; width: 100%; }
+
+/* Mobile sign-out button — sits just above the tab bar, hidden on desktop */
+.mobSignOut { display: none; }
+@media (max-width: 900px) {
+  .mobSignOut {
+    display: block;
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 101;
+    background: none;
+    border: 1px solid #e0d8ce;
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #a05050;
+    cursor: pointer;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .mobSignOut:hover { background: #fdf0f0; border-color: #c08080; }
+}

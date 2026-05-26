@@ -14,7 +14,7 @@ import {
   validatePassword, FormErrors,
 } from '@/lib/account/validation'
 import { getSavedAddresses, type SavedAddress } from '@/lib/account/utils'
-import { updateProfile, changePassword as apiChangePassword, ServiceError } from '@/lib/services/profileService'
+import { updateProfile, changePassword as apiChangePassword, sendForgotPasswordEmail, ServiceError } from '@/lib/services/profileService'
 import { useAddresses } from './useAddresses'
 import type { Profile } from './useAuth'
 
@@ -32,6 +32,7 @@ export function useProfile(
   const [msg,   setMsg]   = useState<Record<string, string>>({})
   const [busy,  setBusy]  = useState<Record<string, boolean>>({})
 
+  const [forgotPwSent, setForgotPwSent] = useState(false)
   const msgTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   useEffect(() => () => { msgTimers.current.forEach(t => clearTimeout(t)); msgTimers.current.clear() }, [])
 
@@ -155,9 +156,29 @@ export function useProfile(
     }
   }
 
+  async function sendForgotPassword() {
+    const email = profile?.email || ''
+    if (!email) {
+      toast('No email linked to this account — cannot send reset link', 'error')
+      return
+    }
+    setBusy(b => ({ ...b, forgotPw: true }))
+    try {
+      await sendForgotPasswordEmail(email)
+      setForgotPwSent(true)
+      toast('📧 Reset link sent to ' + email)
+    } catch {
+      toast('Failed to send reset link — please try again', 'error')
+    } finally {
+      setBusy(b => ({ ...b, forgotPw: false }))
+    }
+  }
+
   return {
     pf, setPf, pfErr, setPfErr, pw, setPw, msg, busy,
-    addresses,   // replaces showAddAddr / newAddr / newAddrErr / saveNewAddress / deleteAddress / deletingId
+    forgotPwSent, sendForgotPassword,
+    profileEmail: profile?.email || '',
+    addresses,
     initFromProfile, saveName, saveAddress, savePhone, changePassword,
   }
 }

@@ -144,3 +144,13 @@ export async function checkSession(): Promise<{ loggedIn: boolean }> {
   if (!parsed.success) return { loggedIn: false }
   return parsed.data
 }
+
+/** Send a password-reset email via the forgot_password auth action.
+ *  No retry — user explicitly triggered this action. */
+export async function sendForgotPasswordEmail(email: string): Promise<void> {
+  await apiFetch('/api/auth', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ action: 'forgot_password', email }),
+  })
+}

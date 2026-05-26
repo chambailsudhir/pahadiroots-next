@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
+import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth }       from './hooks/useAuth'
 import { useUIStore }    from '@/store/uiStore'
@@ -150,23 +151,49 @@ function AccountPageInner() {
         </div>
       </div>
 
-      {/* Mobile tabs */}
-      <div className={styles.mobTabs}>
-        {NAV_TABS.map(it => (
-          <button
-            key={it.key}
-            className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
-            aria-current={tab === it.key ? 'page' : undefined}
-            onClick={() => { navigateTo(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
+      {/* ── Mobile bottom nav ───────────────────────────────────
+           role="tablist" + role="tab" + aria-selected is the correct
+           ARIA pattern for a tab bar (aria-current="page" is for links
+           in a site navigation, not for switching content panels).
+           Logout is a destructive rare action — moved out of the tab bar
+           and into a small header button so it can't be triggered by
+           accident when swiping between tabs.                          */}
+      <nav aria-label="Account mobile navigation" className={styles.mobTabs}>
+        <div role="tablist" aria-label="Account sections" className={styles.mobTabList}>
+          {NAV_TABS.map(it => (
+            <button
+              key={it.key}
+              role="tab"
+              aria-selected={tab === it.key}
+              aria-label={it.label}
+              className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
+              onClick={() => { navigateTo(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
+            >
+              <span className={styles.mtIcon} aria-hidden="true">{it.icon}</span>
+              {it.label}
+            </button>
+          ))}
+          <Link
+            href="/wishlist"
+            aria-label="My Wishlist"
+            className={styles.mobTab}
           >
-            <span className={styles.mtIcon}>{it.icon}</span>
-            {it.label}
-          </button>
-        ))}
-        <button className={styles.mobTab} onClick={auth.logout}>
-          <span className={styles.mtIcon}>🚪</span>Logout
-        </button>
-      </div>
+            <span className={styles.mtIcon} aria-hidden="true">❤️</span>
+            Wishlist
+          </Link>
+        </div>
+      </nav>
+
+      {/* Mobile-only sign-out button — shown above the bottom tab bar.
+          Placed here (not in the tab bar) so it can't be triggered
+          accidentally while navigating between tabs.                   */}
+      <button
+        className={styles.mobSignOut}
+        onClick={auth.logout}
+        aria-label="Sign out of your account"
+      >
+        Sign out
+      </button>
 
       {/*
         Toast — always in the DOM so the aria-live region is registered before

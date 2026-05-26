@@ -150,7 +150,7 @@ export default function OrderCard({ order: o, canReturn, onReturnClick }: Props)
             <Link href={`/account/orders/${o.id}`} className={`${styles.actionBtn} ${styles.actionView}`}>
               View Details
             </Link>
-            <Link href={`/account/orders/${o.id}?print=1`} target="_blank" className={`${styles.actionBtn} ${styles.actionInvoice}`}>
+            <Link href={`/api/orders/${o.id}/invoice`} target="_blank" rel="noopener noreferrer" className={`${styles.actionBtn} ${styles.actionInvoice}`}>
               Invoice
             </Link>
             {canReturn(o) && (

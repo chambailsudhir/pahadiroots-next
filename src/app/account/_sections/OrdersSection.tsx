@@ -19,8 +19,9 @@ interface Props {
 
 export default function OrdersSection({ orders, showToast }: Props) {
   const [returnModal, setReturnModal] = useState<{ orderId: string; orderNum: string } | null>(null)
-  const [returnReason, setReturnReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [returnReason,    setReturnReason]    = useState('')
+  const [returnOtherText, setReturnOtherText] = useState('')
+  const [submitting,      setSubmitting]      = useState(false)
 
   // Focus management for keyboard-accessible modal
   const firstRadioRef  = useRef<HTMLInputElement>(null)
@@ -52,6 +53,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (!order) return
     triggerBtnRef.current = triggerBtn ?? null
     setReturnReason('')
+    setReturnOtherText('')
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum })
   }
 
@@ -59,6 +61,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (submitting) return
     setReturnModal(null)
     setReturnReason('')
+    setReturnOtherText('')
     // Restore focus to the button that opened the modal
     triggerBtnRef.current?.focus()
     triggerBtnRef.current = null
@@ -66,12 +69,17 @@ export default function OrdersSection({ orders, showToast }: Props) {
 
   async function submitReturn() {
     if (!returnModal || !returnReason) return
+    // If "Other" is selected, require the free-text explanation
+    if (returnReason === 'Other' && !returnOtherText.trim()) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/orders/${returnModal.orderId}/return`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ reason: returnReason }),
+        body:    JSON.stringify({
+          reason:       returnReason,
+          other_detail: returnReason === 'Other' ? returnOtherText.trim() : undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -80,6 +88,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
         showToast(data.message || '✅ Return request submitted!')
         setReturnModal(null)
         setReturnReason('')
+        setReturnOtherText('')
         orders.refresh()
       }
     } catch {
@@ -245,6 +254,28 @@ export default function OrdersSection({ orders, showToast }: Props) {
               ))}
             </div>
 
+            {/* Free-text explanation — required when "Other" is selected */}
+            {returnReason === 'Other' && (
+              <div className={styles.returnOtherWrap}>
+                <label htmlFor="return-other-text" className={styles.fLbl}>
+                  Please describe your reason *
+                </label>
+                <textarea
+                  id="return-other-text"
+                  className={styles.returnOtherTextarea}
+                  value={returnOtherText}
+                  onChange={e => setReturnOtherText(e.target.value)}
+                  placeholder="Briefly describe why you'd like to return this item…"
+                  maxLength={500}
+                  rows={3}
+                  autoFocus
+                />
+                <div className={styles.returnOtherCount}>
+                  {returnOtherText.length}/500
+                </div>
+              </div>
+            )}
+
             <div className={styles.modalFooter}>
               <button
                 onClick={closeReturnModal}
@@ -255,7 +286,11 @@ export default function OrdersSection({ orders, showToast }: Props) {
               </button>
               <button
                 onClick={submitReturn}
-                disabled={!returnReason || submitting}
+                disabled={
+                  !returnReason ||
+                  (returnReason === 'Other' && !returnOtherText.trim()) ||
+                  submitting
+                }
                 className={styles.btnPrimary}
               >
                 {submitting ? 'Submitting…' : 'Submit Return Request'}

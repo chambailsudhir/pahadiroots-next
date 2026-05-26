@@ -23,6 +23,25 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
                 <button type="button" className={styles.pwEye} aria-label={profile.pw.showCur ? 'Hide current password' : 'Show current password'} onClick={() => profile.setPw(p => ({ ...p, showCur: !p.showCur }))}>{profile.pw.showCur ? '🙈' : '👁'}</button>
               </div>
               {profile.pfErr.curp && <div className={styles.errTxt}>{profile.pfErr.curp}</div>}
+              {/* Escape hatch for users who can't remember current password */}
+              {profile.profileEmail ? (
+                <div className={styles.forgotPwRow}>
+                  {profile.forgotPwSent ? (
+                    <span className={styles.forgotPwSent}>
+                      ✅ Reset link sent to {profile.profileEmail}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.forgotPwLink}
+                      onClick={profile.sendForgotPassword}
+                      disabled={!!profile.busy.forgotPw}
+                    >
+                      {profile.busy.forgotPw ? 'Sending…' : 'Forgot current password? Send reset link →'}
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className={styles.formFull}>
               <div className={styles.fLbl}>New Password *</div>

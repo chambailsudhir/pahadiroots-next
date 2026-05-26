@@ -34,16 +34,22 @@ export async function POST(
   if (!isValidId) return fail(400, 'Invalid order ID')
 
   // Parse + validate body
-  let reason = ''
+  let reason      = ''
+  let otherDetail = ''
   try {
-    const body = await req.json()
-    reason = (body?.reason ?? '').trim()
+    const body  = await req.json()
+    reason      = (body?.reason       ?? '').trim()
+    otherDetail = (body?.other_detail ?? '').trim()
   } catch {
     return fail(400, 'Invalid request body')
   }
   if (!reason) return fail(400, 'A return reason is required')
   if (!RETURN_REASONS.includes(reason as typeof RETURN_REASONS[number])) {
     return fail(400, `Invalid reason. Must be one of: ${RETURN_REASONS.join(', ')}`)
+  }
+  // "Other" requires a free-text explanation so admin staff have context
+  if (reason === 'Other' && !otherDetail) {
+    return fail(400, 'Please provide a description when selecting "Other"')
   }
 
   // Auth
@@ -98,13 +104,19 @@ export async function POST(
       return fail(409, 'A return request is already in progress for this order')
     }
 
+    // Store enriched reason: "Other: <user explanation>" so admin staff
+    // see the actual context, not just the string "Other".
+    const storedReason = reason === 'Other' && otherDetail
+      ? `Other: ${otherDetail}`
+      : reason
+
     // Update order status
     await sbAdmin(
       'PATCH',
       `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}`,
       {
         order_status:        'return_requested',
-        return_reason:       reason,
+        return_reason:       storedReason,
         return_requested_at: new Date().toISOString(),
       },
     )
