@@ -4,16 +4,16 @@ import { getInitials, formatCurrency } from '@/lib/account/utils'
 import { type Profile, type AuthUser } from '../hooks/useAuth'
 import styles from '../styles/account.module.css'
 
-type Tab = 'orders' | 'addresses' | 'profile' | 'password'
+export type Tab = 'orders' | 'addresses' | 'profile' | 'password' | 'notifications' | 'privacy'
 
 interface Props {
-  tab:          Tab
-  setTab:       (t: Tab) => void
-  profile:      Profile | null
-  authUser:     AuthUser | null
-  stats:        { total: number; delivered: number; active: number; spent: number } | null
-  onLogout:     () => void
-  onOrdersClick:() => void
+  tab:           Tab
+  setTab:        (t: Tab) => void
+  profile:       Profile | null
+  authUser:      AuthUser | null
+  stats:         { total: number; delivered: number; active: number; spent: number } | null
+  onLogout:      () => void
+  onOrdersClick: () => void
 }
 
 export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogout, onOrdersClick }: Props) {
@@ -28,15 +28,15 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
     : null
 
   const NAV: { key: Tab; icon: string; label: string; badge?: number | null }[] = [
-    { key: 'orders',    icon: '📦', label: 'My Orders',       badge: stats?.active || null },
-    { key: 'addresses', icon: '📍', label: 'Addresses' },
-    { key: 'profile',   icon: '👤', label: 'Profile' },
-    { key: 'password',  icon: '🔒', label: 'Change Password' },
+    { key: 'orders',        icon: '📦', label: 'My Orders',       badge: stats?.active || null },
+    { key: 'addresses',     icon: '📍', label: 'Addresses' },
+    { key: 'profile',       icon: '👤', label: 'Profile' },
+    { key: 'password',      icon: '🔒', label: 'Change Password' },
+    { key: 'notifications', icon: '🔔', label: 'Notifications' },
+    { key: 'privacy',       icon: '🛡️', label: 'Privacy & Data' },
   ]
 
   return (
-    // aria-label distinguishes this landmark from any other <nav>/<aside> on the
-    // page (e.g. the site-wide header navigation).
     <aside className={styles.sidebar} aria-label="Account navigation">
       <div className={styles.sbProfile}>
         <div className={styles.sbAvatarRing}>
@@ -71,7 +71,11 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
         {NAV.map(it => (
           <button
             key={it.key}
-            className={`${styles.sbItem}${tab === it.key ? ' ' + styles.sbItemActive : ''}`}
+            className={[
+              styles.sbItem,
+              tab === it.key ? styles.sbItemActive : '',
+              it.key === 'privacy' ? styles.sbPrivacy : '',
+            ].filter(Boolean).join(' ')}
             onClick={() => { setTab(it.key); if (it.key === 'orders') onOrdersClick() }}
             aria-current={tab === it.key ? 'page' : undefined}
           >

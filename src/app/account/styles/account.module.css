@@ -287,3 +287,70 @@
   }
   .mobSignOut:hover { background: #fdf0f0; border-color: #c08080; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Sidebar: Privacy / Danger item
+   ───────────────────────────────────────────────────────────── */
+.sbPrivacy { color: #a05050; margin-top: 2px; }
+.sbPrivacy:hover { background: rgba(192,57,43,.05); color: #c0392b; }
+
+/* ─────────────────────────────────────────────────────────────
+   Notifications Section
+   ───────────────────────────────────────────────────────────── */
+
+.notifCardDesc { font-size: 13px; color: #888; margin: -8px 0 16px; line-height: 1.6; }
+
+.notifRow        { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid #f5f0e8; }
+.notifRowLast    { border-bottom: none; padding-bottom: 0; }
+.notifRowIcon    { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
+.notifRowText    { flex: 1; min-width: 0; }
+.notifRowLabel   { display: block; font-size: 14px; font-weight: 600; color: #1a3a1e; cursor: pointer; }
+.notifRowSub     { display: block; font-size: 12px; color: #aaa; margin-top: 2px; }
+
+.notifToggle     { position: relative; width: 44px; height: 26px; border-radius: 13px; background: #d9d3cc; border: none; cursor: pointer; transition: background .25s; flex-shrink: 0; outline-offset: 3px; }
+.notifToggle:focus-visible { outline: 2px solid #1a3a1e; }
+.notifToggle:disabled { opacity: .55; cursor: not-allowed; }
+.notifToggleOn   { background: #2d6a4f; }
+
+.notifToggleThumb { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.notifToggleOn .notifToggleThumb { transform: translateX(18px); }
+
+.notifToggleSpin { position: absolute; inset: 3px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; animation: accSpin .7s linear infinite; }
+
+.notifLegal { font-size: 11.5px; color: #b0a88a; line-height: 1.7; padding: 10px 4px 0; }
+
+.notifSkeleton { display: flex; flex-direction: column; gap: 0; }
+.notifSkRow    { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid #f5f0e8; }
+.notifSkRow:last-child { border-bottom: none; }
+.notifSkText   { flex: 1; height: 14px; border-radius: 6px; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; animation: skShine 1.5s infinite; }
+.notifSkToggle { width: 44px; height: 26px; border-radius: 13px; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; animation: skShine 1.5s infinite; }
+
+/* ─────────────────────────────────────────────────────────────
+   Danger Zone / Privacy Section
+   ───────────────────────────────────────────────────────────── */
+
+.dangerInfoText { font-size: 14px; color: #555; line-height: 1.7; margin-bottom: 12px; }
+.dangerList     { margin: 0 0 12px 18px; padding: 0; }
+.dangerList li  { font-size: 13px; color: #666; line-height: 1.8; }
+.dangerInfoNote { font-size: 12px; color: #aaa; margin-top: 8px; line-height: 1.6; }
+
+.dangerCard         { border-color: rgba(192,57,43,.2); background: #fffafa; }
+.dangerSectionTitle { color: #c0392b; }
+.dangerRow          { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.dangerRowTitle     { font-size: 14px; font-weight: 700; color: #1a3a1e; }
+.dangerRowSub       { font-size: 12px; color: #aaa; margin-top: 3px; }
+
+.btnDanger { padding: 10px 20px; border-radius: 10px; border: 1.5px solid #c0392b; background: #c0392b; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .2s, border-color .2s; white-space: nowrap; }
+.btnDanger:hover:not(:disabled) { background: #a93226; border-color: #a93226; }
+.btnDanger:disabled { opacity: .5; cursor: not-allowed; }
+
+.btnDangerOutline { padding: 10px 20px; border-radius: 10px; border: 1.5px solid #c0392b; background: transparent; color: #c0392b; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .2s; flex: 2; }
+.btnDangerOutline:hover { background: #fdecea; }
+
+.dangerModalList    { margin: 0 0 16px 18px; padding: 0; }
+.dangerModalList li { font-size: 13px; color: #666; line-height: 1.8; }
+
+.dangerConfirmWrap  { margin-bottom: 20px; }
+.dangerConfirmInput { width: 100%; padding: 12px 14px; border: 2px solid #e0d0d0; border-radius: 10px; font-size: 14px; font-weight: 700; letter-spacing: 1px; outline: none; transition: border-color .2s; box-sizing: border-box; }
+.dangerConfirmInput:focus { border-color: #c0392b; }
+.dangerConfirmInput::placeholder { letter-spacing: 0; font-weight: 400; }

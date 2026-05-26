@@ -5,7 +5,7 @@
 //  ✅ Auth state machine (guest/loading/authenticated/expired/failed)
 //  ✅ Session expired banner
 //  ✅ All logic delegated to hooks + sections
-//  ✅ Tab state URL-synced (?tab=orders|addresses|profile|password)
+//  ✅ Tab state URL-synced (?tab=orders|addresses|profile|password|notifications|privacy)
 //     Suspense wrapper required for useSearchParams in App Router
 // ─────────────────────────────────────────────────────────────
 
@@ -18,18 +18,19 @@ import { useOrders }     from './hooks/useOrders'
 import { useProfile }    from './hooks/useProfile'
 import { useToast }      from './hooks/useToast'
 import Sidebar           from './_components/Sidebar'
+import type { Tab }      from './_components/Sidebar'
 import OrdersSection     from './_sections/OrdersSection'
 import AddressSection    from './_sections/AddressSection'
 import ProfileSection    from './_sections/ProfileSection'
 import PasswordSection   from './_sections/PasswordSection'
+import NotificationsSection from './_sections/NotificationsSection'
+import DangerZoneSection from './_sections/DangerZoneSection'
 import { getSavedAddresses } from '@/lib/account/utils'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from './styles/account.module.css'
 
-type Tab = 'orders' | 'addresses' | 'profile' | 'password'
-
 // All accepted tab values — used to validate the URL param on mount.
-const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password']
+const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifications', 'privacy']
 
 // ─── Inner component — uses useSearchParams (needs Suspense parent) ───────────
 function AccountPageInner() {
@@ -57,7 +58,7 @@ function AccountPageInner() {
 
   const savedAddrs = useMemo(
     () => getSavedAddresses(auth.profile),
-    [auth.profile]  // depend on the whole profile object — safe and correct
+    [auth.profile]
   )
 
   const profileInitialised = useRef(false)
@@ -66,10 +67,6 @@ function AccountPageInner() {
   useEffect(() => { auth.init() }, [])
 
   // Populate forms once — only on the first time auth.profile arrives.
-  // Previously this effect watched auth.profile, which gets a new object reference
-  // on every optimistic update (saveName/saveAddress call updateLocalProfile).
-  // That caused the effect to re-fire mid-edit, wiping form fields back to server values.
-  // The ref guard ensures initFromProfile runs exactly once per page mount.
   useEffect(() => {
     if (auth.profile && !profileInitialised.current) {
       profile.initFromProfile(auth.profile)
@@ -114,12 +111,16 @@ function AccountPageInner() {
     </div>
   )
 
-  const NAV_TABS = [
-    { key: 'orders'    as const, icon: '📦', label: 'Orders'   },
-    { key: 'addresses' as const, icon: '📍', label: 'Addresses'},
-    { key: 'profile'   as const, icon: '👤', label: 'Profile'  },
-    { key: 'password'  as const, icon: '🔒', label: 'Password' },
+  // Mobile bottom nav tabs (subset — privacy/danger kept in sidebar only)
+  const MOB_TABS: { key: Tab; icon: string; label: string }[] = [
+    { key: 'orders',        icon: '📦', label: 'Orders'        },
+    { key: 'addresses',     icon: '📍', label: 'Addresses'     },
+    { key: 'profile',       icon: '👤', label: 'Profile'       },
+    { key: 'notifications', icon: '🔔', label: 'Alerts'        },
+    { key: 'password',      icon: '🔒', label: 'Password'      },
   ]
+
+  const userEmail = auth.authUser?.email || auth.profile?.email || ''
 
   return (
     <div className={styles.accWrap}>
@@ -144,23 +145,26 @@ function AccountPageInner() {
         />
 
         <div className={styles.mainPanel}>
-          {tab === 'orders'    && <OrdersSection   orders={orders} showToast={showToast} />}
-          {tab === 'addresses' && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
-          {tab === 'profile'   && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
-          {tab === 'password'  && <PasswordSection profile={profile} />}
+          {tab === 'orders'        && <OrdersSection   orders={orders} showToast={showToast} />}
+          {tab === 'addresses'     && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
+          {tab === 'profile'       && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
+          {tab === 'password'      && <PasswordSection profile={profile} />}
+          {tab === 'notifications' && <NotificationsSection showToast={showToast} markExpired={auth.markExpired} />}
+          {tab === 'privacy'       && (
+            <DangerZoneSection
+              userEmail={String(userEmail)}
+              onLogout={auth.logout}
+              showToast={showToast}
+              markExpired={auth.markExpired}
+            />
+          )}
         </div>
       </div>
 
-      {/* ── Mobile bottom nav ───────────────────────────────────
-           role="tablist" + role="tab" + aria-selected is the correct
-           ARIA pattern for a tab bar (aria-current="page" is for links
-           in a site navigation, not for switching content panels).
-           Logout is a destructive rare action — moved out of the tab bar
-           and into a small header button so it can't be triggered by
-           accident when swiping between tabs.                          */}
+      {/* ── Mobile bottom nav ─────────────────────────────────── */}
       <nav aria-label="Account mobile navigation" className={styles.mobTabs}>
         <div role="tablist" aria-label="Account sections" className={styles.mobTabList}>
-          {NAV_TABS.map(it => (
+          {MOB_TABS.map(it => (
             <button
               key={it.key}
               role="tab"
@@ -173,20 +177,14 @@ function AccountPageInner() {
               {it.label}
             </button>
           ))}
-          <Link
-            href="/wishlist"
-            aria-label="My Wishlist"
-            className={styles.mobTab}
-          >
+          <Link href="/wishlist" aria-label="My Wishlist" className={styles.mobTab}>
             <span className={styles.mtIcon} aria-hidden="true">❤️</span>
             Wishlist
           </Link>
         </div>
       </nav>
 
-      {/* Mobile-only sign-out button — shown above the bottom tab bar.
-          Placed here (not in the tab bar) so it can't be triggered
-          accidentally while navigating between tabs.                   */}
+      {/* Mobile-only sign-out button */}
       <button
         className={styles.mobSignOut}
         onClick={auth.logout}
@@ -195,15 +193,7 @@ function AccountPageInner() {
         Sign out
       </button>
 
-      {/*
-        Toast — always in the DOM so the aria-live region is registered before
-        any message fires. Screen readers announce changes to live regions only
-        when the element is already present; mounting it conditionally misses
-        the first announcement.  Uses a CSS class for the visually-hidden state
-        (not inline style) so the style attribute does not mutate simultaneously
-        with textContent — that simultaneous mutation caused some screen readers
-        to silently drop the first toast announcement.
-      */}
+      {/* Toast */}
       <div
         role="status"
         aria-live="polite"
@@ -231,9 +221,6 @@ function AccountPageFallback() {
 }
 
 // ─── Public export — wraps inner component in Suspense ────────────────────────
-// Next.js App Router requires any Client Component that calls useSearchParams()
-// to be wrapped in <Suspense>. The fallback matches the existing loading state
-// so there is no visual flash.
 export default function AccountPage() {
   return (
     <Suspense fallback={<AccountPageFallback />}>
