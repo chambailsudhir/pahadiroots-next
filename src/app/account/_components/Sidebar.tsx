@@ -17,13 +17,14 @@ interface Props {
 }
 
 export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogout, onOrdersClick }: Props) {
-  const firstName = profile?.first_name || authUser?.user_metadata?.full_name?.split(' ')[0] || 'User'
+  const userMeta  = (authUser?.user_metadata ?? {}) as Record<string, unknown>
+  const firstName = profile?.first_name || (typeof userMeta.full_name === 'string' ? userMeta.full_name.split(' ')[0] : '') || 'User'
   const fullName  = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || firstName
   const email     = authUser?.email || profile?.email || ''
   const phone     = (profile?.phone || authUser?.phone || '').replace(/^\+91/, '')
   const initials  = getInitials(fullName)
   const since     = profile?.created_at
-    ? new Date(profile.created_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    ? new Date(profile.created_at as string).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : null
 
   const NAV: { key: Tab; icon: string; label: string; badge?: number | null }[] = [
