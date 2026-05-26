@@ -2,7 +2,7 @@
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import type { Profile }      from '../hooks/useAuth'
-import type { SavedAddress } from '../hooks/useProfile'
+import type { SavedAddress } from '@/lib/account/utils'
 import type { useProfile }   from '../hooks/useProfile'
 import styles from '../styles/account.module.css'
 

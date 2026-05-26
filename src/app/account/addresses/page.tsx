@@ -11,7 +11,7 @@ import { INDIA_STATES, ADDRESS_LABELS, CHECKOUT_PROFILE_CACHE_KEY } from '@/lib/
 import { updateProfile } from '@/lib/services/profileService'
 import { useAddresses } from '@/app/account/hooks/useAddresses'
 import { safeLocalStorage } from '@/lib/account/utils'
-import type { SavedAddress } from '@/app/account/hooks/useProfile'
+import type { SavedAddress } from '@/lib/account/utils'
 
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])

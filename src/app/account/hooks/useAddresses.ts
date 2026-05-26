@@ -21,7 +21,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { validateNewAddress } from '@/lib/account/validation'
 import type { FormErrors }    from '@/lib/account/validation'
-import type { SavedAddress }  from './useProfile'
+import type { SavedAddress } from '@/lib/account/utils'
 
 export const EMPTY_ADDRESS_FORM = {
   label: '', name: '', addr: '', city: '', state: '', pin: '',

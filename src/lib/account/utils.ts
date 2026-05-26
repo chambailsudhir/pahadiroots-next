@@ -4,6 +4,32 @@
 
 import { COURIER_TRACKING_MAP } from './constants'
 
+// ── SavedAddress shape ────────────────────────────────────────
+// Single source of truth for the address object that flows between
+// the API (profile/route.ts), hooks (useAddresses, useProfile),
+// and UI (AddressSection, SavedAddressSelector).
+// Keep this in sync with the `saved_addresses` table columns.
+export interface SavedAddress {
+  id:    string   // crypto.randomUUID() generated on the client
+  label: string   // 'Home' | 'Office' | … (from ADDRESS_LABELS)
+  name:  string   // contact name (optional in form, defaults to '')
+  addr:  string   // street / flat / colony
+  city:  string
+  state: string
+  pin:   string   // 6-digit pincode (may be empty string if not set)
+}
+
+// Type-guard: returns true only if `raw` has the minimum required
+// shape (id + addr). Other fields default to '' below rather than
+// filtering the entire address out — a missing label or city is
+// recoverable; a missing id or addr is not.
+function isAddressLike(raw: unknown): raw is Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const a = raw as Record<string, unknown>
+  return typeof a.id === 'string' && a.id.length > 0 &&
+         typeof a.addr === 'string'
+}
+
 // ── Safe localStorage wrapper ────────────────────────────────────────────────
 // Guards against SSR (window undefined), private-browsing quota errors, and
 // any other storage exceptions — all of which are non-fatal for cache keys.
@@ -22,8 +48,32 @@ export const safeLocalStorage = {
   },
 }
 
-export function getSavedAddresses(profile: any): any[] {
-  try { return JSON.parse(profile?.saved_addresses || '[]') } catch { return [] }
+// Parses the `saved_addresses` JSON string from the customer profile.
+// - Returns SavedAddress[] (never `any`, never throws to caller).
+// - Filters out entries that don't have id + addr (the two required fields).
+// - Coerces other fields to strings so missing keys never cause runtime errors.
+export function getSavedAddresses(
+  profile: { saved_addresses?: string | null } | null | undefined,
+): SavedAddress[] {
+  if (!profile?.saved_addresses) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(profile.saved_addresses)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .filter(isAddressLike)
+    .map((raw): SavedAddress => ({
+      id:    String(raw.id),
+      label: typeof raw.label === 'string' ? raw.label : '',
+      name:  typeof raw.name  === 'string' ? raw.name  : '',
+      addr:  typeof raw.addr  === 'string' ? raw.addr  : '',
+      city:  typeof raw.city  === 'string' ? raw.city  : '',
+      state: typeof raw.state === 'string' ? raw.state : '',
+      pin:   typeof raw.pin   === 'string' ? raw.pin   : '',
+    }))
 }
 
 export function formatPhone(raw: string): string {

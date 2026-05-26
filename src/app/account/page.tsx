@@ -22,7 +22,7 @@ import AddressSection    from './_sections/AddressSection'
 import ProfileSection    from './_sections/ProfileSection'
 import PasswordSection   from './_sections/PasswordSection'
 import { getSavedAddresses } from '@/lib/account/utils'
-import type { SavedAddress } from './hooks/useProfile'
+import type { SavedAddress } from '@/lib/account/utils'
 import styles from './styles/account.module.css'
 
 type Tab = 'orders' | 'addresses' | 'profile' | 'password'
@@ -55,7 +55,7 @@ function AccountPageInner() {
   const profile            = useProfile(auth.profile, auth.updateLocalProfile, showToast, auth.markExpired)
 
   const savedAddrs = useMemo(
-    () => getSavedAddresses(auth.profile) as SavedAddress[],
+    () => getSavedAddresses(auth.profile),
     [auth.profile]  // depend on the whole profile object — safe and correct
   )
 

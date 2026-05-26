@@ -13,20 +13,10 @@ import {
   validateProfileName, validateAddress, validatePhone,
   validatePassword, FormErrors,
 } from '@/lib/account/validation'
-import { getSavedAddresses } from '@/lib/account/utils'
+import { getSavedAddresses, type SavedAddress } from '@/lib/account/utils'
 import { updateProfile, changePassword as apiChangePassword, ServiceError } from '@/lib/services/profileService'
 import { useAddresses } from './useAddresses'
 import type { Profile } from './useAuth'
-
-export interface SavedAddress {
-  id:    string
-  label: string
-  name:  string
-  addr:  string
-  city:  string
-  state: string
-  pin:   string
-}
 
 // markExpired is optional so the hook stays usable in isolation (tests, Storybook).
 // page.tsx passes auth.markExpired so a mid-session 401 surfaces the expired banner.
