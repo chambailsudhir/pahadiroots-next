@@ -64,3 +64,16 @@ export const newsletterSchema = z.object({
   email: z.string().email(),
   name:  z.string().trim().max(100).optional(),
 })
+
+// ─── Subscribe Schema (alias used by cart/route.ts and other routes) ──────────
+export const subscribeSchema = z.object({
+  email: z.string().email().toLowerCase().trim(),
+  name:  z.string().trim().max(100).optional(),
+})
+
+// ─── Search Schema ─────────────────────────────────────────────────────────────
+export const searchSchema = z.object({
+  q:      z.string().trim().min(1).max(100),
+  limit:  z.number().int().min(1).max(48).optional().default(24),
+  offset: z.number().int().min(0).optional().default(0),
+})
