@@ -3,7 +3,7 @@
 // AccountPage — orchestrator with loyalty tab added
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
+import { useState, useEffect, useRef, useMemo, Suspense, type JSX } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth }       from './hooks/useAuth'
@@ -93,10 +93,12 @@ function AccountPageInner() {
   if (auth.authState === 'failed') return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
-        <div className={styles.lwIcon}>⚠️</div>
+        <div className={styles.lwIcon}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
         <div className={styles.lwTitle}>Something went wrong</div>
         <p className={styles.lwSub}>Could not connect. Please check your connection and try again.</p>
-        <button className={styles.btnPrimary} onClick={() => window.location.reload()}>Try Again</button>
+        <button className={styles.btnPrimary} onClick={auth.retry}>Try Again</button>
       </div>
     </div>
   )
@@ -104,7 +106,9 @@ function AccountPageInner() {
   if (!auth.loggedIn) return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
-        <div className={styles.lwIcon}>🔐</div>
+        <div className={styles.lwIcon}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
         <div className={styles.lwTitle}>Welcome Back</div>
         <p className={styles.lwSub}>Please login to view your orders and manage your account.</p>
         <button className={styles.btnPrimary} onClick={openAuth}>Sign In to Continue</button>
@@ -112,14 +116,28 @@ function AccountPageInner() {
     </div>
   )
 
-  const MOB_TABS: { key: Tab; icon: string; label: string }[] = [
-    { key: 'orders',        icon: '📦', label: 'Orders'    },
-    { key: 'loyalty',       icon: '🪙', label: 'Coins'     },
-    { key: 'addresses',     icon: '📍', label: 'Addresses' },
-    { key: 'profile',       icon: '👤', label: 'Profile'   },
-    { key: 'notifications', icon: '🔔', label: 'Alerts'    },
-    { key: 'password',      icon: '🔒', label: 'Password'  },
-    { key: 'privacy',       icon: '🛡️', label: 'Privacy'   },
+  // SVG icons for mobile nav — consistent rendering across all OS/devices.
+  // Emoji rendering varies wildly between Android 8 vs 13, and is blocked
+  // on some corporate devices via font substitution.
+  const NAV_ICONS: Record<Tab | 'wishlist', JSX.Element> = {
+    orders:        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
+    loyalty:       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+    addresses:     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+    profile:       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+    notifications: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
+    password:      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
+    privacy:       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+    wishlist:      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>,
+  }
+
+  const MOB_TABS: { key: Tab; label: string }[] = [
+    { key: 'orders',        label: 'Orders'    },
+    { key: 'loyalty',       label: 'Coins'     },
+    { key: 'addresses',     label: 'Addresses' },
+    { key: 'profile',       label: 'Profile'   },
+    { key: 'notifications', label: 'Alerts'    },
+    { key: 'password',      label: 'Password'  },
+    { key: 'privacy',       label: 'Privacy'   },
   ]
 
   const userEmail = auth.authUser?.email || auth.profile?.email || ''
@@ -175,12 +193,12 @@ function AccountPageInner() {
               className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
               onClick={() => { navigateTo(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
             >
-              <span className={styles.mtIcon} aria-hidden="true">{it.icon}</span>
+              <span className={styles.mtIcon}>{NAV_ICONS[it.key]}</span>
               {it.label}
             </button>
           ))}
           <Link href="/wishlist" aria-label="My Wishlist" className={styles.mobTab}>
-            <span className={styles.mtIcon} aria-hidden="true">❤️</span>
+            <span className={styles.mtIcon}>{NAV_ICONS.wishlist}</span>
             Wishlist
           </Link>
         </div>

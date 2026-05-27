@@ -79,14 +79,25 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                     </button>
                   </>
                 ) : (
-                  <button
-                    className={`${styles.addrBtn} ${styles.addrDel}`}
-                    onClick={() => addresses.setConfirmDeleteId(a.id)}
-                    aria-label={`Remove ${a.label || 'saved'} address`}
-                    disabled={addresses.deletingId === a.id}
-                  >
-                    🗑 Remove
-                  </button>
+                  <>
+                    <button
+                      className={styles.addrBtn}
+                      onClick={() => addresses.startEdit(a)}
+                      aria-label={`Edit ${a.label || 'saved'} address`}
+                      disabled={!!addresses.deletingId}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      className={`${styles.addrBtn} ${styles.addrDel}`}
+                      onClick={() => addresses.setConfirmDeleteId(a.id)}
+                      aria-label={`Remove ${a.label || 'saved'} address`}
+                      disabled={addresses.deletingId === a.id}
+                      style={{ marginLeft: '6px' }}
+                    >
+                      🗑 Remove
+                    </button>
+                  </>
                 )}
               </div>
             </div>

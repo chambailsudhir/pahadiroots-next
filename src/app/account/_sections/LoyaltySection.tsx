@@ -4,7 +4,7 @@
 //  Shows: balance card, earn rules, transaction history, referral
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/account.module.css'
 
 interface Transaction {
@@ -45,6 +45,8 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   const [txnLoad, setTxnLoad] = useState(false)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [txnErr,  setTxnErr]  = useState<string | null>(null)
+  const [txnPage,  setTxnPage]  = useState(1)
+  const [hasMore,  setHasMore]  = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -73,15 +75,19 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     return () => { mounted = false }
   }, [])
 
-  async function loadHistory() {
+  async function loadHistory(page = 1) {
     if (txnLoad) return
     setTxnLoad(true)
     setTxnErr(null)
     try {
-      const res  = await fetch('/api/v1/loyalty/history?page=1&limit=20')
+      const res  = await fetch(`/api/v1/loyalty/history?page=${page}&limit=20`)
       const json = await res.json()
       if (res.ok) {
-        setTxns(json.transactions ?? [])
+        const fetched: Transaction[] = json.transactions ?? []
+        setTxns(prev => page === 1 ? fetched : [...prev, ...fetched])
+        setTxnPage(page)
+        // If a full page came back, there might be more
+        setHasMore(fetched.length === 20)
       } else {
         const msg = json?.error || 'Could not load transaction history.'
         setTxnErr(msg)
@@ -96,12 +102,30 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     }
   }
 
+  const [copyFallback, setCopyFallback] = useState(false)
+  const fallbackInputRef = useRef<HTMLInputElement>(null)
+
   function copyReferral() {
     if (!data?.referral_code) return
-    navigator.clipboard.writeText(`https://pahadiroots.com?ref=${data.referral_code}`).then(() => {
+    const url = `https://pahadiroots.com?ref=${data.referral_code}`
+
+    // navigator.clipboard is only available in secure contexts (HTTPS) and
+    // may throw on older Android WebViews. Fall back to a visible read-only
+    // input the user can copy manually.
+    if (!navigator.clipboard) {
+      setCopyFallback(true)
+      requestAnimationFrame(() => fallbackInputRef.current?.select())
+      return
+    }
+
+    navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
       showToast?.('Referral link copied!', 'success')
       setTimeout(() => setCopied(false), 2500)
+    }).catch(() => {
+      // Clipboard write failed (e.g. permissions denied) — show manual input
+      setCopyFallback(true)
+      requestAnimationFrame(() => fallbackInputRef.current?.select())
     })
   }
 
@@ -178,6 +202,28 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
               {copied ? '✓ Copied!' : 'Copy Link'}
             </button>
           </div>
+          {/* Fallback for browsers/contexts where clipboard API is unavailable */}
+          {copyFallback && (
+            <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                ref={fallbackInputRef}
+                type="text"
+                readOnly
+                value={`https://pahadiroots.com?ref=${data.referral_code}`}
+                style={{ flex: 1, fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d0d0d0', background: '#f9f9f9' }}
+                onFocus={e => e.target.select()}
+                aria-label="Referral link — select and copy manually"
+              />
+              <button
+                type="button"
+                className={styles.lyRefCopy}
+                onClick={() => { setCopyFallback(false) }}
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -186,7 +232,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         <div className={styles.lyHistHeader}>
           <strong className={styles.lyHistTitle}>Transaction History</strong>
           {txns.length === 0 && !txnLoad && (
-            <button className={styles.lyHistLoad} onClick={loadHistory} type="button">
+            <button className={styles.lyHistLoad} onClick={() => loadHistory(1)} type="button">
               Load History
             </button>
           )}
@@ -197,37 +243,51 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         {txnErr && !txnLoad && (
           <p className={styles.lyEmpty} style={{ color: '#c0392b' }}>
             {txnErr}{' '}
-            <button type="button" className={styles.lyHistLoad} onClick={loadHistory}>
+            <button type="button" className={styles.lyHistLoad} onClick={() => loadHistory(txnPage)}>
               Retry
             </button>
           </p>
         )}
 
         {txns.length > 0 && (
-          <div className={styles.lyTxnList}>
-            {txns.map(t => {
-              const meta = TYPE_META[t.type] ?? TYPE_META.adjustment
-              const isPositive = t.points > 0
-              const date = new Date(t.created_at).toLocaleDateString('en-IN', {
-                day: 'numeric', month: 'short', year: 'numeric',
-              })
-              return (
-                <div key={t.id} className={styles.lyTxnRow}>
-                  <span className={styles.lyTxnIcon}>{meta.icon}</span>
-                  <div className={styles.lyTxnInfo}>
-                    <div className={styles.lyTxnNote}>{t.note || meta.label}</div>
-                    <div className={styles.lyTxnDate}>{date} · Balance: {t.balance_after}</div>
+          <>
+            <div className={styles.lyTxnList}>
+              {txns.map(t => {
+                const meta = TYPE_META[t.type] ?? TYPE_META.adjustment
+                const isPositive = t.points > 0
+                const date = new Date(t.created_at).toLocaleDateString('en-IN', {
+                  day: 'numeric', month: 'short', year: 'numeric',
+                })
+                return (
+                  <div key={t.id} className={styles.lyTxnRow}>
+                    <span className={styles.lyTxnIcon}>{meta.icon}</span>
+                    <div className={styles.lyTxnInfo}>
+                      <div className={styles.lyTxnNote}>{t.note || meta.label}</div>
+                      <div className={styles.lyTxnDate}>{date} · Balance: {t.balance_after}</div>
+                    </div>
+                    <div className={styles.lyTxnPts} style={{ color: meta.color }}>
+                      {isPositive ? '+' : ''}{t.points}
+                    </div>
                   </div>
-                  <div className={styles.lyTxnPts} style={{ color: meta.color }}>
-                    {isPositive ? '+' : ''}{t.points}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+            {/* Load more — mirrors the pattern used in OrdersSection */}
+            {hasMore && !txnLoad && (
+              <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  className={styles.lyHistLoad}
+                  onClick={() => loadHistory(txnPage + 1)}
+                >
+                  Load more
+                </button>
+              </div>
+            )}
+          </>
         )}
 
-        {txns.length === 0 && !txnLoad && (
+        {txns.length === 0 && !txnLoad && !txnErr && (
           <p className={styles.lyEmpty}>No transactions yet — start earning coins on your next order!</p>
         )}
       </div>

@@ -85,6 +85,13 @@ export function useAuth() {
     }
   }, [])
 
+  // Soft retry: resets the init gate so init() can re-run without a full
+  // page reload. Used by the "Try Again" button in the failed state.
+  const retry = useCallback(() => {
+    initDone.current = false
+    init()
+  }, [init])
+
   async function logout() {
     try {
       await Promise.allSettled([
@@ -120,7 +127,7 @@ export function useAuth() {
   return {
     authState, loaded, loggedIn, expired,
     profile, authUser,
-    init, logout, markExpired,
+    init, retry, logout, markExpired,
     updateLocalProfile,
   }
 }
