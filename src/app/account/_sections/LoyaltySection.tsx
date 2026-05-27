@@ -78,7 +78,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     setTxnLoad(true)
     setTxnErr(null)
     try {
-      const res  = await fetch('/api/v1/loyalty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'history' }) })
+      const res  = await fetch('/api/v1/loyalty/history?page=1&limit=20')
       const json = await res.json()
       if (res.ok) {
         setTxns(json.transactions ?? [])

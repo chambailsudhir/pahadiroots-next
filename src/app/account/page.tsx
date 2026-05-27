@@ -52,13 +52,30 @@ function AccountPageInner() {
   )
 
   const profileInitialised = useRef(false)
+  // Track which version of the profile we last initialised from.
+  // If the server-side fields change mid-session (e.g. pushed update from
+  // another tab, or a failed optimistic save partially changed the store)
+  // we re-init the form so the user always sees current data.
+  const profileSig = useRef<string>('')
+
+  function getProfileSig(p: NonNullable<typeof auth.profile>): string {
+    return [
+      p.first_name, p.last_name,
+      p.address_line1, p.city, p.state, p.postal_code,
+      p.phone,
+    ].join('\x00')
+  }
 
   useEffect(() => { auth.init() }, [])
 
   useEffect(() => {
-    if (auth.profile && !profileInitialised.current) {
+    if (!auth.profile) return
+    const sig = getProfileSig(auth.profile)
+    // Re-init on first load OR when server-side fields change mid-session.
+    if (!profileInitialised.current || sig !== profileSig.current) {
       profile.initFromProfile(auth.profile)
       profileInitialised.current = true
+      profileSig.current         = sig
     }
   }, [auth.profile])
 
