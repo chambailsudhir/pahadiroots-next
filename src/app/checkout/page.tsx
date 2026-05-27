@@ -215,7 +215,7 @@ export default function CheckoutPage() {
         if (!prof) return
         const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
-        const defaultAddr = prof.address_line1 ? [{\
+        const defaultAddr = prof.address_line1 ? [{
           _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
           area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
         }] : []
