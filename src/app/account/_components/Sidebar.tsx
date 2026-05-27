@@ -74,25 +74,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
             </div>
           </div>
 
-          {/* ── Loyalty coins banner ─────────────────────────── */}
-          <button
-            className={styles.sbCoinsBanner}
-            onClick={() => setTab('loyalty')}
-            aria-label={`View Pahadi Coins — ${loyaltyPts} coins`}
-          >
-            <span className={styles.sbCoinsIcon}>🪙</span>
-            <div className={styles.sbCoinsInfo}>
-              <span className={styles.sbCoinsVal}>{coinsLabel} Pahadi Coins</span>
-              <span className={styles.sbCoinsSub}>
-                {loyaltyPts > 0
-                  ? `≈ ₹${Math.floor(loyaltyPts * 0.25)} redeemable`
-                  : 'Earn coins on every order'}
-              </span>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={styles.sbCoinsArrow} aria-hidden="true">
-              <path d="M5 3L9 7L5 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+
         </>
       )}
 
