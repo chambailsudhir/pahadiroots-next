@@ -14,7 +14,7 @@
 // ✅ Matches CSS Module pattern used across account module
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { useUserStore } from '@/store/userStore'
@@ -35,15 +35,43 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   const [step,     setStep]     = useState<1 | 2>(1)
   const [typed,    setTyped]    = useState('')
   const [deleting, setDeleting] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef    = useRef<HTMLInputElement>(null)
+  const modalBoxRef = useRef<HTMLDivElement>(null)
+
+  // ── Focus trap: intercept Tab/Shift+Tab so keyboard focus stays inside the modal
+  const handleModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') { closeModal(); return }
+    if (e.key !== 'Tab') return
+
+    const modal = modalBoxRef.current
+    if (!modal) return
+
+    const focusable = Array.from(
+      modal.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(el => !el.closest('[disabled]'))
+
+    if (focusable.length === 0) { e.preventDefault(); return }
+
+    const first = focusable[0]
+    const last  = focusable[focusable.length - 1]
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus() }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+  }, [])  // closeModal is defined below — see note
 
   function openModal() {
     setStep(1)
     setTyped('')
     setDeleting(false)
     setOpen(true)
-    // Move focus into modal after paint
-    setTimeout(() => inputRef.current?.focus(), 80)
+    // Two rAF frames guarantee focus fires after the modal is fully painted,
+    // without relying on an arbitrary setTimeout delay.
+    requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()))
   }
 
   function closeModal() {
@@ -152,8 +180,9 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
           aria-modal="true"
           aria-labelledby="del-modal-title"
           onClick={e => { if (e.target === e.currentTarget) closeModal() }}
+          onKeyDown={handleModalKeyDown}
         >
-          <div className={styles.modalBox}>
+          <div ref={modalBoxRef} className={styles.modalBox}>
             <div className={styles.modalHeader}>
               <h2 id="del-modal-title" className={styles.modalTitle}>
                 {step === 1 ? '⚠️ Delete your account?' : '🗑️ Confirm permanent deletion'}

@@ -20,6 +20,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
   checkRateLimit,
+  checkCsrf,
 } from '@/lib/api/serverUtils'
 
 // Allowlist of columns this endpoint may read/write
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
 
 // ── POST /api/account/notifications ───────────────────────────
 export async function POST(req: NextRequest) {
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   const ip = (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||

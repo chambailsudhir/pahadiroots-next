@@ -30,6 +30,7 @@ import {
   sbAuth, sbAdmin,
   getToken, tryRefresh,
   checkRateLimit,
+  checkCsrf,
 } from '@/lib/api/serverUtils'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 
@@ -61,6 +62,10 @@ function clearAuthCookies(res: NextResponse): NextResponse {
 }
 
 export async function DELETE(req: NextRequest) {
+  // ── CSRF check ────────────────────────────────────────────────
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   // ── Rate limit ────────────────────────────────────────────────
   const ip = (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||

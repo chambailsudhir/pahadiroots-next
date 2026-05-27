@@ -1,12 +1,54 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// In-memory rate limit store (Vercel Edge — resets per instance)
-// For production use, swap this with Upstash Redis
-const rateLimitMap = new Map<string, { count: number; ts: number }>()
-const RATE_WINDOW  = 60 * 1000   // 1 minute
-const RATE_LIMIT   = 60          // 60 requests/minute per IP (general)
-const API_LIMIT    = 20          // 20 API requests/minute per IP
+const RATE_WINDOW_SEC = 60        // 1 minute
+const API_LIMIT       = 20        // 20 API requests/minute per IP
+
+// ─── Distributed rate limiter (Upstash KV) ───────────────────────────────────
+// Uses the same INCR + EXPIRE pipeline already used by auth/route.ts.
+// Falls back to a per-instance Map when KV is not configured (local dev only).
+// The fallback is NOT reliable across Vercel instances — configure Upstash KV
+// via UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for production.
+type RateEntry = { count: number; reset: number }
+const _localRateMap = new Map<string, RateEntry>()
+
+async function rateLimit(key: string, limit: number, windowSec: number): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (kvUrl && kvToken) {
+    try {
+      const rlKey = `mw:rl:${key}`
+      const res = await fetch(`${kvUrl}/pipeline`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify([
+          ['INCR',   rlKey],
+          ['EXPIRE', rlKey, windowSec, 'NX'],  // NX = only set expiry on first write
+        ]),
+        signal: AbortSignal.timeout(1500),
+      })
+      if (res.ok) {
+        const result = await res.json() as [[string, number], [string, number]]
+        const count  = result[0][1]
+        return count <= limit  // true = allowed
+      }
+    } catch {
+      // KV unreachable — fall through to in-process fallback
+    }
+  }
+
+  // In-process fallback (local dev / KV not yet configured)
+  const now   = Date.now()
+  const entry = _localRateMap.get(key)
+  if (!entry || now > entry.reset) {
+    _localRateMap.set(key, { count: 1, reset: now + windowSec * 1000 })
+    return true
+  }
+  if (entry.count >= limit) return false
+  entry.count++
+  return true
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -14,23 +56,15 @@ export async function middleware(req: NextRequest) {
   // ─── Rate limiting on API routes ─────────────────────────────────────────
 
   if (pathname.startsWith('/api/v1/')) {
-    const ip = req.ip || req.headers.get('x-forwarded-for') || 'unknown'
+    const ip  = req.ip || req.headers.get('x-forwarded-for') || 'unknown'
     const key = `api:${ip}`
-    const now = Date.now()
-    const entry = rateLimitMap.get(key)
-
-    if (entry && now - entry.ts < RATE_WINDOW) {
-      if (entry.count >= API_LIMIT) {
-        return NextResponse.json(
-          { error: 'Too many requests. Please slow down.' },
-          { status: 429 }
-        )
-      }
-      entry.count++
-    } else {
-      rateLimitMap.set(key, { count: 1, ts: now })
+    const allowed = await rateLimit(key, API_LIMIT, RATE_WINDOW_SEC)
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down.' },
+        { status: 429 }
+      )
     }
-
     return NextResponse.next()
   }
 

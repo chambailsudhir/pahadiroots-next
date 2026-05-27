@@ -43,6 +43,8 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   const [loading, setLoading] = useState(true)
   const [copied,  setCopied]  = useState(false)
   const [txnLoad, setTxnLoad] = useState(false)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
+  const [txnErr,  setTxnErr]  = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -50,7 +52,19 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
       try {
         const res  = await fetch('/api/v1/loyalty')
         const json = await res.json()
-        if (mounted && res.ok) setData(json)
+        if (!mounted) return
+        if (res.ok) {
+          setData(json)
+        } else {
+          const msg = json?.error || 'Could not load loyalty data.'
+          setLoadErr(msg)
+          showToast?.(msg, 'error')
+        }
+      } catch {
+        if (!mounted) return
+        const msg = 'Could not load loyalty data — please try again.'
+        setLoadErr(msg)
+        showToast?.(msg, 'error')
       } finally {
         if (mounted) setLoading(false)
       }
@@ -62,10 +76,21 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   async function loadHistory() {
     if (txnLoad) return
     setTxnLoad(true)
+    setTxnErr(null)
     try {
       const res  = await fetch('/api/v1/loyalty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'history' }) })
       const json = await res.json()
-      if (res.ok) setTxns(json.transactions ?? [])
+      if (res.ok) {
+        setTxns(json.transactions ?? [])
+      } else {
+        const msg = json?.error || 'Could not load transaction history.'
+        setTxnErr(msg)
+        showToast?.(msg, 'error')
+      }
+    } catch {
+      const msg = 'Could not load transaction history — please try again.'
+      setTxnErr(msg)
+      showToast?.(msg, 'error')
     } finally {
       setTxnLoad(false)
     }
@@ -84,6 +109,13 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     <div className={styles.secRoot}>
       <div className={styles.secTitle}>🪙 Pahadi Coins</div>
       <div className={styles.lySkeleton} aria-busy="true" />
+    </div>
+  )
+
+  if (loadErr) return (
+    <div className={styles.secRoot}>
+      <div className={styles.secTitle}>🪙 Pahadi Coins</div>
+      <p className={styles.secSub} style={{ color: '#c0392b' }}>{loadErr}</p>
     </div>
   )
 
@@ -161,6 +193,15 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         </div>
 
         {txnLoad && <div className={styles.lySkeleton} aria-busy="true" style={{ height: 60 }} />}
+
+        {txnErr && !txnLoad && (
+          <p className={styles.lyEmpty} style={{ color: '#c0392b' }}>
+            {txnErr}{' '}
+            <button type="button" className={styles.lyHistLoad} onClick={loadHistory}>
+              Retry
+            </button>
+          </p>
+        )}
 
         {txns.length > 0 && (
           <div className={styles.lyTxnList}>

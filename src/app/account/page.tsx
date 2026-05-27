@@ -96,11 +96,13 @@ function AccountPageInner() {
   )
 
   const MOB_TABS: { key: Tab; icon: string; label: string }[] = [
-    { key: 'orders',        icon: '📦', label: 'Orders'   },
-    { key: 'loyalty',       icon: '🪙', label: 'Coins'    },
-    { key: 'addresses',     icon: '📍', label: 'Addresses'},
-    { key: 'profile',       icon: '👤', label: 'Profile'  },
-    { key: 'notifications', icon: '🔔', label: 'Alerts'   },
+    { key: 'orders',        icon: '📦', label: 'Orders'    },
+    { key: 'loyalty',       icon: '🪙', label: 'Coins'     },
+    { key: 'addresses',     icon: '📍', label: 'Addresses' },
+    { key: 'profile',       icon: '👤', label: 'Profile'   },
+    { key: 'notifications', icon: '🔔', label: 'Alerts'    },
+    { key: 'password',      icon: '🔒', label: 'Password'  },
+    { key: 'privacy',       icon: '🛡️', label: 'Privacy'   },
   ]
 
   const userEmail = auth.authUser?.email || auth.profile?.email || ''

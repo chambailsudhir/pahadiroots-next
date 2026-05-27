@@ -17,6 +17,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
   checkRateLimit,
+  checkCsrf,
 } from '@/lib/api/serverUtils'
 
 // ── GET /api/profile ─────────────────────────────────────────
@@ -104,6 +105,10 @@ export async function GET(req: NextRequest) {
 
 // ── POST /api/profile — update fields ────────────────────────
 export async function POST(req: NextRequest) {
+  // ── CSRF check: reject requests from unexpected origins ───────
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   // ── Rate limiting: 20 writes per minute per user (IP-based for unauthenticated
   //    attempts, user-ID-based after token verification).
   //    Applied before token check so even unauthenticated hammering is blocked.

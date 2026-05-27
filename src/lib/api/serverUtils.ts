@@ -24,6 +24,36 @@ const IS_PROD       = process.env.NODE_ENV === 'production'
 export function ok(data: unknown)                    { return NextResponse.json(data) }
 export function fail(status: number, msg: string)    { return NextResponse.json({ error: msg }, { status }) }
 
+// ── CSRF protection ───────────────────────────────────────────
+// Validates the Origin (or Referer fallback) of state-mutating requests
+// against the app's own domain. SameSite=Strict on cookies is good but
+// does not cover subdomain attacks or misconfigured CDN/proxy setups.
+// Call this at the top of every POST / PATCH / DELETE handler.
+// Returns a 403 response on mismatch, or null when the origin is valid.
+const ALLOWED_ORIGINS = [
+  'https://pahadiroots.com',
+  'https://www.pahadiroots.com',
+  ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : []),
+]
+
+export function checkCsrf(req: NextRequest): NextResponse | null {
+  // Server actions / same-origin fetch always send Origin or Referer.
+  const origin  = req.headers.get('origin')
+  const referer = req.headers.get('referer')
+
+  const source = origin || (referer ? new URL(referer).origin : null)
+  if (!source) {
+    // No origin header at all — only safe to allow in non-production (e.g. curl in dev)
+    if (process.env.NODE_ENV !== 'production') return null
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!ALLOWED_ORIGINS.includes(source)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return null  // valid
+}
+
 // ── Supabase Auth call ────────────────────────────────────────
 export async function sbAuth(
   path:   string,
@@ -37,7 +67,10 @@ export async function sbAuth(
       'apikey':        SUPABASE_ANON,
       'Authorization': token ? `Bearer ${token}` : `Bearer ${SUPABASE_ANON}`,
     },
-    body: body !== null ? JSON.stringify(body) : undefined,
+    body:   body !== null ? JSON.stringify(body) : undefined,
+    // Prevent a slow Supabase response from hanging the serverless function
+    // until Vercel's hard 15-second timeout.
+    signal: AbortSignal.timeout(8000),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw { status: res.status, message: data.msg || data.error_description || 'Auth error' }

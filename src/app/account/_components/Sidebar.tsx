@@ -82,6 +82,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
         {NAV.map(it => (
           <button
             key={it.key}
+            type="button"
             className={[
               styles.sbItem,
               tab === it.key ? styles.sbItemActive : '',
@@ -105,7 +106,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
           <span className={styles.sbIcon}>❤️</span>
           <span className={styles.sbLabel}>Wishlist</span>
         </Link>
-        <button className={`${styles.sbItem} ${styles.sbLogout}`} onClick={onLogout}>
+        <button type="button" className={`${styles.sbItem} ${styles.sbLogout}`} onClick={onLogout}>
           <span className={styles.sbIcon}>🚪</span>
           <span className={styles.sbLabel}>Logout</span>
         </button>
