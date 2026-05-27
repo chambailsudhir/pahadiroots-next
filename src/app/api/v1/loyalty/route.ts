@@ -40,17 +40,18 @@ export async function GET(req: NextRequest) {
   if (refreshed) token = refreshed.token
 
   try {
-    const user    = await sbAuth('/user', null, token!)
-    const profile = await syncCustomerProfile(user)
+    const user = await sbAuth('/user', null, token!)
+
+    // Run profile sync + settings fetch in parallel — saves ~300-500ms
+    const [profile, settings] = await Promise.all([
+      syncCustomerProfile(user),
+      getSettings(),
+    ])
     if (!profile) return fail(404, 'Profile not found')
 
-    // Fetch fresh points balance from DB
-    const customerRow: any = await sbAdmin(
-      'GET',
-      `/rest/v1/customers?id=eq.${profile.id}&select=loyalty_points,referral_code&limit=1`,
-    ).then((r: any[]) => r?.[0] ?? null).catch(() => null)
-
-    const settings      = await getSettings()
+    // syncCustomerProfile already fetches select=* so loyalty_points
+    // and referral_code are already on the profile object — no extra query needed
+    const customerRow = profile
     const loyaltyEnabled = settings.loyalty_enabled !== 'false'
     const pointsValue   = asNumber(settings.loyalty_points_value, 0.25)
     const minRedeem     = asNumber(settings.loyalty_min_redeem, 40)
