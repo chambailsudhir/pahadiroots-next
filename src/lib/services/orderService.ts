@@ -135,6 +135,7 @@ export interface CreateOrderInput {
   paymentMethod:  'cod' | 'razorpay'
   couponCode?:    string
   idempotencyKey: string
+  loyaltyPointsRedeemed?: number
 }
 
 export interface OrderEmailItem {
@@ -156,7 +157,7 @@ export interface CreatedOrder {
 export async function createOrder(
   input: CreateOrderInput,
   settings: SiteSettings,
-): Promise<{ order: CreatedOrder; alreadyExists: boolean }> {
+): Promise<{ order: CreatedOrder; alreadyExists: boolean; customerId: string | null }> {
   const db = getServiceClient()
 
   // 1. Idempotency check — return existing order if same key
@@ -177,6 +178,7 @@ export async function createOrder(
         cartItems:    [], // not needed — email is skipped when alreadyExists is true
       },
       alreadyExists: true,
+      customerId:    null,
     }
   }
 
@@ -482,6 +484,7 @@ export async function createOrder(
       })),
     },
     alreadyExists: false,
+    customerId:    custId,
   }
 }
 
