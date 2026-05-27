@@ -2,6 +2,7 @@
 // POST /api/orders/[id]/return — initiate a return request
 //
 //  ✅ Token auth + refresh
+//  ✅ CSRF check (Origin/Referer validation)
 //  ✅ Ownership check: customer_id=eq.${profile.id} prevents IDOR
 //  ✅ Only delivered orders within the 7-day window are returnable
 //  ✅ Idempotent: 409 if a return is already in progress
@@ -15,6 +16,7 @@ import {
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
+  checkCsrf,
 } from '@/lib/api/serverUtils'
 import { RETURN_REASONS } from '@/lib/account/constants'
 
@@ -24,6 +26,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // ── CSRF check ────────────────────────────────────────────────
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   const { id } = params
   if (!id) return fail(400, 'Order ID is required')
 

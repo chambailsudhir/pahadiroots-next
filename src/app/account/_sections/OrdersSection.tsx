@@ -27,6 +27,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
   const firstRadioRef  = useRef<HTMLInputElement>(null)
   const triggerBtnRef  = useRef<HTMLButtonElement | null>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const modalBoxRef    = useRef<HTMLDivElement>(null)
 
   // Move focus into modal when it opens; restore to trigger when it closes
   useEffect(() => {
@@ -35,11 +36,31 @@ export default function OrdersSection({ orders, showToast }: Props) {
     }
   }, [returnModal])
 
-  // ESC key closes the modal
+  // ESC key closes the modal; Tab/Shift+Tab are trapped inside
   useEffect(() => {
     if (!returnModal) return
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeReturnModal()
+      if (e.key === 'Escape') { closeReturnModal(); return }
+      if (e.key !== 'Tab') return
+
+      const modal = modalBoxRef.current
+      if (!modal) return
+
+      const focusable = Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(el => !el.closest('[disabled]'))
+
+      if (focusable.length === 0) { e.preventDefault(); return }
+      const first = focusable[0]
+      const last  = focusable[focusable.length - 1]
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
@@ -219,7 +240,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           className={styles.modalOverlay}
           onClick={e => { if (e.target === e.currentTarget) closeReturnModal() }}
         >
-          <div className={styles.modalBox}>
+          <div ref={modalBoxRef} className={styles.modalBox}>
             <div className={styles.modalHeader}>
               <h3 id="return-modal-title" className={styles.modalTitle}>
                 Return Order {returnModal.orderNum}
