@@ -3,22 +3,24 @@ import { calcGST, asNumber } from '@/lib/utils'
 import { getServiceClient } from '@/lib/supabase'
 
 export interface PriceSummary {
-  subtotal:       number   // sum of (price * qty)
-  discount:       number   // coupon discount
-  shipping:       number   // 0 or flat charge
-  gstTotal:       number   // total GST included in items
-  prepaidDiscount: number  // additional % off for prepaid
-  total:          number   // final payable
-  freeShippingMin: number
-  isFreeShipping: boolean
-  remainingForFreeShip: number
+  subtotal:        number   // sum of (price * qty)
+  discount:        number   // coupon discount
+  shipping:        number   // 0 or flat charge
+  gstTotal:        number   // total GST included in items
+  prepaidDiscount: number   // additional % off for prepaid
+  loyaltyDiscount: number   // 🪙 coins redemption discount
+  total:           number   // final payable
+  freeShippingMin:        number
+  isFreeShipping:         boolean
+  remainingForFreeShip:   number
 }
 
 export function calcPriceSummary(
   items: CartItem[],
   settings: SiteSettings,
   coupon: AppliedCoupon | null,
-  paymentMethod: 'razorpay' | 'cod' = 'cod'
+  paymentMethod: 'razorpay' | 'cod' = 'cod',
+  loyaltyDiscount = 0,           // ₹ coins redemption — passed from checkout state
 ): PriceSummary {
   const freeShippingMin  = asNumber(settings.free_shipping_min, 799)
   const flatShipping     = asNumber(settings.flat_shipping_charge, 99)
@@ -28,7 +30,7 @@ export function calcPriceSummary(
 
   const discount = coupon ? coupon.discount : 0
 
-  const afterDiscount = Math.max(0, subtotal - discount)
+  const afterDiscount = Math.max(0, subtotal - discount - loyaltyDiscount)
 
   const isFreeShipping = afterDiscount >= freeShippingMin
   const shipping       = isFreeShipping ? 0 : flatShipping
@@ -46,6 +48,7 @@ export function calcPriceSummary(
   return {
     subtotal,
     discount,
+    loyaltyDiscount,
     shipping,
     gstTotal,
     prepaidDiscount,

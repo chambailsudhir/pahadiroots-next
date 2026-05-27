@@ -1,0 +1,200 @@
+/* ══════════════════════════════════════════════════════════════
+   LOYALTY / PAHADI COINS — append these rules to
+   src/app/account/styles/account.module.css
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar coins banner ────────────────────────────────────── */
+.sbCoinsBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 4px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #fffbe8, #fff8d6);
+  border: 1.5px solid #e8c940;
+  border-radius: 12px;
+  cursor: pointer;
+  width: calc(100% - 24px);
+  text-align: left;
+  transition: box-shadow .2s, transform .15s;
+}
+.sbCoinsBanner:hover {
+  box-shadow: 0 4px 14px rgba(200, 160, 0, .18);
+  transform: translateY(-1px);
+}
+.sbCoinsIcon  { font-size: 20px; flex-shrink: 0; }
+.sbCoinsInfo  { flex: 1; min-width: 0; }
+.sbCoinsVal   { display: block; font-size: 13px; font-weight: 700; color: #7a5800; }
+.sbCoinsSub   { display: block; font-size: 10px; color: #a08020; margin-top: 1px; }
+.sbCoinsArrow { color: #c8a000; flex-shrink: 0; }
+
+/* Loyalty nav item accent */
+.sbLoyalty { }
+.sbCoinsBadge {
+  margin-left: auto;
+  background: #f5e020;
+  color: #7a5800;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* ── LoyaltySection root ─────────────────────────────────────── */
+.lyBalanceCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #1a3a1e 0%, #2d6a34 100%);
+  border-radius: 18px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 24px rgba(26, 58, 30, .28);
+  overflow: hidden;
+  position: relative;
+}
+.lyBalanceCard::before {
+  content: '';
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 120px; height: 120px;
+  background: rgba(255,255,255,.06);
+  border-radius: 50%;
+}
+.lyBalanceBig {
+  font-size: 42px;
+  font-weight: 800;
+  color: #f5e040;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.lyBalanceLbl {
+  font-size: 13px;
+  color: rgba(255,255,255,.75);
+  font-weight: 600;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.lyBalanceVal {
+  font-size: 12px;
+  color: rgba(255,255,255,.55);
+  margin-top: 6px;
+}
+.lyBalanceCoin { font-size: 52px; opacity: .85; flex-shrink: 0; }
+
+/* ── How it works grid ───────────────────────────────────────── */
+.lyHowGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 480px) { .lyHowGrid { grid-template-columns: 1fr; } }
+
+.lyHowCard {
+  background: #fff;
+  border: 1px solid #e8e0d5;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition: box-shadow .2s, border-color .2s;
+}
+.lyHowCard:hover {
+  border-color: #b8d4a8;
+  box-shadow: 0 4px 16px rgba(44,74,46,.08);
+}
+.lyHowIcon  { font-size: 22px; }
+.lyHowTitle { font-size: 13px; color: #1a3a1e; }
+.lyHowDesc  { font-size: 12px; color: #7a7060; margin: 0; line-height: 1.4; }
+
+/* ── Referral ─────────────────────────────────────────────────── */
+.lyReferral {
+  background: #f0f7ff;
+  border: 1.5px solid #b8d4f0;
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+.lyRefHeader { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.lyRefIcon   { font-size: 24px; flex-shrink: 0; }
+.lyRefTitle  { font-size: 14px; font-weight: 700; color: #1a4068; }
+.lyRefSub    { font-size: 12px; color: #4a6080; margin-top: 2px; line-height: 1.4; }
+.lyRefRow    { display: flex; gap: 10px; align-items: center; }
+.lyRefCode   {
+  flex: 1;
+  background: #fff;
+  border: 1.5px solid #c0d4e8;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a4068;
+  letter-spacing: 2px;
+  font-family: monospace;
+}
+.lyRefCopy {
+  background: #1a6ab5;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s;
+}
+.lyRefCopy:hover { background: #1558a0; }
+.lyRefCopied    { background: #2d7a3a !important; }
+
+/* ── Transaction history ─────────────────────────────────────── */
+.lyHistory     { background: #fff; border: 1px solid #e8e0d5; border-radius: 16px; overflow: hidden; }
+.lyHistHeader  { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid #f0e8dc; }
+.lyHistTitle   { font-size: 14px; color: #1a3a1e; font-weight: 700; }
+.lyHistLoad    {
+  background: none;
+  border: 1.5px solid #2c4a2e;
+  color: #2c4a2e;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .18s, color .18s;
+}
+.lyHistLoad:hover { background: #2c4a2e; color: #fff; }
+
+.lyTxnList  { display: flex; flex-direction: column; }
+.lyTxnRow   {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #f5f0e8;
+  transition: background .15s;
+}
+.lyTxnRow:last-child  { border-bottom: none; }
+.lyTxnRow:hover       { background: #fdfaf5; }
+.lyTxnIcon   { font-size: 18px; flex-shrink: 0; width: 28px; text-align: center; }
+.lyTxnInfo   { flex: 1; min-width: 0; }
+.lyTxnNote   { font-size: 13px; font-weight: 500; color: #2a2a2a; }
+.lyTxnDate   { font-size: 11px; color: #aaa; margin-top: 2px; }
+.lyTxnPts    { font-size: 15px; font-weight: 700; flex-shrink: 0; }
+
+.lyEmpty   { padding: 24px 18px; font-size: 13px; color: #9a9080; text-align: center; margin: 0; }
+.lySkeleton {
+  background: linear-gradient(90deg, #f0ece6 25%, #e8e4de 50%, #f0ece6 75%);
+  background-size: 200% 100%;
+  animation: lySkel 1.4s ease infinite;
+  border-radius: 12px;
+  height: 120px;
+  margin-bottom: 20px;
+}
+@keyframes lySkel {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

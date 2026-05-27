@@ -15,12 +15,11 @@ import ShippingProgress     from '@/components/checkout/ShippingProgress'
 import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
 import AddressForm          from '@/components/checkout/AddressForm'
 import PaymentSection       from '@/components/checkout/PaymentSection'
-import OrderSummary         from '@/components/checkout/OrderSummary'
+import OrderSummary, { type LoyaltyRedemption } from '@/components/checkout/OrderSummary'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
 import {
   readProfileCache  as _readProfileCache,
   writeProfileCache as _writeProfileCache,
-  prefetchProfileToCache,
 } from '@/lib/profileCache'
 
 const INDIA_STATES = [
@@ -60,17 +59,10 @@ const settingsFetcher = async (): Promise<SiteSettings> => {
 
 export default function CheckoutPage() {
   const router = useRouter()
-  // storeReady: guards against Zustand skipHydration gap.
-  // cartStore uses skipHydration:true so items=[] on first SSR render.
-  // Without this guard the page returns null (blank flash) until the store rehydrates.
-  // With this guard, CheckoutSkeleton shows immediately, then transitions to real content.
   const [storeReady, setStoreReady] = useState(false)
   useEffect(() => { setStoreReady(true) }, [])
 
-  // mounted stays true — localStorage useState initializers already guard SSR
-  // via typeof window === 'undefined' checks, so no extra skeleton is needed for form.
   const [mounted, setMounted] = useState(true)
-  // keep setMounted in scope for the profile-fetch dep
   const _setMounted = setMounted
 
   const items              = useCartStore(s => s.items)
@@ -100,7 +92,14 @@ export default function CheckoutPage() {
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError,   setCouponError]   = useState('')
-  const [couponHints,   setCouponHints]   = useState<Array<{code:string,label:string}>>([])
+  const [couponHints,   setCouponHints]   = useState<Array<{code:string,label:string}>>([]  )
+
+  // ── Loyalty state ─────────────────────────────────────────────
+  const [loyaltyBalance,    setLoyaltyBalance]    = useState(0)
+  const [loyaltyRedemption, setLoyaltyRedemption] = useState<LoyaltyRedemption | null>(null)
+  const [loyaltyLoading,    setLoyaltyLoading]    = useState(false)
+  const [loyaltyError,      setLoyaltyError]      = useState('')
+
   const [savedAddrs,       setSavedAddrs]       = useState<any[]>(() => {
     if (typeof window === 'undefined') return []
     try { return readProfileCache()?.addresses || [] } catch { return [] }
@@ -111,10 +110,7 @@ export default function CheckoutPage() {
   })
   const [summaryOpen,      setSummaryOpen]       = useState(true)
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
-  // ── Cache helpers — delegated to shared profileCache utility ──
-  // Profile is now pre-populated at login time (AuthModal / GoogleAuthHandler)
-  // and kept warm by ProfilePrefetcher in the root layout.
-  // These thin wrappers keep the call sites below unchanged.
+
   function readProfileCache() { return _readProfileCache() }
   function writeProfileCache(profile: any, addresses: any[]) {
     _writeProfileCache({ ts: Date.now(), profile, addresses })
@@ -125,7 +121,7 @@ export default function CheckoutPage() {
     const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
     const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
     setAddrFn(prev => {
-      if (prev.flat || prev.city || prev.pincode) return prev // user already typed something
+      if (prev.flat || prev.city || prev.pincode) return prev
       if (allAddrs.length > 0) {
         const a = allAddrs[0]
         const validLabels = ['Home','Office','Parents','Friends','Others'] as const
@@ -140,15 +136,12 @@ export default function CheckoutPage() {
     setSavedFn(allAddrs)
   }
 
-  // ── Instant pre-fill: read full profile from localStorage cache ──
-  // Runs synchronously in useState initializer — zero network wait, zero flicker
   const [addr, setAddr] = useState<OrderAddress>(() => {
     const base: OrderAddress = { name:'', phone:'', flat:'', area:'', city:'', state:'Uttarakhand', pincode:'', label:'Home' }
     if (typeof window === 'undefined') return base
     try {
       const cache = readProfileCache()
       if (!cache) {
-        // Fallback: at least get name/phone from userStore
         const raw = localStorage.getItem('pr-user')
         if (!raw) return base
         const u = JSON.parse(raw)?.state?.user
@@ -180,7 +173,10 @@ export default function CheckoutPage() {
     } catch { return '' }
   })
 
-  const pricing       = calcPriceSummary(items, s, coupon, payMethod)
+  const pricing = calcPriceSummary(
+    items, s, coupon, payMethod,
+    loyaltyRedemption?.discount_inr ?? 0,   // ← loyalty discount
+  )
   const codOk         = codEnabled && pricing.subtotal <= codMax
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
   const bothPayOff    = !codOk && !razorpayEnabled
@@ -190,7 +186,6 @@ export default function CheckoutPage() {
     payMethod, isFreeShipping: pricing.isFreeShipping,
   })
 
-  // Track if order was just placed — prevents cart-empty redirect from firing after clearCart()
   const orderPlacedRef = useRef(false)
   useEffect(() => {
     if (items.length === 0 && mounted && !orderPlacedRef.current) router.replace('/cart')
@@ -200,10 +195,16 @@ export default function CheckoutPage() {
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
   }, [codOk, payMethod, razorpayEnabled])
 
-  // Background profile refresh — stale-while-revalidate.
-  // Cache is pre-warmed at login (AuthModal/GoogleAuthHandler) and on every
-  // page load (ProfilePrefetcher). This useEffect is the final safety net for
-  // cold sessions and also updates the UI with any address changes.
+  // ── Fetch loyalty balance (logged-in users only) ─────────────
+  useEffect(() => {
+    if (s.loyalty_enabled !== 'true') return
+    fetch('/api/v1/loyalty')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.points) setLoyaltyBalance(d.points) })
+      .catch(() => {})
+  }, [s.loyalty_enabled])
+
+  // Background profile refresh
   useEffect(() => {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
@@ -214,17 +215,13 @@ export default function CheckoutPage() {
         if (!prof) return
         const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
-        const defaultAddr = prof.address_line1 ? [{
+        const defaultAddr = prof.address_line1 ? [{\
           _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
           area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
         }] : []
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
-
-        // Refresh the shared cache with latest data
         writeProfileCache(prof, all)
-
-        // Only update UI if cache was empty (first visit) — avoids flicker if cache already filled form
         applyProfileData(prof, all, setAddr, setEmail, setSavedAddrs)
         if (all.length > 0) setSelectedSavedIdx(0)
       })
@@ -234,7 +231,6 @@ export default function CheckoutPage() {
   }, [])
 
   useEffect(() => {
-    // TODO: replace with /api/v1/coupon-hints (server-filtered) to avoid exposing raw coupon data
     fetch('/api/v1/store-data').then(async r => {
       if (!r.ok) return
       const data = await r.json()
@@ -246,7 +242,6 @@ export default function CheckoutPage() {
           return true
         })
         .slice(0, 3)
-        // Only expose code + human label — strip all internal fields
         .map((c:any): { code: string; label: string } => ({
           code: c.code,
           label: c.type === 'percent'
@@ -291,6 +286,32 @@ export default function CheckoutPage() {
     finally  { setCouponLoading(false) }
   }
 
+  // ── Loyalty redemption handlers ──────────────────────────────
+  async function handleApplyLoyalty(ptsToRedeem: number) {
+    if (loyaltyLoading) return
+    setLoyaltyLoading(true); setLoyaltyError('')
+    try {
+      const res  = await fetch('/api/v1/loyalty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:           'validate',
+          points_to_redeem: ptsToRedeem,
+          order_subtotal:   pricing.subtotal,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setLoyaltyError(data.error || 'Invalid redemption'); return }
+      setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
+    } catch { setLoyaltyError('Failed to apply coins') }
+    finally  { setLoyaltyLoading(false) }
+  }
+
+  function handleRemoveLoyalty() {
+    setLoyaltyRedemption(null)
+    setLoyaltyError('')
+  }
+
   const handlePlace = useCallback(async () => {
     const required = ['name','phone','flat','city','state','pincode'] as const
     setTouched(prev => { const n={...prev}; required.forEach(f=>{n[f]=true}); return n })
@@ -318,17 +339,19 @@ export default function CheckoutPage() {
           pincode: addr.pincode,
           label:   addr.label,
         },
-        customer_email:  email || user?.email || '',
-        items:           items.map(i => ({ productId:i.productId, variantId:i.variantId, qty:i.qty })),
-        payment_method:  payMethod,
-        coupon_code:     coupon?.code,
-        idempotency_key: orderKey,
+        customer_email:         email || user?.email || '',
+        items:                  items.map(i => ({ productId:i.productId, variantId:i.variantId, qty:i.qty })),
+        payment_method:         payMethod,
+        coupon_code:            coupon?.code,
+        idempotency_key:        orderKey,
+        // ── Loyalty ──────────────────────────────────────────
+        loyalty_points_redeemed: loyaltyRedemption?.points ?? 0,
       }
       if (payMethod === 'cod') {
-        // Build WhatsApp message exactly like old site
         const waNumber   = s.whatsapp_number || '919899984895'
         const itemLines  = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
         const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
+        const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
         const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
         const waMsg = `*New Order — 5 Pahadi Roots* 🌿\n\n` +
           `👤 *${addr.name}*\n` +
@@ -336,10 +359,9 @@ export default function CheckoutPage() {
           (email ? `📧 ${email}\n` : '') +
           `\n📍 *Delivery Address*\n${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
           `🛒 *Items*\n${itemLines}` +
-          couponLine + shipLine +
+          couponLine + coinsLine + shipLine +
           `\n\n*Total: ₹${pricing.total}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
 
-        // 1. Save to DB first to get order_number
         let orderNumber = ''
         try {
           const dbRes  = await fetch('/api/v1/orders', {
@@ -353,10 +375,7 @@ export default function CheckoutPage() {
           }
         } catch (e) { console.error('[COD] DB save failed:', e) }
 
-        // 2. Open WhatsApp after DB save
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
-
-        // 3. Redirect to success page
         orderPlacedRef.current = true
         clearCart()
         router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricing.total}`)
@@ -371,9 +390,9 @@ export default function CheckoutPage() {
         if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
         const rzp = new RZP({
           key:       razorpayKeyId,
-          amount:    data.amount,           // paise — from server (tamper-proof)
+          amount:    data.amount,
           currency:  data.currency || 'INR',
-          order_id:  data.razorpay_order_id, // server-side Razorpay order_id — required for HMAC
+          order_id:  data.razorpay_order_id,
           name:      'Pahadi Roots',
           description: 'Natural Himalayan Products',
           image:     'https://pahadiroots.com/favicon.ico',
@@ -382,7 +401,6 @@ export default function CheckoutPage() {
           theme:     { color: '#2C4A2E' },
           handler: async (response: any) => {
             try {
-              // 1. Verify payment on server (HMAC check) + mark order confirmed in DB
               const verRes = await fetch('/api/v1/payments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -397,21 +415,20 @@ export default function CheckoutPage() {
               const verData = await verRes.json()
               if (!verRes.ok) throw new Error(verData.error || 'Verification failed')
 
-              // 2. Send WhatsApp confirmation (non-blocking, same as old site)
               const waNumber  = s.whatsapp_number || '919899984895'
               const itemLines = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
               const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
+              const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
               const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
               const waMsg = `✅ *Payment Confirmed — 5 Pahadi Roots* 🌿\n\n` +
                 `✅ *Payment ID:* ${response.razorpay_payment_id}\n` +
                 `👤 *${addr.name}*\n📱 ${addr.phone}\n` +
                 (email ? `📧 ${email}\n` : '') +
                 `\n📍 ${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
-                `🛒 *Items*\n${itemLines}` + couponLine + shipLine +
+                `🛒 *Items*\n${itemLines}` + couponLine + coinsLine + shipLine +
                 `\n\n*Total Paid: ₹${pricing.total}*`
               window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
 
-              // 3. Redirect to success page
               analytics.trackPaymentVerified(verData.order_number, pricing.total)
               orderPlacedRef.current = true
               clearCart()
@@ -427,10 +444,8 @@ export default function CheckoutPage() {
         rzp.open(); return
       }
     } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
-  }, [addr, email, items, coupon, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
+  }, [addr, email, items, coupon, loyaltyRedemption, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
 
-  // Show CheckoutSkeleton while Zustand store rehydrates (skipHydration:true means items=[] on first render)
-  // This eliminates the null→content blank flash that made delivery details appear "late"
   if (!storeReady) return <CheckoutSkeleton />
   if (items.length === 0) return null
 
@@ -558,6 +573,12 @@ export default function CheckoutPage() {
               onCouponCodeChange={setCouponCode}
               onApplyCoupon={handleCoupon}
               onRemoveCoupon={removeCoupon}
+              loyaltyBalance={loyaltyBalance}
+              loyaltyRedemption={loyaltyRedemption}
+              onApplyLoyalty={handleApplyLoyalty}
+              onRemoveLoyalty={handleRemoveLoyalty}
+              loyaltyLoading={loyaltyLoading}
+              loyaltyError={loyaltyError}
               error={error}
               placing={placing}
               bothPaymentsOff={bothPayOff}
@@ -595,283 +616,55 @@ export default function CheckoutPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-        /* ── NAV ── */
-        .ck-nav {
-          background: #FDFAF5;
-          border-bottom: 1px solid #E8E0D5;
-        }
-        .ck-nav-inner {
-          max-width: 1440px;
-          margin: 0 auto;
-          padding: 12px 40px;
-          display: flex;
-          align-items: center;
-          gap: 0;
-        }
+        .ck-nav { background: #FDFAF5; border-bottom: 1px solid #E8E0D5; }
+        .ck-nav-inner { max-width: 1440px; margin: 0 auto; padding: 12px 40px; display: flex; align-items: center; gap: 0; }
         @media (max-width: 640px) { .ck-nav-inner { padding: 12px 16px; } }
-        .ck-crumb {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 500;
-          color: #BDB5A8;
-          letter-spacing: 0.02em;
-        }
+        .ck-crumb { display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
         .ck-crumb--done { color: #7A9A6A; }
         .ck-crumb--active { color: #2C4A2E; font-weight: 600; }
-        .ck-crumb-dot {
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: #E8E0D5;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-        .ck-crumb-dot--done {
-          background: #D4E8C8;
-          color: #4A7A3A;
-          font-size: 11px;
-        }
-        .ck-crumb-dot--active {
-          background: #2C4A2E;
-          color: #F5F0E8;
-          box-shadow: 0 0 0 3px rgba(44,74,46,.15);
-        }
-        .ck-crumb-line {
-          flex: 0 0 40px;
-          height: 1px;
-          background: #E0D8CE;
-          margin: 0 8px;
-        }
+        .ck-crumb-dot { width: 24px; height: 24px; border-radius: 50%; background: #E8E0D5; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+        .ck-crumb-dot--done { background: #D4E8C8; color: #4A7A3A; font-size: 11px; }
+        .ck-crumb-dot--active { background: #2C4A2E; color: #F5F0E8; box-shadow: 0 0 0 3px rgba(44,74,46,.15); }
+        .ck-crumb-line { flex: 0 0 40px; height: 1px; background: #E0D8CE; margin: 0 8px; }
         .ck-crumb-line--done { background: #B8D4A8; }
-
-        /* ── ALERT ── */
-        .ck-alert {
-          background: #FEF0EE;
-          border-bottom: 1px solid #F5C8C0;
-          color: #B03020;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          padding: 10px 40px;
-          text-align: center;
-        }
-
-        /* ── PAGE SHELL ── */
-        .ck-page {
-          background: #F7F2EB;
-          min-height: calc(100vh - 100px);
-          width: 100%;
-        }
-        .ck-grid {
-          max-width: 1440px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1fr 420px;
-          min-height: calc(100vh - 100px);
-        }
+        .ck-alert { background: #FEF0EE; border-bottom: 1px solid #F5C8C0; color: #B03020; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 40px; text-align: center; }
+        .ck-page { background: #F7F2EB; min-height: calc(100vh - 100px); width: 100%; }
+        .ck-grid { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 1fr 420px; min-height: calc(100vh - 100px); }
         @media (max-width: 1200px) { .ck-grid { grid-template-columns: 1fr 380px; } }
         @media (max-width: 960px)  { .ck-grid { grid-template-columns: 1fr; padding-bottom: 80px; } }
-
-        /* ── LEFT ── */
-        .ck-left {
-          padding: 40px 48px 60px 48px;
-          display: flex;
-          flex-direction: column;
-          gap: 28px;
-        }
+        .ck-left { padding: 40px 48px 60px 48px; display: flex; flex-direction: column; gap: 28px; }
         @media (max-width: 1100px) { .ck-left { padding: 32px 32px 48px; } }
         @media (max-width: 640px)  { .ck-left { padding: 20px 16px 40px; gap: 20px; } }
-
-        /* ── SECTIONS ── */
-        .ck-section {
-          background: #FFFFFF;
-          border-radius: 20px;
-          overflow: hidden;
-          box-shadow:
-            0 1px 2px rgba(44,30,10,.04),
-            0 4px 20px rgba(44,30,10,.07),
-            inset 0 1px 0 rgba(255,255,255,.8);
-          border: 1px solid rgba(220,210,195,.6);
-          transition: box-shadow .3s ease;
-        }
-        .ck-section:hover {
-          box-shadow:
-            0 2px 4px rgba(44,30,10,.05),
-            0 8px 32px rgba(44,30,10,.1),
-            inset 0 1px 0 rgba(255,255,255,.8);
-        }
-        .ck-section-header {
-          display: flex;
-          align-items: flex-start;
-          gap: 16px;
-          padding: 24px 28px 20px;
-          border-bottom: 1px solid #F2EDE5;
-          background: linear-gradient(180deg, #FEFCF9 0%, #FFFFFF 100%);
-        }
+        .ck-section { background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(44,30,10,.04), 0 4px 20px rgba(44,30,10,.07), inset 0 1px 0 rgba(255,255,255,.8); border: 1px solid rgba(220,210,195,.6); transition: box-shadow .3s ease; }
+        .ck-section:hover { box-shadow: 0 2px 4px rgba(44,30,10,.05), 0 8px 32px rgba(44,30,10,.1), inset 0 1px 0 rgba(255,255,255,.8); }
+        .ck-section-header { display: flex; align-items: flex-start; gap: 16px; padding: 24px 28px 20px; border-bottom: 1px solid #F2EDE5; background: linear-gradient(180deg, #FEFCF9 0%, #FFFFFF 100%); }
         @media (max-width: 640px) { .ck-section-header { padding: 18px 20px 16px; } }
-        .ck-step-badge {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 13px;
-          font-weight: 600;
-          color: #F7F2EB;
-          background: #2C4A2E;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          letter-spacing: 0.5px;
-          box-shadow: 0 4px 12px rgba(44,74,46,.3);
-          margin-top: 2px;
-        }
-        .ck-section-title {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 22px;
-          font-weight: 600;
-          color: #1C2B1E;
-          margin: 0 0 3px;
-          letter-spacing: -0.3px;
-          line-height: 1.2;
-        }
-        .ck-section-desc {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          color: #9A9080;
-          margin: 0;
-          font-weight: 400;
-          letter-spacing: 0.01em;
-        }
+        .ck-step-badge { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 13px; font-weight: 600; color: #F7F2EB; background: #2C4A2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(44,74,46,.3); margin-top: 2px; }
+        .ck-section-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 600; color: #1C2B1E; margin: 0 0 3px; letter-spacing: -0.3px; line-height: 1.2; }
+        .ck-section-desc { font-family: 'DM Sans', sans-serif; font-size: 12px; color: #9A9080; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
         .ck-section-body { padding: 0; }
-
-        /* ── TRUST STRIP ── */
-        .ck-trust {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
+        .ck-trust { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         @media (max-width: 480px) { .ck-trust { grid-template-columns: 1fr; } }
-        .ck-trust-card {
-          background: #FFFFFF;
-          border: 1px solid rgba(220,210,195,.6);
-          border-radius: 16px;
-          padding: 16px 18px;
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          box-shadow: 0 2px 8px rgba(44,30,10,.04);
-          transition: all .25s ease;
-        }
-        .ck-trust-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(44,30,10,.09);
-          border-color: rgba(180,210,160,.7);
-        }
+        .ck-trust-card { background: #FFFFFF; border: 1px solid rgba(220,210,195,.6); border-radius: 16px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 12px; box-shadow: 0 2px 8px rgba(44,30,10,.04); transition: all .25s ease; }
+        .ck-trust-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(44,30,10,.09); border-color: rgba(180,210,160,.7); }
         .ck-trust-icon { font-size: 22px; flex-shrink: 0; }
-        .ck-trust-text {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .ck-trust-text strong {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          color: #2C3A28;
-        }
-        .ck-trust-text span {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 11px;
-          color: #9A9080;
-        }
-
-        /* ── SIDEBAR ── */
-        .ck-sidebar {
-          background: transparent;
-          border-left: none;
-          position: sticky;
-          top: 0;
-          height: 100vh;
-          overflow-y: auto;
-          overflow-x: hidden;
-          scrollbar-width: thin;
-          scrollbar-color: #D8D0C4 transparent;
-          padding: 40px 24px 40px 20px;
-        }
+        .ck-trust-text { display: flex; flex-direction: column; gap: 2px; }
+        .ck-trust-text strong { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; color: #2C3A28; }
+        .ck-trust-text span { font-family: 'DM Sans', sans-serif; font-size: 11px; color: #9A9080; }
+        .ck-sidebar { background: transparent; border-left: none; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #D8D0C4 transparent; padding: 40px 24px 40px 20px; }
         .ck-sidebar::-webkit-scrollbar { width: 3px; }
         .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
         .ck-sidebar::-webkit-scrollbar-thumb { background: #D8D0C4; border-radius: 3px; }
-        @media (max-width: 960px) {
-          .ck-sidebar {
-            position: static;
-            height: auto;
-            border-left: none;
-            padding: 0 16px 40px;
-          }
-        }
-
-        /* ── MOBILE BAR ── */
-        .ck-mob-bar {
-          display: none;
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          background: rgba(255,255,255,.96);
-          backdrop-filter: blur(16px);
-          border-top: 1px solid #E8E0D5;
-          padding: 14px 20px;
-          z-index: 300;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          box-shadow: 0 -8px 32px rgba(0,0,0,.08);
-        }
+        @media (max-width: 960px) { .ck-sidebar { position: static; height: auto; border-left: none; padding: 0 16px 40px; } }
+        .ck-mob-bar { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(16px); border-top: 1px solid #E8E0D5; padding: 14px 20px; z-index: 300; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,.08); }
         @media (max-width: 960px) { .ck-mob-bar { display: flex; } }
         .ck-mob-info { display: flex; flex-direction: column; }
-        .ck-mob-total {
-          font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 22px;
-          font-weight: 700;
-          color: #1C2B1E;
-          line-height: 1;
-        }
-        .ck-mob-sub {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 10px;
-          color: #9A9080;
-          margin-top: 2px;
-          font-weight: 400;
-        }
-        .ck-mob-cta {
-          background: #2C4A2E;
-          color: #F5F0E8;
-          border: none;
-          padding: 14px 24px;
-          border-radius: 14px;
-          font-family: 'DM Sans', sans-serif;
-          font-weight: 600;
-          font-size: 14px;
-          cursor: pointer;
-          white-space: nowrap;
-          box-shadow: 0 4px 16px rgba(44,74,46,.35);
-          transition: all .2s;
-          letter-spacing: 0.02em;
-        }
-        .ck-mob-cta:hover:not(:disabled) {
-          background: #3A6040;
-          box-shadow: 0 8px 24px rgba(44,74,46,.45);
-          transform: translateY(-1px);
-        }
+        .ck-mob-total { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 700; color: #1C2B1E; line-height: 1; }
+        .ck-mob-sub { font-family: 'DM Sans', sans-serif; font-size: 10px; color: #9A9080; margin-top: 2px; font-weight: 400; }
+        .ck-mob-cta { background: #2C4A2E; color: #F5F0E8; border: none; padding: 14px 24px; border-radius: 14px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 16px rgba(44,74,46,.35); transition: all .2s; letter-spacing: 0.02em; }
+        .ck-mob-cta:hover:not(:disabled) { background: #3A6040; box-shadow: 0 8px 24px rgba(44,74,46,.45); transform: translateY(-1px); }
         .ck-mob-cta:disabled { opacity: .5; cursor: not-allowed; }
       `}</style>
     </>
   )
 }
-

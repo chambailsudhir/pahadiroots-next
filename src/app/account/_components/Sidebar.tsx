@@ -4,14 +4,14 @@ import { getInitials, formatCurrency } from '@/lib/account/utils'
 import { type Profile, type AuthUser } from '../hooks/useAuth'
 import styles from '../styles/account.module.css'
 
-export type Tab = 'orders' | 'addresses' | 'profile' | 'password' | 'notifications' | 'privacy'
+export type Tab = 'orders' | 'addresses' | 'profile' | 'password' | 'notifications' | 'privacy' | 'loyalty'
 
 interface Props {
   tab:           Tab
   setTab:        (t: Tab) => void
   profile:       Profile | null
   authUser:      AuthUser | null
-  stats:         { total: number; delivered: number; active: number; spent: number } | null
+  stats:         { total: number; delivered: number; active: number; spent: number; loyalty_points?: number } | null
   onLogout:      () => void
   onOrdersClick: () => void
 }
@@ -27,8 +27,14 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
     ? new Date(profile.created_at as string).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
     : null
 
+  const loyaltyPts = stats?.loyalty_points ?? 0
+  const coinsLabel = loyaltyPts >= 1000
+    ? `${(loyaltyPts / 1000).toFixed(1)}k`
+    : String(loyaltyPts)
+
   const NAV: { key: Tab; icon: string; label: string; badge?: number | null }[] = [
     { key: 'orders',        icon: '📦', label: 'My Orders',       badge: stats?.active || null },
+    { key: 'loyalty',       icon: '🪙', label: 'Pahadi Coins',    badge: loyaltyPts > 0 ? loyaltyPts : null },
     { key: 'addresses',     icon: '📍', label: 'Addresses' },
     { key: 'profile',       icon: '👤', label: 'Profile' },
     { key: 'password',      icon: '🔒', label: 'Change Password' },
@@ -48,23 +54,46 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
         {since  && <div className={styles.sbMember}>Member since {since}</div>}
       </div>
 
+      {/* ── Stats row ─────────────────────────────────────────── */}
       {stats && (
-        <div className={styles.sbStats}>
-          <div className={styles.sbStat}>
-            <div className={styles.sbStatVal}>{stats.total}</div>
-            <div className={styles.sbStatLbl}>Orders</div>
+        <>
+          <div className={styles.sbStats}>
+            <div className={styles.sbStat}>
+              <div className={styles.sbStatVal}>{stats.total}</div>
+              <div className={styles.sbStatLbl}>Orders</div>
+            </div>
+            <div className={styles.sbStatDiv} />
+            <div className={styles.sbStat}>
+              <div className={styles.sbStatVal}>{stats.delivered}</div>
+              <div className={styles.sbStatLbl}>Delivered</div>
+            </div>
+            <div className={styles.sbStatDiv} />
+            <div className={styles.sbStat}>
+              <div className={styles.sbStatVal}>{formatCurrency(stats.spent)}</div>
+              <div className={styles.sbStatLbl}>Spent</div>
+            </div>
           </div>
-          <div className={styles.sbStatDiv} />
-          <div className={styles.sbStat}>
-            <div className={styles.sbStatVal}>{stats.delivered}</div>
-            <div className={styles.sbStatLbl}>Delivered</div>
-          </div>
-          <div className={styles.sbStatDiv} />
-          <div className={styles.sbStat}>
-            <div className={styles.sbStatVal}>{formatCurrency(stats.spent)}</div>
-            <div className={styles.sbStatLbl}>Spent</div>
-          </div>
-        </div>
+
+          {/* ── Loyalty coins banner ─────────────────────────── */}
+          <button
+            className={styles.sbCoinsBanner}
+            onClick={() => setTab('loyalty')}
+            aria-label={`View Pahadi Coins — ${loyaltyPts} coins`}
+          >
+            <span className={styles.sbCoinsIcon}>🪙</span>
+            <div className={styles.sbCoinsInfo}>
+              <span className={styles.sbCoinsVal}>{coinsLabel} Pahadi Coins</span>
+              <span className={styles.sbCoinsSub}>
+                {loyaltyPts > 0
+                  ? `≈ ₹${Math.floor(loyaltyPts * 0.25)} redeemable`
+                  : 'Earn coins on every order'}
+              </span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={styles.sbCoinsArrow} aria-hidden="true">
+              <path d="M5 3L9 7L5 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </>
       )}
 
       <div className={styles.sbNav}>
@@ -74,14 +103,19 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
             className={[
               styles.sbItem,
               tab === it.key ? styles.sbItemActive : '',
-              it.key === 'privacy' ? styles.sbPrivacy : '',
+              it.key === 'privacy'  ? styles.sbPrivacy  : '',
+              it.key === 'loyalty'  ? styles.sbLoyalty  : '',
             ].filter(Boolean).join(' ')}
             onClick={() => { setTab(it.key); if (it.key === 'orders') onOrdersClick() }}
             aria-current={tab === it.key ? 'page' : undefined}
           >
             <span className={styles.sbIcon}>{it.icon}</span>
             <span className={styles.sbLabel}>{it.label}</span>
-            {it.badge ? <span className={styles.sbBadge}>{it.badge}</span> : null}
+            {it.badge ? (
+              <span className={it.key === 'loyalty' ? styles.sbCoinsBadge : styles.sbBadge}>
+                {it.key === 'loyalty' ? coinsLabel : it.badge}
+              </span>
+            ) : null}
           </button>
         ))}
         <div className={styles.sbDiv} />

@@ -5,52 +5,82 @@ import { createOrder, logOrderEvent } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
 
-// ─── Razorpay helper ─────────────────────────────────────────────────────────
-// Proper server-side Razorpay order creation as recommended by Razorpay docs
-// https://razorpay.com/docs/payments/server-integration/nodejs/payment-gateway/build-integration/
+// ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
   const keyId     = process.env.RAZORPAY_KEY_ID?.trim()
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()
-
   if (!keyId || !keySecret) {
     throw new Error('Razorpay keys not configured — add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Vercel env vars')
   }
-
-  // Razorpay requires Basic Auth: base64(key_id:key_secret)
   const credentials = Buffer.from(`${keyId}:${keySecret}`).toString('base64')
-
   const res = await fetch('https://api.razorpay.com/v1/orders', {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Basic ${credentials}`,
-    },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${credentials}` },
     body: JSON.stringify({
-      amount:   amountPaise,          // must be integer paise (e.g. 39800 for ₹398)
+      amount:   amountPaise,
       currency: 'INR',
-      receipt:  receiptId.slice(0, 40), // max 40 chars
+      receipt:  receiptId.slice(0, 40),
       notes:    { db_order_id: String(dbOrderId) },
     }),
   })
-
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { description: res.statusText } }))
+    const err  = await res.json().catch(() => ({ error: { description: res.statusText } }))
     const desc = err?.error?.description || JSON.stringify(err)
-    console.error('[payments] Razorpay order creation failed:', desc, '| key prefix:', keyId.slice(0, 14))
     throw new Error(`Razorpay order creation failed: ${desc}`)
   }
-
-  return res.json() // { id, amount, currency, receipt, ... }
+  return res.json()
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
+// ─── Loyalty helpers ──────────────────────────────────────────────────────────
+async function callLoyaltyRpc(rpc: string, params: Record<string, unknown>) {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
+  return fetch(`${SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
+    method: 'POST',
+    headers: {
+      apikey:         SERVICE_KEY,
+      Authorization:  `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  })
+}
+
+async function redeemLoyaltyPoints(customerId: string | number, orderId: string | number, points: number): Promise<boolean> {
+  if (!points || points <= 0) return true
+  try {
+    const res    = await callLoyaltyRpc('redeem_loyalty_points', {
+      p_customer_id: Number(customerId), p_order_id: Number(orderId), p_points: points,
+      p_note: 'Redeemed at checkout',
+    })
+    const result = await res.json()
+    return res.ok && (result === true || result?.result === true)
+  } catch { return false }
+}
+
+async function awardLoyaltyPoints(
+  customerId: string | number, orderId: string | number,
+  orderTotal: number, settings: Record<string, string>,
+): Promise<void> {
+  if (settings.loyalty_enabled === 'false') return
+  const rate    = parseFloat(settings.loyalty_points_per_rupee || '1')
+  const pts     = Math.floor(orderTotal * rate)
+  if (pts <= 0) return
+  try {
+    await callLoyaltyRpc('award_loyalty_points', {
+      p_customer_id: Number(customerId), p_order_id: Number(orderId),
+      p_points: pts, p_note: 'Earned from online payment',
+    })
+  } catch (e) { console.error('[loyalty] award failed:', e) }
+}
+
+// ─── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
     const body   = await req.json()
     const action = body.action as string
 
-    // ── ACTION 1: Initiate payment ──────────────────────────────────────────
-    // Flow: validate → create DB order → create Razorpay order → return to client
+    // ── ACTION 1: Initiate payment ─────────────────────────────────────────
     if (action === 'create_payment') {
       const parsed = createOrderSchema.safeParse(body)
       if (!parsed.success) {
@@ -58,10 +88,9 @@ export async function POST(req: Request) {
       }
 
       const settings = await getSiteSettings()
-      const pd = parsed.data
+      const pd       = parsed.data
 
-      // 1. Create order in our DB (stock check, price recalculation, idempotency)
-      const { order, alreadyExists } = await createOrder({
+      const { order, alreadyExists, customerId } = await createOrder({
         customerName:   pd.address.name,
         customerPhone:  pd.address.phone,
         customerEmail:  pd.customer_email || undefined,
@@ -71,59 +100,52 @@ export async function POST(req: Request) {
         state:          pd.address.state,
         pincode:        pd.address.pincode,
         label:          pd.address.label,
-        items:          pd.items.map(i => ({
-          ...i,
-          productId: String(i.productId),
-          variantId: String(i.variantId),
-        })),
+        items:          pd.items.map(i => ({ ...i, productId: String(i.productId), variantId: String(i.variantId) })),
         paymentMethod:  'razorpay',
         couponCode:     pd.coupon_code,
         idempotencyKey: pd.idempotency_key,
+        // ── Loyalty ──────────────────────────────────────────────────────
+        loyaltyPointsRedeemed: pd.loyalty_points_redeemed ?? 0,
       }, settings)
 
-      // Amount in paise — must be a whole number (Razorpay requirement)
       const amountPaise = Math.round(order.total_amount * 100)
-      console.log(`[payments] DB order ${order.id} created, amount=₹${order.total_amount} (${amountPaise} paise), alreadyExists=${alreadyExists}`)
 
-      // 2. Create Razorpay order server-side (tamper-proof amount, enables HMAC verification)
-      const receiptId   = order.order_number || `ORD-${order.id}`
-      const rzpOrder    = await createRazorpayOrder(amountPaise, receiptId, order.id)
+      const receiptId = order.order_number || `ORD-${order.id}`
+      const rzpOrder  = await createRazorpayOrder(amountPaise, receiptId, order.id)
 
-      // 3. Save Razorpay order ID to our DB (needed for webhook reconciliation)
       const db = getServiceClient()
       await db.from('orders').update({ payment_id: rzpOrder.id }).eq('id', order.id)
 
-      console.log(`[payments] Razorpay order created: ${rzpOrder.id} for DB order ${order.id}`)
-
-      // 4. Return to client — client will open Razorpay checkout with these values
       return NextResponse.json({
         success:           true,
-        order_id:          String(order.id),       // our DB order id
-        razorpay_order_id: rzpOrder.id,            // rzp_live_xxx — goes into Razorpay options.order_id
-        amount:            rzpOrder.amount,         // paise (from Razorpay, authoritative)
+        order_id:          String(order.id),
+        razorpay_order_id: rzpOrder.id,
+        amount:            rzpOrder.amount,
         currency:          rzpOrder.currency,
+        // Pass back for use in verify_payment step
+        customer_id:       customerId ?? null,
+        loyalty_points_redeemed: pd.loyalty_points_redeemed ?? 0,
       })
     }
 
-    // ── ACTION 2: Verify payment after Razorpay success callback ────────────
-    // Flow: HMAC verify → update DB order → return order_number to client
+    // ── ACTION 2: Verify payment after Razorpay success callback ─────────
     if (action === 'verify_payment') {
       const {
-        razorpay_order_id,    // from Razorpay response
-        razorpay_payment_id,  // from Razorpay response
-        razorpay_signature,   // from Razorpay response
-        order_id,             // our DB order id
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+        order_id,
+        // ── Loyalty — passed back from checkout (originally from create_payment) ──
+        loyalty_points_redeemed = 0,
       } = body
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !order_id) {
         return NextResponse.json({ error: 'Missing required payment verification fields' }, { status: 400 })
       }
 
-      // 1. Verify HMAC signature — Razorpay standard: sha256(order_id + "|" + payment_id)
+      // 1. Verify HMAC signature
       const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()
-      if (!keySecret) {
-        throw new Error('RAZORPAY_KEY_SECRET not configured')
-      }
+      if (!keySecret) throw new Error('RAZORPAY_KEY_SECRET not configured')
 
       const expectedSignature = crypto
         .createHmac('sha256', keySecret)
@@ -131,15 +153,14 @@ export async function POST(req: Request) {
         .digest('hex')
 
       if (expectedSignature !== razorpay_signature) {
-        console.error('[payments] HMAC signature mismatch — possible tampered request', { order_id, razorpay_payment_id })
+        console.error('[payments] HMAC signature mismatch', { order_id, razorpay_payment_id })
         await logOrderEvent(order_id, 'payment_signature_mismatch', 'system', {
-          razorpay_order_id,
-          razorpay_payment_id,
+          razorpay_order_id, razorpay_payment_id,
         }).catch(() => null)
         return NextResponse.json({ error: 'Payment verification failed — signature mismatch' }, { status: 400 })
       }
 
-      // 2. Mark order as paid in DB
+      // 2. Mark order as paid
       const db = getServiceClient()
       const { error: updateErr } = await db.from('orders').update({
         order_status:   'confirmed',
@@ -147,37 +168,54 @@ export async function POST(req: Request) {
         payment_id:     razorpay_payment_id,
       }).eq('id', order_id)
 
-      if (updateErr) {
-        console.error('[payments] order update failed after verified payment:', updateErr.message)
-        // Don't throw — payment IS verified, just log and continue
-      }
+      if (updateErr) console.error('[payments] order update failed after verified payment:', updateErr.message)
 
-      // 3. Fetch order number for redirect
-      const { data: updatedOrder } = await db
+      // 3. Fetch order + customer for loyalty & email
+      const { data: fullOrder } = await db
         .from('orders')
-        .select('order_number')
+        .select('id, order_number, total_amount, customer_id')
         .eq('id', order_id)
         .single()
 
+      // 4. ── Loyalty: redeem then award ────────────────────────────────────
+      const custId = fullOrder?.customer_id
+      if (custId) {
+        // Deduct redeemed points (validate atomically — if insufficient, silently skip)
+        if (loyalty_points_redeemed > 0) {
+          const redeemed = await redeemLoyaltyPoints(custId, order_id, loyalty_points_redeemed)
+          if (!redeemed) {
+            console.warn(`[loyalty] Redemption skipped for order ${order_id} — insufficient balance`)
+          }
+        }
+        // Award new points for completing a paid order
+        const settings = await getSiteSettings()
+        await awardLoyaltyPoints(custId, order_id, fullOrder?.total_amount ?? 0, settings)
+      }
+
+      // 5. Fetch updated order number for redirect
+      const { data: updatedOrder } = await db
+        .from('orders').select('order_number').eq('id', order_id).single()
+
       await logOrderEvent(order_id, 'payment_verified', 'razorpay', {
-        razorpay_payment_id,
-        razorpay_order_id,
+        razorpay_payment_id, razorpay_order_id,
       }).catch(() => null)
 
-      // Send confirmation email for Razorpay orders
+      // 6. Confirmation email
       try {
-        const { data: fullOrder } = await db
-          .from('orders')
-          .select('id, order_number, total_amount, customer_id')
-          .eq('id', order_id)
-          .single()
         const { data: customer } = await db
-          .from('customers')
-          .select('first_name, email')
-          .eq('id', fullOrder?.customer_id)
-          .single()
+          .from('customers').select('first_name, email').eq('id', fullOrder?.customer_id).single()
 
         if (customer?.email && fullOrder) {
+          const settings = await getSiteSettings()
+          const coinsEarned = Math.floor(fullOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+          const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
+            ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
+                 <span style="font-size:18px">🪙</span>
+                 <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins!</strong>
+                 <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them on your next order.</p>
+               </div>`
+            : ''
+
           const { Resend } = await import('resend')
           const resend = new Resend(process.env.RESEND_API_KEY)
           await resend.emails.send({
@@ -197,8 +235,9 @@ export async function POST(req: Request) {
                      <strong>Payment ID:</strong> ${razorpay_payment_id}<br>
                      <strong>Amount Paid:</strong> ₹${fullOrder.total_amount}<br>
                      <strong>Delivery:</strong> 3–5 business days</p>
+                  ${coinsHtml}
                   <p style="color:#666;font-size:14px">We'll WhatsApp you tracking details once shipped.</p>
-                  <a href="https://pahadiroots.com/track" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
+                  <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
                 </div>
                 <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
                   Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
@@ -207,8 +246,6 @@ export async function POST(req: Request) {
           }).catch(() => null)
         }
       } catch (e) { console.error('[payments] Email failed:', e) }
-
-      console.log(`[payments] payment verified ✓ order=${order_id} payment=${razorpay_payment_id}`)
 
       return NextResponse.json({
         success:      true,

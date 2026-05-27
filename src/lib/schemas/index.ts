@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// ─── Address Schema ───────────────────────────────────────────────────────────
+// ─── Address Schema ────────────────────────────────────────────────────────────
 
 export const addressSchema = z.object({
   name:    z.string().trim().min(2).max(100),
@@ -13,61 +13,54 @@ export const addressSchema = z.object({
   label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
 })
 
-// ─── Order Schema ─────────────────────────────────────────────────────────────
+// ─── Order Schema ──────────────────────────────────────────────────────────────
 
 export const orderItemSchema = z.object({
-  productId:  z.string().min(1),   // integer or UUID — DB uses integer IDs
-  variantId:  z.string().min(1),   // integer or UUID — DB uses integer IDs
+  productId:  z.string().min(1),
+  variantId:  z.string().min(1),
   qty:        z.number().int().min(1).max(50),
 })
 
 export const createOrderSchema = z.object({
-  address:          addressSchema,
-  items:            z.array(orderItemSchema).min(1).max(30),
-  payment_method:   z.enum(['razorpay', 'cod']),
-  coupon_code:      z.string().trim().max(50).optional(),
-  idempotency_key:  z.string().uuid(),
-  customer_email:   z.string().email().optional().or(z.literal('')),
+  address:                addressSchema,
+  items:                  z.array(orderItemSchema).min(1).max(30),
+  payment_method:         z.enum(['razorpay', 'cod']),
+  coupon_code:            z.string().trim().max(50).optional(),
+  idempotency_key:        z.string().uuid(),
+  customer_email:         z.string().email().optional().or(z.literal('')),
+  // ── Loyalty coins ────────────────────────────────────────────────────────
+  loyalty_points_redeemed: z.number().int().min(0).max(100_000).optional().default(0),
 })
 
-// ─── Payment Schema ───────────────────────────────────────────────────────────
+// ─── Payment Schema ────────────────────────────────────────────────────────────
 
 export const verifyPaymentSchema = z.object({
   razorpay_order_id:   z.string(),
   razorpay_payment_id: z.string(),
   razorpay_signature:  z.string(),
-  order_id:            z.string().min(1),  // our DB order id (integer)
+  order_id:            z.string().min(1),
 })
 
-// ─── Coupon Schema ────────────────────────────────────────────────────────────
+// ─── Coupon Schema ─────────────────────────────────────────────────────────────
 
 export const validateCouponSchema = z.object({
   code:     z.string().trim().min(1).max(50),
   subtotal: z.number().positive(),
 })
 
-// ─── Review Schema ────────────────────────────────────────────────────────────
+// ─── Review Schema ─────────────────────────────────────────────────────────────
 
 export const reviewSchema = z.object({
-  product_id:    z.string().min(1),  // integer ID
+  product_id:    z.string().min(1),
   customer_name: z.string().trim().min(2).max(100),
   rating:        z.number().int().min(1).max(5),
   comment:       z.string().trim().max(1000).optional(),
-  order_id:      z.string().min(1).optional(),  // integer ID
+  order_id:      z.string().min(1).optional(),
 })
 
-// ─── Newsletter Schema ────────────────────────────────────────────────────────
+// ─── Newsletter Schema ─────────────────────────────────────────────────────────
 
-export const subscribeSchema = z.object({
-  email: z.string().email().toLowerCase().trim(),
+export const newsletterSchema = z.object({
+  email: z.string().email(),
   name:  z.string().trim().max(100).optional(),
 })
-
-// ─── Search Schema ────────────────────────────────────────────────────────────
-
-export const searchSchema = z.object({
-  q:       z.string().trim().min(1).max(100),
-  limit:   z.number().int().min(1).max(48).optional().default(24),
-  offset:  z.number().int().min(0).optional().default(0),
-})
-

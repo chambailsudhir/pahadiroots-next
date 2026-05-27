@@ -2,17 +2,9 @@
 // /api/orders — paginated + searchable orders route
 //
 //  ✅ GET ?page=&limit=&search=&status=
-//  ✅ Returns { success, orders, total, page, pages }
+//  ✅ Returns { success, orders, total, page, pages, stats }
+//  ✅ stats now includes loyalty_points balance (from updated RPC)
 //  ✅ Token refresh on expiry
-//  ✅ Count via Prefer:count=exact (O(1) — no full table scan)
-//
-// Fix 3: Stats now fetched via get_customer_order_stats RPC
-//   (DB-level aggregation — avoids full table scan on every load).
-//   Graceful fallback to null if RPC is not yet deployed; the client
-//   computes stats from the loaded page-1 orders in that case.
-//
-//   Run this SQL in Supabase once to enable the fast path:
-//   ↓ see /sql/migrations/get_customer_order_stats.sql
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -23,17 +15,11 @@ import {
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 
-// Confirmed enum values from pg_enum — DO NOT add values not in this list
-// or PostgREST will throw "invalid input value for enum order_status_enum"
 const VALID_DB_STATUSES = new Set([
   'pending', 'confirmed', 'packed', 'shipped',
   'delivered', 'cancelled', 'returned',
 ])
 
-// Display-label map: DB status -> UI display status
-// The extra keys (return_requested etc.) are set by the app on orders
-// that have a return record; they are display-only, never written to
-// order_status in the DB.
 const STATUS_MAP: Record<string, string> = {
   pending:          'pending',
   confirmed:        'confirmed',
@@ -58,8 +44,6 @@ async function getCustomerOrders(
 
   let statusFilter = ''
   if (status) {
-    // Only pass values that exist in the DB enum — unknown values would
-    // cause PostgREST to throw "invalid input value for enum order_status_enum"
     const validStatuses = status
       .split(',')
       .map(s => s.trim())
@@ -76,12 +60,11 @@ async function getCustomerOrders(
 
   const baseFilter = `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}`
 
-  // O(1) count — no rows returned
   const total = await sbAdminCount(baseFilter)
 
   const rows = await sbAdmin(
     'GET',
-    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`,
+    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`,
   ).catch(() => [])
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
@@ -108,44 +91,45 @@ async function getCustomerOrders(
       tracking_number: o.tracking_number || null, courier: o.courier || null,
       shipped_at: o.shipped_at || null, delivered_at: o.delivered_at || null,
       updated_at: o.updated_at || null, items, _return: ret,
+      loyalty_points_earned:   Number(o.loyalty_points_earned)   || 0,
+      loyalty_points_redeemed: Number(o.loyalty_points_redeemed) || 0,
     }
   })
 
   return { orders, total, page, pages: Math.ceil(total / limit) }
 }
 
-// ── Fetch stats via DB-level aggregation RPC ──────────────────
-// Replaces the old approach of fetching ALL order rows for aggregation.
-// Returns null if the RPC function hasn't been deployed yet; the client
-// falls back to computing stats from the page-1 orders already in memory.
-//
-// Deploy the function with:
-//   supabase/migrations/get_customer_order_stats.sql   (provided separately)
+// ── Fetch stats via DB-level aggregation RPC ───────────────────
+// Updated RPC now also returns loyalty_points balance.
+// Falls back gracefully if the new RPC column doesn't exist yet.
 async function getStatsFromRpc(
   customerId: string | number,
-): Promise<{ delivered: number; active: number; cancelled: number; spent: number } | null> {
+): Promise<{
+  delivered: number; active: number; cancelled: number;
+  spent: number; loyalty_points: number
+} | null> {
   try {
     const result = await sbAdmin(
       'POST',
       '/rest/v1/rpc/get_customer_order_stats',
       { p_customer_id: customerId },
     )
-    // RPC returns an array with one row
     const row = Array.isArray(result) ? result[0] : result
     if (!row) return null
     return {
-      delivered: Number(row.delivered) || 0,
-      active:    Number(row.active)    || 0,
-      cancelled: Number(row.cancelled) || 0,
-      spent:     Number(row.spent)     || 0,
+      delivered:      Number(row.delivered)      || 0,
+      active:         Number(row.active)         || 0,
+      cancelled:      Number(row.cancelled)      || 0,
+      spent:          Number(row.spent)          || 0,
+      // New column added in db_migration_v4_loyalty.sql
+      loyalty_points: Number(row.loyalty_points) || 0,
     }
   } catch {
-    // RPC not yet deployed or failed — return null so client handles gracefully
     return null
   }
 }
 
-// ── GET /api/orders?page=1&limit=20&search=&status= ──────────
+// ── GET /api/orders?page=1&limit=20&search=&status= ───────────
 export async function GET(req: NextRequest) {
   let token = getToken(req)
   let refreshed = !token ? await tryRefresh(req) : null
@@ -163,9 +147,6 @@ export async function GET(req: NextRequest) {
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
-    // Run paginated orders + stats in parallel when both are needed.
-    // Stats only on page 1 with no active filters (otherwise they'd be
-    // filtered-subset stats, not the user's true account totals).
     const needsStats = page === 1 && !search && !status
 
     const [result, stats] = await Promise.all([

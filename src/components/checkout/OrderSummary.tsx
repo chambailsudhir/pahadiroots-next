@@ -7,6 +7,12 @@ import type { SiteSettings } from '@/types'
 
 interface CouponHint { code: string; label: string }
 
+// ── Loyalty redemption shape ──────────────────────────────────
+export interface LoyaltyRedemption {
+  points:       number   // points to redeem
+  discount_inr: number   // ₹ value of those points
+}
+
 interface Props {
   items: any[]
   pricing: any
@@ -19,6 +25,14 @@ interface Props {
   onCouponCodeChange: (v: string) => void
   onApplyCoupon: () => void
   onRemoveCoupon: () => void
+  // ── Loyalty ───────────────────────────────────────────────
+  loyaltyBalance:    number             // user's current coins balance
+  loyaltyRedemption: LoyaltyRedemption | null
+  onApplyLoyalty:    (pts: number) => Promise<void>
+  onRemoveLoyalty:   () => void
+  loyaltyLoading:    boolean
+  loyaltyError:      string
+  // ── Rest ──────────────────────────────────────────────────
   error: string
   placing: boolean
   bothPaymentsOff: boolean
@@ -33,17 +47,28 @@ interface Props {
 export default function OrderSummary({
   items, pricing, coupon, settings, couponCode, couponLoading,
   couponError, couponHints, onCouponCodeChange, onApplyCoupon,
-  onRemoveCoupon, error, placing, bothPaymentsOff, belowMinOrder,
+  onRemoveCoupon,
+  loyaltyBalance, loyaltyRedemption, onApplyLoyalty, onRemoveLoyalty,
+  loyaltyLoading, loyaltyError,
+  error, placing, bothPaymentsOff, belowMinOrder,
   minOrderAmt, onPlaceOrder, payMethod, summaryOpen, onToggleSummary,
 }: Props) {
-  const [showHints, setShowHints] = useState(false)
+  const [showHints,      setShowHints]      = useState(false)
+  const [showLoyalty,    setShowLoyalty]    = useState(false)
+  const [loyaltyInput,   setLoyaltyInput]   = useState('')
 
-  const savingsBadge   = pricing.discount + pricing.prepaidDiscount
+  const savingsBadge   = pricing.discount + pricing.prepaidDiscount + (loyaltyRedemption?.discount_inr ?? 0)
   const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
   const loyaltyEnabled = settings.loyalty_enabled === 'true'
-  const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '0.1')
-  const loyaltyLabel   = settings.loyalty_points_label || 'reward points'
+  const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '1')
+  const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
+  const pointsValue    = parseFloat(settings.loyalty_points_value || '0.25')
   const loyaltyPts     = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
+
+  const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
+  const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
+  const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)
+  const cappedBalance  = Math.min(loyaltyBalance, maxRedeemPts)
 
   const now     = new Date()
   const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
@@ -53,6 +78,12 @@ export default function OrderSummary({
   const etaMin  = new Date(now); etaMin.setDate(now.getDate() + minDays)
   const etaMax  = new Date(now); etaMax.setDate(now.getDate() + maxDays)
   const fmt     = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+
+  async function handleApplyLoyalty() {
+    const pts = parseInt(loyaltyInput, 10)
+    if (!pts || pts <= 0) return
+    await onApplyLoyalty(pts)
+  }
 
   return (
     <div className="os-root">
@@ -96,7 +127,7 @@ export default function OrderSummary({
 
         <div className="os-rule" />
 
-        {/* Coupon */}
+        {/* ── Coupon ─────────────────────────────────────────── */}
         <div className="os-coupon-area">
           {coupon ? (
             <div className="os-coupon-applied">
@@ -152,6 +183,104 @@ export default function OrderSummary({
           )}
         </div>
 
+        {/* ── Loyalty coins redemption ───────────────────────── */}
+        {loyaltyEnabled && loyaltyBalance > 0 && (
+          <>
+            <div className="os-rule" />
+            <div className="os-loyalty-area">
+              {loyaltyRedemption ? (
+                /* Applied state */
+                <div className="os-loyalty-applied">
+                  <div className="os-loyalty-applied-left">
+                    <span className="os-loyalty-emoji">🪙</span>
+                    <div>
+                      <div className="os-loyalty-applied-title">
+                        {loyaltyRedemption.points} {loyaltyLabel} applied
+                      </div>
+                      <div className="os-loyalty-applied-save">
+                        Saving {formatPrice(loyaltyRedemption.discount_inr)}
+                      </div>
+                    </div>
+                  </div>
+                  <button className="os-coupon-rm" onClick={onRemoveLoyalty} type="button" aria-label="Remove loyalty discount">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                /* Input state */
+                <>
+                  <button
+                    className={`os-loyalty-toggle${showLoyalty ? ' os-loyalty-toggle--open' : ''}`}
+                    onClick={() => setShowLoyalty(v => !v)}
+                    type="button"
+                  >
+                    <span>🪙</span>
+                    <span className="os-loyalty-toggle-title">
+                      Use {loyaltyLabel}
+                    </span>
+                    <span className="os-loyalty-toggle-bal">
+                      {loyaltyBalance} available
+                    </span>
+                    <svg
+                      className={`os-loyalty-chev${showLoyalty ? ' os-loyalty-chev--open' : ''}`}
+                      width="12" height="8" viewBox="0 0 12 8" fill="none"
+                    >
+                      <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    </svg>
+                  </button>
+
+                  {showLoyalty && (
+                    <div className="os-loyalty-panel">
+                      <div className="os-loyalty-info">
+                        <div className="os-loyalty-info-row">
+                          <span>Your balance</span>
+                          <strong>{loyaltyBalance} coins</strong>
+                        </div>
+                        <div className="os-loyalty-info-row">
+                          <span>Max redeemable</span>
+                          <strong>{cappedBalance} coins (₹{Math.floor(cappedBalance * pointsValue)})</strong>
+                        </div>
+                        <div className="os-loyalty-info-row os-loyalty-info-muted">
+                          <span>1 coin = ₹{pointsValue} · Max {maxRedeemPct}% of order</span>
+                        </div>
+                      </div>
+                      <div className="os-loyalty-input-row">
+                        <input
+                          className="os-loyalty-input"
+                          type="number"
+                          min={parseInt(settings.loyalty_min_redeem || '40')}
+                          max={cappedBalance}
+                          value={loyaltyInput}
+                          onChange={e => setLoyaltyInput(e.target.value)}
+                          placeholder={`Enter coins (max ${cappedBalance})`}
+                          aria-label="Coins to redeem"
+                          onFocus={() => { if (!loyaltyInput) setLoyaltyInput(String(cappedBalance)) }}
+                        />
+                        <button
+                          className="os-loyalty-apply-btn"
+                          onClick={handleApplyLoyalty}
+                          disabled={loyaltyLoading || !loyaltyInput}
+                          type="button"
+                        >
+                          {loyaltyLoading ? <span className="os-spin" /> : 'Redeem'}
+                        </button>
+                      </div>
+                      {loyaltyInput && parseInt(loyaltyInput) > 0 && (
+                        <div className="os-loyalty-preview">
+                          💸 Saves ₹{Math.floor(parseInt(loyaltyInput || '0') * pointsValue)} on this order
+                        </div>
+                      )}
+                      {loyaltyError && <p className="os-coupon-err">⚠ {loyaltyError}</p>}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         <div className="os-rule" />
 
         {/* Price table */}
@@ -170,6 +299,13 @@ export default function OrderSummary({
             <div className="os-price-row os-price-row--green">
               <span>Prepaid discount ({prepaidPct}%)</span>
               <span>−{formatPrice(pricing.prepaidDiscount)}</span>
+            </div>
+          )}
+          {/* Loyalty discount row */}
+          {loyaltyRedemption && loyaltyRedemption.discount_inr > 0 && (
+            <div className="os-price-row os-price-row--coins">
+              <span>🪙 {loyaltyLabel} ({loyaltyRedemption.points} coins)</span>
+              <span>−{formatPrice(loyaltyRedemption.discount_inr)}</span>
             </div>
           )}
           <div className="os-price-row">
@@ -197,8 +333,8 @@ export default function OrderSummary({
               <span>You're saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
             </div>
           )}
-          {loyaltyEnabled && loyaltyPts > 0 && (
-            <div className="os-loyalty-strip">
+          {loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
+            <div className="os-loyalty-earn-strip">
               ⭐ Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
             </div>
           )}
@@ -523,6 +659,147 @@ export default function OrderSummary({
           color: #9A9080;
         }
 
+        /* ── Loyalty coins area ─────────────────────────────── */
+        .os-loyalty-area { padding: 14px 24px; }
+
+        /* Applied */
+        .os-loyalty-applied {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px;
+          background: linear-gradient(135deg, #FFFBE8, #FFF6CC);
+          border: 1.5px solid #E8C940;
+          border-radius: 14px;
+          gap: 8px;
+        }
+        .os-loyalty-applied-left { display: flex; align-items: center; gap: 10px; }
+        .os-loyalty-emoji { font-size: 20px; }
+        .os-loyalty-applied-title {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 700;
+          color: #7A5800;
+          letter-spacing: 0.3px;
+        }
+        .os-loyalty-applied-save {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 11px;
+          color: #A07020;
+          font-weight: 500;
+          margin-top: 1px;
+        }
+
+        /* Toggle */
+        .os-loyalty-toggle {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 11px 14px;
+          background: #FDFAF4;
+          border: 1.5px solid #E8D878;
+          border-radius: 12px;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          transition: border-color .2s, background .2s;
+          text-align: left;
+        }
+        .os-loyalty-toggle:hover,
+        .os-loyalty-toggle--open {
+          border-color: #C8A800;
+          background: #FFFBE8;
+        }
+        .os-loyalty-toggle-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #7A5800;
+          flex: 1;
+        }
+        .os-loyalty-toggle-bal {
+          font-size: 11px;
+          color: #A08020;
+          background: #F5E840;
+          padding: 2px 8px;
+          border-radius: 20px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .os-loyalty-chev {
+          color: #C8A800;
+          transition: transform .2s;
+          flex-shrink: 0;
+        }
+        .os-loyalty-chev--open { transform: rotate(180deg); }
+
+        /* Panel */
+        .os-loyalty-panel {
+          margin-top: 10px;
+          background: #FFFCF0;
+          border: 1.5px solid #E8D060;
+          border-radius: 12px;
+          padding: 14px;
+        }
+        .os-loyalty-info { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
+        .os-loyalty-info-row {
+          display: flex;
+          justify-content: space-between;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          color: #7A6020;
+        }
+        .os-loyalty-info-row strong { font-weight: 700; }
+        .os-loyalty-info-muted span {
+          color: #B0A060;
+          font-size: 11px;
+        }
+        .os-loyalty-input-row { display: flex; gap: 8px; }
+        .os-loyalty-input {
+          flex: 1;
+          min-width: 0;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          padding: 10px 12px;
+          border: 1.5px solid #D8C840;
+          border-radius: 10px;
+          background: #fff;
+          outline: none;
+          color: #5a4800;
+          transition: border-color .2s;
+        }
+        .os-loyalty-input:focus { border-color: #C8A800; box-shadow: 0 0 0 3px rgba(200,168,0,.1); }
+        .os-loyalty-input::placeholder { color: #C8B870; font-weight: 400; }
+        .os-loyalty-apply-btn {
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          color: #fff;
+          background: #C8A800;
+          border: none;
+          padding: 10px 16px;
+          border-radius: 10px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: background .2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 64px;
+        }
+        .os-loyalty-apply-btn:hover:not(:disabled) { background: #a88800; }
+        .os-loyalty-apply-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .os-loyalty-preview {
+          margin-top: 8px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 12px;
+          color: #7A5800;
+          font-weight: 600;
+          background: #FFF5C0;
+          border-radius: 8px;
+          padding: 6px 10px;
+        }
+
         /* Price table */
         .os-price-table {
           padding: 16px 24px;
@@ -539,6 +816,7 @@ export default function OrderSummary({
           color: #7A7060;
         }
         .os-price-row--green { color: #3A7030; font-weight: 600; }
+        .os-price-row--coins { color: #C8A800; font-weight: 600; }
         .os-price-row--muted { font-size: 11px; color: #B0A898; }
         .os-free { color: #3A7030; font-weight: 600; }
 
@@ -579,7 +857,7 @@ export default function OrderSummary({
           color: #3A6030;
         }
         .os-saving-strip strong { font-weight: 700; }
-        .os-loyalty-strip {
+        .os-loyalty-earn-strip {
           background: #FEF6E0;
           border: 1px solid #E8D070;
           border-radius: 10px;

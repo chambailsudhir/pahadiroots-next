@@ -1,12 +1,6 @@
 'use client'
 // ─────────────────────────────────────────────────────────────
-// AccountPage — lean orchestrator
-//  ✅ CSS Module (no inline styles)
-//  ✅ Auth state machine (guest/loading/authenticated/expired/failed)
-//  ✅ Session expired banner
-//  ✅ All logic delegated to hooks + sections
-//  ✅ Tab state URL-synced (?tab=orders|addresses|profile|password|notifications|privacy)
-//     Suspense wrapper required for useSearchParams in App Router
+// AccountPage — orchestrator with loyalty tab added
 // ─────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react'
@@ -25,26 +19,22 @@ import ProfileSection    from './_sections/ProfileSection'
 import PasswordSection   from './_sections/PasswordSection'
 import NotificationsSection from './_sections/NotificationsSection'
 import DangerZoneSection from './_sections/DangerZoneSection'
+import LoyaltySection    from './_sections/LoyaltySection'
 import { getSavedAddresses } from '@/lib/account/utils'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from './styles/account.module.css'
 
-// All accepted tab values — used to validate the URL param on mount.
-const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifications', 'privacy']
+const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifications', 'privacy', 'loyalty']
 
-// ─── Inner component — uses useSearchParams (needs Suspense parent) ───────────
 function AccountPageInner() {
   const searchParams = useSearchParams()
   const router       = useRouter()
 
-  // Initialise tab from URL on first render; fall back to 'orders'.
   const urlTab   = searchParams.get('tab') as Tab | null
   const [tab, setTabState] = useState<Tab>(
     urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'orders'
   )
 
-  // Single source of truth for tab changes: updates React state AND the URL.
-  // scroll: false prevents the page jumping to the top on every tab switch.
   function navigateTo(newTab: Tab) {
     setTabState(newTab)
     router.replace(`?tab=${newTab}`, { scroll: false })
@@ -63,10 +53,8 @@ function AccountPageInner() {
 
   const profileInitialised = useRef(false)
 
-  // Auth init — single API call
   useEffect(() => { auth.init() }, [])
 
-  // Populate forms once — only on the first time auth.profile arrives.
   useEffect(() => {
     if (auth.profile && !profileInitialised.current) {
       profile.initFromProfile(auth.profile)
@@ -74,12 +62,10 @@ function AccountPageInner() {
     }
   }, [auth.profile])
 
-  // Trigger order fetch after auth confirmed
   useEffect(() => {
     if (auth.loggedIn && !orders.hasFetched) orders.fetchOrders()
   }, [auth.loggedIn, orders.hasFetched])
 
-  // ── Loading ───────────────────────────────────────────────
   if (!auth.loaded) return (
     <div className={styles.accLoading}>
       <div className={styles.accSpinner} />
@@ -87,7 +73,6 @@ function AccountPageInner() {
     </div>
   )
 
-  // ── API error ─────────────────────────────────────────────
   if (auth.authState === 'failed') return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
@@ -99,7 +84,6 @@ function AccountPageInner() {
     </div>
   )
 
-  // ── Guest (not logged in) ─────────────────────────────────
   if (!auth.loggedIn) return (
     <div className={styles.accWrap}>
       <div className={styles.loginWall}>
@@ -111,13 +95,12 @@ function AccountPageInner() {
     </div>
   )
 
-  // Mobile bottom nav tabs (subset — privacy/danger kept in sidebar only)
   const MOB_TABS: { key: Tab; icon: string; label: string }[] = [
-    { key: 'orders',        icon: '📦', label: 'Orders'        },
-    { key: 'addresses',     icon: '📍', label: 'Addresses'     },
-    { key: 'profile',       icon: '👤', label: 'Profile'       },
-    { key: 'notifications', icon: '🔔', label: 'Alerts'        },
-    { key: 'password',      icon: '🔒', label: 'Password'      },
+    { key: 'orders',        icon: '📦', label: 'Orders'   },
+    { key: 'loyalty',       icon: '🪙', label: 'Coins'    },
+    { key: 'addresses',     icon: '📍', label: 'Addresses'},
+    { key: 'profile',       icon: '👤', label: 'Profile'  },
+    { key: 'notifications', icon: '🔔', label: 'Alerts'   },
   ]
 
   const userEmail = auth.authUser?.email || auth.profile?.email || ''
@@ -125,7 +108,6 @@ function AccountPageInner() {
   return (
     <div className={styles.accWrap}>
 
-      {/* Session expired banner */}
       {auth.expired && (
         <div className={styles.sessionBanner}>
           ⚠️ Your session has expired.
@@ -146,6 +128,7 @@ function AccountPageInner() {
 
         <div className={styles.mainPanel}>
           {tab === 'orders'        && <OrdersSection   orders={orders} showToast={showToast} />}
+          {tab === 'loyalty'       && <LoyaltySection  showToast={showToast} />}
           {tab === 'addresses'     && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
           {tab === 'profile'       && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
           {tab === 'password'      && <PasswordSection profile={profile} />}
@@ -161,7 +144,7 @@ function AccountPageInner() {
         </div>
       </div>
 
-      {/* ── Mobile bottom nav ─────────────────────────────────── */}
+      {/* Mobile bottom nav */}
       <nav aria-label="Account mobile navigation" className={styles.mobTabs}>
         <div role="tablist" aria-label="Account sections" className={styles.mobTabList}>
           {MOB_TABS.map(it => (
@@ -184,7 +167,6 @@ function AccountPageInner() {
         </div>
       </nav>
 
-      {/* Mobile-only sign-out button */}
       <button
         className={styles.mobSignOut}
         onClick={auth.logout}
@@ -210,7 +192,6 @@ function AccountPageInner() {
   )
 }
 
-// ─── Fallback shown while useSearchParams resolves ────────────────────────────
 function AccountPageFallback() {
   return (
     <div className={styles.accLoading}>
@@ -220,7 +201,6 @@ function AccountPageFallback() {
   )
 }
 
-// ─── Public export — wraps inner component in Suspense ────────────────────────
 export default function AccountPage() {
   return (
     <Suspense fallback={<AccountPageFallback />}>
