@@ -53,11 +53,11 @@ export async function POST(req: Request) {
       // Find our order by razorpay_order_id
       const { data: order } = await db
         .from('orders')
-        .select('id, status, order_number')
+        .select('id, order_status, order_number')
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && (order as any).status === 'pending') {
+      if (order && (order as any).order_status === 'pending') {
         await db.from('orders').update({
           order_status:        'confirmed',
           payment_status:      'paid',
@@ -78,11 +78,11 @@ export async function POST(req: Request) {
 
       const { data: order } = await db
         .from('orders')
-        .select('id, status')
+        .select('id, order_status')
         .eq('payment_id', rzpOrderId)
         .single()
 
-      if (order && (order as any).status === 'pending') {
+      if (order && (order as any).order_status === 'pending') {
         await db.from('orders').update({
           payment_status:      'failed',
           updated_at:     new Date().toISOString(),

@@ -50,7 +50,7 @@ async function redeemLoyaltyPoints(customerId: string | number, orderId: string 
   if (!points || points <= 0) return true
   try {
     const res    = await callLoyaltyRpc('redeem_loyalty_points', {
-      p_customer_id: Number(customerId), p_order_id: Number(orderId), p_points: points,
+      p_customer_id: String(customerId), p_order_id: String(orderId), p_points: points,
       p_note: 'Redeemed at checkout',
     })
     const result = await res.json()
@@ -68,7 +68,7 @@ async function awardLoyaltyPoints(
   if (pts <= 0) return
   try {
     await callLoyaltyRpc('award_loyalty_points', {
-      p_customer_id: Number(customerId), p_order_id: Number(orderId),
+      p_customer_id: String(customerId), p_order_id: String(orderId),
       p_points: pts, p_note: 'Earned from online payment',
     })
   } catch (e) { console.error('[loyalty] award failed:', e) }
