@@ -197,16 +197,16 @@ interface RowProps {
 }
 
 function NotifRow({ label, sublabel, icon, checked, busy, onChange, last }: RowProps) {
-  const id = `notif-${label.toLowerCase().replace(/\s+/g, '-')}`
   return (
     <div className={`${styles.notifRow}${last ? ' ' + styles.notifRowLast : ''}`}>
       <span className={styles.notifRowIcon} aria-hidden="true">{icon}</span>
       <div className={styles.notifRowText}>
-        <label htmlFor={id} className={styles.notifRowLabel}>{label}</label>
+        {/* Plain span — the button below carries its own aria-label for screen readers.
+            htmlFor on a <button> is invalid HTML and mis-announces the control. */}
+        <span className={styles.notifRowLabel}>{label}</span>
         <span className={styles.notifRowSub}>{sublabel}</span>
       </div>
       <button
-        id={id}
         role="switch"
         aria-checked={checked}
         aria-label={`${checked ? 'Disable' : 'Enable'} ${label} notifications`}
