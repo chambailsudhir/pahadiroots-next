@@ -72,8 +72,8 @@ async function awardLoyaltyPoints(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        p_customer_id: Number(customerId),   // bigint — must be number not string
-        p_order_id:    Number(orderId),       // bigint — must be number not string
+        p_customer_id: String(customerId),   // UUID — must be string, not Number()
+        p_order_id:    String(orderId),       // UUID — must be string, not Number()
         p_points:      pointsEarned,
         p_note:        'Earned from COD order',
       }),
@@ -102,8 +102,8 @@ async function redeemLoyaltyPoints(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      p_customer_id: Number(customerId),   // bigint — must be number not string
-      p_order_id:    Number(orderId),       // bigint — must be number not string
+      p_customer_id: String(customerId),   // UUID — must be string, not Number()
+      p_order_id:    String(orderId),       // UUID — must be string, not Number()
       p_points:      points,
       p_note:        'Redeemed at checkout',
     }),

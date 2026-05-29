@@ -410,7 +410,7 @@ function SuccessContent() {
         <Link href="/" className="oc-nav-logo">
           <div style={{width:38,height:38,borderRadius:9,overflow:'hidden',background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="https://ulyrhnpoiypuvaurlqqi.supabase.co/storage/v1/object/public/pahadi-images/5%20pahadi%20roots.png" alt="Pahadi Roots" style={{width:38,height:38,objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+            <img src="https://ulyrhnpoiypuvaurlqqi.supabase.co/storage/v1/object/public/pahadi-images/5%20pahadi%20roots.png" alt="5 Pahadi Roots" style={{width:38,height:38,objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
           </div>
           <div>
             <div className="oc-logo-name">5 Pahadi Roots</div>

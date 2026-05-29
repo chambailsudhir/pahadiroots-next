@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   },
   description:
     'Pure, natural products sourced directly from Himalayan mountain farming communities. Honey, spices, grains, and more — delivered across India.',
-  keywords: ['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'organic', 'India'],
+  keywords: ['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'India'],
   openGraph: {
     type:        'website',
     locale:      'en_IN',
