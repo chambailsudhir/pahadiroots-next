@@ -15,9 +15,15 @@ import {
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 
+// All statuses that exist in the orders.order_status column.
+// Must stay in sync with the DB enum / check constraint.
+// Bug fix: return_* statuses were missing — the "Returns" filter tab returned
+// empty results because every status was stripped by the .filter() below.
 const VALID_DB_STATUSES = new Set([
-  'pending', 'confirmed', 'packed', 'shipped',
-  'delivered', 'cancelled', 'returned',
+  'pending', 'confirmed', 'processing', 'packed', 'shipped',
+  'delivered', 'cancelled',
+  'returned', 'return_requested', 'return_approved', 'return_received',
+  'refund_initiated', 'refund_completed', 'return_rejected', 'refunded',
 ])
 
 const STATUS_MAP: Record<string, string> = {

@@ -31,10 +31,11 @@ export interface AuthUser {
 export type { Profile }
 
 export function useAuth() {
-  const router       = useRouter()
-  const storeLogout  = useUserStore(s => s.logout)
-  const storeSetUser = useUserStore(s => s.setUser)
-  const initDone     = useRef(false)
+  const router          = useRouter()
+  const storeLogout     = useUserStore(s => s.logout)
+  const storeSetUser    = useUserStore(s => s.setUser)
+  const storeSetWishlist = useUserStore(s => s.setWishlist)
+  const initDone        = useRef(false)
 
   const [authState, setAuthState] = useState<AuthState>('idle')
   const [profile,   setProfile]   = useState<Profile | null>(null)
@@ -75,6 +76,17 @@ export function useAuth() {
       setAuthUser((data.user ?? null) as AuthUser | null)
       setAuthState('authenticated')
       syncStore(data.profile, (data.user ?? null) as AuthUser | null)
+
+      // Load server wishlist and merge with any locally-saved items.
+      // Fire-and-forget: a failure here must never block login.
+      fetch('/api/wishlist')
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          if (Array.isArray(json?.wishlist)) {
+            storeSetWishlist(json.wishlist)
+          }
+        })
+        .catch(() => { /* silent — local wishlist still works */ })
     } catch (err: unknown) {
       // 401 = no session / expired → guest (not an error)
       if (err instanceof ServiceError && err.status === 401) {

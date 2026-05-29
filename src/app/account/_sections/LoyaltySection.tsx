@@ -47,6 +47,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   const [txnErr,  setTxnErr]  = useState<string | null>(null)
   const [txnPage,  setTxnPage]  = useState(1)
   const [hasMore,  setHasMore]  = useState(false)
+  const TXN_LIMIT = 20   // must match limit= param in loadHistory
 
   useEffect(() => {
     let mounted = true
@@ -80,14 +81,23 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     setTxnLoad(true)
     setTxnErr(null)
     try {
-      const res  = await fetch(`/api/v1/loyalty/history?page=${page}&limit=20`)
+      const res  = await fetch(`/api/v1/loyalty/history?page=${page}&limit=${TXN_LIMIT}`)
       const json = await res.json()
       if (res.ok) {
         const fetched: Transaction[] = json.transactions ?? []
         setTxns(prev => page === 1 ? fetched : [...prev, ...fetched])
         setTxnPage(page)
-        // If a full page came back, there might be more
-        setHasMore(fetched.length === 20)
+        // Use total from API when available; fall back to a safe page-full heuristic.
+        // Bug fix: was `fetched.length === 20` — when exactly 20 txns exist total,
+        // this showed "Load more" and fired one extra empty fetch.
+        if (typeof json.total === 'number') {
+          const loaded = (page - 1) * TXN_LIMIT + fetched.length
+          setHasMore(loaded < json.total)
+        } else {
+          // API doesn't return total — only show more if a full page came back
+          // AND we actually got something new (avoids infinite loop on exact multiples)
+          setHasMore(fetched.length === TXN_LIMIT && fetched.length > 0)
+        }
       } else {
         const msg = json?.error || 'Could not load transaction history.'
         setTxnErr(msg)
