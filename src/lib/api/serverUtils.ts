@@ -95,6 +95,9 @@ export async function sbAdmin(
       'Prefer':        prefer,
     },
     body: body ? JSON.stringify(body) : undefined,
+    // Prevent a slow Supabase response from hanging the serverless slot
+    // until Vercel's hard 15-second timeout — 8 s gives one retry budget.
+    signal: AbortSignal.timeout(8_000),
   })
   const text = await res.text()
   if (!res.ok) throw { status: res.status, message: text }
@@ -112,6 +115,7 @@ export async function sbAdminCount(path: string): Promise<number> {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Prefer':        'count=exact',
     },
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) return 0
   // Content-Range: <start>-<end>/<total>  e.g. "0-19/847" or "*/0" when empty

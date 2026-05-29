@@ -77,7 +77,7 @@
 .filterBtnActive { background: #1a3a1e; color: #fff; border-color: #1a3a1e; }
 
 /* Order card */
-.orderCard { border: 1px solid #ede9e3; border-radius: 16px; margin-bottom: 16px; overflow: hidden; background: #fdfcfa; transition: box-shadow .25s, transform .2s; }
+.orderCard { border: 1px solid #ede9e3; border-radius: 16px; margin-bottom: 16px; overflow: hidden; background: #fdfcfa; transition: box-shadow .25s, transform .2s; content-visibility: auto; contain-intrinsic-size: 0 180px; }
 .orderCard:hover { box-shadow: 0 6px 28px rgba(26,58,30,.12); transform: translateY(-1px); }
 .ocStripe { height: 4px; }
 .ocStripeConfirmed  { background: linear-gradient(90deg,#43a047,#66bb6a); }

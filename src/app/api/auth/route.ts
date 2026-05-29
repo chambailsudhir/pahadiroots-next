@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
 
   // ── Get Profile (legacy — prefer GET /api/profile) ──
   if (action === 'get_profile') {
-    const token = req.cookies.get('pr_token')?.value
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     try {
@@ -342,7 +342,7 @@ export async function POST(req: NextRequest) {
 
   // ── Get Orders (legacy — prefer GET /api/orders) ──
   if (action === 'get_orders') {
-    const token = req.cookies.get('pr_token')?.value
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     try {
@@ -386,7 +386,7 @@ export async function POST(req: NextRequest) {
 
   // ── Link Email ──
   if (action === 'link_email') {
-    const token = req.cookies.get('pr_token')?.value
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { email, password } = body as { email?: string; password?: string }
     if (!token)              return err(401, 'Not logged in')
@@ -537,7 +537,7 @@ export async function POST(req: NextRequest) {
   // ── Change Password — requires current_password for verification ──
   if (action === 'change_password') {
     // Read token from httpOnly cookie first, fall back to Authorization header
-    const token = req.cookies.get('pr_token')?.value
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { current_password, new_password } = body as { current_password?: string; new_password?: string }
 
