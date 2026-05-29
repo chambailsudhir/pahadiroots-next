@@ -167,7 +167,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     <button type="button" className={styles.searchClear} onClick={() => orders.setSearch('')}>✕</button>
                   )}
                 </div>
-                <div className={styles.filterRow}>
+                <div className={styles.filterRow} role="group" aria-label="Filter orders by status">
                   {([
                     { key: 'all'       as const, label: 'All'       },
                     { key: 'active'    as const, label: 'Active'    },

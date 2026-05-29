@@ -499,7 +499,8 @@ export async function POST(req: NextRequest) {
 
   // ── Logout ──
   if (action === 'logout') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
+               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (token) {
       try { await sbAuth('/logout', {}, token) }
       catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed — local session still cleared:', e) }
@@ -548,14 +549,17 @@ export async function POST(req: NextRequest) {
       if (!resendRes.ok) { const t = await resendRes.text(); console.error('[forgot_password] Resend failed:', resendRes.status, t); return err(500, 'Could not send email — please try again') }
       return ok({ success: true })
     } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
+      console.error('[forgot_password] Unexpected error:', e)
       return err(500, 'Something went wrong — please try again')
     }
   }
 
   // ── Reset Password ──
   if (action === 'reset_password') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    // Reset links pass the token via Authorization header (email link flow),
+    // but also check the httpOnly cookie for users who are already signed in.
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
+               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { password } = body as { password?: string }
     if (!token)   return err(401, 'Invalid or expired reset link')
     if (!password || password.length < 6) return err(400, 'Password must be at least 6 characters')

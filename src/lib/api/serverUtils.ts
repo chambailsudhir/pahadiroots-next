@@ -22,7 +22,7 @@ const IS_PROD       = process.env.NODE_ENV === 'production'
 
 // ── Response helpers ──────────────────────────────────────────
 export function ok(data: unknown)                    { return NextResponse.json(data) }
-export function fail(status: number, msg: string)    { return NextResponse.json({ error: msg }, { status }) }
+export function fail(status: number, msg: string, headers?: Record<string, string>) { return NextResponse.json({ error: msg }, { status, headers }) }
 
 // ── CSRF protection ───────────────────────────────────────────
 // Validates the Origin (or Referer fallback) of state-mutating requests

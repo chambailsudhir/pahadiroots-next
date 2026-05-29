@@ -99,7 +99,7 @@ export async function DELETE(req: NextRequest) {
     'unknown'
   )
   if (!checkRateLimit(`account_delete:${ip}`, 3, 60 * 60_000)) {
-    return fail(429, 'Too many requests — please wait before trying again.')
+    return fail(429, 'Too many requests — please wait before trying again.', { 'Retry-After': '3600' })
   }
 
   // ── Auth ──────────────────────────────────────────────────────

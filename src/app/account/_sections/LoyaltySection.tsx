@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/account.module.css'
+import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 interface Transaction {
   id:           string
@@ -164,6 +165,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   const pointsVal = data.value_inr      // current balance in ₹
 
   return (
+    <ErrorBoundary section="Loyalty">
     <div className={styles.secRoot}>
       <div className={styles.secTitle}>🪙 Pahadi Coins</div>
       <p className={styles.secSub}>Earn coins on every order. Redeem for discounts at checkout.</p>
@@ -302,5 +304,6 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         )}
       </div>
     </div>
+    </ErrorBoundary>
   )
 }

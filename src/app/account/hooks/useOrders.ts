@@ -164,14 +164,23 @@ export function useOrders(markExpired?: () => void) {
     //     adds the get_order_stats RPC (see db_migration.sql).
     //     TODO: remove this slow path once migration is confirmed on production.
     const all = [...(data?.orders ?? []), ...extraOrders]
+    const counts = all.reduce(
+      (acc, o) => {
+        const status = o._displayStatus || o.order_status || ''
+        if (status === 'delivered')                             acc.delivered++
+        else if (ACTIVE_STATUSES.includes(status))             acc.active++
+        else if (status === 'cancelled')                       acc.cancelled++
+        if (status !== 'cancelled') acc.spent += o.total_amount || 0
+        return acc
+      },
+      { delivered: 0, active: 0, cancelled: 0, spent: 0 }
+    )
     return {
       total:          totalCount,
-      delivered:      all.filter(o => (o._displayStatus || o.order_status) === 'delivered').length,
-      active:         all.filter(o => ACTIVE_STATUSES.includes(o._displayStatus || o.order_status || '')).length,
-      cancelled:      all.filter(o => (o._displayStatus || o.order_status) === 'cancelled').length,
-      spent:          all
-        .filter(o => (o._displayStatus || o.order_status) !== 'cancelled')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+      delivered:      counts.delivered,
+      active:         counts.active,
+      cancelled:      counts.cancelled,
+      spent:          counts.spent,
       loyalty_points: 0,   // unknown without RPC
     }
   }, [data, totalCount, serverStats, extraOrders])
