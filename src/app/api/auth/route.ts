@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
+import { syncCustomerProfile } from '@/lib/api/serverUtils'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -139,51 +140,6 @@ type CustomerRow = Record<string, unknown>
 type OrderRow    = Record<string, unknown>
 type ItemRow     = { order_id: unknown; quantity: number; price_at_time: number; products?: { name?: string; emoji?: string; image_url?: string } }
 type ReturnRow   = { order_id: unknown; id: unknown; status: string; reason?: string; created_at?: string; updated_at?: string }
-
-async function syncCustomerProfile(user: { id: string; phone?: string; email?: string; user_metadata?: Record<string, string> }) {
-  const phone = user.phone || ''
-  const email = user.email || ''
-  try {
-    const orParts = [`auth_user_id.eq.${user.id}`]
-    if (phone) orParts.push(`phone.eq.${encodeURIComponent(phone)}`)
-    if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
-
-    const rows = await sbAdmin(
-      'GET',
-      `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`
-    ).catch(() => null) as CustomerRow[] | null
-
-    if (rows && rows.length > 0) {
-      let match = rows.find(r => r.auth_user_id === user.id)
-        || rows.find(r => phone && r.phone === phone)
-        || rows[0]
-
-      if (match.auth_user_id !== user.id) {
-        const patch: Record<string, unknown> = { auth_user_id: user.id }
-        if (phone && !match.phone) patch.phone = phone
-        await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch((e: unknown) => {
-          console.warn('[syncCustomerProfile] patch failed — proceeding with stale match:', e)
-        })
-        match = { ...match, ...patch }
-      }
-      return match
-    }
-
-    const fullName  = user.user_metadata?.full_name || ''
-    const nameParts = fullName.trim().split(' ')
-    const newCustomer = await sbAdmin('POST', '/rest/v1/customers', {
-      auth_user_id: user.id,
-      first_name:   nameParts[0] || (email ? email.split('@')[0] : 'Customer'),
-      last_name:    nameParts.slice(1).join(' ') || null,
-      phone:        phone || null,
-      email:        email || null,
-    }) as CustomerRow[] | null
-    return newCustomer && newCustomer[0] ? newCustomer[0] : null
-  } catch (e: unknown) {
-    console.warn('[syncCustomerProfile] failed:', e)
-    return null
-  }
-}
 
 async function getCustomerOrders(customerId: string) {
   try {

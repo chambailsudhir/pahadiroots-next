@@ -31,10 +31,11 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   const router = useRouter()
   const storeLogout = useUserStore(s => s.logout)
 
-  const [open,     setOpen]     = useState(false)
-  const [step,     setStep]     = useState<1 | 2>(1)
-  const [typed,    setTyped]    = useState('')
-  const [deleting, setDeleting] = useState(false)
+  const [open,        setOpen]        = useState(false)
+  const [step,        setStep]        = useState<1 | 2>(1)
+  const [typed,       setTyped]       = useState('')
+  const [deleting,    setDeleting]    = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const inputRef    = useRef<HTMLInputElement>(null)
   const modalBoxRef = useRef<HTMLDivElement>(null)
 
@@ -63,6 +64,39 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       if (document.activeElement === last) { e.preventDefault(); first.focus() }
     }
   }, [])  // closeModal is defined below — see note
+
+  async function downloadMyData() {
+    setDownloading(true)
+    try {
+      const res = await fetch('/api/account/data-export', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'x-origin': window.location.origin },
+      })
+      if (res.status === 429) {
+        showToast('You have already requested a data export recently. Please try again in 24 hours.', 'error')
+        return
+      }
+      if (!res.ok) {
+        showToast('Could not generate your data export — please try again.', 'error')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = 'pahadiroots-my-data.json'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('Your data has been downloaded.', 'success')
+    } catch {
+      showToast('Something went wrong — please try again.', 'error')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   function openModal() {
     setStep(1)
@@ -151,6 +185,31 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
               A confirmation will be sent to <strong>{userEmail}</strong>.
             </p>
           )}
+        </div>
+
+        {/* DPDP §16 — Right to Access / Data Portability */}
+        <div className={styles.card}>
+          <div className={styles.cardSectionTitle}>Download My Data</div>
+          <p className={styles.dangerInfoText}>
+            Under <strong>DPDP Act 2023 §16</strong>, you have the right to access a copy
+            of all personal data we hold about you — your profile, addresses, and order history.
+          </p>
+          <div className={styles.dangerRow}>
+            <div>
+              <div className={styles.dangerRowTitle}>Export your data</div>
+              <div className={styles.dangerRowSub}>
+                Downloads a JSON file containing your profile, saved addresses, and order history.
+              </div>
+            </div>
+            <button
+              className={styles.btnSecondary}
+              onClick={downloadMyData}
+              disabled={downloading}
+              aria-busy={downloading}
+            >
+              {downloading ? 'Preparing…' : 'Download'}
+            </button>
+          </div>
         </div>
 
         {/* Danger zone action */}

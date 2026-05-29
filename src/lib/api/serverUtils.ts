@@ -151,9 +151,10 @@ export function applyNewCookies(res: NextResponse, access: string, refresh: stri
 // on the UNIQUE auth_user_id constraint — two concurrent first-logins
 // won't create duplicate customer rows).
 export async function syncCustomerProfile(user: {
-  id:     string
-  phone?: string
-  email?: string
+  id:            string
+  phone?:        string
+  email?:        string
+  user_metadata?: Record<string, string>
 }) {
   const phone = user.phone || ''
   const email = user.email || ''
@@ -169,24 +170,35 @@ export async function syncCustomerProfile(user: {
 
   if (rows && rows.length > 0) {
     let match =
-      rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) || rows[0]
+      rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) ||
+      rows.find((r: Record<string, unknown>) => phone && r.phone === phone) ||
+      rows[0]
 
     if (match.auth_user_id !== user.id) {
       const patch: Record<string, unknown> = { auth_user_id: user.id }
       if (phone && !match.phone) patch.phone = phone
-      await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch(() => {
-        // Non-fatal: proceed with stale match rather than erroring out
+      await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch((e: unknown) => {
+        console.warn('[syncCustomerProfile] patch failed — proceeding with stale match:', e)
       })
       match = { ...match, ...patch }
     }
     return match
   }
 
-  // Not found — upsert so concurrent requests cannot create duplicate rows
+  // Not found — upsert so concurrent requests cannot create duplicate rows.
+  // Use user_metadata.full_name (present after Google OAuth) to populate name fields.
+  const fullName  = user.user_metadata?.full_name || ''
+  const nameParts = fullName.trim().split(' ')
   const created = await sbAdmin(
     'POST',
     '/rest/v1/customers',
-    { auth_user_id: user.id, phone: phone || null, email: email || null },
+    {
+      auth_user_id: user.id,
+      first_name:   nameParts[0] || (email ? email.split('@')[0] : 'Customer'),
+      last_name:    nameParts.slice(1).join(' ') || null,
+      phone:        phone || null,
+      email:        email || null,
+    },
     'resolution=merge-duplicates,return=representation',
   ).catch(() => null)
   return created?.[0] ?? null

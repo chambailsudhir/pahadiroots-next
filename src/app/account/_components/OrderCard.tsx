@@ -1,4 +1,5 @@
 'use client'
+import React, { memo } from 'react'
 import Link from 'next/link'
 import { BADGE_CLASS, STATUS_LABEL, STRIPE_CLASS, SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
 import { formatCurrency, formatDate, getOrderStatusMessage, getPaymentLabel, getCourierTrackingUrl } from '@/lib/account/utils'
@@ -48,7 +49,7 @@ interface Props {
   onReturnClick: (orderNum: string) => void
 }
 
-export default function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
+function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
   const ds       = o._displayStatus || o.order_status || 'pending'
   const badgeCls = BADGE[BADGE_CLASS[ds]]   || styles.badgePending
   const stripeCls= STRIPE[STRIPE_CLASS[ds]] || styles.ocStripePending
@@ -171,3 +172,5 @@ export default function OrderCard({ order: o, canReturn, onReturnClick }: Props)
     </div>
   )
 }
+
+export default memo(OrderCard)
