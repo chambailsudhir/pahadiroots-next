@@ -121,7 +121,7 @@ export default async function RootLayout({
           <ClientOnly>
             <Header settings={settings} categories={categories} states={states} />
           </ClientOnly>
-          <main className="min-h-screen">
+          <main id="main-content" className="min-h-screen">
             {children}
           </main>
           <ClientOnly>

@@ -46,7 +46,11 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const initials  = firstName ? firstName[0].toUpperCase() : ''
 
   return (
-    <div className="sticky top-0 z-30">
+    <>
+      {/* Skip to main content — keyboard/screen-reader accessibility */}
+      <a href="#main-content" className="old-skip-link">Skip to main content</a>
+
+      <div className="sticky top-0 z-30">
       <AnnouncementBar settings={settings} />
       <TickerBar settings={settings} />
 
@@ -131,6 +135,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           <button
             className="old-dark-btn"
             title="Toggle dark mode"
+            aria-label="Toggle dark mode"
             onClick={() => document.documentElement.classList.toggle('dark')}
           >🌙</button>
 
@@ -248,7 +253,15 @@ export default function Header({ settings, categories = [], states = [] }: Props
           .old-nav{padding:0 12px}
           .old-cart-btn span:first-child{display:none}
         }
+        .old-skip-link{
+          position:absolute;left:-9999px;top:4px;z-index:9999;
+          background:#1a3a1e;color:#fff;padding:8px 16px;
+          font-size:13px;font-weight:700;border-radius:0 0 6px 0;
+          text-decoration:none;
+        }
+        .old-skip-link:focus{left:4px}
       `}</style>
     </div>
+    </>
   )
 }

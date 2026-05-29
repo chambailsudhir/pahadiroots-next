@@ -7,7 +7,7 @@ import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/li
 
 type AuthTab = 'email' | 'signup'
 
-async function callAuth(action: string, body: any = {}, token?: string | null) {
+async function callAuth(action: string, body: Record<string, unknown> = {}, token?: string | null) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = 'Bearer ' + token
   const res  = await fetch('/api/auth', {
@@ -51,6 +51,7 @@ export default function AuthModal() {
   const [fpEmail, setFPEmail] = useState('')
   const [fpSent,  setFPSent]  = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isAuthOpen) {
@@ -60,9 +61,32 @@ export default function AuthModal() {
   }, [isAuthOpen])
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAuth() }
-    if (isAuthOpen) window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    if (!isAuthOpen) return
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeAuth(); return }
+
+      // Focus trap: cycle Tab/Shift+Tab within the modal
+      if (e.key !== 'Tab') return
+      const el = modalRef.current
+      if (!el) return
+      const focusable = Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(n => n.offsetParent !== null) // skip hidden elements
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last  = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
   }, [isAuthOpen, closeAuth])
 
   if (!isAuthOpen) return null
@@ -171,8 +195,8 @@ export default function AuthModal() {
   }
 
   return (
-    <div className="am-ov" onClick={e => e.target === e.currentTarget && closeAuth()}>
-      <div className="am-box">
+    <div className="am-ov" onClick={e => e.target === e.currentTarget && closeAuth()} role="presentation">
+      <div className="am-box" ref={modalRef} role="dialog" aria-modal="true" aria-label="Sign in to 5 Pahadi Roots">
         <button className="am-close" onClick={closeAuth}>✕</button>
 
         {/* Header */}

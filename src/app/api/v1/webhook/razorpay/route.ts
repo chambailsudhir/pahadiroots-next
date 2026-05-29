@@ -3,6 +3,20 @@ import crypto from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { updateOrderStatus, logOrderEvent } from '@/lib/services/orderService'
 
+// Minimal typed shape for Razorpay webhook events we handle
+interface RazorpayPaymentEntity {
+  id: string
+  amount: number
+  error_reason?: string
+  notes?: { db_order_id?: string }
+}
+interface RazorpayWebhookEvent {
+  event: string
+  payload: {
+    payment: { entity: RazorpayPaymentEntity }
+  }
+}
+
 export async function POST(req: Request) {
   // Read raw body for HMAC verification
   const rawBody = await req.text()
@@ -19,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  let event: any
+  let event: RazorpayWebhookEvent
   try {
     event = JSON.parse(rawBody)
   } catch {
@@ -64,7 +78,7 @@ export async function POST(req: Request) {
         .eq('id', dbOrderId)
         .single()
 
-      if (order && (order as any).order_status === 'pending') {
+      if (order && order.order_status === 'pending') {
         await db.from('orders').update({
           order_status:   'confirmed',
           payment_status: 'paid',
@@ -94,7 +108,7 @@ export async function POST(req: Request) {
         .eq('id', dbOrderId)
         .single()
 
-      if (order && (order as any).order_status === 'pending') {
+      if (order && order.order_status === 'pending') {
         await db.from('orders').update({
           payment_status: 'failed',
           updated_at:     new Date().toISOString(),
