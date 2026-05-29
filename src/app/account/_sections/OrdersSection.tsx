@@ -36,6 +36,19 @@ export default function OrdersSection({ orders, showToast }: Props) {
     }
   }, [returnModal])
 
+  // closeReturnModal is declared before handleReturnModalKeyDown so the
+  // reference is explicit. It reads `submitting` so it is a useCallback
+  // with [submitting] in its dep array — prevents stale closure.
+  const closeReturnModal = useCallback(() => {
+    if (submitting) return
+    setReturnModal(null)
+    setReturnReason('')
+    setReturnOtherText('')
+    // Restore focus to the button that opened the modal
+    triggerBtnRef.current?.focus()
+    triggerBtnRef.current = null
+  }, [submitting])
+
   // ESC closes the modal; Tab/Shift+Tab are trapped inside.
   // Uses onKeyDown on the modal div (same pattern as DangerZoneSection) so the
   // handler is scoped to the modal element and requires no global listener cleanup.
@@ -61,10 +74,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     } else {
       if (document.activeElement === last) { e.preventDefault(); first.focus() }
     }
-  // closeReturnModal is a plain function defined below; it reads only state
-  // setters which are stable, so this dep array is safe to leave empty.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [closeReturnModal])
 
   function openReturnModal(orderNum: string, triggerBtn?: HTMLButtonElement | null) {
     // orderNum may be the actual order_number or the id — find the order to get both
@@ -76,16 +86,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
     setReturnReason('')
     setReturnOtherText('')
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum })
-  }
-
-  function closeReturnModal() {
-    if (submitting) return
-    setReturnModal(null)
-    setReturnReason('')
-    setReturnOtherText('')
-    // Restore focus to the button that opened the modal
-    triggerBtnRef.current?.focus()
-    triggerBtnRef.current = null
   }
 
   async function submitReturn() {

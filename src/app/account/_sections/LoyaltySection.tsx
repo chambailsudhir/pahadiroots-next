@@ -58,9 +58,10 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
 
   // Guard: skip fetch if data was already loaded this page session.
   // loyaltyDataFetched is module-level so it persists across tab-switch remounts.
+  // Only set to true on a successful response; on error it stays false so the
+  // user can retry by switching away and back to this tab.
   useEffect(() => {
     if (loyaltyDataFetched) return
-    loyaltyDataFetched = true
     let mounted = true
     async function load() {
       try {
@@ -68,6 +69,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         const json = await res.json()
         if (!mounted) return
         if (res.ok) {
+          loyaltyDataFetched = true   // lock only on success
           setData(json)
         } else {
           const msg = json?.error || 'Could not load loyalty data.'
