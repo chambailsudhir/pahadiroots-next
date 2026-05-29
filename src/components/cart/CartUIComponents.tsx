@@ -12,7 +12,7 @@ interface StickyProps {
 
 export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: StickyProps) {
   return (
-    <div className="scc-wrap" aria-hidden="true">
+    <div className="scc-wrap">
       <div>
         <div className="scc-total">{formatPrice(total)}</div>
         <div className="scc-sub">{totalQty} item{totalQty > 1 ? 's' : ''} · Incl. taxes</div>

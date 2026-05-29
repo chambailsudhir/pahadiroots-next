@@ -166,7 +166,7 @@ export default function CartPage() {
     setAddedUpsell(a => [...a, p.id])
   }, [addedUpsell, addItem, analytics])
 
-  async function handleCoupon() {
+  const handleCoupon = useCallback(async () => {
     if (!couponCode.trim()) return
     setCouponLoading(true); setCouponError('')
     try {
@@ -183,7 +183,7 @@ export default function CartPage() {
       setCouponCode('')
     } catch { setCouponError('Failed to apply coupon') }
     finally  { setCouponLoading(false) }
-  }
+  }, [couponCode, pricing.subtotal, applyCoupon])
 
   // ── Render guards ──────────────────────────────────────────────────────────
   if (!mounted) return <CartSkeleton />
