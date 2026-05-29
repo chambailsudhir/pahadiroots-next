@@ -137,8 +137,18 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
             </div>
             <div>
               <label htmlFor="pf-email" className={styles.fLbl}>Email Address</label>
-              <input id="pf-email" className={`${styles.fInp} ${styles.fDisabled}`} value={String(authUser?.email || authProfile?.email || '')} disabled />
-              <div className={styles.fHint}>Email cannot be changed</div>
+              <input id="pf-email" className={`${styles.fInp} ${styles.fDisabled}`} value={String(authUser?.email || authProfile?.email || '')} disabled aria-describedby="pf-email-hint" />
+              <div id="pf-email-hint" className={styles.fHint}>
+                Email cannot be changed here.{' '}
+                <a
+                  href={`https://wa.me/919899984895?text=${encodeURIComponent('Hi, I need help changing the email on my Pahadi Roots account.')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.fHintLink}
+                >
+                  Contact support →
+                </a>
+              </div>
             </div>
           </div>
           <div className={styles.formActions}>
