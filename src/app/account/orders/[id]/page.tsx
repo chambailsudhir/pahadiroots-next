@@ -4,12 +4,15 @@
 // Uses /api/orders/[id] (cookie auth) — NOT direct Supabase
 // Fixed: removed mounted anti-pattern, proper error state,
 //        no customer_phone auth
+// Style: migrated from Tailwind to account.module.css for
+//        consistency with the rest of the account module.
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
 import { SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
+import styles from '../../styles/account.module.css'
 
 const STATUS_STEPS = [
   { status: 'confirmed',        icon: '✅', label: 'Order Confirmed',   desc: 'Your order has been confirmed' },
@@ -61,18 +64,18 @@ export default function OrderDetailPage() {
   }, [id])
 
   if (loading) return (
-    <div className="space-y-4">
-      <div className="h-8 bg-stone-100 animate-pulse rounded w-48" />
-      <div className="h-48 bg-stone-100 animate-pulse rounded-2xl" />
-      <div className="h-32 bg-stone-100 animate-pulse rounded-2xl" />
+    <div className={`${styles.odSkWrap} ${styles.odSkBlock}`}>
+      <div className={styles.odSkTitle} />
+      <div className={styles.odSkCard} />
+      <div className={styles.odSkCardSm} />
     </div>
   )
 
   if (error) return (
-    <div className="text-center py-16">
-      <div className="text-4xl mb-3">⚠️</div>
-      <p className="text-stone-500 text-sm mb-4">{error}</p>
-      <Link href="/account" className="text-green-700 text-sm font-semibold hover:underline">← Back to Account</Link>
+    <div className={styles.odError}>
+      <div className={styles.odErrorIcon}>⚠️</div>
+      <p className={styles.odErrorMsg}>{error}</p>
+      <Link href="/account" className={styles.odBackLink}>← Back to Account</Link>
     </div>
   )
 
@@ -85,67 +88,84 @@ export default function OrderDetailPage() {
     : null
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className={styles.odRoot}>
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className={styles.odHeader}>
         <div>
-          <Link href="/account" className="text-xs text-green-700 hover:underline mb-1 inline-block">
-            ← Back to Account
-          </Link>
-          <h1 className="text-lg font-bold text-stone-900 font-mono">{order.order_number}</h1>
-          <p className="text-xs text-stone-400">Placed on {formatDate(order.created_at)}</p>
+          <Link href="/account" className={styles.odBackLink}>← Back to Account</Link>
+          <div className={styles.odOrderNum}>{order.order_number}</div>
+          <div className={styles.odOrderDate}>Placed on {formatDate(order.created_at)}</div>
         </div>
-        <div className="text-right">
-          <div className="text-xl font-bold text-stone-900">{formatCurrency(order.total_amount)}</div>
-          <div className="text-xs text-stone-400 capitalize mt-0.5">
+        <div className={styles.odHeaderRight}>
+          <div className={styles.odTotal}>{formatCurrency(order.total_amount)}</div>
+          <div className={styles.odPayMethod}>
             {order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
           </div>
         </div>
       </div>
 
-      {/* Tracking chip */}
+      {/* ── Tracking chip ───────────────────────────────────── */}
       {trackUrl && (
-        <a href={trackUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-green-900 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-800 transition-colors">
+        <a
+          href={trackUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.odTrackChip}
+        >
           🚚 Track Shipment · {order.tracking_number}
         </a>
       )}
 
-      {/* Status tracker */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-stone-700 mb-5">Order Status</h2>
+      {/* ── Status tracker ─────────────────────────────────── */}
+      <div className={styles.odCard}>
+        <div className={styles.odCardTitle}>Order Status</div>
         {isCancelled ? (
-          <div className="text-center py-4">
-            <div className="text-3xl mb-2">
+          <div className={styles.odCancelledState}>
+            <div className={styles.odCancelledIcon}>
               {order.order_status === 'cancelled' ? '❌' : '↩️'}
             </div>
-            <div className="font-semibold text-stone-700 capitalize">
+            <div className={styles.odCancelledLabel}>
               {order.order_status.replace(/_/g, ' ')}
             </div>
           </div>
         ) : (
-          <div className="relative">
-            <div className="absolute left-5 top-5 bottom-5 w-0.5 bg-stone-100" />
+          <div className={styles.odStepsWrap}>
+            <div className={styles.odStepsTrack} />
             {currentStep >= 0 && (
-              <div className="absolute left-5 top-5 w-0.5 bg-green-500 transition-all duration-700"
-                style={{ height: `${(currentStep / (STATUS_STEPS.length - 1)) * 100}%` }} />
+              <div
+                className={styles.odStepsFill}
+                style={{ height: `${(currentStep / (STATUS_STEPS.length - 1)) * 100}%` }}
+              />
             )}
-            <div className="space-y-4">
+            <div className={styles.odStepsList}>
               {STATUS_STEPS.map((step, i) => {
                 const done   = i <= currentStep
                 const active = i === currentStep
                 return (
-                  <div key={step.status} className="flex items-center gap-4 relative">
-                    <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-base border-2 transition-all ${
-                      done ? 'border-green-500 bg-green-50' : 'border-stone-200 bg-white'
-                    } ${active ? 'ring-2 ring-green-200 ring-offset-1' : ''}`}>
+                  <div key={step.status} className={styles.odStep}>
+                    <div
+                      className={[
+                        styles.odStepDot,
+                        done   ? styles.odStepDotDone   : '',
+                        active ? styles.odStepDotActive : '',
+                      ].join(' ')}
+                    >
                       {step.icon}
                     </div>
                     <div>
-                      <div className={`text-sm font-semibold ${done ? 'text-green-800' : 'text-stone-400'}`}>
+                      <div
+                        className={[
+                          styles.odStepLabel,
+                          done   ? styles.odStepLabelDone   : '',
+                          active ? styles.odStepLabelActive : '',
+                        ].join(' ')}
+                      >
                         {step.label}
                       </div>
-                      {active && <div className="text-[11px] text-green-600">{step.desc}</div>}
+                      {active && (
+                        <div className={styles.odStepDesc}>{step.desc}</div>
+                      )}
                     </div>
                   </div>
                 )
@@ -155,71 +175,101 @@ export default function OrderDetailPage() {
         )}
       </div>
 
-      {/* Items */}
+      {/* ── Items ordered ───────────────────────────────────── */}
       {order.items?.length > 0 && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-5">
-          <h2 className="text-sm font-bold text-stone-700 mb-4">Items Ordered</h2>
-          <div className="space-y-3">
+        <div className={styles.odCard}>
+          <div className={styles.odCardTitle}>Items Ordered</div>
+          <div className={styles.odItemsList}>
             {order.items.map((item, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg border border-stone-100 bg-stone-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <div key={i} className={styles.odItem}>
+                <div className={styles.odItemImg}>
                   {item.image_url
-                    ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                    : <span className="text-xl">{item.emoji || '🌿'}</span>}
+                    ? <img src={item.image_url} alt={item.name} />
+                    : <span className={styles.odItemEmoji}>{item.emoji || '🌿'}</span>}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-stone-800 truncate">{item.name}</div>
-                  <div className="text-xs text-stone-400">Qty: {item.qty}</div>
+                <div className={styles.odItemInfo}>
+                  <div className={styles.odItemName}>{item.name}</div>
+                  <div className={styles.odItemQty}>Qty: {item.qty}</div>
                 </div>
-                <div className="text-sm font-bold text-stone-900">{formatCurrency(item.price * item.qty)}</div>
+                <div className={styles.odItemPrice}>{formatCurrency(item.price * item.qty)}</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Delivery address */}
+      {/* ── Delivery address ────────────────────────────────── */}
       {order.shipping_address && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-5">
-          <h2 className="text-sm font-bold text-stone-700 mb-3">Delivery Address</h2>
-          <div className="text-sm text-stone-600 space-y-0.5">
-            {order.shipping_address.name && <div className="font-semibold">{order.shipping_address.name}</div>}
-            <div>{[order.shipping_address.flat, order.shipping_address.area].filter(Boolean).join(', ')}</div>
-            <div>{order.shipping_address.city}, {order.shipping_address.state} — {order.shipping_address.pincode}</div>
-            {order.shipping_address.phone && <div className="text-stone-400">{order.shipping_address.phone}</div>}
+        <div className={styles.odCard}>
+          <div className={styles.odCardTitle}>Delivery Address</div>
+          <div className={styles.odAddrLines}>
+            {order.shipping_address.name && (
+              <div className={styles.odAddrName}>{order.shipping_address.name}</div>
+            )}
+            <div>
+              {[order.shipping_address.flat, order.shipping_address.area]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+            <div>
+              {order.shipping_address.city}, {order.shipping_address.state} —{' '}
+              {order.shipping_address.pincode}
+            </div>
+            {order.shipping_address.phone && (
+              <div className={styles.odAddrPhone}>{order.shipping_address.phone}</div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Price summary */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-stone-700 mb-4">Price Details</h2>
-        <div className="space-y-2 text-sm">
+      {/* ── Price summary ───────────────────────────────────── */}
+      <div className={styles.odCard}>
+        <div className={styles.odCardTitle}>Price Details</div>
+        <div className={styles.odPriceRows}>
           {order.subtotal != null && (
-            <div className="flex justify-between text-stone-600"><span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span></div>
+            <div className={styles.odPriceRow}>
+              <span>Subtotal</span>
+              <span>{formatCurrency(order.subtotal)}</span>
+            </div>
           )}
           {(order.coupon_discount || 0) > 0 && (
-            <div className="flex justify-between text-green-700"><span>Discount</span><span>−{formatCurrency(order.coupon_discount!)}</span></div>
+            <div className={`${styles.odPriceRow} ${styles.odPriceRowDiscount}`}>
+              <span>Discount</span>
+              <span>−{formatCurrency(order.coupon_discount!)}</span>
+            </div>
           )}
           {order.shipping_charge != null && (
-            <div className="flex justify-between text-stone-600"><span>Shipping</span><span>{order.shipping_charge === 0 ? 'FREE' : formatCurrency(order.shipping_charge)}</span></div>
+            <div className={styles.odPriceRow}>
+              <span>Shipping</span>
+              <span>{order.shipping_charge === 0 ? 'FREE' : formatCurrency(order.shipping_charge)}</span>
+            </div>
           )}
-          <div className="flex justify-between font-bold text-stone-900 pt-2 border-t border-stone-100">
-            <span>Total Paid</span><span>{formatCurrency(order.total_amount)}</span>
+          <hr className={styles.odPriceDivider} />
+          <div className={styles.odPriceTotal}>
+            <span>Total Paid</span>
+            <span>{formatCurrency(order.total_amount)}</span>
           </div>
-          {order.tax != null && <div className="text-[11px] text-stone-400">Incl. ₹{order.tax} GST</div>}
+          {order.tax != null && (
+            <div className={styles.odPriceTax}>Incl. ₹{order.tax} GST</div>
+          )}
         </div>
       </div>
 
-      {/* Support */}
-      <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5">
-        <h2 className="text-sm font-bold text-stone-700 mb-3">Need Help?</h2>
-        <a href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi, I need help with order ' + order.order_number)}`}
-          target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 transition-colors">
+      {/* ── Support ─────────────────────────────────────────── */}
+      <div className={styles.odSupportWrap}>
+        <div className={styles.odCardTitle}>Need Help?</div>
+        <a
+          href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(
+            'Hi, I need help with order ' + order.order_number,
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${styles.actionBtn} ${styles.actionSupport}`}
+        >
           💬 WhatsApp Support
         </a>
       </div>
+
     </div>
   )
 }

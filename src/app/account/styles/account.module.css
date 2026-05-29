@@ -524,3 +524,88 @@
 .lyTxnPts   { font-size: 16px; font-weight: 800; letter-spacing: -0.5px; flex-shrink: 0; }
 
 .lyEmpty { font-size: 13px; color: #bbb; text-align: center; padding: 20px 0 8px; font-style: italic; }
+
+/* ─────────────────────────────────────────────────────────────
+   Order Detail Page (/account/orders/[id])
+   Migrated from Tailwind utilities to CSS Modules for consistency
+   with the rest of the account module.
+   ───────────────────────────────────────────────────────────── */
+
+/* Page root */
+.odRoot       { display: flex; flex-direction: column; gap: 20px; }
+
+/* Loading skeleton */
+.odSkWrap     { display: flex; flex-direction: column; gap: 16px; }
+.odSkTitle    { height: 32px; background: #f0ece4; border-radius: 8px; width: 192px; }
+.odSkCard     { height: 192px; background: #f0ece4; border-radius: 16px; }
+.odSkCardSm   { height: 128px; background: #f0ece4; border-radius: 16px; }
+.odSkBlock    { background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; animation: skShine 1.5s infinite; }
+
+/* Error state */
+.odError      { text-align: center; padding: 64px 20px; }
+.odErrorIcon  { font-size: 40px; margin-bottom: 12px; }
+.odErrorMsg   { font-size: 14px; color: #888; margin-bottom: 16px; }
+
+/* Section card — wraps each content block */
+.odCard       { background: #fff; border: 1px solid #ede9e3; border-radius: 20px; padding: 20px; }
+
+/* Page header row */
+.odHeader     { display: flex; align-items: flex-start; justify-content: space-between; }
+.odBackLink   { font-size: 12px; color: #2e7d32; display: inline-block; margin-bottom: 4px; text-decoration: none; }
+.odBackLink:hover { text-decoration: underline; }
+.odOrderNum   { font-size: 18px; font-weight: 700; color: #1a1a1a; font-family: 'Courier New', monospace; }
+.odOrderDate  { font-size: 12px; color: #aaa; margin-top: 2px; }
+.odHeaderRight { text-align: right; }
+.odTotal      { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+.odPayMethod  { font-size: 12px; color: #aaa; margin-top: 2px; text-transform: capitalize; }
+
+/* Tracking chip */
+.odTrackChip  { display: inline-flex; align-items: center; gap: 8px; background: #1a3a1e; color: #fff; padding: 8px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; transition: background .2s; }
+.odTrackChip:hover { background: #2d5233; }
+
+/* Status tracker */
+.odCardTitle  { font-size: 13px; font-weight: 700; color: #555; margin-bottom: 20px; text-transform: uppercase; letter-spacing: .6px; }
+.odCancelledState { text-align: center; padding: 16px 0; }
+.odCancelledIcon  { font-size: 36px; margin-bottom: 8px; }
+.odCancelledLabel { font-size: 15px; font-weight: 600; color: #555; text-transform: capitalize; }
+
+/* Vertical status steps */
+.odStepsWrap  { position: relative; }
+.odStepsTrack { position: absolute; left: 20px; top: 20px; bottom: 20px; width: 2px; background: #f0ece4; }
+.odStepsFill  { position: absolute; left: 20px; top: 20px; width: 2px; background: #43a047; transition: height .7s ease; }
+.odStepsList  { display: flex; flex-direction: column; gap: 16px; }
+.odStep       { display: flex; align-items: center; gap: 16px; position: relative; }
+.odStepDot    { position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid #e0dbd3; background: #fff; transition: border-color .3s, background .3s; flex-shrink: 0; }
+.odStepDotDone    { border-color: #43a047; background: #f0faf0; }
+.odStepDotActive  { border-color: #43a047; background: #f0faf0; box-shadow: 0 0 0 4px rgba(67,160,71,.15); }
+.odStepLabel  { font-size: 14px; font-weight: 600; color: #bbb; }
+.odStepLabelDone   { color: #1b5e20; }
+.odStepLabelActive { color: #1b5e20; }
+.odStepDesc   { font-size: 12px; color: #43a047; margin-top: 2px; }
+
+/* Items list */
+.odItemsList  { display: flex; flex-direction: column; gap: 12px; }
+.odItem       { display: flex; align-items: center; gap: 12px; }
+.odItemImg    { width: 48px; height: 48px; border-radius: 10px; border: 1px solid #ede9e3; background: #f5f0e8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+.odItemImg img { width: 100%; height: 100%; object-fit: cover; }
+.odItemEmoji  { font-size: 22px; }
+.odItemInfo   { flex: 1; min-width: 0; }
+.odItemName   { font-size: 13px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.odItemQty    { font-size: 12px; color: #aaa; margin-top: 2px; }
+.odItemPrice  { font-size: 14px; font-weight: 700; color: #1a1a1a; flex-shrink: 0; }
+
+/* Delivery address */
+.odAddrLines  { font-size: 13px; color: #555; line-height: 1.9; }
+.odAddrName   { font-weight: 700; color: #1a1a1a; }
+.odAddrPhone  { color: #aaa; }
+
+/* Price breakdown */
+.odPriceRows  { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.odPriceRow   { display: flex; justify-content: space-between; color: #666; }
+.odPriceRowDiscount { color: #2e7d32; }
+.odPriceDivider { border: none; border-top: 1px solid #f0ece4; margin: 4px 0; }
+.odPriceTotal { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; color: #1a1a1a; padding-top: 4px; }
+.odPriceTax   { font-size: 11px; color: #aaa; margin-top: 4px; }
+
+/* Support block */
+.odSupportWrap  { background: #fafaf8; border: 1px solid #ede9e3; border-radius: 20px; padding: 20px; }
