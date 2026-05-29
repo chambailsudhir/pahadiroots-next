@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
@@ -36,35 +36,35 @@ export default function OrdersSection({ orders, showToast }: Props) {
     }
   }, [returnModal])
 
-  // ESC key closes the modal; Tab/Shift+Tab are trapped inside
-  useEffect(() => {
-    if (!returnModal) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { closeReturnModal(); return }
-      if (e.key !== 'Tab') return
+  // ESC closes the modal; Tab/Shift+Tab are trapped inside.
+  // Uses onKeyDown on the modal div (same pattern as DangerZoneSection) so the
+  // handler is scoped to the modal element and requires no global listener cleanup.
+  const handleReturnModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') { closeReturnModal(); return }
+    if (e.key !== 'Tab') return
 
-      const modal = modalBoxRef.current
-      if (!modal) return
+    const modal = modalBoxRef.current
+    if (!modal) return
 
-      const focusable = Array.from(
-        modal.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter(el => !el.closest('[disabled]'))
+    const focusable = Array.from(
+      modal.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(el => !el.closest('[disabled]'))
 
-      if (focusable.length === 0) { e.preventDefault(); return }
-      const first = focusable[0]
-      const last  = focusable[focusable.length - 1]
+    if (focusable.length === 0) { e.preventDefault(); return }
+    const first = focusable[0]
+    const last  = focusable[focusable.length - 1]
 
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus() }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus() }
-      }
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus() }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus() }
     }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [returnModal, submitting])
+  // closeReturnModal is a plain function defined below; it reads only state
+  // setters which are stable, so this dep array is safe to leave empty.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function openReturnModal(orderNum: string, triggerBtn?: HTMLButtonElement | null) {
     // orderNum may be the actual order_number or the id — find the order to get both
@@ -239,6 +239,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           aria-labelledby="return-modal-title"
           className={styles.modalOverlay}
           onClick={e => { if (e.target === e.currentTarget) closeReturnModal() }}
+          onKeyDown={handleReturnModalKeyDown}
         >
           <div ref={modalBoxRef} className={styles.modalBox}>
             <div className={styles.modalHeader}>

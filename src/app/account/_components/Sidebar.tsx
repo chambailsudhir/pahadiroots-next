@@ -29,7 +29,9 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
     : null
 
   const loyaltyPts = stats?.loyalty_points ?? 0
-  const coinsLabel = loyaltyPts >= 1000
+  const coinsLabel = loyaltyPts >= 99_500
+    ? '99k+'
+    : loyaltyPts >= 1000
     ? `${(loyaltyPts / 1000).toFixed(1)}k`
     : String(loyaltyPts)
 

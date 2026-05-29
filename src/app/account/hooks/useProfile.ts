@@ -72,6 +72,11 @@ export function useProfile(
     showToast: toast,
   })
 
+  // initFromProfile is called by the effect in page.tsx whenever auth.profile
+  // changes (first load + mid-session server-side updates detected via profileSig).
+  // The useCallback dep array is intentionally empty: setPf is stable and the
+  // function itself does not read any outer scope that could become stale — it
+  // receives the full profile snapshot as its argument every time it is called.
   const initFromProfile = useCallback((p: Profile) => {
     setPf({
       fname: p.first_name    || '',
@@ -82,8 +87,7 @@ export function useProfile(
       pin:   p.postal_code   || '',
       phone: (p.phone || '').replace(/^\+91/, ''),
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally empty — only runs once on mount to populate from profile
+  }, [])
 
   async function saveName() {
     const errors = validateProfileName(pf.fname)

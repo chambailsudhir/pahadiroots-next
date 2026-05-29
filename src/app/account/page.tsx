@@ -202,15 +202,16 @@ function AccountPageInner() {
             Wishlist
           </Link>
         </div>
+        {/* Sign out sits inside the nav landmark so keyboard/screen-reader users
+            navigating by landmark reach it in the same context as the tab bar. */}
+        <button
+          className={styles.mobSignOut}
+          onClick={auth.logout}
+          aria-label="Sign out of your account"
+        >
+          Sign out
+        </button>
       </nav>
-
-      <button
-        className={styles.mobSignOut}
-        onClick={auth.logout}
-        aria-label="Sign out of your account"
-      >
-        Sign out
-      </button>
 
       {/* Toast */}
       <div

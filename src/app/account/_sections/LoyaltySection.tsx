@@ -38,6 +38,12 @@ const TYPE_META: Record<string, { icon: string; color: string; label: string }> 
   adjustment: { icon: '✏️', color: '#666',    label: 'Adjusted'},
 }
 
+// Module-level flag: survives unmount/remount when the user switches tabs.
+// AccountPage renders sections conditionally, so the component is destroyed and
+// re-created on every tab switch. A module-level boolean means we fetch once per
+// page-session rather than once per mount.
+let loyaltyDataFetched = false
+
 export default function LoyaltySection({ showToast }: { showToast?: (msg: string, type?: 'success'|'error') => void }) {
   const [data,    setData]    = useState<LoyaltyData | null>(null)
   const [txns,    setTxns]    = useState<Transaction[]>([])
@@ -50,7 +56,11 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   const [hasMore,  setHasMore]  = useState(false)
   const TXN_LIMIT = 20   // must match limit= param in loadHistory
 
+  // Guard: skip fetch if data was already loaded this page session.
+  // loyaltyDataFetched is module-level so it persists across tab-switch remounts.
   useEffect(() => {
+    if (loyaltyDataFetched) return
+    loyaltyDataFetched = true
     let mounted = true
     async function load() {
       try {

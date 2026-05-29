@@ -114,7 +114,13 @@ export function getCourierTrackingUrl(courier: string | null | undefined, tracki
   return `https://www.google.com/search?q=${encodeURIComponent((courier || '') + ' tracking ' + trackingNumber)}`
 }
 
-export function getOrderStatusMessage(o: any): string {
+interface OrderStatusFields {
+  _displayStatus?: string | null
+  order_status?:   string | null
+  shipped_at?:     string | null
+}
+
+export function getOrderStatusMessage(o: OrderStatusFields): string {
   const ds = o._displayStatus || o.order_status || ''
   if (ds === 'delivered')           return '✅ Delivered! Enjoy your Himalayan goodness 🌿'
   if (ds === 'shipped' && o.shipped_at) {

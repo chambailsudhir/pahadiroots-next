@@ -39,6 +39,15 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   const inputRef    = useRef<HTMLInputElement>(null)
   const modalBoxRef = useRef<HTMLDivElement>(null)
 
+  // closeModal is declared before handleModalKeyDown so the reference is
+  // explicit and not relying on function-hoisting.
+  const closeModal = useCallback(() => {
+    if (deleting) return   // don't close mid-delete
+    setOpen(false)
+    setStep(1)
+    setTyped('')
+  }, [deleting])
+
   // ── Focus trap: intercept Tab/Shift+Tab so keyboard focus stays inside the modal
   const handleModalKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') { closeModal(); return }
@@ -63,7 +72,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     } else {
       if (document.activeElement === last) { e.preventDefault(); first.focus() }
     }
-  }, [])  // closeModal is defined below — see note
+  }, [closeModal])
 
   async function downloadMyData() {
     setDownloading(true)
@@ -106,13 +115,6 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     // Two rAF frames guarantee focus fires after the modal is fully painted,
     // without relying on an arbitrary setTimeout delay.
     requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()))
-  }
-
-  function closeModal() {
-    if (deleting) return   // don't close mid-delete
-    setOpen(false)
-    setStep(1)
-    setTyped('')
   }
 
   async function handleDelete() {
