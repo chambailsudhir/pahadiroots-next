@@ -2,12 +2,35 @@
 // ─────────────────────────────────────────────────────────────
 // /account/orders — standalone orders list page
 // Uses /api/orders (cookie auth) — NOT direct Supabase client
+//  ✅ Migrated from Tailwind to account.module.css
+//  ✅ Fixed oc-badge raw class string (was never matching anything);
+//     badge styles now applied via CSS Modules (ocBadge + status variant)
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { fetchOrders, type Order } from '@/lib/services/orderService'
 import { formatCurrency, formatDate } from '@/lib/account/utils'
-import { STATUS_LABEL, BADGE_CLASS } from '@/lib/account/constants'
+import { STATUS_LABEL } from '@/lib/account/constants'
+import styles from '../styles/account.module.css'
+
+// Map order status → CSS Module class for the badge
+const BADGE_MODULE_CLASS: Record<string, string> = {
+  pending:           styles.badgePending,
+  confirmed:         styles.badgeConfirmed,
+  processing:        styles.badgeConfirmed,
+  packed:            styles.badgePacked,
+  shipped:           styles.badgeShipped,
+  delivered:         styles.badgeDelivered,
+  cancelled:         styles.badgeCancelled,
+  returned:          styles.badgeReturn,
+  return_requested:  styles.badgeReturn,
+  return_approved:   styles.badgeReturn,
+  return_received:   styles.badgeReturn,
+  refunded:          styles.badgeReturn,
+  refund_initiated:  styles.badgeReturn,
+  refund_completed:  styles.badgeReturn,
+  return_rejected:   styles.badgeCancelled,
+}
 
 export default function OrdersPage() {
   const [orders,  setOrders]  = useState<Order[] | null>(null)
@@ -24,59 +47,54 @@ export default function OrdersPage() {
   }, [])
 
   if (loading) return (
-    <div className="space-y-2">
-      {[1,2,3].map(i => <div key={i} className="h-16 bg-stone-100 animate-pulse rounded-xl" />)}
+    <div className={styles.soLoading}>
+      {[1, 2, 3].map(i => <div key={i} className={styles.soSkRow} />)}
     </div>
   )
 
-  // Detect session expiry / unauthenticated access and show a helpful prompt
-  // instead of the raw red error string. Previously, visiting this URL from a
-  // bookmark while logged out showed only an uninformative error message.
   if (error?.includes('401') || error?.includes('Unauthorized') || error?.includes('Not logged in')) return (
-    <div className="text-center py-16">
-      <div className="text-3xl mb-3">🔒</div>
-      <p className="text-stone-500 text-sm mb-4">Please sign in to view your orders</p>
-      <a href="/account" className="inline-block bg-green-900 text-white text-sm font-bold px-5 py-2.5 rounded-xl hover:bg-green-800 transition-colors">
-        Sign In
-      </a>
+    <div className={styles.soAuthWall}>
+      <div className={styles.soAuthIcon}>🔒</div>
+      <p className={styles.soAuthMsg}>Please sign in to view your orders</p>
+      <a href="/account" className={styles.soAuthLink}>Sign In</a>
     </div>
   )
 
   if (error) return (
-    <div className="text-center py-16 text-red-500 text-sm">{error}</div>
+    <div className={styles.soError}>{error}</div>
   )
 
   if (!orders?.length) return (
-    <div className="text-center py-16 border border-dashed border-stone-200 rounded-2xl">
-      <div className="text-4xl mb-3">📦</div>
-      <p className="text-stone-400 text-sm mb-3">No orders yet</p>
-      <Link href="/products" className="text-green-700 text-sm font-semibold hover:underline">Browse Products →</Link>
+    <div className={styles.soEmpty}>
+      <div className={styles.soEmptyIcon}>📦</div>
+      <p className={styles.soEmptyMsg}>No orders yet</p>
+      <Link href="/products" className={styles.soEmptyLink}>Browse Products →</Link>
     </div>
   )
 
   return (
-    <div>
-      <h1 className="text-lg font-bold text-stone-900 mb-5">My Orders</h1>
-      <div className="space-y-2">
+    <div className={styles.soRoot}>
+      <h1 className={styles.soTitle}>My Orders</h1>
+      <div className={styles.soList}>
         {orders.map(order => {
-          const ds    = order._displayStatus || order.order_status || ''
-          const badge = BADGE_CLASS[ds] || 'badge-pending'
+          const ds        = order._displayStatus || order.order_status || ''
+          const badgeCls  = BADGE_MODULE_CLASS[ds] || styles.badgePending
           return (
             <Link
               key={order.id}
               href={`/account/orders/${order.id}`}
-              className="flex items-center justify-between p-4 bg-white border border-stone-100 rounded-xl hover:border-stone-200 hover:shadow-sm transition-all"
+              className={styles.soRow}
             >
-              <div>
-                <div className="text-sm font-bold text-stone-800 font-mono">{order.order_number}</div>
-                <div className="text-xs text-stone-400 mt-0.5">{formatDate(order.created_at)}</div>
+              <div className={styles.soRowLeft}>
+                <div className={styles.soOrderNum}>{order.order_number}</div>
+                <div className={styles.soOrderDate}>{formatDate(order.created_at)}</div>
               </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full oc-badge ${badge}`}>
+              <div className={styles.soRowRight}>
+                <span className={`${styles.ocBadge} ${badgeCls}`}>
                   {STATUS_LABEL[ds] || ds}
                 </span>
-                <span className="text-sm font-bold text-stone-900">{formatCurrency(order.total_amount)}</span>
-                <svg className="w-4 h-4 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <span className={styles.soTotal}>{formatCurrency(order.total_amount)}</span>
+                <svg className={styles.soChevron} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
               </div>

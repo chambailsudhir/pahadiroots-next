@@ -29,6 +29,10 @@
 .sbIcon  { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
 .sbLabel { flex: 1; }
 .sbBadge { background: #e8f5e9; color: #1b5e20; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; }
+.sbLoyalty { color: #b07d00; }
+.sbLoyalty:hover { background: rgba(176,125,0,.07); color: #8a6000; }
+.sbLoyalty.sbItemActive { background: linear-gradient(90deg,rgba(176,125,0,.10),transparent); color: #8a6000; border-left-color: #b07d00; }
+.sbCoinsBadge { background: #fff8e1; color: #b07d00; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 10px; border: 1px solid #ffe082; }
 .sbDiv   { height: 1px; background: #f0ece6; margin: 6px 0; }
 .sbWishlist { color: #c0392b; }
 .sbWishlist:hover { background: rgba(192,57,43,.05); color: #c0392b; }
@@ -609,3 +613,97 @@
 
 /* Support block */
 .odSupportWrap  { background: #fafaf8; border: 1px solid #ede9e3; border-radius: 20px; padding: 20px; }
+
+/* ─── Wishlist standalone page (wl*) ─────────────────────────────── */
+.wlRoot         { }
+.wlHeader       { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.wlTitle        { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+.wlCount        { margin-left: 8px; font-size: 14px; font-weight: 400; color: #aaa; }
+.wlClearBtn     { font-size: 12px; color: #aaa; background: none; border: none; cursor: pointer; transition: color .2s; padding: 0; }
+.wlClearBtn:hover { color: #c0392b; }
+.wlEmpty        { text-align: center; padding: 64px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
+.wlEmptyIcon    { font-size: 40px; margin-bottom: 12px; }
+.wlEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.wlEmptyLink    { font-size: 14px; font-weight: 600; color: #2e7d32; text-decoration: none; }
+.wlEmptyLink:hover { text-decoration: underline; }
+.wlError        { text-align: center; padding: 32px 20px; font-size: 14px; color: #c0392b; }
+.wlGrid         { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (min-width: 640px) { .wlGrid { grid-template-columns: repeat(3, 1fr); } }
+
+/* ─── Standalone addresses page (sa*) ───────────────────────────── */
+.saRoot         { }
+.saHeader       { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.saTitle        { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+.saAddBtn       { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600; color: #2e7d32; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
+.saAddBtn:hover { color: #1a5e24; }
+.saAddBtnIcon   { width: 16px; height: 16px; }
+.saLoading      { display: flex; flex-direction: column; gap: 12px; }
+.saSkRow        { height: 96px; background: #f0ece4; border-radius: 14px; animation: skShine 1.5s infinite; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; }
+.saAuthWall     { text-align: center; padding: 64px 20px; }
+.saAuthIcon     { font-size: 36px; margin-bottom: 12px; }
+.saAuthMsg      { font-size: 14px; color: #888; margin-bottom: 16px; }
+.saAuthLink     { display: inline-block; background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 700; padding: 10px 20px; border-radius: 12px; text-decoration: none; transition: background .2s; }
+.saAuthLink:hover { background: #2e7d32; }
+.saError        { text-align: center; padding: 64px 20px; font-size: 14px; color: #c0392b; }
+.saForm         { background: #fff; border: 1.5px solid #e0d8cd; border-radius: 20px; padding: 20px; margin-bottom: 20px; }
+.saFormTitle    { font-size: 14px; font-weight: 700; color: #1a3a1e; margin-bottom: 16px; }
+.saFormGrid     { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 640px) { .saFormGrid { grid-template-columns: 1fr 1fr; } }
+.saFormSpan2    { grid-column: 1 / -1; }
+.saFLbl         { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px; }
+.saFInp         { width: 100%; border: 1.5px solid #e0d8cd; border-radius: 12px; padding: 10px 12px; font-size: 14px; outline: none; box-sizing: border-box; transition: border-color .2s; background: #fff; }
+.saFInp:focus   { border-color: #2e7d32; }
+.saFErr         { border-color: #e74c3c; }
+.saFErrMsg      { font-size: 12px; color: #c0392b; margin-top: 4px; }
+.saFormActions  { display: flex; gap: 12px; margin-top: 16px; }
+.saSaveBtn      { flex: 1; background: #1a3a1e; color: #fff; font-weight: 700; padding: 10px; border-radius: 12px; font-size: 14px; border: none; cursor: pointer; transition: background .2s; }
+.saSaveBtn:hover:not(:disabled) { background: #2e7d32; }
+.saSaveBtn:disabled { opacity: 0.6; cursor: default; }
+.saCancelBtn    { padding: 10px 20px; border: 1.5px solid #e0d8cd; color: #555; border-radius: 12px; font-size: 14px; background: #fff; cursor: pointer; transition: background .2s; }
+.saCancelBtn:hover { background: #f5f0e8; }
+.saEmpty        { text-align: center; padding: 48px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
+.saEmptyIcon    { font-size: 36px; margin-bottom: 12px; }
+.saEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.saEmptyBtn     { font-size: 14px; font-weight: 600; color: #2e7d32; background: none; border: none; cursor: pointer; padding: 0; }
+.saEmptyBtn:hover { text-decoration: underline; }
+.saList         { display: flex; flex-direction: column; gap: 12px; }
+.saCard         { background: #fff; border: 1.5px solid #ede9e3; border-radius: 14px; padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.saCardBody     { }
+.saCardTag      { font-size: 11px; font-weight: 700; color: #2e7d32; background: #e8f5e9; padding: 2px 8px; border-radius: 20px; display: inline-block; margin-bottom: 4px; }
+.saCardName     { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.saCardLine     { font-size: 13px; color: #666; }
+.saCardSub      { font-size: 13px; color: #999; }
+.saCardActions  { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+.saActBtn       { font-size: 12px; font-weight: 600; color: #888; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
+.saActBtn:hover { color: #2e7d32; }
+.saDelConfirmTxt { font-size: 12px; color: #c0392b; font-weight: 500; }
+.saDelConfirmBtn { font-size: 12px; font-weight: 600; color: #c0392b; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
+.saDelConfirmBtn:hover { color: #a93226; }
+.saDelCancelBtn { font-size: 12px; font-weight: 600; color: #888; background: none; border: none; cursor: pointer; padding: 0; }
+.saToast        { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.2); z-index: 50; white-space: nowrap; }
+
+/* ─── Standalone orders list page (so*) ──────────────────────────── */
+.soRoot         { }
+.soTitle        { font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+.soLoading      { display: flex; flex-direction: column; gap: 8px; }
+.soSkRow        { height: 64px; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; animation: skShine 1.5s infinite; border-radius: 12px; }
+.soAuthWall     { text-align: center; padding: 64px 20px; }
+.soAuthIcon     { font-size: 36px; margin-bottom: 12px; }
+.soAuthMsg      { font-size: 14px; color: #888; margin-bottom: 16px; }
+.soAuthLink     { display: inline-block; background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 700; padding: 10px 20px; border-radius: 12px; text-decoration: none; transition: background .2s; }
+.soAuthLink:hover { background: #2e7d32; }
+.soError        { text-align: center; padding: 64px 20px; font-size: 14px; color: #c0392b; }
+.soEmpty        { text-align: center; padding: 64px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
+.soEmptyIcon    { font-size: 40px; margin-bottom: 12px; }
+.soEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.soEmptyLink    { font-size: 14px; font-weight: 600; color: #2e7d32; text-decoration: none; }
+.soEmptyLink:hover { text-decoration: underline; }
+.soList         { display: flex; flex-direction: column; gap: 8px; }
+.soRow          { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: #fff; border: 1px solid #ede9e3; border-radius: 12px; text-decoration: none; transition: border-color .2s, box-shadow .2s; }
+.soRow:hover    { border-color: #c8e6c9; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.soRowLeft      { }
+.soOrderNum     { font-size: 14px; font-weight: 700; color: #1a1a1a; font-family: 'Courier New', monospace; }
+.soOrderDate    { font-size: 12px; color: #aaa; margin-top: 2px; }
+.soRowRight     { display: flex; align-items: center; gap: 12px; }
+.soTotal        { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+.soChevron      { width: 16px; height: 16px; color: #ccc; flex-shrink: 0; }

@@ -5,6 +5,7 @@
 //  ✅ Supabase client → /api/wishlist route (cookie auth)
 //  ✅ Removed mounted anti-pattern
 //  ✅ Proper loading / error / empty states
+//  ✅ Migrated from Tailwind to account.module.css
 // ─────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -12,6 +13,7 @@ import { useUserStore }  from '@/store/userStore'
 import ProductCard       from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product }  from '@/types'
+import styles from '../styles/account.module.css'
 
 export default function WishlistPage() {
   const wishlist           = useUserStore(s => s.wishlist)
@@ -38,18 +40,19 @@ export default function WishlistPage() {
   }, [wishlist.join(',')])
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg font-bold text-stone-900">
+    <div className={styles.wlRoot}>
+      <div className={styles.wlHeader}>
+        <h1 className={styles.wlTitle}>
           Wishlist
           {wishlist.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-stone-400">({wishlist.length})</span>
+            <span className={styles.wlCount}>({wishlist.length})</span>
           )}
         </h1>
         {wishlist.length > 0 && (
           <button
+            type="button"
             onClick={() => wishlist.forEach(id => removeFromWishlist(id))}
-            className="text-xs text-stone-400 hover:text-red-500 transition-colors"
+            className={styles.wlClearBtn}
           >
             Clear all
           </button>
@@ -57,19 +60,19 @@ export default function WishlistPage() {
       </div>
 
       {wishlist.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-stone-200 rounded-2xl">
-          <div className="text-4xl mb-3">❤️</div>
-          <p className="text-stone-400 text-sm mb-3">Your wishlist is empty</p>
-          <Link href="/products" className="text-green-700 text-sm font-semibold hover:underline">
+        <div className={styles.wlEmpty}>
+          <div className={styles.wlEmptyIcon}>❤️</div>
+          <p className={styles.wlEmptyMsg}>Your wishlist is empty</p>
+          <Link href="/products" className={styles.wlEmptyLink}>
             Browse Products →
           </Link>
         </div>
       ) : loading ? (
         <ProductGridSkeleton count={4} />
       ) : error ? (
-        <div className="text-center py-8 text-red-500 text-sm">{error}</div>
+        <div className={styles.wlError}>{error}</div>
       ) : products.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className={styles.wlGrid}>
           {products.map(p => (
             <ProductCard key={p.id} product={p} showWishlist />
           ))}
