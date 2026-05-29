@@ -46,23 +46,30 @@ export async function POST(req: Request) {
     const eventType = event.event
 
     if (eventType === 'payment.captured') {
-      const payment    = event.payload.payment.entity
-      const rzpOrderId = payment.order_id
-      const paymentId  = payment.id
+      const payment   = event.payload.payment.entity
+      const paymentId = payment.id
 
-      // Find our order by razorpay_order_id
+      // Look up our order via notes.db_order_id (set when creating the Razorpay order).
+      // We cannot use payment_id here because verify_payment already overwrites it
+      // with the Razorpay payment ID before this webhook fires.
+      const dbOrderId = payment.notes?.db_order_id
+      if (!dbOrderId) {
+        console.error('[webhook] payment.captured missing notes.db_order_id', { paymentId })
+        return responsePromise
+      }
+
       const { data: order } = await db
         .from('orders')
         .select('id, order_status, order_number')
-        .eq('payment_id', rzpOrderId)
+        .eq('id', dbOrderId)
         .single()
 
       if (order && (order as any).order_status === 'pending') {
         await db.from('orders').update({
-          order_status:        'confirmed',
-          payment_status:      'paid',
-          payment_id:          paymentId,
-          updated_at:          new Date().toISOString(),
+          order_status:   'confirmed',
+          payment_status: 'paid',
+          payment_id:     paymentId,
+          updated_at:     new Date().toISOString(),
         }).eq('id', order.id)
 
         await logOrderEvent(order.id, 'payment_captured_webhook', 'razorpay', {
@@ -73,18 +80,23 @@ export async function POST(req: Request) {
     }
 
     if (eventType === 'payment.failed') {
-      const payment    = event.payload.payment.entity
-      const rzpOrderId = payment.order_id
+      const payment   = event.payload.payment.entity
+      const dbOrderId = payment.notes?.db_order_id
+
+      if (!dbOrderId) {
+        console.error('[webhook] payment.failed missing notes.db_order_id')
+        return responsePromise
+      }
 
       const { data: order } = await db
         .from('orders')
         .select('id, order_status')
-        .eq('payment_id', rzpOrderId)
+        .eq('id', dbOrderId)
         .single()
 
       if (order && (order as any).order_status === 'pending') {
         await db.from('orders').update({
-          payment_status:      'failed',
+          payment_status: 'failed',
           updated_at:     new Date().toISOString(),
         }).eq('id', order.id)
 
