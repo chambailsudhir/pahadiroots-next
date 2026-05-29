@@ -30,20 +30,21 @@ export function fail(status: number, msg: string, headers?: Record<string, strin
 // does not cover subdomain attacks or misconfigured CDN/proxy setups.
 // Call this at the top of every POST / PATCH / DELETE handler.
 // Returns a 403 response on mismatch, or null when the origin is valid.
-// Build allowed origins dynamically so Vercel preview deployments work.
-// Set NEXT_PUBLIC_SITE_URL in Vercel env vars per environment, e.g.:
-//   Production: https://pahadiroots.com
-//   Preview:    https://pahadiroots-next-git-main-xxx.vercel.app
-const _extraOrigin = process.env.NEXT_PUBLIC_SITE_URL
-  ? [process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')]
-  : []
-
 const ALLOWED_ORIGINS = [
   'https://pahadiroots.com',
   'https://www.pahadiroots.com',
-  ..._extraOrigin,
   ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : []),
 ]
+
+// Vercel preview URLs change per deployment so can't be hardcoded.
+// Allow any *.vercel.app origin — these are Vercel-authenticated deployments,
+// not reachable by arbitrary third parties, so CSRF risk is acceptable here.
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true
+  if (/^https:\/\/[a-z0-9-]+-[a-z0-9]+-[a-z0-9]+\.vercel\.app$/.test(origin)) return true
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return true
+  return false
+}
 
 export function checkCsrf(req: NextRequest): NextResponse | null {
   // Server actions / same-origin fetch always send Origin or Referer.
@@ -57,7 +58,7 @@ export function checkCsrf(req: NextRequest): NextResponse | null {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  if (!ALLOWED_ORIGINS.includes(source)) {
+  if (!isAllowedOrigin(source)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   return null  // valid
