@@ -37,6 +37,31 @@ import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY!
 const IS_PROD      = process.env.NODE_ENV === 'production'
+const RESEND_KEY   = process.env.RESEND_API_KEY
+const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+
+// ── Step 5.5: Send deletion confirmation email ────────────────
+// Non-fatal — deletion proceeds even if Resend is unreachable.
+// Called BEFORE deleteAuthUser so the email address is still valid.
+async function sendDeletionConfirmation(email: string): Promise<void> {
+  if (!RESEND_KEY || !email) return
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
+      signal:  AbortSignal.timeout(8_000),
+      body: JSON.stringify({
+        from:    '5 Pahadi Roots <noreply@pahadiroots.com>',
+        to:      [email],
+        subject: 'Your 5 Pahadi Roots account has been deleted',
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">5 Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account and all associated personal data have been permanently deleted, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>.</p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px"><li>Your name, phone, email and address have been erased</li><li>Saved delivery addresses have been removed</li><li>Order records are anonymised and retained for 7 years (GST requirement)</li></ul><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
+      }),
+    })
+  } catch (e) {
+    // Log but never throw — email failure must not block erasure
+    console.warn('[account/delete] Resend confirmation failed:', e)
+  }
+}
 
 // ── Delete Supabase Auth user via admin API ───────────────────
 async function deleteAuthUser(userId: string): Promise<void> {
@@ -46,6 +71,7 @@ async function deleteAuthUser(userId: string): Promise<void> {
       'apikey':        SUPABASE_KEY,
       'Authorization': `Bearer ${SUPABASE_KEY}`,
     },
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -180,6 +206,14 @@ export async function DELETE(req: NextRequest) {
       'return=representation',
     ).catch(() => null)   // audit failure must never block deletion
 
+    // ── Step 5.5: Send deletion confirmation email ────────────────
+    // Must run BEFORE deleteAuthUser — the auth record (and its email)
+    // is wiped in Step 6 and can't be read afterwards.
+    // sendDeletionConfirmation is non-fatal: if Resend is down, deletion
+    // still completes and we log the failure internally.
+    const userEmail: string = typeof user.email === 'string' ? user.email : ''
+    await sendDeletionConfirmation(userEmail)
+
     // ── Step 6: Delete Supabase Auth user ─────────────────────────
     // Irrecoverable — always the very last step.
     // If anything above failed partially, the user still has an account
@@ -187,8 +221,11 @@ export async function DELETE(req: NextRequest) {
     await deleteAuthUser(userId)
 
     // ── Step 7: Clear cookies + respond ──────────────────────────
+    const successMsg = userEmail
+      ? `Account deleted. A confirmation has been sent to ${userEmail}.`
+      : 'Account deleted successfully.'
     return clearAuthCookies(
-      ok({ success: true, message: 'Account deleted. A confirmation email has been sent.' }) as NextResponse
+      ok({ success: true, message: successMsg }) as NextResponse
     )
 
   } catch (e: unknown) {

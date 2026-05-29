@@ -108,7 +108,8 @@ async function sbAuth(path: string, body: Record<string, unknown> | null = null,
   const res = await fetch(url, {
     method: body !== null ? 'POST' : 'GET',
     headers,
-    body: body !== null ? JSON.stringify(body) : undefined,
+    body:   body !== null ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8_000),
   })
   const text = await res.text()
   const data = text ? JSON.parse(text) : {}
@@ -126,7 +127,8 @@ async function sbAdmin(method: string, path: string, body: Record<string, unknow
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Prefer':        'return=representation',
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body:   body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8_000),
   })
   const text = await res.text()
   if (!res.ok) throw { status: res.status, message: text }
