@@ -449,7 +449,8 @@ export async function POST(req: NextRequest) {
 
   // ── Link Phone ──
   if (action === 'link_phone') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
+               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { phone } = body as { phone?: string }
     if (!token) return err(401, 'Not logged in')
     if (!phone) return err(400, 'Phone required')
@@ -468,7 +469,8 @@ export async function POST(req: NextRequest) {
 
   // ── Update Profile ──
   if (action === 'update_profile') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
+               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     const { first_name, last_name, address_line1, city, state, postal_code, phone: phoneUpdate, saved_addresses } = body as {
       first_name?: string; last_name?: string; address_line1?: string; city?: string
@@ -612,7 +614,8 @@ export async function POST(req: NextRequest) {
 
   // ── Create Return ──
   if (action === 'create_return') {
-    const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const token = req.cookies.get(COOKIE_TOKEN)?.value
+               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
     const { order_id, order_number, customer_name, reason, description, refund_amount, selected_items, is_partial } = body as {
       order_id?: string | number; order_number?: string; customer_name?: string; reason?: string

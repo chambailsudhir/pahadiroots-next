@@ -51,12 +51,25 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
               </div>
               {profile.pfErr.newp && <div className={styles.errTxt}>{profile.pfErr.newp}</div>}
               {profile.pw.newp.length > 0 && (
-                <div className={styles.pwStrength}>
+                <div className={styles.pwStrength} role="status">
                   {(() => {
                     const score = validate.password.score(profile.pw.newp)
                     const label = score <= 1 ? 'Weak' : score <= 2 ? 'Fair' : score === 3 ? 'Good' : 'Strong'
                     const cls   = score <= 1 ? styles.pwWeak : score <= 2 ? styles.pwFair : score === 3 ? styles.pwMedium : styles.pwStrong
-                    return <><div className={`${styles.pwBar} ${cls}`} style={{ width: `${score * 25}%` }} /><span className={styles.pwStrengthLbl}>{label}</span></>
+                    return (
+                      <>
+                        <div
+                          className={`${styles.pwBar} ${cls}`}
+                          style={{ width: `${score * 25}%` }}
+                          role="meter"
+                          aria-valuenow={score}
+                          aria-valuemin={0}
+                          aria-valuemax={4}
+                          aria-label={`Password strength: ${label}`}
+                        />
+                        <span className={styles.pwStrengthLbl} aria-hidden="true">{label}</span>
+                      </>
+                    )
                   })()}
                 </div>
               )}
