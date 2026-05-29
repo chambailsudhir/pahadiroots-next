@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Products
   let products = null
-  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false); products = data } catch {}
+  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false).eq('is_active', true); products = data } catch {}
 
   const productPages: MetadataRoute.Sitemap = (products || []).map(p => ({
     url:             `${BASE}/products/${p.slug}`,
