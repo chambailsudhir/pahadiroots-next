@@ -12,7 +12,17 @@ const nextConfig = {
   experimental: {
     // Enable server actions
     serverActions: {
-      allowedOrigins: ['pahadiroots.com', 'localhost:3000'],
+      // Include NEXT_PUBLIC_SITE_URL so Vercel preview deployments are allowed.
+      // Strip protocol prefix — Next.js serverActions expects hostname[:port] only.
+      allowedOrigins: [
+        'pahadiroots.com',
+        'www.pahadiroots.com',
+        'localhost:3000',
+        ...(process.env.NEXT_PUBLIC_SITE_URL
+          ? [process.env.NEXT_PUBLIC_SITE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '')]
+          : []
+        ),
+      ],
     },
   },
   // Vercel function timeout
