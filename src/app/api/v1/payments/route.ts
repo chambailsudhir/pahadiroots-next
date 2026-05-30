@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
+import { checkCsrf } from '@/lib/api/serverUtils'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -75,7 +76,14 @@ async function awardLoyaltyPoints(
 }
 
 // ─── Main handler ──────────────────────────────────────────────────────────────
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // ── CSRF check ─────────────────────────────────────────────────────────────
+  // Reject requests that originate from a domain we don't own.
+  // This mirrors the guard already present on /api/orders/[id]/return,
+  // /api/profile, and /api/account/data-export.
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   try {
     const body   = await req.json()
     const action = body.action as string

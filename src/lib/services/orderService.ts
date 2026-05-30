@@ -407,6 +407,30 @@ export async function createOrder(
   }
   if (!custId) throw new Error('Could not create/find customer record')
 
+  // 7c. Loyalty balance guard — verify the customer still holds enough points
+  //     at this exact moment before we create the order.
+  //     The client-side validate call (POST /api/v1/loyalty action=validate) is
+  //     a point-in-time snapshot; points can be redeemed in a parallel session
+  //     between that call and now. We re-fetch the live balance here so a race
+  //     cannot result in a negative balance.
+  if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
+    const { data: customerRow, error: balanceErr } = await db
+      .from('customers')
+      .select('loyalty_points')
+      .eq('id', custId)
+      .single()
+
+    if (balanceErr) throw new Error('Could not verify loyalty balance')
+
+    const liveBalance = Number(customerRow?.loyalty_points ?? 0)
+    if (input.loyaltyPointsRedeemed! > liveBalance) {
+      throw new Error(
+        `Insufficient loyalty balance — available: ${liveBalance} pts, ` +
+        `requested: ${input.loyaltyPointsRedeemed} pts`
+      )
+    }
+  }
+
   // 8. Create order
   const { data: newOrder, error: orderErr } = await db
     .from('orders')

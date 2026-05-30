@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
+import { checkCsrf } from '@/lib/api/serverUtils'
 
 // Lightweight server-side sanitizer
 function sanitize(str: string): string {
@@ -114,7 +115,14 @@ async function redeemLoyaltyPoints(
   return result === true || result?.result === true
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // ── CSRF check ─────────────────────────────────────────────────────────────
+  // Reject requests that originate from a domain we don't own.
+  // This mirrors the guard already present on /api/orders/[id]/return,
+  // /api/profile, and /api/account/data-export.
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   try {
     const body   = await req.json()
     const parsed = orderSchema.safeParse(body)
