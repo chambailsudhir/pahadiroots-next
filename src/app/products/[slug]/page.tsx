@@ -10,6 +10,7 @@ import ReviewsSection from '@/components/product/ReviewsSection'
 import RelatedProducts from '@/components/product/RelatedProducts'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export const revalidate = 3600
 
@@ -277,7 +278,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-origin-body">
                 <div className="pdp-origin-map">
                   {stateImg
-                    ? <img src={stateImg} alt={regionName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ? <Image src={stateImg} alt={regionName} width={80} height={80} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                     : <span style={{ fontSize: '26px', lineHeight: '1' }}>{rEmoji}</span>}
                 </div>
                 <div className="pdp-origin-text">

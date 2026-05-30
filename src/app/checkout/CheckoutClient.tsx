@@ -171,10 +171,24 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
   const bothPayOff    = !codOk && !razorpayEnabled
 
-  const analytics = useCheckoutAnalytics({
+  // Destructure individual stable useCallback refs — the analytics object itself
+  // is a new reference each render, so adding `analytics` to a useCallback dep
+  // would defeat memoization. Each method is stable (useCallback with []).
+  const {
+    trackOrderPlaced,
+    trackPaymentInitiated,
+    trackPaymentVerified,
+    trackCouponApplied,
+    trackCouponError,
+  } = useCheckoutAnalytics({
     itemCount: items.length, subtotal: pricing.subtotal,
     payMethod, isFreeShipping: pricing.isFreeShipping,
   })
+
+  // Primitive snapshots used inside placeOrder — stable values to include in dep array
+  const pricingShipping  = pricing.shipping
+  const pricingTotal     = pricing.total
+  const waNumber         = s.whatsapp_number || '919899984895'
 
   const orderPlacedRef = useRef(false)
   useEffect(() => {
@@ -269,9 +283,9 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         body: JSON.stringify({ code:couponCode.trim().toUpperCase(), subtotal:pricing.subtotal }),
       })
       const data = await res.json()
-      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); analytics.trackCouponError(couponCode, data.error || 'invalid'); return }
+      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); trackCouponError(couponCode, data.error || 'invalid'); return }
       applyCoupon(data.coupon); setCouponCode('')
-      analytics.trackCouponApplied(data.coupon.code, data.coupon.discount)
+      trackCouponApplied(data.coupon.code, data.coupon.discount)
     } catch { setCouponError('Failed to apply coupon') }
     finally  { setCouponLoading(false) }
   }
@@ -338,11 +352,11 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         loyalty_points_redeemed: loyaltyRedemption?.points ?? 0,
       }
       if (payMethod === 'cod') {
-        const waNumber   = s.whatsapp_number || '919899984895'
+        // waNumber comes from stable primitive extracted above the callback
         const itemLines  = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
         const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
         const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
-        const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
+        const shipLine   = pricingShipping > 0 ? `\n🚚 Shipping: ₹${pricingShipping}` : '\n🚚 Shipping: FREE'
         const waMsg = `*New Order — 5 Pahadi Roots* 🌿\n\n` +
           `👤 *${addr.name}*\n` +
           `📱 ${addr.phone}\n` +
@@ -350,7 +364,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           `\n📍 *Delivery Address*\n${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
           `🛒 *Items*\n${itemLines}` +
           couponLine + coinsLine + shipLine +
-          `\n\n*Total: ₹${pricing.total}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
+          `\n\n*Total: ₹${pricingTotal}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
 
         let orderNumber = ''
         try {
@@ -361,14 +375,14 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           const dbData = await dbRes.json()
           if (dbRes.ok) {
             orderNumber = dbData.order_number || ''
-            analytics.trackOrderPlaced(orderNumber, pricing.total, 'cod')
+            trackOrderPlaced(orderNumber, pricingTotal, 'cod')
           }
         } catch (e) { console.error('[COD] DB save failed:', e) }
 
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
         orderPlacedRef.current = true
         clearCart()
-        router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricing.total}`)
+        router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricingTotal}`)
       } else {
         const RZP = (window as any).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
@@ -405,24 +419,24 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               const verData = await verRes.json()
               if (!verRes.ok) throw new Error(verData.error || 'Verification failed')
 
-              const waNumber  = s.whatsapp_number || '919899984895'
+              // waNumber comes from stable primitive extracted above the callback
               const itemLines = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
               const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
               const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
-              const shipLine   = pricing.shipping > 0 ? `\n🚚 Shipping: ₹${pricing.shipping}` : '\n🚚 Shipping: FREE'
+              const shipLine   = pricingShipping > 0 ? `\n🚚 Shipping: ₹${pricingShipping}` : '\n🚚 Shipping: FREE'
               const waMsg = `✅ *Payment Confirmed — 5 Pahadi Roots* 🌿\n\n` +
                 `✅ *Payment ID:* ${response.razorpay_payment_id}\n` +
                 `👤 *${addr.name}*\n📱 ${addr.phone}\n` +
                 (email ? `📧 ${email}\n` : '') +
                 `\n📍 ${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
                 `🛒 *Items*\n${itemLines}` + couponLine + coinsLine + shipLine +
-                `\n\n*Total Paid: ₹${pricing.total}*`
+                `\n\n*Total Paid: ₹${pricingTotal}*`
               window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
 
-              analytics.trackPaymentVerified(verData.order_number, pricing.total)
+              trackPaymentVerified(verData.order_number, pricingTotal)
               orderPlacedRef.current = true
               clearCart()
-              router.replace(`/order-success?id=${verData.order_number || ''}&method=razorpay&total=${pricing.total}`)
+              router.replace(`/order-success?id=${verData.order_number || ''}&method=razorpay&total=${pricingTotal}`)
             } catch (e:any) {
               setError(e.message || 'Payment verified but order save failed. Contact support with payment ID: ' + response.razorpay_payment_id)
               setPlacing(false)
@@ -430,11 +444,11 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           },
           modal: { ondismiss: () => { setPlacing(false); ensureIdempotencyKey() } },
         })
-        analytics.trackPaymentInitiated(pricing.total)
+        trackPaymentInitiated(pricingTotal)
         rzp.open(); return
       }
     } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
-  }, [addr, email, items, coupon, loyaltyRedemption, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId])
+  }, [addr, email, items, coupon, loyaltyRedemption, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId, trackOrderPlaced, trackPaymentInitiated, trackPaymentVerified, pricingShipping, pricingTotal, waNumber])
 
   if (!storeReady) return <CheckoutSkeleton />
   if (items.length === 0) return null

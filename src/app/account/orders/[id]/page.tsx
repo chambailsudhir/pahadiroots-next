@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
 import { SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
 import styles from '../../styles/account.module.css'
@@ -184,7 +185,7 @@ export default function OrderDetailPage() {
               <div key={i} className={styles.odItem}>
                 <div className={styles.odItemImg}>
                   {item.image_url
-                    ? <img src={item.image_url} alt={item.name} />
+                    ? <Image src={item.image_url} alt={item.name} width={64} height={64} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span className={styles.odItemEmoji}>{item.emoji || '🌿'}</span>}
                 </div>
                 <div className={styles.odItemInfo}>

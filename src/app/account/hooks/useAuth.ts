@@ -50,25 +50,22 @@ export function useAuth() {
     return { ...(current ?? {}), ...updates }
   }
 
-  function syncStore(prof: Profile | null, user: AuthUser | null) {
+  const syncStore = useCallback((prof: Profile | null, user: AuthUser | null) => {
     storeSetUser({
       id:    String(prof?.id    || user?.id    || ''),
       phone: (prof?.phone || user?.phone || '').replace(/^\+91/, ''),
       email: String(user?.email || prof?.email || ''),
       name:  prof?.first_name || '',
     })
-  }
+  }, [storeSetUser])
 
   const init = useCallback(async () => {
     if (initDone.current) return
     initDone.current = true
     setAuthState('loading')
     try {
-      // Single call — profile route handles token refresh internally.
-      // 401 = not logged in (guest), anything else = error.
       const data = await fetchProfile()
       if (!data.profile) {
-        // Logged in but no customer record yet — treat as guest
         setAuthState('guest')
         return
       }
@@ -77,8 +74,6 @@ export function useAuth() {
       setAuthState('authenticated')
       syncStore(data.profile, (data.user ?? null) as AuthUser | null)
 
-      // Load server wishlist and merge with any locally-saved items.
-      // Fire-and-forget: a failure here must never block login.
       fetch('/api/wishlist')
         .then(r => r.ok ? r.json() : null)
         .then(json => {
@@ -88,14 +83,13 @@ export function useAuth() {
         })
         .catch(() => { /* silent — local wishlist still works */ })
     } catch (err: unknown) {
-      // 401 = no session / expired → guest (not an error)
       if (err instanceof ServiceError && err.status === 401) {
         setAuthState('guest')
       } else {
         setAuthState('failed')
       }
     }
-  }, [])
+  }, [syncStore, storeSetWishlist])
 
   // Soft retry: resets the init gate so init() can re-run without a full
   // page reload. Used by the "Try Again" button in the failed state.

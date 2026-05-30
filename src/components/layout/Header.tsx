@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
@@ -59,7 +60,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         <Link href="/" className="old-logo">
           <div className="old-logo-icon">
             {logoUrl
-              ? <img src={logoUrl} alt={siteName} style={{ height: '40px', width: '40px', objectFit: 'contain' }} />
+              ? <Image src={logoUrl} alt={siteName} width={40} height={40} style={{ objectFit: 'contain' }} />
               : <span style={{ fontSize: '28px' }}>🌿</span>}
           </div>
           <div className="old-logo-words">

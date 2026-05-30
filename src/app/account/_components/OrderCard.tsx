@@ -1,6 +1,7 @@
 'use client'
 import React, { memo } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { BADGE_CLASS, STATUS_LABEL, STRIPE_CLASS, SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
 import { formatCurrency, formatDate, getOrderStatusMessage, getPaymentLabel, getCourierTrackingUrl } from '@/lib/account/utils'
 import { type Order } from '@/lib/services/orderService'
@@ -115,7 +116,7 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
               {items.slice(0, 4).map((it, i) => (
                 <div key={`${it.name}-${it.variant ?? ''}-${i}`} className={styles.ocImgBox}>
                   {it.image_url
-                    ? <img
+                    ? <Image
                         src={it.image_url}
                         alt={it.name || ''}
                         width={64}
