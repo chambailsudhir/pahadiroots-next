@@ -260,36 +260,44 @@ export async function createOrder(
       // No-variant product — price comes from products table
       const p = productMap.get(String(i.productId))
       return {
-        productId:  i.productId,
-        variantId:  i.variantId,
-        name:       String(p?.name  ?? ''),
-        slug:       '',
-        image:      null,
-        emoji:      String(p?.emoji ?? '🌿'),
-        size:       '',
-        price:      Number(p?.price) || 0,
-        mrp:        Number(p?.mrp)   || Number(p?.price) || 0,
-        gstRate:    Number(p?.gst_rate ?? 0),
-        qty:        i.qty,
-        maxQty:     Number(p?.available_stock) || 999,
+        productId:    i.productId,
+        variantId:    i.variantId,
+        name:         String(p?.name  ?? ''),
+        slug:         '',
+        image:        null,
+        emoji:        String(p?.emoji ?? '🌿'),
+        size:         '',
+        price:        Number(p?.price) || 0,
+        mrp:          Number(p?.mrp)   || Number(p?.price) || 0,
+        gstRate:      Number(p?.gst_rate ?? 0),
+        qty:          i.qty,
+        maxQty:       Number(p?.available_stock) || 999,
+        // Badge flags are display-only and irrelevant for server-side price calculation
+        isOrganic:    !!(p?.badges_organic),
+        isHimalayan:  !!(p?.state_id),
+        isBestseller: !!(p?.badges_bestseller),
       }
     } else {
       // Variant product — price from product_variants, mrp from original_price column
       const v = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
       const p = productMap.get(String(v?.product_id ?? i.productId))
       return {
-        productId:  i.productId,
-        variantId:  i.variantId,
-        name:       String(p?.name  ?? ''),
-        slug:       '',
-        image:      null,
-        emoji:      String(p?.emoji ?? '🌿'),
-        size:       '',
-        price:      Number(v?.price) || 0,
-        mrp:        Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
-        gstRate:    Number(p?.gst_rate ?? 0),
-        qty:        i.qty,
-        maxQty:     Number(v?.available_stock) || 999,
+        productId:    i.productId,
+        variantId:    i.variantId,
+        name:         String(p?.name  ?? ''),
+        slug:         '',
+        image:        null,
+        emoji:        String(p?.emoji ?? '🌿'),
+        size:         '',
+        price:        Number(v?.price) || 0,
+        mrp:          Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
+        gstRate:      Number(p?.gst_rate ?? 0),
+        qty:          i.qty,
+        maxQty:       Number(v?.available_stock) || 999,
+        // Badge flags are display-only and irrelevant for server-side price calculation
+        isOrganic:    !!(p?.badges_organic),
+        isHimalayan:  !!(p?.state_id),
+        isBestseller: !!(p?.badges_bestseller),
       }
     }
   })

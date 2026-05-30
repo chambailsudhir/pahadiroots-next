@@ -3,11 +3,13 @@
 import Link from 'next/link'
 import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
+import type { CartItem, AppliedCoupon } from '@/types'
+import type { PriceSummary } from '@/lib/services/pricingService'
 
 interface Props {
-  items: any[]
-  pricing: any
-  coupon: any
+  items: CartItem[]
+  pricing: PriceSummary
+  coupon: AppliedCoupon | null
   onApplyCoupon: () => void
   onRemoveCoupon: () => void
   couponCode: string

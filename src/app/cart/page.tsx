@@ -27,6 +27,26 @@ import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 import type { SiteSettings } from '@/types'
 
+// UpsellItem is defined in UpsellSection but also needed here for the fetch shape.
+// Re-declared locally to avoid a circular import — kept in sync with UpsellSection.tsx.
+interface UpsellItem {
+  id: string
+  productId: string
+  name: string
+  slug: string
+  size: string
+  price: number
+  mrp: number
+  emoji: string | null
+  image: string | null
+  gstRate: number
+  maxQty: number
+  badge: string | null
+  isOrganic:    boolean
+  isHimalayan:  boolean
+  isBestseller: boolean
+}
+
 import CartSkeleton               from '@/components/cart/CartSkeleton'
 import CartItemCard                from '@/components/cart/CartItemCard'
 import CartSummary                 from '@/components/cart/CartSummary'
@@ -69,7 +89,7 @@ export default function CartPage() {
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponError,   setCouponError]   = useState('')
-  const [upsellItems,   setUpsellItems]   = useState<any[]>([])
+  const [upsellItems,   setUpsellItems]   = useState<UpsellItem[]>([])
   const [upsellLoading, setUpsellLoading] = useState(true)
   const [addedUpsell,   setAddedUpsell]   = useState<string[]>([])
   const [reviews,       setReviews]       = useState(FALLBACK_REVIEWS)
@@ -94,27 +114,31 @@ export default function CartPage() {
         if (!r.ok) return
         const data = await r.json()
         const cartIds  = new Set(items.map(i => i.variantId))
-        const variants: any[] = data.product_variants || []
-        const products: any[] = data.products         || []
-        const images:   any[] = data.product_images   || []
-        const prodMap = Object.fromEntries(products.map((p: any) => [p.id, p]))
+        // Raw API shapes — narrowed just enough for the fields we access
+        interface RawVariant { id: string; product_id: string; is_active: boolean; available_stock: number; price: number; mrp: number; size?: string; weight?: string }
+        interface RawProduct  { id: string; name?: string; slug?: string; emoji?: string | null; gst_rate?: number; state_id?: string | null; badges_organic?: boolean; badges_bestseller?: boolean; badges_new?: boolean }
+        interface RawImage    { product_id: string; image_url: string }
+        const variants: RawVariant[] = data.product_variants || []
+        const products: RawProduct[] = data.products         || []
+        const images:   RawImage[]   = data.product_images   || []
+        const prodMap = Object.fromEntries(products.map(p => [p.id, p]))
         const imgMap: Record<string,string> = {}
-        images.forEach((img: any) => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
+        images.forEach(img => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
         // Deduplicate by product_id: pick the best-stocked variant per product.
         // Previously all variants of the same product (e.g. 3× Himalayan Wild Honey
         // at different sizes) were shown together — now only one card per product.
         const seenProducts = new Set<string>()
         const cartProductIds = new Set(items.map(i => i.productId))
         const upsells = variants
-          .filter((v: any) => v.is_active && v.available_stock > 0 && !cartIds.has(v.id) && !cartProductIds.has(v.product_id))
-          .sort((a: any, b: any) => b.available_stock - a.available_stock) // best-stocked variant first
-          .filter((v: any) => {
+          .filter(v => v.is_active && v.available_stock > 0 && !cartIds.has(v.id) && !cartProductIds.has(v.product_id))
+          .sort((a, b) => b.available_stock - a.available_stock) // best-stocked variant first
+          .filter(v => {
             if (seenProducts.has(v.product_id)) return false
             seenProducts.add(v.product_id)
             return true
           })
           .slice(0, 6)
-          .map((v: any) => {
+          .map(v => {
             const p = prodMap[v.product_id] || {}
             // Badge derived from real product flags — no index-rotation heuristic
             const badge = p.badges_bestseller ? 'Bestseller'
@@ -162,7 +186,7 @@ export default function CartPage() {
     removeItem(variantId)
   }, [removeItem, analytics])
 
-  const handleUpsellAdd = useCallback((p: any) => {
+  const handleUpsellAdd = useCallback((p: UpsellItem) => {
     if (addedUpsell.includes(p.id)) return
     addItem({
       productId:p.productId, variantId:p.id, name:p.name,

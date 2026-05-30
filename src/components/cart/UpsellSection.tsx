@@ -16,7 +16,10 @@ interface UpsellItem {
   image: string | null
   gstRate: number
   maxQty: number
-  badge: string
+  badge: string | null
+  isOrganic:    boolean
+  isHimalayan:  boolean
+  isBestseller: boolean
 }
 
 interface Props {
@@ -71,7 +74,7 @@ const UpsellSection = memo(function UpsellSection({
                     : <span style={{ fontSize:'26px' }}>{p.emoji || '🌿'}</span>}
                 </div>
                 <div className="us-info">
-                  <div className="us-badge">{p.badge}</div>
+                  {p.badge && <div className="us-badge">{p.badge}</div>}
                   <div className="us-name">{p.name}</div>
                   <div className="us-size">{p.size}</div>
                   <div className="us-price-row">
