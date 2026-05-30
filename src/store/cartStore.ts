@@ -74,7 +74,12 @@ export const useCartStore = create<CartStore>()(
       clearCart: () => set({
         items:          [],
         coupon:         null,
-        idempotencyKey: generateUUID(),  // fresh key for next order
+        // Reset to '' rather than eagerly generating a new UUID.
+        // If clearCart fires while the order-success page is still in flight,
+        // a retry would otherwise pick up the freshly-minted key and submit
+        // a duplicate order. With '' the key is generated lazily on the next
+        // addItem() call, which is the only safe moment to do it.
+        idempotencyKey: '',
       }),
 
       resetIdempotencyKey: () => set({ idempotencyKey: generateUUID() }),

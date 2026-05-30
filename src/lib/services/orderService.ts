@@ -304,6 +304,8 @@ export async function createOrder(
 
   // 4. Resolve coupon — convert raw DB row to AppliedCoupon shape
   let appliedCoupon: import('@/types').AppliedCoupon | null = null
+  // Retain the raw DB row so we can atomically increment uses_count after order creation.
+  let couponDbRow: { code: string; uses_count: number; max_uses: number | null } | null = null
   if (input.couponCode) {
     const { data: coupon } = await db
       .from('coupons')
@@ -312,6 +314,7 @@ export async function createOrder(
       .eq('is_active', true)
       .maybeSingle()
     if (coupon) {
+      couponDbRow = { code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
       const subtotalForDiscount = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
       const discountAmt = coupon.type === 'percent'
         ? Math.min(
@@ -336,8 +339,11 @@ export async function createOrder(
     throw new Error('COD is not available at this time')
   }
 
-  // 7. Generate order number
-  const orderNumber = `PR${Date.now().toString(36).toUpperCase()}`
+  // 7. Generate order number — shown to customers and support.
+  //    Date.now() gives the millisecond epoch; appending 4 random base-36 chars
+  //    makes same-millisecond collisions astronomically unlikely without any DB
+  //    lookup. The idempotency_key remains the true uniqueness guard in the DB.
+  const orderNumber = `PR${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
 
   // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
   // Matches old site pattern: lookup by phone → upsert → get custId
@@ -492,7 +498,22 @@ export async function createOrder(
     throw new Error('Order items could not be saved: ' + itemsErr.message)
   }
 
-  // 10. Log creation event
+  // 10. Increment coupon uses_count now that the order is committed.
+  //     Each PostgreSQL UPDATE acquires a row-level lock, so concurrent increments
+  //     are serialised at the DB level — no read-modify-write race here.
+  //     Non-fatal: a failure to increment just means the coupon can be reused one
+  //     extra time; it does NOT roll back the order.
+  if (couponDbRow) {
+    const { error: couponIncrErr } = await db
+      .from('coupons')
+      .update({ uses_count: couponDbRow.uses_count + 1 })
+      .eq('code', couponDbRow.code)
+    if (couponIncrErr) {
+      console.error('[createOrder] coupon uses_count increment failed:', couponIncrErr.message)
+    }
+  }
+
+  // 11. Log creation event
   await logOrderEvent(newOrder.id, 'order_created', 'system', {
     payment_method: input.paymentMethod,
     total:          pricing.total,

@@ -30,6 +30,7 @@ import CartItemCard                from '@/components/cart/CartItemCard'
 import CartSummary                 from '@/components/cart/CartSummary'
 import { StickyCartCTA, EmptyCart } from '@/components/cart/CartUIComponents'
 import { useCartAnalytics }        from '@/hooks/useCheckoutAnalytics'
+import ErrorBoundary               from '@/components/ui/ErrorBoundary'
 
 // Lazy-load below-fold sections for performance (Issue 9)
 const UpsellSection   = lazy(() => import('@/components/cart/UpsellSection'))
@@ -297,23 +298,27 @@ export default function CartPage() {
           </div>
 
           {/* Upsell — lazy loaded, shimmer while loading */}
-          <Suspense fallback={null}>
-            <UpsellSection
-              items={upsellItems}
-              loading={upsellLoading}
-              error={upsellError}
-              addedIds={addedUpsell}
-              remainingForFreeShip={pricing.remainingForFreeShip}
-              isFreeShipping={pricing.isFreeShipping}
-              freeShipMin={freeShipMin}
-              onAdd={handleUpsellAdd}
-            />
-          </Suspense>
+          <ErrorBoundary section="Upsell" fallback={null}>
+            <Suspense fallback={null}>
+              <UpsellSection
+                items={upsellItems}
+                loading={upsellLoading}
+                error={upsellError}
+                addedIds={addedUpsell}
+                remainingForFreeShip={pricing.remainingForFreeShip}
+                isFreeShipping={pricing.isFreeShipping}
+                freeShipMin={freeShipMin}
+                onAdd={handleUpsellAdd}
+              />
+            </Suspense>
+          </ErrorBoundary>
 
           {/* Pahadi story — lazy loaded */}
-          <Suspense fallback={null}>
-            <PahadiStoryCard />
-          </Suspense>
+          <ErrorBoundary section="Story" fallback={null}>
+            <Suspense fallback={null}>
+              <PahadiStoryCard />
+            </Suspense>
+          </ErrorBoundary>
 
           {/* Trust grid */}
           <div className="cp-card cp-trust-card">
@@ -334,9 +339,11 @@ export default function CartPage() {
           </div>
 
           {/* Reviews — lazy loaded */}
-          <Suspense fallback={null}>
-            <ReviewSection reviews={reviews} />
-          </Suspense>
+          <ErrorBoundary section="Reviews" fallback={null}>
+            <Suspense fallback={null}>
+              <ReviewSection reviews={reviews} />
+            </Suspense>
+          </ErrorBoundary>
 
           {/* Delivery promise */}
           <div className="cp-card cp-delivery-card">

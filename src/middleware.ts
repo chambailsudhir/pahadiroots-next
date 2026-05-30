@@ -13,6 +13,10 @@ const COUPON_LIMIT     = 5         // 5 coupon attempts/minute per IP (brute-for
 type RateEntry = { count: number; reset: number }
 const _localRateMap = new Map<string, RateEntry>()
 
+// Emit a single warning per cold-start when KV is absent in production so the
+// issue surfaces in Vercel logs without flooding every subsequent request.
+let _kvMissingWarned = false
+
 async function rateLimit(key: string, limit: number, windowSec: number): Promise<boolean> {
   const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -40,6 +44,16 @@ async function rateLimit(key: string, limit: number, windowSec: number): Promise
   }
 
   // In-process fallback (local dev / KV not yet configured)
+  if (!_kvMissingWarned) {
+    _kvMissingWarned = true
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[middleware] Upstash KV not configured — rate-limiting falls back to a per-instance ' +
+        'Map. Burst limits are NOT enforced globally across Vercel edge replicas. ' +
+        'Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN to fix this.'
+      )
+    }
+  }
   const now   = Date.now()
   const entry = _localRateMap.get(key)
   if (!entry || now > entry.reset) {
