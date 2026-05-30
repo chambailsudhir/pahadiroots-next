@@ -57,6 +57,7 @@ export default function CartPage() {
   const removeItem   = useCartStore(s => s.removeItem)
   const updateQty    = useCartStore(s => s.updateQty)
   const addItem      = useCartStore(s => s.addItem)
+  const lastAppliedCouponCode = useCartStore(s => s.lastAppliedCouponCode)
 
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
@@ -70,20 +71,35 @@ export default function CartPage() {
   // Settings loaded from store-data — single fetch, no SWR double-fetch
   const [s, setS] = useState<SiteSettings>({} as SiteSettings)
 
-  // Undo toast: keyed by variantId — holds the item snapshot + timer ref
-  const [pendingRemoval, setPendingRemoval] = useState<{
-    variantId: string
-    name: string
-    timerId: ReturnType<typeof setTimeout>
-  } | null>(null)
+  // Undo toast queue: Map<variantId, {name, timerId}>.
+  // A Map (not a single slot) means removing item B while A is pending does NOT
+  // silently commit A — each item gets its own independent 4-second undo window.
+  const [pendingRemovals, setPendingRemovals] = useState<
+    Map<string, { name: string; timerId: ReturnType<typeof setTimeout> }>
+  >(new Map())
 
   const freeShipMin = parseFloat(s.free_shipping_min || '0') || 0
   const pricing     = calcPriceSummary(items, s, coupon, 'cod')
-  const progressPct = freeShipMin > 0 ? Math.min(100, (pricing.subtotal / freeShipMin) * 100) : 100
+  // Use pricing.progressBase (= afterDiscount) — NOT pricing.subtotal — so the bar
+  // always matches the engine. subtotal ignores coupon/loyalty; afterDiscount does not.
+  const progressPct = freeShipMin > 0 ? Math.min(100, (pricing.progressBase / freeShipMin) * 100) : 100
   const totalQty    = items.reduce((sum, i) => sum + i.qty, 0)
 
   // Analytics
   const analytics = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })
+
+  // Coupon hint: if the store has a lastAppliedCouponCode but no active coupon
+  // (cleared on refresh because coupon is session-only), pre-fill the input so
+  // the user can see and re-apply their code with one click.
+  // Runs once after hydration; the condition becomes false after Apply is tapped.
+  useEffect(() => {
+    if (lastAppliedCouponCode && !coupon && !couponCode) {
+      setCouponCode(lastAppliedCouponCode)
+    }
+  // Only want this to fire once after the store hydrates — dependencies are stable
+  // identities after hydration, so this is intentionally tight.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAppliedCouponCode])
 
   // Stable fingerprint of cart item IDs (sorted variantIds, no quantities).
   // Changes only when items are added or removed — NOT on qty updates.
@@ -182,25 +198,37 @@ export default function CartPage() {
   }, [items, updateQty, analytics])
 
   const handleRemove = useCallback((variantId: string, name: string, price: number) => {
-    // Cancel any existing pending removal (user removed a different item)
-    if (pendingRemoval) {
-      clearTimeout(pendingRemoval.timerId)
-      removeItem(pendingRemoval.variantId) // commit the previous one immediately
-    }
     analytics.trackItemRemoved(name, price)
-    // Schedule actual removal after 4s — user can undo in the meantime
+    // Each item gets its own independent 4-second undo slot in the Map.
+    // Removing item B no longer silently commits item A — both are pending
+    // simultaneously until their individual timers fire or the user undoes them.
     const timerId = setTimeout(() => {
       removeItem(variantId)
-      setPendingRemoval(null)
+      setPendingRemovals(prev => {
+        const next = new Map(prev)
+        next.delete(variantId)
+        return next
+      })
     }, 4000)
-    setPendingRemoval({ variantId, name, timerId })
-  }, [pendingRemoval, removeItem, analytics])
+    setPendingRemovals(prev => {
+      // If this item is already pending (e.g. tapped remove twice), clear the old
+      // timer first to avoid double-firing removeItem.
+      const existing = prev.get(variantId)
+      if (existing) clearTimeout(existing.timerId)
+      return new Map(prev).set(variantId, { name, timerId })
+    })
+  }, [removeItem, analytics])
 
-  const handleUndoRemove = useCallback(() => {
-    if (!pendingRemoval) return
-    clearTimeout(pendingRemoval.timerId)
-    setPendingRemoval(null)
-  }, [pendingRemoval])
+  const handleUndoRemove = useCallback((variantId: string) => {
+    setPendingRemovals(prev => {
+      const entry = prev.get(variantId)
+      if (!entry) return prev
+      clearTimeout(entry.timerId)
+      const next = new Map(prev)
+      next.delete(variantId)
+      return next
+    })
+  }, [])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
     if (addedUpsell.includes(p.id)) return
@@ -277,7 +305,7 @@ export default function CartPage() {
             </div>
             <div className="cp-items">
               {items
-                .filter(item => item.variantId !== pendingRemoval?.variantId)
+                .filter(item => !pendingRemovals.has(item.variantId))
                 .map(item => (
                 <CartItemCard
                   key={item.variantId}
@@ -287,13 +315,13 @@ export default function CartPage() {
                   onRemove={handleRemove}
                 />
               ))}
-              {/* Undo toast */}
-              {pendingRemoval && (
-                <div className="cp-undo-toast" role="status" aria-live="polite">
-                  <span>"{pendingRemoval.name}" removed</span>
-                  <button className="cp-undo-btn" onClick={handleUndoRemove}>Undo</button>
+              {/* Undo toasts — one per pending removal, each with its own Undo button */}
+              {[...pendingRemovals.entries()].map(([vid, entry]) => (
+                <div key={vid} className="cp-undo-toast" role="status" aria-live="polite">
+                  <span>"{entry.name}" removed</span>
+                  <button className="cp-undo-btn" onClick={() => handleUndoRemove(vid)}>Undo</button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
 

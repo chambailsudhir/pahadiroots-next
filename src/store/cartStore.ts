@@ -9,6 +9,11 @@ interface CartStore {
   items:             CartItem[]
   coupon:            AppliedCoupon | null
   idempotencyKey:    string           // generated on first item add, reset after order
+  // The last coupon code the user successfully applied.
+  // Persisted (code string only — never the discount amount) so we can hint the
+  // user to re-apply after a page refresh clears the ephemeral coupon object.
+  // Cleared when the user explicitly removes the coupon or the cart is cleared.
+  lastAppliedCouponCode: string
 
   // Actions
   addItem:           (item: Omit<CartItem, 'qty'> & { qty?: number }) => void
@@ -30,6 +35,7 @@ export const useCartStore = create<CartStore>()(
       items:          [],
       coupon:         null,
       idempotencyKey: '',
+      lastAppliedCouponCode: '',
 
       addItem: (newItem) => {
         set(state => {
@@ -72,12 +78,13 @@ export const useCartStore = create<CartStore>()(
         }))
       },
 
-      applyCoupon:       (coupon) => set({ coupon }),
-      removeCoupon:      ()       => set({ coupon: null }),
+      applyCoupon:       (coupon) => set({ coupon, lastAppliedCouponCode: coupon.code }),
+      removeCoupon:      ()       => set({ coupon: null, lastAppliedCouponCode: '' }),
 
       clearCart: () => set({
         items:          [],
         coupon:         null,
+        lastAppliedCouponCode: '',
         // Reset to '' rather than eagerly generating a new UUID.
         // If clearCart fires while the order-success page is still in flight,
         // a retry would otherwise pick up the freshly-minted key and submit
@@ -123,6 +130,10 @@ export const useCartStore = create<CartStore>()(
           return rest
         }),
         idempotencyKey: state.idempotencyKey,
+        // Persist code string only — the discount is never trusted from storage.
+        // On hydration CartPage checks this and pre-fills the coupon input so
+        // the user knows to re-apply rather than wondering why their discount vanished.
+        lastAppliedCouponCode: state.lastAppliedCouponCode,
       }),
       // Migrate persisted state across schema versions.
       // v1: no partialize — coupon may exist in old localStorage, drop it.

@@ -77,17 +77,14 @@ const CartSummary = memo(function CartSummary({
             {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
           </span>
         </div>
-        {pricing.gstTotal > 0 && (
-          <div className="cs-row muted">
-            <span>Tax (GST inclusive)</span>
-            <span>₹{pricing.gstTotal}</span>
-          </div>
-        )}
         <div className="cs-divider" />
         <div className="cs-total">
           <span>Total</span>
           <span>{formatPrice(pricing.total)}</span>
         </div>
+        {pricing.gstTotal > 0 && (
+          <div className="cs-gst-note">* Prices include GST</div>
+        )}
         {pricing.discount > 0 && (
           <div className="cs-save-pill">🎉 Saving {formatPrice(pricing.discount)} on this order!</div>
         )}
@@ -158,6 +155,7 @@ const CartSummary = memo(function CartSummary({
         .cs-row.green{color:#2d6a4f;font-weight:700;}
         .cs-row .free{color:#2d6a4f;font-weight:700;}
         .cs-row.muted{font-size:11px;color:#bbb;}
+        .cs-gst-note{font-size:11px;color:#bbb;text-align:right;margin-top:-4px;}
         .cs-divider{height:1px;background:#e2dbd0;margin:4px 0;}
         .cs-total{display:flex;justify-content:space-between;align-items:center;
           font-family:var(--font-playfair,'Playfair Display',serif);

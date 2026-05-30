@@ -13,6 +13,10 @@ export interface PriceSummary {
   freeShippingMin:        number
   isFreeShipping:         boolean
   remainingForFreeShip:   number
+  // The value compared against freeShippingMin to determine isFreeShipping.
+  // Use this — NOT subtotal — for the progress bar so the bar always agrees
+  // with the engine (subtotal ignores coupon/loyalty discounts; afterDiscount does not).
+  progressBase:           number
 }
 
 export function calcPriceSummary(
@@ -56,6 +60,9 @@ export function calcPriceSummary(
     freeShippingMin,
     isFreeShipping,
     remainingForFreeShip: Math.max(0, freeShippingMin - afterDiscount),
+    // afterDiscount is what isFreeShipping actually compares — expose it so the
+    // progress bar uses the same base value and can never disagree with the engine.
+    progressBase: afterDiscount,
   }
 }
 
