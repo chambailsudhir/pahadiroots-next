@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { formatPrice } from '@/lib/utils'
 
 // ─── Sticky mobile CTA ────────────────────────────────────────────────────────
@@ -11,8 +11,37 @@ interface StickyProps {
 }
 
 export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: StickyProps) {
+  // Track whether the sticky bar is visually active (mobile viewport).
+  // When hidden on desktop we apply aria-hidden + inert so neither screen readers
+  // nor keyboard users can reach the checkout button.
+  const [isMobile, setIsMobile] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 960px)')
+    const update = (e: MediaQueryListEvent | MediaQueryList) => setIsMobile(e.matches)
+    update(mq)
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  // Apply inert attribute imperatively — React doesn't support it natively yet
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    if (isMobile) {
+      el.removeAttribute('inert')
+    } else {
+      el.setAttribute('inert', '')
+    }
+  }, [isMobile])
+
   return (
-    <div className="scc-wrap">
+    <div
+      ref={wrapRef}
+      className="scc-wrap"
+      aria-hidden={!isMobile}
+    >
       <div>
         <div className="scc-total">{formatPrice(total)}</div>
         <div className="scc-sub">{totalQty} item{totalQty > 1 ? 's' : ''} · Incl. taxes</div>

@@ -100,7 +100,6 @@ export default function CartPage() {
         const prodMap = Object.fromEntries(products.map((p: any) => [p.id, p]))
         const imgMap: Record<string,string> = {}
         images.forEach((img: any) => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
-        const badges = ['Bestseller','Organic','Popular','Farm Fresh','Pure','New Arrival']
         // Deduplicate by product_id: pick the best-stocked variant per product.
         // Previously all variants of the same product (e.g. 3× Himalayan Wild Honey
         // at different sizes) were shown together — now only one card per product.
@@ -115,15 +114,23 @@ export default function CartPage() {
             return true
           })
           .slice(0, 6)
-          .map((v: any, i: number) => {
+          .map((v: any) => {
             const p = prodMap[v.product_id] || {}
+            // Badge derived from real product flags — no index-rotation heuristic
+            const badge = p.badges_bestseller ? 'Bestseller'
+              : p.badges_organic              ? 'Organic'
+              : p.badges_new                  ? 'New Arrival'
+              : null
             return {
               id:v.id, productId:v.product_id, name:p.name||'Product',
               slug:p.slug||'', size:v.size||v.weight||'',
               price:v.price, mrp:v.mrp||v.price,
               emoji:p.emoji||null, image:imgMap[v.product_id]||null,
               gstRate:p.gst_rate||5, maxQty:v.available_stock||10,
-              badge:badges[i % badges.length],
+              badge,
+              isOrganic:    !!(p.badges_organic),
+              isHimalayan:  !!(p.state_id),
+              isBestseller: !!(p.badges_bestseller),
             }
           })
         setUpsellItems(upsells)
@@ -161,6 +168,9 @@ export default function CartPage() {
       productId:p.productId, variantId:p.id, name:p.name,
       slug:p.slug, image:p.image, emoji:p.emoji, size:p.size,
       price:p.price, mrp:p.mrp, gstRate:p.gstRate, maxQty:p.maxQty,
+      isOrganic:    p.isOrganic    ?? false,
+      isHimalayan:  p.isHimalayan  ?? false,
+      isBestseller: p.isBestseller ?? false,
     })
     analytics.trackUpsellAdded(p.name, p.price)
     setAddedUpsell(a => [...a, p.id])

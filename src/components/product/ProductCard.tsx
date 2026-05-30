@@ -75,6 +75,9 @@ export default function ProductCard({ product, showWishlist = true, priority = f
       price, mrp,
       gstRate:   product.gst_rate,
       maxQty:    stock,
+      isOrganic:    product.badges_organic    ?? false,
+      isHimalayan:  !!(product.state_id),
+      isBestseller: product.badges_bestseller ?? false,
     })
     openCart()
   }

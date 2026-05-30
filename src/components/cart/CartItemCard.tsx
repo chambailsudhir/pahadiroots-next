@@ -18,6 +18,10 @@ interface CartItem {
   gstRate: number
   qty: number
   maxQty: number
+  // Product badge flags — driven from DB, not hardcoded
+  isOrganic:    boolean
+  isHimalayan:  boolean
+  isBestseller: boolean
 }
 
 interface Props {
@@ -65,8 +69,9 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
           <Link href={`/products/${item.slug}`} className="cic-name">{item.name}</Link>
           {item.size && <span className="cic-size">{item.size}</span>}
           <div className="cic-badges">
-            <span className="cic-badge org">🌿 Organic</span>
-            <span className="cic-badge hml">🏔 Himalayan</span>
+            {item.isOrganic    && <span className="cic-badge org">🌿 Organic</span>}
+            {item.isHimalayan  && <span className="cic-badge hml">🏔 Himalayan</span>}
+            {item.isBestseller && <span className="cic-badge best">⭐ Bestseller</span>}
             {item.maxQty <= 5 && (
               <span className="cic-badge stock">⚡ Only {item.maxQty} left</span>
             )}
@@ -168,6 +173,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
         .cic-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
         .cic-badge.org{background:#e8f5e9;color:#2d6a4f;border:1px solid #c8e6c9;}
         .cic-badge.hml{background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;}
+        .cic-badge.best{background:#fff8e1;color:#f57f17;border:1px solid #ffecb3;}
         .cic-badge.stock{background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;}
         .cic-footer{
           display:flex;align-items:center;justify-content:space-between;

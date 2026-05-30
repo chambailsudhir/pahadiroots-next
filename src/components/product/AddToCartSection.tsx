@@ -63,6 +63,9 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       gstRate: product.gst_rate,
       maxQty:  maxStock,
       qty,
+      isOrganic:    product.badges_organic    ?? false,
+      isHimalayan:  !!(product.state_id),
+      isBestseller: product.badges_bestseller ?? false,
     })
 
     if (mode === 'buy') {

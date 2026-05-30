@@ -97,6 +97,10 @@ export interface CartItem {
   gstRate: number
   qty: number
   maxQty: number      // stock limit
+  // Product badge flags — driven from DB, not hardcoded
+  isOrganic:    boolean
+  isHimalayan:  boolean
+  isBestseller: boolean
 }
 
 export interface AppliedCoupon {

@@ -34,6 +34,9 @@ export default function RelatedCard({ product: p }: { product: any }) {
       gstRate:   p.gst_rate ?? 5,
       maxQty:    baseVariant?.available_stock ?? p.available_stock ?? 99,
       qty:       1,
+      isOrganic:    !!(p.badges_organic),
+      isHimalayan:  !!(p.state_id),
+      isBestseller: !!(p.badges_bestseller),
     })
     openCart()
     setBtnText('✅ Added!')
