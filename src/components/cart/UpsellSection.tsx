@@ -25,6 +25,7 @@ interface UpsellItem {
 interface Props {
   items: UpsellItem[]
   loading: boolean
+  error?: boolean
   addedIds: string[]
   remainingForFreeShip: number
   isFreeShipping: boolean
@@ -48,7 +49,7 @@ function UpsellShimmer() {
 }
 
 const UpsellSection = memo(function UpsellSection({
-  items, loading, addedIds, remainingForFreeShip,
+  items, loading, error, addedIds, remainingForFreeShip,
   isFreeShipping, freeShipMin, onAdd,
 }: Props) {
   return (
@@ -65,7 +66,11 @@ const UpsellSection = memo(function UpsellSection({
       <div className="us-grid">
         {loading
           ? [0,1,2,3].map(i => <UpsellShimmer key={i} />)
-          : items.slice(0,4).map(p => (
+          : error
+            ? <p style={{ fontSize:'13px', color:'var(--color-text-secondary)', padding:'8px 0', gridColumn:'1/-1' }}>
+                Couldn&apos;t load suggestions right now.
+              </p>
+            : items.slice(0,4).map(p => (
               <div key={p.id} className={`us-item${addedIds.includes(p.id) ? ' added' : ''}`}>
                 <div className="us-img-wrap">
                   {p.image

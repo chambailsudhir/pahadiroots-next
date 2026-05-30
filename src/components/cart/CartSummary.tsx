@@ -8,6 +8,7 @@ import type { PriceSummary } from '@/lib/services/pricingService'
 
 interface Props {
   items: CartItem[]
+  totalQty: number
   pricing: PriceSummary
   coupon: AppliedCoupon | null
   onApplyCoupon: () => void
@@ -19,7 +20,7 @@ interface Props {
 }
 
 const CartSummary = memo(function CartSummary({
-  items, pricing, coupon,
+  items, totalQty, pricing, coupon,
   onApplyCoupon, onRemoveCoupon,
   couponCode, onCouponCodeChange,
   couponLoading, couponError,
@@ -57,7 +58,7 @@ const CartSummary = memo(function CartSummary({
       {/* Price breakdown */}
       <div className="cs-prices">
         <div className="cs-row">
-          <span>Subtotal ({items.length} item{items.length > 1 ? 's' : ''})</span>
+          <span>Subtotal ({totalQty} item{totalQty > 1 ? 's' : ''})</span>
           <span>{formatPrice(pricing.subtotal)}</span>
         </div>
         {coupon && pricing.discount > 0 && (

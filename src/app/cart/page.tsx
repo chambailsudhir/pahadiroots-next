@@ -23,8 +23,6 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
-import useSWR from 'swr'
-import { supabase } from '@/lib/supabase'
 import type { SiteSettings } from '@/types'
 
 // UpsellItem is defined in UpsellSection but also needed here for the fetch shape.
@@ -65,13 +63,6 @@ const FALLBACK_REVIEWS = [
   { name:'Anita K.',  location:'Bangalore', text:"Love the ghee — just like dadi's kitchen."    },
 ]
 
-const settingsFetcher = async (): Promise<SiteSettings> => {
-  const { data } = await supabase.from('site_settings').select('key, value')
-  return Object.fromEntries(
-    (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
-  ) as SiteSettings
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function CartPage() {
   // Hydration guard — stores use skipHydration:true
@@ -91,12 +82,12 @@ export default function CartPage() {
   const [couponError,   setCouponError]   = useState('')
   const [upsellItems,   setUpsellItems]   = useState<UpsellItem[]>([])
   const [upsellLoading, setUpsellLoading] = useState(true)
+  const [upsellError,   setUpsellError]   = useState(false)
   const [addedUpsell,   setAddedUpsell]   = useState<string[]>([])
   const [reviews,       setReviews]       = useState(FALLBACK_REVIEWS)
   const [qtyAnim,       setQtyAnim]       = useState<Record<string,'up'|'down'|null>>({})
-
-  const { data: settings } = useSWR<SiteSettings>('site_settings', settingsFetcher)
-  const s = settings || {} as SiteSettings
+  // Settings loaded from store-data — single fetch, no SWR double-fetch
+  const [s, setS] = useState<SiteSettings>({} as SiteSettings)
 
   const freeShipMin = parseFloat(s.free_shipping_min || '0') || 0
   const pricing     = calcPriceSummary(items, s, coupon, 'cod')
@@ -106,14 +97,40 @@ export default function CartPage() {
   // Analytics
   const analytics = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })
 
-  // Fetch upsells + live reviews
+  // Stable fingerprint of cart item IDs (sorted variantIds, no quantities).
+  // Changes only when items are added or removed — NOT on qty updates.
+  // This prevents a spurious re-fetch every time the user taps +/−.
+  const cartFingerprint = items.map(i => i.variantId).sort().join(',')
+
+  // Fetch upsells + live reviews + settings in a single request.
+  // Previously settings were also fetched via SWR (useSWR → Supabase direct).
+  // That second fetch has been removed — store-data already returns settings.
   useEffect(() => {
+    // Capture a snapshot of cart IDs at fetch time so the closure is stable
+    const variantIds  = new Set(items.map(i => i.variantId))
+    const productIds  = new Set(items.map(i => i.productId))
+
     setUpsellLoading(true)
+    setUpsellError(false)
+
     fetch('/api/v1/store-data')
       .then(async r => {
-        if (!r.ok) return
+        if (!r.ok) throw new Error(`store-data ${r.status}`)
         const data = await r.json()
-        const cartIds  = new Set(items.map(i => i.variantId))
+
+        // ── Settings (single source of truth) ─────────────────────────────
+        const ss: SiteSettings = data.settings || {}
+        setS(ss)
+
+        // Live reviews from site_settings keys
+        const dbRevs = [1,2,3].map(n => ({
+          name:     ss[`review_${n}_name`     as keyof SiteSettings] as string || FALLBACK_REVIEWS[n-1]?.name,
+          location: ss[`review_${n}_location` as keyof SiteSettings] as string || FALLBACK_REVIEWS[n-1]?.location,
+          text:     ss[`review_${n}_text`     as keyof SiteSettings] as string || FALLBACK_REVIEWS[n-1]?.text,
+        })).filter(r => r.name && r.text)
+        if (dbRevs.length > 0) setReviews(dbRevs)
+
+        // ── Upsells ────────────────────────────────────────────────────────
         // Raw API shapes — narrowed just enough for the fields we access
         interface RawVariant { id: string; product_id: string; is_active: boolean; available_stock: number; price: number; mrp: number; size?: string; weight?: string }
         interface RawProduct  { id: string; name?: string; slug?: string; emoji?: string | null; gst_rate?: number; state_id?: string | null; badges_organic?: boolean; badges_bestseller?: boolean; badges_new?: boolean }
@@ -124,14 +141,12 @@ export default function CartPage() {
         const prodMap = Object.fromEntries(products.map(p => [p.id, p]))
         const imgMap: Record<string,string> = {}
         images.forEach(img => { if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url })
+
         // Deduplicate by product_id: pick the best-stocked variant per product.
-        // Previously all variants of the same product (e.g. 3× Himalayan Wild Honey
-        // at different sizes) were shown together — now only one card per product.
         const seenProducts = new Set<string>()
-        const cartProductIds = new Set(items.map(i => i.productId))
         const upsells = variants
-          .filter(v => v.is_active && v.available_stock > 0 && !cartIds.has(v.id) && !cartProductIds.has(v.product_id))
-          .sort((a, b) => b.available_stock - a.available_stock) // best-stocked variant first
+          .filter(v => v.is_active && v.available_stock > 0 && !variantIds.has(v.id) && !productIds.has(v.product_id))
+          .sort((a, b) => b.available_stock - a.available_stock)
           .filter(v => {
             if (seenProducts.has(v.product_id)) return false
             seenProducts.add(v.product_id)
@@ -140,7 +155,6 @@ export default function CartPage() {
           .slice(0, 6)
           .map(v => {
             const p = prodMap[v.product_id] || {}
-            // Badge derived from real product flags — no index-rotation heuristic
             const badge = p.badges_bestseller ? 'Bestseller'
               : p.badges_organic              ? 'Organic'
               : p.badges_new                  ? 'New Arrival'
@@ -158,18 +172,16 @@ export default function CartPage() {
             }
           })
         setUpsellItems(upsells)
-        // Live reviews from site_settings keys
-        const ss = data.settings || {}
-        const dbRevs = [1,2,3].map(n => ({
-          name:     ss[`review_${n}_name`]     || FALLBACK_REVIEWS[n-1]?.name,
-          location: ss[`review_${n}_location`] || FALLBACK_REVIEWS[n-1]?.location,
-          text:     ss[`review_${n}_text`]     || FALLBACK_REVIEWS[n-1]?.text,
-        })).filter(r => r.name && r.text)
-        if (dbRevs.length > 0) setReviews(dbRevs)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // Surface the error so devs can diagnose failures in production logs
+        console.error('[CartPage] store-data fetch failed:', err)
+        setUpsellError(true)
+        // Reviews and settings fall back to their initial values (FALLBACK_REVIEWS / {})
+      })
       .finally(() => setUpsellLoading(false))
-  }, [items.length])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartFingerprint]) // stable fingerprint: only changes on item add/remove, not qty
 
   // Handlers — all stable with useCallback (Issue 9: avoid re-renders)
   const handleQtyChange = useCallback((variantId: string, newQty: number, oldQty: number) => {
@@ -229,7 +241,7 @@ export default function CartPage() {
       <div className="cp-ship-bar">
         {freeShipMin > 0 ? (
           pricing.isFreeShipping
-            ? <span>🎉 You've unlocked <strong>free shipping</strong>!</span>
+            ? <span>🎉 You&apos;ve unlocked <strong>free shipping</strong>!</span>
             : <span>🚚 Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</span>
         ) : '🚚 Free shipping on all orders!'}
         {freeShipMin > 0 && (
@@ -277,6 +289,7 @@ export default function CartPage() {
             <UpsellSection
               items={upsellItems}
               loading={upsellLoading}
+              error={upsellError}
               addedIds={addedUpsell}
               remainingForFreeShip={pricing.remainingForFreeShip}
               isFreeShipping={pricing.isFreeShipping}
@@ -346,6 +359,7 @@ export default function CartPage() {
         <div className="cp-right">
           <CartSummary
             items={items}
+            totalQty={totalQty}
             pricing={pricing}
             coupon={coupon}
             onApplyCoupon={handleCoupon}
