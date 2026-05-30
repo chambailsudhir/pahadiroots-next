@@ -1,8 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
-// /api/v1/store-data — mirrors old site's api/store-data.js exactly
+// /api/v1/store-data — public catalogue & settings endpoint
 // Uses SERVICE KEY so RLS is bypassed — same as old pahadiroots.com
 // Returns: products, product_images, product_variants, categories,
-//          site_settings, states, state_images, coupons, team_members
+//          site_settings, states, state_images, team_members
+//
+// NOTE: Coupon data is intentionally NOT returned here — it would
+// expose all active codes, values, and usage limits to any client.
+// Use /api/v1/coupon-hints for safe, display-only coupon suggestions.
 // ═══════════════════════════════════════════════════════════════
 
 import { NextResponse } from 'next/server'
@@ -30,7 +34,6 @@ export async function GET() {
       states,
       products,
       siteSettings,
-      coupons,
       stateImages,
       productImages,
       productVariants,
@@ -40,7 +43,6 @@ export async function GET() {
       sbGet('states',           'is_active=eq.true&order=name.asc').catch(() => []),
       sbGet('products',         'select=*&status=eq.active&is_deleted=eq.false&order=name.asc&limit=500').catch(() => []),
       sbGet('site_settings',    'select=key,value').catch(() => []),
-      sbGet('coupons',          'is_active=eq.true&select=code,type,value,min_order,max_uses,uses_count,expires_at,first_order_only,max_discount').catch(() => []),
       sbGet('state_images',     'select=state_id,image_url,sort_order&order=state_id.asc,sort_order.asc').catch(() => []),
       sbGet('product_images',   'select=product_id,image_url,sort_order&order=product_id.asc,sort_order.asc').catch(() => []),
       sbGet('product_variants',  'is_active=eq.true&order=product_id.asc,sort_order.asc').catch(() => []),
@@ -56,7 +58,6 @@ export async function GET() {
       states,
       products,
       settings,
-      coupons,
       state_images:     stateImages,
       product_images:   productImages,
       product_variants: productVariants,

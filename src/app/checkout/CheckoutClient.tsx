@@ -235,24 +235,10 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   }, [])
 
   useEffect(() => {
-    fetch('/api/v1/store-data').then(async r => {
+    fetch('/api/v1/coupon-hints').then(async r => {
       if (!r.ok) return
       const data = await r.json()
-      const now = new Date()
-      const hints = (data.coupons || [])
-        .filter((c:any) => {
-          if (c.expires_at && new Date(c.expires_at) < now) return false
-          if (c.max_uses && c.uses_count >= c.max_uses) return false
-          return true
-        })
-        .slice(0, 3)
-        .map((c:any): { code: string; label: string } => ({
-          code: c.code,
-          label: c.type === 'percent'
-            ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`
-            : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
-        }))
-      setCouponHints(hints)
+      setCouponHints(data.hints || [])
     }).catch(() => {})
   }, [])
 

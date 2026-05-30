@@ -23,27 +23,7 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
-import type { SiteSettings } from '@/types'
-
-// UpsellItem is defined in UpsellSection but also needed here for the fetch shape.
-// Re-declared locally to avoid a circular import — kept in sync with UpsellSection.tsx.
-interface UpsellItem {
-  id: string
-  productId: string
-  name: string
-  slug: string
-  size: string
-  price: number
-  mrp: number
-  emoji: string | null
-  image: string | null
-  gstRate: number
-  maxQty: number
-  badge: string | null
-  isOrganic:    boolean
-  isHimalayan:  boolean
-  isBestseller: boolean
-}
+import type { SiteSettings, UpsellItem } from '@/types'
 
 import CartSkeleton               from '@/components/cart/CartSkeleton'
 import CartItemCard                from '@/components/cart/CartItemCard'
@@ -88,6 +68,13 @@ export default function CartPage() {
   const [qtyAnim,       setQtyAnim]       = useState<Record<string,'up'|'down'|null>>({})
   // Settings loaded from store-data — single fetch, no SWR double-fetch
   const [s, setS] = useState<SiteSettings>({} as SiteSettings)
+
+  // Undo toast: keyed by variantId — holds the item snapshot + timer ref
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    variantId: string
+    name: string
+    timerId: ReturnType<typeof setTimeout>
+  } | null>(null)
 
   const freeShipMin = parseFloat(s.free_shipping_min || '0') || 0
   const pricing     = calcPriceSummary(items, s, coupon, 'cod')
@@ -194,9 +181,25 @@ export default function CartPage() {
   }, [items, updateQty, analytics])
 
   const handleRemove = useCallback((variantId: string, name: string, price: number) => {
+    // Cancel any existing pending removal (user removed a different item)
+    if (pendingRemoval) {
+      clearTimeout(pendingRemoval.timerId)
+      removeItem(pendingRemoval.variantId) // commit the previous one immediately
+    }
     analytics.trackItemRemoved(name, price)
-    removeItem(variantId)
-  }, [removeItem, analytics])
+    // Schedule actual removal after 4s — user can undo in the meantime
+    const timerId = setTimeout(() => {
+      removeItem(variantId)
+      setPendingRemoval(null)
+    }, 4000)
+    setPendingRemoval({ variantId, name, timerId })
+  }, [pendingRemoval, removeItem, analytics])
+
+  const handleUndoRemove = useCallback(() => {
+    if (!pendingRemoval) return
+    clearTimeout(pendingRemoval.timerId)
+    setPendingRemoval(null)
+  }, [pendingRemoval])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
     if (addedUpsell.includes(p.id)) return
@@ -272,7 +275,9 @@ export default function CartPage() {
               <Link href="/products" className="cp-card-link">+ Add more</Link>
             </div>
             <div className="cp-items">
-              {items.map(item => (
+              {items
+                .filter(item => item.variantId !== pendingRemoval?.variantId)
+                .map(item => (
                 <CartItemCard
                   key={item.variantId}
                   item={item}
@@ -281,6 +286,13 @@ export default function CartPage() {
                   onRemove={handleRemove}
                 />
               ))}
+              {/* Undo toast */}
+              {pendingRemoval && (
+                <div className="cp-undo-toast" role="status" aria-live="polite">
+                  <span>"{pendingRemoval.name}" removed</span>
+                  <button className="cp-undo-btn" onClick={handleUndoRemove}>Undo</button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -444,6 +456,18 @@ const PAGE_CSS = `
   border-radius:12px;font-size:13px;font-weight:700;
   box-shadow:0 3px 10px rgba(37,211,102,.3);transition:all .2s;}
 .cp-whatsapp:hover{background:#22be5c;transform:translateY(-1px);}
+.cp-undo-toast{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 20px;background:#1a1a1a;color:#fff;
+  font-size:13px;animation:cp-toast-in .22s ease;
+}
+@keyframes cp-toast-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.cp-undo-btn{
+  background:none;border:1.5px solid rgba(255,255,255,.4);color:#fff;
+  font-size:12px;font-weight:700;padding:4px 12px;border-radius:8px;
+  cursor:pointer;transition:all .15s;font-family:inherit;flex-shrink:0;
+}
+.cp-undo-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.7);}
 .cp-right{background:var(--white);border-left:1px solid var(--border);
   position:sticky;top:134px;max-height:calc(100vh - 134px);
   overflow-y:auto;overflow-x:hidden;width:100%;min-width:0;}

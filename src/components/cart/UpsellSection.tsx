@@ -3,24 +3,7 @@
 import { memo } from 'react'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
-
-interface UpsellItem {
-  id: string
-  productId: string
-  name: string
-  slug: string
-  size: string
-  price: number
-  mrp: number
-  emoji: string | null
-  image: string | null
-  gstRate: number
-  maxQty: number
-  badge: string | null
-  isOrganic:    boolean
-  isHimalayan:  boolean
-  isBestseller: boolean
-}
+import type { UpsellItem } from '@/types'
 
 interface Props {
   items: UpsellItem[]

@@ -267,6 +267,26 @@ export interface SiteSettings {
   [key: string]: string
 }
 
+// ─── Upsell Types ─────────────────────────────────────────────────────────────
+
+export interface UpsellItem {
+  id:           string
+  productId:    string
+  name:         string
+  slug:         string
+  size:         string
+  price:        number
+  mrp:          number
+  emoji:        string | null
+  image:        string | null
+  gstRate:      number
+  maxQty:       number
+  badge:        string | null
+  isOrganic:    boolean
+  isHimalayan:  boolean
+  isBestseller: boolean
+}
+
 // ─── Address Types ────────────────────────────────────────────────────────────
 
 export type AddressLabel = 'Home' | 'Office' | 'Parents' | 'Friends' | 'Others'

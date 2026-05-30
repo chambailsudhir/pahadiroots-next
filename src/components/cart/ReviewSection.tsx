@@ -25,19 +25,28 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
 
   return (
     <div className="rv-card">
-      <h3 className="rv-heading">💬 What Customers Say</h3>
-      <div className="rv-body">
-        <div className="rv-stars">★★★★★</div>
+      <h3 className="rv-heading">What Customers Say</h3>
+      <div
+        className="rv-body"
+        role="region"
+        aria-label="Customer reviews"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div className="rv-stars" aria-label="5 out of 5 stars">★★★★★</div>
         <p className="rv-text">"{reviews[idx].text}"</p>
         <div className="rv-author">— {reviews[idx].name}, {reviews[idx].location}</div>
       </div>
       {reviews.length > 1 && (
-        <div className="rv-dots" role="tablist">
-          {reviews.map((_, i) => (
-            <button key={i}
+        <div className="rv-dots" role="group" aria-label="Review navigation">
+          {reviews.map((r, i) => (
+            <button
+              key={i}
               className={`rv-dot${i === idx ? ' active' : ''}`}
               onClick={() => setIdx(i)}
-              aria-label={`Review ${i+1}`} role="tab" aria-selected={i===idx} />
+              aria-label={`Show review by ${r.name}`}
+              aria-pressed={i === idx}
+            />
           ))}
         </div>
       )}
