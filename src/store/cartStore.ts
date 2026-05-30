@@ -90,7 +90,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name:    'pr-cart',
-      version: 1,
+      version: 2,
       skipHydration: true,
       storage: createJSONStorage(() =>
         typeof window !== 'undefined' ? localStorage : {
@@ -99,6 +99,22 @@ export const useCartStore = create<CartStore>()(
           removeItem: () => {},
         }
       ),
+      // Migrate persisted state across schema versions.
+      // v1 → v2: no shape change; drop coupon to force re-validation.
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const state = persisted as Partial<CartStore>
+        if (fromVersion < 2) {
+          // Clear any persisted coupon — it was applied in a previous session
+          // and may now be expired, exhausted, or otherwise invalid.
+          return { ...state, coupon: null }
+        }
+        return state
+      },
+      // Always clear coupon on rehydration so stale discounts never survive
+      // a browser restart. User can re-apply if the coupon is still valid.
+      onRehydrateStorage: () => (state) => {
+        if (state) state.coupon = null
+      },
     }
   )
 )

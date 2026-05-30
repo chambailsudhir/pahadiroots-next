@@ -19,11 +19,29 @@ export default function CartDrawer({ settings }: Props) {
   const removeItem = useCartStore(s => s.removeItem)
   const updateQty  = useCartStore(s => s.updateQty)
   const drawerRef  = useRef<HTMLDivElement>(null)
+  const firstFocusRef = useRef<HTMLButtonElement>(null)
 
-  // Close on Escape
+  // Close on Escape + focus trap
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeCart()
-    if (isOpen) document.addEventListener('keydown', onKey)
+    const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeCart(); return }
+      if (e.key === 'Tab' && drawerRef.current) {
+        const els = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
+        if (!els.length) return
+        const first = els[0], last = els[els.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus() }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus() }
+        }
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', onKey)
+      // move focus into drawer on open
+      setTimeout(() => firstFocusRef.current?.focus(), 50)
+    }
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, closeCart])
 
@@ -70,6 +88,7 @@ export default function CartDrawer({ settings }: Props) {
           <button
             onClick={closeCart}
             aria-label="Close cart"
+            ref={firstFocusRef}
             style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}
           >
             ✕ Close
@@ -127,8 +146,10 @@ export default function CartDrawer({ settings }: Props) {
                       <span className="w-7 text-center text-xs font-bold text-stone-700">{item.qty}</span>
                       <button
                         onClick={() => updateQty(item.variantId, item.qty + 1)}
-                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold"
-                        aria-label="Increase"
+                        disabled={item.qty >= item.maxQty}
+                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                        aria-label="Increase quantity"
+                        aria-disabled={item.qty >= item.maxQty}
                       >+</button>
                     </div>
                     <div className="flex items-center gap-3">

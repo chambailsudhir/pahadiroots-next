@@ -380,6 +380,7 @@ export default function CartPage() {
             onCouponCodeChange={setCouponCode}
             couponLoading={couponLoading}
             couponError={couponError}
+            minOrderAmt={parseFloat(s.min_order_amount || '0')}
           />
         </div>
       </div>

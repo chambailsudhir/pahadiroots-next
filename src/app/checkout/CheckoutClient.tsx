@@ -51,10 +51,11 @@ function parseSavedAddresses(raw: string | undefined | null): any[] {
 export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const router = useRouter()
   const [storeReady, setStoreReady] = useState(false)
+  // Hydration guard
+
   useEffect(() => { setStoreReady(true) }, [])
 
-  const [mounted, setMounted] = useState(true)
-  const _setMounted = setMounted
+  const [mounted, setMounted] = useState(false)
 
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
@@ -191,6 +192,9 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const waNumber         = s.whatsapp_number || '919899984895'
 
   const orderPlacedRef = useRef(false)
+  // Hydration guard — prevents redirect running before cart is rehydrated
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
     if (items.length === 0 && mounted && !orderPlacedRef.current) router.replace('/cart')
   }, [items, mounted, router])

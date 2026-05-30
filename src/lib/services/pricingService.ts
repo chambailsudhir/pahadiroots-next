@@ -26,7 +26,7 @@ export function calcPriceSummary(
   const flatShipping     = asNumber(settings.flat_shipping_charge, 99)
   const prepaidPct       = asNumber(settings.prepaid_discount_pct, 5)
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0)
+  const subtotal = Math.round(items.reduce((sum, item) => sum + item.price * item.qty, 0))
 
   const discount = coupon ? coupon.discount : 0
 

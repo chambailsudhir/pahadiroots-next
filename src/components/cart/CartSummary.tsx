@@ -17,6 +17,7 @@ interface Props {
   onCouponCodeChange: (v: string) => void
   couponLoading: boolean
   couponError: string
+  minOrderAmt?: number
 }
 
 const CartSummary = memo(function CartSummary({
@@ -24,7 +25,10 @@ const CartSummary = memo(function CartSummary({
   onApplyCoupon, onRemoveCoupon,
   couponCode, onCouponCodeChange,
   couponLoading, couponError,
+  minOrderAmt = 0,
 }: Props) {
+  const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
+
   return (
     <div className="cs-wrap">
       {/* Coupon */}
@@ -89,12 +93,28 @@ const CartSummary = memo(function CartSummary({
         )}
       </div>
 
+      {/* Min order warning */}
+      {belowMinOrder && (
+        <div className="cs-min-warn" role="alert">
+          ⚠ Minimum order is {formatPrice(minOrderAmt)}. Add{' '}
+          <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more to checkout.
+        </div>
+      )}
+
       {/* CTA */}
-      <Link href="/checkout" className="cs-cta">
-        <span>🔒</span>
-        <span>Proceed to Checkout</span>
-        <span className="cs-cta-amt">{formatPrice(pricing.total)}</span>
-      </Link>
+      {belowMinOrder ? (
+        <div className="cs-cta cs-cta--disabled" aria-disabled="true">
+          <span>🔒</span>
+          <span>Proceed to Checkout</span>
+          <span className="cs-cta-amt">{formatPrice(pricing.total)}</span>
+        </div>
+      ) : (
+        <Link href="/checkout" className="cs-cta">
+          <span>🔒</span>
+          <span>Proceed to Checkout</span>
+          <span className="cs-cta-amt">{formatPrice(pricing.total)}</span>
+        </Link>
+      )}
 
       <Link href="/products" className="cs-continue">← Continue Shopping</Link>
 
@@ -153,6 +173,7 @@ const CartSummary = memo(function CartSummary({
           position:relative;overflow:hidden;}
         .cs-cta:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(26,58,30,.45);}
         .cs-cta:active{transform:translateY(0);}
+        .cs-cta--disabled{opacity:.5;cursor:not-allowed;pointer-events:none;box-shadow:none;transform:none;}
         .cs-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;
           border-radius:20px;font-size:14px;font-weight:800;}
         .cs-continue{text-align:center;display:block;font-size:12px;color:#7a7565;
@@ -161,6 +182,8 @@ const CartSummary = memo(function CartSummary({
         .cs-trust{border-top:1px solid #ede8df;padding-top:12px;}
         .cs-trust-row{display:flex;justify-content:space-between;font-size:11px;
           color:#7a7565;margin-bottom:8px;flex-wrap:wrap;gap:3px;}
+        .cs-min-warn{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;
+          padding:10px 13px;font-size:12px;color:#7a5c00;font-weight:600;line-height:1.4;}
         .cs-logos{display:flex;gap:5px;flex-wrap:wrap;}
         .cs-logo{font-size:10px;font-weight:800;padding:3px 7px;
           border-radius:5px;color:#fff;letter-spacing:.3px;}
