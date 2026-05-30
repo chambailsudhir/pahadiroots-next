@@ -203,13 +203,21 @@ describe('cartStore.clearCart', () => {
     expect(state.coupon).toBeNull()
   })
 
-  it('generates a fresh idempotencyKey after clearing', () => {
+  it('resets idempotencyKey to empty on clear, then lazily generates on next addItem', () => {
     const store = useCartStore.getState()
     store.addItem(makeItem())
     const keyBefore = useCartStore.getState().idempotencyKey
+    expect(keyBefore).not.toBe('') // key was generated on addItem
+
     store.clearCart()
+    // clearCart intentionally resets to '' — NOT a new UUID.
+    // Eagerly minting a new key here would let a retry on the order-success page
+    // pick it up and submit a duplicate order. The '' signals "no pending order".
+    expect(useCartStore.getState().idempotencyKey).toBe('')
+
+    // On the next addItem a fresh key is generated lazily — safe moment to do it.
+    store.addItem(makeItem())
     const keyAfter = useCartStore.getState().idempotencyKey
-    // A new key must be set (clearCart pre-generates one for the next order)
     expect(keyAfter).not.toBe('')
     expect(keyAfter).not.toBe(keyBefore)
   })
