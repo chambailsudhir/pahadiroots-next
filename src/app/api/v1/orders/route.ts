@@ -271,8 +271,10 @@ export async function POST(req: Request) {
       { success: true, order_number: order.order_number, order_id: order.id },
       { status: alreadyExists ? 200 : 201 }
     )
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[orders POST]', err)
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: err.message?.includes('stock') || err.message?.includes('COD') ? 409 : 500 })
+    const message = err instanceof Error ? err.message : 'Internal server error'
+    const status  = message.includes('stock') || message.includes('COD') ? 409 : 500
+    return NextResponse.json({ error: message }, { status })
   }
 }

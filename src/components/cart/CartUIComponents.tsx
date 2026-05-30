@@ -12,8 +12,8 @@ interface StickyProps {
 
 export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: StickyProps) {
   // Track whether the sticky bar is visually active (mobile viewport).
-  // When hidden on desktop we apply aria-hidden + inert so neither screen readers
-  // nor keyboard users can reach the checkout button.
+  // On desktop the wrapper has the `inert` attribute so neither keyboard users
+  // nor screen readers can reach it — no aria-hidden needed.
   const [isMobile, setIsMobile] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -40,7 +40,6 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: St
     <div
       ref={wrapRef}
       className="scc-wrap"
-      aria-hidden={!isMobile}
     >
       <div>
         <div className="scc-total">{formatPrice(total)}</div>

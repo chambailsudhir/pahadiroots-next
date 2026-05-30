@@ -50,7 +50,7 @@ export async function GET() {
 
     // Convert site_settings array → object (same as old site)
     const settings: Record<string, string> = {}
-    ;(siteSettings as any[]).forEach((s: any) => { settings[s.key] = s.value })
+    ;(siteSettings as { key: string; value: string }[]).forEach(s => { settings[s.key] = s.value })
 
     return NextResponse.json({
       states,
@@ -67,10 +67,11 @@ export async function GET() {
         'Cache-Control': 's-maxage=60, stale-while-revalidate=120',
       },
     })
-  } catch (e: any) {
-    console.error('store-data error:', e.message)
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    console.error('store-data error:', message)
     return NextResponse.json(
-      { error: e.message, products: [], settings: {}, categories: [], product_images: [] },
+      { error: message, products: [], settings: {}, categories: [], product_images: [] },
       { status: 500 }
     )
   }

@@ -65,12 +65,16 @@ export async function POST(req: Request) {
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
       try {
+        // Sanitize all user-supplied fields before HTML interpolation (XSS prevention)
+        const safeName    = DOMPurify.sanitize(String(body.name    ?? ''))
+        const safeEmail   = DOMPurify.sanitize(String(body.email   ?? ''))
+        const safeMessage = DOMPurify.sanitize(String(body.message ?? ''))
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',
           to:      [process.env.ADMIN_EMAIL || 'hello@pahadiroots.com'],
-          subject: `Contact form: ${body.name}`,
-          html:    `<p><b>Name:</b> ${body.name}<br><b>Email:</b> ${body.email}<br><b>Message:</b> ${body.message}</p>`,
+          subject: `Contact form: ${safeName}`,
+          html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
         })
       } catch { /* non-fatal */ }
       return NextResponse.json({ success: true })
@@ -78,8 +82,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[cart API]', err)
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

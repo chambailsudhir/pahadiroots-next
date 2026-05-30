@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const RATE_WINDOW_SEC = 60        // 1 minute
-const API_LIMIT       = 20        // 20 API requests/minute per IP
+const RATE_WINDOW_SEC  = 60        // 1 minute
+const API_LIMIT        = 20        // 20 API requests/minute per IP
+const COUPON_LIMIT     = 5         // 5 coupon attempts/minute per IP (brute-force prevention)
 
 // ─── Distributed rate limiter (Upstash KV) ───────────────────────────────────
 // Uses the same INCR + EXPIRE pipeline already used by auth/route.ts.
@@ -57,6 +58,21 @@ export async function middleware(req: NextRequest) {
 
   if (pathname.startsWith('/api/v1/')) {
     const ip  = req.ip || req.headers.get('x-forwarded-for') || 'unknown'
+
+    // Coupon endpoint gets a tighter limit (5/min) to prevent brute-force attacks
+    if (pathname === '/api/v1/coupons') {
+      const allowed = await rateLimit(`coupon:${ip}`, COUPON_LIMIT, RATE_WINDOW_SEC)
+      if (!allowed) {
+        return NextResponse.json(
+          { error: 'Too many coupon attempts. Please wait before trying again.' },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(RATE_WINDOW_SEC) },
+          }
+        )
+      }
+    }
+
     const key = `api:${ip}`
     const allowed = await rateLimit(key, API_LIMIT, RATE_WINDOW_SEC)
     if (!allowed) {

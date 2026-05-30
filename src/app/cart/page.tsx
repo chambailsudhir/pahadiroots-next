@@ -236,7 +236,7 @@ export default function CartPage() {
   if (items.length === 0) return <EmptyCart />
 
   return (
-    <>
+    <main id="main-content">
       {/* Shipping progress bar */}
       <div className="cp-ship-bar">
         {freeShipMin > 0 ? (
@@ -376,7 +376,7 @@ export default function CartPage() {
       <StickyCartCTA total={pricing.total} totalQty={totalQty} />
 
       <style>{PAGE_CSS}</style>
-    </>
+    </main>
   )
 }
 

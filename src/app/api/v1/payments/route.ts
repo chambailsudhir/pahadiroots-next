@@ -255,8 +255,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
-  } catch (err: any) {
-    console.error('[payments POST] Error:', err.message)
-    return NextResponse.json({ error: err.message || 'Payment error' }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Payment error'
+    console.error('[payments POST] Error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -72,9 +72,10 @@ export async function GET(req: NextRequest) {
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
 
-  } catch (e: any) {
-    if (e?.status === 401) return fail(401, 'Session expired')
-    return fail(500, e?.message || 'Loyalty fetch failed')
+  } catch (e: unknown) {
+    if (typeof e === 'object' && e !== null && 'status' in e && (e as { status: number }).status === 401) return fail(401, 'Session expired')
+    const msg = e instanceof Error ? e.message : 'Loyalty fetch failed'
+    return fail(500, msg)
   }
 }
 
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
 
       const [customerRow, settings] = await Promise.all([
         sbAdmin('GET', `/rest/v1/customers?id=eq.${profile.id}&select=loyalty_points&limit=1`)
-          .then((r: any[]) => r?.[0] ?? null),
+          .then((r: Record<string, unknown>[]) => r?.[0] ?? null),
         getSettings(),
       ])
 
@@ -155,8 +156,9 @@ export async function POST(req: NextRequest) {
 
     return fail(400, 'Unknown action')
 
-  } catch (e: any) {
-    if (e?.status === 401) return fail(401, 'Session expired')
-    return fail(500, e?.message || 'Loyalty error')
+  } catch (e: unknown) {
+    if (typeof e === 'object' && e !== null && 'status' in e && (e as { status: number }).status === 401) return fail(401, 'Session expired')
+    const msg = e instanceof Error ? e.message : 'Loyalty error'
+    return fail(500, msg)
   }
 }
