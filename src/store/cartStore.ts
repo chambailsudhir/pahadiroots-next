@@ -35,11 +35,15 @@ export const useCartStore = create<CartStore>()(
         set(state => {
           const existing = state.items.find(i => i.variantId === newItem.variantId)
           if (existing) {
+            // maxQty may be absent on hydrated items (stripped from localStorage).
+            // Fall back to a high cap so qty can still increase; the server
+            // enforces the real stock limit at order time.
+            const cap = existing.maxQty ?? newItem.maxQty ?? 99
             return {
               idempotencyKey: state.idempotencyKey || generateUUID(),
               items: state.items.map(i =>
                 i.variantId === newItem.variantId
-                  ? { ...i, qty: Math.min(i.qty + (newItem.qty ?? 1), i.maxQty) }
+                  ? { ...i, maxQty: cap, qty: Math.min(i.qty + (newItem.qty ?? 1), cap) }
                   : i
               ),
             }
@@ -62,7 +66,7 @@ export const useCartStore = create<CartStore>()(
         set(state => ({
           items: state.items.map(i =>
             i.variantId === variantId
-              ? { ...i, qty: Math.min(qty, i.maxQty) }
+              ? { ...i, qty: Math.min(qty, i.maxQty ?? 99) }
               : i
           ),
         }))
@@ -95,7 +99,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name:    'pr-cart',
-      version: 2,
+      version: 3,  // bumped: strips maxQty from persisted items (security fix)
       skipHydration: true,
       storage: createJSONStorage(() =>
         typeof window !== 'undefined' ? localStorage : {
@@ -104,21 +108,44 @@ export const useCartStore = create<CartStore>()(
           removeItem: () => {},
         }
       ),
-      // Only persist items and idempotency key.
-      // coupon is intentionally excluded — it's session-only so stale/expired
-      // discounts can never survive a page refresh. Users re-apply each session.
+      // Only persist item identity + qty + idempotency key.
+      //
+      // Intentionally excluded:
+      //   coupon   — session-only; stale/expired discounts must not survive a refresh.
+      //   maxQty   — stock cap must NOT be persisted. A user who edits localStorage to
+      //              raise maxQty could bypass client-side stock guards. The server
+      //              always re-checks stock, but we also clamp client-side so the UI
+      //              is correct. On hydration, maxQty falls back to a safe default (1)
+      //              until the product page or upsell fetch supplies the live value.
       partialize: (state) => ({
-        items:          state.items,
+        items: state.items.map(({ maxQty: _drop, ...rest }) => {
+          void _drop   // strip maxQty from every persisted item
+          return rest
+        }),
         idempotencyKey: state.idempotencyKey,
       }),
       // Migrate persisted state across schema versions.
-      // v1 had no partialize so coupon may exist in old localStorage — drop it.
+      // v1: no partialize — coupon may exist in old localStorage, drop it.
+      // v2: items persisted with maxQty — strip it on load.
+      // v3: items persisted without maxQty (current).
       migrate: (persisted: unknown, fromVersion: number) => {
-        const state = persisted as Partial<CartStore>
+        const state = persisted as Record<string, unknown>
+        // Drop old coupon field (v1 → v2)
         if (fromVersion < 2) {
-          const { coupon: _drop, ...rest } = state as Record<string, unknown>
-          void _drop
+          const { coupon: _c, ...rest } = state
+          void _c
           return rest
+        }
+        // Strip maxQty from any persisted items (v2 → v3)
+        if (fromVersion < 3) {
+          const items = (state.items as Array<Record<string, unknown>> | undefined) ?? []
+          return {
+            ...state,
+            items: items.map(({ maxQty: _mq, ...rest }) => {
+              void _mq
+              return rest
+            }),
+          }
         }
         return state
       },

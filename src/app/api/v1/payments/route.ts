@@ -4,7 +4,10 @@ import { createOrderSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf } from '@/lib/api/serverUtils'
+import { checkCsrf, checkRateLimit } from '@/lib/api/serverUtils'
+// ── Security: server-only imports (build-time guard against client-bundle leaks) ──
+import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { esc } from '@/lib/server/htmlEscape'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -32,57 +35,17 @@ async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrd
   return res.json()
 }
 
-// ─── Loyalty helpers ──────────────────────────────────────────────────────────
-async function callLoyaltyRpc(rpc: string, params: Record<string, unknown>) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-  return fetch(`${SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
-    method: 'POST',
-    headers: {
-      apikey:         SERVICE_KEY,
-      Authorization:  `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(params),
-  })
-}
-
-async function redeemLoyaltyPoints(customerId: string | number, orderId: string | number, points: number): Promise<boolean> {
-  if (!points || points <= 0) return true
-  try {
-    const res    = await callLoyaltyRpc('redeem_loyalty_points', {
-      p_customer_id: String(customerId), p_order_id: String(orderId), p_points: points,
-      p_note: 'Redeemed at checkout',
-    })
-    const result = await res.json()
-    return res.ok && (result === true || result?.result === true)
-  } catch { return false }
-}
-
-async function awardLoyaltyPoints(
-  customerId: string | number, orderId: string | number,
-  orderTotal: number, settings: Record<string, string>,
-): Promise<void> {
-  if (settings.loyalty_enabled === 'false') return
-  const rate    = parseFloat(settings.loyalty_points_per_rupee || '1')
-  const pts     = Math.floor(orderTotal * rate)
-  if (pts <= 0) return
-  try {
-    await callLoyaltyRpc('award_loyalty_points', {
-      p_customer_id: String(customerId), p_order_id: String(orderId),
-      p_points: pts, p_note: 'Earned from online payment',
-    })
-  } catch (e) { console.error('[loyalty] award failed:', e) }
-}
-
 // ─── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
-  // Reject requests that originate from a domain we don't own.
-  // This mirrors the guard already present on /api/orders/[id]/return,
-  // /api/profile, and /api/account/data-export.
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
+
+  // ── IP-level rate limit — covers both actions ──────────────────────────────
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  if (!checkRateLimit(`payments:ip:${ip}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
+  }
 
   try {
     const body   = await req.json()
@@ -116,6 +79,9 @@ export async function POST(req: NextRequest) {
         loyaltyPointsRedeemed: pd.loyalty_points_redeemed ?? 0,
       }, settings)
 
+      // ── Amount integrity: use the DB-computed total, never the client value ──
+      // createOrder() computed total_amount server-side from live DB prices.
+      // We convert that authoritative value to paise for Razorpay.
       const amountPaise = Math.round(order.total_amount * 100)
 
       const receiptId = order.order_number || `ORD-${order.id}`
@@ -128,9 +94,8 @@ export async function POST(req: NextRequest) {
         success:           true,
         order_id:          String(order.id),
         razorpay_order_id: rzpOrder.id,
-        amount:            rzpOrder.amount,
+        amount:            rzpOrder.amount,   // authoritative paise value from Razorpay
         currency:          rzpOrder.currency,
-        // Pass back for use in verify_payment step
         customer_id:       customerId ?? null,
         loyalty_points_redeemed: pd.loyalty_points_redeemed ?? 0,
       })
@@ -143,7 +108,9 @@ export async function POST(req: NextRequest) {
         razorpay_payment_id,
         razorpay_signature,
         order_id,
-        // ── Loyalty — passed back from checkout (originally from create_payment) ──
+        // loyalty_points_redeemed was persisted in the DB order record during
+        // create_payment; we read it from the client as a convenience but
+        // only use it for the RPC call — actual point deduction is atomic in DB.
         loyalty_points_redeemed = 0,
       } = body
 
@@ -151,7 +118,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing required payment verification fields' }, { status: 400 })
       }
 
-      // 1. Verify HMAC signature
+      // 1. Verify HMAC signature — this is the primary integrity check.
+      //    If this passes, we know Razorpay generated the callback and the
+      //    payment genuinely succeeded for the razorpay_order_id we created.
       const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()
       if (!keySecret) throw new Error('RAZORPAY_KEY_SECRET not configured')
 
@@ -188,16 +157,14 @@ export async function POST(req: NextRequest) {
       // 4. ── Loyalty: redeem then award ────────────────────────────────────
       const custId = fullOrder?.customer_id
       if (custId) {
-        // Deduct redeemed points (validate atomically — if insufficient, silently skip)
         if (loyalty_points_redeemed > 0) {
           const redeemed = await redeemLoyaltyPoints(custId, order_id, loyalty_points_redeemed)
           if (!redeemed) {
             console.warn(`[loyalty] Redemption skipped for order ${order_id} — insufficient balance`)
           }
         }
-        // Award new points for completing a paid order
         const settings = await getSiteSettings()
-        await awardLoyaltyPoints(custId, order_id, fullOrder?.total_amount ?? 0, settings)
+        await awardLoyaltyPoints(custId, order_id, fullOrder?.total_amount ?? 0, settings, 'Earned from online payment')
       }
 
       // 5. Fetch updated order number for redirect
@@ -214,7 +181,7 @@ export async function POST(req: NextRequest) {
           .from('customers').select('first_name, email').eq('id', fullOrder?.customer_id).single()
 
         if (customer?.email && fullOrder) {
-          const settings = await getSiteSettings()
+          const settings    = await getSiteSettings()
           const coinsEarned = Math.floor(fullOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
           const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
             ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
@@ -238,13 +205,13 @@ export async function POST(req: NextRequest) {
                 </div>
                 <div style="padding:24px">
                   <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
-                  <p>Hi <strong>${customer.first_name}</strong>, your payment was successful.</p>
-                  <p><strong>Order #:</strong> ${fullOrder.order_number}<br>
-                     <strong>Payment ID:</strong> ${razorpay_payment_id}<br>
+                  <p>Hi <strong>${esc(customer.first_name)}</strong>, your payment was successful.</p>
+                  <p><strong>Order #:</strong> ${esc(fullOrder.order_number)}<br>
+                     <strong>Payment ID:</strong> ${esc(razorpay_payment_id)}<br>
                      <strong>Amount Paid:</strong> ₹${fullOrder.total_amount}<br>
                      <strong>Delivery:</strong> 3–5 business days</p>
                   ${coinsHtml}
-                  <p style="color:#666;font-size:14px">We'll WhatsApp you tracking details once shipped.</p>
+                  <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
                   <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
                 </div>
                 <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">

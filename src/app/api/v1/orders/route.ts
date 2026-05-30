@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
-import { checkCsrf } from '@/lib/api/serverUtils'
+import { checkCsrf, checkRateLimit } from '@/lib/api/serverUtils'
+// ── Security: server-only imports (build-time guard against client-bundle leaks) ──
+import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { esc } from '@/lib/server/htmlEscape'
 
-// Lightweight server-side sanitizer
+// Lightweight server-side sanitizer (strips HTML tags from address fields)
 function sanitize(str: string): string {
   return str.replace(/<[^>]*>/g, '').trim()
 }
 
 // Input schema — loyalty_points_redeemed added
+// NOTE: coupon_code is accepted here but the DISCOUNT is never trusted from
+// the client. createOrder() re-validates the code against the DB and computes
+// the authoritative discount amount server-side.
 const orderSchema = z.object({
   address: z.object({
     name:    z.string().trim().min(2).max(100),
@@ -49,79 +54,18 @@ function getDeliveryEstimate(): string {
   return `${from} - ${to}`
 }
 
-// ─── Award loyalty points after confirmed COD order ───────────────────────────
-async function awardLoyaltyPoints(
-  customerId: string | number,
-  orderId:    string | number,
-  orderTotal: number,
-  settings:   Record<string, string>,
-): Promise<void> {
-  if (settings.loyalty_enabled === 'false') return
-  const rate         = parseFloat(settings.loyalty_points_per_rupee || '1')
-  const pointsEarned = Math.floor(orderTotal * rate)
-  if (pointsEarned <= 0) return
-
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/rpc/award_loyalty_points`, {
-      method: 'POST',
-      headers: {
-        apikey:         SERVICE_KEY,
-        Authorization:  `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        p_customer_id: String(customerId),   // UUID — must be string, not Number()
-        p_order_id:    String(orderId),       // UUID — must be string, not Number()
-        p_points:      pointsEarned,
-        p_note:        'Earned from COD order',
-      }),
-    })
-  } catch (e) {
-    console.error('[loyalty] award points failed:', e)
-  }
-}
-
-// ─── Redeem loyalty points atomically (BEFORE order is confirmed) ─────────────
-async function redeemLoyaltyPoints(
-  customerId: string | number,
-  orderId:    string | number,
-  points:     number,
-): Promise<boolean> {
-  if (!points || points <= 0) return true
-
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_loyalty_points`, {
-    method: 'POST',
-    headers: {
-      apikey:         SERVICE_KEY,
-      Authorization:  `Bearer ${SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      p_customer_id: String(customerId),   // UUID — must be string, not Number()
-      p_order_id:    String(orderId),       // UUID — must be string, not Number()
-      p_points:      points,
-      p_note:        'Redeemed at checkout',
-    }),
-  })
-
-  if (!res.ok) return false
-  const result = await res.json()
-  return result === true || result?.result === true
-}
-
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
-  // Reject requests that originate from a domain we don't own.
-  // This mirrors the guard already present on /api/orders/[id]/return,
-  // /api/profile, and /api/account/data-export.
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
+
+  // ── Rate limit: 3 order attempts per phone per minute ─────────────────────
+  // Key is derived after schema parse so we can use the phone number.
+  // We do a lightweight IP-keyed pre-check first to catch bots without parsing.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  if (!checkRateLimit(`orders:ip:${ip}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
+  }
 
   try {
     const body   = await req.json()
@@ -132,6 +76,11 @@ export async function POST(req: NextRequest) {
 
     const d = parsed.data
     const a = d.address
+
+    // ── Phone-level rate limit (after parse, so we have the phone number) ──
+    if (!checkRateLimit(`orders:phone:${a.phone}`, 3, 60_000)) {
+      return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429 })
+    }
 
     const name = sanitize(a.name)
     const flat = sanitize(a.flat)
@@ -157,18 +106,13 @@ export async function POST(req: NextRequest) {
     }, settings)
 
     // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
-    // For COD orders, the order is immediately confirmed so we:
-    //  1. Atomically deduct redeemed points from the customer's balance
-    //  2. Award new points for completing the order
     if (!alreadyExists && d.payment_method === 'cod') {
       const cid = customerId ?? (order as any).customer_id
       if (cid) {
-        // 1. Deduct redeemed points
         if ((d.loyalty_points_redeemed ?? 0) > 0) {
           await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
         }
-        // 2. Award earned points
-        await awardLoyaltyPoints(cid, order.id, order.total_amount, settings)
+        await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
       }
     }
 
@@ -182,12 +126,20 @@ export async function POST(req: NextRequest) {
         const estDate    = getDeliveryEstimate()
         const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
 
+        // ── All user-supplied strings are HTML-escaped before interpolation ──
+        const safeName    = esc(name)
+        const safeFlat    = esc(flat)
+        const safeArea    = esc(area)
+        const safeCity    = esc(a.city)
+        const safeState   = esc(a.state)
+        const safePincode = esc(a.pincode)
+
         const itemsHtml = emailItems.map(i =>
           `<tr>
             <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
-              <span style="font-size:16px">${i.emoji || '🌿'}</span>
-              <strong style="color:#1a1a1a;margin-left:8px">${i.name}</strong>
-              <span style="color:#888;font-size:13px"> × ${i.qty}</span>
+              <span style="font-size:16px">${esc(i.emoji) || '🌿'}</span>
+              <strong style="color:#1a1a1a;margin-left:8px">${esc(i.name)}</strong>
+              <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
             </td>
             <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
               ₹${(i.price * i.qty).toLocaleString('en-IN')}
@@ -214,21 +166,21 @@ export async function POST(req: NextRequest) {
   <div style="background:#fff;padding:28px 32px;text-align:center;border-left:1px solid #eee;border-right:1px solid #eee">
     <div style="font-size:44px;margin-bottom:10px">✅</div>
     <h1 style="font-family:Georgia,serif;font-size:24px;color:#1a3a1e;margin:0 0 8px">Order Confirmed!</h1>
-    <p style="color:#666;font-size:14px;margin:0 0 16px">Thank you ${name}! Your mountain goodness is on its way 🌿</p>
+    <p style="color:#666;font-size:14px;margin:0 0 16px">Thank you ${safeName}! Your mountain goodness is on its way 🌿</p>
     <div style="display:inline-block;background:#f0f7f4;border:1.5px solid #c8e6c9;border-radius:20px;padding:8px 20px">
-      <span style="font-size:13px;font-weight:700;color:#1a3a1e">📋 ${order.order_number}</span>
+      <span style="font-size:13px;font-weight:700;color:#1a3a1e">📋 ${esc(order.order_number)}</span>
     </div>
     ${coinsHtml}
   </div>
   <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
-    <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${estDate}</strong><br>
-    <span style="color:#888;font-size:12px">Pan India · We'll notify you when shipped</span>
+    <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${esc(estDate)}</strong><br>
+    <span style="color:#888;font-size:12px">Pan India · We&apos;ll notify you when shipped</span>
   </div>
   <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
     <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
     <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
     <table style="width:100%;border-collapse:collapse;margin-top:12px">
-      <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${payLabel}</td></tr>
+      <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${esc(payLabel)}</td></tr>
       <tr>
         <td style="padding:6px 0;font-size:17px;font-weight:900;color:#1a3a1e">Total</td>
         <td style="text-align:right;font-size:17px;font-weight:900;color:#1a3a1e">₹${order.total_amount.toLocaleString('en-IN')}</td>
@@ -237,7 +189,7 @@ export async function POST(req: NextRequest) {
   </div>
   <div style="background:#f0f7f4;padding:16px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
     <p style="margin:0;font-size:13px;color:#2d6a4f">
-      📍 <strong>Delivering to:</strong> ${flat}${area ? ', ' + area : ''}, ${a.city}, ${a.state} - ${a.pincode}
+      📍 <strong>Delivering to:</strong> ${safeFlat}${safeArea ? ', ' + safeArea : ''}, ${safeCity}, ${safeState} - ${safePincode}
     </p>
   </div>
   <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
@@ -270,7 +222,9 @@ export async function POST(req: NextRequest) {
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
           to:      [settings.admin_notify_email],
           subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
-          html:    `<p>Order: <b>#${order.order_number}</b><br>Customer: ${name} (+91${a.phone})<br>City: ${a.city}, ${a.state}<br>Total: Rs.${order.total_amount}<br>Payment: ${d.payment_method}${coinsLine}</p>`,
+          // Admin email uses safe values: order_number and total_amount are DB-generated,
+          // name/phone/city/state come through sanitize() above.
+          html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(a.city)}, ${esc(a.state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
         }), 5000)
       } catch { /* non-fatal */ }
     }
