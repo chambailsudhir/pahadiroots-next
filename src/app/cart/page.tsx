@@ -386,7 +386,7 @@ export default function CartPage() {
       </div>
 
       {/* Mobile sticky CTA */}
-      <StickyCartCTA total={pricing.total} totalQty={totalQty} />
+      <StickyCartCTA total={pricing.total} totalQty={totalQty} minOrderAmt={parseFloat(s.min_order_amount || '0')} />
 
       <style>{PAGE_CSS}</style>
     </main>

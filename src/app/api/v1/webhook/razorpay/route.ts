@@ -43,13 +43,22 @@ export async function POST(req: Request) {
   const db = getServiceClient()
 
   // Store raw webhook (Audit #6 — always store before processing)
-  await db.from('webhook_logs').insert({
-    provider:    'razorpay',
-    event:       event.event,
-    payload:     event,
-    status:      'received',
-    created_at:  new Date().toISOString(),
-  }).then(res => { if (res.error) console.error('[webhook] Log failed:', res.error) })
+  // Capture the inserted row ID so we can update it by primary key later.
+  // .order().limit() are SELECT-only modifiers and are silently ignored on UPDATE
+  // in Supabase REST API, so using the row ID is the only safe way to update
+  // the specific log entry rather than all rows with the same event type.
+  const { data: webhookLog, error: logErr } = await db
+    .from('webhook_logs')
+    .insert({
+      provider:    'razorpay',
+      event:       event.event,
+      payload:     event,
+      status:      'received',
+      created_at:  new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+  if (logErr) console.error('[webhook] Log failed:', logErr)
 
   // Return 200 IMMEDIATELY — process async (Audit #6)
   // Using a background-style approach (Vercel doesn't support true async after response,
@@ -120,12 +129,13 @@ export async function POST(req: Request) {
       }
     }
 
-    // Update webhook log to processed
-    await db.from('webhook_logs')
-      .update({ status: 'processed', processed_at: new Date().toISOString() })
-      .eq('event', event.event)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    // Mark this specific webhook log as processed — use row ID, not event type,
+    // because ORDER+LIMIT are ignored on UPDATE in Supabase REST API.
+    if (webhookLog?.id) {
+      await db.from('webhook_logs')
+        .update({ status: 'processed', processed_at: new Date().toISOString() })
+        .eq('id', webhookLog.id)
+    }
 
   } catch (err) {
     console.error('[webhook] Processing error:', err)

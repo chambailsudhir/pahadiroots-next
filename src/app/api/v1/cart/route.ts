@@ -51,17 +51,6 @@ export async function POST(req: Request) {
 
 
 
-    if (action === 'save_addresses') {
-      const { phone, saved_addresses } = body
-      if (!phone || !Array.isArray(saved_addresses)) {
-        return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
-      }
-      await db.from('customers')
-        .update({ saved_addresses, updated_at: new Date().toISOString() })
-        .eq('phone', phone)
-      return NextResponse.json({ success: true })
-    }
-
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
       try {

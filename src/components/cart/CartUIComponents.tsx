@@ -8,9 +8,12 @@ import { formatPrice } from '@/lib/utils'
 interface StickyProps {
   total: number
   totalQty: number
+  minOrderAmt?: number
 }
 
-export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: StickyProps) {
+export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty, minOrderAmt = 0 }: StickyProps) {
+  const belowMinOrder = minOrderAmt > 0 && total < minOrderAmt
+
   // Track whether the sticky bar is visually active (mobile viewport).
   // On desktop the wrapper has the `inert` attribute so neither keyboard users
   // nor screen readers can reach it — no aria-hidden needed.
@@ -45,7 +48,11 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: St
         <div className="scc-total">{formatPrice(total)}</div>
         <div className="scc-sub">{totalQty} item{totalQty > 1 ? 's' : ''} · Incl. taxes</div>
       </div>
-      <Link href="/checkout" className="scc-btn">🔒 Checkout</Link>
+      {belowMinOrder ? (
+        <span className="scc-btn scc-btn--disabled" aria-disabled="true">🔒 Checkout</span>
+      ) : (
+        <Link href="/checkout" className="scc-btn">🔒 Checkout</Link>
+      )}
 
       <style>{`
         .scc-wrap{
@@ -69,6 +76,7 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty }: St
           transition:all .2s;
         }
         .scc-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(26,58,30,.35);}
+        .scc-btn--disabled{opacity:.45;cursor:not-allowed;box-shadow:none;}
       `}</style>
     </div>
   )
