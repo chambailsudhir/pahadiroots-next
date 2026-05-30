@@ -28,14 +28,18 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty, minO
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  // Apply inert attribute imperatively — React doesn't support it natively yet
+  // Apply inert + aria-hidden imperatively — React doesn't support them natively yet.
+  // aria-hidden ensures VoiceOver on older Safari (where inert isn't fully supported)
+  // doesn't announce the duplicate "Checkout" button to screen reader users on desktop.
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
     if (isMobile) {
       el.removeAttribute('inert')
+      el.removeAttribute('aria-hidden')
     } else {
       el.setAttribute('inert', '')
+      el.setAttribute('aria-hidden', 'true')
     }
   }, [isMobile])
 

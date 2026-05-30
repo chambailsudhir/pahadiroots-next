@@ -26,7 +26,7 @@ import { calcPriceSummary } from '@/lib/services/pricingService'
 import type { SiteSettings, UpsellItem } from '@/types'
 
 import CartSkeleton               from '@/components/cart/CartSkeleton'
-import CartItemCard                from '@/components/cart/CartItemCard'
+import CartItemCard, { CART_ITEM_CARD_CSS } from '@/components/cart/CartItemCard'
 import CartSummary                 from '@/components/cart/CartSummary'
 import { StickyCartCTA, EmptyCart } from '@/components/cart/CartUIComponents'
 import { useCartAnalytics }        from '@/hooks/useCheckoutAnalytics'
@@ -273,11 +273,18 @@ export default function CartPage() {
       <div className="cp-ship-bar">
         {freeShipMin > 0 ? (
           pricing.isFreeShipping
-            ? <span>🎉 You&apos;ve unlocked <strong>free shipping</strong>!</span>
-            : <span>🚚 Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</span>
+            ? <span aria-live="polite">🎉 You&apos;ve unlocked <strong>free shipping</strong>!</span>
+            : <span aria-live="polite">🚚 Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</span>
         ) : '🚚 Free shipping on all orders!'}
         {freeShipMin > 0 && (
-          <div className="cp-ship-track">
+          <div
+            className="cp-ship-track"
+            role="progressbar"
+            aria-valuenow={Math.round(progressPct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Free shipping progress"
+          >
             <div className="cp-ship-fill" style={{ width:`${progressPct}%` }} />
           </div>
         )}
@@ -423,7 +430,7 @@ export default function CartPage() {
       {/* Mobile sticky CTA */}
       <StickyCartCTA total={pricing.total} totalQty={totalQty} minOrderAmt={parseFloat(s.min_order_amount || '0')} />
 
-      <style>{PAGE_CSS}</style>
+      <style>{PAGE_CSS + CART_ITEM_CARD_CSS}</style>
     </main>
   )
 }
@@ -507,6 +514,11 @@ const PAGE_CSS = `
 .cp-right{background:var(--white);border-left:1px solid var(--border);
   position:sticky;top:134px;max-height:calc(100vh - 134px);
   overflow-y:auto;overflow-x:hidden;width:100%;min-width:0;}
+/* On short viewports the sticky panel can clip the CTA button below the fold.
+   Remove sticky so the panel scrolls naturally with the page instead. */
+@media(max-height:700px){
+  .cp-right{position:static;max-height:none;}
+}
 @media(max-width:960px){
   .cp-right{position:static;border-left:none;
     border-top:1px solid var(--border);max-height:none;width:auto;}

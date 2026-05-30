@@ -56,7 +56,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               src={item.image}
               alt={item.name}
               fill
-              sizes="120px"
+              sizes="(max-width:640px) 80px, 120px"
               className="cic-img"
               priority={false}
             />
@@ -108,7 +108,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
             )}
           </div>
 
-          {/* Remove */}
+          {/* Remove — min 44×44px touch target per WCAG 2.5.5 */}
           <button
             className="cic-remove"
             onClick={handleRemove}
@@ -122,113 +122,117 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
           </button>
         </div>
       </div>
-
-      <style>{`
-        @keyframes cic-enter{
-          from{opacity:0;transform:translateY(10px)}
-          to{opacity:1;transform:translateY(0)}
-        }
-        @keyframes qty-up{
-          0%{transform:translateY(8px);opacity:0}
-          60%{transform:translateY(-2px)}
-          100%{transform:translateY(0);opacity:1}
-        }
-        @keyframes qty-down{
-          0%{transform:translateY(-8px);opacity:0}
-          60%{transform:translateY(2px)}
-          100%{transform:translateY(0);opacity:1}
-        }
-        .cic-wrap{
-          display:flex;gap:16px;padding:16px 20px;
-          border-bottom:1px solid #ede8df;
-          transition:background .18s,transform .2s,box-shadow .2s;
-          animation:cic-enter .3s ease both;
-        }
-        .cic-wrap:last-child{border-bottom:none;}
-        .cic-wrap:hover{
-          background:#f8f6f2;
-          box-shadow:inset 3px 0 0 #1a3a1e;
-        }
-        /* position:relative required for next/image fill */
-        .cic-img-wrap{
-          width:120px;height:120px;flex-shrink:0;border-radius:12px;
-          overflow:hidden;background:#f5f0e8;position:relative;
-          display:flex;align-items:center;justify-content:center;
-          box-shadow:0 2px 8px rgba(0,0,0,.09);
-          transition:box-shadow .2s;
-        }
-        .cic-wrap:hover .cic-img-wrap{box-shadow:0 4px 14px rgba(0,0,0,.14);}
-        .cic-img{object-fit:cover;}
-        .cic-emoji{font-size:46px;}
-        .cic-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;}
-        .cic-meta{display:flex;flex-direction:column;gap:3px;}
-        .cic-name{
-          font-family:var(--font-playfair,'Playfair Display',serif);
-          font-size:16px;font-weight:700;color:#1a1a1a;
-          text-decoration:none;line-height:1.3;transition:color .2s;
-        }
-        .cic-name:hover{color:#1a3a1e;}
-        .cic-size{font-size:12px;color:#7a7565;}
-        .cic-badges{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;}
-        .cic-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
-        .cic-badge.org{background:#e8f5e9;color:#2d6a4f;border:1px solid #c8e6c9;}
-        .cic-badge.hml{background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;}
-        .cic-badge.best{background:#fff8e1;color:#f57f17;border:1px solid #ffecb3;}
-        .cic-badge.stock{background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;}
-        .cic-footer{
-          display:flex;align-items:center;justify-content:space-between;
-          margin-top:10px;flex-wrap:wrap;gap:8px;
-        }
-        /* Qty stepper */
-        .cic-qty{
-          display:flex;align-items:center;background:#f5f0e8;
-          border-radius:30px;padding:3px;border:1px solid #e2dbd0;
-          box-shadow:0 1px 4px rgba(0,0,0,.06);
-        }
-        .cic-qty-btn{
-          width:34px;height:34px;border:none;background:#fff;border-radius:50%;
-          font-size:17px;font-weight:700;color:#1a3a1e;cursor:pointer;
-          display:flex;align-items:center;justify-content:center;
-          transition:all .18s cubic-bezier(.4,0,.2,1);
-          box-shadow:0 1px 4px rgba(0,0,0,.08);line-height:1;
-        }
-        .cic-qty-btn:hover:not(:disabled){
-          background:#1a3a1e;color:#fff;
-          transform:scale(1.1);box-shadow:0 3px 10px rgba(26,58,30,.25);
-        }
-        .cic-qty-btn:active:not(:disabled){transform:scale(.93);}
-        .cic-qty-btn:disabled{opacity:.3;cursor:not-allowed;}
-        .cic-qty-num{
-          width:34px;text-align:center;font-size:14px;font-weight:700;color:#1a1a1a;
-        }
-        .cic-qty-num.anim-up{animation:qty-up .28s cubic-bezier(.4,0,.2,1);}
-        .cic-qty-num.anim-down{animation:qty-down .28s cubic-bezier(.4,0,.2,1);}
-        /* Price */
-        .cic-price-col{display:flex;flex-direction:column;align-items:flex-end;}
-        .cic-mrp{font-size:12px;color:#bbb;text-decoration:line-through;}
-        .cic-price{
-          font-family:var(--font-playfair,'Playfair Display',serif);
-          font-size:18px;font-weight:700;color:#1a1a1a;
-        }
-        .cic-save{
-          font-size:11px;font-weight:600;color:#2d6a4f;
-          background:#e8f5e9;padding:2px 7px;border-radius:10px;
-        }
-        /* Remove */
-        .cic-remove{
-          display:flex;align-items:center;gap:4px;
-          background:none;border:1px solid #f0d5d5;color:#c0392b;
-          font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;
-          cursor:pointer;transition:all .15s;font-family:inherit;
-        }
-        .cic-remove:hover{background:#fdecea;border-color:#c0392b;}
-        @media(max-width:640px){
-          .cic-wrap{flex-direction:column;}
-          .cic-img-wrap{width:100%;height:160px;}
-        }
-      `}</style>
     </div>
   )
 })
 
 export default CartItemCard
+
+// ─── Singleton style ──────────────────────────────────────────────────────────
+// Kept as a module-level constant and rendered once in CartPage's PAGE_CSS area.
+// This prevents N duplicate <style> injections when the cart has multiple items.
+// The actual <style> tag is injected by the CartPage layout; CartItemCard is now
+// a pure presentational component with zero side-effect style injection.
+export const CART_ITEM_CARD_CSS = `
+  @keyframes cic-enter{
+    from{opacity:0;transform:translateY(10px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  /* Qty animations only fire when the user hasn't requested reduced motion */
+  @media(prefers-reduced-motion:no-preference){
+    @keyframes qty-up{
+      0%{transform:translateY(8px);opacity:0}
+      60%{transform:translateY(-2px)}
+      100%{transform:translateY(0);opacity:1}
+    }
+    @keyframes qty-down{
+      0%{transform:translateY(-8px);opacity:0}
+      60%{transform:translateY(2px)}
+      100%{transform:translateY(0);opacity:1}
+    }
+    .cic-qty-num.anim-up{animation:qty-up .28s cubic-bezier(.4,0,.2,1);}
+    .cic-qty-num.anim-down{animation:qty-down .28s cubic-bezier(.4,0,.2,1);}
+  }
+  .cic-wrap{
+    display:flex;gap:16px;padding:16px 20px;
+    border-bottom:1px solid #ede8df;
+    transition:background .18s,box-shadow .2s;
+    animation:cic-enter .3s ease both;
+  }
+  .cic-wrap:last-child{border-bottom:none;}
+  .cic-wrap:hover{background:#f8f6f2;box-shadow:inset 3px 0 0 #1a3a1e;}
+  .cic-img-wrap{
+    width:120px;height:120px;flex-shrink:0;border-radius:12px;
+    overflow:hidden;background:#f5f0e8;position:relative;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.09);transition:box-shadow .2s;
+  }
+  .cic-wrap:hover .cic-img-wrap{box-shadow:0 4px 14px rgba(0,0,0,.14);}
+  .cic-img{object-fit:cover;}
+  .cic-emoji{font-size:46px;}
+  .cic-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;}
+  .cic-meta{display:flex;flex-direction:column;gap:3px;}
+  .cic-name{
+    font-family:var(--font-playfair,'Playfair Display',serif);
+    font-size:16px;font-weight:700;color:#1a1a1a;
+    text-decoration:none;line-height:1.3;transition:color .2s;
+  }
+  .cic-name:hover{color:#1a3a1e;}
+  .cic-size{font-size:12px;color:#7a7565;}
+  .cic-badges{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;}
+  .cic-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;}
+  .cic-badge.org{background:#e8f5e9;color:#2d6a4f;border:1px solid #c8e6c9;}
+  .cic-badge.hml{background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;}
+  .cic-badge.best{background:#fff8e1;color:#f57f17;border:1px solid #ffecb3;}
+  .cic-badge.stock{background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;}
+  .cic-footer{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-top:10px;flex-wrap:wrap;gap:8px;
+  }
+  .cic-qty{
+    display:flex;align-items:center;background:#f5f0e8;
+    border-radius:30px;padding:3px;border:1px solid #e2dbd0;
+    box-shadow:0 1px 4px rgba(0,0,0,.06);
+  }
+  .cic-qty-btn{
+    width:34px;height:34px;border:none;background:#fff;border-radius:50%;
+    font-size:17px;font-weight:700;color:#1a3a1e;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .18s cubic-bezier(.4,0,.2,1);
+    box-shadow:0 1px 4px rgba(0,0,0,.08);line-height:1;
+  }
+  .cic-qty-btn:hover:not(:disabled){
+    background:#1a3a1e;color:#fff;
+    transform:scale(1.1);box-shadow:0 3px 10px rgba(26,58,30,.25);
+  }
+  .cic-qty-btn:active:not(:disabled){transform:scale(.93);}
+  .cic-qty-btn:disabled{opacity:.3;cursor:not-allowed;}
+  .cic-qty-num{width:34px;text-align:center;font-size:14px;font-weight:700;color:#1a1a1a;}
+  .cic-price-col{display:flex;flex-direction:column;align-items:flex-end;}
+  .cic-mrp{font-size:12px;color:#bbb;text-decoration:line-through;}
+  .cic-price{
+    font-family:var(--font-playfair,'Playfair Display',serif);
+    font-size:18px;font-weight:700;color:#1a1a1a;
+  }
+  .cic-save{
+    font-size:11px;font-weight:600;color:#2d6a4f;
+    background:#e8f5e9;padding:2px 7px;border-radius:10px;
+  }
+  /* Remove button — row layout preserved on mobile; min 44×44px touch target */
+  .cic-remove{
+    display:flex;align-items:center;gap:4px;
+    background:none;border:1px solid #f0d5d5;color:#c0392b;
+    font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;
+    cursor:pointer;transition:all .15s;font-family:inherit;
+  }
+  .cic-remove:hover{background:#fdecea;border-color:#c0392b;}
+  @media(max-width:640px){
+    /* Keep row layout — only shrink image to 80×80px so pricing/CTA stays visible */
+    .cic-img-wrap{width:80px;height:80px;}
+    .cic-emoji{font-size:32px;}
+    .cic-name{font-size:14px;}
+    .cic-price{font-size:16px;}
+    /* Ensure remove button meets 44×44px WCAG 2.5.5 touch target */
+    .cic-remove{min-height:44px;min-width:44px;justify-content:center;}
+  }
+`

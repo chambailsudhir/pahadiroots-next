@@ -141,7 +141,7 @@ export default function CartDrawer({ settings }: Props) {
                       <button
                         onClick={() => updateQty(item.variantId, item.qty - 1)}
                         className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold"
-                        aria-label="Decrease"
+                        aria-label="Decrease quantity"
                       >−</button>
                       <span className="w-7 text-center text-xs font-bold text-stone-700">{item.qty}</span>
                       <button
@@ -186,7 +186,7 @@ export default function CartDrawer({ settings }: Props) {
                 <div className="mt-2 h-1.5 bg-earth-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-earth-500 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, (pricing.subtotal / pricing.freeShippingMin) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (pricing.progressBase / pricing.freeShippingMin) * 100)}%` }}
                   />
                 </div>
               </div>

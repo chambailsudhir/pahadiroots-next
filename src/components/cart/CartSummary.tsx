@@ -52,11 +52,16 @@ const CartSummary = memo(function CartSummary({
             />
             <button className="cs-coupon-btn" onClick={onApplyCoupon}
               disabled={couponLoading} type="button">
-              {couponLoading ? '...' : 'Apply'}
+              {couponLoading
+                ? <><span className="cs-spinner" aria-hidden="true" />Applying…</>
+                : 'Apply'}
             </button>
           </div>
         )}
-        {couponError && <p className="cs-coupon-err" role="alert">⚠ {couponError}</p>}
+        {/* Aria-live region for coupon status — single announcement point, no double-fire */}
+        <div aria-live="polite" aria-atomic="true" className="cs-coupon-live">
+          {couponError && <span className="cs-coupon-err">⚠ {couponError}</span>}
+        </div>
       </div>
 
       {/* Price breakdown */}
@@ -131,6 +136,7 @@ const CartSummary = memo(function CartSummary({
       </div>
 
       <style>{`
+        @keyframes cs-spin{to{transform:rotate(360deg)}}
         .cs-wrap{padding:20px 22px;display:flex;flex-direction:column;gap:14px;}
         .cs-coupon{border:1px dashed #e2dbd0;border-radius:12px;padding:13px;}
         .cs-coupon-head{font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:9px;}
@@ -139,16 +145,28 @@ const CartSummary = memo(function CartSummary({
           padding:10px 12px;font-size:13px;font-weight:600;outline:none;
           transition:border-color .2s;min-width:0;font-family:inherit;}
         .cs-coupon-input:focus{border-color:#1a3a1e;}
-        .cs-coupon-btn{background:#1a3a1e;color:#fff;border:none;padding:10px 16px;
+        .cs-coupon-btn{
+          background:#1a3a1e;color:#fff;border:none;padding:10px 16px;
           border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
-          transition:background .2s;white-space:nowrap;font-family:inherit;}
+          transition:background .2s;white-space:nowrap;font-family:inherit;
+          display:flex;align-items:center;gap:6px;
+        }
         .cs-coupon-btn:hover:not(:disabled){background:#2d5233;}
         .cs-coupon-btn:disabled{opacity:.6;cursor:not-allowed;}
+        /* Spinner shown during coupon validation */
+        .cs-spinner{
+          display:inline-block;width:12px;height:12px;border-radius:50%;
+          border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
+          animation:cs-spin .6s linear infinite;flex-shrink:0;
+        }
+        @media(prefers-reduced-motion:reduce){.cs-spinner{animation:none;opacity:.6;}}
         .cs-coupon-applied{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;
           padding:10px 12px;display:flex;align-items:center;justify-content:space-between;
           font-size:13px;color:#2d6a4f;font-weight:600;gap:8px;}
         .cs-coupon-rm{background:none;border:none;color:#888;font-size:15px;cursor:pointer;padding:0;}
-        .cs-coupon-err{font-size:11px;color:#c0392b;margin-top:5px;}
+        /* Aria-live coupon status region — visually unchanged, screen-reader single source */
+        .cs-coupon-live{min-height:0;}
+        .cs-coupon-err{font-size:11px;color:#c0392b;display:block;margin-top:5px;}
         .cs-prices{display:flex;flex-direction:column;gap:9px;}
         .cs-row{display:flex;justify-content:space-between;align-items:center;
           font-size:13px;color:#7a7565;}
