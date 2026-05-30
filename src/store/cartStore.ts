@@ -99,21 +99,23 @@ export const useCartStore = create<CartStore>()(
           removeItem: () => {},
         }
       ),
+      // Only persist items and idempotency key.
+      // coupon is intentionally excluded — it's session-only so stale/expired
+      // discounts can never survive a page refresh. Users re-apply each session.
+      partialize: (state) => ({
+        items:          state.items,
+        idempotencyKey: state.idempotencyKey,
+      }),
       // Migrate persisted state across schema versions.
-      // v1 → v2: no shape change; drop coupon to force re-validation.
+      // v1 had no partialize so coupon may exist in old localStorage — drop it.
       migrate: (persisted: unknown, fromVersion: number) => {
         const state = persisted as Partial<CartStore>
         if (fromVersion < 2) {
-          // Clear any persisted coupon — it was applied in a previous session
-          // and may now be expired, exhausted, or otherwise invalid.
-          return { ...state, coupon: null }
+          const { coupon: _drop, ...rest } = state as Record<string, unknown>
+          void _drop
+          return rest
         }
         return state
-      },
-      // Always clear coupon on rehydration so stale discounts never survive
-      // a browser restart. User can re-apply if the coupon is still valid.
-      onRehydrateStorage: () => (state) => {
-        if (state) state.coupon = null
       },
     }
   )
