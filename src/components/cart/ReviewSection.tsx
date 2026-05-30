@@ -17,6 +17,10 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
 
   useEffect(() => {
     if (reviews.length <= 1) return
+    // Respect the user's OS motion preference — do not auto-rotate for
+    // users with vestibular disorders who have set prefers-reduced-motion.
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (mq.matches) return
     const t = setInterval(() => setIdx(i => (i + 1) % reviews.length), 3800)
     return () => clearInterval(t)
   }, [reviews.length])
@@ -42,6 +46,7 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
           {reviews.map((r, i) => (
             <button
               key={i}
+              type="button"
               className={`rv-dot${i === idx ? ' active' : ''}`}
               onClick={() => setIdx(i)}
               aria-label={`Show review by ${r.name}`}

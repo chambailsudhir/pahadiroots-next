@@ -324,7 +324,7 @@ export default function CartPage() {
               ))}
               {/* Undo toasts — one per pending removal, each with its own Undo button */}
               {[...pendingRemovals.entries()].map(([vid, entry]) => (
-                <div key={vid} className="cp-undo-toast" role="status" aria-live="polite">
+                <div key={vid} className="cp-undo-toast" role="status">
                   <span>"{entry.name}" removed</span>
                   <button className="cp-undo-btn" onClick={() => handleUndoRemove(vid)}>Undo</button>
                 </div>

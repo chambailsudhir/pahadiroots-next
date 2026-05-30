@@ -140,7 +140,8 @@ export default function CartDrawer({ settings }: Props) {
                     <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden">
                       <button
                         onClick={() => updateQty(item.variantId, item.qty - 1)}
-                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold"
+                        disabled={item.qty <= 1}
+                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                         aria-label="Decrease quantity"
                       >−</button>
                       <span className="w-7 text-center text-xs font-bold text-stone-700">{item.qty}</span>

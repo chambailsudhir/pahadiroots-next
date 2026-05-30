@@ -84,9 +84,23 @@ const UpsellSection = memo(function UpsellSection({
 
       <style>{`
         @keyframes us-pulse{0%,100%{opacity:1}50%{opacity:.45}}
-        @keyframes us-shimmer-slide{
-          0%{background-position:-200px 0}
-          100%{background-position:calc(200px + 100%) 0}
+        @media(prefers-reduced-motion:no-preference){
+          @keyframes us-shimmer-slide{
+            0%{background-position:-200px 0}
+            100%{background-position:calc(200px + 100%) 0}
+          }
+          .us-sh-img,.us-sh-line,.us-sh-btn{
+            animation:us-shimmer-slide 1.4s ease-in-out infinite;
+          }
+        }
+        /* Fallback static shimmer background for reduced-motion users */
+        .us-sh-img,.us-sh-line,.us-sh-btn{
+          background:#e8e2d8;background-size:400px 100%;
+        }
+        @media(prefers-reduced-motion:no-preference){
+          .us-sh-img,.us-sh-line,.us-sh-btn{
+            background:linear-gradient(90deg,#e8e2d8 25%,#f0ebe0 50%,#e8e2d8 75%);
+          }
         }
         .us-card{background:#fff;border-radius:14px;
           box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);
@@ -129,22 +143,12 @@ const UpsellSection = memo(function UpsellSection({
         /* Shimmer */
         .us-shimmer{display:flex;gap:10px;align-items:center;border:1px solid #e2dbd0;
           border-radius:12px;padding:10px;background:#f5f0e8;}
-        .us-sh-img{width:50px;height:50px;border-radius:8px;flex-shrink:0;
-          background:linear-gradient(90deg,#e8e2d8 25%,#f0ebe0 50%,#e8e2d8 75%);
-          background-size:400px 100%;
-          animation:us-shimmer-slide 1.4s ease-in-out infinite;}
+        .us-sh-img{width:50px;height:50px;border-radius:8px;flex-shrink:0;}
         .us-sh-body{flex:1;display:flex;flex-direction:column;gap:6px;}
-        .us-sh-line{height:11px;border-radius:5px;
-          background:linear-gradient(90deg,#e8e2d8 25%,#f0ebe0 50%,#e8e2d8 75%);
-          background-size:400px 100%;
-          animation:us-shimmer-slide 1.4s ease-in-out infinite;
-          width:100%;}
+        .us-sh-line{height:11px;border-radius:5px;width:100%;}
         .us-sh-line.short{width:40%;}
         .us-sh-line.medium{width:55%;}
-        .us-sh-btn{width:52px;height:32px;border-radius:8px;flex-shrink:0;
-          background:linear-gradient(90deg,#e8e2d8 25%,#f0ebe0 50%,#e8e2d8 75%);
-          background-size:400px 100%;
-          animation:us-shimmer-slide 1.4s ease-in-out infinite;}
+        .us-sh-btn{width:52px;height:32px;border-radius:8px;flex-shrink:0;}
       `}</style>
     </div>
   )
