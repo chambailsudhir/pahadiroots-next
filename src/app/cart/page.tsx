@@ -507,7 +507,10 @@ const PAGE_CSS = `
 .cp-layout{
   display:grid;grid-template-columns:1fr 395px;gap:0;
   max-width:1420px;margin:0 auto;background:var(--cream);
-  align-items:start;min-height:calc(100vh - 180px);overflow:hidden;
+  align-items:start;min-height:calc(100vh - 180px);
+  /* overflow:hidden intentionally removed — it creates a sticky containing block,
+     which offsets .cp-right by top:134px within the grid instead of the viewport */
+  overflow:clip;
 }
 @media(max-width:960px){.cp-layout{grid-template-columns:1fr;}}
 .cp-left{padding:28px 32px;display:flex;flex-direction:column;gap:20px;}
