@@ -414,20 +414,26 @@ export default function CartPage() {
         </div>
 
         {/* ══ RIGHT ══════════════════════════════════════════ */}
+        {/* cp-right: sticky shell only — overflow lives on the inner div.
+             Having position:sticky + overflow-y:auto on the SAME element causes
+             some browsers to treat top:Npx as an internal offset, pushing content
+             down by the sticky-top value and creating a blank gap at the top. */}
         <div className="cp-right">
-          <CartSummary
-            items={items}
-            totalQty={totalQty}
-            pricing={pricing}
-            coupon={coupon}
-            onApplyCoupon={handleCoupon}
-            onRemoveCoupon={removeCoupon}
-            couponCode={couponCode}
-            onCouponCodeChange={setCouponCode}
-            couponLoading={couponLoading}
-            couponError={couponError}
-            minOrderAmt={parseFloat(s.min_order_amount || '0')}
-          />
+          <div className="cp-right-inner">
+            <CartSummary
+              items={items}
+              totalQty={totalQty}
+              pricing={pricing}
+              coupon={coupon}
+              onApplyCoupon={handleCoupon}
+              onRemoveCoupon={removeCoupon}
+              couponCode={couponCode}
+              onCouponCodeChange={setCouponCode}
+              couponLoading={couponLoading}
+              couponError={couponError}
+              minOrderAmt={parseFloat(s.min_order_amount || '0')}
+            />
+          </div>
         </div>
       </div>
 
@@ -590,17 +596,31 @@ const PAGE_CSS = `
 .cp-undo-btn:hover{background:rgba(201,162,64,.1);border-color:var(--gold);}
 
 /* ── Right summary panel ─────────────────────────────────────────────────────── */
+/* cp-right: sticky SHELL only — no overflow here.
+   Bug: sticky + overflow-y on the same element makes some browsers offset
+   the content by top:Npx, creating a phantom gap at the top of the sidebar. */
 .cp-right{
   background:var(--white);border-left:1px solid var(--border-lt);
   box-shadow:-6px 0 28px rgba(26,22,17,.05);
-  position:sticky;top:134px;max-height:calc(100vh - 134px);
-  overflow-y:auto;overflow-x:hidden;width:100%;min-width:0;
+  position:sticky;top:134px;
+  width:100%;min-width:0;
+  /* overflow intentionally NOT set here — lives on cp-right-inner */
+}
+/* Inner scroll container — separated from sticky so top:134px is never
+   misread as an internal offset by the browser */
+.cp-right-inner{
+  max-height:calc(100vh - 134px);
+  overflow-y:auto;overflow-x:hidden;
 }
 /* Short viewports — un-stick so CTA is never clipped below fold */
-@media(max-height:700px){.cp-right{position:static;max-height:none;}}
+@media(max-height:700px){
+  .cp-right{position:static;}
+  .cp-right-inner{max-height:none;}
+}
 @media(max-width:960px){
   .cp-right{position:static;border-left:none;border-top:1px solid var(--border-lt);
-    max-height:none;width:auto;box-shadow:none;}
+    width:auto;box-shadow:none;}
+  .cp-right-inner{max-height:none;overflow-y:visible;}
   .cp-layout{padding-bottom:80px;}
 }
 `
