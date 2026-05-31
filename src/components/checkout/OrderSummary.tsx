@@ -103,7 +103,7 @@ export default function OrderSummary({
 
       {/* Sticky header inside sidebar */}
       <div className="os-head">
-        <button className="os-head-btn" onClick={onToggleSummary} aria-expanded={summaryOpen} type="button">
+        <button className="os-head-btn" onClick={onToggleSummary} aria-expanded={summaryOpen} aria-controls="os-body-region" type="button">
           <span className="os-head-title">Your Order</span>
           <span className="os-head-meta">
             <span className="os-head-count">{items.length} item{items.length !== 1 ? 's' : ''}</span>
@@ -114,7 +114,7 @@ export default function OrderSummary({
         </button>
       </div>
 
-      <div className={`os-body${summaryOpen ? ' os-body--open' : ''}`}>
+      <div id="os-body-region" className={`os-body${summaryOpen ? ' os-body--open' : ''}`}>
 
         {/* Item list */}
         <div className="os-items">
@@ -354,13 +354,13 @@ export default function OrderSummary({
         </div>
       </div>
 
-      {/* Errors */}
+      {/* Errors — role="alert" triggers immediate announcement by screen readers */}
       {belowMinOrder && (
-        <div className="os-error-box">
+        <div className="os-error-box" role="alert">
           🛒 Minimum order is {formatPrice(minOrderAmt)}. Add <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more.
         </div>
       )}
-      {error && <div className="os-error-box">⚠ {error}</div>}
+      {error && <div className="os-error-box" role="alert">⚠ {error}</div>}
 
       {/* CTA */}
       <div className="os-cta-area">

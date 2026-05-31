@@ -275,11 +275,15 @@ export default function CartPage() {
     <main id="main-content">
       {/* Shipping progress bar */}
       <div className="cp-ship-bar">
-        {freeShipMin > 0 ? (
-          pricing.isFreeShipping
-            ? <span aria-live="polite">🎉 You&apos;ve unlocked <strong>free shipping</strong>!</span>
-            : <span aria-live="polite">🚚 Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</span>
-        ) : '🚚 Free shipping on all orders!'}
+        {/* aria-live on a stable outer span so the region persists across re-renders;
+            putting it on the swapped inner spans causes screen readers to miss updates */}
+        <span aria-live="polite" aria-atomic="true">
+          {freeShipMin > 0 ? (
+            pricing.isFreeShipping
+              ? <>🎉 You&apos;ve unlocked <strong>free shipping</strong>!</>
+              : <>🚚 Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</>
+          ) : '🚚 Free shipping on all orders!'}
+        </span>
         {freeShipMin > 0 && (
           <div
             className="cp-ship-track"
@@ -294,14 +298,14 @@ export default function CartPage() {
         )}
       </div>
 
-      {/* Progress steps */}
-      <div className="cp-steps">
-        <div className="cp-step cp-step-active"><span>1</span> Cart</div>
-        <div className="cp-step-line" />
-        <div className="cp-step"><span>2</span> Checkout</div>
-        <div className="cp-step-line" />
-        <div className="cp-step"><span>3</span> Confirmation</div>
-      </div>
+      {/* Progress steps — nav landmark so screen reader users can jump to it */}
+      <nav className="cp-steps" aria-label="Checkout progress">
+        <div className="cp-step cp-step-active" aria-current="step"><span aria-hidden="true">1</span> Cart</div>
+        <div className="cp-step-line" aria-hidden="true" />
+        <div className="cp-step"><span aria-hidden="true">2</span> Checkout</div>
+        <div className="cp-step-line" aria-hidden="true" />
+        <div className="cp-step"><span aria-hidden="true">3</span> Confirmation</div>
+      </nav>
 
       <div className="cp-layout">
 

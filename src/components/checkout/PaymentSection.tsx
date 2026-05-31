@@ -35,7 +35,7 @@ export default function PaymentSection({
                 <span className="ps-opt-title">Pay Online</span>
                 {prepaidPct > 0 && <span className="ps-save-badge">Save {prepaidPct}%</span>}
               </div>
-              <div className="ps-logos">
+              <div className="ps-logos" aria-hidden="true">
                 {/* UPI */}
                 <svg className="ps-logo" viewBox="0 0 52 22" xmlns="http://www.w3.org/2000/svg">
                   <rect width="52" height="22" rx="4" fill="#5A1589"/>
@@ -89,7 +89,7 @@ export default function PaymentSection({
             </div>
           </label>
         ) : (
-          <div className="ps-cod-disabled">
+          <div className="ps-cod-disabled" aria-disabled="true" aria-label={`Cash on Delivery: ${!codEnabled ? 'Unavailable' : total > codMax ? `Maximum order ₹${codMax}` : 'Unavailable'}`}>
             <div className="ps-cod-disabled-left">
               <span className="ps-cod-icon">💵</span>
               <span className="ps-opt-title ps-opt-title--off">Cash on Delivery</span>
