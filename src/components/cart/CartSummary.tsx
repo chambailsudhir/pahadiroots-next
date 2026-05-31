@@ -34,6 +34,7 @@ const CartSummary = memo(function CartSummary({
       {/* Coupon */}
       <div className="cs-coupon">
         <div className="cs-coupon-head">🏷 Have a coupon code?</div>
+        <div className="cs-coupon-body">
         {coupon ? (
           <div className="cs-coupon-applied">
             <span>🎉 <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
@@ -61,6 +62,7 @@ const CartSummary = memo(function CartSummary({
         {/* Aria-live region for coupon status — single announcement point, no double-fire */}
         <div aria-live="polite" aria-atomic="true" className="cs-coupon-live">
           {couponError && <span className="cs-coupon-err">⚠ {couponError}</span>}
+        </div>
         </div>
       </div>
 
@@ -139,13 +141,16 @@ const CartSummary = memo(function CartSummary({
         @keyframes cs-spin{to{transform:rotate(360deg)}}
         .cs-wrap{padding:22px 24px;display:flex;flex-direction:column;gap:16px;}
         .cs-coupon{
-          border:1.5px dashed #d8c9a8;border-radius:14px;padding:14px 16px;
+          border:1.5px dashed #d8c9a8;border-radius:14px;overflow:hidden;
           background:linear-gradient(135deg,#fdf9f2,#faf5ea);
         }
         .cs-coupon-head{
-          font-size:11px;font-weight:800;color:#6b5620;margin-bottom:10px;
+          font-size:11px;font-weight:800;color:#6b5620;
           letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:6px;
+          padding:14px 16px;
+          border-bottom:1px solid #e8d8b8;
         }
+        .cs-coupon-body{padding:14px 16px;}
         .cs-coupon-row{display:flex;gap:8px;}
         .cs-coupon-input{
           flex:1;border:1.5px solid #e0d5c0;border-radius:9px;
