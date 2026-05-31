@@ -75,12 +75,12 @@ export default function CartDrawer({ settings }: Props) {
         }`}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--bd)', background: 'var(--g)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>🛒</span>
-            <h2 style={{ fontSize: 16, fontWeight: 900, color: '#fff', fontFamily: '"Playfair Display", Georgia, serif' }}>Your Cart</h2>
+        <div className="cd-header">
+          <div className="cd-header-left">
+            <span className="cd-cart-icon">🛒</span>
+            <h2 className="cd-title">Your Cart</h2>
             {items.length > 0 && (
-              <span style={{ background: 'var(--gd)', color: '#1a0800', fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 12 }}>
+              <span className="cd-count">
                 {items.reduce((s, i) => s + i.qty, 0)}
               </span>
             )}
@@ -89,11 +89,42 @@ export default function CartDrawer({ settings }: Props) {
             onClick={closeCart}
             aria-label="Close cart"
             ref={firstFocusRef}
-            style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}
+            className="cd-close"
           >
             ✕ Close
           </button>
         </div>
+        <style>{`
+          .cd-header{
+            display:flex;align-items:center;justify-content:space-between;
+            padding:17px 22px;border-bottom:1px solid rgba(255,255,255,.12);
+            background:linear-gradient(135deg,#1a3a1e,#2d5233);
+            position:relative;flex-shrink:0;
+          }
+          .cd-header::after{
+            content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+            background:linear-gradient(90deg,transparent,rgba(201,162,64,.4),transparent);
+          }
+          .cd-header-left{display:flex;align-items:center;gap:10px;}
+          .cd-cart-icon{font-size:20px;filter:drop-shadow(0 1px 4px rgba(0,0,0,.3));}
+          .cd-title{
+            font-family:'Playfair Display',Georgia,serif;
+            font-size:17px;font-weight:700;color:#fff;margin:0;letter-spacing:.1px;
+          }
+          .cd-count{
+            background:linear-gradient(135deg,#c9a240,#e8c060);
+            color:#1a1611;font-size:11px;font-weight:900;
+            padding:2px 9px;border-radius:12px;
+            box-shadow:0 2px 6px rgba(201,162,64,.4);
+          }
+          .cd-close{
+            background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+            border-radius:9px;padding:7px 13px;color:#fff;cursor:pointer;
+            font-size:13px;font-weight:700;font-family:inherit;
+            transition:all .18s;letter-spacing:.15px;
+          }
+          .cd-close:hover{background:rgba(255,255,255,.22);}
+        `}</style>
 
         {/* Items */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">

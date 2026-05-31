@@ -137,72 +137,136 @@ const CartSummary = memo(function CartSummary({
 
       <style>{`
         @keyframes cs-spin{to{transform:rotate(360deg)}}
-        .cs-wrap{padding:20px 22px;display:flex;flex-direction:column;gap:14px;}
-        .cs-coupon{border:1px dashed #e2dbd0;border-radius:12px;padding:13px;}
-        .cs-coupon-head{font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:9px;}
-        .cs-coupon-row{display:flex;gap:7px;}
-        .cs-coupon-input{flex:1;border:1.5px solid #e2dbd0;border-radius:8px;
-          padding:10px 12px;font-size:13px;font-weight:600;outline:none;
-          transition:border-color .2s;min-width:0;font-family:inherit;}
-        .cs-coupon-input:focus{border-color:#1a3a1e;}
-        .cs-coupon-btn{
-          background:#1a3a1e;color:#fff;border:none;padding:10px 16px;
-          border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
-          transition:background .2s;white-space:nowrap;font-family:inherit;
-          display:flex;align-items:center;gap:6px;
+        .cs-wrap{padding:22px 24px;display:flex;flex-direction:column;gap:16px;}
+        .cs-coupon{
+          border:1.5px dashed #d8c9a8;border-radius:14px;padding:14px 16px;
+          background:linear-gradient(135deg,#fdf9f2,#faf5ea);
         }
-        .cs-coupon-btn:hover:not(:disabled){background:#2d5233;}
-        .cs-coupon-btn:disabled{opacity:.6;cursor:not-allowed;}
-        /* Spinner shown during coupon validation */
+        .cs-coupon-head{
+          font-size:11px;font-weight:800;color:#6b5620;margin-bottom:10px;
+          letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:6px;
+        }
+        .cs-coupon-row{display:flex;gap:8px;}
+        .cs-coupon-input{
+          flex:1;border:1.5px solid #e0d5c0;border-radius:9px;
+          padding:10px 13px;font-size:13px;font-weight:600;outline:none;
+          transition:border-color .2s,box-shadow .2s;min-width:0;font-family:inherit;
+          background:#fff;color:#1a1611;
+          box-shadow:inset 0 1px 3px rgba(26,22,17,.06);
+        }
+        .cs-coupon-input::placeholder{color:#c0b8ae;font-weight:500;}
+        .cs-coupon-input:focus{border-color:#c9a240;box-shadow:0 0 0 3px rgba(201,162,64,.12);}
+        .cs-coupon-btn{
+          background:linear-gradient(135deg,#1a3a1e,#2d5233);color:#fff;border:none;
+          padding:10px 18px;border-radius:9px;font-size:13px;font-weight:700;
+          cursor:pointer;transition:all .2s;white-space:nowrap;font-family:inherit;
+          display:flex;align-items:center;gap:6px;letter-spacing:.2px;
+          box-shadow:0 3px 10px rgba(26,58,30,.22);
+        }
+        .cs-coupon-btn:hover:not(:disabled){
+          background:linear-gradient(135deg,#22472a,#376340);
+          transform:translateY(-1px);box-shadow:0 5px 14px rgba(26,58,30,.3);
+        }
+        .cs-coupon-btn:active:not(:disabled){transform:translateY(0);}
+        .cs-coupon-btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none;}
         .cs-spinner{
           display:inline-block;width:12px;height:12px;border-radius:50%;
-          border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
-          animation:cs-spin .6s linear infinite;flex-shrink:0;
+          border:2px solid rgba(255,255,255,.3);border-top-color:#fff;
+          animation:cs-spin .65s linear infinite;flex-shrink:0;
         }
         @media(prefers-reduced-motion:reduce){.cs-spinner{animation:none;opacity:.6;}}
-        .cs-coupon-applied{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;
-          padding:10px 12px;display:flex;align-items:center;justify-content:space-between;
-          font-size:13px;color:#2d6a4f;font-weight:600;gap:8px;}
-        .cs-coupon-rm{background:none;border:none;color:#888;font-size:15px;cursor:pointer;padding:0;}
-        /* Aria-live coupon status region — visually unchanged, screen-reader single source */
+        .cs-coupon-applied{
+          background:linear-gradient(135deg,#eef7ee,#e6f4e6);
+          border:1.5px solid #b8dab8;border-radius:10px;
+          padding:11px 14px;display:flex;align-items:center;justify-content:space-between;
+          font-size:13px;color:#276141;font-weight:700;gap:8px;
+        }
+        .cs-coupon-rm{
+          background:none;border:1px solid #b8dab8;color:#276141;
+          font-size:12px;cursor:pointer;padding:3px 9px;border-radius:7px;
+          transition:all .15s;font-family:inherit;font-weight:700;
+        }
+        .cs-coupon-rm:hover{background:#d4ecd4;}
         .cs-coupon-live{min-height:0;}
-        .cs-coupon-err{font-size:11px;color:#c0392b;display:block;margin-top:5px;}
-        .cs-prices{display:flex;flex-direction:column;gap:9px;}
-        .cs-row{display:flex;justify-content:space-between;align-items:center;
-          font-size:13px;color:#7a7565;}
-        .cs-row.green{color:#2d6a4f;font-weight:700;}
-        .cs-row .free{color:#2d6a4f;font-weight:700;}
-        .cs-row.muted{font-size:11px;color:#bbb;}
-        .cs-gst-note{font-size:11px;color:#bbb;text-align:right;margin-top:-4px;}
-        .cs-divider{height:1px;background:#e2dbd0;margin:4px 0;}
-        .cs-total{display:flex;justify-content:space-between;align-items:center;
+        .cs-coupon-err{font-size:11px;color:#a03030;display:block;margin-top:6px;font-weight:600;}
+        .cs-prices{display:flex;flex-direction:column;gap:10px;}
+        .cs-row{
+          display:flex;justify-content:space-between;align-items:center;
+          font-size:13px;color:#7a6e5f;
+        }
+        .cs-row.green{color:#276141;font-weight:700;}
+        .cs-row .free{color:#276141;font-weight:700;}
+        .cs-gst-note{font-size:11px;color:#b8aea0;text-align:right;margin-top:-5px;}
+        .cs-divider{
+          position:relative;height:1px;
+          background:linear-gradient(to right,transparent,#d8c9a8 20%,#d8c9a8 80%,transparent);
+          margin:6px 0;
+        }
+        .cs-divider::after{
+          content:'◆';position:absolute;left:50%;top:50%;
+          transform:translate(-50%,-50%);background:#fff;
+          padding:0 8px;font-size:8px;color:#c9a240;line-height:1;
+        }
+        .cs-total{
+          display:flex;justify-content:space-between;align-items:baseline;
           font-family:var(--font-playfair,'Playfair Display',serif);
-          font-size:20px;font-weight:700;color:#1a1a1a;}
-        .cs-save-pill{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;
-          padding:7px 11px;font-size:12px;font-weight:700;color:#2d6a4f;text-align:center;}
-        .cs-cta{display:flex;align-items:center;justify-content:space-between;
-          background:linear-gradient(135deg,#1a3a1e,#2d5233);
-          color:#fff;text-decoration:none;padding:15px 18px;border-radius:13px;
-          font-size:14px;font-weight:700;
-          box-shadow:0 4px 16px rgba(26,58,30,.32);
-          transition:all .28s cubic-bezier(.4,0,.2,1);
-          position:relative;overflow:hidden;}
-        .cs-cta:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(26,58,30,.45);}
+          font-size:22px;font-weight:700;color:#1a1611;
+        }
+        .cs-save-pill{
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          background:linear-gradient(135deg,#eef7ee,#e0f0e0);
+          border:1px solid #b8dab8;border-radius:10px;
+          padding:9px 14px;font-size:12.5px;font-weight:700;color:#276141;
+          text-align:center;letter-spacing:.1px;
+        }
+        .cs-cta{
+          display:flex;align-items:center;justify-content:space-between;
+          background:linear-gradient(135deg,#1a3a1e 0%,#2a5230 50%,#1a3a1e 100%);
+          background-size:200% 200%;
+          color:#fff;text-decoration:none;padding:16px 20px;border-radius:14px;
+          font-size:14px;font-weight:700;letter-spacing:.2px;
+          box-shadow:0 5px 20px rgba(26,58,30,.36),inset 0 1px 0 rgba(255,255,255,.08);
+          transition:all .32s cubic-bezier(.4,0,.2,1);
+          position:relative;overflow:hidden;
+        }
+        .cs-cta::before{
+          content:'';position:absolute;top:0;left:0;right:0;height:1px;
+          background:linear-gradient(90deg,transparent,rgba(201,162,64,.6),transparent);
+        }
+        .cs-cta:hover{
+          transform:translateY(-2px);
+          box-shadow:0 14px 36px rgba(26,58,30,.46),inset 0 1px 0 rgba(255,255,255,.08);
+          background-position:right center;
+        }
         .cs-cta:active{transform:translateY(0);}
-        .cs-cta--disabled{opacity:.5;cursor:not-allowed;pointer-events:none;box-shadow:none;transform:none;}
-        .cs-cta-amt{background:rgba(255,255,255,.2);padding:4px 11px;
-          border-radius:20px;font-size:14px;font-weight:800;}
-        .cs-continue{text-align:center;display:block;font-size:12px;color:#7a7565;
-          text-decoration:none;transition:color .2s;}
+        .cs-cta--disabled{opacity:.45;cursor:not-allowed;pointer-events:none;box-shadow:none;transform:none;}
+        .cs-cta-amt{
+          background:rgba(255,255,255,.15);padding:5px 13px;
+          border-radius:20px;font-size:14px;font-weight:800;
+          border:1px solid rgba(255,255,255,.2);
+        }
+        .cs-continue{
+          text-align:center;display:block;font-size:12px;color:#9a8e7e;
+          text-decoration:none;transition:color .2s;letter-spacing:.2px;padding:4px 0;
+        }
         .cs-continue:hover{color:#1a3a1e;}
-        .cs-trust{border-top:1px solid #ede8df;padding-top:12px;}
-        .cs-trust-row{display:flex;justify-content:space-between;font-size:11px;
-          color:#7a7565;margin-bottom:8px;flex-wrap:wrap;gap:3px;}
-        .cs-min-warn{background:#fff8e1;border:1px solid #ffe082;border-radius:10px;
-          padding:10px 13px;font-size:12px;color:#7a5c00;font-weight:600;line-height:1.4;}
-        .cs-logos{display:flex;gap:5px;flex-wrap:wrap;}
-        .cs-logo{font-size:10px;font-weight:800;padding:3px 7px;
-          border-radius:5px;color:#fff;letter-spacing:.3px;}
+        .cs-min-warn{
+          background:linear-gradient(135deg,#fefae8,#fdf5d0);
+          border:1px solid #e8d078;border-radius:11px;
+          padding:11px 14px;font-size:12px;color:#6b5000;font-weight:600;line-height:1.5;
+        }
+        .cs-trust{border-top:1px solid #ece4d8;padding-top:14px;display:flex;flex-direction:column;gap:10px;}
+        .cs-trust-row{
+          display:flex;justify-content:space-around;font-size:11px;
+          color:#9a8e7e;flex-wrap:wrap;gap:4px;
+        }
+        .cs-trust-row span{display:flex;align-items:center;gap:3px;font-weight:600;}
+        .cs-logos{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;}
+        .cs-logo{
+          font-size:9.5px;font-weight:900;padding:4px 8px;
+          border-radius:6px;color:#fff;letter-spacing:.4px;
+          box-shadow:0 1px 4px rgba(0,0,0,.18);
+        }
       `}</style>
     </div>
   )

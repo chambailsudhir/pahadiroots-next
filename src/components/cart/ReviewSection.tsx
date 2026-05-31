@@ -56,20 +56,42 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
         </div>
       )}
       <style>{`
-        .rv-card{background:#fff;border-radius:14px;
-          box-shadow:0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.03);
-          border:1px solid #e2dbd0;padding:18px 20px;}
-        .rv-heading{font-family:var(--font-playfair,'Playfair Display',serif);
-          font-size:15px;font-weight:700;color:#1a1a1a;margin:0 0 12px;}
-        .rv-body{text-align:center;padding:0 4px;}
-        .rv-stars{font-size:19px;color:#c8920a;letter-spacing:2px;margin-bottom:8px;}
-        .rv-text{font-family:var(--font-playfair,'Playfair Display',serif);
-          font-size:14px;color:#1a1a1a;font-style:italic;line-height:1.6;margin:0 0 6px;}
-        .rv-author{font-size:12px;color:#7a7565;font-weight:600;}
-        .rv-dots{display:flex;justify-content:center;gap:6px;margin-top:12px;}
-        .rv-dot{width:8px;height:8px;border-radius:50%;background:#ddd;border:none;
-          cursor:pointer;transition:all .2s;padding:0;}
-        .rv-dot.active{background:#1a3a1e;width:20px;border-radius:4px;}
+        .rv-card{
+          background:linear-gradient(160deg,#fdf9f2,#faf5e8);
+          border-radius:16px;
+          box-shadow:0 2px 14px rgba(26,22,17,.07),0 0 0 1px rgba(26,22,17,.04);
+          border:1px solid #e0d5c5;padding:20px 22px;
+        }
+        .rv-heading{
+          font-family:var(--font-playfair,'Playfair Display',serif);
+          font-size:14px;font-weight:700;color:#6b5620;margin:0 0 14px;
+          letter-spacing:.5px;text-transform:uppercase;
+          display:flex;align-items:center;gap:8px;
+        }
+        .rv-heading::before,.rv-heading::after{
+          content:'';flex:1;height:1px;
+          background:linear-gradient(to right,transparent,#d8c9a8);
+        }
+        .rv-heading::after{background:linear-gradient(to left,transparent,#d8c9a8);}
+        .rv-body{text-align:center;padding:0 6px;}
+        .rv-stars{
+          font-size:18px;color:#c9a240;letter-spacing:3px;margin-bottom:10px;
+          text-shadow:0 1px 4px rgba(201,162,64,.35);
+        }
+        .rv-text{
+          font-family:var(--font-playfair,'Playfair Display',serif);
+          font-size:14.5px;color:#1a1611;font-style:italic;
+          line-height:1.7;margin:0 0 8px;
+        }
+        .rv-author{font-size:11.5px;color:#9a8e7e;font-weight:700;letter-spacing:.3px;}
+        .rv-dots{display:flex;justify-content:center;gap:6px;margin-top:14px;}
+        .rv-dot{
+          width:7px;height:7px;border-radius:50%;
+          background:#d8c9a8;border:none;
+          cursor:pointer;transition:all .25s;padding:0;
+        }
+        .rv-dot.active{background:#c9a240;width:22px;border-radius:4px;}
+        .rv-dot:hover:not(.active){background:#b8a888;}
       `}</style>
     </div>
   )
