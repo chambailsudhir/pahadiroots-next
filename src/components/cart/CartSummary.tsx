@@ -30,7 +30,7 @@ const CartSummary = memo(function CartSummary({
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
 
   return (
-    <div className="cs-wrap">
+    <div className="cs-wrap" style={{ marginTop: '28px' }}>
       {/* Coupon */}
       <div className="cs-coupon">
         <div className="cs-coupon-head">🏷️ Have a coupon code?</div>
