@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { formatPrice } from '@/lib/utils'
 import type { SiteSettings } from '@/types'
 
@@ -57,27 +57,40 @@ export default function OrderSummary({
   const [showLoyalty,    setShowLoyalty]    = useState(false)
   const [loyaltyInput,   setLoyaltyInput]   = useState('')
 
-  const savingsBadge   = pricing.discount + pricing.prepaidDiscount + (loyaltyRedemption?.discount_inr ?? 0)
-  const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
-  const loyaltyEnabled = settings.loyalty_enabled === 'true'
-  const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '1')
-  const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
-  const pointsValue    = parseFloat(settings.loyalty_points_value || '0.25')
-  const loyaltyPts     = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
+  // useMemo — settings-derived values; only recalc when settings/pricing/loyalty change
+  const {
+    savingsBadge, prepaidPct, loyaltyEnabled, loyaltyRate, loyaltyLabel,
+    pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
+  } = useMemo(() => {
+    const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
+    const loyaltyEnabled = settings.loyalty_enabled === 'true'
+    const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '1')
+    const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
+    const pointsValue    = parseFloat(settings.loyalty_points_value || '0.25')
+    const loyaltyPts     = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
+    const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
+    const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
+    const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)
+    const cappedBalance  = Math.min(loyaltyBalance, maxRedeemPts)
+    const savingsBadge   = pricing.discount + pricing.prepaidDiscount + (loyaltyRedemption?.discount_inr ?? 0)
+    return {
+      savingsBadge, prepaidPct, loyaltyEnabled, loyaltyRate, loyaltyLabel,
+      pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
+    }
+  }, [settings, pricing, loyaltyBalance, loyaltyRedemption])
 
-  const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
-  const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
-  const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)
-  const cappedBalance  = Math.min(loyaltyBalance, maxRedeemPts)
-
-  const now     = new Date()
-  const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
-  const sameDay = istHour < 14
-  const minDays = (sameDay ? 0 : 1) + 3
-  const maxDays = (sameDay ? 0 : 1) + 5
-  const etaMin  = new Date(now); etaMin.setDate(now.getDate() + minDays)
-  const etaMax  = new Date(now); etaMax.setDate(now.getDate() + maxDays)
-  const fmt     = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+  // useMemo — ETA date calc; only recalc once per mount (time-of-day doesn't change mid-session)
+  const { sameDay, etaMinStr, etaMaxStr } = useMemo(() => {
+    const now     = new Date()
+    const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
+    const sameDay = istHour < 14
+    const minDays = (sameDay ? 0 : 1) + 3
+    const maxDays = (sameDay ? 0 : 1) + 5
+    const etaMin  = new Date(now); etaMin.setDate(now.getDate() + minDays)
+    const etaMax  = new Date(now); etaMax.setDate(now.getDate() + maxDays)
+    const fmt     = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+    return { sameDay, etaMinStr: fmt(etaMin), etaMaxStr: fmt(etaMax) }
+  }, [])
 
   async function handleApplyLoyalty() {
     const pts = parseInt(loyaltyInput, 10)
@@ -381,7 +394,7 @@ export default function OrderSummary({
         <div className="os-eta-icon">🚚</div>
         <div>
           <div className="os-eta-line">
-            Delivery by <strong>{fmt(etaMin)} – {fmt(etaMax)}</strong>
+            Delivery by <strong>{etaMinStr} – {etaMaxStr}</strong>
           </div>
           <div className="os-eta-sub">
             {sameDay ? 'Order now for today\'s dispatch!' : 'Order now for tomorrow\'s dispatch'}

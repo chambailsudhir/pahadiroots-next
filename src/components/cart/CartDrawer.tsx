@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
@@ -51,7 +51,11 @@ export default function CartDrawer({ settings }: Props) {
     return () => { document.body.style.overflow = '' }
   }, [isOpen])
 
-  const pricing = calcPriceSummary(items, settings, coupon, 'cod')
+  // useMemo — avoid recalculating pricing on every render (only recalc when deps change)
+  const pricing = useMemo(
+    () => calcPriceSummary(items, settings, coupon, 'cod'),
+    [items, settings, coupon]
+  )
 
   return (
     <>

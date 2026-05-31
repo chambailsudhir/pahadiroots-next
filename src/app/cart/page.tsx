@@ -19,7 +19,7 @@
  */
 
 import Link from 'next/link'
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
@@ -78,12 +78,16 @@ export default function CartPage() {
     Map<string, { name: string; timerId: ReturnType<typeof setTimeout> }>
   >(new Map())
 
-  const freeShipMin = parseFloat(s.free_shipping_min || '0') || 0
-  const pricing     = calcPriceSummary(items, s, coupon, 'cod')
+  const freeShipMin = useMemo(() => parseFloat(s.free_shipping_min || '0') || 0, [s.free_shipping_min])
+  // useMemo — calcPriceSummary is non-trivial; skip recalculation when deps are unchanged
+  const pricing     = useMemo(() => calcPriceSummary(items, s, coupon, 'cod'), [items, s, coupon])
   // Use pricing.progressBase (= afterDiscount) — NOT pricing.subtotal — so the bar
   // always matches the engine. subtotal ignores coupon/loyalty; afterDiscount does not.
-  const progressPct = freeShipMin > 0 ? Math.min(100, (pricing.progressBase / freeShipMin) * 100) : 100
-  const totalQty    = items.reduce((sum, i) => sum + i.qty, 0)
+  const progressPct = useMemo(
+    () => freeShipMin > 0 ? Math.min(100, (pricing.progressBase / freeShipMin) * 100) : 100,
+    [freeShipMin, pricing.progressBase]
+  )
+  const totalQty    = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items])
 
   // Analytics
   const analytics = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })

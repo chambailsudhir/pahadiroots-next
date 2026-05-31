@@ -4,17 +4,33 @@ import { memo } from 'react'
 
 // Issue 11 — Product storytelling: farmer story, sourcing journey, certifications
 // These values can later be driven from site_settings keys like:
-//   story_headline, story_body, story_farmer_region, certifications_list
+//   story_headline, story_body, certifications_list
 // For now uses the brand story — swap strings via admin settings when ready.
 
+// Static arrays outside component — not recreated on every render
+const CERTS = [
+  { icon:'✅', label:'100% Natural',      sub:'No pesticides'       },
+  { icon:'🏔', label:'Himalayan Source',  sub:'High altitude farms' },
+  { icon:'🤝', label:'Farmer Direct',     sub:'No middlemen'        },
+  { icon:'🧪', label:'No Chemicals',      sub:'Traditional methods' },
+  { icon:'📦', label:'Small Batch',       sub:'Limited, fresh stock'},
+  { icon:'💚', label:'Eco Packaged',      sub:'Minimal plastic'     },
+] as const
+
+const STEPS = [
+  { icon:'🌱', step:'Grown',     desc:'High altitude farms'  },
+  { icon:'🧺', step:'Harvested', desc:'Traditional methods'  },
+  { icon:'🔍', step:'Inspected', desc:'Quality checked'      },
+  { icon:'📦', step:'Packed',    desc:'Small batch'          },
+  { icon:'🚚', step:'Delivered', desc:'To your door'         },
+] as const
+
 interface Props {
-  farmerRegion?: string  // e.g. "Uttarakhand & Himachal Pradesh"
   headline?: string
   body?: string
 }
 
 const PahadiStoryCard = memo(function PahadiStoryCard({
-  farmerRegion = 'Uttarakhand & Himachal Pradesh',
   headline = 'From Himalayan Farms to Your Doorstep',
   body = 'Every product you order supports small-batch Pahadi farmers practicing traditional, chemical-free agriculture. We source directly — no middlemen, fair prices, and the freshest possible produce.',
 }: Props) {
@@ -22,24 +38,14 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
     <div className="ps-card">
       <div className="ps-header">
         <span className="ps-leaf">🌿</span>
-        <div>
-          <div className="ps-headline">{headline}</div>
-          <div className="ps-region">📍 {farmerRegion}</div>
-        </div>
+        <div className="ps-headline">{headline}</div>
       </div>
 
       <p className="ps-body">{body}</p>
 
       {/* Certifications */}
       <div className="ps-certs">
-        {[
-          { icon:'✅', label:'100% Natural', sub:'No pesticides' },
-          { icon:'🏔', label:'Himalayan Source', sub:'High altitude farms' },
-          { icon:'🤝', label:'Farmer Direct', sub:'No middlemen' },
-          { icon:'🧪', label:'No Chemicals', sub:'Traditional methods' },
-          { icon:'📦', label:'Small Batch', sub:'Limited, fresh stock' },
-          { icon:'💚', label:'Eco Packaged', sub:'Minimal plastic' },
-        ].map(c => (
+        {CERTS.map(c => (
           <div key={c.label} className="ps-cert">
             <span className="ps-cert-icon">{c.icon}</span>
             <div>
@@ -54,13 +60,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
       <div className="ps-journey">
         <div className="ps-journey-title">Our Sourcing Journey</div>
         <div className="ps-steps">
-          {[
-            { icon:'🌱', step:'Grown', desc:'High altitude farms' },
-            { icon:'🧺', step:'Harvested', desc:'Traditional methods' },
-            { icon:'🔍', step:'Inspected', desc:'Quality checked' },
-            { icon:'📦', step:'Packed', desc:'Small batch' },
-            { icon:'🚚', step:'Delivered', desc:'To your door' },
-          ].map((s, i) => (
+          {STEPS.map((s, i) => (
             <div key={s.step} className="ps-step-wrap">
               <div className="ps-step">
                 <div className="ps-step-icon">{s.icon}</div>
@@ -86,13 +86,12 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
           background:linear-gradient(90deg,transparent 5%,#c9a240 40%,#e8c060 60%,transparent 95%);
           opacity:.7;
         }
-        .ps-header{display:flex;align-items:flex-start;gap:13px;margin-bottom:14px;}
-        .ps-leaf{font-size:30px;flex-shrink:0;margin-top:2px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3));}
+        .ps-header{display:flex;align-items:center;gap:13px;margin-bottom:14px;}
+        .ps-leaf{font-size:30px;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3));}
         .ps-headline{
           font-family:var(--font-playfair,'Playfair Display',serif);
           font-size:16px;font-weight:700;line-height:1.35;color:#fff;letter-spacing:.1px;
         }
-        .ps-region{font-size:11px;color:rgba(255,255,255,.55);margin-top:4px;letter-spacing:.2px;}
         .ps-body{
           font-size:12.5px;color:rgba(255,255,255,.72);line-height:1.7;
           margin:0 0 18px;border-top:1px solid rgba(255,255,255,.1);padding-top:14px;
