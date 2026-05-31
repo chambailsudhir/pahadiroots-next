@@ -33,7 +33,7 @@ const CartSummary = memo(function CartSummary({
     <div className="cs-wrap">
       {/* Coupon */}
       <div className="cs-coupon">
-        <div className="cs-coupon-head">🏷 Have a coupon code?</div>
+        <div className="cs-coupon-head">🏷️ Have a coupon code?</div>
         <div className="cs-coupon-body">
         {coupon ? (
           <div className="cs-coupon-applied">
@@ -141,16 +141,18 @@ const CartSummary = memo(function CartSummary({
         @keyframes cs-spin{to{transform:rotate(360deg)}}
         .cs-wrap{padding:22px 24px;display:flex;flex-direction:column;gap:16px;}
         .cs-coupon{
-          border:1.5px dashed #d8c9a8;border-radius:14px;overflow:hidden;
-          background:linear-gradient(135deg,#fdf9f2,#faf5ea);
+          border:1px solid #e8e0d4;border-radius:14px;overflow:hidden;
+          background:#fff;
+          box-shadow:0 2px 12px rgba(26,22,17,.06);
         }
         .cs-coupon-head{
-          font-size:11px;font-weight:800;color:#6b5620;
-          letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:6px;
-          padding:14px 16px;
-          border-bottom:1px solid #e8d8b8;
+          font-size:13px;font-weight:700;color:#1a1611;
+          display:flex;align-items:center;gap:6px;
+          padding:16px 18px 14px;
+          border-bottom:1px solid #ece4d8;
+          background:#fff;
         }
-        .cs-coupon-body{padding:14px 16px;}
+        .cs-coupon-body{padding:16px 18px;}
         .cs-coupon-row{display:flex;gap:8px;}
         .cs-coupon-input{
           flex:1;border:1.5px solid #e0d5c0;border-radius:9px;
