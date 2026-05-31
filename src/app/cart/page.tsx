@@ -618,6 +618,7 @@ const PAGE_CSS = `
 .cp-right-inner{
   max-height:calc(100vh - 134px);
   overflow-y:auto;overflow-x:hidden;
+  padding:28px 0 0;
 }
 /* Short viewports — un-stick so CTA is never clipped below fold */
 @media(max-height:700px){

@@ -139,7 +139,7 @@ const CartSummary = memo(function CartSummary({
 
       <style>{`
         @keyframes cs-spin{to{transform:rotate(360deg)}}
-        .cs-wrap{padding:22px 24px;display:flex;flex-direction:column;gap:16px;}
+        .cs-wrap{padding:0 24px 22px;display:flex;flex-direction:column;gap:16px;}
         .cs-coupon{
           border:1px solid #e8e0d4;border-radius:14px;overflow:hidden;
           background:#fff;
