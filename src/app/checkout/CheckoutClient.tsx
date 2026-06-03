@@ -140,8 +140,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         const validLabels = ['Home','Office','Parents','Friends','Others'] as const
         const lbl = validLabels.find(l => l === a.label) || 'Home'
         return { ...prev, name: a.name||fullName||prev.name, phone: a.phone||cleanPhone||prev.phone,
-          flat: a.addr||a.flat||'', area: a.area||'', city: a.city||'',
-          state: matchState(a.state), pincode: a.pin||a.pincode||'', label: lbl }
+          flat: a.flat||'', area: a.area||'', city: a.city||'',
+          state: matchState(a.state), pincode: a.pincode||'', label: lbl }
       }
       return { ...prev, name: prev.name||fullName, phone: prev.phone||cleanPhone }
     })
@@ -170,8 +170,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         const validLabels = ['Home','Office','Parents','Friends','Others'] as const
         const lbl = validLabels.find(l => l === a.label) || 'Home'
         return { ...base, name: a.name||fullName, phone: a.phone||cleanPhone,
-          flat: a.addr||a.flat||'', area: a.area||'', city: a.city||'',
-          state: matchState(a.state), pincode: a.pin||a.pincode||'', label: lbl }
+          flat: a.flat||'', area: a.area||'', city: a.city||'',
+          state: matchState(a.state), pincode: a.pincode||'', label: lbl }
       }
       return { ...base, name: fullName, phone: cleanPhone }
     } catch { return base }
@@ -252,8 +252,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
         const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
         const defaultAddr = prof.address_line1 ? [{
-          _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
-          area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
+          id: 'default', is_default: true, label:'Home' as const, name:fullName||'', flat:prof.address_line1||'',
+          area:'', city:prof.city||'', state:prof.state||'', pincode:prof.pincode||'', phone:cleanPhone||'',
         }] : []
         const saved = parseSavedAddresses(prof.saved_addresses).filter((a: SavedAddress) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
@@ -284,8 +284,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
       ...prev, name:saved.name||prev.name, phone:saved.phone||prev.phone,
-      flat:saved.addr||saved.flat||'', area:saved.area||'', city:saved.city||'',
-      state:matchState(saved.state), pincode:saved.pin||saved.pincode||'', label:lbl,
+      flat:saved.flat||'', area:saved.area||'', city:saved.city||'',
+      state:matchState(saved.state), pincode:saved.pincode||'', label:lbl,
     }))
     setSelectedSavedIdx(idx)
     setTouched({ name:true, phone:true, flat:true, city:true, state:true, pincode:true })
