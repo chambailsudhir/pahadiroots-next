@@ -57,8 +57,9 @@ export function buildCacheEntry(prof: RawProfile): CachedProfile {
     phone:      cleanPhone,
   }] : []
 
+  const validLabels = new Set(['Home','Office','Parents','Friends','Others'])
   const saved = parseSavedAddresses(prof.saved_addresses)
-    .filter((a: SavedAddress) => a.label !== 'Default')
+    .filter((a: SavedAddress) => validLabels.has(a.label ?? ''))
 
   return {
     ts:        Date.now(),

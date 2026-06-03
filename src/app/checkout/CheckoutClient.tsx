@@ -255,7 +255,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           id: 'default', is_default: true, label:'Home' as const, name:fullName||'', flat:prof.address_line1||'',
           area:'', city:prof.city||'', state:prof.state||'', pincode:prof.pincode||'', phone:cleanPhone||'',
         }] : []
-        const saved = parseSavedAddresses(prof.saved_addresses).filter((a: SavedAddress) => a.label !== 'Default')
+        const validLabels = new Set(['Home','Office','Parents','Friends','Others'])
+        const saved = parseSavedAddresses(prof.saved_addresses).filter((a: SavedAddress) => validLabels.has(a.label ?? ''))
         const all   = [...defaultAddr, ...saved]
         writeProfileCache(prof, all)
         applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs)
