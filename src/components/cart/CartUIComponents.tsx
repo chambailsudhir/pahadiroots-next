@@ -53,7 +53,12 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty, minO
         <div className="scc-sub">{totalQty} item{totalQty > 1 ? 's' : ''} · Incl. taxes</div>
       </div>
       {belowMinOrder ? (
-        <span className="scc-btn scc-btn--disabled" aria-disabled="true">🔒 Checkout</span>
+        <button
+          className="scc-btn scc-btn--disabled"
+          disabled
+          aria-disabled="true"
+          title={`Minimum order ₹${minOrderAmt}`}
+        >🔒 Checkout</button>
       ) : (
         <Link href="/checkout" className="scc-btn">🔒 Checkout</Link>
       )}

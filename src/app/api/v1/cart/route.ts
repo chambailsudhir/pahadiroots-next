@@ -1,10 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { subscribeSchema, reviewSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
+import { checkCsrf, getToken } from '@/lib/api/serverUtils'
 import DOMPurify from 'isomorphic-dompurify'
 import { Resend } from 'resend'
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // ── CSRF guard — protects subscribe, submit_review, contact ──────────────
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   try {
     const body   = await req.json()
     const action = body.action as string
@@ -25,6 +30,12 @@ export async function POST(req: Request) {
     }
 
     if (action === 'submit_review') {
+      // ── Auth check — only logged-in users may submit reviews ─────────────
+      const token = getToken(req)
+      if (!token) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+      }
+
       const parsed = reviewSchema.safeParse(body)
       if (!parsed.success) {
         return NextResponse.json({ error: 'Invalid review data' }, { status: 400 })
@@ -72,8 +83,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
   } catch (err: unknown) {
-    console.error('[cart API]', err)
-    const message = err instanceof Error ? err.message : 'Server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const internalMessage = err instanceof Error ? err.message : 'Server error'
+    console.error('[cart API]', internalMessage)
+    const clientMessage = process.env.NODE_ENV === 'production'
+      ? 'Something went wrong. Please try again.'
+      : internalMessage
+    return NextResponse.json({ error: clientMessage }, { status: 500 })
   }
 }

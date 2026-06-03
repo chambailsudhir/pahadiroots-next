@@ -14,7 +14,12 @@
 import { NextResponse } from 'next/server'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
+// Use the anon key for this public GET endpoint — the service key would grant
+// full DB write access if ever leaked. Row-level security on `coupons` must
+// allow anon SELECT on non-sensitive columns (code, type, value, min_order,
+// expires_at, is_active) for this to work. Internal fields (uses_count,
+// max_uses, max_discount, first_order_only) are excluded by the select list.
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // Only select the columns needed to render a hint label.
 // max_uses, uses_count, max_discount, first_order_only are excluded.
@@ -33,8 +38,8 @@ export async function GET() {
     const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&select=${HINT_SELECT}&order=value.desc&limit=5`
     const res = await fetch(url, {
       headers: {
-        apikey:        SERVICE_KEY,
-        Authorization: `Bearer ${SERVICE_KEY}`,
+        apikey:        ANON_KEY,
+        Authorization: `Bearer ${ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       next: { revalidate: 120 }, // cache 2 min — hints don't need to be real-time

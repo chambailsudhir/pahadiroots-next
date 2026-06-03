@@ -6,6 +6,8 @@ import { formatPrice } from '@/lib/utils'
 import type { CartItem, AppliedCoupon } from '@/types'
 import type { PriceSummary } from '@/lib/services/pricingService'
 
+interface CouponHint { code: string; label: string }
+
 interface Props {
   items: CartItem[]
   totalQty: number
@@ -17,6 +19,8 @@ interface Props {
   onCouponCodeChange: (v: string) => void
   couponLoading: boolean
   couponError: string
+  couponHints?: CouponHint[]
+  onApplyHint?: (code: string) => void
   minOrderAmt?: number
 }
 
@@ -25,6 +29,7 @@ const CartSummary = memo(function CartSummary({
   onApplyCoupon, onRemoveCoupon,
   couponCode, onCouponCodeChange,
   couponLoading, couponError,
+  couponHints = [], onApplyHint,
   minOrderAmt = 0,
 }: Props) {
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
@@ -63,6 +68,23 @@ const CartSummary = memo(function CartSummary({
         <div aria-live="polite" aria-atomic="true" className="cs-coupon-live">
           {couponError && <span className="cs-coupon-err">⚠ {couponError}</span>}
         </div>
+        {/* Coupon hints — quick-apply pills from /api/v1/coupon-hints */}
+        {!coupon && couponHints.length > 0 && (
+          <div className="cs-coupon-hints" role="group" aria-label="Available coupon codes">
+            {couponHints.map(h => (
+              <button
+                key={h.code}
+                className="cs-coupon-hint-btn"
+                type="button"
+                onClick={() => onApplyHint?.(h.code)}
+                aria-label={`Apply coupon ${h.code}: ${h.label}`}
+              >
+                <span className="cs-hint-code">{h.code}</span>
+                <span className="cs-hint-label">{h.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
         </div>
       </div>
 

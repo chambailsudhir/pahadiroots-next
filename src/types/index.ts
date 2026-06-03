@@ -295,3 +295,17 @@ export interface SavedAddress extends OrderAddress {
   id: string
   is_default: boolean
 }
+
+/** Raw profile object returned by /api/v1/profile or the profile cache. */
+export interface RawProfile {
+  first_name:       string | null
+  last_name:        string | null
+  phone:            string | null
+  email:            string | null
+  address_line1:    string | null
+  address_line2?:   string | null
+  city?:            string | null
+  state?:           string | null
+  pincode?:         string | null
+  saved_addresses?: string | null   // JSON-stringified SavedAddress[]
+}

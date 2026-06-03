@@ -1,12 +1,34 @@
 'use client'
 
+/** Minimal Razorpay options type — avoids `window as any` at the call site. */
+interface RazorpayResponse {
+  razorpay_order_id:   string
+  razorpay_payment_id: string
+  razorpay_signature:  string
+}
+
+interface RazorpayOptions {
+  key:         string
+  amount:      number
+  currency:    string
+  order_id:    string
+  name:        string
+  description: string
+  image:       string
+  prefill:     { name: string; email: string; contact: string }
+  notes:       Record<string, string>
+  theme:       { color: string }
+  handler:     (response: RazorpayResponse) => void
+  modal:       { ondismiss: () => void }
+}
+
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
-import type { SiteSettings, OrderAddress } from '@/types'
+import type { SiteSettings, OrderAddress, SavedAddress, RawProfile } from '@/types'
 
 import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
 import ShippingProgress     from '@/components/checkout/ShippingProgress'
@@ -43,9 +65,9 @@ function matchState(stored: string | undefined | null): string {
   return has || s
 }
 
-function parseSavedAddresses(raw: string | undefined | null): any[] {
+function parseSavedAddresses(raw: string | undefined | null): SavedAddress[] {
   if (!raw) return []
-  try { return JSON.parse(raw) } catch { return [] }
+  try { return JSON.parse(raw) as SavedAddress[] } catch { return [] }
 }
 
 export function CheckoutClient({ settings }: { settings: SiteSettings }) {
@@ -91,7 +113,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const [loyaltyLoading,    setLoyaltyLoading]    = useState(false)
   const [loyaltyError,      setLoyaltyError]      = useState('')
 
-  const [savedAddrs,       setSavedAddrs]       = useState<any[]>(() => {
+  const [savedAddrs,       setSavedAddrs]       = useState<SavedAddress[]>(() => {
     if (typeof window === 'undefined') return []
     try { return readProfileCache()?.addresses || [] } catch { return [] }
   })
@@ -103,11 +125,11 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const [touched,          setTouched]           = useState<Record<string, boolean>>({})
 
   function readProfileCache() { return _readProfileCache() }
-  function writeProfileCache(profile: any, addresses: any[]) {
+  function writeProfileCache(profile: RawProfile, addresses: SavedAddress[]) {
     _writeProfileCache({ ts: Date.now(), profile, addresses })
   }
 
-  function applyProfileData(prof: any, allAddrs: any[], setAddrFn: typeof setAddr, setEmailFn: typeof setEmail, setSavedFn: typeof setSavedAddrs) {
+  function applyProfileData(prof: RawProfile, allAddrs: SavedAddress[], setAddrFn: typeof setAddr, setEmailFn: typeof setEmail, setSavedFn: typeof setSavedAddrs) {
     if (!prof) return
     const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
     const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
@@ -212,7 +234,13 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       .catch(() => {})
   }, [s.loyalty_enabled])
 
-  // Background profile refresh
+  // Background profile refresh — runs once on mount.
+  // applyProfileDataRef holds the latest applyProfileData so the effect
+  // doesn't need to list it as a dep (it's stable in practice but defined
+  // inside the component, so this avoids the suppression cleanly).
+  const applyProfileDataRef = useRef(applyProfileData)
+  useEffect(() => { applyProfileDataRef.current = applyProfileData })
+
   useEffect(() => {
     const ctrl = new AbortController()
     fetch('/api/profile', { signal: ctrl.signal })
@@ -227,16 +255,15 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           _isDefault:true, label:'Home' as const, name:fullName||'', addr:prof.address_line1||'',
           area:'', city:prof.city||'', state:prof.state||'', pin:prof.postal_code||'', phone:cleanPhone||'',
         }] : []
-        const saved = parseSavedAddresses(prof.saved_addresses).filter((a:any) => a.label !== 'Default')
+        const saved = parseSavedAddresses(prof.saved_addresses).filter((a: SavedAddress) => a.label !== 'Default')
         const all   = [...defaultAddr, ...saved]
         writeProfileCache(prof, all)
-        applyProfileData(prof, all, setAddr, setEmail, setSavedAddrs)
+        applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs)
         if (all.length > 0) setSelectedSavedIdx(0)
       })
       .catch(() => {})
     return () => ctrl.abort()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // intentionally mount-only — background profile prefill
 
   useEffect(() => {
     fetch('/api/v1/coupon-hints').then(async r => {
@@ -252,7 +279,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   }
   function touchField(field: string) { setTouched(prev => ({ ...prev, [field]: true })) }
 
-  function applySaved(saved: any, idx: number) {
+  function applySaved(saved: SavedAddress, idx: number) {
     const validLabels = ['Home','Office','Parents','Friends','Others'] as const
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
@@ -276,7 +303,11 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); trackCouponError(couponCode, data.error || 'invalid'); return }
       applyCoupon(data.coupon); setCouponCode('')
       trackCouponApplied(data.coupon.code, data.coupon.discount)
-    } catch { setCouponError('Failed to apply coupon') }
+    } catch (e: unknown) {
+      const reason = e instanceof Error ? e.message : 'network_error'
+      setCouponError('Failed to apply coupon')
+      trackCouponError(couponCode, reason)
+    }
     finally  { setCouponLoading(false) }
   }
 
@@ -374,7 +405,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         clearCart()
         router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricingTotal}`)
       } else {
-        const RZP = (window as any).Razorpay
+        const RZP = (window as Window & { Razorpay?: new (opts: RazorpayOptions) => { open(): void } }).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
         const res  = await fetch('/api/v1/payments', {
           method:'POST', headers:{ 'Content-Type':'application/json' },
@@ -393,7 +424,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           prefill:   { name: addr.name, email: email || user?.email || '', contact: addr.phone },
           notes:     { db_order_id: data.order_id },
           theme:     { color: '#2C4A2E' },
-          handler: async (response: any) => {
+          handler: async (response: RazorpayResponse) => {
             try {
               const verRes = await fetch('/api/v1/payments', {
                 method: 'POST',
@@ -427,8 +458,9 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               orderPlacedRef.current = true
               clearCart()
               router.replace(`/order-success?id=${verData.order_number || ''}&method=razorpay&total=${pricingTotal}`)
-            } catch (e:any) {
-              setError(e.message || 'Payment verified but order save failed. Contact support with payment ID: ' + response.razorpay_payment_id)
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
+              setError(msg + ' Contact support with payment ID: ' + response.razorpay_payment_id)
               setPlacing(false)
             }
           },
@@ -437,7 +469,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         trackPaymentInitiated(pricingTotal)
         rzp.open(); return
       }
-    } catch (e:any) { setError(e.message || 'Something went wrong.'); setPlacing(false) }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Something went wrong.'); setPlacing(false) }
   }, [addr, email, items, coupon, loyaltyRedemption, idempotencyKey, ensureIdempotencyKey, payMethod, user, clearCart, router, razorpayKeyId, trackOrderPlaced, trackPaymentInitiated, trackPaymentVerified, pricingShipping, pricingTotal, waNumber])
 
   if (!storeReady) return <CheckoutSkeleton />

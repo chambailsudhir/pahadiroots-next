@@ -53,6 +53,14 @@ interface EventPayload {
   [key: string]: string | number | boolean | undefined
 }
 
+/** Typed extension of Window for analytics SDKs loaded via CDN snippets. */
+interface AnalyticsWindow extends Window {
+  gtag?:      (...args: unknown[]) => void
+  dataLayer?: Record<string, unknown>[]
+  posthog?:   { capture: (event: string, props?: Record<string, unknown>) => void }
+  mixpanel?:  { track:   (event: string, props?: Record<string, unknown>) => void }
+}
+
 function dispatch(event: AnalyticsEvent, payload: EventPayload = {}) {
   const isDev = process.env.NODE_ENV === 'development'
 
@@ -65,7 +73,7 @@ function dispatch(event: AnalyticsEvent, payload: EventPayload = {}) {
 
   // Google Analytics 4
   if (typeof window !== 'undefined') {
-    const win = window as any
+    const win = window as AnalyticsWindow
     if (typeof win.gtag === 'function') {
       win.gtag('event', event, payload)
     }
@@ -203,5 +211,13 @@ export function useCartAnalytics({ itemCount, subtotal }: CartAnalyticsOptions) 
     dispatch('quantity_changed', { product_name: productName, old_qty: oldQty, new_qty: newQty })
   }, [])
 
-  return { trackUpsellAdded, trackItemRemoved, trackQuantityChanged }
+  const trackCouponApplied = useCallback((code: string, discount: number) => {
+    dispatch('coupon_applied', { coupon_code: code, discount_amount: discount, currency: 'INR' })
+  }, [])
+
+  const trackCouponError = useCallback((code: string, reason: string) => {
+    dispatch('coupon_error', { coupon_code: code, reason })
+  }, [])
+
+  return { trackUpsellAdded, trackItemRemoved, trackQuantityChanged, trackCouponApplied, trackCouponError }
 }

@@ -69,7 +69,8 @@ export default function CartPage() {
     qtyAnim, pendingRemovals,
     freeShipMin, pricing, progressPct, totalQty,
     handleQtyChange, handleRemove, handleUndoRemove,
-    handleUpsellAdd, handleCoupon,
+    handleUpsellAdd, handleCoupon, handleApplyHint,
+    couponHints,
   } = useCartPage()
 
   // Render guards
@@ -106,11 +107,13 @@ export default function CartPage() {
 
       {/* ── Checkout progress steps ────────────────────────────────────────── */}
       <nav className="cp-steps" aria-label="Checkout progress">
-        <div className="cp-step cp-step-active" aria-current="step"><span aria-hidden="true">1</span> Cart</div>
-        <div className="cp-step-line" aria-hidden="true" />
-        <div className="cp-step"><span aria-hidden="true">2</span> Checkout</div>
-        <div className="cp-step-line" aria-hidden="true" />
-        <div className="cp-step"><span aria-hidden="true">3</span> Confirmation</div>
+        <ol className="cp-steps-list">
+          <li className="cp-step cp-step-active" aria-current="step"><span aria-hidden="true">1</span> Cart</li>
+          <li className="cp-step-line" aria-hidden="true" />
+          <li className="cp-step"><span aria-hidden="true">2</span> Checkout</li>
+          <li className="cp-step-line" aria-hidden="true" />
+          <li className="cp-step"><span aria-hidden="true">3</span> Confirmation</li>
+        </ol>
       </nav>
 
       <div className="cp-layout">
@@ -234,6 +237,8 @@ export default function CartPage() {
               onCouponCodeChange={setCouponCode}
               couponLoading={couponLoading}
               couponError={couponError}
+              couponHints={couponHints}
+              onApplyHint={handleApplyHint}
               minOrderAmt={minOrderAmt}
             />
           </div>

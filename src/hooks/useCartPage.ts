@@ -34,6 +34,23 @@ import { calcPriceSummary }   from '@/lib/services/pricingService'
 import { useCartAnalytics }   from '@/hooks/useCheckoutAnalytics'
 import type { SiteSettings, UpsellItem } from '@/types'
 
+// ─── Retry helper ─────────────────────────────────────────────────────────────
+// Retries a fetch up to `maxRetries` times on network / 5xx errors with
+// exponential back-off.  4xx errors (bad request, not-found) are NOT retried.
+async function fetchWithRetry(
+  input: RequestInfo,
+  init?: RequestInit,
+  maxRetries = 2,
+): Promise<Response> {
+  let attempt = 0
+  while (true) {
+    const res = await fetch(input, init)
+    if (res.ok || res.status < 500 || attempt >= maxRetries) return res
+    attempt++
+    await new Promise(r => setTimeout(r, 300 * 2 ** attempt)) // 600 ms, 1200 ms
+  }
+}
+
 // ─── Fallback reviews ─────────────────────────────────────────────────────────
 // Defined at module level — not recreated on every render.
 const FALLBACK_REVIEWS: CartReview[] = [
@@ -68,6 +85,7 @@ export function useCartPage() {
   const [couponCode,      setCouponCode]      = useState('')
   const [couponLoading,   setCouponLoading]   = useState(false)
   const [couponError,     setCouponError]     = useState('')
+  const [couponHints,     setCouponHints]     = useState<Array<{code: string; label: string}>>([])
 
   const [upsellItems,     setUpsellItems]     = useState<UpsellItem[]>([])
   const [upsellLoading,   setUpsellLoading]   = useState(true)
@@ -143,7 +161,7 @@ export function useCartPage() {
   // Fix 6 (SRP): previously part of the monolithic store-data fetch.
   // Now a dedicated lightweight endpoint — ~15 keys instead of the full table.
   useEffect(() => {
-    fetch('/api/v1/cart-settings')
+    fetchWithRetry('/api/v1/cart-settings')
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-settings ${r.status}`)))
       .then((data: { settings: Partial<SiteSettings> }) => {
         const ss = data.settings ?? {}
@@ -166,6 +184,21 @@ export function useCartPage() {
       })
   }, []) // settings are stable for the session lifetime; fetch once
 
+  // ── Coupon hints fetch ─────────────────────────────────────────────────────
+  // Fetches available quick-apply coupons once on mount. Uses the anon-key
+  // endpoint so no service-key credentials are involved.
+  useEffect(() => {
+    fetchWithRetry('/api/v1/coupon-hints')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`coupon-hints ${r.status}`)))
+      .then((data: { hints: Array<{code: string; label: string}> }) => {
+        setCouponHints(data.hints ?? [])
+      })
+      .catch((err: unknown) => {
+        // Non-fatal — hints are a UX enhancement, not required for checkout
+        console.error('[useCartPage] coupon-hints fetch failed:', err)
+      })
+  }, [])
+
   // ── Upsells fetch ──────────────────────────────────────────────────────────
   // Fix 4 (part B): was using eslint-disable-next-line react-hooks/exhaustive-deps
   // because `items` was accessed inside but not listed in deps.
@@ -183,7 +216,7 @@ export function useCartPage() {
     setUpsellLoading(true)
     setUpsellError(false)
 
-    fetch(`/api/v1/cart-upsells?${params}`)
+    fetchWithRetry(`/api/v1/cart-upsells?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-upsells ${r.status}`)))
       .then((data: { upsells: UpsellItem[] }) => setUpsellItems(data.upsells ?? []))
       .catch((err: unknown) => {
@@ -253,8 +286,7 @@ export function useCartPage() {
     setAddedUpsell(a => [...a, p.id])
   }, [addedUpsell, addItem, analytics])
 
-  const handleCoupon = useCallback(async () => {
-    if (!couponCode.trim()) return
+  const handleCoupon = useCallback(async () => {    if (!couponCode.trim()) return
     setCouponLoading(true)
     setCouponError('')
     try {
@@ -267,15 +299,56 @@ export function useCartPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setCouponError(data.error ?? 'Invalid coupon'); return }
+      if (!res.ok) {
+        const reason = data.error ?? 'invalid'
+        setCouponError(reason)
+        analytics.trackCouponError(couponCode, reason)
+        return
+      }
       applyCoupon(data.coupon)
+      analytics.trackCouponApplied(data.coupon.code, data.coupon.discount)
       setCouponCode('')
-    } catch {
+    } catch (e: unknown) {
+      const reason = e instanceof Error ? e.message : 'network_error'
       setCouponError('Failed to apply coupon')
+      analytics.trackCouponError(couponCode, reason)
     } finally {
       setCouponLoading(false)
     }
-  }, [couponCode, pricing.subtotal, applyCoupon])
+  }, [couponCode, pricing.subtotal, applyCoupon, analytics])
+
+  // Clicking a coupon hint pill pre-fills the code and immediately applies it
+  const handleApplyHint = useCallback((code: string) => {
+    setCouponCode(code)
+    // Schedule coupon apply on next tick so setCouponCode state is flushed first
+    setTimeout(async () => {
+      setCouponLoading(true)
+      setCouponError('')
+      try {
+        const res  = await fetch('/api/v1/coupons', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ code: code.toUpperCase(), subtotal: pricing.subtotal }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          const reason = data.error ?? 'invalid'
+          setCouponError(reason)
+          analytics.trackCouponError(code, reason)
+          return
+        }
+        applyCoupon(data.coupon)
+        analytics.trackCouponApplied(data.coupon.code, data.coupon.discount)
+        setCouponCode('')
+      } catch (e: unknown) {
+        const reason = e instanceof Error ? e.message : 'network_error'
+        setCouponError('Failed to apply coupon')
+        analytics.trackCouponError(code, reason)
+      } finally {
+        setCouponLoading(false)
+      }
+    }, 0)
+  }, [pricing.subtotal, applyCoupon, analytics])
 
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
@@ -289,6 +362,7 @@ export function useCartPage() {
     setCouponCode,
     couponLoading,
     couponError,
+    couponHints,
 
     // upsells
     upsellItems,
@@ -316,5 +390,6 @@ export function useCartPage() {
     handleUndoRemove,
     handleUpsellAdd,
     handleCoupon,
+    handleApplyHint,
   } as const
 }

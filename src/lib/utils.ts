@@ -67,6 +67,28 @@ export function calcGST(price: number, gstRate: number, qty = 1): number {
   return Math.round((price * qty * gstRate) / (100 + gstRate))
 }
 
+/**
+ * Split total GST into CGST + SGST (intra-state) or return IGST (inter-state).
+ *
+ * CRITICAL: Never use Math.round for both halves — for odd-paise GST amounts
+ * (e.g. ₹5 total GST = 2.5 + 2.5 paise) double-rounding produces 3+3=6 ≠ 5.
+ * Fix: floor the first half, assign the remainder to the second.
+ *
+ * @param gstPaise   Total GST in paise (integer, output of calcGST * 100)
+ * @param interState True when supplier state ≠ customer state → single IGST line
+ */
+export function splitGST(
+  gstPaise: number,
+  interState = false,
+): { cgst: number; sgst: number; igst: number } {
+  if (interState) {
+    return { cgst: 0, sgst: 0, igst: gstPaise }
+  }
+  const cgst = Math.floor(gstPaise / 2)
+  const sgst = gstPaise - cgst   // absorbs the odd paise — total always correct
+  return { cgst, sgst, igst: 0 }
+}
+
 // ─── Truncate ────────────────────────────────────────────────────────────────
 
 export function truncate(str: string, maxLen: number): string {

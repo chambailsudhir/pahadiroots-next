@@ -231,8 +231,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Payment error'
-    console.error('[payments POST] Error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    const internalMessage = err instanceof Error ? err.message : 'Payment error'
+    console.error('[payments POST] Error:', internalMessage)
+    // Never leak Razorpay / Supabase internals to the client in production
+    const clientMessage = process.env.NODE_ENV === 'production'
+      ? 'Payment processing failed. Please try again or contact support.'
+      : internalMessage
+    return NextResponse.json({ error: clientMessage }, { status: 500 })
   }
 }

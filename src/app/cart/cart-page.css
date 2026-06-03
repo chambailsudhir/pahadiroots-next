@@ -74,6 +74,15 @@
   border-bottom: 1px solid var(--border-lt);
 }
 
+/* ol/li used for accessibility semantics — reset list styling */
+.cp-steps-list {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .cp-step {
   display: flex;
   align-items: center;
@@ -336,4 +345,43 @@
   }
   .cp-right-inner { max-height: none; overflow-y: visible; }
   .cp-layout      { padding-bottom: 80px; }
+}
+
+/* ── Coupon hint pills ───────────────────────────────────────────────────── */
+.cs-coupon-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cs-coupon-hint-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #f5f0e8;
+  border: 1px dashed #c9a240;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+
+.cs-coupon-hint-btn:hover,
+.cs-coupon-hint-btn:focus-visible {
+  background: #ede5d0;
+  outline: 2px solid #c9a240;
+  outline-offset: 1px;
+}
+
+.cs-hint-code {
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: #7a4f1a;
+  letter-spacing: 0.5px;
+}
+
+.cs-hint-label {
+  color: #5a4a3a;
 }

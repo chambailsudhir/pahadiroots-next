@@ -18,44 +18,47 @@
  *   If cache is cold → checkout skeleton shows while fetch completes.
  */
 
+import type { RawProfile, SavedAddress } from '@/types'
+
 export const PROFILE_CACHE_KEY = 'pr_checkout_profile'
 export const PROFILE_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 export interface CachedProfile {
   ts:        number
-  profile:   any
-  addresses: any[]
+  profile:   RawProfile
+  addresses: SavedAddress[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function parseSavedAddresses(raw: string | undefined | null): any[] {
+function parseSavedAddresses(raw: string | undefined | null): SavedAddress[] {
   if (!raw) return []
-  try { return JSON.parse(raw) } catch { return [] }
+  try { return JSON.parse(raw) as SavedAddress[] } catch { return [] }
 }
 
 /**
  * Build a CachedProfile entry from a raw API profile object.
  * Constructs the addresses array exactly as checkout/page.tsx expects it.
  */
-export function buildCacheEntry(prof: any): CachedProfile {
+export function buildCacheEntry(prof: RawProfile): CachedProfile {
   const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
   const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
 
-  const defaultAddr = prof.address_line1 ? [{
-    _isDefault: true,
-    label:  'Home' as const,
-    name:   fullName,
-    addr:   prof.address_line1 || '',
-    area:   '',
-    city:   prof.city          || '',
-    state:  prof.state         || '',
-    pin:    prof.postal_code   || '',
-    phone:  cleanPhone,
+  const defaultAddr: SavedAddress[] = prof.address_line1 ? [{
+    id:         'default',
+    is_default: true,
+    label:      'Home' as const,
+    name:       fullName,
+    flat:       prof.address_line1 || '',
+    area:       '',
+    city:       prof.city          || '',
+    state:      prof.state         || '',
+    pincode:    prof.pincode        || '',
+    phone:      cleanPhone,
   }] : []
 
   const saved = parseSavedAddresses(prof.saved_addresses)
-    .filter((a: any) => a.label !== 'Default')
+    .filter((a: SavedAddress) => a.label !== 'Default')
 
   return {
     ts:        Date.now(),
@@ -118,7 +121,8 @@ export async function prefetchProfileToCache(): Promise<CachedProfile | null> {
     const entry = buildCacheEntry(data.profile)
     writeProfileCache(entry)
     return entry
-  } catch {
+  } catch (e: unknown) {
+    console.error('[profileCache] prefetch failed:', e instanceof Error ? e.message : e)
     return null
   }
 }
