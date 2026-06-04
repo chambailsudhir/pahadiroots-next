@@ -22,14 +22,16 @@ import type { RawVariant, RawProduct, RawImage } from '@/types/store-data'
 import type { UpsellItem } from '@/types'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
+// Use anon key for this read-only GET endpoint — service key is reserved for
+// mutations. Ensure product_variants, products, product_images RLS allow anon SELECT.
+const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 async function sbGet<T>(table: string, query = ''): Promise<T> {
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`
   const res = await fetch(url, {
     headers: {
-      apikey:        SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
+      apikey:        SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
     },
     next: { revalidate: 30 },
   })
@@ -116,7 +118,7 @@ export async function GET(req: NextRequest) {
       .map(v => {
         const p = prodMap[v.product_id] ?? {}
         const badge = p.badges_bestseller ? 'Bestseller'
-          : p.badges_organic              ? 'Organic'
+          : p.badges_organic              ? 'Natural'
           : p.badges_new                  ? 'New Arrival'
           : null
         return {

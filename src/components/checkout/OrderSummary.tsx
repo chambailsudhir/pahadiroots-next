@@ -37,6 +37,7 @@ interface Props {
   placing: boolean
   bothPaymentsOff: boolean
   belowMinOrder: boolean
+  razorpayLoaded: boolean
   minOrderAmt: number
   onPlaceOrder: () => void
   payMethod: 'razorpay' | 'cod'
@@ -50,7 +51,7 @@ export default function OrderSummary({
   onRemoveCoupon,
   loyaltyBalance, loyaltyRedemption, onApplyLoyalty, onRemoveLoyalty,
   loyaltyLoading, loyaltyError,
-  error, placing, bothPaymentsOff, belowMinOrder,
+  error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded,
   minOrderAmt, onPlaceOrder, payMethod, summaryOpen, onToggleSummary,
 }: Props) {
   const [showHints,      setShowHints]      = useState(false)
@@ -367,12 +368,14 @@ export default function OrderSummary({
         <button
           className={`os-cta${placing ? ' os-cta--loading' : ''}`}
           onClick={onPlaceOrder}
-          disabled={placing || bothPaymentsOff || belowMinOrder}
+          disabled={placing || bothPaymentsOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded)}
           type="button"
           aria-busy={placing}
         >
           {placing ? (
             <><span className="os-spin os-spin--white" /> Placing Order…</>
+          ) : payMethod === 'razorpay' && !razorpayLoaded ? (
+            <><span className="os-spin" /> Loading payment…</>
           ) : payMethod === 'razorpay' ? (
             <><span>⚡ Pay Securely</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           ) : (

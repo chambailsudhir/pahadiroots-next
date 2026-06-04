@@ -108,11 +108,19 @@ export async function POST(req: NextRequest) {
         razorpay_payment_id,
         razorpay_signature,
         order_id,
-        // loyalty_points_redeemed was persisted in the DB order record during
-        // create_payment; we read it from the client as a convenience but
-        // only use it for the RPC call — actual point deduction is atomic in DB.
-        loyalty_points_redeemed = 0,
       } = body
+
+      // Sanitize client-supplied loyalty value — clamp to a non-negative integer,
+      // cap at 100,000 to block obvious overflow attempts.
+      // The DB RPC (redeem_loyalty_points) is the primary atomic guard; this is
+      // defence-in-depth. loyalty_points_redeemed is NOT stored in the orders row
+      // (no schema change needed) — the validated amount was agreed as part of the
+      // Razorpay order the user already paid, so the client hint is used as-is
+      // after sanitization and the RPC rejects any excess unconditionally.
+      const loyalty_points_redeemed = Math.max(
+        0,
+        Math.min(Math.floor(Number(body.loyalty_points_redeemed) || 0), 100_000),
+      )
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !order_id) {
         return NextResponse.json({ error: 'Missing required payment verification fields' }, { status: 400 })
@@ -154,7 +162,11 @@ export async function POST(req: NextRequest) {
         .eq('id', order_id)
         .single()
 
-      // 4. ── Loyalty: redeem then award ────────────────────────────────────
+      // 4. Site settings — fetched ONCE and reused for loyalty award + email.
+      //    Previously called twice (once in loyalty block, once in email block).
+      const settings = await getSiteSettings()
+
+      // 5. ── Loyalty: redeem then award ────────────────────────────────────
       const custId = fullOrder?.customer_id
       if (custId) {
         if (loyalty_points_redeemed > 0) {
@@ -163,11 +175,10 @@ export async function POST(req: NextRequest) {
             console.warn(`[loyalty] Redemption skipped for order ${order_id} — insufficient balance`)
           }
         }
-        const settings = await getSiteSettings()
         await awardLoyaltyPoints(custId, order_id, fullOrder?.total_amount ?? 0, settings, 'Earned from online payment')
       }
 
-      // 5. Fetch updated order number for redirect
+      // 6. Fetch updated order number for redirect
       const { data: updatedOrder } = await db
         .from('orders').select('order_number').eq('id', order_id).single()
 
@@ -175,13 +186,12 @@ export async function POST(req: NextRequest) {
         razorpay_payment_id, razorpay_order_id,
       }).catch(() => null)
 
-      // 6. Confirmation email
+      // 7. Confirmation email
       try {
         const { data: customer } = await db
           .from('customers').select('first_name, email').eq('id', fullOrder?.customer_id).single()
 
         if (customer?.email && fullOrder) {
-          const settings    = await getSiteSettings()
           const coinsEarned = Math.floor(fullOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
           const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
             ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">

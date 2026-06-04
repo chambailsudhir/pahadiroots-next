@@ -68,7 +68,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
           <Link href={`/products/${item.slug}`} className="cic-name">{item.name}</Link>
           {item.size && <span className="cic-size">{item.size}</span>}
           <div className="cic-badges">
-            {item.isOrganic    && <span className="cic-badge org">🌿 Organic</span>}
+            {item.isOrganic    && <span className="cic-badge org">🌿 Natural</span>}
             {item.isHimalayan  && <span className="cic-badge hml">🏔 Himalayan</span>}
             {item.isBestseller && <span className="cic-badge best">⭐ Bestseller</span>}
             {item.maxQty <= 5  && (

@@ -11,8 +11,11 @@
 
 import { NextResponse } from 'next/server'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
+const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
+// Use anon key for this read-only GET endpoint — the service key grants full DB
+// write access and should be reserved for mutations and admin operations.
+// Ensure the `site_settings` table RLS policy allows anon SELECT on key+value.
+const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 /** Keys the cart page actually reads — nothing more is returned to the client. */
 const CART_SETTING_KEYS = [
@@ -37,8 +40,8 @@ async function fetchCartSettings(): Promise<Record<string, string>> {
 
   const res = await fetch(url, {
     headers: {
-      apikey:        SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
+      apikey:        SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
     },
     next: { revalidate: 60 },
   })

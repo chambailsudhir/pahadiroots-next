@@ -36,13 +36,14 @@ const ALLOWED_ORIGINS = [
   ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : []),
 ]
 
-// Vercel preview URLs change per deployment so can't be hardcoded.
-// Allow any *.vercel.app origin — these are Vercel-authenticated deployments,
-// not reachable by arbitrary third parties, so CSRF risk is acceptable here.
+// Vercel injects VERCEL_URL for every deployment (e.g. "my-app-abc123.vercel.app").
+// We allow only that specific URL — NOT the entire *.vercel.app namespace.
+// The old regex matched ANY *.vercel.app project, meaning an attacker who deploys
+// their own Vercel app could POST to this API.  Using the exact env var is safe.
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.includes(origin)) return true
-  if (/^https:\/\/[a-z0-9-]+-[a-z0-9]+-[a-z0-9]+\.vercel\.app$/.test(origin)) return true
-  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return true
+  // VERCEL_URL is set per-deployment by Vercel (no NEXT_PUBLIC_ prefix — server only)
+  if (process.env.VERCEL_URL && origin === `https://${process.env.VERCEL_URL}`) return true
   return false
 }
 

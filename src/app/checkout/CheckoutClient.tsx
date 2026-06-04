@@ -24,6 +24,7 @@ interface RazorpayOptions {
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Script from 'next/script'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { formatPrice } from '@/lib/utils'
@@ -98,7 +99,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const minOrderAmt     = parseFloat(s.min_order_amount     || '0')
 
   const [payMethod, setPayMethod]   = useState<'razorpay' | 'cod'>('cod')
-  const [placing,   setPlacing]     = useState(false)
+  const [placing,        setPlacing]       = useState(false)
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   const [error,     setError]       = useState('')
   const [couponCode,    setCouponCode]    = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
@@ -481,7 +483,17 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
 
   return (
     <>
-      <script src="https://checkout.razorpay.com/v1/checkout.js" async />
+      {/* Razorpay checkout.js — loaded via Next.js Script so we get an onLoad
+          callback. Previously a raw <script async> tag gave no signal when the
+          library was ready, so clicking Pay Now on a slow connection threw
+          "Payment gateway not loaded" with no retry path.
+          razorpayLoaded gates the Pay Now button until the script is ready. */}
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        strategy="afterInteractive"
+        onLoad={() => setRazorpayLoaded(true)}
+        onError={() => console.error('[checkout] Razorpay script failed to load')}
+      />
 
       <ShippingProgress
         subtotal={pricing.subtotal}
@@ -613,6 +625,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               placing={placing}
               bothPaymentsOff={bothPayOff}
               belowMinOrder={belowMinOrder}
+              razorpayLoaded={razorpayLoaded}
               minOrderAmt={minOrderAmt}
               onPlaceOrder={handlePlace}
               payMethod={payMethod}
@@ -638,8 +651,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
             }, 100)
           })
         }}
-          disabled={placing || bothPayOff || belowMinOrder} type="button">
-          {placing ? 'Placing…' : payMethod === 'razorpay' ? '⚡ Pay Now' : 'Place Order →'}
+          disabled={placing || bothPayOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded)} type="button">
+          {placing ? 'Placing…' : payMethod === 'razorpay' && !razorpayLoaded ? 'Loading…' : payMethod === 'razorpay' ? '⚡ Pay Now' : 'Place Order →'}
         </button>
       </div>
 

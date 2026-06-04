@@ -48,7 +48,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   let badgeLabel = ''
   let badgeDotClass = ''
   if (isBestseller) { badgeLabel = 'Bestseller'; badgeDotClass = 'pbd-bs' }
-  else if (isOrganic)    { badgeLabel = 'Organic';     badgeDotClass = 'pbd-og' }
+  else if (isOrganic)    { badgeLabel = 'Natural';     badgeDotClass = 'pbd-og' }
   else if (isPremium)    { badgeLabel = 'Premium';     badgeDotClass = 'pbd-pm' }
   else if (isNew)        { badgeLabel = 'New Arrival'; badgeDotClass = 'pbd-nw' }
 
