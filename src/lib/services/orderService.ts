@@ -438,20 +438,25 @@ export async function createOrder(
   }
 
   // 8. Create order
+  // loyalty_points_redeemed is stored on the orders row so that verify_payment
+  // can read it from the DB rather than trusting the client-supplied value.
+  // This fixes the P2 security issue where an inflated client value could
+  // pass if the DB RPC lacked a sufficient balance check.
   const { data: newOrder, error: orderErr } = await db
     .from('orders')
     .insert({
-      order_number:    orderNumber,        // e.g. PR1A2B3C — shown to customer
-      customer_id:     custId,
-      total_amount:    pricing.total,
-      subtotal:        pricing.subtotal,
-      coupon_discount: pricing.discount,
-      tax:             pricing.gstTotal,
-      shipping_charge: pricing.shipping,
-      order_status:    'pending',
-      payment_status:  'pending',
-      payment_method:  input.paymentMethod,
-      idempotency_key: input.idempotencyKey,
+      order_number:           orderNumber,        // e.g. PR1A2B3C — shown to customer
+      customer_id:            custId,
+      total_amount:           pricing.total,
+      subtotal:               pricing.subtotal,
+      coupon_discount:        pricing.discount,
+      tax:                    pricing.gstTotal,
+      shipping_charge:        pricing.shipping,
+      order_status:           'pending',
+      payment_status:         'pending',
+      payment_method:         input.paymentMethod,
+      idempotency_key:        input.idempotencyKey,
+      loyalty_points_redeemed: input.loyaltyPointsRedeemed ?? 0,
     })
     .select('id, order_number, total_amount, order_status')
     .single()

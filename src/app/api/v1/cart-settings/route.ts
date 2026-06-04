@@ -26,6 +26,12 @@ const CART_SETTING_KEYS = [
   'prepaid_discount_pct',
   'cod_enabled',
   'cod_max_value',
+  // BUG FIX: upi_enabled and loyalty_enabled were missing but are consumed by
+  // CheckoutClient.tsx — their absence caused UPI/loyalty features to silently
+  // fall back to disabled state on the checkout page.
+  'upi_enabled',
+  'loyalty_enabled',
+  'loyalty_points_per_rupee',
   'review_1_name',     'review_1_location',     'review_1_text',
   'review_2_name',     'review_2_location',     'review_2_text',
   'review_3_name',     'review_3_location',     'review_3_text',

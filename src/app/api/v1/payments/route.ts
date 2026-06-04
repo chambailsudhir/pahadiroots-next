@@ -110,17 +110,11 @@ export async function POST(req: NextRequest) {
         order_id,
       } = body
 
-      // Sanitize client-supplied loyalty value — clamp to a non-negative integer,
-      // cap at 100,000 to block obvious overflow attempts.
-      // The DB RPC (redeem_loyalty_points) is the primary atomic guard; this is
-      // defence-in-depth. loyalty_points_redeemed is NOT stored in the orders row
-      // (no schema change needed) — the validated amount was agreed as part of the
-      // Razorpay order the user already paid, so the client hint is used as-is
-      // after sanitization and the RPC rejects any excess unconditionally.
-      const loyalty_points_redeemed = Math.max(
-        0,
-        Math.min(Math.floor(Number(body.loyalty_points_redeemed) || 0), 100_000),
-      )
+      // P2 SECURITY FIX: loyalty_points_redeemed is now read from the DB orders row,
+      // not from the client body. createOrder() stores the validated amount at order
+      // creation time (after balance check), so by verify_payment time the correct
+      // value is authoritative in the DB — no client manipulation is possible.
+      // The client-supplied value is ignored entirely here.
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !order_id) {
         return NextResponse.json({ error: 'Missing required payment verification fields' }, { status: 400 })
@@ -156,11 +150,16 @@ export async function POST(req: NextRequest) {
       if (updateErr) console.error('[payments] order update failed after verified payment:', updateErr.message)
 
       // 3. Fetch order + customer for loyalty & email
+      // loyalty_points_redeemed is now read from the DB (stored by createOrder),
+      // not from the client body — this is the P2 security fix.
       const { data: fullOrder } = await db
         .from('orders')
-        .select('id, order_number, total_amount, customer_id')
+        .select('id, order_number, total_amount, customer_id, loyalty_points_redeemed')
         .eq('id', order_id)
         .single()
+
+      // Read the DB-authoritative loyalty redemption value
+      const loyalty_points_redeemed = Number(fullOrder?.loyalty_points_redeemed ?? 0)
 
       // 4. Site settings — fetched ONCE and reused for loyalty award + email.
       //    Previously called twice (once in loyalty block, once in email block).

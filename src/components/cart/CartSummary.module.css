@@ -1,0 +1,411 @@
+/* CartSummary.module.css
+ * P3 Style fix: moved from inline <style> template literal inside CartSummary.tsx.
+ * Migrating to a CSS Module lets Next.js deduplicate styles, enables tree-shaking,
+ * and keeps the component file focused on JSX logic.
+ */
+
+@keyframes csSpin {
+  to { transform: rotate(360deg); }
+}
+
+.wrap {
+  padding: 0 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+/* ── Coupon block ── */
+.coupon {
+  border: 1px solid #e8e0d4;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(26, 22, 17, 0.06);
+}
+
+.couponHead {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1611;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid #ece4d8;
+  background: #fff;
+}
+
+.couponBody {
+  padding: 16px 18px;
+}
+
+.couponRow {
+  display: flex;
+  gap: 8px;
+}
+
+.couponInput {
+  flex: 1;
+  border: 1.5px solid #e0d5c0;
+  border-radius: 9px;
+  padding: 10px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0;
+  font-family: inherit;
+  background: #fff;
+  color: #1a1611;
+  box-shadow: inset 0 1px 3px rgba(26, 22, 17, 0.06);
+}
+
+.couponInput::placeholder {
+  color: #c0b8ae;
+  font-weight: 500;
+}
+
+.couponInput:focus {
+  border-color: #c9a240;
+  box-shadow: 0 0 0 3px rgba(201, 162, 64, 0.12);
+}
+
+.couponBtn {
+  background: linear-gradient(135deg, #1a3a1e, #2d5233);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.2px;
+  box-shadow: 0 3px 10px rgba(26, 58, 30, 0.22);
+}
+
+.couponBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22472a, #376340);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(26, 58, 30, 0.3);
+}
+
+.couponBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.couponBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  animation: csSpin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.couponApplied {
+  background: linear-gradient(135deg, #eef7ee, #e6f4e6);
+  border: 1.5px solid #b8dab8;
+  border-radius: 10px;
+  padding: 11px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #276141;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.couponRm {
+  background: none;
+  border: 1px solid #b8dab8;
+  color: #276141;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 9px;
+  border-radius: 7px;
+  transition: all 0.15s;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.couponRm:hover {
+  background: #d4ecd4;
+}
+
+.couponLive {
+  min-height: 0;
+}
+
+.couponErr {
+  font-size: 11px;
+  color: #a03030;
+  display: block;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* ── Coupon hints ── */
+.couponHints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.couponHintBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  background: #f7f3ec;
+  border: 1px solid #dfd5c0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.couponHintBtn:hover {
+  background: #eef7ee;
+  border-color: #b8dab8;
+}
+
+.hintCode {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a3a1e;
+  letter-spacing: 0.3px;
+}
+
+.hintLabel {
+  font-size: 10px;
+  color: #8a8070;
+}
+
+/* ── Price breakdown ── */
+.prices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #7a6e5f;
+}
+
+.rowGreen {
+  color: #276141;
+  font-weight: 700;
+}
+
+.free {
+  color: #276141;
+  font-weight: 700;
+}
+
+.gstNote {
+  font-size: 11px;
+  color: #b8aea0;
+  text-align: right;
+  margin-top: -5px;
+}
+
+.divider {
+  position: relative;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #d8c9a8 20%, #d8c9a8 80%, transparent);
+  margin: 6px 0;
+}
+
+.divider::after {
+  content: '◆';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  padding: 0 8px;
+  font-size: 8px;
+  color: #c9a240;
+  line-height: 1;
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-playfair, 'Playfair Display', serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1611;
+}
+
+.savePill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #eef7ee, #e0f0e0);
+  border: 1px solid #b8dab8;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #276141;
+  text-align: center;
+  letter-spacing: 0.1px;
+}
+
+/* ── CTA ── */
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #1a3a1e 0%, #2a5230 50%, #1a3a1e 100%);
+  background-size: 200% 200%;
+  color: #fff;
+  text-decoration: none;
+  padding: 16px 20px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 5px 20px rgba(26, 58, 30, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.cta::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 64, 0.6), transparent);
+}
+
+.cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(26, 58, 30, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background-position: right center;
+}
+
+.cta:active {
+  transform: translateY(0);
+}
+
+.ctaDisabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.ctaAmt {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.continue {
+  text-align: center;
+  display: block;
+  font-size: 12px;
+  color: #9a8e7e;
+  text-decoration: none;
+  transition: color 0.2s;
+  letter-spacing: 0.2px;
+  padding: 4px 0;
+}
+
+.continue:hover {
+  color: #1a3a1e;
+}
+
+.minWarn {
+  background: linear-gradient(135deg, #fefae8, #fdf5d0);
+  border: 1px solid #e8d078;
+  border-radius: 11px;
+  padding: 11px 14px;
+  font-size: 12px;
+  color: #6b5000;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ── Trust strip ── */
+.trust {
+  border-top: 1px solid #ece4d8;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trustRow {
+  display: flex;
+  justify-content: space-around;
+  font-size: 11px;
+  color: #9a8e7e;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.trustRow span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+
+.logos {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.logo {
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #fff;
+  letter-spacing: 0.4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}

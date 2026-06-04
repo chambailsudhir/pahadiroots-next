@@ -107,7 +107,9 @@ export async function POST(req: NextRequest) {
 
     // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
     if (!alreadyExists && d.payment_method === 'cod') {
-      const cid = customerId ?? (order as any).customer_id
+      // customerId comes directly from createOrder() return value — no need for
+      // the unsafe (order as any).customer_id fallback (order doesn't carry that field).
+      const cid = customerId
       if (cid) {
         if ((d.loyalty_points_redeemed ?? 0) > 0) {
           await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
