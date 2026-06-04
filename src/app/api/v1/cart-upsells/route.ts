@@ -48,23 +48,48 @@ export async function GET(req: NextRequest) {
   )
 
   try {
-    // Fetch narrow variant + product columns — not the full 500-product dump
-    const [variants, products, images] = await Promise.all([
-      sbGet<RawVariant[]>(
-        'product_variants',
-        'is_active=eq.true&available_stock=gt.0'
-        + '&order=available_stock.desc&limit=80'
-        + '&select=id,product_id,is_active,available_stock,price,mrp,size,weight',
+    // ── Step 1: fetch top-80 in-stock variants ─────────────────────────────
+    // This is the cheapest fetch and gives us the candidate product IDs we need
+    // to filter the more expensive product + image queries.
+    const variants = await sbGet<RawVariant[]>(
+      'product_variants',
+      'is_active=eq.true&available_stock=gt.0'
+      + '&order=available_stock.desc&limit=80'
+      + '&select=id,product_id,is_active,available_stock,price,mrp,size,weight',
+    )
+
+    // Determine candidate product IDs (non-cart, deduped) — capped at 20 so the
+    // IN filter stays compact while still giving enough candidates for 6 upsells.
+    const candidateProductIds = [
+      ...new Set(
+        variants
+          .filter(v => !excludedVariantIds.has(v.id) && !excludedProductIds.has(v.product_id))
+          .map(v => v.product_id),
       ),
+    ].slice(0, 20)
+
+    if (candidateProductIds.length === 0) {
+      return NextResponse.json(
+        { upsells: [] },
+        { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
+      )
+    }
+
+    // ── Step 2: fetch products + images filtered to candidate IDs only ─────
+    // Previously: fetched ALL products and ALL images (unbounded).
+    // Now: each query is bounded to at most 20 product IDs — dramatically
+    // smaller payloads regardless of catalog size.
+    const idFilter = candidateProductIds.join(',')
+    const [products, images] = await Promise.all([
       sbGet<RawProduct[]>(
         'products',
-        'status=eq.active&is_deleted=eq.false'
+        `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false`
         + '&select=id,name,slug,emoji,gst_rate,state_id'
         + ',badges_organic,badges_bestseller,badges_new',
       ),
       sbGet<RawImage[]>(
         'product_images',
-        'select=product_id,image_url&order=product_id.asc,sort_order.asc',
+        `product_id=in.(${idFilter})&select=product_id,image_url&order=product_id.asc,sort_order.asc`,
       ),
     ])
 

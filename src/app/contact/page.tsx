@@ -57,7 +57,7 @@ export default function ContactPage() {
     if (!form.name || !form.email || !form.message) return
     setStatus('sending')
     try {
-      const res = await fetch('/api/v1/cart', {
+      const res = await fetch('/api/v1/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'contact', ...form }),

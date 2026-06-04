@@ -11,7 +11,7 @@ export default function NewsletterBar() {
     if (!email.includes('@')) return
     setStatus('loading')
     try {
-      const res = await fetch('/api/v1/cart', {
+      const res = await fetch('/api/v1/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', email }),

@@ -16,7 +16,7 @@ export default function Footer({ settings }: Props) {
     if (!email.includes('@')) return
     setSubLoading(true)
     try {
-      await fetch('/api/v1/cart', {
+      await fetch('/api/v1/actions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', email }),
       })

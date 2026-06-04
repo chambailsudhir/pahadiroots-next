@@ -286,23 +286,25 @@ export function useCartPage() {
     setAddedUpsell(a => [...a, p.id])
   }, [addedUpsell, addItem, analytics])
 
-  const handleCoupon = useCallback(async () => {    if (!couponCode.trim()) return
+  // ── Shared coupon apply helper ─────────────────────────────────────────────
+  // Previously: handleCoupon and handleApplyHint each had their own copy of this
+  // ~30-line block, with handleApplyHint using a setTimeout(0) state-flush hack
+  // that was unnecessary (the code parameter is used directly, not read from state).
+  // Now: one function, two thin callers.
+  const applyCouponCode = useCallback(async (code: string) => {
     setCouponLoading(true)
     setCouponError('')
     try {
       const res  = await fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          code:     couponCode.trim().toUpperCase(),
-          subtotal: pricing.subtotal,
-        }),
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal }),
       })
       const data = await res.json()
       if (!res.ok) {
         const reason = data.error ?? 'invalid'
         setCouponError(reason)
-        analytics.trackCouponError(couponCode, reason)
+        analytics.trackCouponError(code, reason)
         return
       }
       applyCoupon(data.coupon)
@@ -311,44 +313,25 @@ export function useCartPage() {
     } catch (e: unknown) {
       const reason = e instanceof Error ? e.message : 'network_error'
       setCouponError('Failed to apply coupon')
-      analytics.trackCouponError(couponCode, reason)
+      analytics.trackCouponError(code, reason)
     } finally {
       setCouponLoading(false)
     }
-  }, [couponCode, pricing.subtotal, applyCoupon, analytics])
+  }, [pricing.subtotal, applyCoupon, analytics])
 
-  // Clicking a coupon hint pill pre-fills the code and immediately applies it
+  const handleCoupon = useCallback(async () => {
+    const trimmed = couponCode.trim().toUpperCase()
+    if (!trimmed) return
+    await applyCouponCode(trimmed)
+  }, [couponCode, applyCouponCode])
+
+  // Clicking a coupon hint pre-fills the input for visibility, then applies it.
+  // No setTimeout needed — applyCouponCode uses the `code` parameter directly,
+  // never reads from couponCode state.
   const handleApplyHint = useCallback((code: string) => {
     setCouponCode(code)
-    // Schedule coupon apply on next tick so setCouponCode state is flushed first
-    setTimeout(async () => {
-      setCouponLoading(true)
-      setCouponError('')
-      try {
-        const res  = await fetch('/api/v1/coupons', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ code: code.toUpperCase(), subtotal: pricing.subtotal }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          const reason = data.error ?? 'invalid'
-          setCouponError(reason)
-          analytics.trackCouponError(code, reason)
-          return
-        }
-        applyCoupon(data.coupon)
-        analytics.trackCouponApplied(data.coupon.code, data.coupon.discount)
-        setCouponCode('')
-      } catch (e: unknown) {
-        const reason = e instanceof Error ? e.message : 'network_error'
-        setCouponError('Failed to apply coupon')
-        analytics.trackCouponError(code, reason)
-      } finally {
-        setCouponLoading(false)
-      }
-    }, 0)
-  }, [pricing.subtotal, applyCoupon, analytics])
+    applyCouponCode(code.toUpperCase())
+  }, [applyCouponCode])
 
   // ── Public API ─────────────────────────────────────────────────────────────
   return {

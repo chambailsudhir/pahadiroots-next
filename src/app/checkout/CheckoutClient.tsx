@@ -72,12 +72,10 @@ function parseSavedAddresses(raw: string | undefined | null): SavedAddress[] {
 
 export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const router = useRouter()
+  // Single hydration guard — storeReady gates both the skeleton render and
+  // the empty-cart redirect. Two separate useState+useEffect with identical
+  // timing (both fire on mount) was redundant; merged into one.
   const [storeReady, setStoreReady] = useState(false)
-  // Hydration guard
-
-  useEffect(() => { setStoreReady(true) }, [])
-
-  const [mounted, setMounted] = useState(false)
 
   const items              = useCartStore(s => s.items)
   const coupon             = useCartStore(s => s.coupon)
@@ -214,12 +212,12 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const waNumber         = s.whatsapp_number || '919899984895'
 
   const orderPlacedRef = useRef(false)
-  // Hydration guard — prevents redirect running before cart is rehydrated
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => { setStoreReady(true) }, [])
 
+  // Redirect to cart only after hydration — prevents false redirect on SSR
   useEffect(() => {
-    if (items.length === 0 && mounted && !orderPlacedRef.current) router.replace('/cart')
-  }, [items, mounted, router])
+    if (items.length === 0 && storeReady && !orderPlacedRef.current) router.replace('/cart')
+  }, [items, storeReady, router])
   useEffect(() => {
     if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
@@ -388,19 +386,24 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           couponLine + coinsLine + shipLine +
           `\n\n*Total: ₹${pricingTotal}*\n\n💵 *Payment: Cash on Delivery*\n\nPlease confirm my order!`
 
-        let orderNumber = ''
-        try {
-          const dbRes  = await fetch('/api/v1/orders', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-          const dbData = await dbRes.json()
-          if (dbRes.ok) {
-            orderNumber = dbData.order_number || ''
-            trackOrderPlaced(orderNumber, pricingTotal, 'cod')
-          }
-        } catch (e) { console.error('[COD] DB save failed:', e) }
+        // ── Save to DB BEFORE touching cart state ─────────────────────────────
+        // Previous code swallowed DB errors and cleared the cart anyway — orders
+        // were silently lost on stock conflicts, COD-limit rejections, or network
+        // failures. Now: throw on any failure so the outer try/catch surfaces the
+        // error to the user and setPlacing(false) keeps the form intact.
+        const dbRes  = await fetch('/api/v1/orders', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const dbData = await dbRes.json()
+        if (!dbRes.ok) {
+          // Real server message (e.g. "out of stock", "COD not available for this amount")
+          throw new Error(dbData.error || `Order save failed (${dbRes.status})`)
+        }
+        const orderNumber = dbData.order_number || ''
+        trackOrderPlaced(orderNumber, pricingTotal, 'cod')
 
+        // ── DB confirmed — open WhatsApp, clear cart, redirect ────────────────
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
         orderPlacedRef.current = true
         clearCart()
