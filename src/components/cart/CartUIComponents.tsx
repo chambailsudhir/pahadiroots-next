@@ -8,12 +8,36 @@ import styles from './CartUIComponents.module.css'
 // ─── Sticky mobile CTA ────────────────────────────────────────────────────────
 interface StickyProps {
   total: number
+  /**
+   * Pre-shipping subtotal — used exclusively for the min-order gate.
+   *
+   * Bug fixed: the original component used `total` (post-shipping) for both
+   * the displayed amount AND the min-order comparison. This caused a logical
+   * inconsistency with CartSummary, which correctly compares against the
+   * pre-shipping subtotal. Example:
+   *
+   *   subtotal  ₹450  |  shipping ₹99  |  total ₹549  |  minOrderAmt ₹500
+   *   StickyCartCTA (old): ₹549 ≥ ₹500 → checkout ENABLED   ✗
+   *   CartSummary:         ₹450 < ₹500 → checkout BLOCKED    ✓
+   *
+   * With orderSubtotal, both components now compare the same value. The prop
+   * is optional (defaults to total) so any existing usages of StickyCartCTA
+   * outside CartPage continue to work without changes.
+   */
+  orderSubtotal?: number
   totalQty: number
   minOrderAmt?: number
 }
 
-export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty, minOrderAmt = 0 }: StickyProps) {
-  const belowMinOrder = minOrderAmt > 0 && total < minOrderAmt
+export const StickyCartCTA = memo(function StickyCartCTA({
+  total,
+  orderSubtotal,
+  totalQty,
+  minOrderAmt = 0,
+}: StickyProps) {
+  // Fix: use orderSubtotal for the min-order gate; fall back to total when the
+  // prop is absent so existing call-sites outside CartPage are unaffected.
+  const belowMinOrder = minOrderAmt > 0 && (orderSubtotal ?? total) < minOrderAmt
 
   // Track whether the sticky bar is visually active (mobile viewport).
   // On desktop the wrapper has the `inert` attribute so neither keyboard users
