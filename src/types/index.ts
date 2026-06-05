@@ -302,6 +302,9 @@ export type AddressLabel = 'Home' | 'Office' | 'Parents' | 'Friends' | 'Others'
 export interface SavedAddress extends OrderAddress {
   id: string
   is_default: boolean
+  // Legacy field aliases present in addresses saved by the old site
+  addr?: string    // old name for flat/address_line1
+  pin?: string     // old name for pincode
 }
 
 /** Raw profile object returned by /api/v1/profile or the profile cache. */
