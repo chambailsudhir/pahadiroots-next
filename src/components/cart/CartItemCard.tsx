@@ -71,8 +71,8 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
             {item.isOrganic    && <span className="cic-badge org">🌿 Natural</span>}
             {item.isHimalayan  && <span className="cic-badge hml">🏔 Himalayan</span>}
             {item.isBestseller && <span className="cic-badge best">⭐ Bestseller</span>}
-            {item.maxQty <= 5  && (
-              <span className="cic-badge stock">⚡ Only {item.maxQty} left</span>
+            {(item.maxQty ?? 99) <= 5  && (
+              <span className="cic-badge stock">⚡ Only {item.maxQty ?? 99} left</span>
             )}
           </div>
         </div>
@@ -94,7 +94,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               className="cic-qty-btn"
               onClick={handleIncr}
               aria-label="Increase quantity"
-              disabled={item.qty >= item.maxQty}
+              disabled={item.qty >= (item.maxQty ?? 99)}
             >+</button>
           </div>
 

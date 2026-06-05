@@ -49,6 +49,8 @@ const CartSummary = memo(function CartSummary({
         ) : (
           <div className={styles.couponRow}>
             <input
+              id="coupon-code"
+              name="coupon-code"
               type="text" value={couponCode}
               onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
@@ -56,6 +58,7 @@ const CartSummary = memo(function CartSummary({
               className={styles.couponInput}
               aria-label="Coupon code"
               autoCapitalize="characters"
+              autoComplete="off"
             />
             <button className={styles.couponBtn} onClick={onApplyCoupon}
               disabled={couponLoading} type="button">

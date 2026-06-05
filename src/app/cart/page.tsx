@@ -82,6 +82,9 @@ export default function CartPage() {
   return (
     <main id="main-content">
 
+      {/* Visually hidden h1 — required by WCAG 1.3.1; screen readers + crawlers need a document landmark */}
+      <h1 className="sr-only">Your Cart</h1>
+
       {/* ── Shipping progress bar ──────────────────────────────────────────── */}
       <div className="cp-ship-bar">
         <span aria-live="polite" aria-atomic="true">
