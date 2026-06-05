@@ -37,6 +37,8 @@ import type { SiteSettings, UpsellItem } from '@/types'
 // ─── Retry helper ─────────────────────────────────────────────────────────────
 // Retries a fetch up to `maxRetries` times on network / 5xx errors with
 // exponential back-off.  4xx errors (bad request, not-found) are NOT retried.
+// AbortErrors are never retried — they propagate immediately so the caller's
+// .catch() can filter them out and avoid setState on unmounted components.
 async function fetchWithRetry(
   input: RequestInfo,
   init?: RequestInit,
@@ -44,10 +46,21 @@ async function fetchWithRetry(
 ): Promise<Response> {
   let attempt = 0
   while (true) {
+    // Bail out immediately if already aborted before the fetch begins
+    if (init?.signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
     const res = await fetch(input, init)
     if (res.ok || res.status < 500 || attempt >= maxRetries) return res
     attempt++
-    await new Promise(r => setTimeout(r, 300 * 2 ** attempt)) // 600 ms, 1200 ms
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, 300 * 2 ** attempt) // 600 ms, 1200 ms
+      // Cancel the back-off wait if aborted mid-retry
+      init?.signal?.addEventListener('abort', () => {
+        clearTimeout(timer)
+        reject(new DOMException('Aborted', 'AbortError'))
+      }, { once: true })
+    })
   }
 }
 
@@ -161,7 +174,12 @@ export function useCartPage() {
   // Fix 6 (SRP): previously part of the monolithic store-data fetch.
   // Now a dedicated lightweight endpoint — ~15 keys instead of the full table.
   useEffect(() => {
-    fetchWithRetry('/api/v1/cart-settings')
+    // AbortController lets us cancel in-flight fetches if the cart page unmounts
+    // mid-request (e.g. fast navigation). Without this, the .then() callbacks
+    // call setState on an unmounted component, causing React warnings in strict mode.
+    const ac = new AbortController()
+
+    fetchWithRetry('/api/v1/cart-settings', { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-settings ${r.status}`)))
       .then((data: { settings: Partial<SiteSettings> }) => {
         const ss = data.settings ?? {}
@@ -179,24 +197,32 @@ export function useCartPage() {
         if (dbRevs.length > 0) setReviews(dbRevs)
       })
       .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
         console.error('[useCartPage] cart-settings fetch failed:', err)
         // settings stay as {} — pricing service handles missing keys with defaults
       })
+
+    return () => ac.abort()
   }, []) // settings are stable for the session lifetime; fetch once
 
   // ── Coupon hints fetch ─────────────────────────────────────────────────────
   // Fetches available quick-apply coupons once on mount. Uses the anon-key
   // endpoint so no service-key credentials are involved.
   useEffect(() => {
-    fetchWithRetry('/api/v1/coupon-hints')
+    const ac = new AbortController()
+
+    fetchWithRetry('/api/v1/coupon-hints', { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`coupon-hints ${r.status}`)))
       .then((data: { hints: Array<{code: string; label: string}> }) => {
         setCouponHints(data.hints ?? [])
       })
       .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
         // Non-fatal — hints are a UX enhancement, not required for checkout
         console.error('[useCartPage] coupon-hints fetch failed:', err)
       })
+
+    return () => ac.abort()
   }, [])
 
   // ── Upsells fetch ──────────────────────────────────────────────────────────
@@ -208,6 +234,7 @@ export function useCartPage() {
   // Fix 6 (SRP): now calls /api/v1/cart-upsells — a targeted query (~80 variants
   // with exclusion filter) instead of fetching all 500 products via store-data.
   useEffect(() => {
+    const ac = new AbortController()
     const current    = itemsRef.current
     const variantIds = current.map(i => i.variantId).join(',')
     const productIds = [...new Set(current.map(i => i.productId))].join(',')
@@ -216,14 +243,20 @@ export function useCartPage() {
     setUpsellLoading(true)
     setUpsellError(false)
 
-    fetchWithRetry(`/api/v1/cart-upsells?${params}`)
+    fetchWithRetry(`/api/v1/cart-upsells?${params}`, { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-upsells ${r.status}`)))
       .then((data: { upsells: UpsellItem[] }) => setUpsellItems(data.upsells ?? []))
       .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
         console.error('[useCartPage] cart-upsells fetch failed:', err)
         setUpsellError(true)
       })
-      .finally(() => setUpsellLoading(false))
+      .finally(() => {
+        // Guard: don't update loading state if the effect was cleaned up
+        if (!ac.signal.aborted) setUpsellLoading(false)
+      })
+
+    return () => ac.abort()
   }, [cartKey]) // stable primitive — no suppression needed
 
   // ── Handlers ───────────────────────────────────────────────────────────────

@@ -131,7 +131,7 @@ const CartSummary = memo(function CartSummary({
 
       {/* Min order warning */}
       {belowMinOrder && (
-        <div className={styles.minWarn} role="alert">
+        <div id="cart-min-warn" className={styles.minWarn} role="alert">
           ⚠ Minimum order is {formatPrice(minOrderAmt)}. Add{' '}
           <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more to checkout.
         </div>
@@ -139,11 +139,19 @@ const CartSummary = memo(function CartSummary({
 
       {/* CTA */}
       {belowMinOrder ? (
-        <div className={`${styles.cta} ${styles.ctaDisabled}`} aria-disabled="true">
-          <span>🔒</span>
+        // A <button disabled> is natively focusable and announced as "dimmed" by
+        // screen readers. aria-describedby wires the visible warning text so SR
+        // users hear *why* checkout is blocked without needing to find the alert.
+        <button
+          type="button"
+          disabled
+          aria-describedby="cart-min-warn"
+          className={`${styles.cta} ${styles.ctaDisabled}`}
+        >
+          <span aria-hidden="true">🔒</span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
-        </div>
+        </button>
       ) : (
         <Link href="/checkout" className={styles.cta}>
           <span>🔒</span>

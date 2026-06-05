@@ -326,6 +326,11 @@
 }
 
 .ctaDisabled {
+  /* Reset native <button> chrome so it matches the <Link> .cta visually */
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  text-align: left;
   opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;

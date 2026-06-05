@@ -95,6 +95,14 @@ export default function AddToCartSection({ product, variants, settings }: Props)
               const savePct = v.mrp && v.mrp > v.price ? Math.round((1 - v.price / v.mrp) * 100) : 0
               const isActive = selectedVariant?.id === v.id
               const oos = v.available_stock <= 0
+              // Build a descriptive label so screen readers announce size, price,
+              // discount, and availability — not just "button, pressed".
+              const variantLabel = [
+                `Select ${v.size}`,
+                `₹${v.price}`,
+                savePct > 0 ? `Save ${savePct}%` : null,
+                oos ? 'Out of stock' : null,
+              ].filter(Boolean).join(', ')
               return (
                 <button
                   key={v.id}
@@ -103,6 +111,7 @@ export default function AddToCartSection({ product, variants, settings }: Props)
                   onClick={() => selectVariant(v)}
                   disabled={oos}
                   aria-pressed={isActive}
+                  aria-label={variantLabel}
                 >
                   {i === 1 && variants.length >= 3 && (
                     <span className="pdp-vcard-tag best">Best Value</span>
@@ -130,8 +139,14 @@ export default function AddToCartSection({ product, variants, settings }: Props)
         <div className="pdp-qty-row">
           {/* Qty control */}
           <div className="pdp-qty-ctrl">
-            <div className="pdp-qty-above">Qty</div>
-            <div className="pdp-qty-inner">
+            <div className="pdp-qty-above" aria-hidden="true">Qty</div>
+            {/* role=group gives the stepper a named region so SR users
+                hear "Quantity for [product], decrease, 1, increase" */}
+            <div
+              className="pdp-qty-inner"
+              role="group"
+              aria-label={`Quantity for ${product.name}`}
+            >
               <button
                 type="button"
                 className="pdp-qty-btn"
@@ -139,7 +154,12 @@ export default function AddToCartSection({ product, variants, settings }: Props)
                 disabled={qty <= 1}
                 aria-label="Decrease quantity"
               >−</button>
-              <span className="pdp-qty-num">{qty}</span>
+              <span
+                className="pdp-qty-num"
+                aria-live="polite"
+                aria-atomic="true"
+                aria-label={`${qty} selected`}
+              >{qty}</span>
               <button
                 type="button"
                 className="pdp-qty-btn"
@@ -150,35 +170,41 @@ export default function AddToCartSection({ product, variants, settings }: Props)
             </div>
           </div>
 
-          {/* Wishlist */}
+          {/* Wishlist — aria-pressed reflects toggle state; label flips on change */}
           <button
             type="button"
             className={`pdp-wl-btn${wishlisted ? ' active' : ''}`}
             onClick={() => setWL(w => !w)}
-            title="Save to Wishlist"
-            aria-label="Add to Wishlist"
+            aria-pressed={wishlisted}
+            aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >
-            {wishlisted ? '❤️' : '🤍'}
+            <span aria-hidden="true">{wishlisted ? '❤️' : '🤍'}</span>
           </button>
 
-          {/* Add to Cart */}
+          {/* Add to Cart — label conveys product name + state change for SR */}
           <button
             type="button"
             className={`pdp-btn-atc${added ? ' added' : ''}`}
             onClick={() => handleAdd('add')}
             disabled={!inStock || added}
+            aria-label={
+              added    ? `${product.name} added to cart` :
+              !inStock ? `${product.name} out of stock` :
+              `Add ${product.name} to cart`
+            }
           >
             {added ? '✅ Added to Cart!' : !inStock ? 'Out of Stock' : '🛒 Add to Cart'}
           </button>
         </div>
 
-        {/* Buy Now */}
+        {/* Buy Now — include product name so SR users aren't left wondering "buy what?" */}
         {inStock && (
           <button
             type="button"
             className="pdp-btn-buy"
             onClick={() => handleAdd('buy')}
             disabled={buying}
+            aria-label={buying ? `Processing order for ${product.name}` : `Buy ${product.name} now`}
           >
             {buying ? '⚡ Processing…' : '⚡ Buy Now'}
           </button>

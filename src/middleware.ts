@@ -126,6 +126,9 @@ export async function middleware(req: NextRequest) {
             apikey:        supabaseAnon,
             Authorization: `Bearer ${supabaseAnon}`,
           },
+          // Cache at the edge for 30 s — store_open rarely changes and
+          // hitting Supabase on every page request is unnecessary load.
+          next: { revalidate: 30 },
           // Short timeout — don't block page load
           signal: AbortSignal.timeout(2000),
         }

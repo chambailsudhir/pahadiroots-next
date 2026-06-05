@@ -166,19 +166,28 @@ export default function CartDrawer({ settings }: Props) {
                   )}
                   <div className="flex items-center justify-between mt-2">
                     {/* Qty stepper */}
-                    <div className="flex items-center border border-stone-200 rounded-lg overflow-hidden">
+                    <div
+                      className="flex items-center border border-stone-200 rounded-lg overflow-hidden"
+                      role="group"
+                      aria-label={`Quantity for ${item.name}`}
+                    >
                       <button
                         onClick={() => updateQty(item.variantId, item.qty - 1)}
                         disabled={item.qty <= 1}
                         className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Decrease quantity"
+                        aria-label={`Decrease quantity of ${item.name}`}
                       >−</button>
-                      <span className="w-7 text-center text-xs font-bold text-stone-700">{item.qty}</span>
+                      <span
+                        className="w-7 text-center text-xs font-bold text-stone-700"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        aria-label={`${item.qty} in cart`}
+                      >{item.qty}</span>
                       <button
                         onClick={() => updateQty(item.variantId, item.qty + 1)}
                         disabled={item.qty >= (item.maxQty ?? 99)}
                         className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Increase quantity"
+                        aria-label={`Increase quantity of ${item.name}`}
                       >+</button>
                     </div>
                     <div className="flex items-center gap-3">
@@ -187,7 +196,7 @@ export default function CartDrawer({ settings }: Props) {
                       </span>
                       <button
                         onClick={() => removeItem(item.variantId)}
-                        aria-label="Remove item"
+                        aria-label={`Remove ${item.name} from cart`}
                         className="text-stone-300 hover:text-red-400 transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
