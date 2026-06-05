@@ -19,7 +19,7 @@ export default async function RelatedProducts({ categoryId, excludeId }: Props) 
       const imgs = storeData.product_images
         .filter((i: any) => String(i.product_id) === String(p.id))
         .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      return { ...p, _firstImage: imgs[0]?.image_url || imgs[0]?.url || p.image_url || '' }
+      return { ...p, _firstImage: imgs[0]?.image_url || p.image_url || '' }
     })
 
     // Attach variants
