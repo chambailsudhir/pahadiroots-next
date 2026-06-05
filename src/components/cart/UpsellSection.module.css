@@ -190,11 +190,17 @@
   cursor: default;
 }
 
-.errorMsg {
+.errorMsg,
+.emptyMsg {
   font-size: 13px;
   color: var(--color-text-secondary);
   padding: 8px 0;
   grid-column: 1 / -1;
+}
+
+.emptyMsg {
+  text-align: center;
+  padding: 20px 0;
 }
 
 /* Shimmer skeleton */

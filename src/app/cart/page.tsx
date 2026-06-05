@@ -32,7 +32,6 @@ import CartItemCard                        from '@/components/cart/CartItemCard'
 import CartSummary                         from '@/components/cart/CartSummary'
 import { StickyCartCTA, EmptyCart }        from '@/components/cart/CartUIComponents'
 import ErrorBoundary                       from '@/components/ui/ErrorBoundary'
-import { useCartStore }                    from '@/store/cartStore'
 import { useState, useEffect }             from 'react'
 
 // Lazy-load below-fold sections for performance

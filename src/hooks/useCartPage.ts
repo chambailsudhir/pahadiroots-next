@@ -158,6 +158,13 @@ export function useCartPage() {
   const itemsRef = useRef(items)
   useEffect(() => { itemsRef.current = items })
 
+  // Keep a ref to the latest subtotal so applyCouponCode never closes over a
+  // stale value. pricing is re-computed on every render (useMemo) and changing
+  // subtotal should NOT re-create applyCouponCode — doing so would invalidate
+  // all downstream useCallbacks that depend on it every time qty changes.
+  const subtotalRef = useRef(pricing.subtotal)
+  useEffect(() => { subtotalRef.current = pricing.subtotal }, [pricing.subtotal])
+
   // ── Coupon pre-fill (runs once after store hydrates) ──────────────────────
   // Fix 3: was using eslint-disable-next-line react-hooks/exhaustive-deps.
   // A one-shot ref lets us safely list all real dependencies — no suppression.
@@ -331,7 +338,10 @@ export function useCartPage() {
       const res  = await fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: pricing.subtotal }),
+        // Use the ref — reads the live subtotal at call-time instead of the
+        // subtotal captured when the callback was last created. This prevents
+        // a stale discount if the user edits qty while the coupon input is open.
+        body:    JSON.stringify({ code, subtotal: subtotalRef.current }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -350,7 +360,9 @@ export function useCartPage() {
     } finally {
       setCouponLoading(false)
     }
-  }, [pricing.subtotal, applyCoupon, analytics])
+  }, [applyCoupon, analytics])
+  // subtotalRef is intentionally excluded from deps — it's a ref (stable object),
+  // and subtotalRef.current is always the latest value at call-time.
 
   const handleCoupon = useCallback(async () => {
     const trimmed = couponCode.trim().toUpperCase()

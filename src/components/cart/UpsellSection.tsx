@@ -52,6 +52,8 @@ const UpsellSection = memo(function UpsellSection({
           ? [0, 1, 2, 3].map(i => <UpsellShimmer key={i} />)
           : error
             ? <p className={styles.errorMsg}>Couldn&apos;t load suggestions right now.</p>
+          : items.slice(0, 4).length === 0
+            ? <p className={styles.emptyMsg}>You&apos;re all caught up — no more suggestions right now!</p>
             : items.slice(0, 4).map(p => (
               <div
                 key={p.id}

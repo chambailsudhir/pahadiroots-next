@@ -163,3 +163,14 @@ export const useCartStore = create<CartStore>()(
     }
   )
 )
+
+// ─── Stable selector ──────────────────────────────────────────────────────────
+// Use this in components instead of `useCartStore(s => s.cartCount())`.
+// `cartCount` is a plain function inside the store; calling it via a selector
+// returns a new Function reference on every render, so React can't deduplicate
+// re-renders. This selector reads `items` directly — Zustand's equality check
+// fires only when the total actually changes.
+//
+// Usage:  const count = useCartStore(selectCartCount)
+export const selectCartCount = (s: { items: CartItem[] }): number =>
+  s.items.reduce((sum, i) => sum + i.qty, 0)
