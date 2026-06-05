@@ -8,6 +8,7 @@ import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
 import ClientOnly from '@/components/ClientOnly'
 import { Providers } from './providers'
+import SkipLink from '@/components/ui/SkipLink'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
 import AuthModal from '@/components/auth/AuthModal'
@@ -118,19 +119,7 @@ export default async function RootLayout({
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         {/* Skip-to-content: visible on focus for keyboard / screen-reader users */}
-        <a
-          href="#main-content"
-          style={{
-            position: 'absolute', top: '-40px', left: 0, zIndex: 9999,
-            background: '#1a3a1e', color: '#fff', padding: '8px 16px',
-            borderRadius: '0 0 6px 0', fontSize: '14px', fontWeight: 700,
-            transition: 'top .2s',
-          }}
-          onFocus={e => { e.currentTarget.style.top = '0' }}
-          onBlur={e  => { e.currentTarget.style.top = '-40px' }}
-        >
-          Skip to main content
-        </a>
+        <SkipLink />
         <Providers>
           <ClientOnly>
             <Header settings={settings} categories={categories} states={states} />
