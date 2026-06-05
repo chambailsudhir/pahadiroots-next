@@ -38,7 +38,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const sLbl    = !inStock ? 'Out of Stock' : stock > 20 ? 'In Stock' : `Only ${stock} left`
 
   // Badge: use badges array — same priority as old site (badge_type: bs/og/pm/nw)
-  const badges: string[] = Array.isArray((product as any).badges) ? (product as any).badges : []
+  const badges: string[] = Array.isArray(product.badges) ? product.badges : []
   const isBestseller = product.badges_bestseller || badges.includes('bestseller')
   const isOrganic    = product.badges_organic    || badges.includes('organic')
   const isNew        = product.badges_new        || badges.includes('new')
@@ -53,12 +53,11 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   else if (isNew)        { badgeLabel = 'New Arrival'; badgeDotClass = 'pbd-nw' }
 
   // Region: old site shows p.region (state name). We use categories.name as fallback
-  const region = (product as any).region || product.categories?.name || ''
-  const unitLabel = baseVariant?.size || (product as any).unit || product.unit_label || ''
-  // Deterministic fake count based on product id — no Math.random() during render
-  // (Math.random differs between server and client → React hydration error #418)
-  const _seed = typeof product.id === 'number' ? product.id : String(product.id).split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  const reviewCount = (product as any).review_count || ((_seed * 37 + 19) % 80 + 20)
+  const region = product.region || product.categories?.name || ''
+  const unitLabel = baseVariant?.size || product.unit || product.unit_label || ''
+  // Use the real DB review_count if available; fall back to null (no fake numbers).
+  // Deterministic fake counts were removed — they're a trust-signal fabrication.
+  const reviewCount = product.review_count ?? null
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
@@ -108,7 +107,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
       )}
 
       {/* ── Image wrapper ── */}
-      <div className="piw" style={{ background: (product as any).card_bg || '#f5f0e8' }}>
+      <div className="piw" style={{ background: product.card_bg || '#f5f0e8' }}>
 
         {/* Emoji fallback (behind image) */}
         <span className="pemo">{product.emoji || '🌿'}</span>
@@ -171,10 +170,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         {/* Name */}
         <div className="pname">{product.name}</div>
 
-        {/* Rating — same as old site: always 5 stars */}
+        {/* Rating — always 5 stars; review count shown only when real DB data exists */}
         <div className="prating">
           <span className="pstars">★★★★★</span>
-          <span className="prc">({reviewCount})</span>
+          {reviewCount !== null && <span className="prc">({reviewCount})</span>}
         </div>
 
         {/* Stock bar + label */}

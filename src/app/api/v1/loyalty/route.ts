@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  ok, fail,
+  ok, fail, checkCsrf,
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
@@ -20,14 +20,14 @@ function asNumber(v: string | undefined, fallback: number) {
   return isNaN(n) ? fallback : n
 }
 
+// Use the shared sbAdmin helper — avoids duplicating raw env-var / key handling
+// here (the audit flagged the old inline fetch as a security smell because any
+// future key rotation or header change had to be updated in two places).
 async function getSettings(): Promise<Record<string, string>> {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points)`,
-    { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } }
-  )
-  const rows: Array<{ key: string; value: string }> = await res.json().catch(() => [])
+  const rows: Array<{ key: string; value: string }> = await sbAdmin(
+    'GET',
+    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points)',
+  ).catch(() => [])
   return Object.fromEntries((rows || []).map(r => [r.key, r.value]))
 }
 
@@ -83,6 +83,9 @@ export async function GET(req: NextRequest) {
 // action=validate  → validates a redemption amount against user's balance
 // action=history   → last 20 loyalty transactions
 export async function POST(req: NextRequest) {
+  const csrf = checkCsrf(req)
+  if (csrf) return csrf
+
   let token = getToken(req)
   let refreshed = !token ? await tryRefresh(req) : null
   if (!token && !refreshed) return fail(401, 'Not logged in')

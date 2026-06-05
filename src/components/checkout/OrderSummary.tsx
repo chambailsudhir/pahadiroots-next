@@ -3,7 +3,8 @@
 import Image from 'next/image'
 import { useState, useMemo } from 'react'
 import { formatPrice } from '@/lib/utils'
-import type { SiteSettings } from '@/types'
+import type { SiteSettings, CartItem, AppliedCoupon } from '@/types'
+import type { PriceSummary } from '@/lib/services/pricingService'
 
 interface CouponHint { code: string; label: string }
 
@@ -14,9 +15,9 @@ export interface LoyaltyRedemption {
 }
 
 interface Props {
-  items: any[]
-  pricing: any
-  coupon: any
+  items: CartItem[]
+  pricing: PriceSummary
+  coupon: AppliedCoupon | null
   settings: SiteSettings
   couponCode: string
   couponLoading: boolean
@@ -119,7 +120,7 @@ export default function OrderSummary({
 
         {/* Item list */}
         <div className="os-items">
-          {items.map((item: any) => (
+          {items.map((item) => (
             <div key={item.variantId} className="os-item">
               <div className="os-img-shell">
                 <div className="os-img">

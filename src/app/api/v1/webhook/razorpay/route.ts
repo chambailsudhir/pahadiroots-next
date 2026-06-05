@@ -22,9 +22,17 @@ export async function POST(req: Request) {
   const rawBody = await req.text()
   const signature = req.headers.get('x-razorpay-signature') || ''
 
-  // Verify webhook signature (Audit #6)
+  // Verify webhook signature using the WEBHOOK secret (configured in Razorpay Dashboard →
+  // Webhooks). This is a DIFFERENT credential from RAZORPAY_KEY_SECRET (API key).
+  // Using the API key secret here would mean any attacker who knows your key id could
+  // forge valid webhook signatures — the webhook secret is the correct credential.
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    console.error('[webhook] RAZORPAY_WEBHOOK_SECRET env var not set')
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+  }
   const expectedSig = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+    .createHmac('sha256', webhookSecret)
     .update(rawBody)
     .digest('hex')
 

@@ -1,5 +1,7 @@
 'use client'
 
+import type { SavedAddress } from '@/types'
+
 const LABEL_ICONS: Record<string, string> = {
   Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
 }
@@ -18,9 +20,9 @@ function matchState(stored: string | undefined | null, states: string[]): string
 }
 
 interface Props {
-  addresses: any[]
+  addresses: SavedAddress[]
   selectedIdx: number | null
-  onSelect: (addr: any, idx: number) => void
+  onSelect: (addr: SavedAddress, idx: number) => void
   indiaStates: string[]
 }
 
@@ -30,7 +32,7 @@ export default function SavedAddressSelector({ addresses, selectedIdx, onSelect,
     <div className="sas-root">
       <p className="sas-label">Saved Addresses</p>
       <div className="sas-list">
-        {addresses.map((a: any, i: number) => (
+        {addresses.map((a, i) => (
           <div
             key={`${i}-${a.label}`}
             className={`sas-card${selectedIdx === i ? ' sas-card--on' : ''}`}

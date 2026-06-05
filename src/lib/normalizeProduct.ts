@@ -24,9 +24,9 @@ export const PRODUCT_SELECT = `
  * Called after fetching from /api/v1/store-data which uses SERVICE KEY.
  */
 export function applyProductImages(
-  products: any[],
+  products: Product[],
   productImages: { product_id: number | string; image_url: string; sort_order: number }[]
-): any[] {
+): Product[] {
   if (!productImages?.length) return products
 
   // Group by product_id (exactly as old site does)
@@ -56,23 +56,29 @@ export function applyProductImages(
  * normalizeProduct — maps raw Supabase product row to Product shape.
  * Works with OR without product_images pre-applied.
  */
-export function normalizeProduct(p: any): Product {
+// Raw Supabase row — a superset of Product with unprocessed fields
+type RawProductRow = Omit<Product, 'badges_bestseller' | 'badges_new' | 'badges_organic' | 'product_variants'> & {
+  badges?: string[] | null
+  product_variants?: Array<{ id: number; price: number; mrp: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
+  [key: string]: unknown
+}
+
+export function normalizeProduct(p: RawProductRow): Product {
   const badges: string[] = Array.isArray(p.badges) ? p.badges : []
 
   return {
     ...p,
     image_url:         p.image_url || null,
-    _images:           p._images   || (p.image_url ? [p.image_url] : []),
     badges_bestseller: badges.includes('bestseller'),
     badges_new:        badges.includes('new'),
     badges_organic:    badges.includes('organic'),
-    product_variants: (p.product_variants ?? []).map((v: any) => ({
+    product_variants: (p.product_variants ?? []).map(v => ({
       ...v,
       size: v.variant_value ?? v.size ?? '',
     })),
   } as Product
 }
 
-export function normalizeProducts(data: any[]): Product[] {
+export function normalizeProducts(data: RawProductRow[]): Product[] {
   return (data ?? []).map(normalizeProduct)
 }

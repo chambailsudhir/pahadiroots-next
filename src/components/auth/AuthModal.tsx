@@ -129,8 +129,8 @@ export default function AuthModal() {
 
       setSuccess('✅ Welcome back!')
       setTimeout(() => { closeAuth(); window.location.reload() }, 700)
-    } catch (err: any) {
-      const msg = err.message || ''
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
       if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('wrong')) {
         setError('❌ Incorrect email or password. Please try again.')
       } else {
@@ -158,8 +158,8 @@ export default function AuthModal() {
       })
       setSuccess('✅ Account created! Check your email to verify.')
       setTimeout(() => setTab('email'), 2000)
-    } catch (err: any) {
-      const msg = err.message || ''
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
       if (msg.toLowerCase().includes('already')) {
         setError('An account with this email already exists. Please login instead.')
       } else {
@@ -181,7 +181,7 @@ export default function AuthModal() {
       const data = await res.json() as { url?: string; error?: string }
       if (data.url) { window.location.href = data.url; return }
       setError(data.error || 'Google login unavailable')
-    } catch (err: any) { setError(err.message || 'Google login failed') }
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Google login failed') }
     setLoading(false)
   }
 
@@ -190,7 +190,7 @@ export default function AuthModal() {
     if (!fpEmail.trim()) { setError('Please enter your email'); return }
     setLoading(true); setError('')
     try { await callAuth('forgot_password', { email: fpEmail.trim() }); setFPSent(true) }
-    catch (err: any) { setError(err.message || 'Failed') }
+    catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed') }
     finally { setLoading(false) }
   }
 

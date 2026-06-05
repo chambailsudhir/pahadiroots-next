@@ -6,7 +6,34 @@ import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 
-export default function RelatedCard({ product: p }: { product: any }) {
+// Normalised shape produced by RelatedProducts / normalizeProduct
+interface RelatedProduct {
+  id: number | string
+  name: string
+  slug: string
+  emoji: string | null
+  price: number
+  mrp: number | null
+  image_url: string | null
+  unit_label: string | null
+  gst_rate: number
+  available_stock: number
+  state_id: string | null
+  badges_organic: boolean
+  badges_bestseller: boolean
+  // Fields injected by normalizeProduct
+  _firstImage?: string | null
+  _variants?: Array<{
+    id: number | string
+    price: number
+    mrp: number | null
+    size?: string | null
+    variant_value?: string | null
+    available_stock: number
+  }>
+}
+
+export default function RelatedCard({ product: p }: { product: RelatedProduct }) {
   const router   = useRouter()
   const addItem  = useCartStore(s => s.addItem)
   const openCart = useUIStore(s => s.openCart)

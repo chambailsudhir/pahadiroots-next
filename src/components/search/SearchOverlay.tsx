@@ -101,13 +101,13 @@ export default function SearchOverlay() {
               autoComplete="off"
             />
             {query && (
-              <button onClick={() => setQuery('')} className="text-stone-300 hover:text-stone-500">
+              <button onClick={() => setQuery('')} aria-label="Clear search" className="text-stone-300 hover:text-stone-500">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             )}
-            <button onClick={closeSearch} className="text-xs text-stone-400 hover:text-stone-600 px-2 py-1 border border-stone-200 rounded-lg">
+            <button onClick={closeSearch} aria-label="Close search" className="text-xs text-stone-400 hover:text-stone-600 px-2 py-1 border border-stone-200 rounded-lg">
               esc
             </button>
           </div>

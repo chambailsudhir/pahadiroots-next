@@ -4,9 +4,11 @@ export interface Category {
   id: number
   name: string
   slug: string
+  emoji?: string | null
   description: string | null
   image_url: string | null
   is_active: boolean
+  sort_order?: number | null
 }
 
 export interface State {
@@ -67,6 +69,12 @@ export interface Product {
   ai_storage_tips: string | null      // JSON array string
   ai_who_should_buy: string | null
   ai_generated_at: string | null
+  // Fields present in DB / normalised shape but previously accessed via (product as any)
+  badges?: string[]            // badge slugs array e.g. ['bestseller', 'organic']
+  region?: string | null       // state/region display name
+  unit?: string | null         // alternative unit label
+  card_bg?: string | null      // card background colour
+  review_count?: number | null // real DB review count (replaces fake deterministic value)
   // Relations (when joined)
   categories?: Category
   states?: State

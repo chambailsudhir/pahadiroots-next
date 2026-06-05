@@ -12,12 +12,16 @@ const nextConfig = {
   experimental: {
     // Enable server actions
     serverActions: {
-      // *.vercel.app covers all preview deployments regardless of the generated URL.
+      // Only allow our own domain + the exact Vercel preview URL injected per-deployment.
+      // *.vercel.app was removed — it allowed ANY attacker-controlled Vercel project to
+      // invoke server actions cross-origin (CRITICAL security issue).
+      // VERCEL_URL is set automatically by Vercel (e.g. "pahadiroots-abc123.vercel.app")
+      // and is available at build time. Localhost is kept for local dev only.
       allowedOrigins: [
         'pahadiroots.com',
         'www.pahadiroots.com',
         'localhost:3000',
-        '*.vercel.app',
+        ...(process.env.VERCEL_URL ? [process.env.VERCEL_URL] : []),
       ],
     },
   },

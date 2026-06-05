@@ -7,16 +7,24 @@
 
 import { getServiceClient } from './supabase'
 import { applyProductImages } from './normalizeProduct'
+import type { Product, Category, State } from '@/types'
+
+// Minimal shapes for related tables (not full DB types)
+export interface ProductImage   { product_id: number; image_url: string; sort_order: number }
+export interface ProductVariant { id: number; product_id: number; price: number; mrp: number | null; variant_value: string | null; size?: string | null; available_stock: number; is_active: boolean; sort_order?: number }
+export interface StateImage     { state_id: string; image_url: string; sort_order: number }
+export interface Coupon         { code: string; type: string; value: number; min_order: number | null; max_uses: number | null; uses_count: number; expires_at: string | null; first_order_only: boolean; max_discount: number | null }
+export interface SiteSettingRow { key: string; value: string }
 
 export interface StoreData {
-  products:         any[]
-  product_images:   any[]
-  product_variants: any[]
-  categories:       any[]
+  products:         Product[]
+  product_images:   ProductImage[]
+  product_variants: ProductVariant[]
+  categories:       Category[]
   settings:         Record<string, string>
-  states:           any[]
-  state_images:     any[]
-  coupons:          any[]
+  states:           State[]
+  state_images:     StateImage[]
+  coupons:          Coupon[]
 }
 
 let _cache: StoreData | null = null
@@ -68,7 +76,7 @@ export async function getStoreData(force = false): Promise<StoreData> {
 
   // Convert settings array → object (same as old site)
   const settings: Record<string, string> = {}
-  ;(siteSettings || []).forEach((s: any) => { settings[s.key] = s.value })
+  ;(siteSettings || []).forEach((s: SiteSettingRow) => { settings[s.key] = s.value })
 
   _cache = {
     products:         products         || [],
@@ -85,7 +93,7 @@ export async function getStoreData(force = false): Promise<StoreData> {
 }
 
 // ── Same imgFor() as old site main.js initCollectionImages ───────────────
-export function imgFor(cat: any, settings: Record<string, string>): string {
+export function imgFor(cat: Category, settings: Record<string, string>): string {
   const keysToTry = [
     cat.slug,
     cat.name,

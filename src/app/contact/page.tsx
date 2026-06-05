@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import type { Metadata } from 'next'
-import { getSiteSettings } from '@/lib/getSiteSettings'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 import type { SiteSettings } from '@/types'
@@ -44,7 +42,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 export default function ContactPage() {
   const { data: settingsRows } = useSWR('site_settings_contact', async () => {
     const { data } = await supabase.from('site_settings').select('key, value')
-    return Object.fromEntries((data || []).map((r: any) => [r.key, r.value])) as SiteSettings
+    return Object.fromEntries((data || []).map((r: { key: string; value: string }) => [r.key, r.value])) as SiteSettings
   })
   const settings = settingsRows || {} as SiteSettings
   const waNumber = settings.whatsapp_number || '919899984895'
@@ -151,7 +149,7 @@ export default function ContactPage() {
                   <label className="block text-xs font-semibold text-stone-600 mb-1">{label}</label>
                   <input
                     type={type}
-                    value={(form as any)[field]}
+                    value={form[field as keyof typeof form]}
                     onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                     placeholder={placeholder}
                     required

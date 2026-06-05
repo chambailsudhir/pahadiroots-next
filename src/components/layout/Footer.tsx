@@ -60,7 +60,7 @@ export default function Footer({ settings }: Props) {
                 placeholder="Enter your email address" required
                 style={{ flex: 1, padding: '12px 16px', background: 'rgba(255,255,255,.07)', border: 'none', color: '#fff', fontSize: '13px', outline: 'none' }}
               />
-              <button type="submit" disabled={subLoading} style={{
+              <button type="submit" aria-label="Subscribe to newsletter" disabled={subLoading} style={{
                 padding: '12px 20px', background: '#c8920a', color: '#1a0800',
                 fontWeight: 800, fontSize: '13px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
               }}>Subscribe</button>
