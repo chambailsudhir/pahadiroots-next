@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
+import { useUserStore } from '@/store/userStore'
 import { useRouter } from 'next/navigation'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 
@@ -17,13 +18,20 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const addItem   = useCartStore(s => s.addItem)
   const openCart  = useUIStore(s => s.openCart)
 
+  // Read wishlist state from store — direct selector so the component re-renders
+  // when the wishlist changes (e.g. from another tab or the Header heart icon).
+  // Local useState(false) was a bug: state was never persisted to the store and
+  // reset to false on every page navigation.
+  const inWishlist         = useUserStore(s => s.wishlist.includes(String(product.id)))
+  const addToWishlist      = useUserStore(s => s.addToWishlist)
+  const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
+
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
     variants.length > 0 ? variants[0] : null
   )
   const [qty, setQty]         = useState(1)
   const [added, setAdded]     = useState(false)
   const [buying, setBuying]   = useState(false)
-  const [wishlisted, setWL]   = useState(false)
 
   const price    = selectedVariant?.price   ?? product.price
   const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.price
@@ -173,12 +181,15 @@ export default function AddToCartSection({ product, variants, settings }: Props)
           {/* Wishlist — aria-pressed reflects toggle state; label flips on change */}
           <button
             type="button"
-            className={`pdp-wl-btn${wishlisted ? ' active' : ''}`}
-            onClick={() => setWL(w => !w)}
-            aria-pressed={wishlisted}
-            aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
+            className={`pdp-wl-btn${inWishlist ? ' active' : ''}`}
+            onClick={() => inWishlist
+              ? removeFromWishlist(String(product.id))
+              : addToWishlist(String(product.id))
+            }
+            aria-pressed={inWishlist}
+            aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >
-            <span aria-hidden="true">{wishlisted ? '❤️' : '🤍'}</span>
+            <span aria-hidden="true">{inWishlist ? '❤️' : '🤍'}</span>
           </button>
 
           {/* Add to Cart — label conveys product name + state change for SR */}

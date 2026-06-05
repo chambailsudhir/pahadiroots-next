@@ -60,6 +60,11 @@ export const useUserStore = create<UserStore>()(
           wishlist: state.wishlist.filter(id => id !== productId),
         })),
 
+      // ⚠ IMPERATIVE USE ONLY — never use this as a React selector.
+      // `useUserStore(s => s.isInWishlist)` subscribes to the function reference
+      // (which never changes), so the component won't re-render when wishlist updates.
+      // In React components use the direct selector instead:
+      //   const inWishlist = useUserStore(s => s.wishlist.includes(productId))
       isInWishlist: (productId) => get().wishlist.includes(productId),
     }),
     {
@@ -78,16 +83,30 @@ export const useUserStore = create<UserStore>()(
 )
 
 // ── Wishlist auto-sync ────────────────────────────────────────────────────────
-// Subscribes to wishlist + user changes. Whenever the wishlist changes AND the
-// user is logged in, it fires a debounced PUT /api/wishlist so the server stays
-// in sync. This means add/remove anywhere (main page, product card, account) is
-// automatically persisted without any component needing to call the API itself.
+// Subscribes to wishlist changes. Whenever the wishlist array reference changes
+// AND the user is logged in, it fires a debounced PUT /api/wishlist.
+//
+// Key design choices:
+//   • prevWishlist reference equality check — Zustand creates a new array
+//     reference on every addToWishlist/removeFromWishlist/setWishlist call, so
+//     `state.wishlist !== prevWishlist` is true exactly when the wishlist mutates.
+//     Without this check, the subscriber fires on every state mutation (login,
+//     setAddresses, etc.), triggering needless PUT /api/wishlist calls.
+//   • 800 ms debounce — coalesces rapid add/remove taps into a single request.
+//   • Fire-and-forget — no UI feedback needed; next change retries on failure.
 //
 // Only runs in the browser (subscribe is a no-op on the server).
 if (typeof window !== 'undefined') {
   let syncTimer: ReturnType<typeof setTimeout> | null = null
+  // Track the previous wishlist reference so we can skip unrelated state changes.
+  let prevWishlist: string[] = useUserStore.getState().wishlist
 
   useUserStore.subscribe(state => {
+    // Skip if wishlist array reference hasn't changed — this is the guard that
+    // prevents syncing on login, setAddresses, or any other unrelated mutation.
+    if (state.wishlist === prevWishlist) return
+    prevWishlist = state.wishlist
+
     // Only sync when a user is logged in
     if (!state.user?.id) return
 

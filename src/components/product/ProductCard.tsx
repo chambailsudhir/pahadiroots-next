@@ -16,11 +16,14 @@ interface Props {
 export default function ProductCard({ product, showWishlist = true, priority = false }: Props) {
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
-  const isInWishlist       = useUserStore(s => s.isInWishlist)
+  // ⚠ Do NOT use `useUserStore(s => s.isInWishlist)` — that selector subscribes
+  // to the function reference (which is stable) not to wishlist contents, so the
+  // component never re-renders when items are added/removed.
+  // Instead, read wishlist.includes() directly so Zustand's equality check fires
+  // on every wishlist array update.
+  const inWishlist         = useUserStore(s => s.wishlist.includes(String(product.id)))
   const addToWishlist      = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
-
-  const inWishlist = isInWishlist(String(product.id))
 
   const variants    = product.product_variants?.filter(v => v.is_active) || []
   const baseVariant = variants.length > 0
