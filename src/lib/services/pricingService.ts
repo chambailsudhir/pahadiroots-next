@@ -101,7 +101,7 @@ export async function validateCouponServer(
   }
 
   const discount = data.type === 'percent'
-    ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount || Infinity)
+    ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? Infinity)
     : data.value
 
   return {

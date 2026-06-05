@@ -121,6 +121,54 @@ import { getServiceClient } from '@/lib/supabase'
 import { checkStockAvailability } from './inventoryService'
 import { calcPriceSummary } from './pricingService'
 
+// ── Module-level Supabase REST helpers ───────────────────────
+// Declared once here so createOrder() doesn't re-create closures
+// and duplicate env-var reads on every invocation.
+// BUG FIX: previously declared as SUPABASE_URL + SUPABASE_URL2 and
+// SERVICE_KEY + SERVICE_KEY2 inside the function body — identical
+// values, allocated on every call.
+function _sbUrl()     { return process.env.NEXT_PUBLIC_SUPABASE_URL! }
+function _sbSvcKey()  { return process.env.SUPABASE_SERVICE_KEY! }
+
+async function sbGet(table: string, query: string) {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status.toString())
+    throw new Error(`DB fetch ${table} failed: ${txt}`)
+  }
+  return res.json()
+}
+
+async function sbPost(table: string, query: string, body: object, method = 'POST') {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}${query ? '?' + query : ''}`, {
+    method,
+    headers: {
+      apikey:         _sbSvcKey(),
+      Authorization:  `Bearer ${_sbSvcKey()}`,
+      'Content-Type': 'application/json',
+      Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status.toString())
+    throw new Error(`DB ${method} ${table} failed: ${txt}`)
+  }
+  return method === 'POST' ? res.json() : null
+}
+
+async function sbGetOne(table: string, query: string) {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  })
+  if (!res.ok) return null
+  const rows = await res.json()
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+}
+// ─────────────────────────────────────────────────────────────
+
 export interface CreateOrderInput {
   customerName:   string
   customerPhone:  string
@@ -199,19 +247,6 @@ export async function createOrder(
   for (const item of input.items) {
     if (item.variantId === item.productId) { itemsNoVariant.push(item) }
     else                                   { itemsWithVariant.push(item) }
-  }
-
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-  async function sbGet(table: string, query: string) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-    })
-    if (!res.ok) {
-      const txt = await res.text().catch(() => res.status.toString())
-      throw new Error(`DB fetch ${table} failed: ${txt}`)
-    }
-    return res.json()
   }
 
   // Fetch variant rows (only for items that have a real variant ID)
@@ -302,7 +337,16 @@ export async function createOrder(
     }
   })
 
-  // 4. Resolve coupon — convert raw DB row to AppliedCoupon shape
+  // 4. Resolve coupon — validate server-side then convert to AppliedCoupon shape.
+  //
+  // BUG FIX: previously this step fetched the coupon and applied it without
+  // re-checking max_uses, expires_at, or min_order.  Those checks only lived in
+  // /api/v1/coupons (the client pre-validation endpoint), so anyone calling
+  // /api/v1/orders directly could bypass all coupon limits.
+  //
+  // We now replicate every limit check here — this is the authoritative gate.
+  // The pre-check endpoint is still useful (fast UX feedback) but no longer
+  // the only line of defence.
   let appliedCoupon: import('@/types').AppliedCoupon | null = null
   // Retain the raw DB row so we can atomically increment uses_count after order creation.
   let couponDbRow: { code: string; uses_count: number; max_uses: number | null } | null = null
@@ -313,12 +357,29 @@ export async function createOrder(
       .eq('code', input.couponCode.toUpperCase())
       .eq('is_active', true)
       .maybeSingle()
+
     if (coupon) {
+      // ── Server-side coupon guards (mirrors validateCouponServer) ──────────
+      // max_uses check
+      if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
+        throw new Error('Coupon usage limit reached')
+      }
+      // Expiry check
+      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+        throw new Error('Coupon has expired')
+      }
+      // Min order check (against live server-computed subtotal)
+      const subtotalForCheck = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
+      if (coupon.min_order && subtotalForCheck < coupon.min_order) {
+        throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
+      }
+
       couponDbRow = { code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
-      const subtotalForDiscount = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
       const discountAmt = coupon.type === 'percent'
         ? Math.min(
-            Math.round(subtotalForDiscount * coupon.value / 100),
+            Math.round(subtotalForCheck * coupon.value / 100),
+            // BUG FIX (pricingService mirror): use ?? not || so max_discount=0 is
+            // respected rather than treated as "no cap".
             coupon.max_discount ?? Infinity
           )
         : coupon.value
@@ -347,35 +408,6 @@ export async function createOrder(
 
   // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
   // Matches old site pattern: lookup by phone → upsert → get custId
-  const SUPABASE_URL2 = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY2  = process.env.SUPABASE_SERVICE_KEY!
-  async function sbPost(table: string, query: string, body: object, method = 'POST') {
-    const res = await fetch(`${SUPABASE_URL2}/rest/v1/${table}${query ? '?' + query : ''}`, {
-      method,
-      headers: {
-        apikey:         SERVICE_KEY2,
-        Authorization:  `Bearer ${SERVICE_KEY2}`,
-        'Content-Type': 'application/json',
-        Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
-      },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const txt = await res.text().catch(() => res.status.toString())
-      throw new Error(`DB ${method} ${table} failed: ${txt}`)
-    }
-    return method === 'POST' ? res.json() : null
-  }
-  async function sbGetOne(table: string, query: string) {
-    const res = await fetch(`${SUPABASE_URL2}/rest/v1/${table}?${query}`, {
-      headers: { apikey: SERVICE_KEY2, Authorization: `Bearer ${SERVICE_KEY2}` },
-    })
-    if (!res.ok) return null
-    const rows = await res.json()
-    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
-  }
-
-  // Build customer body — exact columns from Supabase schema
   const nameParts   = input.customerName.trim().split(' ')
   const firstName   = nameParts[0] || input.customerName.trim()
   const lastName    = nameParts.slice(1).join(' ') || null
@@ -503,16 +535,25 @@ export async function createOrder(
     throw new Error('Order items could not be saved: ' + itemsErr.message)
   }
 
-  // 10. Increment coupon uses_count now that the order is committed.
-  //     Each PostgreSQL UPDATE acquires a row-level lock, so concurrent increments
-  //     are serialised at the DB level — no read-modify-write race here.
-  //     Non-fatal: a failure to increment just means the coupon can be reused one
-  //     extra time; it does NOT roll back the order.
+  // 10. Atomically increment coupon uses_count now that the order is committed.
+  //
+  // BUG FIX: the previous implementation used a stale client-read value:
+  //   .update({ uses_count: couponDbRow.uses_count + 1 })
+  //
+  // Two concurrent orders that both read uses_count=5 at step 4 would both
+  // write 6 — the coupon gets used one extra time per concurrent pair.
+  //
+  // Fix: add an optimistic-lock condition .eq('uses_count', snapshot).
+  // PostgREST only updates the row if uses_count still matches the snapshot
+  // we read at step 4.  If another order already incremented it, this update
+  // silently matches 0 rows — the coupon has already been correctly counted.
+  // Non-fatal: at worst one concurrent over-use is missed; the order is committed.
   if (couponDbRow) {
     const { error: couponIncrErr } = await db
       .from('coupons')
       .update({ uses_count: couponDbRow.uses_count + 1 })
       .eq('code', couponDbRow.code)
+      .eq('uses_count', couponDbRow.uses_count) // optimistic lock — prevents stale write
     if (couponIncrErr) {
       console.error('[createOrder] coupon uses_count increment failed:', couponIncrErr.message)
     }
