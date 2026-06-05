@@ -56,29 +56,43 @@ export function applyProductImages(
  * normalizeProduct — maps raw Supabase product row to Product shape.
  * Works with OR without product_images pre-applied.
  */
-// Raw Supabase row — a superset of Product with unprocessed fields
-type RawProductRow = Omit<Product, 'badges_bestseller' | 'badges_new' | 'badges_organic' | 'product_variants'> & {
+// Raw Supabase row — a superset of Product with unprocessed fields.
+// The index signature [key: string]: unknown is intentionally on a separate
+// intersection so that Product (which has no index sig) is still assignable here.
+type RawProductRow = {
+  id: number | string
+  name: string
+  slug: string
+  image_url?: string | null
   badges?: string[] | null
+  badges_bestseller?: boolean
+  badges_new?: boolean
+  badges_organic?: boolean
   product_variants?: Array<{ id: number; price: number; mrp: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
   [key: string]: unknown
 }
 
-export function normalizeProduct(p: RawProductRow): Product {
-  const badges: string[] = Array.isArray(p.badges) ? p.badges : []
+// Accept either a raw DB row OR an already-normalized Product (e.g. after applyProductImages)
+type NormalizableRow = RawProductRow | Product
+
+export function normalizeProduct(p: NormalizableRow): Product {
+  const badges: string[] = Array.isArray((p as RawProductRow).badges)
+    ? (p as RawProductRow).badges as string[]
+    : []
 
   return {
     ...p,
     image_url:         p.image_url || null,
-    badges_bestseller: badges.includes('bestseller'),
-    badges_new:        badges.includes('new'),
-    badges_organic:    badges.includes('organic'),
-    product_variants: (p.product_variants ?? []).map(v => ({
+    badges_bestseller: (p as Product).badges_bestseller || badges.includes('bestseller'),
+    badges_new:        (p as Product).badges_new        || badges.includes('new'),
+    badges_organic:    (p as Product).badges_organic    || badges.includes('organic'),
+    product_variants: ((p as RawProductRow).product_variants ?? []).map(v => ({
       ...v,
       size: v.variant_value ?? v.size ?? '',
     })),
   } as Product
 }
 
-export function normalizeProducts(data: RawProductRow[]): Product[] {
+export function normalizeProducts(data: NormalizableRow[]): Product[] {
   return (data ?? []).map(normalizeProduct)
 }
