@@ -22,7 +22,10 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // Only select the columns needed to render a hint label.
-// max_uses, uses_count, max_discount, first_order_only are excluded.
+// expires_at is fetched internally for server-side expiry filtering but is
+// intentionally excluded from the JSON response — exposing it lets scrapers
+// detect when a coupon is about to expire and spam it at peak discount.
+// max_uses, uses_count, max_discount, first_order_only are also excluded.
 const HINT_SELECT = 'code,type,value,min_order,expires_at'
 
 interface RawHint {
@@ -54,6 +57,10 @@ export async function GET() {
       .filter(c => !c.expires_at || new Date(c.expires_at) > now)
       .slice(0, 3)
       .map(c => ({
+        // expires_at intentionally excluded — exposing it is a timing leak
+        // that lets scrapers detect near-expiry coupons and spam them.
+        // min_order is included in the label text but not as a raw field
+        // so callers can't reconstruct the full coupon profile.
         code:  c.code,
         label: c.type === 'percent'
           ? `${c.value}% off${c.min_order ? ` on ₹${c.min_order}+` : ''}`

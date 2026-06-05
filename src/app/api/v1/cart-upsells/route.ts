@@ -26,7 +26,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // mutations. Ensure product_variants, products, product_images RLS allow anon SELECT.
 const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-async function sbGet<T>(table: string, query = ''): Promise<T> {
+async function sbGet<T>(table: string, query = '', timeoutMs?: number): Promise<T> {
   const url = `${SUPABASE_URL}/rest/v1/${table}${query ? '?' + query : ''}`
   const res = await fetch(url, {
     headers: {
@@ -34,6 +34,9 @@ async function sbGet<T>(table: string, query = ''): Promise<T> {
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
     next: { revalidate: 30 },
+    // Per-request timeout so a slow DB response doesn't block the cart page.
+    // AbortSignal.timeout is available in Node 18+ and modern browsers.
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
   })
   if (!res.ok) throw new Error(`${table}: ${res.status}`)
   return res.json() as Promise<T>
@@ -81,6 +84,9 @@ export async function GET(req: NextRequest) {
     // Previously: fetched ALL products and ALL images (unbounded).
     // Now: each query is bounded to at most 20 product IDs — dramatically
     // smaller payloads regardless of catalog size.
+    // Each parallel fetch gets its own 5 s timeout so a slow DB response
+    // doesn't block the cart page indefinitely. AbortSignal.timeout is
+    // supported in Node 18+ and all modern browsers.
     const idFilter = candidateProductIds.join(',')
     const [products, images] = await Promise.all([
       sbGet<RawProduct[]>(
@@ -88,10 +94,12 @@ export async function GET(req: NextRequest) {
         `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false`
         + '&select=id,name,slug,emoji,gst_rate,state_id'
         + ',badges_organic,badges_bestseller,badges_new',
+        5000,
       ),
       sbGet<RawImage[]>(
         'product_images',
         `product_id=in.(${idFilter})&select=product_id,image_url&order=product_id.asc,sort_order.asc`,
+        5000,
       ),
     ])
 
