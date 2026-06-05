@@ -49,7 +49,7 @@ export default function SavedAddressSelector({ addresses, selectedIdx, onSelect,
             </div>
             <div className="sas-body">
               <div className="sas-tag">
-                <span>{LABEL_ICONS[a.label] || '📍'}</span>
+                <span>{LABEL_ICONS[a.label ?? ''] || '📍'}</span>
                 <span>{a.label}</span>
               </div>
               <div className="sas-addr">
