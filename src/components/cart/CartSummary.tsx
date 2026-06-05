@@ -48,6 +48,11 @@ const CartSummary = memo(function CartSummary({
           </div>
         ) : (
           <div className={styles.couponRow}>
+            {/* A visible label is required by WCAG 1.3.1 (Info and Relationships).
+                We use sr-only so it doesn't break the existing visual design —
+                the "Have a coupon code?" heading already acts as a visual cue
+                but is not programmatically associated with the input. */}
+            <label htmlFor="coupon-code" className="sr-only">Coupon code</label>
             <input
               id="coupon-code"
               name="coupon-code"
@@ -56,9 +61,10 @@ const CartSummary = memo(function CartSummary({
               onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
               placeholder="e.g. WELCOME50"
               className={styles.couponInput}
-              aria-label="Coupon code"
               autoCapitalize="characters"
               autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <button className={styles.couponBtn} onClick={onApplyCoupon}
               disabled={couponLoading} type="button">

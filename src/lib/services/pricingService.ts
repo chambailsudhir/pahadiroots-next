@@ -100,8 +100,13 @@ export async function validateCouponServer(
     return { valid: false, error: 'Coupon has expired' }
   }
 
+  // Use a safe finite cap instead of Infinity — Math.min(x, Infinity) is valid JS
+  // but if data.max_discount is ever null/undefined AND the subtotal is very large,
+  // Math.round(Infinity) = Infinity which flows into total as -Infinity.
+  // Cap at subtotal (can never discount more than the order value).
+  const MAX_DISCOUNT_FALLBACK = subtotal
   const discount = data.type === 'percent'
-    ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? Infinity)
+    ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? MAX_DISCOUNT_FALLBACK)
     : data.value
 
   return {

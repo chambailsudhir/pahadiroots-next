@@ -13,14 +13,18 @@ import styles from './CartDrawer.module.css'
 interface Props { settings: SiteSettings }
 
 export default function CartDrawer({ settings }: Props) {
-  const isOpen   = useUIStore(s => s.isCartOpen)
+  const isOpen    = useUIStore(s => s.isCartOpen)
   const closeCart = useUIStore(s => s.closeCart)
-  const items    = useCartStore(s => s.items)
-  const coupon   = useCartStore(s => s.coupon)
-  const removeItem = useCartStore(s => s.removeItem)
-  const updateQty  = useCartStore(s => s.updateQty)
-  const drawerRef  = useRef<HTMLDivElement>(null)
+  const items     = useCartStore(s => s.items)
+  const coupon    = useCartStore(s => s.coupon)
+  const removeItem  = useCartStore(s => s.removeItem)
+  const updateQty   = useCartStore(s => s.updateQty)
+  const drawerRef   = useRef<HTMLDivElement>(null)
   const firstFocusRef = useRef<HTMLButtonElement>(null)
+  // WCAG 2.1 §3.2 — when a dialog closes, focus must return to the element
+  // that triggered it. We capture the active element at the moment the drawer
+  // opens, then restore it when it closes.
+  const openerRef = useRef<HTMLElement | null>(null)
 
   // Close on Escape + focus trap
   useEffect(() => {
@@ -39,9 +43,16 @@ export default function CartDrawer({ settings }: Props) {
       }
     }
     if (isOpen) {
+      // Capture the element that opened the drawer so we can restore focus on close
+      openerRef.current = document.activeElement as HTMLElement
       document.addEventListener('keydown', onKey)
-      // move focus into drawer on open
       setTimeout(() => firstFocusRef.current?.focus(), 50)
+    } else {
+      // Return focus to the trigger (e.g. the Cart button in the header)
+      if (openerRef.current && typeof openerRef.current.focus === 'function') {
+        openerRef.current.focus()
+        openerRef.current = null
+      }
     }
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, closeCart])
@@ -50,6 +61,19 @@ export default function CartDrawer({ settings }: Props) {
   useEffect(() => {
     document.body.style.overflow = isOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
+  // Apply `inert` imperatively when the drawer is closed so that keyboard
+  // users and screen readers cannot reach the off-screen content.
+  // React doesn't support the `inert` attribute as a JSX prop yet (React 18).
+  useEffect(() => {
+    const el = drawerRef.current
+    if (!el) return
+    if (isOpen) {
+      el.removeAttribute('inert')
+    } else {
+      el.setAttribute('inert', '')
+    }
   }, [isOpen])
 
   // useMemo — avoid recalculating pricing on every render (only recalc when deps change)
@@ -73,7 +97,7 @@ export default function CartDrawer({ settings }: Props) {
       <div
         ref={drawerRef}
         role="dialog"
-        aria-label="Shopping cart"
+        aria-labelledby="cart-drawer-title"
         aria-modal="true"
         className={`fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
@@ -83,7 +107,7 @@ export default function CartDrawer({ settings }: Props) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <span className={styles.cartIcon}>🛒</span>
-            <h2 className={styles.title}>Your Cart</h2>
+            <h2 id="cart-drawer-title" className={styles.title}>Your Cart</h2>
             {items.length > 0 && (
               <span className={styles.count}>
                 {items.reduce((s, i) => s + i.qty, 0)}

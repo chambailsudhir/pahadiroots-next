@@ -328,17 +328,29 @@ export function useCartPage() {
   // Clicking a coupon hint pre-fills the input for visibility, then applies it.
   // No setTimeout needed — applyCouponCode uses the `code` parameter directly,
   // never reads from couponCode state.
+  // void is intentional: this is a fire-and-forget UI action; errors are
+  // surfaced via setCouponError inside applyCouponCode, not via the call-site.
   const handleApplyHint = useCallback((code: string) => {
     setCouponCode(code)
-    applyCouponCode(code.toUpperCase())
+    void applyCouponCode(code.toUpperCase())
   }, [applyCouponCode])
+
+  // Wraps store.removeCoupon to also clear local UI state.
+  // Previously the raw store action was exposed directly, meaning couponError
+  // and couponCode persisted after the user removed a coupon — leading to a
+  // stale error banner remaining visible on screen.
+  const handleRemoveCoupon = useCallback(() => {
+    removeCoupon()
+    setCouponCode('')
+    setCouponError('')
+  }, [removeCoupon])
 
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
     // cart store slices
     items,
     coupon,
-    removeCoupon,
+    removeCoupon: handleRemoveCoupon,
 
     // coupon input
     couponCode,

@@ -997,3 +997,18 @@ ul.mega-list.mega-list-2col {
 .dark .mega-parent.open .mega-trigger { color: #7ec87e !important; }
 
 @media (max-width: 900px) { .mega-menu { display: none !important; } }
+
+/* ── Accessibility utilities ─────────────────────────────────────────────── */
+/* sr-only: visually hidden but present for screen readers + crawlers.
+   Matches Tailwind's built-in implementation exactly. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

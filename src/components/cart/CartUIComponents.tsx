@@ -54,7 +54,6 @@ export const StickyCartCTA = memo(function StickyCartCTA({ total, totalQty, minO
         <button
           className={`${styles.sccBtn} ${styles.sccBtnDisabled}`}
           disabled
-          aria-disabled="true"
           title={`Minimum order ₹${minOrderAmt}`}
         >🔒 Checkout</button>
       ) : (
