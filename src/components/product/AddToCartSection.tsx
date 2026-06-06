@@ -54,7 +54,7 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       ? String(selectedVariant.id)
       : String(product.id)
     const size = selectedVariant?.size
-      || (selectedVariant as any)?.variant_value
+      || (selectedVariant as ProductVariant & { variant_value?: string })?.variant_value
       || product.unit_label
       || ''
 

@@ -137,6 +137,11 @@ export async function POST(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Return request failed')
+    // SEC-FIX: never expose raw DB/Supabase error messages in production —
+    // they can leak table names, constraint names, and other internals.
+    const clientMsg = process.env.NODE_ENV !== 'production'
+      ? (err.message || 'Return request failed')
+      : 'Return request failed. Please try again or contact support.'
+    return fail(500, clientMsg)
   }
 }

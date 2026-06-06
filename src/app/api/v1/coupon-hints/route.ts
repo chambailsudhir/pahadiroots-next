@@ -45,6 +45,10 @@ export async function GET() {
         Authorization: `Bearer ${ANON_KEY}`,
         'Content-Type': 'application/json',
       },
+      // SEC-FIX: add a timeout so a slow/unresponsive Supabase doesn't hang the
+      // serverless function until Vercel's hard 15-second timeout fires.
+      // 4 s is generous for a simple SELECT on an indexed table.
+      signal: AbortSignal.timeout(4000),
       next: { revalidate: 120 }, // cache 2 min — hints don't need to be real-time
     })
 

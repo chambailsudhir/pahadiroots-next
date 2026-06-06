@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
   // Applied before body parsing so bots are rejected cheaply without DB work.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   if (!await checkOrderIpLimit(ip)) {
-    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   try {
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     // ── Phone-level rate limit (after parse, so we have the phone number) ──
     if (!await checkOrderPhoneLimit(a.phone)) {
-      return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429 })
+      return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
     }
 
     const name = sanitize(a.name)

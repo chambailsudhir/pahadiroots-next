@@ -220,14 +220,19 @@ export async function syncCustomerProfile(user: {
 }
 
 // ── Rate limiter ──────────────────────────────────────────────
-// In-process limiter — suitable for profile mutation endpoints which
-// are lower-risk than auth actions.
+// In-process limiter — suitable ONLY for low-risk account endpoints
+// (profile reads/writes) where cross-replica consistency is not required.
 //
-// ⚠ In-process state is NOT shared across Vercel instances.
-//   For auth-level security (send_otp, login), use the Upstash KV
-//   rate limiter in /api/auth/route.ts instead.
-//   Add Upstash KV here too if cross-instance enforcement is needed
-//   for profile updates (rare requirement for an e-commerce account page).
+// ⚠ DO NOT use this for any security-sensitive endpoint (auth, coupons,
+//   orders, payments, loyalty redemption).  In-process state is NOT shared
+//   across Vercel instances — on a multi-replica deployment each replica has
+//   its own counter, giving an attacker (replicas × limit) attempts per window.
+//
+//   For security-sensitive routes use the Upstash KV pipeline already
+//   implemented in:
+//     /api/auth/route.ts
+//     /api/v1/coupons/route.ts
+//     /api/v1/orders/route.ts
 //
 // Returns true = request allowed, false = rate limit exceeded.
 

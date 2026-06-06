@@ -393,7 +393,38 @@ export async function createOrder(
   }
 
   // 5. Calculate final price server-side
-  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon)
+  //
+  // SEC-FIX: loyalty discount must be enforced server-side here, not just in
+  // /api/v1/loyalty action=validate.  That route is a client-facing pre-check;
+  // an attacker who calls /api/v1/orders directly can supply any
+  // loyalty_points_redeemed value.  We enforce two guards:
+  //
+  //   a) Balance guard (step 7c below) — points cannot exceed live balance.
+  //   b) max_redeem_pct cap (here) — loyalty ₹ value cannot exceed
+  //      loyalty_max_redeem_pct % of the subtotal.  Without this, a user with
+  //      a very large points balance could make an arbitrarily large order for
+  //      free even if they legitimately accrued that many points.
+  //
+  // loyaltyDiscountInr is then passed to calcPriceSummary so pricing.total
+  // reflects the actual amount to charge.  Previously this arg was omitted,
+  // meaning the stored total_amount ignored loyalty — customers were being
+  // charged the full pre-loyalty price even when points were redeemed.
+  let loyaltyDiscountInr = 0
+  if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
+    const pointsValue  = parseFloat(settings.loyalty_points_value   || '0.25') || 0.25
+    const maxRedeemPct = parseFloat(settings.loyalty_max_redeem_pct || '20')   || 20
+    const subtotal     = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
+
+    const requestedDiscount = Math.floor(input.loyaltyPointsRedeemed! * pointsValue)
+    const maxAllowed        = Math.floor(subtotal * maxRedeemPct / 100)
+
+    // Clamp to the cap rather than throwing — the order still proceeds but
+    // excess loyalty is silently capped.  The balance guard (step 7c) handles
+    // the "more points than the customer owns" case.
+    loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed)
+  }
+
+  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, 'cod', loyaltyDiscountInr)
 
   // 6. COD availability check
   if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {

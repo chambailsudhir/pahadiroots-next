@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 const RATE_WINDOW_SEC  = 60        // 1 minute
 const API_LIMIT        = 20        // 20 API requests/minute per IP
 const COUPON_LIMIT     = 5         // 5 coupon attempts/minute per IP (brute-force prevention)
+const ORDERS_LIMIT     = 10        // 10 order submissions/minute per IP (matches route-level guard)
 
 // ─── Distributed rate limiter (Upstash KV) ───────────────────────────────────
 // Uses the same INCR + EXPIRE pipeline already used by auth/route.ts.
@@ -87,12 +88,31 @@ export async function middleware(req: NextRequest) {
       }
     }
 
+    // Orders endpoint gets a dedicated limit (10/min) — tighter than the generic
+    // API limit and consistent with the route-level checkOrderIpLimit in orders/route.ts.
+    // Both share the same Upstash key space (`mw:rl:orders_ip:${ip}`) so they
+    // count together as a single distributed counter.
+    if (pathname === '/api/v1/orders') {
+      const allowed = await rateLimit(`orders_ip:${ip}`, ORDERS_LIMIT, RATE_WINDOW_SEC)
+      if (!allowed) {
+        return NextResponse.json(
+          { error: 'Too many order requests. Please wait before trying again.' },
+          {
+            status: 429,
+            headers: { 'Retry-After': String(RATE_WINDOW_SEC) },
+          }
+        )
+      }
+    }
+
     const key = `api:${ip}`
     const allowed = await rateLimit(key, API_LIMIT, RATE_WINDOW_SEC)
     if (!allowed) {
       return NextResponse.json(
         { error: 'Too many requests. Please slow down.' },
-        { status: 429 }
+        // SEC-FIX: add Retry-After so clients know when to retry — required by
+        // RFC 6585 §4 and avoids hammering the API again immediately.
+        { status: 429, headers: { 'Retry-After': String(RATE_WINDOW_SEC) } }
       )
     }
     return NextResponse.next()
