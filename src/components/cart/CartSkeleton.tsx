@@ -3,33 +3,50 @@
 /**
  * CartSkeleton — full-page loading placeholder shown while the cart hydrates.
  *
- * Bug-fix applied:
+ * Accessibility fix applied (this round):
  *
- *   PRICE_WIDTHS constant moved to module level (Minor).
- *   The array [120, 100, 80] was defined inside the component function, so a
- *   new array object was allocated on every render. CartSkeleton only renders
- *   once (it's replaced by CartPage after mount), so this had no observable
- *   impact in practice. However, defining static data inside a component is
- *   inconsistent with the rest of the codebase (TRUST_ITEMS, DELIVERY_ITEMS,
- *   CERTS, STEPS, FALLBACK_REVIEWS are all at module level) and would become
- *   wasteful if CartSkeleton were ever re-rendered.
+ *   A1. Loading state not communicated to screen readers (WCAG 1.3.1 / 4.1.3).
+ *       The skeleton rendered shimmer divs with no indication to assistive
+ *       technology that content was loading. A screen reader user would either
+ *       encounter a silent void (no interactive elements) or hear raw shimmer
+ *       div content with no explanation.
+ *       Fix:
+ *         • role="status" on the root — a polite live region that announces
+ *           its initial content on mount without interrupting ongoing SR output.
+ *         • aria-label="Loading cart" — gives the region a descriptive name.
+ *         • aria-busy="true" — signals to AT that the region's content is
+ *           actively changing, suppressing premature reading of partial content.
+ *         • All shimmer children marked aria-hidden="true" — skeleton shapes
+ *           have no semantic meaning; the parent role="status" communicates
+ *           the loading state and nothing more needs to be announced.
+ *
+ * Prior bug-fix already present (kept for reference):
+ *   • PRICE_WIDTHS constant moved to module level — static data was being
+ *     re-allocated inside the component function on every render.
  */
 
 import styles from './CartSkeleton.module.css'
 
-// Bug-fix: moved from inside the component function.
-// Static data belongs at module level — allocated once, never recreated.
 const PRICE_WIDTHS = [120, 100, 80] as const
 
-// Uses .skeleton class from globals.css (shimmer animation already defined)
 export default function CartSkeleton() {
   return (
-    <div className={styles.wrap}>
+    /*
+     * A1: role="status" + aria-label + aria-busy communicate the loading state.
+     * All inner shimmer elements are aria-hidden — they are visual placeholders
+     * only and add no information for screen reader users.
+     */
+    <div
+      className={styles.wrap}
+      role="status"
+      aria-label="Loading cart"
+      aria-busy="true"
+    >
       {/* Ship bar */}
-      <div className={styles.shipBar} />
+      <div className={styles.shipBar} aria-hidden="true" />
 
       {/* Steps */}
-      <div className={styles.stepsBar}>
+      <div className={styles.stepsBar} aria-hidden="true">
         {[0, 1, 2].map(i => (
           <div key={i} className={styles.stepGroup}>
             <div className={`skeleton ${styles.circle}`} />
@@ -39,7 +56,7 @@ export default function CartSkeleton() {
         ))}
       </div>
 
-      <div className={styles.layout}>
+      <div className={styles.layout} aria-hidden="true">
         {/* Left */}
         <div className={styles.left}>
 

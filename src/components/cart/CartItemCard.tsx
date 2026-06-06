@@ -3,23 +3,39 @@
 /**
  * CartItemCard — memoised item row with qty animation.
  *
- * Fix: previously exported CART_ITEM_CARD_CSS (a template-literal string) that
- * CartPage injected via <style>{CART_ITEM_CARD_CSS}</style> to avoid N duplicate
- * <style> blocks. That pattern bypasses Next.js's build pipeline entirely.
+ * Accessibility fixes applied (this round):
  *
- * Now: styles live in ./cart-item-card.css, imported here.
- * Next.js deduplicates CSS imports automatically — the rules appear exactly once
- * in the extracted stylesheet regardless of how many instances mount.
+ *   A1. MRP (was-price) span lacks accessible context (WCAG 1.3.1).
+ *       The strikethrough MRP (e.g. "₹500") was rendered in a plain <span
+ *       className="cic-mrp"> with no semantic meaning. Screen readers
+ *       announced the number with no indication it was the original/crossed-out
+ *       price — indistinguishable from the current price.
+ *       Fix: wrapped in <s> (the semantic strikethrough element) with
+ *       aria-label="Was ₹X" so screen readers announce "Was ₹500" while visual
+ *       users see the struck-through number. The <s> element's default CSS
+ *       text-decoration:line-through is already applied by .cic-mrp styles, so
+ *       no visual change occurs.
  *
- * Bug-fix applied:
+ *   A2. Badge emojis (🌿, 🏔, ⭐, ⚡) were read aloud by screen readers.
+ *       The text labels immediately follow each emoji ("Natural", "Himalayan",
+ *       "Bestseller", "Only N left"), so the emoji names add no information but
+ *       do add noise. aria-hidden="true" added to each emoji span.
  *
- *   All three <button> elements were missing type="button".
- *   Without an explicit type, buttons default to type="submit" inside a <form>.
- *   While no <form> wraps these buttons today, the omission is inconsistent with
- *   the rest of the codebase and risks accidental form submission if this
- *   component is ever placed inside a form (e.g. a checkout page wrapping its
- *   entire content in a <form>).
- *   Affected: Decrease quantity (−), Increase quantity (+), Remove item.
+ *   A3. Quantity live region had no explicit label (WCAG 1.3.1).
+ *       The <span aria-live="polite"> that displays the qty counter announced
+ *       only the number (e.g. "2") with no context when it changed. A screen
+ *       reader user navigating a cart with 3 items would hear "2", "1", "3"
+ *       with no indication these are quantities.
+ *       Fix: aria-label={`Quantity: ${item.qty}`} added so the live region
+ *       announces "Quantity: 2" when the value changes.
+ *
+ * Prior bug-fixes already present (kept for reference):
+ *
+ *   • All three <button> elements were missing type="button".
+ *     Defensive against future <form> wrapper scenarios.
+ *
+ *   • CSS moved from a CART_ITEM_CARD_CSS template literal to ./cart-item-card.css
+ *     so Next.js can extract, deduplicate, and cache the rules properly.
  */
 
 import './cart-item-card.css'
@@ -37,7 +53,6 @@ interface Props {
   onRemove:    (variantId: string, name: string, price: number) => void
 }
 
-// memo prevents re-render of all items when one qty changes
 const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, onRemove }: Props) {
 
   const handleRemove = useCallback(() => {
@@ -68,7 +83,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               className="cic-img"
               priority={false}
             />
-          : <span className="cic-emoji">{item.emoji || '🌿'}</span>
+          : <span className="cic-emoji" aria-hidden="true">{item.emoji || '🌿'}</span>
         }
       </div>
 
@@ -78,11 +93,13 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
           <Link href={`/products/${item.slug}`} className="cic-name">{item.name}</Link>
           {item.size && <span className="cic-size">{item.size}</span>}
           <div className="cic-badges">
-            {item.isOrganic    && <span className="cic-badge org">🌿 Natural</span>}
-            {item.isHimalayan  && <span className="cic-badge hml">🏔 Himalayan</span>}
-            {item.isBestseller && <span className="cic-badge best">⭐ Bestseller</span>}
+            {/* A2: aria-hidden on badge emojis — the text label that follows
+                provides all the information; the emoji name adds only noise. */}
+            {item.isOrganic    && <span className="cic-badge org"><span aria-hidden="true">🌿</span> Natural</span>}
+            {item.isHimalayan  && <span className="cic-badge hml"><span aria-hidden="true">🏔</span> Himalayan</span>}
+            {item.isBestseller && <span className="cic-badge best"><span aria-hidden="true">⭐</span> Bestseller</span>}
             {(item.maxQty ?? 99) <= 5  && (
-              <span className="cic-badge stock">⚡ Only {item.maxQty ?? 99} left</span>
+              <span className="cic-badge stock"><span aria-hidden="true">⚡</span> Only {item.maxQty ?? 99} left</span>
             )}
           </div>
         </div>
@@ -90,7 +107,6 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
         <div className="cic-footer">
           {/* Qty stepper */}
           <div className="cic-qty" role="group" aria-label={`Quantity for ${item.name}`}>
-            {/* Bug-fix: type="button" added to all three buttons. */}
             <button
               type="button"
               className="cic-qty-btn"
@@ -98,9 +114,13 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               aria-label="Decrease quantity"
               disabled={item.qty <= 1}
             >−</button>
+            {/* A3: aria-label gives screen readers "Quantity: N" context on change,
+                rather than just announcing the bare number. */}
             <span
               className={`cic-qty-num${qtyAnim ? ` anim-${qtyAnim}` : ''}`}
               aria-live="polite"
+              aria-atomic="true"
+              aria-label={`Quantity: ${item.qty}`}
             >{item.qty}</span>
             <button
               type="button"
@@ -113,7 +133,14 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
 
           {/* Price */}
           <div className="cic-price-col">
-            {hasSaving && <span className="cic-mrp">{formatPrice(item.mrp * item.qty)}</span>}
+            {hasSaving && (
+              // A1: <s> provides semantic strikethrough. aria-label="Was ₹X" gives
+              // screen readers meaningful context rather than just a raw number.
+              // Visual appearance unchanged — .cic-mrp already applies line-through.
+              <s className="cic-mrp" aria-label={`Was ${formatPrice(item.mrp * item.qty)}`}>
+                {formatPrice(item.mrp * item.qty)}
+              </s>
+            )}
             <span className="cic-price">{formatPrice(item.price * item.qty)}</span>
             {hasSaving && (
               <span className="cic-save">Save {formatPrice((item.mrp - item.price) * item.qty)}</span>

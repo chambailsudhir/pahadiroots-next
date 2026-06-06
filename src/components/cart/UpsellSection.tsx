@@ -3,22 +3,32 @@
 /**
  * UpsellSection — "Customers Also Buy" grid of product suggestions.
  *
- * Bug-fixes applied:
+ * Accessibility fixes applied (this round):
  *
- *   1. items.slice(0, 4) called twice in one ternary (Minor).
- *      The original ternary ran items.slice(0, 4) once to check .length === 0
- *      and again immediately after to call .map() on the non-empty case:
+ *   A1. Loading state not communicated to screen readers (WCAG 4.1.3).
+ *       While the grid displayed shimmer placeholders, there was no indication
+ *       to AT that content was being loaded. A screen reader navigating the page
+ *       during load would hit the grid and hear nothing meaningful.
+ *       Fix: aria-busy={loading} on the grid container. When true, AT is
+ *       signaled to wait before reading the region's content. When loading
+ *       completes (false), AT can announce the updated content normally.
  *
- *        items.slice(0, 4).length === 0
- *          ? <empty>
- *          : items.slice(0, 4).map(...)   ← second slice, same result
+ *   A2. Shimmer placeholder elements were exposed to screen readers.
+ *       The UpsellShimmer component renders purely visual skeleton shapes.
+ *       Exposing these to AT produces meaningless announcements (empty divs).
+ *       Fix: aria-hidden="true" on each shimmer wrapper so AT skips them
+ *       entirely, relying instead on aria-busy (A1) to communicate loading.
  *
- *      Fix: derive `visibleItems` once before the JSX. This removes the
- *      redundant allocation and makes the intent clear.
+ *   A3. Grid has no accessible name (WCAG 1.3.1).
+ *       The <h2> heading is a sibling of the grid, not a label for it. A screen
+ *       reader user navigating directly to the grid region had no landmark label.
+ *       Fix: aria-label="Customer suggestions" on the grid div gives it a
+ *       programmatically determinable name independent of the heading.
  *
- *   2. Add-to-cart button missing type="button" (Minor).
- *      Consistent with the rest of the codebase; defensive against future
- *      <form> wrappers.
+ * Prior bug-fixes already present (kept for reference):
+ *
+ *   1. items.slice(0,4) called twice in one ternary — derived to visibleItems once.
+ *   2. Add-to-cart button missing type="button".
  */
 
 import { memo } from 'react'
@@ -38,10 +48,12 @@ interface Props {
   onAdd: (item: UpsellItem) => void
 }
 
-// Shimmer skeleton for individual upsell card
+// A2: UpsellShimmer is a purely visual skeleton — aria-hidden="true" ensures
+// AT skips it entirely. The parent grid's aria-busy={loading} communicates
+// the loading state instead.
 function UpsellShimmer() {
   return (
-    <div className={styles.shimmer}>
+    <div className={styles.shimmer} aria-hidden="true">
       <div className={styles.shImg} />
       <div className={styles.shBody}>
         <div className={`${styles.shLine} ${styles.short}`} />
@@ -57,15 +69,12 @@ const UpsellSection = memo(function UpsellSection({
   items, loading, error, addedIds, remainingForFreeShip,
   isFreeShipping, freeShipMin, onAdd,
 }: Props) {
-  // Bug-fix 1: compute once — previously items.slice(0, 4) appeared twice in
-  // the ternary below (once for .length === 0 and once for .map()), allocating
-  // a second array with the same contents.
   const visibleItems = items.slice(0, 4)
 
   return (
     <div className={styles.card}>
       <div className={styles.head}>
-        <h2 className={styles.title}>🛍 Customers Also Buy</h2>
+        <h2 className={styles.title}><span aria-hidden="true">🛍</span> Customers Also Buy</h2>
         <span className={styles.sub}>
           {freeShipMin > 0 && !isFreeShipping
             ? `Add ${formatPrice(remainingForFreeShip)} more for free shipping`
@@ -73,7 +82,18 @@ const UpsellSection = memo(function UpsellSection({
         </span>
       </div>
 
-      <div className={styles.grid}>
+      {/*
+       * A1: aria-busy={loading} signals to AT that this region is actively
+       *     loading. Combined with A2 (shimmer aria-hidden), SR users hear
+       *     nothing during load, then get the updated product list announced
+       *     once aria-busy flips to false.
+       * A3: aria-label provides an accessible name for the grid region.
+       */}
+      <div
+        className={styles.grid}
+        aria-busy={loading}
+        aria-label="Customer suggestions"
+      >
         {loading
           ? [0, 1, 2, 3].map(i => <UpsellShimmer key={i} />)
           : error
@@ -89,7 +109,7 @@ const UpsellSection = memo(function UpsellSection({
                     {p.image
                       ? <Image src={p.image} alt={p.name} fill sizes="50px"
                           style={{ objectFit: 'cover', borderRadius: '8px' }} />
-                      : <span className={styles.imgEmoji}>{p.emoji || '🌿'}</span>
+                      : <span className={styles.imgEmoji} aria-hidden="true">{p.emoji || '🌿'}</span>
                     }
                   </div>
                   <div className={styles.info}>
@@ -97,12 +117,14 @@ const UpsellSection = memo(function UpsellSection({
                     <div className={styles.name}>{p.name}</div>
                     <div className={styles.size}>{p.size}</div>
                     <div className={styles.priceRow}>
-                      {p.mrp > p.price && <span className={styles.mrp}>{formatPrice(p.mrp)}</span>}
+                      {p.mrp > p.price && (
+                        <s className={styles.mrp} aria-label={`Was ${formatPrice(p.mrp)}`}>
+                          {formatPrice(p.mrp)}
+                        </s>
+                      )}
                       <span className={styles.price}>{formatPrice(p.price)}</span>
                     </div>
                   </div>
-                  {/* Bug-fix 2: type="button" added — consistent with the rest of
-                      the codebase and defensive against future <form> wrappers. */}
                   <button
                     type="button"
                     className={`${styles.btn}${addedIds.includes(p.id) ? ` ${styles.added}` : ''}`}

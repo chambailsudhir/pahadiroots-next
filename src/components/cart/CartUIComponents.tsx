@@ -11,18 +11,10 @@ interface StickyProps {
   /**
    * Pre-shipping subtotal — used exclusively for the min-order gate.
    *
-   * Bug fixed: the original component used `total` (post-shipping) for both
-   * the displayed amount AND the min-order comparison. This caused a logical
-   * inconsistency with CartSummary, which correctly compares against the
-   * pre-shipping subtotal. Example:
-   *
-   *   subtotal  ₹450  |  shipping ₹99  |  total ₹549  |  minOrderAmt ₹500
-   *   StickyCartCTA (old): ₹549 ≥ ₹500 → checkout ENABLED   ✗
-   *   CartSummary:         ₹450 < ₹500 → checkout BLOCKED    ✓
-   *
-   * With orderSubtotal, both components now compare the same value. The prop
-   * is optional (defaults to total) so any existing usages of StickyCartCTA
-   * outside CartPage continue to work without changes.
+   * Bug fixed (prior round): the original component used `total` (post-shipping)
+   * for both the displayed amount AND the min-order comparison, causing a logical
+   * inconsistency with CartSummary. With orderSubtotal, both components compare
+   * the same value. Optional so existing usages outside CartPage still work.
    */
   orderSubtotal?: number
   totalQty: number
@@ -35,13 +27,8 @@ export const StickyCartCTA = memo(function StickyCartCTA({
   totalQty,
   minOrderAmt = 0,
 }: StickyProps) {
-  // Fix: use orderSubtotal for the min-order gate; fall back to total when the
-  // prop is absent so existing call-sites outside CartPage are unaffected.
   const belowMinOrder = minOrderAmt > 0 && (orderSubtotal ?? total) < minOrderAmt
 
-  // Track whether the sticky bar is visually active (mobile viewport).
-  // On desktop the wrapper has the `inert` attribute so neither keyboard users
-  // nor screen readers can reach it — no aria-hidden needed.
   const [isMobile, setIsMobile] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -53,7 +40,7 @@ export const StickyCartCTA = memo(function StickyCartCTA({
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  // Apply inert + aria-hidden imperatively — React doesn't support them natively yet.
+  // Apply inert + aria-hidden imperatively — React 18 doesn't support inert as a JSX prop.
   // aria-hidden ensures VoiceOver on older Safari (where inert isn't fully supported)
   // doesn't announce the duplicate "Checkout" button to screen reader users on desktop.
   useEffect(() => {
@@ -76,19 +63,35 @@ export const StickyCartCTA = memo(function StickyCartCTA({
       </div>
       {belowMinOrder ? (
         <>
-          {/* sr-only text tells screen readers *why* checkout is blocked —
-              title attributes are not announced on touch devices. */}
+          {/* sr-only text tells screen readers *why* checkout is blocked */}
           <span id="scc-min-warn" className="sr-only">
             Minimum order is ₹{minOrderAmt}. Add more items to proceed.
           </span>
+          {/*
+           * A1 (accessibility fix): type="button" added.
+           *    Without an explicit type attribute, <button> defaults to
+           *    type="submit" inside a <form>. While no <form> wraps this
+           *    component today, the omission is inconsistent with the rest of
+           *    the codebase and risks accidental form submission in future.
+           *
+           * A2 (accessibility fix): aria-hidden on 🔒 emoji.
+           *    The emoji is decorative — "Checkout" is the meaningful label.
+           *    Without aria-hidden, screen readers announce "lock emoji Checkout"
+           *    instead of just "Checkout, dimmed button".
+           */}
           <button
+            type="button"
             className={`${styles.sccBtn} ${styles.sccBtnDisabled}`}
             disabled
             aria-describedby="scc-min-warn"
-          >🔒 Checkout</button>
+          >
+            <span aria-hidden="true">🔒</span> Checkout
+          </button>
         </>
       ) : (
-        <Link href="/checkout" className={styles.sccBtn}>🔒 Checkout</Link>
+        <Link href="/checkout" className={styles.sccBtn}>
+          <span aria-hidden="true">🔒</span> Checkout
+        </Link>
       )}
     </div>
   )
@@ -98,7 +101,13 @@ export const StickyCartCTA = memo(function StickyCartCTA({
 export const EmptyCart = memo(function EmptyCart() {
   return (
     <div className={styles.ecEmpty}>
-      <div className={styles.ecIcon}>🛒</div>
+      {/*
+       * A3 (accessibility fix): aria-hidden on 🛒 decorative icon.
+       *    The heading "Your cart is empty" immediately below already communicates
+       *    the page state. The large cart emoji is purely visual decoration —
+       *    having SR announce "shopping cart emoji" before the heading adds noise.
+       */}
+      <div className={styles.ecIcon} aria-hidden="true">🛒</div>
       <h1 className={styles.ecTitle}>Your cart is empty</h1>
       <p className={styles.ecSub}>
         Discover natural Himalayan goodness crafted by mountain farmers.

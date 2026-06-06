@@ -3,39 +3,47 @@
 /**
  * CartSummary — order summary panel with coupon input, price breakdown, and CTA.
  *
- * Bug-fixes applied:
+ * Accessibility fixes applied (this round):
  *
- *   1. Coupon input Enter key bypassed the loading guard (Medium — Logic).
+ *   A1. Coupon input missing aria-invalid + aria-describedby (WCAG 1.3.1 / 4.1.3).
+ *       When the coupon error is set the input was visually highlighted red but
+ *       never programmatically flagged as invalid. Screen readers had no way to
+ *       associate the error text with the field that caused it.
+ *       Fix:
+ *         • id="coupon-code-error" added to the inner <span> inside the live
+ *           region so it can be the target of aria-describedby.
+ *         • aria-invalid={!!couponError} added to the <input> — flips from false
+ *           (no error) to true (error present), which causes VoiceOver / NVDA to
+ *           announce "invalid data" alongside the field label.
+ *         • aria-describedby="coupon-code-error" added to the <input> — wires
+ *           the error text so it is announced when the field receives focus while
+ *           an error is active.
  *
- *      The Apply button was correctly disabled when couponLoading=true, preventing
- *      mouse/touch users from sending duplicate requests. However, the input's
- *      onKeyDown handler fired onApplyCoupon() unconditionally on Enter:
+ *   A2. Decorative emoji 🏷️ in coupon heading announced by screen readers.
+ *       aria-hidden="true" added so SR users hear "Have a coupon code?" without
+ *       a preceding emoji name (e.g. "label emoji Have a coupon code?").
  *
- *        onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
+ *   A3. Decorative emoji 🎉 in coupon-applied banner announced by screen readers.
+ *       The SR already hears the coupon code and saving amount — the emoji
+ *       description adds no value. aria-hidden="true" added.
  *
- *      A keyboard user who pressed Enter while a request was already in-flight
- *      would launch a second concurrent request. Both fetches would race to update
- *      state: whichever resolved last "won" the applyCoupon / setCouponError call,
- *      potentially showing a stale error from the first request after the second
- *      had already succeeded.
+ *   A4. The ✕ text inside the remove-coupon button is redundant because the
+ *       button carries aria-label="Remove coupon". Without aria-hidden, SR users
+ *       on some AT implementations hear both "Remove coupon" (aria-label) and
+ *       "multiplication sign" (✕ character description).
+ *       Fix: aria-hidden="true" on the ✕ character span.
  *
- *      Fix: add !couponLoading to the short-circuit chain so Enter is a no-op while
- *      the first request is pending:
+ *   A5. Savings pill emoji 🎉 and lock emoji 🔒 in CTA are decorative.
+ *       aria-hidden="true" added to both so the meaningful CTA text isn't buried
+ *       under emoji descriptions.
  *
- *        onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
+ * Logic bug-fixes already present (prior round — kept for reference):
  *
- *      This aligns keyboard behaviour with the disabled-button UX and matches how
- *      the Apply button itself has always behaved.
+ *   1. Coupon input Enter key bypassed couponLoading guard — race condition on
+ *      double submit. Fixed: !couponLoading added to the onKeyDown handler.
  *
- *   2. Remove-coupon (✕) button missing type="button" (Minor — Accessibility).
- *
- *      The ✕ button that dismisses an applied coupon had no explicit type attribute.
- *      Without type="button", buttons default to type="submit" inside a <form>.
- *      While no <form> wraps CartSummary today, the omission is inconsistent with
- *      the rest of the codebase (Apply, hint pills, and CTA all carry the attribute)
- *      and risks accidental form submission if CartSummary is ever placed inside a
- *      checkout <form>.
- *      Fix: added type="button" to the couponRm button.
+ *   2. Remove-coupon button was missing type="button" — would default to
+ *      type="submit" inside a future <form>. Fixed.
  */
 
 import Link from 'next/link'
@@ -77,23 +85,28 @@ const CartSummary = memo(function CartSummary({
     <div className={styles.wrap}>
       {/* Coupon */}
       <div className={styles.coupon}>
-        <div className={styles.couponHead}>🏷️ Have a coupon code?</div>
+        {/* A2: aria-hidden on 🏷️ — emoji is decorative; SR reads "Have a coupon code?" */}
+        <div className={styles.couponHead}>
+          <span aria-hidden="true">🏷️</span>{' '}Have a coupon code?
+        </div>
         <div className={styles.couponBody}>
         {coupon ? (
           <div className={styles.couponApplied}>
-            <span>🎉 <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
-            {/* Bug-fix: type="button" added — without it, this defaults to type="submit"
-                inside any ancestor <form>, which would submit the form instead of
-                removing the coupon. Consistent with all other interactive buttons in
-                the codebase. */}
-            <button type="button" className={styles.couponRm} onClick={onRemoveCoupon} aria-label="Remove coupon">✕</button>
+            {/* A3: aria-hidden on 🎉 — SR hears code + saving amount; emoji adds noise */}
+            <span><span aria-hidden="true">🎉</span> <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
+            <button
+              type="button"
+              className={styles.couponRm}
+              onClick={onRemoveCoupon}
+              aria-label="Remove coupon"
+            >
+              {/* A4: aria-hidden on ✕ — button's aria-label already describes the action;
+                  some AT implementations read both the label and the inner text/character */}
+              <span aria-hidden="true">✕</span>
+            </button>
           </div>
         ) : (
           <div className={styles.couponRow}>
-            {/* A visible label is required by WCAG 1.3.1 (Info and Relationships).
-                We use sr-only so it doesn't break the existing visual design —
-                the "Have a coupon code?" heading already acts as a visual cue
-                but is not programmatically associated with the input. */}
             <label htmlFor="coupon-code" className="sr-only">Coupon code</label>
             <input
               id="coupon-code"
@@ -101,12 +114,6 @@ const CartSummary = memo(function CartSummary({
               type="text"
               value={couponCode}
               onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
-              // Bug-fix: guard Enter with !couponLoading.
-              // Previously `e.key === 'Enter' && onApplyCoupon()` fired regardless
-              // of loading state. The Apply button is disabled={couponLoading} so
-              // mouse users could not double-submit, but keyboard users could —
-              // two concurrent fetches would race on couponError / applyCoupon
-              // state. Now both paths honour the same loading guard.
               onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
               placeholder="e.g. WELCOME50"
               className={styles.couponInput}
@@ -114,6 +121,11 @@ const CartSummary = memo(function CartSummary({
               autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
+              // A1: aria-invalid flags the field as erroneous to screen readers.
+              // aria-describedby wires the live error message to the input so SR
+              // users hear the reason when they focus or navigate to the field.
+              aria-invalid={!!couponError}
+              aria-describedby={couponError ? 'coupon-code-error' : undefined}
             />
             <button
               className={styles.couponBtn}
@@ -127,9 +139,14 @@ const CartSummary = memo(function CartSummary({
             </button>
           </div>
         )}
-        {/* Aria-live region for coupon status — single announcement point, no double-fire */}
+        {/* A1: id added to the inner <span> so aria-describedby on the input can
+            target the exact text node, not the outer wrapper div.
+            aria-live="polite" + aria-atomic="true" ensures the error is announced
+            as a complete sentence when it appears. */}
         <div aria-live="polite" aria-atomic="true" className={styles.couponLive}>
-          {couponError && <span className={styles.couponErr}>⚠ {couponError}</span>}
+          {couponError && (
+            <span id="coupon-code-error" className={styles.couponErr}>⚠ {couponError}</span>
+          )}
         </div>
         {/* Coupon hints — quick-apply pills from /api/v1/coupon-hints */}
         {!coupon && couponHints.length > 0 && (
@@ -166,7 +183,9 @@ const CartSummary = memo(function CartSummary({
         <div className={styles.row}>
           <span>Shipping</span>
           <span className={pricing.isFreeShipping ? styles.free : ''}>
-            {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
+            {pricing.isFreeShipping ? (
+              <><span aria-hidden="true">🚚</span> FREE</>
+            ) : formatPrice(pricing.shipping)}
           </span>
         </div>
         <div className={styles.divider} />
@@ -178,7 +197,10 @@ const CartSummary = memo(function CartSummary({
           <div className={styles.gstNote}>* Prices include GST</div>
         )}
         {pricing.discount > 0 && (
-          <div className={styles.savePill}>🎉 Saving {formatPrice(pricing.discount)} on this order!</div>
+          // A5: aria-hidden on 🎉 — the saving amount text is the meaningful content
+          <div className={styles.savePill}>
+            <span aria-hidden="true">🎉</span> Saving {formatPrice(pricing.discount)} on this order!
+          </div>
         )}
       </div>
 
@@ -192,22 +214,20 @@ const CartSummary = memo(function CartSummary({
 
       {/* CTA */}
       {belowMinOrder ? (
-        // A <button disabled> is natively focusable and announced as "dimmed" by
-        // screen readers. aria-describedby wires the visible warning text so SR
-        // users hear *why* checkout is blocked without needing to find the alert.
         <button
           type="button"
           disabled
           aria-describedby="cart-min-warn"
           className={`${styles.cta} ${styles.ctaDisabled}`}
         >
+          {/* A5: aria-hidden on 🔒 — button label is "Proceed to Checkout"; emoji is decorative */}
           <span aria-hidden="true">🔒</span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </button>
       ) : (
         <Link href="/checkout" className={styles.cta}>
-          <span>🔒</span>
+          <span aria-hidden="true">🔒</span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </Link>
@@ -218,9 +238,9 @@ const CartSummary = memo(function CartSummary({
       {/* Payment trust */}
       <div className={styles.trust}>
         <div className={styles.trustRow}>
-          <span>🔐 SSL Encrypted</span>
-          <span>🏦 Razorpay</span>
-          <span>✅ Secure</span>
+          <span><span aria-hidden="true">🔐</span> SSL Encrypted</span>
+          <span><span aria-hidden="true">🏦</span> Razorpay</span>
+          <span><span aria-hidden="true">✅</span> Secure</span>
         </div>
         <div className={styles.logos}>
           {[['#6a1b9a','UPI'],['#1a1f71','VISA'],['#eb001b','MC'],
