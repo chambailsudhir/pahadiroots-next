@@ -1,5 +1,33 @@
 'use client'
 
+/**
+ * CartSummary — order summary panel with coupon input, price breakdown, and CTA.
+ *
+ * Bug-fix applied:
+ *
+ *   Coupon input Enter key bypassed the loading guard (Medium — Logic).
+ *
+ *   The Apply button was correctly disabled when couponLoading=true, preventing
+ *   mouse/touch users from sending duplicate requests. However, the input's
+ *   onKeyDown handler fired onApplyCoupon() unconditionally on Enter:
+ *
+ *     onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
+ *
+ *   A keyboard user who pressed Enter while a request was already in-flight
+ *   would launch a second concurrent request. Both fetches would race to update
+ *   state: whichever resolved last "won" the applyCoupon / setCouponError call,
+ *   potentially showing a stale error from the first request after the second
+ *   had already succeeded.
+ *
+ *   Fix: add !couponLoading to the short-circuit chain so Enter is a no-op while
+ *   the first request is pending:
+ *
+ *     onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
+ *
+ *   This aligns keyboard behaviour with the disabled-button UX and matches how
+ *   the Apply button itself has always behaved.
+ */
+
 import Link from 'next/link'
 import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
@@ -56,9 +84,21 @@ const CartSummary = memo(function CartSummary({
             <input
               id="coupon-code"
               name="coupon-code"
-              type="text" value={couponCode}
+              type="text"
+              value={couponCode}
               onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
+              {/*
+                Bug-fix: guard Enter with !couponLoading.
+                Previously: e.key === 'Enter' && onApplyCoupon()
+                The Apply button is disabled={couponLoading} so mouse users could
+                not double-submit. Keyboard users could, because Enter on the
+                input calls onApplyCoupon regardless of loading state. Two
+                concurrent fetch calls race to write couponError / applyCoupon
+                state — whichever resolves last wins, potentially showing a stale
+                error after a successful apply.
+                Now keyboard and pointer paths both honour the loading guard.
+              */}
+              onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
               placeholder="e.g. WELCOME50"
               className={styles.couponInput}
               autoCapitalize="characters"
@@ -66,8 +106,12 @@ const CartSummary = memo(function CartSummary({
               autoCorrect="off"
               spellCheck={false}
             />
-            <button className={styles.couponBtn} onClick={onApplyCoupon}
-              disabled={couponLoading} type="button">
+            <button
+              className={styles.couponBtn}
+              onClick={onApplyCoupon}
+              disabled={couponLoading}
+              type="button"
+            >
               {couponLoading
                 ? <><span className={styles.spinner} aria-hidden="true" />Applying…</>
                 : 'Apply'}

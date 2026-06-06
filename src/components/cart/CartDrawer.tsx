@@ -1,5 +1,40 @@
 'use client'
 
+/**
+ * CartDrawer — slide-in mini-cart with full accessibility support.
+ *
+ * Bug-fixes applied:
+ *
+ *   1. Focus setTimeout not cleaned up (Medium — Accessibility).
+ *      The 50 ms timer that moves focus to the Close button had no cleanup.
+ *      In React StrictMode, effects are double-invoked: the first run fired the
+ *      timer, the cleanup ran (but never cleared the timer), then the second run
+ *      started a new timer. The first timer could fire while the second run was
+ *      still setting up, or — in production — if isOpen flipped from true→false
+ *      within 50 ms, the timer would fire and focus the Close button on a drawer
+ *      that is already closing (inert element receives focus silently).
+ *      Fix: store the timer ID in a local variable captured by the cleanup closure
+ *      and call clearTimeout on it.
+ *
+ *   2. Scroll-lock layout shift (Medium — UX).
+ *      Setting document.body.style.overflow = 'hidden' removes the scrollbar.
+ *      On Windows and some desktop browsers the scrollbar is ~15–17 px wide.
+ *      Hiding it shrinks the viewport, causing all non-scroll-locked content
+ *      (header, page text) to jump rightward when the drawer opens.
+ *      Fix: measure the scrollbar width before locking (window.innerWidth −
+ *      document.documentElement.clientWidth) and apply an equal paddingRight to
+ *      document.body so the layout doesn't shift. Both properties are reset
+ *      together in the effect cleanup.
+ *
+ *   3. Interactive buttons missing type="button" (Minor).
+ *      Every <button> without an explicit type attribute defaults to
+ *      type="submit" inside a <form>. While no <form> wraps these buttons today,
+ *      adding type="button" is defensive against future refactors and is
+ *      consistent with the rest of the codebase.
+ *      Affected: Close button, "Continue Shopping" button, qty − and + buttons,
+ *      and the Remove (×) button on each item row.
+ */
+
 import { useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -28,6 +63,11 @@ export default function CartDrawer({ settings }: Props) {
 
   // Close on Escape + focus trap
   useEffect(() => {
+    // Fix 1: declare the timer ID here so the cleanup closure can cancel it.
+    // Previously there was no reference to the timer at all, so it could fire
+    // after the effect had already been re-run or the drawer had closed.
+    let focusTimer: ReturnType<typeof setTimeout> | null = null
+
     const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { closeCart(); return }
@@ -42,11 +82,14 @@ export default function CartDrawer({ settings }: Props) {
         }
       }
     }
+
     if (isOpen) {
       // Capture the element that opened the drawer so we can restore focus on close
       openerRef.current = document.activeElement as HTMLElement
       document.addEventListener('keydown', onKey)
-      setTimeout(() => firstFocusRef.current?.focus(), 50)
+      // Fix 1: store the timer so cleanup can cancel it if isOpen changes before
+      // the 50 ms window elapses (e.g. StrictMode double-invoke, or rapid toggle).
+      focusTimer = setTimeout(() => firstFocusRef.current?.focus(), 50)
     } else {
       // Return focus to the trigger (e.g. the Cart button in the header)
       if (openerRef.current && typeof openerRef.current.focus === 'function') {
@@ -54,13 +97,36 @@ export default function CartDrawer({ settings }: Props) {
         openerRef.current = null
       }
     }
-    return () => document.removeEventListener('keydown', onKey)
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      // Fix 1: cancel the pending focus timer so it never fires on a closed
+      // or inert drawer element.
+      if (focusTimer !== null) clearTimeout(focusTimer)
+    }
   }, [isOpen, closeCart])
 
   // Lock body scroll when open
   useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    if (isOpen) {
+      // Fix 2: measure the scrollbar width BEFORE hiding overflow, because once
+      // overflow is hidden the scrollbar is gone and the width reads as 0.
+      // Apply an equal paddingRight so fixed/absolute positioned elements
+      // (header, this drawer's overlay) don't shift when the scrollbar disappears.
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+      document.body.style.overflow = 'hidden'
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
+    } else {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
+    return () => {
+      // Cleanup on unmount — ensure we never leave the body in a locked state.
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
   }, [isOpen])
 
   // Apply `inert` imperatively when the drawer is closed so that keyboard
@@ -114,7 +180,9 @@ export default function CartDrawer({ settings }: Props) {
               </span>
             )}
           </div>
+          {/* Fix 3: type="button" — defensive against future <form> wrappers. */}
           <button
+            type="button"
             onClick={closeCart}
             aria-label="Close cart"
             ref={firstFocusRef}
@@ -131,7 +199,9 @@ export default function CartDrawer({ settings }: Props) {
               <div className="text-5xl mb-4">🛒</div>
               <h3 className="text-base font-semibold text-stone-700 mb-1">Your cart is empty</h3>
               <p className="text-stone-400 text-sm mb-5">Add products to get started</p>
+              {/* Fix 3: type="button" */}
               <button
+                type="button"
                 onClick={closeCart}
                 className="text-sm font-semibold text-forest-700 hover:text-forest-900"
               >
@@ -171,7 +241,9 @@ export default function CartDrawer({ settings }: Props) {
                       role="group"
                       aria-label={`Quantity for ${item.name}`}
                     >
+                      {/* Fix 3: type="button" on both stepper buttons */}
                       <button
+                        type="button"
                         onClick={() => updateQty(item.variantId, item.qty - 1)}
                         disabled={item.qty <= 1}
                         className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
@@ -184,6 +256,7 @@ export default function CartDrawer({ settings }: Props) {
                         aria-label={`${item.qty} in cart`}
                       >{item.qty}</span>
                       <button
+                        type="button"
                         onClick={() => updateQty(item.variantId, item.qty + 1)}
                         disabled={item.qty >= (item.maxQty ?? 99)}
                         className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
@@ -194,7 +267,9 @@ export default function CartDrawer({ settings }: Props) {
                       <span className="text-sm font-bold text-stone-900">
                         {formatPrice(item.price * item.qty)}
                       </span>
+                      {/* Fix 3: type="button" on remove button */}
                       <button
+                        type="button"
                         onClick={() => removeItem(item.variantId)}
                         aria-label={`Remove ${item.name} from cart`}
                         className="text-stone-300 hover:text-red-400 transition-colors"

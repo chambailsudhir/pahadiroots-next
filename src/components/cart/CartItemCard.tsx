@@ -10,6 +10,16 @@
  * Now: styles live in ./cart-item-card.css, imported here.
  * Next.js deduplicates CSS imports automatically — the rules appear exactly once
  * in the extracted stylesheet regardless of how many instances mount.
+ *
+ * Bug-fix applied:
+ *
+ *   All three <button> elements were missing type="button".
+ *   Without an explicit type, buttons default to type="submit" inside a <form>.
+ *   While no <form> wraps these buttons today, the omission is inconsistent with
+ *   the rest of the codebase and risks accidental form submission if this
+ *   component is ever placed inside a form (e.g. a checkout page wrapping its
+ *   entire content in a <form>).
+ *   Affected: Decrease quantity (−), Increase quantity (+), Remove item.
  */
 
 import './cart-item-card.css'
@@ -80,7 +90,9 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
         <div className="cic-footer">
           {/* Qty stepper */}
           <div className="cic-qty" role="group" aria-label={`Quantity for ${item.name}`}>
+            {/* Bug-fix: type="button" added to all three buttons. */}
             <button
+              type="button"
               className="cic-qty-btn"
               onClick={handleDecr}
               aria-label="Decrease quantity"
@@ -91,6 +103,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               aria-live="polite"
             >{item.qty}</span>
             <button
+              type="button"
               className="cic-qty-btn"
               onClick={handleIncr}
               aria-label="Increase quantity"
@@ -109,6 +122,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
 
           {/* Remove — min 44×44px touch target per WCAG 2.5.5 */}
           <button
+            type="button"
             className="cic-remove"
             onClick={handleRemove}
             aria-label={`Remove ${item.name}`}

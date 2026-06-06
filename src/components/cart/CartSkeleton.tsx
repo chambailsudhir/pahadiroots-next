@@ -1,11 +1,28 @@
 'use client'
 
+/**
+ * CartSkeleton — full-page loading placeholder shown while the cart hydrates.
+ *
+ * Bug-fix applied:
+ *
+ *   PRICE_WIDTHS constant moved to module level (Minor).
+ *   The array [120, 100, 80] was defined inside the component function, so a
+ *   new array object was allocated on every render. CartSkeleton only renders
+ *   once (it's replaced by CartPage after mount), so this had no observable
+ *   impact in practice. However, defining static data inside a component is
+ *   inconsistent with the rest of the codebase (TRUST_ITEMS, DELIVERY_ITEMS,
+ *   CERTS, STEPS, FALLBACK_REVIEWS are all at module level) and would become
+ *   wasteful if CartSkeleton were ever re-rendered.
+ */
+
 import styles from './CartSkeleton.module.css'
+
+// Bug-fix: moved from inside the component function.
+// Static data belongs at module level — allocated once, never recreated.
+const PRICE_WIDTHS = [120, 100, 80] as const
 
 // Uses .skeleton class from globals.css (shimmer animation already defined)
 export default function CartSkeleton() {
-  const PRICE_WIDTHS = [120, 100, 80]
-
   return (
     <div className={styles.wrap}>
       {/* Ship bar */}
