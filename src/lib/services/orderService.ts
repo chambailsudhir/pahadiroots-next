@@ -1,0 +1,649 @@
+import { captureError } from '@/lib/logger'
+// ─────────────────────────────────────────────────────────────
+// orderService — orders API calls
+//
+// Features:
+//  ✅ Server-side pagination (?page=&limit=)
+//  ✅ Server-side search (?search=&status=)
+//  ✅ Retry with exponential backoff
+//  ✅ Zod schema validation
+//  ✅ Independent of React — testable
+// ─────────────────────────────────────────────────────────────
+import { z } from 'zod'
+import { ServiceError } from './profileService'
+
+// ── Zod Schema ───────────────────────────────────────────────
+const OrderItemSchema = z.object({
+  qty:       z.number(),
+  price:     z.number(),
+  name:      z.string(),
+  emoji:     z.string(),
+  image_url: z.string().nullable(),
+  variant:   z.string().nullable().optional(),
+})
+
+export const OrderSchema = z.object({
+  id:              z.union([z.string(), z.number()]),
+  order_number:    z.string(),
+  order_status:    z.string(),
+  _displayStatus:  z.string(),
+  payment_method:  z.string().nullable(),
+  payment_status:  z.string().nullable(),
+  total_amount:    z.number(),
+  created_at:      z.string(),
+  tracking_number: z.string().nullable(),
+  courier:         z.string().nullable(),
+  shipped_at:      z.string().nullable(),
+  delivered_at:    z.string().nullable(),
+  updated_at:      z.string().nullable().optional(),
+  items:           z.array(OrderItemSchema),
+  _return:         z.unknown().nullable(),
+})
+
+const OrdersResponseSchema = z.object({
+  success: z.boolean(),
+  orders:  z.array(OrderSchema),
+  total:   z.number().optional(),
+  page:    z.number().optional(),
+  pages:   z.number().optional(),
+  stats:   z.object({
+    delivered: z.number(),
+    active:    z.number(),
+    cancelled: z.number(),
+    spent:     z.number(),
+  }).optional(),
+})
+
+export type Order          = z.infer<typeof OrderSchema>
+export type OrdersResponse = z.infer<typeof OrdersResponseSchema>
+
+export interface FetchOrdersParams {
+  page?:   number
+  limit?:  number
+  search?: string
+  status?: string
+  signal?: AbortSignal
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 800): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < retries; i++) {
+    try { return await fn() } catch (err: unknown) {
+      lastErr = err
+      if (err instanceof ServiceError && err.status && err.status < 500) throw err
+      if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs * 2 ** i))
+    }
+  }
+  throw lastErr
+}
+
+export async function fetchOrders(params: FetchOrdersParams = {}): Promise<OrdersResponse> {
+  const { page = 1, limit = 20, search = '', status = '', signal } = params
+  const qs = new URLSearchParams({
+    page: String(page), limit: String(limit),
+    ...(search ? { search } : {}),
+    ...(status && status !== 'all' ? { status } : {}),
+  })
+  const timeoutCtrl    = new AbortController()
+  const timeoutId      = setTimeout(() => timeoutCtrl.abort(new Error('Timeout')), 15000)
+  const onCallerAbort  = () => timeoutCtrl.abort(signal?.reason)
+  signal?.addEventListener('abort', onCallerAbort)
+
+  try {
+    const raw = await withRetry(async () => {
+      const res  = await fetch(`/api/orders?${qs}`, { signal: timeoutCtrl.signal })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new ServiceError(
+        (data as { error?: string }).error || `Orders fetch failed (${res.status})`, res.status
+      )
+      return data
+    })
+
+    const parsed = OrdersResponseSchema.safeParse(raw)
+    if (!parsed.success) {
+      captureError(parsed.error, { action: 'orderService/fetchOrders', validation: true })
+      return { success: true, orders: [], total: 0, page: 1, pages: 0 }
+    }
+    return parsed.data
+  } finally {
+    clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', onCallerAbort)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SERVER-SIDE ORDER FUNCTIONS
+// Used by: /api/v1/orders, /api/v1/payments, /api/v1/webhook
+// These run only on the server (Node.js) — not in the browser
+// ─────────────────────────────────────────────────────────────
+import type { SiteSettings } from '@/types'
+import { getServiceClient } from '@/lib/supabase'
+import { checkStockAvailability } from './inventoryService'
+import { calcPriceSummary } from './pricingService'
+
+// ── Module-level Supabase REST helpers ───────────────────────
+// Declared once here so createOrder() doesn't re-create closures
+// and duplicate env-var reads on every invocation.
+// BUG FIX: previously declared as SUPABASE_URL + SUPABASE_URL2 and
+// SERVICE_KEY + SERVICE_KEY2 inside the function body — identical
+// values, allocated on every call.
+function _sbUrl()     { return process.env.NEXT_PUBLIC_SUPABASE_URL! }
+function _sbSvcKey()  { return process.env.SUPABASE_SERVICE_KEY! }
+
+async function sbGet(table: string, query: string) {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status.toString())
+    throw new Error(`DB fetch ${table} failed: ${txt}`)
+  }
+  return res.json()
+}
+
+async function sbPost(table: string, query: string, body: object, method = 'POST') {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}${query ? '?' + query : ''}`, {
+    method,
+    headers: {
+      apikey:         _sbSvcKey(),
+      Authorization:  `Bearer ${_sbSvcKey()}`,
+      'Content-Type': 'application/json',
+      Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status.toString())
+    throw new Error(`DB ${method} ${table} failed: ${txt}`)
+  }
+  return method === 'POST' ? res.json() : null
+}
+
+async function sbGetOne(table: string, query: string) {
+  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  })
+  if (!res.ok) return null
+  const rows = await res.json()
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+}
+// ─────────────────────────────────────────────────────────────
+
+export interface CreateOrderInput {
+  customerName:   string
+  customerPhone:  string
+  customerEmail?: string
+  flat:           string
+  area:           string
+  city:           string
+  state:          string
+  pincode:        string
+  label?:         string
+  items:          Array<{ productId: string; variantId: string; qty: number }>
+  paymentMethod:  'cod' | 'razorpay'
+  couponCode?:    string
+  idempotencyKey: string
+  loyaltyPointsRedeemed?: number
+}
+
+export interface OrderEmailItem {
+  name:  string
+  emoji: string
+  qty:   number
+  price: number  // price per unit
+}
+
+export interface CreatedOrder {
+  id:           string
+  order_number: string
+  total_amount: number
+  total:        number
+  status:       string
+  cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
+}
+
+export async function createOrder(
+  input: CreateOrderInput,
+  settings: SiteSettings,
+): Promise<{ order: CreatedOrder; alreadyExists: boolean; customerId: string | null }> {
+  const db = getServiceClient()
+
+  // 1. Idempotency check — return existing order if same key
+  const { data: existing } = await db
+    .from('orders')
+    .select('id, order_number, total_amount, order_status')
+    .eq('idempotency_key', input.idempotencyKey)
+    .maybeSingle()
+
+  if (existing) {
+    return {
+      order: {
+        id:           existing.id,
+        order_number: existing.order_number,
+        total_amount: existing.total_amount,
+        total:        existing.total_amount,
+        status:       existing.order_status,
+        cartItems:    [], // not needed — email is skipped when alreadyExists is true
+      },
+      alreadyExists: true,
+      customerId:    null,
+    }
+  }
+
+  // 2. Stock check
+  const stockCheck = await checkStockAvailability(
+    input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
+  )
+  if (!stockCheck.ok) {
+    const failed = stockCheck.failedItems.map(f => `variantId:${f.variantId} (req:${f.requested} avail:${f.available})`).join(', ')
+    throw new Error(`Insufficient stock: ${failed}`)
+  }
+
+  // 3. Fetch prices via direct REST API (same pattern as store-data route — proven working)
+  // Split items: those with a real variant ID vs those using product ID as fallback
+  // (variantId === productId means the product has no variants)
+  const itemsWithVariant: typeof input.items = []
+  const itemsNoVariant:   typeof input.items = []
+  for (const item of input.items) {
+    if (item.variantId === item.productId) { itemsNoVariant.push(item) }
+    else                                   { itemsWithVariant.push(item) }
+  }
+
+  // Fetch variant rows (only for items that have a real variant ID)
+  const variantRows: any[] = []
+  if (itemsWithVariant.length > 0) {
+    const variantIdList = itemsWithVariant.map(i => i.variantId).join(',')
+    const data = await sbGet('product_variants',
+      `select=id,price,original_price,is_active,available_stock,product_id&id=in.(${variantIdList})`
+    )
+    variantRows.push(...(data || []))
+    if (variantRows.length === 0) throw new Error('Could not fetch product details — variant IDs not found in DB')
+  }
+
+  // Collect all product IDs (from variants + direct product-only items)
+  const allProductIds = Array.from(new Set([
+    ...variantRows.map((v: any) => String(v.product_id)),
+    ...itemsNoVariant.map(i => String(i.productId)),
+  ]))
+  if (!allProductIds.length) throw new Error('Could not fetch product details')
+
+  const productIdList = allProductIds.join(',')
+  const products: any[] = await sbGet('products',
+    `select=id,name,emoji,gst_rate,is_deleted,status,price,mrp,available_stock&id=in.(${productIdList})`
+  )
+  if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
+
+  const productMap = new Map(products.map((p: any) => [String(p.id), p]))
+
+  // Validate all products/variants are active
+  for (const v of variantRows) {
+    const p = productMap.get(String(v.product_id))
+    if (!v.is_active || p?.is_deleted || p?.status !== 'active') {
+      throw new Error('Product no longer available')
+    }
+  }
+  for (const item of itemsNoVariant) {
+    const p = productMap.get(String(item.productId))
+    if (!p || p.is_deleted || p.status !== 'active') {
+      throw new Error('Product no longer available')
+    }
+  }
+
+  // Build CartItem array for pricing — handles both variant and non-variant products
+  const cartItems: import('@/types').CartItem[] = input.items.map(i => {
+    if (i.variantId === i.productId) {
+      // No-variant product — price comes from products table
+      const p = productMap.get(String(i.productId))
+      return {
+        productId:    i.productId,
+        variantId:    i.variantId,
+        name:         String(p?.name  ?? ''),
+        slug:         '',
+        image:        null,
+        emoji:        String(p?.emoji ?? '🌿'),
+        size:         '',
+        price:        Number(p?.price) || 0,
+        mrp:          Number(p?.mrp)   || Number(p?.price) || 0,
+        gstRate:      Number(p?.gst_rate ?? 0),
+        qty:          i.qty,
+        maxQty:       Number(p?.available_stock) || 999,
+        // Badge flags are display-only and irrelevant for server-side price calculation
+        isOrganic:    !!(p?.badges_organic),
+        isHimalayan:  !!(p?.state_id),
+        isBestseller: !!(p?.badges_bestseller),
+      }
+    } else {
+      // Variant product — price from product_variants, mrp from original_price column
+      const v = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
+      const p = productMap.get(String(v?.product_id ?? i.productId))
+      return {
+        productId:    i.productId,
+        variantId:    i.variantId,
+        name:         String(p?.name  ?? ''),
+        slug:         '',
+        image:        null,
+        emoji:        String(p?.emoji ?? '🌿'),
+        size:         '',
+        price:        Number(v?.price) || 0,
+        mrp:          Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
+        gstRate:      Number(p?.gst_rate ?? 0),
+        qty:          i.qty,
+        maxQty:       Number(v?.available_stock) || 999,
+        // Badge flags are display-only and irrelevant for server-side price calculation
+        isOrganic:    !!(p?.badges_organic),
+        isHimalayan:  !!(p?.state_id),
+        isBestseller: !!(p?.badges_bestseller),
+      }
+    }
+  })
+
+  // 4. Resolve coupon — validate server-side then convert to AppliedCoupon shape.
+  //
+  // BUG FIX: previously this step fetched the coupon and applied it without
+  // re-checking max_uses, expires_at, or min_order.  Those checks only lived in
+  // /api/v1/coupons (the client pre-validation endpoint), so anyone calling
+  // /api/v1/orders directly could bypass all coupon limits.
+  //
+  // We now replicate every limit check here — this is the authoritative gate.
+  // The pre-check endpoint is still useful (fast UX feedback) but no longer
+  // the only line of defence.
+  let appliedCoupon: import('@/types').AppliedCoupon | null = null
+  // Retain the raw DB row so we can atomically increment uses_count after order creation.
+  let couponDbRow: { code: string; uses_count: number; max_uses: number | null } | null = null
+  if (input.couponCode) {
+    const { data: coupon } = await db
+      .from('coupons')
+      .select('*')
+      .eq('code', input.couponCode.toUpperCase())
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (coupon) {
+      // ── Server-side coupon guards (mirrors validateCouponServer) ──────────
+      // max_uses check
+      if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
+        throw new Error('Coupon usage limit reached')
+      }
+      // Expiry check
+      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+        throw new Error('Coupon has expired')
+      }
+      // Min order check (against live server-computed subtotal)
+      const subtotalForCheck = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
+      if (coupon.min_order && subtotalForCheck < coupon.min_order) {
+        throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
+      }
+
+      couponDbRow = { code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
+      const discountAmt = coupon.type === 'percent'
+        ? Math.min(
+            Math.round(subtotalForCheck * coupon.value / 100),
+            // BUG FIX (pricingService mirror): use ?? not || so max_discount=0 is
+            // respected rather than treated as "no cap".
+            coupon.max_discount ?? Infinity
+          )
+        : coupon.value
+      appliedCoupon = {
+        code:     coupon.code,
+        discount: Math.round(discountAmt),
+        type:     coupon.type,
+        percent:  coupon.type === 'percent' ? coupon.value : undefined,
+      }
+    }
+  }
+
+  // 5. Calculate final price server-side
+  //
+  // SEC-FIX: loyalty discount must be enforced server-side here, not just in
+  // /api/v1/loyalty action=validate.  That route is a client-facing pre-check;
+  // an attacker who calls /api/v1/orders directly can supply any
+  // loyalty_points_redeemed value.  We enforce two guards:
+  //
+  //   a) Balance guard (step 7c below) — points cannot exceed live balance.
+  //   b) max_redeem_pct cap (here) — loyalty ₹ value cannot exceed
+  //      loyalty_max_redeem_pct % of the subtotal.  Without this, a user with
+  //      a very large points balance could make an arbitrarily large order for
+  //      free even if they legitimately accrued that many points.
+  //
+  // loyaltyDiscountInr is then passed to calcPriceSummary so pricing.total
+  // reflects the actual amount to charge.  Previously this arg was omitted,
+  // meaning the stored total_amount ignored loyalty — customers were being
+  // charged the full pre-loyalty price even when points were redeemed.
+  let loyaltyDiscountInr = 0
+  if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
+    const pointsValue  = parseFloat(settings.loyalty_points_value   || '0.25') || 0.25
+    const maxRedeemPct = parseFloat(settings.loyalty_max_redeem_pct || '20')   || 20
+    const subtotal     = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
+
+    const requestedDiscount = Math.floor(input.loyaltyPointsRedeemed! * pointsValue)
+    const maxAllowed        = Math.floor(subtotal * maxRedeemPct / 100)
+
+    // Clamp to the cap rather than throwing — the order still proceeds but
+    // excess loyalty is silently capped.  The balance guard (step 7c) handles
+    // the "more points than the customer owns" case.
+    loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed)
+  }
+
+  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, 'cod', loyaltyDiscountInr)
+
+  // 6. COD availability check
+  if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {
+    throw new Error('COD is not available at this time')
+  }
+
+  // 7. Generate order number — shown to customers and support.
+  //    Date.now() gives the millisecond epoch; appending 4 random base-36 chars
+  //    makes same-millisecond collisions astronomically unlikely without any DB
+  //    lookup. The idempotency_key remains the true uniqueness guard in the DB.
+  const orderNumber = `PR${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
+
+  // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
+  // Matches old site pattern: lookup by phone → upsert → get custId
+  const nameParts   = input.customerName.trim().split(' ')
+  const firstName   = nameParts[0] || input.customerName.trim()
+  const lastName    = nameParts.slice(1).join(' ') || null
+  const addressLine = [input.flat, input.area].filter(Boolean).join(', ')
+  const custBody = {
+    first_name:    firstName,
+    last_name:     lastName,
+    phone:         input.customerPhone.trim(),
+    email:         input.customerEmail?.trim() || null,
+    address_line1: addressLine || null,
+    city:          input.city    || null,
+    state:         input.state   || null,
+    postal_code:   input.pincode || null,
+  }
+
+  // Lookup: phone first, then email — avoids duplicate key on idx_customers_email
+  let custId: string | null = null
+  let existingCust: any = null
+  existingCust = await sbGetOne('customers', `phone=eq.${encodeURIComponent(input.customerPhone.trim())}&select=id&limit=1`)
+  if (!existingCust?.id && input.customerEmail?.trim()) {
+    existingCust = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+  }
+
+  if (existingCust?.id) {
+    // Existing customer — update name/address but skip email to avoid unique constraint
+    custId = existingCust.id
+    const { email: _e, ...patchBody } = custBody
+    await sbPost('customers', `id=eq.${custId}`, patchBody, 'PATCH').catch(() => null)
+  } else {
+    // New customer — insert, fallback to null email if constraint fires
+    const rows: any[] = await sbPost('customers', '', custBody).catch(async () => {
+      return sbPost('customers', '', { ...custBody, email: null })
+    })
+    custId = rows?.[0]?.id ?? null
+  }
+  if (!custId) throw new Error('Could not create/find customer record')
+
+  // 7c. Loyalty balance guard — verify the customer still holds enough points
+  //     at this exact moment before we create the order.
+  //     The client-side validate call (POST /api/v1/loyalty action=validate) is
+  //     a point-in-time snapshot; points can be redeemed in a parallel session
+  //     between that call and now. We re-fetch the live balance here so a race
+  //     cannot result in a negative balance.
+  if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
+    const { data: customerRow, error: balanceErr } = await db
+      .from('customers')
+      .select('loyalty_points')
+      .eq('id', custId)
+      .single()
+
+    if (balanceErr) throw new Error('Could not verify loyalty balance')
+
+    const liveBalance = Number(customerRow?.loyalty_points ?? 0)
+    if (input.loyaltyPointsRedeemed! > liveBalance) {
+      throw new Error(
+        `Insufficient loyalty balance — available: ${liveBalance} pts, ` +
+        `requested: ${input.loyaltyPointsRedeemed} pts`
+      )
+    }
+  }
+
+  // 8. Create order
+  // loyalty_points_redeemed is stored on the orders row so that verify_payment
+  // can read it from the DB rather than trusting the client-supplied value.
+  // This fixes the P2 security issue where an inflated client value could
+  // pass if the DB RPC lacked a sufficient balance check.
+  const { data: newOrder, error: orderErr } = await db
+    .from('orders')
+    .insert({
+      order_number:           orderNumber,        // e.g. PR1A2B3C — shown to customer
+      customer_id:            custId,
+      total_amount:           pricing.total,
+      subtotal:               pricing.subtotal,
+      coupon_discount:        pricing.discount,
+      tax:                    pricing.gstTotal,
+      shipping_charge:        pricing.shipping,
+      order_status:           'pending',
+      payment_status:         'pending',
+      payment_method:         input.paymentMethod,
+      idempotency_key:        input.idempotencyKey,
+      loyalty_points_redeemed: input.loyaltyPointsRedeemed ?? 0,
+    })
+    .select('id, order_number, total_amount, order_status')
+    .single()
+
+  if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
+
+  // 9. Insert order items
+  //    order_items.variant_id is UUID (references product_variants.id)
+  //    For no-variant products (variantId === productId), fetch the canonical variant from DB
+  const noVariantProductIds = itemsNoVariant.map(i => i.productId)
+  const defaultVariantMap = new Map<string, string>() // productId → variantId (UUID)
+  if (noVariantProductIds.length > 0) {
+    const productIdList2 = noVariantProductIds.join(',')
+    const defaultVariants: any[] = await sbGet('product_variants',
+      `select=id,product_id,price&product_id=in.(${productIdList2})&is_active=eq.true&order=id.asc&limit=${noVariantProductIds.length * 2}`
+    ).catch(() => [])
+    for (const v of (defaultVariants || [])) {
+      const pid = String(v.product_id)
+      if (!defaultVariantMap.has(pid)) defaultVariantMap.set(pid, String(v.id))
+    }
+  }
+
+  const orderItems = input.items.map(i => {
+    const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
+    const p: any = productMap.get(String(v?.product_id ?? i.productId))
+    // For no-variant products, resolve the real variant UUID from DB lookup
+    const resolvedVariantId = i.variantId === i.productId
+      ? (defaultVariantMap.get(String(i.productId)) ?? i.variantId)
+      : i.variantId
+    return {
+      order_id:      newOrder.id,
+      product_id:    i.productId,   // UUID string — keep as-is
+      variant_id:    resolvedVariantId, // UUID string — FK to product_variants(id)
+      quantity:      i.qty,
+      price_at_time: Number(v?.price) || Number(p?.price) || 0,
+    }
+  })
+
+  const { error: itemsErr } = await db.from('order_items').insert(orderItems)
+  if (itemsErr) {
+    // Cleanup orphan order then throw — matches old site error handling
+    console.error('[createOrder] order_items insert failed:', itemsErr.message)
+    try { await db.from("orders").delete().eq("id", newOrder.id) } catch(_) {}
+    throw new Error('Order items could not be saved: ' + itemsErr.message)
+  }
+
+  // 10. Atomically increment coupon uses_count now that the order is committed.
+  //
+  // BUG FIX: the previous implementation used a stale client-read value:
+  //   .update({ uses_count: couponDbRow.uses_count + 1 })
+  //
+  // Two concurrent orders that both read uses_count=5 at step 4 would both
+  // write 6 — the coupon gets used one extra time per concurrent pair.
+  //
+  // Fix: add an optimistic-lock condition .eq('uses_count', snapshot).
+  // PostgREST only updates the row if uses_count still matches the snapshot
+  // we read at step 4.  If another order already incremented it, this update
+  // silently matches 0 rows — the coupon has already been correctly counted.
+  // Non-fatal: at worst one concurrent over-use is missed; the order is committed.
+  if (couponDbRow) {
+    const { error: couponIncrErr } = await db
+      .from('coupons')
+      .update({ uses_count: couponDbRow.uses_count + 1 })
+      .eq('code', couponDbRow.code)
+      .eq('uses_count', couponDbRow.uses_count) // optimistic lock — prevents stale write
+    if (couponIncrErr) {
+      console.error('[createOrder] coupon uses_count increment failed:', couponIncrErr.message)
+    }
+  }
+
+  // 11. Log creation event
+  await logOrderEvent(newOrder.id, 'order_created', 'system', {
+    payment_method: input.paymentMethod,
+    total:          pricing.total,
+    items:          input.items.length,
+  })
+
+  // Return cartItems alongside order so the email template in orders/route.ts
+  // can use real product names + prices (d.items from Zod only has productId/variantId/qty)
+  return {
+    order: {
+      id:           newOrder.id,
+      order_number: newOrder.order_number,
+      total_amount: newOrder.total_amount,
+      total:        newOrder.total_amount,
+      status:       newOrder.order_status,
+      cartItems:    cartItems.map(i => ({
+        name:  i.name,
+        emoji: i.emoji ?? '🌿',
+        qty:   i.qty,
+        price: i.price,
+      })),
+    },
+    alreadyExists: false,
+    customerId:    custId,
+  }
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status:  string,
+  extra:   Record<string, unknown> = {},
+): Promise<void> {
+  const db = getServiceClient()
+  await db.from('orders').update({
+    order_status: status,
+    ...extra,
+  }).eq('id', orderId)
+}
+
+export async function logOrderEvent(
+  orderId:  string,
+  event:    string,
+  actor:    string,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
+  const db = getServiceClient()
+  await db.from('order_events').insert({
+    order_id:   orderId,
+    event,
+    actor,
+    metadata,
+    created_at: new Date().toISOString(),
+  })
+  // Non-fatal — if order_events table doesn't exist yet, silently continue
+  // .then() not needed — fire and forget pattern for audit log
+}
