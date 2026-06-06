@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { useCartStore } from '@/store/cartStore'
+import { useCartStore, selectCartCount } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import type { SiteSettings, Category, State } from '@/types'
@@ -19,7 +19,8 @@ interface Props {
 }
 
 export default function Header({ settings, categories = [], states = [] }: Props) {
-  const cartCount  = useCartStore(s => s.items.reduce((n, i) => n + i.qty, 0))
+  // selectCartCount: stable selector — only re-renders when count changes
+  const cartCount  = useCartStore(selectCartCount)
   const wishlist   = useUserStore(s => s.wishlist)
   const user       = useUserStore(s => s.user)
   const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
@@ -29,9 +30,12 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // ── Mount guard: Zustand persist reads localStorage which doesn't exist on server.
   // Rendering persisted values before mount causes React hydration errors #418/#423/#425.
   const [mounted,  setMounted]  = useState(false)
+  // Track dark mode for aria-pressed on the toggle button (WCAG 4.1.2)
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+    setIsDark(document.documentElement.classList.contains('dark'))
     const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -82,75 +86,101 @@ export default function Header({ settings, categories = [], states = [] }: Props
         {/* Right actions */}
         <div className="old-nav-right">
           {/* Search */}
-          <button onClick={openSearch} aria-label="Search" className="old-nib" title="Search products">🔍</button>
+          <button type="button" onClick={openSearch} aria-label="Search" className="old-nib" title="Search products"><span aria-hidden="true">🔍</span></button>
 
           {/* Wishlist */}
           {showWishlist && (
             <Link href="/wishlist" aria-label="Wishlist" className="old-nib" style={{ position: 'relative' }}>
-              ❤️
+              <span aria-hidden="true">❤️</span>
               {mounted && wishlist.length > 0 && (
-                <span className="old-wl-badge">{wishlist.length > 9 ? '9+' : wishlist.length}</span>
+                // aria-hidden: count already in link aria-label isn't practical here, but the
+                // number badge is decorative alongside the icon. Announce via aria-label update instead.
+                <span className="old-wl-badge" aria-hidden="true">{wishlist.length > 9 ? '9+' : wishlist.length}</span>
               )}
             </Link>
           )}
 
-          {/* Account with hover dropdown */}
+          {/* Account with hover + focus dropdown (WCAG 2.1.1: keyboard accessible) */}
           <div
             style={{ position: 'relative' }}
             onMouseEnter={() => setAcctOpen(true)}
             onMouseLeave={() => setAcctOpen(false)}
+            onFocus={() => setAcctOpen(true)}
+            onBlur={(e) => {
+              // Only close if focus leaves the entire dropdown container
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setAcctOpen(false)
+              }
+            }}
           >
-            <Link href="/account" className="old-nib" aria-label="My Account" style={{ position: 'relative' }}>
+            <Link href="/account" className="old-nib" style={{ position: 'relative' }}
+              aria-label={mounted && user ? `My Account, ${firstName}` : 'My Account'}
+              aria-haspopup="true"
+              aria-expanded={acctOpen}
+            >
               {mounted && user && initials
                 ? <span className="old-acct-av">{initials}</span>
-                : <span>👤</span>}
+                : <span aria-hidden="true">👤</span>}
               {mounted && user && <span className="old-acct-dot" />}
             </Link>
 
             {acctOpen && (
-              <div className="old-acct-dd">
+              <div className="old-acct-dd" role="menu" aria-label="Account menu">
                 <div className="old-dd-head">
                   {mounted && user
                     ? <><div className="old-dd-name">Hi, {firstName}!</div><div className="old-dd-sub">{user.email || ''}</div></>
                     : <><div className="old-dd-name">Welcome!</div><div className="old-dd-sub">Login to manage your account</div></>}
                 </div>
-                <Link href="/account" className="old-dd-item" onClick={() => setAcctOpen(false)}>
-                  <span>📦</span> My Orders
+                <Link href="/account" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                  <span aria-hidden="true">📦</span> My Orders
                 </Link>
-                <Link href="/wishlist" className="old-dd-item" onClick={() => setAcctOpen(false)}>
-                  <span>🤍</span> Wishlist
+                <Link href="/wishlist" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                  <span aria-hidden="true">🤍</span> Wishlist
                 </Link>
-                <Link href="/account/addresses" className="old-dd-item" onClick={() => setAcctOpen(false)}>
-                  <span>👤</span> Profile &amp; Address
+                <Link href="/account/addresses" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                  <span aria-hidden="true">👤</span> Profile &amp; Address
                 </Link>
                 <div className="old-dd-foot">
                   {mounted && user
-                    ? <Link href="/account" className="old-dd-btn" style={{ background: '#fdecea', color: '#c0392b' }} onClick={() => setAcctOpen(false)}>Logout</Link>
-                    : <button className="old-dd-btn" onClick={() => { setAcctOpen(false); openAuth() }}>Login / Sign Up</button>}
+                    ? <Link href="/account" className="old-dd-btn" role="menuitem" style={{ background: '#fdecea', color: '#c0392b' }} onClick={() => setAcctOpen(false)}>Logout</Link>
+                    : <button type="button" className="old-dd-btn" role="menuitem" onClick={() => { setAcctOpen(false); openAuth() }}>Login / Sign Up</button>}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Dark mode toggle */}
+          {/* Dark mode toggle — aria-pressed reflects current mode (WCAG 4.1.2) */}
           <button
+            type="button"
             className="old-dark-btn"
             title="Toggle dark mode"
-            aria-label="Toggle dark mode"
-            onClick={() => document.documentElement.classList.toggle('dark')}
-          >🌙</button>
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={isDark}
+            onClick={() => {
+              document.documentElement.classList.toggle('dark')
+              setIsDark(d => !d)
+            }}
+          ><span aria-hidden="true">🌙</span></button>
 
-          {/* Cart */}
-          <button onClick={openCart} aria-label="Cart" className="old-cart-btn">
-            🛒 Cart
+          {/* Cart — aria-label includes count so SR announces "Open cart, 3 items" (WCAG 4.1.2) */}
+          <button
+            type="button"
+            onClick={openCart}
+            aria-label={mounted && cartCount > 0
+              ? `Open cart, ${cartCount} item${cartCount > 1 ? 's' : ''}`
+              : 'Open cart'}
+            className="old-cart-btn"
+          >
+            <span aria-hidden="true">🛒</span> Cart
             {mounted && cartCount > 0 && (
-              <span className="old-cbadge">{cartCount > 9 ? '9+' : cartCount}</span>
+              // aria-hidden: count already conveyed in button aria-label above
+              <span className="old-cbadge" aria-hidden="true">{cartCount > 9 ? '9+' : cartCount}</span>
             )}
           </button>
 
           {/* Mobile menu */}
-          <button onClick={openMobileMenu} aria-label="Open menu" className="old-nib old-mob-btn">
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button type="button" onClick={openMobileMenu} aria-label="Open menu" className="old-nib old-mob-btn">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
             </svg>
           </button>

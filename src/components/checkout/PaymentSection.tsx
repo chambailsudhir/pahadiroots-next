@@ -67,7 +67,7 @@ export default function PaymentSection({
                 </svg>
               </div>
               {payMethod === 'razorpay' && prepaidDiscount > 0 && (
-                <div className={styles.disc}>🎉 Extra {formatPrice(prepaidDiscount)} off applied!</div>
+                <div className={styles.disc}><span aria-hidden="true">🎉</span> Extra {formatPrice(prepaidDiscount)} off applied!</div>
               )}
             </div>
           </label>
@@ -84,30 +84,48 @@ export default function PaymentSection({
             <div className={styles.optInner}>
               <div className={styles.optHead}>
                 <span className={styles.optTitle}>Cash on Delivery</span>
-                <span className={styles.codIcon}>💵</span>
+                {/* aria-hidden: icon is decorative alongside the text label */}
+                <span className={styles.codIcon} aria-hidden="true">💵</span>
               </div>
               <p className={styles.optSub}>Pay in cash when your order arrives</p>
             </div>
           </label>
         ) : (
-          <div className={styles.codDisabled} aria-disabled="true" aria-label={`Cash on Delivery: ${!codEnabled ? 'Unavailable' : total > codMax ? `Maximum order ₹${codMax}` : 'Unavailable'}`}>
+          /*
+           * A11y fix: <div aria-disabled="true"> is non-focusable and aria-disabled
+           * is meaningless on a non-interactive element — screen readers ignore it.
+           * Fix: role="radio" makes it part of the radiogroup semantics;
+           * aria-disabled="true" is now meaningful on an interactive role;
+           * aria-checked="false" communicates it is an unselectable option;
+           * tabIndex={-1} keeps it out of the tab order (it's disabled) but still
+           * discoverable by screen readers navigating with arrow keys in a group.
+           * The reason text is wired via aria-describedby.
+           */
+          <div
+            className={styles.codDisabled}
+            role="radio"
+            aria-disabled="true"
+            aria-checked={false}
+            aria-describedby="cod-disabled-reason"
+            tabIndex={-1}
+          >
             <div className={styles.codDisabledLeft}>
-              <span className={styles.codIcon}>💵</span>
+              <span className={styles.codIcon} aria-hidden="true">💵</span>
               <span className={`${styles.optTitle} ${styles.optTitleOff}`}>Cash on Delivery</span>
             </div>
-            <span className={styles.codReason}>
+            <span className={styles.codReason} id="cod-disabled-reason">
               {!codEnabled ? 'Unavailable' : total > codMax ? `Max ₹${codMax}` : 'Unavailable'}
             </span>
           </div>
         )}
       </div>
 
-      {/* Security strip */}
+      {/* Security strip — emojis are decorative; text carries the meaning */}
       <div className={styles.seals}>
-        <div className={styles.seal}>🔒 SSL Encrypted</div>
-        <div className={styles.seal}>🏦 Razorpay Secured</div>
-        <div className={styles.seal}>✅ PCI-DSS</div>
-        <div className={styles.seal}>🇮🇳 Made for India</div>
+        <div className={styles.seal}><span aria-hidden="true">🔒</span> SSL Encrypted</div>
+        <div className={styles.seal}><span aria-hidden="true">🏦</span> Razorpay Secured</div>
+        <div className={styles.seal}><span aria-hidden="true">✅</span> PCI-DSS</div>
+        <div className={styles.seal}><span aria-hidden="true">🇮🇳</span> Made for India</div>
       </div>
     </div>
   )

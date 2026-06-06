@@ -121,11 +121,15 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
             <label className="af-label" htmlFor="af-name">Full Name</label>
             <input id="af-name" className="af-input" type="text"
               autoComplete="name" value={addr.name}
+              required
+              aria-required="true"
+              aria-invalid={!!fieldErr('name')}
+              aria-describedby={fieldErr('name') ? 'af-name-err' : undefined}
               onChange={e => onChange('name', e.target.value)}
               onBlur={() => onTouch('name')}
               placeholder="Ravi Kumar"
             />
-            {fieldErr('name') && <span className="af-err">{fieldErr('name')}</span>}
+            {fieldErr('name') && <span id="af-name-err" className="af-err" role="alert">{fieldErr('name')}</span>}
           </div>
           <div className={`af-group${fieldErr('phone') ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-phone">Mobile Number</label>
@@ -134,12 +138,16 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
               <input id="af-phone" className="af-input af-phone-field"
                 type="tel" autoComplete="tel-national" inputMode="numeric"
                 value={addr.phone}
+                required
+                aria-required="true"
+                aria-invalid={!!fieldErr('phone')}
+                aria-describedby={fieldErr('phone') ? 'af-phone-err' : undefined}
                 onChange={e => onChange('phone', e.target.value.replace(/\D/g, ''))}
                 onBlur={() => onTouch('phone')}
                 placeholder="9876543210" maxLength={10}
               />
             </div>
-            {fieldErr('phone') && <span className="af-err">{fieldErr('phone')}</span>}
+            {fieldErr('phone') && <span id="af-phone-err" className="af-err" role="alert">{fieldErr('phone')}</span>}
           </div>
         </div>
 
@@ -148,12 +156,16 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
           <label className="af-label" htmlFor="af-flat">House / Flat, Street, Colony</label>
           <textarea id="af-flat" className="af-input af-textarea"
             autoComplete="street-address" value={addr.flat}
+            required
+            aria-required="true"
+            aria-invalid={!!fieldErr('flat')}
+            aria-describedby={fieldErr('flat') ? 'af-flat-err' : undefined}
             onChange={e => onChange('flat', e.target.value)}
             onBlur={() => onTouch('flat')}
             placeholder="Flat 4B, Green Valley Apartments, Mall Road"
             rows={2}
           />
-          {fieldErr('flat') && <span className="af-err">{fieldErr('flat')}</span>}
+          {fieldErr('flat') && <span id="af-flat-err" className="af-err" role="alert">{fieldErr('flat')}</span>}
         </div>
 
         {/* Row 3: Landmark */}
@@ -174,11 +186,15 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
             <label className="af-label" htmlFor="af-city">City</label>
             <input id="af-city" className="af-input" type="text"
               autoComplete="address-level2" value={addr.city}
+              required
+              aria-required="true"
+              aria-invalid={!!fieldErr('city')}
+              aria-describedby={fieldErr('city') ? 'af-city-err' : undefined}
               onChange={e => onChange('city', e.target.value)}
               onBlur={() => onTouch('city')}
               placeholder="Dehradun"
             />
-            {fieldErr('city') && <span className="af-err">{fieldErr('city')}</span>}
+            {fieldErr('city') && <span id="af-city-err" className="af-err" role="alert">{fieldErr('city')}</span>}
           </div>
           <div className="af-group">
             <label className="af-label" htmlFor="af-state">State</label>
@@ -193,19 +209,59 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
         {/* Row 5: Pincode + Email */}
         <div className="af-row">
           <div className={`af-group${fieldErr('pincode') ? ' af-group--err' : ''}`}>
-            <label className="af-label" htmlFor="af-pincode">
-              Pincode
-              {pincodeLoading && <span className="af-pin-spin"> ↻</span>}
-              {pincodeMsg && !pincodeLoading && <span className="af-pin-ok"> ✓ {pincodeMsg}</span>}
-            </label>
+            {/*
+             * Label + status are in a flex row so the spinner/city name appears
+             * visually inline after "Pincode" — matching the original design.
+             *
+             * The status lives in a SIBLING <div> with id="af-pin-status", NOT
+             * inside the <label>. This is the core fix:
+             *   - Before: status was a child of <label> → every state change caused
+             *     AT to re-read the full label ("Pincode ↻ Pincode" / "Pincode ✓ …")
+             *   - After: status is an aria-live region with its own id → AT announces
+             *     only the status change ("Looking up pincode" / "Dehradun, Uttarakhand")
+             *     without touching the label text at all.
+             *
+             * aria-describedby on the input references "af-pin-status" so that when
+             * the user focuses the field after a successful lookup they hear the
+             * resolved city + state as supplementary context.
+             *
+             * aria-atomic="true" → the whole region is announced as one unit on change,
+             * preventing partial reads mid-update.
+             */}
+            <div className="af-label-row">
+              <label className="af-label" htmlFor="af-pincode">Pincode</label>
+              <div
+                id="af-pin-status"
+                className="af-pin-status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {pincodeLoading && (
+                  <span className="af-pin-spin" aria-label="Looking up pincode">↻</span>
+                )}
+                {pincodeMsg && !pincodeLoading && (
+                  // aria-label gives SR a clean sentence without the ✓ glyph name
+                  <span className="af-pin-ok" aria-label={`Found: ${pincodeMsg}`}>✓ {pincodeMsg}</span>
+                )}
+              </div>
+            </div>
             <input id="af-pincode" className="af-input" type="text"
               autoComplete="postal-code" inputMode="numeric"
               value={addr.pincode}
+              required
+              aria-required="true"
+              aria-invalid={!!fieldErr('pincode')}
+              aria-describedby={[
+                fieldErr('pincode')              ? 'af-pincode-err' : '',
+                pincodeMsg && !pincodeLoading    ? 'af-pin-status'  : '',
+              ].filter(Boolean).join(' ') || undefined}
               onChange={e => handlePincodeChange(e.target.value)}
               onBlur={() => onTouch('pincode')}
               placeholder="248001" maxLength={6}
             />
-            {fieldErr('pincode') && <span className="af-err">{fieldErr('pincode')}</span>}
+            {fieldErr('pincode') && (
+              <span id="af-pincode-err" className="af-err" role="alert">{fieldErr('pincode')}</span>
+            )}
           </div>
           <div className="af-group">
             <label className="af-label" htmlFor="af-email">
@@ -298,6 +354,19 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
         .af-group--err .af-input,
         .af-group--err .af-phone { border-color: #D04030 !important; }
 
+        /* Flex row that places the label and the inline pin-status side by side.
+           Keeps the visual design identical to the original (status beside label text)
+           while decoupling them in the DOM for correct screen reader behaviour. */
+        .af-label-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 0;
+        }
+        .af-label-row .af-label {
+          margin-bottom: 0;
+        }
+
         .af-label {
           font-family: 'DM Sans', sans-serif;
           font-size: 11px;
@@ -385,7 +454,15 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
           min-width: 0;
         }
 
-        /* Pincode feedback */
+        /* Pincode feedback — sits in .af-label-row as a flex sibling of the label.
+           min-width:0 prevents the region from pushing the label off-screen when
+           a long city+state string appears. */
+        .af-pin-status {
+          display: flex;
+          align-items: center;
+          min-width: 0;
+          font-size: 10px;
+        }
         .af-pin-spin {
           display: inline-block;
           animation: pin-spin .6s linear infinite;

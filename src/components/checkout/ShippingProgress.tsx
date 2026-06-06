@@ -14,24 +14,38 @@ export default function ShippingProgress({ subtotal, freeShipMin, isFreeShipping
   }
 
   const pct = Math.min(100, (subtotal / freeShipMin) * 100)
+  const pctInt = Math.round(pct)
 
   return (
     <div className={`sp-bar${isFreeShipping ? ' sp-bar--free' : ''}`}>
       <div className="sp-content">
-        <span className="sp-icon">{isFreeShipping ? '🎉' : '🚚'}</span>
+        {/* aria-hidden on emoji — the text beside it carries all meaning */}
+        <span className="sp-icon" aria-hidden="true">{isFreeShipping ? '🎉' : '🚚'}</span>
         <span className="sp-text">
           {isFreeShipping
             ? 'Free shipping unlocked!'
             : <>Add <strong>{formatPrice(remainingForFreeShip)}</strong> more for free shipping</>}
         </span>
         {!isFreeShipping && (
-          <span className="sp-pct">{Math.round(pct)}%</span>
+          <span className="sp-pct" aria-hidden="true">{pctInt}%</span>
         )}
       </div>
       {!isFreeShipping && (
-        <div className="sp-track">
-          <div className="sp-fill" style={{ width: `${pct}%` }} />
-          <div className="sp-thumb" style={{ left: `${pct}%` }} />
+        /*
+         * role="progressbar" + aria-value* communicate progress semantically (WCAG 1.3.1).
+         * aria-label provides context; aria-valuenow is the integer 0–100 percentage.
+         * The inner fill and thumb divs are purely visual — aria-hidden on each.
+         */
+        <div
+          className="sp-track"
+          role="progressbar"
+          aria-label="Free shipping progress"
+          aria-valuenow={pctInt}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div className="sp-fill" style={{ width: `${pct}%` }} aria-hidden="true" />
+          <div className="sp-thumb" style={{ left: `${pct}%` }} aria-hidden="true" />
         </div>
       )}
       <style>{`
