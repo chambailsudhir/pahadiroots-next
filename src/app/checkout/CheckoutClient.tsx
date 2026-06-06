@@ -235,10 +235,18 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   // ── Fetch loyalty balance (logged-in users only) ─────────────
   useEffect(() => {
     if (s.loyalty_enabled !== 'true') return
-    fetch('/api/v1/loyalty')
+    // BUG FIX: AbortController added — the original fetch had no cleanup.
+    // If s.loyalty_enabled changes or the component unmounts while the request
+    // is in-flight, the .then() setState calls would fire on the unmounted
+    // component, causing React StrictMode warnings and potential stale updates.
+    const ac = new AbortController()
+    fetch('/api/v1/loyalty', { signal: ac.signal })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.points) setLoyaltyBalance(d.points) })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
+      })
+    return () => ac.abort()
   }, [s.loyalty_enabled])
 
   // Background profile refresh — runs once on mount.
@@ -274,11 +282,20 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   }, []) // intentionally mount-only — background profile prefill
 
   useEffect(() => {
-    fetch('/api/v1/coupon-hints').then(async r => {
-      if (!r.ok) return
-      const data = await r.json()
-      setCouponHints(data.hints || [])
-    }).catch(() => {})
+    // BUG FIX: AbortController added — the original fetch had no cleanup.
+    // Without abort, if CheckoutClient unmounts before the response arrives
+    // (fast back-navigation), setCouponHints fires on an unmounted component.
+    const ac = new AbortController()
+    fetch('/api/v1/coupon-hints', { signal: ac.signal })
+      .then(async r => {
+        if (!r.ok) return
+        const data = await r.json()
+        setCouponHints(data.hints || [])
+      })
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
+      })
+    return () => ac.abort()
   }, [])
 
   function setAddrField(field: keyof OrderAddress, value: string) {

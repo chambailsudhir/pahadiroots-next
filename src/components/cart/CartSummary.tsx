@@ -55,6 +55,17 @@ import styles from './CartSummary.module.css'
 
 interface CouponHint { code: string; label: string }
 
+// PERF FIX: hoisted to module level — was recreated as a new array on every
+// CartSummary render (even though it's purely static). React.memo couldn't
+// prevent this because inline literals always produce new references.
+const PAYMENT_LOGOS: [string, string][] = [
+  ['#6a1b9a', 'UPI'],
+  ['#1a1f71', 'VISA'],
+  ['#eb001b', 'MC'],
+  ['#008c44', 'RuPay'],
+  ['#4285f4', 'GPay'],
+]
+
 interface Props {
   items: CartItem[]
   totalQty: number
@@ -243,8 +254,7 @@ const CartSummary = memo(function CartSummary({
           <span><span aria-hidden="true">✅</span> Secure</span>
         </div>
         <div className={styles.logos}>
-          {[['#6a1b9a','UPI'],['#1a1f71','VISA'],['#eb001b','MC'],
-            ['#008c44','RuPay'],['#4285f4','GPay']].map(([bg,label]) => (
+          {PAYMENT_LOGOS.map(([bg, label]) => (
             <span key={label} className={styles.logo} style={{ background: bg }}>{label}</span>
           ))}
         </div>

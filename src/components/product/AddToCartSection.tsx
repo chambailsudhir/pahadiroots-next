@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
@@ -48,6 +48,19 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     setQty(q => Math.max(1, Math.min(q + d, maxStock || 99)))
   }
 
+  // BUG FIX: track timers so they can be cleared on unmount.
+  // The two setTimeout calls inside handleAdd — router.push (300 ms) and
+  // setAdded reset (2200 ms) — fired on the unmounted component if the user
+  // navigated away before the delay elapsed. React 18 strict mode surfaced this
+  // as a "Can't perform a React state update on an unmounted component" warning.
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => {
+    return () => {
+      // Cleanup: cancel any in-flight timers when the component unmounts.
+      timersRef.current.forEach(clearTimeout)
+    }
+  }, [])
+
   function handleAdd(mode: 'add' | 'buy') {
     if (!inStock) return
     const variantId = selectedVariant
@@ -78,12 +91,16 @@ export default function AddToCartSection({ product, variants, settings }: Props)
 
     if (mode === 'buy') {
       setBuying(true)
-      setTimeout(() => router.push('/checkout'), 300)
+      // BUG FIX: capture the timer ID so the cleanup effect can cancel it on unmount.
+      const t = setTimeout(() => router.push('/checkout'), 300)
+      timersRef.current.push(t)
     } else {
       setAdded(true)
       openCart()
       setQty(1)
-      setTimeout(() => setAdded(false), 2200)
+      // BUG FIX: capture the timer ID so the cleanup effect can cancel it on unmount.
+      const t = setTimeout(() => setAdded(false), 2200)
+      timersRef.current.push(t)
     }
   }
 

@@ -32,6 +32,7 @@ export default function CartError({
         Something went wrong displaying your cart. Your items are still saved — please try again.
       </p>
       <button
+        type="button"
         onClick={reset}
         style={{
           padding: '12px 28px',

@@ -31,7 +31,7 @@
  *   2. Add-to-cart button missing type="button".
  */
 
-import { memo } from 'react'
+import { memo, useRef } from 'react'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { UpsellItem } from '@/types'
@@ -71,6 +71,20 @@ const UpsellSection = memo(function UpsellSection({
 }: Props) {
   const visibleItems = items.slice(0, 4)
 
+  // PERF FIX 1: O(1) lookup — addedIds array `.includes()` is O(n) and was called
+  // 4× per rendered item. A Set gives constant-time `.has()` at no visible cost.
+  const addedSet = new Set(addedIds)
+
+  // UX FIX: match shimmer count to the real item count from the last successful load,
+  // preventing the jarring jump from 4 shimmers → 1–3 real items.
+  // On the very first load (no prior data) we default to 2 (the median expected
+  // result) instead of always showing 4, avoiding unnecessary layout shift.
+  const prevCountRef = useRef(2)
+  if (!loading && !error && visibleItems.length > 0) {
+    prevCountRef.current = visibleItems.length
+  }
+  const shimmerCount = loading ? Math.max(1, Math.min(4, prevCountRef.current)) : 0
+
   return (
     <div className={styles.card}>
       <div className={styles.head}>
@@ -95,7 +109,7 @@ const UpsellSection = memo(function UpsellSection({
         aria-label="Customer suggestions"
       >
         {loading
-          ? [0, 1, 2, 3].map(i => <UpsellShimmer key={i} />)
+          ? Array.from({ length: shimmerCount }, (_, i) => <UpsellShimmer key={i} />)
           : error
             ? <p className={styles.errorMsg}>Couldn&apos;t load suggestions right now.</p>
             : visibleItems.length === 0
@@ -103,7 +117,7 @@ const UpsellSection = memo(function UpsellSection({
               : visibleItems.map(p => (
                 <div
                   key={p.id}
-                  className={`${styles.item}${addedIds.includes(p.id) ? ` ${styles.added}` : ''}`}
+                  className={`${styles.item}${addedSet.has(p.id) ? ` ${styles.added}` : ''}`}
                 >
                   <div className={styles.imgWrap}>
                     {p.image
@@ -127,12 +141,12 @@ const UpsellSection = memo(function UpsellSection({
                   </div>
                   <button
                     type="button"
-                    className={`${styles.btn}${addedIds.includes(p.id) ? ` ${styles.added}` : ''}`}
+                    className={`${styles.btn}${addedSet.has(p.id) ? ` ${styles.added}` : ''}`}
                     onClick={() => onAdd(p)}
                     aria-label={`Add ${p.name} to cart`}
-                    disabled={addedIds.includes(p.id)}
+                    disabled={addedSet.has(p.id)}
                   >
-                    {addedIds.includes(p.id) ? '✓' : '+ Add'}
+                    {addedSet.has(p.id) ? '✓' : '+ Add'}
                   </button>
                 </div>
               ))}
