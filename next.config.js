@@ -48,8 +48,6 @@ const nextConfig = {
             // Tightened CSP — adjust script/style sources if you load third-party bundles
             value: [
               "default-src 'self'",
-              // 'unsafe-eval' is required by Razorpay checkout.js (uses Function/eval internally).
-              // Cannot be removed without breaking payments. See next.config.js comment.
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://ulyrhnpoiypuvaurlqqi.supabase.co",
