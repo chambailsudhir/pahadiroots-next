@@ -87,17 +87,12 @@ const CartSummary = memo(function CartSummary({
               type="text"
               value={couponCode}
               onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
-              {/*
-                Bug-fix: guard Enter with !couponLoading.
-                Previously: e.key === 'Enter' && onApplyCoupon()
-                The Apply button is disabled={couponLoading} so mouse users could
-                not double-submit. Keyboard users could, because Enter on the
-                input calls onApplyCoupon regardless of loading state. Two
-                concurrent fetch calls race to write couponError / applyCoupon
-                state — whichever resolves last wins, potentially showing a stale
-                error after a successful apply.
-                Now keyboard and pointer paths both honour the loading guard.
-              */}
+              // Bug-fix: guard Enter with !couponLoading.
+              // Previously `e.key === 'Enter' && onApplyCoupon()` fired regardless
+              // of loading state. The Apply button is disabled={couponLoading} so
+              // mouse users could not double-submit, but keyboard users could —
+              // two concurrent fetches would race on couponError / applyCoupon
+              // state. Now both paths honour the same loading guard.
               onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
               placeholder="e.g. WELCOME50"
               className={styles.couponInput}
