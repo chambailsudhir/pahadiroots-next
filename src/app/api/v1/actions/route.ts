@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { subscribeSchema, reviewSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken } from '@/lib/api/serverUtils'
-import DOMPurify from 'isomorphic-dompurify'
+import { esc } from '@/lib/server/htmlEscape'
 import { Resend } from 'resend'
+
+// BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
+// resolution errors in Next.js 14 App Router server routes. The original import
+// was `import DOMPurify from 'isomorphic-dompurify'` which caused cold-start
+// crashes on certain Vercel/Node builds.
+//
+// For SERVER-SIDE use we don't need a full DOM sanitiser — we just need to:
+//   1. Strip HTML tags before storing user text in the DB (prevents stored XSS
+//      when the text is later rendered as HTML in emails/admin UI).
+//   2. HTML-escape strings before interpolating into email HTML bodies
+//      (prevents injection into the email's own HTML structure).
+//
+// `stripTags` handles (1). `esc` from htmlEscape handles (2) and is already
+// used by orders/route.ts and payments/route.ts for the same purpose.
+function stripTags(str: string): string {
+  return str.replace(/<[^>]*>/g, '').trim()
+}
 
 /**
  * /api/v1/actions — generic action dispatcher for non-cart server mutations.
@@ -53,9 +70,9 @@ export async function POST(req: NextRequest) {
 
       const d = parsed.data
 
-      // Sanitize text (Audit #G26)
-      const comment = d.comment ? DOMPurify.sanitize(d.comment.trim()) : null
-      const name    = DOMPurify.sanitize(d.customer_name.trim())
+      // Sanitize text: strip HTML tags before DB storage to prevent stored XSS
+      const comment = d.comment ? stripTags(d.comment) : null
+      const name    = stripTags(d.customer_name)
 
       await db.from('reviews').insert({
         product_id:    d.product_id,
@@ -75,10 +92,10 @@ export async function POST(req: NextRequest) {
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
       try {
-        // Sanitize all user-supplied fields before HTML interpolation (XSS prevention)
-        const safeName    = DOMPurify.sanitize(String(body.name    ?? ''))
-        const safeEmail   = DOMPurify.sanitize(String(body.email   ?? ''))
-        const safeMessage = DOMPurify.sanitize(String(body.message ?? ''))
+        // HTML-escape before interpolating into email HTML to prevent injection
+        const safeName    = esc(String(body.name    ?? ''))
+        const safeEmail   = esc(String(body.email   ?? ''))
+        const safeMessage = esc(String(body.message ?? ''))
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',

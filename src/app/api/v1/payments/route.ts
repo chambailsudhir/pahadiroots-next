@@ -4,10 +4,53 @@ import { createOrderSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf, checkRateLimit } from '@/lib/api/serverUtils'
+import { checkCsrf } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
+
+// ── Distributed rate limiter (Upstash KV) ────────────────────────────────────
+// SEC-1 FIX: the previous checkRateLimit() call used an in-process Map that is
+// NOT shared across Vercel instances. On a multi-replica deployment an attacker
+// could make 10 payment attempts per instance per minute (10 × N replicas).
+// This function uses the same Upstash KV pipeline as middleware.ts and
+// coupons/route.ts — the counter is global and consistent across all replicas.
+//
+// Falls back to allowing the request (fail-open) if Upstash is unreachable so
+// legitimate users aren't blocked by an infra outage.
+async function checkPaymentRateLimit(ip: string): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (!kvUrl || !kvToken) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[payments] Upstash KV not configured — route-level rate limit disabled. ' +
+        'Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for cross-replica enforcement.'
+      )
+    }
+    return true // fail-open: middleware general API limit still applies
+  }
+
+  try {
+    const rlKey = `mw:rl:payments_ip:${ip}`
+    const res = await fetch(`${kvUrl}/pipeline`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ['INCR',   rlKey],
+        ['EXPIRE', rlKey, 60, 'NX'], // 60-second window; NX = only set expiry on first write
+      ]),
+      signal: AbortSignal.timeout(1500),
+    })
+    if (!res.ok) return true // KV unhealthy — fail-open
+    const result = await res.json() as [[string, number], [string, number]]
+    const count  = result[0][1]
+    return count <= 10 // allow up to 10 payment attempts per IP per minute
+  } catch {
+    return true // network error / timeout — fail-open
+  }
+}
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -41,9 +84,9 @@ export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  // ── IP-level rate limit — covers both actions ──────────────────────────────
+  // ── IP-level rate limit — covers both actions (distributed via Upstash KV) ──
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  if (!checkRateLimit(`payments:ip:${ip}`, 10, 60_000)) {
+  if (!await checkPaymentRateLimit(ip)) {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
   }
 

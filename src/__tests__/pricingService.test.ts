@@ -86,7 +86,6 @@ function makeSettings(overrides: Partial<SiteSettings> = {}): SiteSettings {
     show_blog:              'true',
     catalogue_visible:      'true',
     featured_collection_slug: '',
-    prepaid_discount_pct:   '5',
     cod_enabled:            'true',
     cod_max_value:          '3000',
     cod_max_active_orders:  '3',

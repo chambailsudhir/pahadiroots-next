@@ -3,10 +3,61 @@ import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { Resend } from 'resend'
-import { checkCsrf, checkRateLimit } from '@/lib/api/serverUtils'
+import { checkCsrf } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
+
+// ── Distributed rate limiters (Upstash KV) ───────────────────────────────────
+// SEC-2 FIX: the previous checkRateLimit() calls used an in-process Map that is
+// NOT shared across Vercel instances. On a multi-replica deployment an attacker
+// could make (10 × N) IP attempts or (3 × N) phone attempts per minute.
+// These functions use the same Upstash KV pipeline as middleware.ts and
+// coupons/route.ts — counters are global and consistent across all replicas.
+//
+// Falls back to allowing the request (fail-open) if Upstash is unreachable so
+// legitimate users are not blocked by an infra outage. Middleware's general
+// API rate limit (20/min) still provides defence in that case.
+async function checkOrderIpLimit(ip: string): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!kvUrl || !kvToken) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[orders] Upstash KV not configured — IP rate limit disabled. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.')
+    }
+    return true
+  }
+  try {
+    const rlKey = `mw:rl:orders_ip:${ip}`
+    const res = await fetch(`${kvUrl}/pipeline`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify([['INCR', rlKey], ['EXPIRE', rlKey, 60, 'NX']]),
+      signal:  AbortSignal.timeout(1500),
+    })
+    if (!res.ok) return true
+    const result = await res.json() as [[string, number], [string, number]]
+    return result[0][1] <= 10
+  } catch { return true }
+}
+
+async function checkOrderPhoneLimit(phone: string): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!kvUrl || !kvToken) return true
+  try {
+    const rlKey = `mw:rl:orders_phone:${phone}`
+    const res = await fetch(`${kvUrl}/pipeline`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify([['INCR', rlKey], ['EXPIRE', rlKey, 60, 'NX']]),
+      signal:  AbortSignal.timeout(1500),
+    })
+    if (!res.ok) return true
+    const result = await res.json() as [[string, number], [string, number]]
+    return result[0][1] <= 3 // max 3 order attempts per phone number per minute
+  } catch { return true }
+}
 
 // Lightweight server-side sanitizer (strips HTML tags from address fields)
 function sanitize(str: string): string {
@@ -59,11 +110,10 @@ export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  // ── Rate limit: 3 order attempts per phone per minute ─────────────────────
-  // Key is derived after schema parse so we can use the phone number.
-  // We do a lightweight IP-keyed pre-check first to catch bots without parsing.
+  // ── Rate limit: IP-level pre-check (distributed via Upstash KV) ──────────
+  // Applied before body parsing so bots are rejected cheaply without DB work.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  if (!checkRateLimit(`orders:ip:${ip}`, 10, 60_000)) {
+  if (!await checkOrderIpLimit(ip)) {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
   }
 
@@ -78,7 +128,7 @@ export async function POST(req: NextRequest) {
     const a = d.address
 
     // ── Phone-level rate limit (after parse, so we have the phone number) ──
-    if (!checkRateLimit(`orders:phone:${a.phone}`, 3, 60_000)) {
+    if (!await checkOrderPhoneLimit(a.phone)) {
       return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429 })
     }
 
@@ -237,8 +287,15 @@ export async function POST(req: NextRequest) {
     )
   } catch (err: unknown) {
     console.error('[orders POST]', err)
-    const message = err instanceof Error ? err.message : 'Internal server error'
-    const status  = message.includes('stock') || message.includes('COD') ? 409 : 500
-    return NextResponse.json({ error: message }, { status })
+    const internalMessage = err instanceof Error ? err.message : 'Internal server error'
+    // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
+    // but never expose raw DB error messages in production — they leak table names,
+    // constraint names, and Supabase internals to attackers.
+    const isUserFacing = internalMessage.includes('stock') || internalMessage.includes('COD')
+    const status  = isUserFacing ? 409 : 500
+    const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
+      ? internalMessage
+      : 'Order placement failed. Please try again or contact support.'
+    return NextResponse.json({ error: clientMessage }, { status })
   }
 }
