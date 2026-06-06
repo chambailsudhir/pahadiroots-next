@@ -139,18 +139,26 @@ export const useCartStore = create<CartStore>()(
       // v1: no partialize — coupon may exist in old localStorage, drop it.
       // v2: items persisted with maxQty — strip it on load.
       // v3: items persisted without maxQty (current).
+      //
+      // Bug-fix: the original fromVersion < 2 branch returned early, so a user
+      // upgrading directly from v1 → v3 (never having run v2) would have their
+      // coupon dropped correctly but maxQty would survive in persisted items,
+      // because the fromVersion < 3 strip was never reached. Fixed by applying
+      // all outstanding migrations in sequence (not with early returns).
       migrate: (persisted: unknown, fromVersion: number) => {
-        const state = persisted as Record<string, unknown>
-        // Drop old coupon field (v1 → v2)
+        let state = persisted as Record<string, unknown>
+
+        // v1 → v2: drop stale coupon field
         if (fromVersion < 2) {
           const { coupon: _c, ...rest } = state
           void _c
-          return rest
+          state = rest
         }
-        // Strip maxQty from any persisted items (v2 → v3)
+
+        // v2 → v3: strip maxQty from every persisted item (security fix)
         if (fromVersion < 3) {
           const items = (state.items as Array<Record<string, unknown>> | undefined) ?? []
-          return {
+          state = {
             ...state,
             items: items.map(({ maxQty: _mq, ...rest }) => {
               void _mq
@@ -158,6 +166,7 @@ export const useCartStore = create<CartStore>()(
             }),
           }
         }
+
         return state
       },
     }

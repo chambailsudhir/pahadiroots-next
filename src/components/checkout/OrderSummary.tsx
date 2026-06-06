@@ -97,7 +97,16 @@ export default function OrderSummary({
   async function handleApplyLoyalty() {
     const pts = parseInt(loyaltyInput, 10)
     if (!pts || pts <= 0) return
-    await onApplyLoyalty(pts)
+    // Bug-fix: clamp to cappedBalance before submitting.
+    // The input has max={cappedBalance} but that only prevents the stepper — a
+    // user can type any value directly. Without clamping here, a value above the
+    // user's balance (or above the order's redemption cap) is sent to the server,
+    // which returns a 400 error. Clamping client-side provides immediate, silent
+    // correction and avoids an unnecessary round-trip on the common case where
+    // the user cleared and re-typed a number slightly above their balance.
+    const clamped = Math.min(pts, cappedBalance)
+    if (clamped !== pts) setLoyaltyInput(String(clamped))
+    await onApplyLoyalty(clamped)
   }
 
   return (

@@ -79,6 +79,49 @@ export async function POST(req: NextRequest) {
         loyaltyPointsRedeemed: pd.loyalty_points_redeemed ?? 0,
       }, settings)
 
+      const db = getServiceClient()
+
+      // Bug-fix: when alreadyExists=true (idempotency retry), we must NOT create a
+      // new Razorpay order. The original call already created one and stored its ID in
+      // orders.payment_id. Creating a second Razorpay order for the same DB order means:
+      //   1. Two separate Razorpay charge flows exist for one DB order.
+      //   2. If the user completes the first payment before the retry fires, the second
+      //      Razorpay order is a duplicate charge opportunity.
+      //   3. The update `payment_id = rzpOrder.id` overwrites the first Razorpay order ID,
+      //      breaking the webhook's `notes.db_order_id` lookup for the original order.
+      //
+      // Fix: for retried requests, fetch the existing Razorpay order ID from the DB and
+      // return it directly. Razorpay orders are single-use — the client resumes the same
+      // checkout session rather than opening a new one.
+      if (alreadyExists) {
+        const { data: existingRow } = await db
+          .from('orders')
+          .select('payment_id, total_amount')
+          .eq('id', order.id)
+          .single()
+
+        if (!existingRow?.payment_id) {
+          // No prior Razorpay order exists for this DB order — this can happen if the
+          // original create_payment call failed after createOrder() but before the
+          // Razorpay API call. Fall through to create a fresh Razorpay order below.
+          // (Same code path as a new order — intentional fall-through via goto-equivalent)
+        } else {
+          // Reuse the existing Razorpay order ID so the client can resume payment.
+          return NextResponse.json({
+            success:           true,
+            order_id:          String(order.id),
+            razorpay_order_id: existingRow.payment_id,
+            // Razorpay orders store amount in paise — return the DB total converted.
+            // We don't re-fetch from Razorpay because the DB total IS authoritative
+            // (it was set server-side by the original createOrder() call).
+            amount:            Math.round((existingRow.total_amount ?? order.total_amount) * 100),
+            currency:          'INR',
+            customer_id:       null,
+            loyalty_points_redeemed: pd.loyalty_points_redeemed ?? 0,
+          })
+        }
+      }
+
       // ── Amount integrity: use the DB-computed total, never the client value ──
       // createOrder() computed total_amount server-side from live DB prices.
       // We convert that authoritative value to paise for Razorpay.
@@ -87,7 +130,6 @@ export async function POST(req: NextRequest) {
       const receiptId = order.order_number || `ORD-${order.id}`
       const rzpOrder  = await createRazorpayOrder(amountPaise, receiptId, order.id)
 
-      const db = getServiceClient()
       await db.from('orders').update({ payment_id: rzpOrder.id }).eq('id', order.id)
 
       return NextResponse.json({
