@@ -135,9 +135,12 @@ export default function CartPage() {
 
   // Fix 5: wa.me expects digits only — strip everything else before building the
   // href. Compute once here rather than inline in JSX to keep the template clean.
-  const whatsappHref = settings.whatsapp_number
-    ? `https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`
-    : null
+  // SEC-FIX: strip non-digits, then validate minimum length (7 digits) before
+  // building the href. An empty-after-sanitization string would produce
+  // `https://wa.me/` — a valid URL to an unrelated page. Requiring ≥7 digits
+  // ensures we only render the link when a real phone number is configured.
+  const _waDigits = (settings.whatsapp_number ?? '').replace(/\D/g, '')
+  const whatsappHref = _waDigits.length >= 7 ? `https://wa.me/${_waDigits}` : null
 
   return (
     <main id="main-content">

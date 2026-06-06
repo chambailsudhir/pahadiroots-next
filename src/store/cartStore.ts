@@ -26,6 +26,15 @@ interface CartStore {
   ensureIdempotencyKey: () => string
 
   // Derived
+  /**
+   * @deprecated Use the `selectCartCount` selector instead:
+   *   `useCartStore(selectCartCount)`
+   *
+   * Calling `useCartStore(s => s.cartCount())` returns a new Function reference on
+   * every render — Zustand cannot deduplicate it, so the subscribing component
+   * re-renders on *every* store update regardless of whether the count changed.
+   * `selectCartCount` reads `items` directly and only fires when the count changes.
+   */
   cartCount:         () => number
 }
 

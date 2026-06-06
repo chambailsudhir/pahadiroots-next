@@ -6,6 +6,43 @@ const API_LIMIT        = 20        // 20 API requests/minute per IP
 const COUPON_LIMIT     = 5         // 5 coupon attempts/minute per IP (brute-force prevention)
 const ORDERS_LIMIT     = 10        // 10 order submissions/minute per IP (matches route-level guard)
 
+// ─── store_open TTL cache ─────────────────────────────────────────────────────
+// next: { revalidate } is ignored in Edge middleware (no App Router cache).
+// This lightweight in-process cache fires at most one Supabase call per
+// cold-start instance per 30 s, dropping N calls/min to ~1 per 30 s.
+let _storeOpenCache: { value: boolean; expiresAt: number } | null = null
+const STORE_OPEN_TTL_MS = 30_000 // 30 seconds
+
+async function getCachedStoreOpen(): Promise<boolean> {
+  const now = Date.now()
+  if (_storeOpenCache && now < _storeOpenCache.expiresAt) {
+    return _storeOpenCache.value
+  }
+
+  const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnon) return true // no config — fail open
+
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/site_settings?key=eq.store_open&select=value`,
+    {
+      headers: {
+        apikey:        supabaseAnon,
+        Authorization: `Bearer ${supabaseAnon}`,
+      },
+      // Short timeout — don't block page load; fail-open on timeout
+      signal: AbortSignal.timeout(2000),
+    }
+  )
+  if (!res.ok) return true // DB unavailable — fail open
+
+  const data = await res.json()
+  const value = data?.[0]?.value !== 'false'
+  _storeOpenCache = { value, expiresAt: now + STORE_OPEN_TTL_MS }
+  return value
+}
+
+
 // ─── Distributed rate limiter (Upstash KV) ───────────────────────────────────
 // Uses the same INCR + EXPIRE pipeline already used by auth/route.ts.
 // Falls back to a per-instance Map when KV is not configured (local dev only).
@@ -133,35 +170,17 @@ export async function middleware(req: NextRequest) {
 
   if (skip) return NextResponse.next()
 
+  // PERF/SEC FIX: next: { revalidate: 30 } is silently ignored in Edge middleware
+  // (the App Router fetch cache is not available there). Without caching, every page
+  // request caused a live Supabase round-trip — N calls/min at normal traffic.
+  // Fix: in-process TTL cache (30 s) so at most one Supabase hit fires per cold-start
+  // instance per 30 s. In-process is acceptable here (unlike rate-limiting) because
+  // store_open is a read-only soft signal; a ≤30 s per-replica inconsistency is far
+  // less harmful than an uncached DB call on every request.
   try {
-    // Fetch store_open setting
-    const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (supabaseUrl && supabaseAnon) {
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/site_settings?key=eq.store_open&select=value`,
-        {
-          headers: {
-            apikey:        supabaseAnon,
-            Authorization: `Bearer ${supabaseAnon}`,
-          },
-          // Cache at the edge for 30 s — store_open rarely changes and
-          // hitting Supabase on every page request is unnecessary load.
-          next: { revalidate: 30 },
-          // Short timeout — don't block page load
-          signal: AbortSignal.timeout(2000),
-        }
-      )
-
-      if (res.ok) {
-        const data = await res.json()
-        const storeOpen = data?.[0]?.value !== 'false'
-
-        if (!storeOpen) {
-          return NextResponse.rewrite(new URL('/maintenance', req.url))
-        }
-      }
+    const storeOpen = await getCachedStoreOpen()
+    if (!storeOpen) {
+      return NextResponse.rewrite(new URL('/maintenance', req.url))
     }
   } catch {
     // If check fails, allow through (fail open — better than blocking real customers)

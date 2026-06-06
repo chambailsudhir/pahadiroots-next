@@ -211,7 +211,14 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   // Primitive snapshots used inside placeOrder — stable values to include in dep array
   const pricingShipping  = pricing.shipping
   const pricingTotal     = pricing.total
-  const waNumber         = s.whatsapp_number || '919899984895'
+  // SEC-FIX: strip non-digit characters (spaces, dashes, brackets, leading +)
+  // before injecting into the wa.me URL. wa.me expects digits only; an admin
+  // who saves "+91 98765-43210" would otherwise produce a broken link, and a
+  // malformed value could inject unexpected path segments.
+  // Also validate minimum length — an empty post-sanitization string would
+  // produce `https://wa.me/` pointing to an unrelated page.
+  const _waRaw    = (s.whatsapp_number || '919899984895').replace(/\D/g, '')
+  const waNumber  = _waRaw.length >= 7 ? _waRaw : '919899984895'
 
   const orderPlacedRef = useRef(false)
   useEffect(() => { setStoreReady(true) }, [])
