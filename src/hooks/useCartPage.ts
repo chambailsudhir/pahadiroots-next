@@ -62,6 +62,15 @@
  *      callbacks fired on unmounted components when the user navigated away
  *      mid-countdown, causing StrictMode warnings.
  *      Fix: mountedRef guards all deferred setState calls.
+ *
+ *  12. [PERF] handleUpsellAdd listed `addedUpsell` (a state array) as a
+ *      useCallback dep. Every upsell add changes addedUpsell → recreates
+ *      handleUpsellAdd → busts UpsellSection's React.memo on every tap, even
+ *      though UpsellSection's props didn't change in any meaningful way.
+ *      Fix: addedUpsellRef mirrors addedUpsell via a sync useEffect. The
+ *      callback reads addedUpsellRef.current at call-time (always fresh) and
+ *      no longer lists addedUpsell as a dep, making it stable for the lifetime
+ *      of the hook — the same pattern already used for itemsRef and subtotalRef.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -158,6 +167,13 @@ export function useCartPage() {
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
+
+  // addedUpsellRef always holds the latest addedUpsell array so handleUpsellAdd
+  // can read it without listing `addedUpsell` as a useCallback dep.
+  // Without this, every upsell add recreates handleUpsellAdd (because addedUpsell
+  // changes), which invalidates UpsellSection's React.memo on every add tap.
+  const addedUpsellRef = useRef(addedUpsell)
+  useEffect(() => { addedUpsellRef.current = addedUpsell }, [addedUpsell])
 
   // ── Derived / memoised values ──────────────────────────────────────────────
   const pricing = useMemo(
@@ -378,7 +394,9 @@ export function useCartPage() {
   }, [])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
-    if (addedUpsell.includes(p.id)) return
+    // Read the latest addedUpsell via ref — avoids listing `addedUpsell` as a dep,
+    // which would recreate this callback on every add and bust UpsellSection.memo.
+    if (addedUpsellRef.current.includes(p.id)) return
     addItem({
       productId:   p.productId,
       variantId:   p.id,
@@ -397,7 +415,9 @@ export function useCartPage() {
     })
     trackUpsellAdded(p.name, p.price)
     setAddedUpsell(a => [...a, p.id])
-  }, [addedUpsell, addItem, trackUpsellAdded])
+  // addedUpsellRef is intentionally excluded from deps — it's a ref (stable object),
+  // and addedUpsellRef.current is always the latest value at call-time.
+  }, [addItem, trackUpsellAdded])
 
   // ── Shared coupon apply helper ─────────────────────────────────────────────
   const applyCouponCode = useCallback(async (code: string) => {

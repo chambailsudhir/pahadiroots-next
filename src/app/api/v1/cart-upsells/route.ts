@@ -14,6 +14,17 @@
  *   variantIds  comma-separated list of variantIds currently in cart
  *   productIds  comma-separated list of productIds currently in cart
  *
+ * Bug-fix: ghost upsell items from soft-deleted/inactive products.
+ *   The product_variants query only checks is_active=true on the variant. A
+ *   product can be soft-deleted (is_deleted=true) or deactivated (status≠active)
+ *   while its variants remain active in the DB. Previously such variants would
+ *   pass the exclusion filter, but since their product_id was absent from
+ *   prodMap they'd render as a ghost card (name="Product", slug=""). This
+ *   produces a broken link and a misleading card in the cart.
+ *   Fix: added `v.product_id in prodMap` guard before the dedup+slice step so
+ *   only variants whose product passed the status=active&is_deleted=false check
+ *   can become upsell items.
+ *
  * Consumed by: useCartPage hook
  */
 
@@ -110,12 +121,22 @@ export async function GET(req: NextRequest) {
       if (!imgMap[img.product_id]) imgMap[img.product_id] = img.image_url
     })
 
-    // Deduplicate by product, skip cart items, take top 6
+    // Deduplicate by product, skip cart items, take top 6.
+    // Bug-fix: also skip variants whose product_id is absent from prodMap.
+    // The variant query only checks is_active=true on the variant itself; a
+    // product can be soft-deleted (is_deleted=true) or deactivated (status≠active)
+    // while its variants remain active in the DB. The products query already
+    // filters those out with status=eq.active&is_deleted=eq.false, so any
+    // variant whose product_id isn't in prodMap belongs to a deleted/inactive
+    // product and must be excluded — otherwise it renders as a ghost card with
+    // name="Product" and an empty slug, producing a broken link.
     const seenProducts = new Set<string>()
     const upsells: UpsellItem[] = variants
       .filter(v =>
         !excludedVariantIds.has(v.id) &&
-        !excludedProductIds.has(v.product_id),
+        !excludedProductIds.has(v.product_id) &&
+        // Only include variants whose product passed the active+non-deleted filter
+        v.product_id in prodMap,
       )
       .filter(v => {
         if (seenProducts.has(v.product_id)) return false
@@ -124,7 +145,7 @@ export async function GET(req: NextRequest) {
       })
       .slice(0, 6)
       .map(v => {
-        const p = prodMap[v.product_id] ?? {}
+        const p = prodMap[v.product_id]  // guaranteed to exist after the filter above
         const badge = p.badges_bestseller ? 'Bestseller'
           : p.badges_organic              ? 'Natural'
           : p.badges_new                  ? 'New Arrival'

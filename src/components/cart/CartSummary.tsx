@@ -3,29 +3,39 @@
 /**
  * CartSummary — order summary panel with coupon input, price breakdown, and CTA.
  *
- * Bug-fix applied:
+ * Bug-fixes applied:
  *
- *   Coupon input Enter key bypassed the loading guard (Medium — Logic).
+ *   1. Coupon input Enter key bypassed the loading guard (Medium — Logic).
  *
- *   The Apply button was correctly disabled when couponLoading=true, preventing
- *   mouse/touch users from sending duplicate requests. However, the input's
- *   onKeyDown handler fired onApplyCoupon() unconditionally on Enter:
+ *      The Apply button was correctly disabled when couponLoading=true, preventing
+ *      mouse/touch users from sending duplicate requests. However, the input's
+ *      onKeyDown handler fired onApplyCoupon() unconditionally on Enter:
  *
- *     onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
+ *        onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
  *
- *   A keyboard user who pressed Enter while a request was already in-flight
- *   would launch a second concurrent request. Both fetches would race to update
- *   state: whichever resolved last "won" the applyCoupon / setCouponError call,
- *   potentially showing a stale error from the first request after the second
- *   had already succeeded.
+ *      A keyboard user who pressed Enter while a request was already in-flight
+ *      would launch a second concurrent request. Both fetches would race to update
+ *      state: whichever resolved last "won" the applyCoupon / setCouponError call,
+ *      potentially showing a stale error from the first request after the second
+ *      had already succeeded.
  *
- *   Fix: add !couponLoading to the short-circuit chain so Enter is a no-op while
- *   the first request is pending:
+ *      Fix: add !couponLoading to the short-circuit chain so Enter is a no-op while
+ *      the first request is pending:
  *
- *     onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
+ *        onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
  *
- *   This aligns keyboard behaviour with the disabled-button UX and matches how
- *   the Apply button itself has always behaved.
+ *      This aligns keyboard behaviour with the disabled-button UX and matches how
+ *      the Apply button itself has always behaved.
+ *
+ *   2. Remove-coupon (✕) button missing type="button" (Minor — Accessibility).
+ *
+ *      The ✕ button that dismisses an applied coupon had no explicit type attribute.
+ *      Without type="button", buttons default to type="submit" inside a <form>.
+ *      While no <form> wraps CartSummary today, the omission is inconsistent with
+ *      the rest of the codebase (Apply, hint pills, and CTA all carry the attribute)
+ *      and risks accidental form submission if CartSummary is ever placed inside a
+ *      checkout <form>.
+ *      Fix: added type="button" to the couponRm button.
  */
 
 import Link from 'next/link'
@@ -72,7 +82,11 @@ const CartSummary = memo(function CartSummary({
         {coupon ? (
           <div className={styles.couponApplied}>
             <span>🎉 <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
-            <button className={styles.couponRm} onClick={onRemoveCoupon} aria-label="Remove coupon">✕</button>
+            {/* Bug-fix: type="button" added — without it, this defaults to type="submit"
+                inside any ancestor <form>, which would submit the form instead of
+                removing the coupon. Consistent with all other interactive buttons in
+                the codebase. */}
+            <button type="button" className={styles.couponRm} onClick={onRemoveCoupon} aria-label="Remove coupon">✕</button>
           </div>
         ) : (
           <div className={styles.couponRow}>
