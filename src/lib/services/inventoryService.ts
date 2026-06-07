@@ -11,8 +11,60 @@ export interface StockCheckResult {
   failedItems: Array<{ variantId: string; requested: number; available: number }>
 }
 
-// Check stock for multiple items before order creation
-// Does NOT deduct — deduction happens via DB trigger after order confirm
+// ─────────────────────────────────────────────────────────────────────────────
+// reserveStockAtomicForOrder
+// ─────────────────────────────────────────────────────────────────────────────
+// Atomically deducts stock at ORDER CREATION time using a PostgreSQL UPDATE
+// with a WHERE available_stock >= qty guard.  If 0 rows are updated, stock
+// is insufficient and we throw before the order is committed.
+//
+// This replaces the old read-only checkStockAvailability pattern which had a
+// TOCTOU race: two concurrent requests both read "stock=1", both pass the
+// check, both create an order → stock goes to -1.
+//
+// Handles both variant products (product_variants table) and no-variant
+// products (products table, where app-layer variantId === productId).
+//
+// Caller must roll back / delete the order if a subsequent step fails.
+// Stock is restored via restoreStock() on cancellation / payment failure.
+export async function reserveStockAtomicForOrder(
+  items: StockCheckItem[]
+): Promise<{ ok: boolean; failedVariantId?: string }> {
+  const db = getServiceClient()
+
+  for (const item of items) {
+    const isNoVariant = item.productId && item.variantId === item.productId
+
+    if (isNoVariant) {
+      // No-variant product: atomically deduct from products.available_stock
+      const { data, error } = await db.rpc('reserve_product_stock_at_order', {
+        p_product_id: item.productId!,
+        p_qty:        item.qty,
+      })
+      if (error || !data) {
+        return { ok: false, failedVariantId: item.variantId }
+      }
+    } else {
+      // Variant product: atomically deduct from product_variants.available_stock
+      const { data, error } = await db.rpc('reserve_stock_at_order', {
+        p_variant_id: item.variantId,
+        p_qty:        item.qty,
+      })
+      if (error || !data) {
+        return { ok: false, failedVariantId: item.variantId }
+      }
+    }
+  }
+
+  return { ok: true }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// checkStockAvailability (read-only, non-atomic)
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️  DEPRECATED for order-creation use — use reserveStockAtomicForOrder().
+// Kept for cart-page pre-checks where you want a fast read without committing
+// a reservation (e.g. rendering "Out of stock" badges).
 export async function checkStockAvailability(
   items: StockCheckItem[]
 ): Promise<StockCheckResult> {
@@ -49,7 +101,6 @@ export async function checkStockAvailability(
 
   for (const item of items) {
     if (item.productId && item.variantId === item.productId) {
-      // No-variant product
       const prod = productStockMap.get(String(item.productId))
       if (!prod || prod.is_deleted || prod.status !== 'active') {
         failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
@@ -59,7 +110,6 @@ export async function checkStockAvailability(
         failedItems.push({ variantId: item.variantId, requested: item.qty, available: prod.available_stock ?? 0 })
       }
     } else {
-      // Variant product
       const variant = variantStockMap.get(String(item.variantId))
       if (!variant || !variant.is_active) {
         failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
@@ -74,9 +124,11 @@ export async function checkStockAvailability(
   return { ok: failedItems.length === 0, failedItems }
 }
 
-// Atomic stock deduction — ONLY call after payment confirmed
-// Uses conditional UPDATE to prevent race conditions (audit #A4)
-// Returns false if stock insufficient (someone else bought last unit)
+// ─────────────────────────────────────────────────────────────────────────────
+// deductStockAtomic — ONLY call after payment confirmed
+// ─────────────────────────────────────────────────────────────────────────────
+// Uses conditional UPDATE to prevent race conditions (audit #A4).
+// Returns false if stock insufficient (someone else bought last unit).
 export async function deductStockAtomic(
   items: StockCheckItem[]
 ): Promise<{ ok: boolean; failedVariantId?: string }> {
@@ -103,10 +155,17 @@ export async function restoreStock(
   const db = getServiceClient()
 
   for (const item of items) {
-    await db.rpc('restore_stock', {
-      p_variant_id: item.variantId,
-      p_qty: item.qty,
-    })
+    const isNoVariant = item.productId && item.variantId === item.productId
+    if (isNoVariant) {
+      await db.rpc('restore_product_stock', {
+        p_product_id: item.productId!,
+        p_qty: item.qty,
+      })
+    } else {
+      await db.rpc('restore_stock', {
+        p_variant_id: item.variantId,
+        p_qty: item.qty,
+      })
+    }
   }
 }
-

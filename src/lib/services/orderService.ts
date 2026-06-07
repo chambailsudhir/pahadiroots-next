@@ -118,7 +118,7 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
 // ─────────────────────────────────────────────────────────────
 import type { SiteSettings } from '@/types'
 import { getServiceClient } from '@/lib/supabase'
-import { checkStockAvailability } from './inventoryService'
+import { reserveStockAtomicForOrder } from './inventoryService'
 import { calcPriceSummary } from './pricingService'
 
 // ── Module-level Supabase REST helpers ───────────────────────
@@ -230,14 +230,39 @@ export async function createOrder(
     }
   }
 
-  // 2. Stock check
-  const stockCheck = await checkStockAvailability(
+  // 2. Atomic stock reservation — replaces the old read-only checkStockAvailability.
+  //
+  // RACE CONDITION FIX: the previous pattern did SELECT available_stock, then checked
+  // qty client-side, then created the order separately.  Two concurrent checkouts for
+  // the last unit both passed the read-check and both created orders → stock went to -1.
+  //
+  // We now call reserve_stock_at_order / reserve_product_stock_at_order, which execute:
+  //   UPDATE product_variants
+  //   SET    available_stock = available_stock - qty
+  //   WHERE  id = $1 AND is_active AND available_stock >= qty
+  // PostgreSQL's row-level locking guarantees only one concurrent UPDATE wins when
+  // available_stock = 1.  The loser gets rows_updated = 0 → we throw before order insert.
+  //
+  // Stock is restored (restoreStock) on cancellation or if any subsequent step fails.
+  const stockReservation = await reserveStockAtomicForOrder(
     input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
   )
-  if (!stockCheck.ok) {
-    const failed = stockCheck.failedItems.map(f => `variantId:${f.variantId} (req:${f.requested} avail:${f.available})`).join(', ')
-    throw new Error(`Insufficient stock: ${failed}`)
+  if (!stockReservation.ok) {
+    throw new Error(`Insufficient stock for item ${stockReservation.failedVariantId ?? 'unknown'} — please reduce quantity or remove the item`)
   }
+
+  // ── STOCK SAFETY WRAPPER ─────────────────────────────────────────────────
+  // Everything from here to the final return runs inside try/finally.
+  // If ANY step throws — bad product ID, coupon expired, customer creation
+  // failure, loyalty shortfall, RPC error — the stock we atomically decremented
+  // above is restored in the finally block.
+  //
+  // The guard is: newOrder===null means the DB transaction never committed →
+  // safe to restore.  Once newOrder is set the order owns those units and we
+  // must not touch stock again.
+  let newOrder: { id: string; order_number: string; total_amount: number; order_status: string } | null = null
+
+  try {
 
   // 3. Fetch prices via direct REST API (same pattern as store-data route — proven working)
   // Split items: those with a real variant ID vs those using product ID as fallback
@@ -500,35 +525,23 @@ export async function createOrder(
     }
   }
 
-  // 8. Create order
+  // 8 + 9. Create order AND insert order items in a single PostgreSQL transaction.
+  //
+  // DB TRANSACTION FIX: previously these were two separate Supabase SDK calls.
+  // If the order_items insert failed, we attempted a manual DELETE of the orphan
+  // order — a fragile cleanup that could also fail (e.g. network drop), leaving
+  // an orphan order row with no items.
+  //
+  // We now call create_order_with_items(), a PL/pgSQL function that wraps both
+  // INSERTs in an implicit transaction.  If the order_items loop throws, PG rolls
+  // back the orders row automatically — no orphan cleanup needed.
+  //
   // loyalty_points_redeemed is stored on the orders row so that verify_payment
   // can read it from the DB rather than trusting the client-supplied value.
   // This fixes the P2 security issue where an inflated client value could
   // pass if the DB RPC lacked a sufficient balance check.
-  const { data: newOrder, error: orderErr } = await db
-    .from('orders')
-    .insert({
-      order_number:           orderNumber,        // e.g. PR1A2B3C — shown to customer
-      customer_id:            custId,
-      total_amount:           pricing.total,
-      subtotal:               pricing.subtotal,
-      coupon_discount:        pricing.discount,
-      tax:                    pricing.gstTotal,
-      shipping_charge:        pricing.shipping,
-      order_status:           'pending',
-      payment_status:         'pending',
-      payment_method:         input.paymentMethod,
-      idempotency_key:        input.idempotencyKey,
-      loyalty_points_redeemed: input.loyaltyPointsRedeemed ?? 0,
-    })
-    .select('id, order_number, total_amount, order_status')
-    .single()
 
-  if (orderErr || !newOrder) throw new Error('Failed to create order: ' + orderErr?.message)
-
-  // 9. Insert order items
-  //    order_items.variant_id is UUID (references product_variants.id)
-  //    For no-variant products (variantId === productId), fetch the canonical variant from DB
+  // Resolve canonical variant UUIDs for no-variant products before the RPC call
   const noVariantProductIds = itemsNoVariant.map(i => i.productId)
   const defaultVariantMap = new Map<string, string>() // productId → variantId (UUID)
   if (noVariantProductIds.length > 0) {
@@ -542,29 +555,44 @@ export async function createOrder(
     }
   }
 
-  const orderItems = input.items.map(i => {
+  const rpcItems = input.items.map(i => {
     const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
     const p: any = productMap.get(String(v?.product_id ?? i.productId))
-    // For no-variant products, resolve the real variant UUID from DB lookup
     const resolvedVariantId = i.variantId === i.productId
       ? (defaultVariantMap.get(String(i.productId)) ?? i.variantId)
       : i.variantId
     return {
-      order_id:      newOrder.id,
-      product_id:    i.productId,   // UUID string — keep as-is
-      variant_id:    resolvedVariantId, // UUID string — FK to product_variants(id)
+      product_id:    i.productId,
+      variant_id:    resolvedVariantId,
       quantity:      i.qty,
       price_at_time: Number(v?.price) || Number(p?.price) || 0,
     }
   })
 
-  const { error: itemsErr } = await db.from('order_items').insert(orderItems)
-  if (itemsErr) {
-    // Cleanup orphan order then throw — matches old site error handling
-    console.error('[createOrder] order_items insert failed:', itemsErr.message)
-    try { await db.from("orders").delete().eq("id", newOrder.id) } catch(_) {}
-    throw new Error('Order items could not be saved: ' + itemsErr.message)
+  const { data: rpcResult, error: rpcErr } = await db.rpc('create_order_with_items', {
+    p_order_number:             orderNumber,
+    p_customer_id:              custId,
+    p_total_amount:             pricing.total,
+    p_subtotal:                 pricing.subtotal,
+    p_coupon_discount:          pricing.discount,
+    p_tax:                      pricing.gstTotal,
+    p_shipping_charge:          pricing.shipping,
+    p_order_status:             'pending',
+    p_payment_status:           'pending',
+    p_payment_method:           input.paymentMethod,
+    p_idempotency_key:          input.idempotencyKey,
+    p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
+    p_items:                    rpcItems,
+  })
+
+  if (rpcErr || !rpcResult) {
+    throw new Error('Failed to create order: ' + (rpcErr?.message ?? 'no data returned'))
   }
+
+  // rpc() with RETURNS TABLE returns an array — take first row
+  const row = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult
+  if (!row?.id) throw new Error('Order creation RPC returned no row')
+  newOrder = row as { id: string; order_number: string; total_amount: number; order_status: string }
 
   // 10. Atomically increment coupon uses_count now that the order is committed.
   //
@@ -591,7 +619,7 @@ export async function createOrder(
   }
 
   // 11. Log creation event
-  await logOrderEvent(newOrder.id, 'order_created', 'system', {
+  await logOrderEvent(newOrder!.id, 'order_created', 'system', {
     payment_method: input.paymentMethod,
     total:          pricing.total,
     items:          input.items.length,
@@ -601,11 +629,11 @@ export async function createOrder(
   // can use real product names + prices (d.items from Zod only has productId/variantId/qty)
   return {
     order: {
-      id:           newOrder.id,
-      order_number: newOrder.order_number,
-      total_amount: newOrder.total_amount,
-      total:        newOrder.total_amount,
-      status:       newOrder.order_status,
+      id:           newOrder!.id,
+      order_number: newOrder!.order_number,
+      total_amount: newOrder!.total_amount,
+      total:        newOrder!.total_amount,
+      status:       newOrder!.order_status,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
         emoji: i.emoji ?? '🌿',
@@ -615,6 +643,23 @@ export async function createOrder(
     },
     alreadyExists: false,
     customerId:    custId,
+  }
+
+  } finally {
+    // Restore stock if order was never committed (newOrder===null means
+    // the DB transaction rolled back or a pre-insert step threw).
+    // This covers ALL throw paths after the atomic reservation:
+    // bad product ID, coupon expired, COD disabled, loyalty shortfall,
+    // customer creation failure, RPC error — every possible exit.
+    if (newOrder === null) {
+      const { restoreStock } = await import('./inventoryService')
+      await restoreStock(
+        input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
+      ).catch(restoreErr => {
+        // Non-fatal — log for ops; ops team can manually correct via restore_stock RPC
+        console.error('[createOrder] stock restore failed after aborted order:', restoreErr)
+      })
+    }
   }
 }
 

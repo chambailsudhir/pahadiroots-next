@@ -250,3 +250,153 @@ INSERT INTO site_settings (key, value) VALUES
   ('cod_max_value',           '3000'),
   ('cod_max_active_orders',   '3')
 ON CONFLICT (key) DO NOTHING;
+
+-- ─── 12. Atomic stock reservation at order creation (Race-condition fix) ────
+-- Called by createOrder() INSTEAD of the old read-only checkStockAvailability.
+-- Single UPDATE per variant; returns FALSE if stock insufficient so the caller
+-- can abort without creating an orphan order.
+-- Works for both product_variants (real variants) and the products table
+-- (no-variant products, where variantId === productId at the app layer).
+--
+-- NOTE: deduct_stock_atomic (above, #9) remains for payment-confirmation
+-- deduction — this function handles *reservation* at order placement time.
+-- If you switch to a reserve/release model, call restore_stock on cancellation.
+CREATE OR REPLACE FUNCTION reserve_stock_at_order(
+  p_variant_id UUID,
+  p_qty        INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  UPDATE product_variants
+  SET    available_stock = available_stock - p_qty
+  WHERE  id              = p_variant_id
+    AND  is_active       = true
+    AND  available_stock >= p_qty;
+
+  GET DIAGNOSTICS rows_updated = ROW_COUNT;
+  RETURN rows_updated > 0;
+END;
+$$ LANGUAGE plpgsql;
+
+-- No-variant product variant: reserve from products table stock
+CREATE OR REPLACE FUNCTION reserve_product_stock_at_order(
+  p_product_id UUID,
+  p_qty        INTEGER
+) RETURNS BOOLEAN AS $$
+DECLARE
+  rows_updated INTEGER;
+BEGIN
+  UPDATE products
+  SET    available_stock = available_stock - p_qty
+  WHERE  id              = p_product_id
+    AND  is_deleted      = false
+    AND  status          = 'active'
+    AND  available_stock >= p_qty;
+
+  GET DIAGNOSTICS rows_updated = ROW_COUNT;
+  RETURN rows_updated > 0;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── 13. Transactional order + items creation (Audit #A3 wire-up) ───────────
+-- Wraps the orders INSERT + order_items INSERT in a single PG transaction.
+-- Called by createOrder() in orderService.ts after all price/coupon validation.
+-- Uses the ACTUAL column names from the live schema (order_status, total_amount,
+-- coupon_discount, tax, shipping_charge, loyalty_points_redeemed).
+--
+-- Returns the new order row so the caller can use order.id without a second
+-- SELECT round-trip.
+CREATE OR REPLACE FUNCTION create_order_with_items(
+  p_order_number            TEXT,
+  p_customer_id             UUID,
+  p_total_amount            NUMERIC,
+  p_subtotal                NUMERIC,
+  p_coupon_discount         NUMERIC,
+  p_tax                     NUMERIC,
+  p_shipping_charge         NUMERIC,
+  p_order_status            TEXT,
+  p_payment_status          TEXT,
+  p_payment_method          TEXT,
+  p_idempotency_key         UUID,
+  p_loyalty_points_redeemed INTEGER,
+  p_items                   JSONB    -- [{order_id(ignored),product_id,variant_id,quantity,price_at_time}]
+) RETURNS TABLE(
+  id            UUID,
+  order_number  TEXT,
+  total_amount  NUMERIC,
+  order_status  TEXT
+) AS $$
+DECLARE
+  v_order_id UUID;
+  v_item     JSONB;
+BEGIN
+  -- Insert order
+  INSERT INTO orders (
+    order_number,
+    customer_id,
+    total_amount,
+    subtotal,
+    coupon_discount,
+    tax,
+    shipping_charge,
+    order_status,
+    payment_status,
+    payment_method,
+    idempotency_key,
+    loyalty_points_redeemed
+  ) VALUES (
+    p_order_number,
+    p_customer_id,
+    p_total_amount,
+    p_subtotal,
+    p_coupon_discount,
+    p_tax,
+    p_shipping_charge,
+    p_order_status,
+    p_payment_status,
+    p_payment_method,
+    p_idempotency_key,
+    p_loyalty_points_redeemed
+  )
+  RETURNING orders.id INTO v_order_id;
+
+  -- Insert order items
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    INSERT INTO order_items (
+      order_id,
+      product_id,
+      variant_id,
+      quantity,
+      price_at_time
+    ) VALUES (
+      v_order_id,
+      (v_item->>'product_id')::UUID,
+      (v_item->>'variant_id')::UUID,
+      (v_item->>'quantity')::INTEGER,
+      (v_item->>'price_at_time')::NUMERIC
+    );
+  END LOOP;
+
+  -- Return inserted order fields
+  RETURN QUERY
+    SELECT o.id, o.order_number, o.total_amount, o.order_status
+    FROM   orders o
+    WHERE  o.id = v_order_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── 14. Restore product stock (no-variant products) ────────────────────────
+-- Mirror of restore_stock but targets products.available_stock.
+-- Called by restoreStock() in inventoryService when variantId === productId.
+CREATE OR REPLACE FUNCTION restore_product_stock(
+  p_product_id UUID,
+  p_qty        INTEGER
+) RETURNS VOID AS $$
+BEGIN
+  UPDATE products
+  SET    available_stock = available_stock + p_qty
+  WHERE  id = p_product_id;
+END;
+$$ LANGUAGE plpgsql;
