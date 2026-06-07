@@ -105,11 +105,14 @@ export default function AuthModal() {
     setLoading(true); setError(''); setSuccess('')
     try {
       const data = await callAuth('email_login', { email: em, password: pass })
-      if (data.access_token) {
-        try { localStorage.setItem('pr_auth_token', data.access_token) } catch {}
-        if (data.refresh_token) { try { localStorage.setItem('pr_auth_refresh', data.refresh_token) } catch {} }
-        if (data.profile) { try { localStorage.setItem('pr_auth_profile', JSON.stringify(data.profile)) } catch {} }
-      }
+      // SEC-FIX: removed localStorage.setItem('pr_auth_token' / 'pr_auth_refresh') calls.
+      // The /api/auth route writes tokens only into httpOnly cookies — the response body
+      // contains { success, user, profile }, never tokens. data.access_token is always
+      // undefined here, so these writes were dead code. Keeping them was a security
+      // landmine: any future change that accidentally added tokens to the response body
+      // would silently re-expose them to XSS via localStorage. Removed entirely.
+      // pr_auth_profile localStorage is also removed — profile data is now in the
+      // profileCache (writeProfileCache below) which is a safer, explicit abstraction.
       setUser({
         id:    data.user?.id || '',
         email: data.user?.email || em,

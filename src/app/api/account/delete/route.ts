@@ -31,6 +31,7 @@ import {
   getToken, tryRefresh,
   checkRateLimit,
   checkCsrf,
+  applyNewCookies,
 } from '@/lib/api/serverUtils'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 
@@ -80,8 +81,11 @@ async function deleteAuthUser(userId: string): Promise<void> {
 }
 
 // ── Clear session cookies ─────────────────────────────────────
+// SEC-FIX: the previous local copy used SameSite='strict' which is inconsistent
+// with all other cookie-writing paths (session/route.ts, google-callback/route.ts,
+// auth/route.ts). Changed to 'lax' to match the rest of the auth system.
 function clearAuthCookies(res: NextResponse): NextResponse {
-  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'strict' as const, path: '/' }
+  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
   res.cookies.set(COOKIE_TOKEN,   '', { ...base, maxAge: 0 })
   res.cookies.set(COOKIE_REFRESH, '', { ...base, maxAge: 0 })
   return res

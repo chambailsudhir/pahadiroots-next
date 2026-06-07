@@ -49,6 +49,11 @@ async function fetchCartSettings(): Promise<Record<string, string>> {
       apikey:        SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
+    // SEC/PERF FIX: without a timeout, a slow or unresponsive Supabase response
+    // hangs this serverless function until Vercel's hard 15-second limit fires,
+    // blocking the entire cart page render. 4 s is generous for a simple indexed
+    // SELECT on ~15 rows.
+    signal: AbortSignal.timeout(4_000),
     next: { revalidate: 60 },
   })
 

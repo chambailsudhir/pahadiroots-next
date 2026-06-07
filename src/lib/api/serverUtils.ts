@@ -155,7 +155,11 @@ export async function tryRefresh(req: NextRequest): Promise<RefreshResult | null
 }
 
 export function applyNewCookies(res: NextResponse, access: string, refresh: string) {
-  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'strict' as const, path: '/' }
+  // SEC-FIX: changed sameSite from 'strict' to 'lax' to match session/route.ts
+  // and google-callback/route.ts. See auth/route.ts withAuthCookies comment
+  // for the full rationale. All cookie-writing paths must agree on SameSite
+  // to avoid split-brain session behaviour.
+  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
   res.cookies.set(COOKIE_TOKEN,   access,  { ...base, maxAge: 60 * 60 })
   res.cookies.set(COOKIE_REFRESH, refresh, { ...base, maxAge: 60 * 60 * 24 * 30 })
 }

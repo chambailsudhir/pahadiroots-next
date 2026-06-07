@@ -22,6 +22,11 @@ async function sbGet(table: string, query = '') {
       'Authorization': `Bearer ${SERVICE_KEY}`,
       'Content-Type':  'application/json',
     },
+    // PERF/SEC FIX: no timeout was set — any of the 8 parallel Supabase fetches
+    // could hang the serverless function until Vercel's 15-second hard limit.
+    // 8 s matches the timeout used by every other Supabase fetch in the codebase
+    // (sbAdmin in serverUtils.ts). next.revalidate is kept for edge caching.
+    signal: AbortSignal.timeout(8_000),
     next: { revalidate: 60 }, // cache 60s at edge
   })
   if (!res.ok) throw new Error(`Supabase ${table}: ${res.status}`)

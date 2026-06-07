@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
+import { checkCsrf } from '@/lib/api/serverUtils'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 
@@ -26,6 +27,17 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // SEC-FIX: the previous implementation had no CSRF protection. The action=set
+  // path writes arbitrary tokens into httpOnly cookies — an attacker who can
+  // issue a cross-origin POST (e.g. via a malicious web page) could plant a
+  // controlled access_token into the victim's browser. This is a session
+  // fixation vector: the victim's subsequent requests carry the attacker's token,
+  // potentially letting the attacker observe session activity or force the victim
+  // into a known account.
+  // Fix: validate Origin/Referer before touching cookies on any POST.
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
+
   let body: { action?: string; access_token?: string; refresh_token?: string } = {}
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })

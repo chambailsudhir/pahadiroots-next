@@ -16,6 +16,7 @@ import {
   getToken, tryRefresh,
   checkRateLimit,
   checkCsrf,
+  applyNewCookies,
 } from '@/lib/api/serverUtils'
 
 export async function GET(req: NextRequest) {
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
 
     // ── Return as downloadable JSON file ──────────────────────────
     const json = JSON.stringify(exportData, null, 2)
-    return new NextResponse(json, {
+    const res = new NextResponse(json, {
       status: 200,
       headers: {
         'Content-Type':        'application/json',
@@ -103,6 +104,13 @@ export async function GET(req: NextRequest) {
         'Cache-Control':       'no-store',
       },
     })
+    // SEC-FIX: if the token was silently refreshed via tryRefresh(), the new
+    // access + refresh tokens must be written back into the httpOnly cookies.
+    // Without this call the refreshed tokens are discarded — the next request
+    // finds a stale cookie, tryRefresh() runs again (wasting a Supabase call),
+    // and eventually the refresh token itself expires, logging the user out.
+    if (refreshed) applyNewCookies(res, refreshed.token, refreshed.refresh)
+    return res
   } catch (e: unknown) {
     console.error('[data-export] Failed:', e)
     return fail(500, 'Could not export your data — please try again.')

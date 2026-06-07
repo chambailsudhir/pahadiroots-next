@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
-import { syncCustomerProfile } from '@/lib/api/serverUtils'
+import { syncCustomerProfile, checkCsrf } from '@/lib/api/serverUtils'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -26,13 +26,30 @@ function fail(status: number, msg: string) { return NextResponse.json({ error: m
 const err = fail
 
 // ── httpOnly cookie writer ────────────────────────────────────
-// Called after every successful login to move tokens off localStorage
+// Called after every successful login to move tokens off localStorage.
+//
+// SEC-FIX: changed sameSite from 'strict' to 'lax' to match session/route.ts
+// and google-callback/route.ts. 'strict' caused auth cookies to be omitted on
+// top-level cross-site navigations (WhatsApp links, email links) — the session
+// appeared broken depending on which login method the user chose. All four
+// cookie-writing paths must agree on SameSite.
 function withAuthCookies(res: NextResponse, accessToken: string, refreshToken?: string | null): NextResponse {
-  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'strict' as const, path: '/' }
+  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
   res.cookies.set(COOKIE_TOKEN,   accessToken,  { ...base, maxAge: 60 * 60 })
   if (refreshToken) {
     res.cookies.set(COOKIE_REFRESH, refreshToken, { ...base, maxAge: 60 * 60 * 24 * 30 })
   }
+  return res
+}
+
+// ── httpOnly cookie clearer ───────────────────────────────────
+// Expires both auth cookies in a response. Used by logout so the browser
+// actually removes them — setting maxAge:0 is the only reliable way to clear
+// an httpOnly cookie from a server route.
+function clearAuthCookies(res: NextResponse): NextResponse {
+  const base = { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
+  res.cookies.set(COOKIE_TOKEN,   '', { ...base, maxAge: 0 })
+  res.cookies.set(COOKIE_REFRESH, '', { ...base, maxAge: 0 })
   return res
 }
 
@@ -202,6 +219,12 @@ export async function POST(req: NextRequest) {
     return err(500, 'Server misconfigured — check env vars')
   }
 
+  // ── CSRF check — protects all state-mutating actions ─────────────────────
+  // This route handles login, logout, link_email, link_phone, update_profile,
+  // change_password, create_return — all state-mutating. Without CSRF validation
+  // a cross-origin page can trigger any of these actions on a logged-in user
+  // (e.g. CSRF logout, CSRF profile update, CSRF return creation).
+  // _ping is exempted (no state mutation, used by keep-warm scheduler).
   let body: Record<string, unknown> = {}
   try {
     body = await req.json()
@@ -211,8 +234,11 @@ export async function POST(req: NextRequest) {
 
   const { action } = body as { action?: string }
 
-  // ── Keep-warm ping ──
+  // ── Keep-warm ping — skip CSRF (no state mutation, called by cron/warmup) ──
   if (action === '_ping') return ok({ ok: true })
+
+  const csrfError = checkCsrf(req)
+  if (csrfError) return csrfError
 
   // ── Rate limiting — applied to sensitive actions ──────────
   const RATE_LIMITED_ACTIONS = new Set([
@@ -315,10 +341,13 @@ export async function POST(req: NextRequest) {
 
   // ── Refresh Token ──
   if (action === 'refresh_token') {
-    const { refresh_token } = body as { refresh_token?: string }
-    if (!refresh_token) return err(400, 'refresh_token required')
+    // SEC-FIX: refresh token must be read from the httpOnly cookie, not the
+    // request body. Reading from the body requires the client to store it in
+    // JS-accessible memory, which defeats the point of httpOnly cookies.
+    const rt = req.cookies.get(COOKIE_REFRESH)?.value
+    if (!rt) return err(401, 'No refresh token — please login again')
     try {
-      const data = await sbAuth('/token?grant_type=refresh_token', { refresh_token: refresh_token as string })
+      const data = await sbAuth('/token?grant_type=refresh_token', { refresh_token: rt })
       const res = ok({ success: true })
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch {
@@ -461,7 +490,11 @@ export async function POST(req: NextRequest) {
       try { await sbAuth('/logout', {}, token) }
       catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed — local session still cleared:', e) }
     }
-    return ok({ success: true })
+    // SEC-FIX: the previous implementation returned ok({ success: true }) without
+    // clearing the httpOnly cookies. pr_token and pr_refresh remained in the browser
+    // until they naturally expired (1 h / 30 days). Fix: expire both immediately.
+    const res = ok({ success: true })
+    return clearAuthCookies(res as NextResponse)
   }
 
   // ── Forgot Password ──

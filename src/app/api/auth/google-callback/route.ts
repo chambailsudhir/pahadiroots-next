@@ -40,6 +40,9 @@ export async function GET(req: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON },
         body: JSON.stringify({ auth_code: code }),
+        // PERF FIX: no timeout was set — a slow Supabase response hangs the serverless
+        // function until Vercel's 15-second limit. 8 s matches all other auth fetches.
+        signal: AbortSignal.timeout(8_000),
       })
       const tokenData = await tokenRes.json()
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { subscribeSchema, reviewSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf, getToken } from '@/lib/api/serverUtils'
+import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
 import { esc } from '@/lib/server/htmlEscape'
 import { Resend } from 'resend'
 
@@ -36,6 +36,19 @@ export async function POST(req: NextRequest) {
   // ── CSRF guard — protects subscribe, submit_review, contact ──────────────
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
+
+  // ── Rate limit ─────────────────────────────────────────────────────────────
+  // subscribe and contact are unauthenticated and have no other anti-spam
+  // guard — without a rate limit a bot can flood the subscribers table and
+  // admin inbox indefinitely. checkRateLimit() is the in-process limiter
+  // (sufficient here: these are low-risk, non-financial actions where a small
+  // per-replica burst window is acceptable). 10 requests/min per IP covers all
+  // legitimate use (a real user doesn't submit the contact form 10 times/min).
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const rateLimitKey = `actions:${ip}`
+  if (!checkRateLimit(rateLimitKey, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
+  }
 
   try {
     const body   = await req.json()
