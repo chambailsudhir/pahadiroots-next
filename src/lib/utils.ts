@@ -127,5 +127,12 @@ export function isEnabled(value: string | undefined, defaultValue = true): boole
 // ─── Safe category slug (fallback: slugify name) ─────────────────────────────
 // Prevents /collections/Wild%20Honey — always returns a clean URL slug
 export function catSlug(cat: { slug?: string | null; name?: string | null; id?: number | string }): string {
-  return (cat.slug || '').trim() || slugify(cat.name || '') || String(cat.id)
+  const bySlug = (cat.slug || '').trim()
+  if (bySlug) return bySlug
+  // slugify can produce '-' or '--' for names containing only special characters
+  // and spaces (e.g. '((())) !!!' → '-'). Trim edge hyphens so we don't return
+  // an invalid URL segment — fall through to the id in that case.
+  const byName = slugify(cat.name || '').replace(/^-+|-+$/g, '')
+  if (byName) return byName
+  return String(cat.id)
 }

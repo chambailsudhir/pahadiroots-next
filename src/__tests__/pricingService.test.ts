@@ -304,3 +304,80 @@ describe('calcPriceSummary — multi-item cart', () => {
     expect(result.total).toBe(result.subtotal - result.discount - result.prepaidDiscount)
   })
 })
+
+// ─── Edge cases not previously covered ────────────────────────────────────────
+
+describe('calcPriceSummary — edge cases', () => {
+  it('handles zero-price items — subtotal is 0, still charges shipping', () => {
+    const items = [makeItem({ price: 0, qty: 2 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.subtotal).toBe(0)
+    expect(result.gstTotal).toBe(0)
+    expect(result.isFreeShipping).toBe(false)
+    expect(result.shipping).toBe(99)
+    expect(result.total).toBe(99)
+  })
+
+  it('loyalty + coupon combined: both deducted from afterDiscount', () => {
+    // subtotal=1000, coupon=200, loyalty=100 → afterDiscount=700 → shipping (700<799)
+    const items  = [makeItem({ price: 1000, qty: 1 })]
+    const coupon: AppliedCoupon = { code: 'C200', discount: 200, type: 'flat' }
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, coupon, 'cod', 100)
+    expect(result.discount).toBe(200)
+    expect(result.loyaltyDiscount).toBe(100)
+    expect(result.isFreeShipping).toBe(false)     // 700 < 799
+    expect(result.shipping).toBe(99)
+    expect(result.total).toBe(700 + 99)           // afterDiscount + shipping
+  })
+
+  it('loyalty + coupon exceeding subtotal: total floored at shipping cost (never negative)', () => {
+    // subtotal=100, coupon=80, loyalty=50 → afterDiscount=max(0,100-80-50)=0
+    const items  = [makeItem({ price: 100, qty: 1 })]
+    const coupon: AppliedCoupon = { code: 'BIG', discount: 80, type: 'flat' }
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, coupon, 'cod', 50)
+    expect(result.total).toBeGreaterThanOrEqual(0)
+    // afterDiscount=0 → isFreeShipping=false → shipping=99 → total=99
+    expect(result.total).toBe(99)
+  })
+
+  it('progressBase equals afterDiscount — shipping bar uses same base as isFreeShipping', () => {
+    const items  = [makeItem({ price: 1000, qty: 1 })]
+    const coupon: AppliedCoupon = { code: 'C100', discount: 100, type: 'flat' }
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, coupon, 'cod', 50)
+    // afterDiscount = 1000 - 100 - 50 = 850
+    expect(result.progressBase).toBe(850)
+    expect(result.isFreeShipping).toBe(true)  // 850 >= 799
+  })
+
+  it('remainingForFreeShip is 0 when isFreeShipping is true', () => {
+    const items = [makeItem({ price: 1000, qty: 1 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.isFreeShipping).toBe(true)
+    expect(result.remainingForFreeShip).toBe(0)
+  })
+
+  it('qty=0 items contribute 0 to subtotal (degenerate input)', () => {
+    const items = [makeItem({ price: 200, qty: 0 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.subtotal).toBe(0)
+  })
+
+  it('prepaid discount applied on afterDiscount=0 yields 0 prepaid (no negative discounts)', () => {
+    const items  = [makeItem({ price: 100, qty: 1 })]
+    const coupon: AppliedCoupon = { code: 'FULL', discount: 100, type: 'flat' }
+    // afterDiscount = max(0, 100-100) = 0 → prepaid 5% of 0 = 0
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, coupon, 'razorpay')
+    expect(result.prepaidDiscount).toBe(0)
+    expect(result.total).toBeGreaterThanOrEqual(0)
+  })
+
+  it('gstTotal is always an integer (sum of rounded per-item values)', () => {
+    const items = [
+      makeItem({ variantId: 'v1', price: 99,  qty: 3, gstRate: 5  }),
+      makeItem({ variantId: 'v2', price: 199, qty: 2, gstRate: 12 }),
+      makeItem({ variantId: 'v3', price: 499, qty: 1, gstRate: 18 }),
+    ]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(Number.isInteger(result.gstTotal)).toBe(true)
+  })
+})

@@ -5,14 +5,18 @@
  *   • addItem — new item, duplicate accumulation, qty cap at maxQty
  *   • removeItem
  *   • updateQty — normal update, update to 0 removes item, clamps to maxQty
- *   • applyCoupon / removeCoupon
+ *   • applyCoupon / removeCoupon — including lastAppliedCouponCode persistence
  *   • clearCart
  *   • cartCount derived value
- *   • idempotencyKey is generated on first addItem and preserved thereafter
+ *   • idempotencyKey lifecycle: lazy generation, preserve across adds, reset on clear
+ *   • resetIdempotencyKey / ensureIdempotencyKey helpers
+ *   • selectCartCount stable selector
+ *   • persist partialize — maxQty is stripped, coupon is excluded
+ *   • migrate — v1→v3 and v2→v3 upgrade paths
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useCartStore } from '@/store/cartStore'
+import { useCartStore, selectCartCount } from '@/store/cartStore'
 import type { CartItem } from '@/types'
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -100,6 +104,26 @@ describe('cartStore.addItem', () => {
     const key2 = useCartStore.getState().idempotencyKey
     expect(key1).toBe(key2)
   })
+
+  it('uses maxQty from existing item when accumulating (not newItem.maxQty)', () => {
+    // First add sets maxQty=3, second add tries maxQty=10 — cap must stay 3
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1', maxQty: 3 }))
+    store.addItem({ ...makeItem({ variantId: 'v1', maxQty: 10 }), qty: 5 })
+    expect(useCartStore.getState().items[0].qty).toBe(3) // capped at original maxQty
+  })
+
+  it('falls back to 99 cap when existing item has no maxQty (stripped by persist)', () => {
+    // Simulate a hydrated item without maxQty
+    useCartStore.setState({
+      items: [{ ...makeItem(), qty: 1, maxQty: undefined as unknown as number }],
+    })
+    // Adding more should not crash — caps at 99
+    useCartStore.getState().addItem({ ...makeItem(), qty: 50 })
+    const qty = useCartStore.getState().items[0].qty
+    expect(qty).toBeGreaterThan(1)
+    expect(qty).toBeLessThanOrEqual(99)
+  })
 })
 
 // ─── removeItem ───────────────────────────────────────────────────────────────
@@ -164,6 +188,13 @@ describe('cartStore.updateQty', () => {
     const v2 = useCartStore.getState().items.find(i => i.variantId === 'v2')
     expect(v2?.qty).toBe(1) // unchanged
   })
+
+  it('is a no-op for an unknown variantId', () => {
+    useCartStore.getState().addItem(makeItem())
+    useCartStore.getState().updateQty('non-existent', 3)
+    expect(useCartStore.getState().items).toHaveLength(1)
+    expect(useCartStore.getState().items[0].qty).toBe(1)
+  })
 })
 
 // ─── coupon ───────────────────────────────────────────────────────────────────
@@ -186,6 +217,24 @@ describe('cartStore coupon actions', () => {
     useCartStore.getState().applyCoupon({ code: 'X', discount: 10, type: 'flat' })
     useCartStore.getState().removeCoupon()
     expect(useCartStore.getState().coupon).toBeNull()
+  })
+
+  it('sets lastAppliedCouponCode when a coupon is applied', () => {
+    useCartStore.getState().applyCoupon({ code: 'PAHADI10', discount: 100, type: 'flat' })
+    expect(useCartStore.getState().lastAppliedCouponCode).toBe('PAHADI10')
+  })
+
+  it('clears lastAppliedCouponCode when coupon is removed', () => {
+    useCartStore.getState().applyCoupon({ code: 'PAHADI10', discount: 100, type: 'flat' })
+    useCartStore.getState().removeCoupon()
+    expect(useCartStore.getState().lastAppliedCouponCode).toBe('')
+  })
+
+  it('coupon object is null after clearCart but lastAppliedCouponCode is also cleared', () => {
+    useCartStore.getState().applyCoupon({ code: 'SAVE', discount: 50, type: 'flat' })
+    useCartStore.getState().clearCart()
+    expect(useCartStore.getState().coupon).toBeNull()
+    expect(useCartStore.getState().lastAppliedCouponCode).toBe('')
   })
 })
 
@@ -246,5 +295,223 @@ describe('cartStore.cartCount', () => {
     expect(useCartStore.getState().cartCount()).toBe(4)
     store.removeItem('v1')
     expect(useCartStore.getState().cartCount()).toBe(0)
+  })
+})
+
+// ─── selectCartCount ─────────────────────────────────────────────────────────
+
+describe('selectCartCount (stable selector)', () => {
+  it('returns 0 for empty cart', () => {
+    expect(selectCartCount(useCartStore.getState())).toBe(0)
+  })
+
+  it('sums quantities across all items — matches cartCount()', () => {
+    const store = useCartStore.getState()
+    store.addItem({ ...makeItem({ variantId: 'v1' }), qty: 2 })
+    store.addItem({ ...makeItem({ variantId: 'v2' }), qty: 3 })
+    const state = useCartStore.getState()
+    expect(selectCartCount(state)).toBe(state.cartCount())
+    expect(selectCartCount(state)).toBe(5)
+  })
+
+  it('works with a plain items array directly (no store required)', () => {
+    const items: CartItem[] = [
+      { ...makeItem({ variantId: 'v1' }), qty: 1 },
+      { ...makeItem({ variantId: 'v2' }), qty: 4 },
+    ]
+    expect(selectCartCount({ items })).toBe(5)
+  })
+})
+
+// ─── resetIdempotencyKey ──────────────────────────────────────────────────────
+
+describe('cartStore.resetIdempotencyKey', () => {
+  it('generates a new UUID regardless of existing key', () => {
+    useCartStore.getState().addItem(makeItem())
+    const before = useCartStore.getState().idempotencyKey
+    useCartStore.getState().resetIdempotencyKey()
+    const after = useCartStore.getState().idempotencyKey
+    expect(after).not.toBe('')
+    expect(after).not.toBe(before) // genuinely new key
+    expect(after).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('works even when key is empty (fresh cart)', () => {
+    // clearCart sets idempotencyKey to ''
+    expect(useCartStore.getState().idempotencyKey).toBe('')
+    useCartStore.getState().resetIdempotencyKey()
+    const key = useCartStore.getState().idempotencyKey
+    expect(key).not.toBe('')
+    expect(key).toMatch(/^[0-9a-f-]{36}$/)
+  })
+})
+
+// ─── ensureIdempotencyKey ─────────────────────────────────────────────────────
+
+describe('cartStore.ensureIdempotencyKey', () => {
+  it('returns the existing key when one is already set', () => {
+    useCartStore.getState().addItem(makeItem())
+    const existing = useCartStore.getState().idempotencyKey
+    const returned = useCartStore.getState().ensureIdempotencyKey()
+    expect(returned).toBe(existing)
+    // Store must not have changed
+    expect(useCartStore.getState().idempotencyKey).toBe(existing)
+  })
+
+  it('generates, stores, and returns a new key when key is empty', () => {
+    // clearCart sets idempotencyKey to ''
+    expect(useCartStore.getState().idempotencyKey).toBe('')
+    const returned = useCartStore.getState().ensureIdempotencyKey()
+    expect(returned).not.toBe('')
+    expect(returned).toMatch(/^[0-9a-f-]{36}$/)
+    // Must be persisted to store too
+    expect(useCartStore.getState().idempotencyKey).toBe(returned)
+  })
+
+  it('is idempotent — calling twice returns the same key', () => {
+    const first  = useCartStore.getState().ensureIdempotencyKey()
+    const second = useCartStore.getState().ensureIdempotencyKey()
+    expect(first).toBe(second)
+  })
+})
+
+// ─── persist partialize ───────────────────────────────────────────────────────
+
+describe('cartStore persist — partialize', () => {
+  it('strips maxQty from persisted items (security: prevents localStorage stock tampering)', () => {
+    useCartStore.getState().addItem(makeItem({ variantId: 'v1', maxQty: 5 }))
+    const state = useCartStore.getState()
+    // Access partialize directly by calling it with the current state
+    // @ts-expect-error — accessing internal persist config for test
+    const partializer = useCartStore.persist?.getOptions?.()?.partialize
+    if (!partializer) return // skip if internal API changed
+
+    const persisted = partializer(state)
+    expect(persisted.items[0]).not.toHaveProperty('maxQty')
+  })
+
+  it('coupon is not part of persisted state — session-only', () => {
+    useCartStore.getState().addItem(makeItem())
+    useCartStore.getState().applyCoupon({ code: 'TEST', discount: 50, type: 'flat' })
+    const state = useCartStore.getState()
+    // @ts-expect-error — accessing internal persist config for test
+    const partializer = useCartStore.persist?.getOptions?.()?.partialize
+    if (!partializer) return
+
+    const persisted = partializer(state)
+    expect(persisted).not.toHaveProperty('coupon')
+  })
+
+  it('lastAppliedCouponCode IS persisted (code hint — not discount value)', () => {
+    useCartStore.getState().applyCoupon({ code: 'HINT', discount: 100, type: 'flat' })
+    const state = useCartStore.getState()
+    // @ts-expect-error — accessing internal persist config for test
+    const partializer = useCartStore.persist?.getOptions?.()?.partialize
+    if (!partializer) return
+
+    const persisted = partializer(state)
+    expect(persisted.lastAppliedCouponCode).toBe('HINT')
+  })
+})
+
+// ─── persist migrate ──────────────────────────────────────────────────────────
+
+describe('cartStore persist — migrate', () => {
+  // Extract migrate function directly from Zustand store internals
+  function getMigrate() {
+    // @ts-expect-error — accessing private persist API for testing
+    return useCartStore.persist?.getOptions?.()?.migrate as
+      | ((persisted: unknown, fromVersion: number) => unknown)
+      | undefined
+  }
+
+  it('v1 → v3: drops stale coupon field AND strips maxQty from items', () => {
+    const migrate = getMigrate()
+    if (!migrate) return // skip if API changed
+
+    const v1State = {
+      coupon: { code: 'OLD', discount: 50, type: 'flat' },
+      idempotencyKey: 'abc',
+      items: [{ variantId: 'v1', maxQty: 5, qty: 1 }],
+    }
+    const result = migrate(v1State, 1) as Record<string, unknown>
+
+    // Coupon dropped (v1→v2 migration)
+    expect(result).not.toHaveProperty('coupon')
+    // maxQty stripped (v2→v3 migration)
+    const items = result.items as Array<Record<string, unknown>>
+    expect(items[0]).not.toHaveProperty('maxQty')
+  })
+
+  it('v2 → v3: strips maxQty from items but preserves other fields', () => {
+    const migrate = getMigrate()
+    if (!migrate) return
+
+    const v2State = {
+      idempotencyKey: 'xyz',
+      items: [
+        { variantId: 'v1', maxQty: 10, qty: 2, name: 'Honey' },
+        { variantId: 'v2', maxQty: 3, qty: 1, name: 'Ghee' },
+      ],
+    }
+    const result = migrate(v2State, 2) as Record<string, unknown>
+    const items = result.items as Array<Record<string, unknown>>
+
+    // maxQty stripped from both items
+    expect(items[0]).not.toHaveProperty('maxQty')
+    expect(items[1]).not.toHaveProperty('maxQty')
+    // Other fields preserved
+    expect(items[0].variantId).toBe('v1')
+    expect(items[0].qty).toBe(2)
+    expect(items[0].name).toBe('Honey')
+  })
+
+  it('v1 → v3 direct: applies BOTH coupon drop AND maxQty strip (no early return bug)', () => {
+    // Regression: original code returned early from v1 branch, so maxQty
+    // would survive if user jumped v1→v3. Fixed by sequential if blocks.
+    const migrate = getMigrate()
+    if (!migrate) return
+
+    const v1State = {
+      coupon: { code: 'STALE', discount: 20, type: 'flat' },
+      items: [{ variantId: 'v1', maxQty: 99, qty: 1 }],
+    }
+    const result = migrate(v1State, 1) as Record<string, unknown>
+
+    // Both migrations applied
+    expect(result).not.toHaveProperty('coupon')
+    const items = result.items as Array<Record<string, unknown>>
+    expect(items[0]).not.toHaveProperty('maxQty')
+  })
+
+  it('v3 → v3 (already current): returns state unchanged', () => {
+    const migrate = getMigrate()
+    if (!migrate) return
+
+    const v3State = {
+      idempotencyKey: 'key123',
+      items: [{ variantId: 'v1', qty: 1 }],
+      lastAppliedCouponCode: 'SAVE',
+    }
+    const result = migrate(v3State, 3) as Record<string, unknown>
+    expect(result.idempotencyKey).toBe('key123')
+    expect(result.lastAppliedCouponCode).toBe('SAVE')
+  })
+
+  it('handles missing items array gracefully during migration', () => {
+    const migrate = getMigrate()
+    if (!migrate) return
+
+    // Some edge case: persisted state with no items field at all
+    const v1State = {
+      coupon: { code: 'X', discount: 10, type: 'flat' },
+      idempotencyKey: 'abc',
+      // items missing
+    }
+    expect(() => migrate(v1State, 1)).not.toThrow()
+    const result = migrate(v1State, 1) as Record<string, unknown>
+    // items defaults to [] when missing
+    expect(Array.isArray(result.items)).toBe(true)
+    expect((result.items as unknown[]).length).toBe(0)
   })
 })

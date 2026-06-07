@@ -107,7 +107,7 @@ export async function validateCouponServer(
   const MAX_DISCOUNT_FALLBACK = subtotal
   const discount = data.type === 'percent'
     ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? MAX_DISCOUNT_FALLBACK)
-    : data.value
+    : Math.round(data.value)  // round flat values — DB may store non-integer (e.g. 49.99)
 
   return {
     valid: true,
