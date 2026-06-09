@@ -32,6 +32,7 @@ export default function CheckoutError({
         Something went wrong while loading checkout. Your cart is safe — please try again.
       </p>
       <button
+        type="button"
         onClick={reset}
         style={{
           padding: '12px 28px',
