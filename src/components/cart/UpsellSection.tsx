@@ -31,7 +31,7 @@
  *   2. Add-to-cart button missing type="button".
  */
 
-import { memo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { UpsellItem } from '@/types'
@@ -71,9 +71,11 @@ const UpsellSection = memo(function UpsellSection({
 }: Props) {
   const visibleItems = items.slice(0, 4)
 
-  // PERF FIX 1: O(1) lookup — addedIds array `.includes()` is O(n) and was called
-  // 4× per rendered item. A Set gives constant-time `.has()` at no visible cost.
-  const addedSet = new Set(addedIds)
+  // PERF FIX: useMemo — was `new Set(addedIds)` inline, recreating the Set on
+  // every render even when addedIds didn't change. With useMemo the Set is only
+  // rebuilt when the addedIds array reference changes (i.e. after an upsell add).
+  // The original O(1) lookup benefit is preserved; the allocation cost is not.
+  const addedSet = useMemo(() => new Set(addedIds), [addedIds])
 
   // UX FIX: match shimmer count to the real item count from the last successful load,
   // preventing the jarring jump from 4 shimmers → 1–3 real items.

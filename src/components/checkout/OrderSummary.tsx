@@ -26,6 +26,10 @@ interface Props {
   onCouponCodeChange: (v: string) => void
   onApplyCoupon: () => void
   onRemoveCoupon: () => void
+  // Called with the raw code when a hint pill is tapped — allows the parent to
+  // apply the coupon directly without going through the couponCode state intermediate
+  // (which would be stale by the time onApplyCoupon is called).
+  onApplyHint?: (code: string) => void
   // ── Loyalty ───────────────────────────────────────────────
   loyaltyBalance:    number             // user's current coins balance
   loyaltyRedemption: LoyaltyRedemption | null
@@ -49,7 +53,7 @@ interface Props {
 export default function OrderSummary({
   items, pricing, coupon, settings, couponCode, couponLoading,
   couponError, couponHints, onCouponCodeChange, onApplyCoupon,
-  onRemoveCoupon,
+  onRemoveCoupon, onApplyHint,
   loyaltyBalance, loyaltyRedemption, onApplyLoyalty, onRemoveLoyalty,
   loyaltyLoading, loyaltyError,
   error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded,
@@ -176,7 +180,10 @@ export default function OrderSummary({
                   type="text"
                   value={couponCode}
                   onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
-                  onKeyDown={e => e.key === 'Enter' && onApplyCoupon()}
+                  // BUG FIX: guard with !couponLoading — without it, holding Enter fires
+                  // onApplyCoupon on every keydown repeat while loading, creating a race
+                  // where multiple in-flight requests race to set coupon state.
+                  onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
                   placeholder="Coupon code"
                   aria-label="Coupon code"
                 />
@@ -194,7 +201,25 @@ export default function OrderSummary({
                     <div className="os-hints-list">
                       {couponHints.map(h => (
                         <button key={h.code} className="os-hint" type="button"
-                          onClick={() => { onCouponCodeChange(h.code); setShowHints(false) }}>
+                          // BUG FIX: disabled while loading — without this, tapping a
+                          // second hint while the first request is in-flight fires
+                          // onApplyHint again, creating two concurrent fetch calls that
+                          // race to set coupon state. The Enter key and Apply button both
+                          // have this guard; the hint buttons were missing it.
+                          disabled={couponLoading}
+                          onClick={() => {
+                            // BUG FIX: uppercase the code (DB values may be lowercase).
+                            // Use onApplyHint when provided — it takes the code as a
+                            // direct argument so there is no stale-closure problem.
+                            // Falls back to setCouponCode only (no auto-apply) when the
+                            // parent doesn't support onApplyHint.
+                            const upper = h.code.toUpperCase()
+                            onCouponCodeChange(upper)
+                            setShowHints(false)
+                            if (onApplyHint) {
+                              onApplyHint(upper)
+                            }
+                          }}>
                           <span className="os-hint-code">{h.code}</span>
                           <span className="os-hint-label">{h.label}</span>
                         </button>

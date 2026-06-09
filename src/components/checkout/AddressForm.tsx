@@ -2,16 +2,10 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type { OrderAddress } from '@/types'
-
-const INDIA_STATES = [
-  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
-  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
-  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
-  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
-  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
-  'Ladakh','Lakshadweep','Puducherry',
-]
+// CODE QUALITY: import from single source of truth — INDIA_STATES was duplicated
+// verbatim in AddressForm, CheckoutClient, and lib/account/constants.ts.
+// Any state addition or correction had to be made in all three places.
+import { INDIA_STATES } from '@/lib/account/constants'
 
 const LABEL_OPTIONS = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
 const LABEL_ICONS: Record<string, string> = {

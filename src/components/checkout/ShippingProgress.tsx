@@ -2,18 +2,24 @@
 import { formatPrice } from '@/lib/utils'
 
 interface Props {
-  subtotal: number
+  // BUG FIX: renamed from `subtotal` → `progressBase`.
+  // The progress bar must use afterDiscount (= subtotal − coupon − loyalty) to stay
+  // in sync with the isFreeShipping flag, which is computed from the same value
+  // inside calcPriceSummary. Using raw subtotal caused a visual contradiction:
+  // after a coupon lowered afterDiscount below freeShipMin the bar could still
+  // show "100%" while the text said "Add ₹X more for free shipping".
+  progressBase: number
   freeShipMin: number
   isFreeShipping: boolean
   remainingForFreeShip: number
 }
 
-export default function ShippingProgress({ subtotal, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
+export default function ShippingProgress({ progressBase, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
   if (!freeShipMin || freeShipMin <= 0) {
     return null
   }
 
-  const pct = Math.min(100, (subtotal / freeShipMin) * 100)
+  const pct = Math.min(100, (progressBase / freeShipMin) * 100)
   const pctInt = Math.round(pct)
 
   return (

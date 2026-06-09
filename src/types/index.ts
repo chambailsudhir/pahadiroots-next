@@ -141,7 +141,11 @@ export interface OrderAddress {
   city: string
   state: string
   pincode: string
-  label?: 'Home' | 'Office' | 'Parents' | 'Friends' | 'Others'
+  // Required — always initialised to 'Home' as the safe default.
+  // Was optional (`?`) but every code path sets it; making it required
+  // surfaces any accidental omission at the type level and prevents the
+  // payload field from being `undefined` when sent to the orders API.
+  label: 'Home' | 'Office' | 'Parents' | 'Friends' | 'Others'
 }
 
 export interface OrderItem {
@@ -270,6 +274,27 @@ export interface SiteSettings {
   cod_enabled: string
   cod_max_value: string                 // max COD order value e.g. '3000'
   cod_max_active_orders: string         // fraud: max active COD orders per phone
+  min_order_amount: string              // minimum cart value to allow checkout e.g. '199'
+  upi_enabled: string                   // 'true' | 'false' — gates Razorpay UPI in checkout
+
+  // Loyalty / coins programme
+  loyalty_enabled: string               // 'true' | 'false'
+  loyalty_points_per_rupee: string      // coins earned per ₹ spent e.g. '1'
+  loyalty_points_value: string          // ₹ value of 1 coin e.g. '0.25'
+  loyalty_points_label: string          // display name e.g. 'Pahadi Coins'
+  loyalty_min_redeem: string            // minimum coins to redeem per order e.g. '40'
+  loyalty_max_redeem_pct: string        // max % of order value redeemable e.g. '20'
+
+  // Cart reviews (CMS-controlled)
+  review_1_name: string
+  review_1_location: string
+  review_1_text: string
+  review_2_name: string
+  review_2_location: string
+  review_2_text: string
+  review_3_name: string
+  review_3_location: string
+  review_3_text: string
 
   // Allow arbitrary additional keys
   [key: string]: string

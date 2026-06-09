@@ -49,7 +49,7 @@
 import Link from 'next/link'
 import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
-import type { CartItem, AppliedCoupon } from '@/types'
+import type { AppliedCoupon } from '@/types'
 import type { PriceSummary } from '@/lib/services/pricingService'
 import styles from './CartSummary.module.css'
 
@@ -67,7 +67,9 @@ const PAYMENT_LOGOS: [string, string][] = [
 ]
 
 interface Props {
-  items: CartItem[]
+  // items prop removed — CartSummary never references individual items;
+  // it only needs pricing (which is already pre-computed from items by the parent).
+  // Keeping it was dead weight and required callers to pass an unnecessary prop.
   totalQty: number
   pricing: PriceSummary
   coupon: AppliedCoupon | null
@@ -83,7 +85,7 @@ interface Props {
 }
 
 const CartSummary = memo(function CartSummary({
-  items, totalQty, pricing, coupon,
+  totalQty, pricing, coupon,
   onApplyCoupon, onRemoveCoupon,
   couponCode, onCouponCodeChange,
   couponLoading, couponError,
@@ -167,6 +169,10 @@ const CartSummary = memo(function CartSummary({
                 key={h.code}
                 className={styles.couponHintBtn}
                 type="button"
+                // BUG FIX: disabled while loading — same guard as the Apply button
+                // and Enter key. Without it, tapping a hint while a prior request
+                // is in-flight fires onApplyHint again, causing a race condition.
+                disabled={couponLoading}
                 onClick={() => onApplyHint?.(h.code)}
                 aria-label={`Apply coupon ${h.code}: ${h.label}`}
               >

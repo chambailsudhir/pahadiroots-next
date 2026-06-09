@@ -32,6 +32,15 @@ const CART_SETTING_KEYS = [
   'upi_enabled',
   'loyalty_enabled',
   'loyalty_points_per_rupee',
+  // BUG FIX: the four keys below were absent from CART_SETTING_KEYS even though
+  // OrderSummary reads all of them from the settings prop. Their absence caused
+  // the loyalty panel to always use hardcoded defaults (0.25 ₹/coin, 20% cap,
+  // 40-coin minimum, "Pahadi Coins" label) instead of the admin-configured values,
+  // silently overriding any customisation made in the CMS.
+  'loyalty_points_value',
+  'loyalty_points_label',
+  'loyalty_min_redeem',
+  'loyalty_max_redeem_pct',
   'review_1_name',     'review_1_location',     'review_1_text',
   'review_2_name',     'review_2_location',     'review_2_text',
   'review_3_name',     'review_3_location',     'review_3_text',

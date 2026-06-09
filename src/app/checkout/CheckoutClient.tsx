@@ -2,6 +2,30 @@
 
 import './checkout.css'
 
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import Script from 'next/script'
+import { useCartStore } from '@/store/cartStore'
+import { useUserStore } from '@/store/userStore'
+import { formatPrice } from '@/lib/utils'
+import { calcPriceSummary } from '@/lib/services/pricingService'
+import type { SiteSettings, OrderAddress, SavedAddress, RawProfile } from '@/types'
+
+import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
+import ShippingProgress     from '@/components/checkout/ShippingProgress'
+import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
+import AddressForm          from '@/components/checkout/AddressForm'
+import PaymentSection       from '@/components/checkout/PaymentSection'
+import OrderSummary, { type LoyaltyRedemption } from '@/components/checkout/OrderSummary'
+import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
+import {
+  readProfileCache  as _readProfileCache,
+  writeProfileCache as _writeProfileCache,
+} from '@/lib/profileCache'
+// CODE QUALITY: import from single source of truth — INDIA_STATES was duplicated
+// verbatim in AddressForm, CheckoutClient, and lib/account/constants.ts.
+import { INDIA_STATES } from '@/lib/account/constants'
+
 /** Minimal Razorpay options type — avoids `window as any` at the call site. */
 interface RazorpayResponse {
   razorpay_order_id:   string
@@ -24,36 +48,18 @@ interface RazorpayOptions {
   modal:       { ondismiss: () => void }
 }
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import Script from 'next/script'
-import { useCartStore } from '@/store/cartStore'
-import { useUserStore } from '@/store/userStore'
-import { formatPrice } from '@/lib/utils'
-import { calcPriceSummary } from '@/lib/services/pricingService'
-import type { SiteSettings, OrderAddress, SavedAddress, RawProfile } from '@/types'
-
-import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
-import ShippingProgress     from '@/components/checkout/ShippingProgress'
-import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
-import AddressForm          from '@/components/checkout/AddressForm'
-import PaymentSection       from '@/components/checkout/PaymentSection'
-import OrderSummary, { type LoyaltyRedemption } from '@/components/checkout/OrderSummary'
-import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
-import {
-  readProfileCache  as _readProfileCache,
-  writeProfileCache as _writeProfileCache,
-} from '@/lib/profileCache'
-
-const INDIA_STATES = [
-  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
-  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
-  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
-  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
-  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
-  'Ladakh','Lakshadweep','Puducherry',
-]
+// PERF: module-level constant — was an inline array literal inside JSX, which
+// created a new array on every render. Hoisting it prevents the allocation
+// and makes the intent clear (static content).
+// CODE QUALITY: moved after imports — placing a const before import statements
+// is technically valid JS (imports are hoisted) but violates ES module convention
+// and breaks static analysis tools that expect imports first.
+const CHECKOUT_TRUST_ITEMS = [
+  { icon: '🚚', t: '3–5 Day Delivery', d: 'Pan-India Himalayan dispatch' },
+  { icon: '🔄', t: '7-Day Returns',    d: 'Hassle-free, no questions'   },
+  { icon: '🌿', t: '100% Authentic',   d: 'Straight from the mountains' },
+  { icon: '💬', t: 'WhatsApp Support', d: 'Real humans, always here'    },
+] as const
 
 function matchState(stored: string | undefined | null): string {
   if (!stored) return 'Uttarakhand'
@@ -188,9 +194,16 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     } catch { return '' }
   })
 
-  const pricing = calcPriceSummary(
-    items, s, coupon, payMethod,
-    loyaltyRedemption?.discount_inr ?? 0,   // ← loyalty discount
+  // PERF FIX: wrap in useMemo — calcPriceSummary was called inline on every render.
+  // CheckoutClient has many state fields (placing, error, touched, couponCode, etc.)
+  // so renders are frequent. Memoising means the heavy reduce/Math.round chain only
+  // runs when items, coupon, payMethod, or loyalty actually changes.
+  const pricing = useMemo(
+    () => calcPriceSummary(
+      items, s, coupon, payMethod,
+      loyaltyRedemption?.discount_inr ?? 0,
+    ),
+    [items, s, coupon, payMethod, loyaltyRedemption],
   )
   const codOk         = codEnabled && pricing.subtotal <= codMax
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
@@ -336,6 +349,33 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       trackCouponError(couponCode, reason)
     }
     finally  { setCouponLoading(false) }
+  }
+
+  // BUG FIX: separate hint handler that takes the code as a direct argument.
+  // handleCoupon reads couponCode from state — calling it via setTimeout after
+  // setCouponCode() would see the *old* couponCode value because React state
+  // updates are asynchronous and the component hasn't re-rendered yet.
+  // This handler bypasses state entirely by receiving the code as a parameter,
+  // matching the same pattern used in useCartPage.handleApplyHint.
+  async function handleApplyCouponHint(code: string) {
+    const upper = code.trim().toUpperCase()
+    if (!upper) return
+    setCouponLoading(true); setCouponError('')
+    try {
+      const res  = await fetch('/api/v1/coupons', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCouponError(data.error || 'Invalid coupon'); trackCouponError(upper, data.error || 'invalid'); return }
+      applyCoupon(data.coupon); setCouponCode('')
+      trackCouponApplied(data.coupon.code, data.coupon.discount)
+    } catch (e: unknown) {
+      const reason = e instanceof Error ? e.message : 'network_error'
+      setCouponError('Failed to apply coupon')
+      trackCouponError(upper, reason)
+    }
+    finally { setCouponLoading(false) }
   }
 
   // ── Loyalty redemption handlers ──────────────────────────────
@@ -533,7 +573,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       />
 
       <ShippingProgress
-        subtotal={pricing.subtotal}
+        progressBase={pricing.progressBase}
         freeShipMin={freeShipMin}
         isFreeShipping={pricing.isFreeShipping}
         remainingForFreeShip={pricing.remainingForFreeShip}
@@ -622,12 +662,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
             {/* Trust strip — emojis are decorative; aria-hidden prevents screen readers
                 from announcing emoji names (e.g. "delivery truck", "sparkles") */}
             <div className="ck-trust">
-              {[
-                { icon:'🚚', t:'3–5 Day Delivery', d:'Pan-India Himalayan dispatch' },
-                { icon:'🔄', t:'7-Day Returns',    d:'Hassle-free, no questions' },
-                { icon:'🌿', t:'100% Authentic',   d:'Straight from the mountains' },
-                { icon:'💬', t:'WhatsApp Support', d:'Real humans, always here' },
-              ].map(({ icon, t, d }) => (
+              {CHECKOUT_TRUST_ITEMS.map(({ icon, t, d }) => (
                 <div key={t} className="ck-trust-card">
                   <div className="ck-trust-icon" aria-hidden="true">{icon}</div>
                   <div className="ck-trust-text">
@@ -653,6 +688,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               onCouponCodeChange={setCouponCode}
               onApplyCoupon={handleCoupon}
               onRemoveCoupon={removeCoupon}
+              onApplyHint={handleApplyCouponHint}
               loyaltyBalance={loyaltyBalance}
               loyaltyRedemption={loyaltyRedemption}
               onApplyLoyalty={handleApplyLoyalty}
@@ -694,10 +730,6 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         </button>
       </div>
 
-      <style>{`
-        /* Styles extracted to src/app/checkout/checkout.css — this block is intentionally empty.
-           Keeping the tag avoids a larger JSX diff; it is removed in the next cleanup pass. */
-      `}</style>
     </>
   )
 }

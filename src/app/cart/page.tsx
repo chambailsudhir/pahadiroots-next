@@ -275,7 +275,6 @@ export default function CartPage() {
         <div className="cp-right">
           <div className="cp-right-inner">
             <CartSummary
-              items={items}
               totalQty={totalQty}
               pricing={pricing}
               coupon={coupon}
