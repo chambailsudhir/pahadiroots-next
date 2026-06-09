@@ -162,7 +162,12 @@ export async function POST(req: NextRequest) {
       const cid = customerId
       if (cid) {
         if ((d.loyalty_points_redeemed ?? 0) > 0) {
-          await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
+          const redeemed = await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
+          if (!redeemed) {
+            // Non-fatal: order is committed, but redemption was skipped (balance race).
+            // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
+            console.warn(`[loyalty] COD redemption skipped for order ${order.id} — insufficient balance at debit time`)
+          }
         }
         await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
       }

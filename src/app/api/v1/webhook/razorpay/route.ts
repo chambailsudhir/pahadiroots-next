@@ -96,17 +96,36 @@ export async function POST(req: Request) {
         .single()
 
       if (order && order.order_status === 'pending') {
-        await db.from('orders').update({
-          order_status:   'confirmed',
-          payment_status: 'paid',
-          payment_id:     paymentId,
-          updated_at:     new Date().toISOString(),
-        }).eq('id', order.id)
+        // TOCTOU RACE FIX: two concurrent webhook deliveries can BOTH read
+        // order_status='pending' before either commits. Adding the WHERE guard
+        // here means only one UPDATE wins the Postgres row lock; the other
+        // sees updatedRows.length === 0 and skips the event log.
+        // This prevents duplicate order_events rows on replayed webhooks.
+        const { data: updatedRows } = await db
+          .from('orders')
+          .update({
+            order_status:   'confirmed',
+            payment_status: 'paid',
+            payment_id:     paymentId,
+            updated_at:     new Date().toISOString(),
+          })
+          .eq('id', order.id)
+          .eq('order_status', 'pending') // atomic guard — mirrors verify_payment fix
+          .select('id')
 
-        await logOrderEvent(order.id, 'payment_captured_webhook', 'razorpay', {
-          razorpay_payment_id: paymentId,
-          amount: payment.amount / 100,
-        })
+        if (updatedRows && updatedRows.length > 0) {
+          // We won the race — log the capture event once
+          await logOrderEvent(order.id, 'payment_captured_webhook', 'razorpay', {
+            razorpay_payment_id: paymentId,
+            amount: payment.amount / 100,
+          })
+        } else {
+          // Lost the race or replayed event — another process already confirmed this order
+          console.info('[webhook] payment.captured: order already confirmed by concurrent process', {
+            paymentId,
+            dbOrderId,
+          })
+        }
       }
     }
 
@@ -147,7 +166,30 @@ export async function POST(req: Request) {
 
   } catch (err) {
     console.error('[webhook] Processing error:', err)
-    // Still return 200 — Razorpay will retry on non-2xx
+    // AUDIT FIX: update webhook log to 'failed' so ops can identify stuck events.
+    // Previously the catch block only logged to console; every errored event
+    // appeared as 'received' indefinitely — invisible to any monitoring query
+    // that filters for unprocessed logs.
+    if (webhookLog?.id) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      try {
+        await db
+          .from('webhook_logs')
+          .update({
+            status:       'failed',
+            processed_at: new Date().toISOString(),
+            // Store error summary in payload for ops inspection without losing
+            // the original event body (useful for manual replay).
+            payload: { ...(event as object), _processing_error: errMsg.slice(0, 500) },
+          })
+          .eq('id', webhookLog.id)
+      } catch (logUpdateErr) {
+        // Non-fatal: original error is already in the console above.
+        console.error('[webhook] Failed to mark log as failed:', logUpdateErr)
+      }
+    }
+    // Still return 200 — Razorpay will retry on non-2xx, which could replay
+    // the event into the same broken state. Log the failure and investigate.
   }
 
   return responsePromise

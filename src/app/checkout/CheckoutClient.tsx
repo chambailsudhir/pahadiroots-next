@@ -1,5 +1,7 @@
 'use client'
 
+import './checkout.css'
+
 /** Minimal Razorpay options type — avoids `window as any` at the call site. */
 interface RazorpayResponse {
   razorpay_order_id:   string
@@ -443,6 +445,17 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
+
+        // BUG C FIX: already_confirmed means the server detected this order is already
+        // paid (webhook or prior verify_payment beat this retry). Don't open Razorpay —
+        // passing a Razorpay payment ID ("pay_xxx") as order_id crashes the SDK.
+        if (data.already_confirmed) {
+          orderPlacedRef.current = true
+          clearCart()
+          router.replace(`/order-success?id=${data.order_number || ''}&method=razorpay&total=${pricingTotal}`)
+          return
+        }
+
         const rzp = new RZP({
           key:       razorpayKeyId,
           amount:    data.amount,
@@ -606,7 +619,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               </div>
             </section>
 
-            {/* Trust strip */}
+            {/* Trust strip — emojis are decorative; aria-hidden prevents screen readers
+                from announcing emoji names (e.g. "delivery truck", "sparkles") */}
             <div className="ck-trust">
               {[
                 { icon:'🚚', t:'3–5 Day Delivery', d:'Pan-India Himalayan dispatch' },
@@ -615,7 +629,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
                 { icon:'💬', t:'WhatsApp Support', d:'Real humans, always here' },
               ].map(({ icon, t, d }) => (
                 <div key={t} className="ck-trust-card">
-                  <div className="ck-trust-icon">{icon}</div>
+                  <div className="ck-trust-icon" aria-hidden="true">{icon}</div>
                   <div className="ck-trust-text">
                     <strong>{t}</strong>
                     <span>{d}</span>
@@ -681,56 +695,8 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
-
-        .ck-nav { background: #FDFAF5; border-bottom: 1px solid #E8E0D5; }
-        .ck-nav-inner { max-width: 1440px; margin: 0 auto; padding: 12px 40px; display: flex; align-items: center; gap: 0; }
-        @media (max-width: 640px) { .ck-nav-inner { padding: 12px 16px; } }
-        .ck-crumb { display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
-        .ck-crumb--done { color: #7A9A6A; }
-        .ck-crumb--active { color: #2C4A2E; font-weight: 600; }
-        .ck-crumb-dot { width: 24px; height: 24px; border-radius: 50%; background: #E8E0D5; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-        .ck-crumb-dot--done { background: #D4E8C8; color: #4A7A3A; font-size: 11px; }
-        .ck-crumb-dot--active { background: #2C4A2E; color: #F5F0E8; box-shadow: 0 0 0 3px rgba(44,74,46,.15); }
-        .ck-crumb-line { flex: 0 0 40px; height: 1px; background: #E0D8CE; margin: 0 8px; }
-        .ck-crumb-line--done { background: #B8D4A8; }
-        .ck-alert { background: #FEF0EE; border-bottom: 1px solid #F5C8C0; color: #B03020; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 40px; text-align: center; }
-        .ck-page { background: #F7F2EB; min-height: calc(100vh - 100px); width: 100%; }
-        .ck-grid { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 1fr 420px; min-height: calc(100vh - 100px); }
-        @media (max-width: 1200px) { .ck-grid { grid-template-columns: 1fr 380px; } }
-        @media (max-width: 960px)  { .ck-grid { grid-template-columns: 1fr; padding-bottom: 80px; } }
-        .ck-left { padding: 40px 48px 60px 48px; display: flex; flex-direction: column; gap: 28px; }
-        @media (max-width: 1100px) { .ck-left { padding: 32px 32px 48px; } }
-        @media (max-width: 640px)  { .ck-left { padding: 20px 16px 40px; gap: 20px; } }
-        .ck-section { background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(44,30,10,.04), 0 4px 20px rgba(44,30,10,.07), inset 0 1px 0 rgba(255,255,255,.8); border: 1px solid rgba(220,210,195,.6); transition: box-shadow .3s ease; }
-        .ck-section:hover { box-shadow: 0 2px 4px rgba(44,30,10,.05), 0 8px 32px rgba(44,30,10,.1), inset 0 1px 0 rgba(255,255,255,.8); }
-        .ck-section-header { display: flex; align-items: flex-start; gap: 16px; padding: 24px 28px 20px; border-bottom: 1px solid #F2EDE5; background: linear-gradient(180deg, #FEFCF9 0%, #FFFFFF 100%); }
-        @media (max-width: 640px) { .ck-section-header { padding: 18px 20px 16px; } }
-        .ck-step-badge { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 13px; font-weight: 600; color: #F7F2EB; background: #2C4A2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(44,74,46,.3); margin-top: 2px; }
-        .ck-section-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 600; color: #1C2B1E; margin: 0 0 3px; letter-spacing: -0.3px; line-height: 1.2; }
-        .ck-section-desc { font-family: 'DM Sans', sans-serif; font-size: 12px; color: #9A9080; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
-        .ck-section-body { padding: 0; }
-        .ck-trust { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        @media (max-width: 480px) { .ck-trust { grid-template-columns: 1fr; } }
-        .ck-trust-card { background: #FFFFFF; border: 1px solid rgba(220,210,195,.6); border-radius: 16px; padding: 16px 18px; display: flex; align-items: flex-start; gap: 12px; box-shadow: 0 2px 8px rgba(44,30,10,.04); transition: all .25s ease; }
-        .ck-trust-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(44,30,10,.09); border-color: rgba(180,210,160,.7); }
-        .ck-trust-icon { font-size: 22px; flex-shrink: 0; }
-        .ck-trust-text { display: flex; flex-direction: column; gap: 2px; }
-        .ck-trust-text strong { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; color: #2C3A28; }
-        .ck-trust-text span { font-family: 'DM Sans', sans-serif; font-size: 11px; color: #9A9080; }
-        .ck-sidebar { background: transparent; border-left: none; position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #D8D0C4 transparent; padding: 40px 24px 40px 20px; }
-        .ck-sidebar::-webkit-scrollbar { width: 3px; }
-        .ck-sidebar::-webkit-scrollbar-track { background: transparent; }
-        .ck-sidebar::-webkit-scrollbar-thumb { background: #D8D0C4; border-radius: 3px; }
-        @media (max-width: 960px) { .ck-sidebar { position: static; height: auto; border-left: none; padding: 0 16px 40px; } }
-        .ck-mob-bar { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.96); backdrop-filter: blur(16px); border-top: 1px solid #E8E0D5; padding: 14px 20px; z-index: 300; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 -8px 32px rgba(0,0,0,.08); }
-        @media (max-width: 960px) { .ck-mob-bar { display: flex; } }
-        .ck-mob-info { display: flex; flex-direction: column; }
-        .ck-mob-total { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 700; color: #1C2B1E; line-height: 1; }
-        .ck-mob-sub { font-family: 'DM Sans', sans-serif; font-size: 10px; color: #9A9080; margin-top: 2px; font-weight: 400; }
-        .ck-mob-cta { background: #2C4A2E; color: #F5F0E8; border: none; padding: 14px 24px; border-radius: 14px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 16px rgba(44,74,46,.35); transition: all .2s; letter-spacing: 0.02em; }
-        .ck-mob-cta:hover:not(:disabled) { background: #3A6040; box-shadow: 0 8px 24px rgba(44,74,46,.45); transform: translateY(-1px); }
-        .ck-mob-cta:disabled { opacity: .5; cursor: not-allowed; }
+        /* Styles extracted to src/app/checkout/checkout.css — this block is intentionally empty.
+           Keeping the tag avoids a larger JSX diff; it is removed in the next cleanup pass. */
       `}</style>
     </>
   )

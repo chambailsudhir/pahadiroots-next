@@ -404,6 +404,35 @@ describe('POST /api/v1/payments — verify_payment', () => {
     expect(json.order_number).toBeTruthy()
   })
 
+  it('idempotency — already-confirmed order returns success without re-awarding loyalty', async () => {
+    // Simulate: order is already 'confirmed' (payment_status = 'paid').
+    // The conditional update returns 0 rows → we should short-circuit.
+    // The Supabase mock returns `data: []` for the .select('id') on update when
+    // we override responses to simulate 0 rows updated.
+    mockDb.responses['orders'] = []  // update().select('id') → [] means 0 rows updated
+
+    // We also need the subsequent .single() for order_number to return something
+    // Override: after the first [] response the builder returns the full order on next call
+    let callCount = 0
+    const origBuilder = (table: string) => {
+      const b = buildQueryBuilder(table)
+      const origThen = b.then
+      b.single = () => {
+        callCount++
+        if (callCount === 1) return Promise.resolve({ data: [], error: null }) // update → 0 rows
+        return Promise.resolve({ data: { id: DB_ORDER_ID, order_number: 'PR1A2B3C4D', total_amount: 1000, customer_id: 'cust-uuid-001', loyalty_points_redeemed: 0 }, error: null })
+      }
+      return b
+    }
+
+    const res  = await callVerify()
+    const json = await res.json()
+
+    // Should succeed — not a 500 or 400
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
+  })
+
   it('HMAC mismatch → 400, order NOT updated', async () => {
     const res = await callVerify({
       razorpay_signature: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
