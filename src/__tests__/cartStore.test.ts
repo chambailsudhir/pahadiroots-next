@@ -151,6 +151,52 @@ describe('cartStore.removeItem', () => {
     store.removeItem('v1')
     expect(useCartStore.getState().items).toHaveLength(0)
   })
+
+  // BUG FIX regression test: removeItem must reset idempotencyKey when it
+  // empties the cart, exactly like clearCart does. Otherwise a stale key
+  // generated for a previous (now-removed) cart contents would be reused
+  // for a completely different set of items on the next addItem — a
+  // payment-integrity hazard if the server has any record tied to that key.
+  it('resets idempotencyKey to empty when removeItem empties the cart', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    expect(useCartStore.getState().idempotencyKey).not.toBe('')
+
+    store.removeItem('v1')
+    expect(useCartStore.getState().items).toHaveLength(0)
+    expect(useCartStore.getState().idempotencyKey).toBe('')
+
+    // A subsequent add for *different* items gets a fresh key, never the old one.
+    const oldKey = useCartStore.getState().idempotencyKey
+    store.addItem(makeItem({ variantId: 'v2' }))
+    const newKey = useCartStore.getState().idempotencyKey
+    expect(newKey).not.toBe('')
+    expect(newKey).not.toBe(oldKey)
+  })
+
+  // updateQty(qty<=0) delegates to removeItem — same guarantee must hold.
+  it('resets idempotencyKey to empty when updateQty(0) empties the cart', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    expect(useCartStore.getState().idempotencyKey).not.toBe('')
+
+    store.updateQty('v1', 0)
+    expect(useCartStore.getState().items).toHaveLength(0)
+    expect(useCartStore.getState().idempotencyKey).toBe('')
+  })
+
+  // Removing one of several items must NOT reset the key — the remaining
+  // cart contents are still covered by the existing idempotency window.
+  it('preserves idempotencyKey when removeItem leaves items behind', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    store.addItem(makeItem({ variantId: 'v2' }))
+    const keyBefore = useCartStore.getState().idempotencyKey
+
+    store.removeItem('v1')
+    expect(useCartStore.getState().items).toHaveLength(1)
+    expect(useCartStore.getState().idempotencyKey).toBe(keyBefore)
+  })
 })
 
 // ─── updateQty ────────────────────────────────────────────────────────────────

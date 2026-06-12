@@ -71,6 +71,29 @@
  *      callback reads addedUpsellRef.current at call-time (always fresh) and
  *      no longer lists addedUpsell as a dep, making it stable for the lifetime
  *      of the hook — the same pattern already used for itemsRef and subtotalRef.
+ *
+ * Bug-fixes (third round):
+ *
+ *  13. [MEDIUM] applyCouponCode missing mountedRef guard.
+ *      The setState / store-action calls inside applyCouponCode that execute
+ *      after `await fetch(...)` — setCouponError, applyCoupon, setCouponCode,
+ *      setCouponLoading (finally) — had no mountedRef guard. Fix 9 addressed
+ *      the three background fetch effects, but applyCouponCode (a user-triggered
+ *      async function) was missed. If the user navigates away while a coupon
+ *      request is in-flight, all these setters fire on an unmounted component,
+ *      producing React StrictMode warnings and potential state corruption on
+ *      re-mount.
+ *      Fix: check mountedRef.current before every setState/store call after the
+ *      first await. The finally block also checks before setCouponLoading(false).
+ *
+ *  14. [PERF] Upsell fetch fires when the cart is empty.
+ *      cartKey = '' when items is empty. On first render (pre-hydration) and
+ *      on an empty-cart page, the effect still fired a request to
+ *      /api/v1/cart-upsells?variantIds=&productIds= — a wasted round-trip that
+ *      returns an empty list and triggers an unnecessary loading state.
+ *      Fix: early-return in the upsell effect when itemsRef.current is empty.
+ *      The effect will re-run once hydration lands and cartKey changes to a
+ *      non-empty value.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -157,11 +180,9 @@ export function useCartPage() {
     Map<string, { name: string; timerId: ReturnType<typeof setTimeout> }>
   >(new Map())
 
-  // ── Mounted guard (Fix 11) ─────────────────────────────────────────────────
-  // Used to skip deferred setState calls (setQtyAnim, setPendingRemovals) after
-  // the component unmounts. The removeItem Zustand action is intentionally NOT
-  // guarded — it should still fire so the item is actually removed from cart
-  // after the 4-second undo window expires regardless of where the user navigated.
+  // ── Mounted guard (Fix 11 + Fix 13) ───────────────────────────────────────
+  // Used to skip deferred setState calls after the component unmounts.
+  // Fix 13: also guards applyCouponCode's post-await setState calls.
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
@@ -170,23 +191,43 @@ export function useCartPage() {
 
   // addedUpsellRef always holds the latest addedUpsell array so handleUpsellAdd
   // can read it without listing `addedUpsell` as a useCallback dep.
-  // Without this, every upsell add recreates handleUpsellAdd (because addedUpsell
-  // changes), which invalidates UpsellSection's React.memo on every add tap.
   const addedUpsellRef = useRef(addedUpsell)
   useEffect(() => { addedUpsellRef.current = addedUpsell }, [addedUpsell])
 
+  // ── Visible items (excludes pending removals) ─────────────────────────────
+  //
+  // BUG FIX: pricing/totalQty/progressPct were previously derived from the raw
+  // `items` array, while cart/page.tsx rendered `visibleItems` (items minus
+  // anything in `pendingRemovals`) for the "Your Items (N)" list.
+  //
+  // Repro: user clicks "Remove" on an item. handleRemove adds it to
+  // pendingRemovals and shows an undo toast for 4 seconds — the item
+  // immediately disappears from the "Your Items (N)" list (count drops,
+  // e.g. 3 -> 2). But CartSummary's "Subtotal (N items)" and the sticky
+  // bottom-bar total were still computed from the full `items` array, so
+  // they continued to include that item's price/qty until the deferred
+  // removeItem() actually fired 4 seconds later.
+  //
+  // Net effect: for ~4 seconds the page showed "Your Items (2)" on the left
+  // while the order summary said "Subtotal (3 items) ₹XXX" on the right —
+  // a directly visible self-contradiction, and the total shown to the user
+  // didn't match the cart contents they could see.
+  //
+  // Fix: compute visibleItems here (single source of truth) and derive
+  // pricing / totalQty / progressPct from it. cart/page.tsx now consumes
+  // visibleItems from this hook instead of re-deriving it independently.
+  const visibleItems = useMemo(
+    () => items.filter(item => !pendingRemovals.has(item.variantId)),
+    [items, pendingRemovals],
+  )
+
   // ── Derived / memoised values ──────────────────────────────────────────────
   const pricing = useMemo(
-    () => calcPriceSummary(items, settings as SiteSettings, coupon, 'cod'),
-    [items, settings, coupon],
+    () => calcPriceSummary(visibleItems, settings as SiteSettings, coupon, 'cod'),
+    [visibleItems, settings, coupon],
   )
 
   // Fix 7: destructure individual stable method references from useCartAnalytics.
-  // useCartAnalytics returns a new plain-object literal on every render, so
-  // listing `analytics` as a useCallback dep caused every callback to recreate
-  // on every render, defeating React.memo on CartItemCard and CartSummary.
-  // Each method is a useCallback(fn, []) internally — destructuring gives us the
-  // stable references we can safely list as deps without the wrapping object churn.
   const {
     trackUpsellAdded,
     trackItemRemoved,
@@ -208,8 +249,8 @@ export function useCartPage() {
   )
 
   const totalQty = useMemo(
-    () => items.reduce((sum, i) => sum + i.qty, 0),
-    [items],
+    () => visibleItems.reduce((sum, i) => sum + i.qty, 0),
+    [visibleItems],
   )
 
   // ── Stable cart fingerprint ────────────────────────────────────────────────
@@ -232,18 +273,11 @@ export function useCartPage() {
   useEffect(() => { subtotalRef.current = pricing.subtotal }, [pricing.subtotal])
 
   // ── Coupon pre-fill (runs once after store hydrates) ──────────────────────
-  // Fix 8: the original code set couponInitRef.current = true unconditionally on
-  // the first effect run. Because StoreHydrator uses setTimeout(0) to rehydrate,
-  // the first run always saw lastAppliedCouponCode = '' (pre-hydration). The ref
-  // was marked done immediately, so the effect returned early when hydration
-  // fired and the dep changed — coupon pre-fill silently never worked.
-  //
-  // Fix: only mark the ref done after we actually have a non-empty
+  // Fix 8: only mark the ref done after we actually have a non-empty
   // lastAppliedCouponCode value, so the effect stays ready until hydration lands.
   const couponInitRef = useRef(false)
   useEffect(() => {
     if (couponInitRef.current) return
-    // Not hydrated yet — wait for the next dep change when the store rehydrates.
     if (!lastAppliedCouponCode) return
     couponInitRef.current = true
     if (!coupon) {
@@ -258,16 +292,11 @@ export function useCartPage() {
     fetchWithRetry('/api/v1/cart-settings', { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-settings ${r.status}`)))
       .then((data: { settings: Partial<SiteSettings> }) => {
-        // Fix 9: guard against setState on unmounted component.
-        // The .finally() guard in the upsells fetch prevented setUpsellLoading
-        // after unmount, but the preceding .then() blocks here (and in the other
-        // two fetches) had no equivalent guard.
         if (ac.signal.aborted) return
 
         const ss = data.settings ?? {}
         setSettings(ss)
 
-        // Build live reviews from settings keys, falling back to module constants
         const dbRevs = ([1, 2, 3] as const)
           .map(n => ({
             name:     String(ss[`review_${n}_name`     as keyof SiteSettings] ?? '') || FALLBACK_REVIEWS[n - 1].name,
@@ -281,11 +310,10 @@ export function useCartPage() {
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'AbortError') return
         console.error('[useCartPage] cart-settings fetch failed:', err)
-        // settings stay as {} — pricing service handles missing keys with defaults
       })
 
     return () => ac.abort()
-  }, []) // settings are stable for the session lifetime; fetch once
+  }, [])
 
   // ── Coupon hints fetch ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -294,13 +322,11 @@ export function useCartPage() {
     fetchWithRetry('/api/v1/coupon-hints', { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`coupon-hints ${r.status}`)))
       .then((data: { hints: Array<{code: string; label: string}> }) => {
-        // Fix 9 (continued): guard before setState.
         if (ac.signal.aborted) return
         setCouponHints(data.hints ?? [])
       })
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'AbortError') return
-        // Non-fatal — hints are a UX enhancement, not required for checkout
         console.error('[useCartPage] coupon-hints fetch failed:', err)
       })
 
@@ -309,6 +335,19 @@ export function useCartPage() {
 
   // ── Upsells fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
+    // Fix 14: skip the fetch entirely when the cart is empty.
+    // cartKey is '' on an empty cart and during pre-hydration. Firing the
+    // request with ?variantIds=&productIds= wastes a round-trip and triggers
+    // a loading spinner the user will never see resolve into anything useful.
+    // The effect will re-fire once cartKey becomes non-empty (after hydration
+    // adds items to the store).
+    if (!cartKey) {
+      setUpsellLoading(false)
+      setUpsellError(false)
+      setUpsellItems([])
+      return
+    }
+
     const ac = new AbortController()
     const current    = itemsRef.current
     const variantIds = current.map(i => i.variantId).join(',')
@@ -321,7 +360,6 @@ export function useCartPage() {
     fetchWithRetry(`/api/v1/cart-upsells?${params}`, { signal: ac.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-upsells ${r.status}`)))
       .then((data: { upsells: UpsellItem[] }) => {
-        // Fix 9 (continued): guard before setState.
         if (ac.signal.aborted) return
         setUpsellItems(data.upsells ?? [])
       })
@@ -331,41 +369,28 @@ export function useCartPage() {
         setUpsellError(true)
       })
       .finally(() => {
-        // Guard: don't update loading state if the effect was cleaned up
         if (!ac.signal.aborted) setUpsellLoading(false)
       })
 
     return () => ac.abort()
-  }, [cartKey]) // stable primitive — no suppression needed
+  }, [cartKey])
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-
-  // Fix 7: deps now reference the stable destructured analytics methods instead
-  // of the `analytics` object, so these callbacks are stable for the lifetime of
-  // the hook and do not invalidate CartItemCard / CartSummary memoisation.
 
   const handleQtyChange = useCallback((variantId: string, newQty: number, oldQty: number) => {
     const item = itemsRef.current.find(i => i.variantId === variantId)
     if (item) trackQuantityChanged(item.name, oldQty, newQty)
     setQtyAnim(a => ({ ...a, [variantId]: newQty > oldQty ? 'up' : 'down' }))
     updateQty(variantId, newQty)
-    // Fix 11: guard the deferred setState so it doesn't fire on an unmounted
-    // component if the user navigates away within the 320 ms animation window.
     setTimeout(() => {
       if (mountedRef.current) setQtyAnim(a => ({ ...a, [variantId]: null }))
     }, 320)
   }, [updateQty, trackQuantityChanged])
-  // mountedRef is intentionally excluded from deps — it is a ref (stable object)
-  // and mountedRef.current is always the latest value at call-time.
 
   const handleRemove = useCallback((variantId: string, name: string, price: number) => {
     trackItemRemoved(name, price)
     const timerId = setTimeout(() => {
-      // removeItem (Zustand action) is intentionally NOT guarded by mountedRef.
-      // The item must be removed after the undo window regardless of navigation.
       removeItem(variantId)
-      // Fix 11: guard only the React state update — Zustand is fine to call
-      // from any context, but setState on an unmounted component is noisy.
       if (mountedRef.current) {
         setPendingRemovals(prev => {
           const next = new Map(prev)
@@ -375,7 +400,6 @@ export function useCartPage() {
       }
     }, 4000)
     setPendingRemovals(prev => {
-      // Clear any existing timer for this variant (double-tap guard)
       const existing = prev.get(variantId)
       if (existing) clearTimeout(existing.timerId)
       return new Map(prev).set(variantId, { name, timerId })
@@ -394,8 +418,6 @@ export function useCartPage() {
   }, [])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
-    // Read the latest addedUpsell via ref — avoids listing `addedUpsell` as a dep,
-    // which would recreate this callback on every add and bust UpsellSection.memo.
     if (addedUpsellRef.current.includes(p.id)) return
     addItem({
       productId:   p.productId,
@@ -415,11 +437,12 @@ export function useCartPage() {
     })
     trackUpsellAdded(p.name, p.price)
     setAddedUpsell(a => [...a, p.id])
-  // addedUpsellRef is intentionally excluded from deps — it's a ref (stable object),
-  // and addedUpsellRef.current is always the latest value at call-time.
   }, [addItem, trackUpsellAdded])
 
   // ── Shared coupon apply helper ─────────────────────────────────────────────
+  // Fix 13: all post-await setState / store-action calls now check mountedRef.current
+  // before firing. If the component unmounts while a coupon request is in-flight
+  // (e.g. user navigates away), none of these setters reach a stale component.
   const applyCouponCode = useCallback(async (code: string) => {
     setCouponLoading(true)
     setCouponError('')
@@ -429,7 +452,10 @@ export function useCartPage() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ code, subtotal: subtotalRef.current }),
       })
+      // Guard: component may have unmounted while the request was in-flight.
+      if (!mountedRef.current) return
       const data = await res.json()
+      if (!mountedRef.current) return
       if (!res.ok) {
         const reason = data.error ?? 'invalid'
         setCouponError(reason)
@@ -440,15 +466,15 @@ export function useCartPage() {
       trackCouponApplied(data.coupon.code, data.coupon.discount)
       setCouponCode('')
     } catch (e: unknown) {
+      if (!mountedRef.current) return
       const reason = e instanceof Error ? e.message : 'network_error'
       setCouponError('Failed to apply coupon')
       trackCouponError(code, reason)
     } finally {
-      setCouponLoading(false)
+      // Guard the finally block too — it always runs, even after early returns.
+      if (mountedRef.current) setCouponLoading(false)
     }
   }, [applyCoupon, trackCouponApplied, trackCouponError])
-  // subtotalRef is intentionally excluded from deps — it's a ref (stable object),
-  // and subtotalRef.current is always the latest value at call-time.
 
   const handleCoupon = useCallback(async () => {
     const trimmed = couponCode.trim().toUpperCase()
@@ -456,10 +482,6 @@ export function useCartPage() {
     await applyCouponCode(trimmed)
   }, [couponCode, applyCouponCode])
 
-  // Fix 10: both setCouponCode and applyCouponCode now receive the uppercased
-  // code. Previously setCouponCode used the original (possibly lowercase) code
-  // while applyCouponCode uppercased it. On a coupon error the input showed a
-  // lowercase code inconsistent with the server-normalised error message.
   const handleApplyHint = useCallback((code: string) => {
     const upper = code.toUpperCase()
     setCouponCode(upper)
@@ -476,6 +498,7 @@ export function useCartPage() {
   return {
     // cart store slices
     items,
+    visibleItems,
     coupon,
     removeCoupon: handleRemoveCoupon,
 

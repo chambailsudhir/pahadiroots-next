@@ -70,8 +70,35 @@ export const useCartStore = create<CartStore>()(
         })
       },
 
+      // BUG FIX: stale idempotencyKey survives "remove all items" cycle.
+      //
+      // clearCart() resets idempotencyKey to '' so a fresh key is lazily
+      // generated on the next addItem (see comment on clearCart below).
+      // removeItem() previously did NOT apply the same reset. If a user
+      // removed every item one-by-one (rather than using clearCart), the
+      // cart became empty but idempotencyKey retained its old value.
+      //
+      // Impact: the next addItem reuses that stale key for a *completely
+      // different* cart (`state.idempotencyKey || generateUUID()` — the old
+      // key is truthy, so no new key is generated). If the prior checkout
+      // attempt with that key reached the server (e.g. a failed/abandoned
+      // order or payment record was created under it), the new checkout
+      // — for entirely different items — would be sent with the same
+      // idempotency_key. The server's idempotency lookup could then either
+      // reject the new order as a duplicate, or worse, return the *old*
+      // order's confirmation while the user believes they ordered the new
+      // items — a payment-integrity issue.
+      //
+      // Fix: when removeItem empties the cart, reset idempotencyKey to ''
+      // exactly like clearCart does. updateQty's qty<=0 branch calls
+      // removeItem internally, so it is covered automatically.
       removeItem: (variantId) =>
-        set(state => ({ items: state.items.filter(i => i.variantId !== variantId) })),
+        set(state => {
+          const items = state.items.filter(i => i.variantId !== variantId)
+          return items.length === 0
+            ? { items, idempotencyKey: '' }
+            : { items }
+        }),
 
       updateQty: (variantId, qty) => {
         if (qty <= 0) {

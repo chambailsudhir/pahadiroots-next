@@ -79,7 +79,7 @@ export default function CartPage() {
   useEffect(() => { setMounted(true) }, [])
 
   const {
-    items, coupon, removeCoupon,
+    items, visibleItems, coupon, removeCoupon,
     couponCode, setCouponCode, couponLoading, couponError,
     upsellItems, upsellLoading, upsellError, addedUpsell,
     reviews, settings,
@@ -95,8 +95,10 @@ export default function CartPage() {
 
   const minOrderAmt = parseFloat(settings.min_order_amount ?? '0') || 0
 
-  const visibleItems = items.filter(item => !pendingRemovals.has(item.variantId))
-  const visibleQty   = visibleItems.reduce((sum, i) => sum + i.qty, 0)
+  // visibleItems/totalQty come from useCartPage — pricing, the "Your Items (N)"
+  // header, CartSummary's subtotal, and the sticky bottom bar all now derive
+  // from the same filtered (pending-removal-excluded) list. See the BUG FIX
+  // comment in useCartPage.ts for why this single source of truth matters.
 
   const _waDigits = (settings.whatsapp_number ?? '').replace(/\D/g, '')
   const whatsappHref = _waDigits.length >= 7 ? `https://wa.me/${_waDigits}` : null
@@ -154,7 +156,7 @@ export default function CartPage() {
           {/* Cart items */}
           <div className="cp-card">
             <div className="cp-card-head">
-              <h2 className="cp-card-title">Your Items ({visibleQty})</h2>
+              <h2 className="cp-card-title">Your Items ({totalQty})</h2>
               <Link href="/products" className="cp-card-link">+ Add more</Link>
             </div>
             <div className="cp-items">
