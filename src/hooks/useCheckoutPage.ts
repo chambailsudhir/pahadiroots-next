@@ -498,6 +498,13 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }
   }
 
+  // BUG FIX: mountedRef guards added — same class of bug as handleCoupon /
+  // handleApplyCouponHint (fixed in the previous pass, Fix 13 in useCartPage).
+  // handleApplyLoyalty is a user-triggered async function; all post-await
+  // setState calls were unconditional. Fast back-navigation while a loyalty
+  // validate request is in-flight would fire setLoyaltyError, setLoyaltyRedemption,
+  // and setLoyaltyLoading on an unmounted component, producing StrictMode
+  // warnings and potential state corruption on re-mount.
   async function handleApplyLoyalty(ptsToRedeem: number) {
     if (loyaltyLoading) return
     setLoyaltyLoading(true)
@@ -512,13 +519,16 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           order_subtotal:   pricing.subtotal,
         }),
       })
+      if (!mountedRef.current) return
       const data = await res.json()
+      if (!mountedRef.current) return
       if (!res.ok) { setLoyaltyError(data.error || 'Invalid redemption'); return }
       setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
     } catch {
+      if (!mountedRef.current) return
       setLoyaltyError('Failed to apply coins')
     } finally {
-      setLoyaltyLoading(false)
+      if (mountedRef.current) setLoyaltyLoading(false)
     }
   }
 

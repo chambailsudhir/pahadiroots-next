@@ -3,8 +3,16 @@ import path from 'path'
 
 export default defineConfig({
   test: {
+    // Default environment is node. Individual test files can override with
+    // the `// @vitest-environment jsdom` file-level directive when they need
+    // a browser-like context (e.g. renderHook tests for useCartPage).
     environment: 'node',
     globals: true,
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost:3000',
+      },
+    },
     // Mock modules that only work in Next.js / browser contexts
     server: {
       deps: {
@@ -27,6 +35,7 @@ export default defineConfig({
         'src/app/api/v1/orders/route.ts',
         'src/app/api/health/route.ts',
         'src/lib/services/inventoryService.ts',
+        'src/hooks/useCartPage.ts',
       ],
     },
   },
