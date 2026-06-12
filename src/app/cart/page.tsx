@@ -45,9 +45,10 @@
 import './cart-page.css'
 
 import Link                             from 'next/link'
-import { lazy, Suspense, useState, useEffect } from 'react'
+import { lazy, Suspense }               from 'react'
 import { formatPrice }                  from '@/lib/utils'
 import { useCartPage }                  from '@/hooks/useCartPage'
+import { useCartStore, selectHasHydrated } from '@/store/cartStore'
 
 import CartSkeleton                     from '@/components/cart/CartSkeleton'
 import CartItemCard                     from '@/components/cart/CartItemCard'
@@ -75,8 +76,16 @@ const DELIVERY_ITEMS = [
 ] as const
 
 export default function CartPage() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
+  // BUG FIX (hydration-race): a plain `useEffect(() => setMounted(true), [])`
+  // flipped `mounted` to true BEFORE StoreHydrator's deferred
+  // `persist.rehydrate()` call resolved (setTimeout(0) runs after the
+  // synchronous effect-flush). For one tick `mounted` was true while `items`
+  // was still `[]`, so a returning user with a persisted cart briefly saw
+  // <EmptyCart/> flash before their items appeared.
+  // Fix: gate on `_hasHydrated`, which only flips true inside
+  // onRehydrateStorage — after localStorage has actually been applied.
+  // See cartStore.ts for the full explanation.
+  const hasHydrated = useCartStore(selectHasHydrated)
 
   const {
     items, visibleItems, coupon, removeCoupon,
@@ -90,7 +99,7 @@ export default function CartPage() {
     couponHints,
   } = useCartPage()
 
-  if (!mounted)      return <CartSkeleton />
+  if (!hasHydrated)  return <CartSkeleton />
   if (!items.length) return <EmptyCart />
 
   const minOrderAmt = parseFloat(settings.min_order_amount ?? '0') || 0

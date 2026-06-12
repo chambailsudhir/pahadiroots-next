@@ -16,6 +16,10 @@ interface UserStore {
   savedAddresses:   SavedAddress[]
   wishlist:         string[]      // productIds
 
+  // BUG FIX: hydration-race — see matching fields/comment in cartStore.ts.
+  _hasHydrated:     boolean
+  setHasHydrated:   (state: boolean) => void
+
   setUser:          (user: User | null) => void
   logout:           () => void
   setAddresses:     (addresses: SavedAddress[]) => void
@@ -31,6 +35,8 @@ export const useUserStore = create<UserStore>()(
       user:           null,
       savedAddresses: [],
       wishlist:       [],
+      _hasHydrated:   false,
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
 
       setUser: (user) => set({ user }),
 
@@ -78,9 +84,18 @@ export const useUserStore = create<UserStore>()(
           removeItem: () => {},
         }
       ),
+      // BUG FIX (hydration-race): see cartStore.ts for the full explanation.
+      onRehydrateStorage: () => () => {
+        useUserStore.getState().setHasHydrated(true)
+      },
     }
   )
 )
+
+// ─── Hydration-ready selector ─────────────────────────────────────────────────
+// Usage:  const hasHydrated = useUserStore(selectHasHydrated)
+export const selectHasHydrated = (s: { _hasHydrated: boolean }): boolean =>
+  s._hasHydrated
 
 // ── Wishlist auto-sync ────────────────────────────────────────────────────────
 // Subscribes to wishlist changes. Whenever the wishlist array reference changes

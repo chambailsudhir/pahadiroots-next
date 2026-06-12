@@ -22,7 +22,7 @@ import {
   useState, useEffect, useCallback, useMemo, useRef,
 } from 'react'
 import { useRouter }            from 'next/navigation'
-import { useCartStore }         from '@/store/cartStore'
+import { useCartStore, selectHasHydrated } from '@/store/cartStore'
 import { useUserStore }         from '@/store/userStore'
 import { calcPriceSummary }     from '@/lib/services/pricingService'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
@@ -208,7 +208,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const waNumber        = _waRaw.length >= 7 ? _waRaw : '919899984895'
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [storeReady,     setStoreReady]     = useState(false)
+  // BUG FIX (hydration-race): storeReady used to be its own `useState(false)`
+  // flipped by `useEffect(() => setStoreReady(true), [])`. That effect fires
+  // BEFORE StoreHydrator's deferred `persist.rehydrate()` resolves (see
+  // cartStore.ts), so for one tick `storeReady` was `true` while `items` was
+  // still `[]` from the pre-hydration default. The redirect effect below
+  // (`items.length === 0 && storeReady`) then fired on that tick and sent
+  // users with a non-empty *persisted* cart back to /cart before their items
+  // had a chance to load — a checkout-killing false redirect.
+  // Fix: derive storeReady directly from the cart store's `_hasHydrated` flag,
+  // which only becomes true once localStorage has actually been applied.
+  const storeReady = useCartStore(selectHasHydrated)
   const [payMethod,      setPayMethod]      = useState<'razorpay' | 'cod'>('cod')
   const [placing,        setPlacing]        = useState(false)
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
@@ -328,8 +338,6 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   })
 
   // ── Effects ────────────────────────────────────────────────────────────────
-
-  useEffect(() => { setStoreReady(true) }, [])
 
   useEffect(() => {
     if (items.length === 0 && storeReady && !orderPlacedRef.current) {

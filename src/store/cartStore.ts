@@ -9,6 +9,10 @@ interface CartStore {
   items:             CartItem[]
   coupon:            AppliedCoupon | null
   idempotencyKey:    string           // generated on first item add, reset after order
+
+  // BUG FIX: hydration-race flag. See setHasHydrated below.
+  _hasHydrated:      boolean
+  setHasHydrated:    (state: boolean) => void
   // The last coupon code the user successfully applied.
   // Persisted (code string only — never the discount amount) so we can hint the
   // user to re-apply after a page refresh clears the ephemeral coupon object.
@@ -45,6 +49,8 @@ export const useCartStore = create<CartStore>()(
       coupon:         null,
       idempotencyKey: '',
       lastAppliedCouponCode: '',
+      _hasHydrated:   false,
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
 
       addItem: (newItem) => {
         set(state => {
@@ -205,6 +211,18 @@ export const useCartStore = create<CartStore>()(
 
         return state
       },
+
+      // BUG FIX (hydration-race): called once `persist.rehydrate()` has
+      // finished applying persisted state (or finished with an error, or
+      // found nothing to apply — all three still mean "hydration attempt is
+      // done, items now reflect localStorage or the empty default").
+      // Pages read `_hasHydrated` via `selectHasHydrated` instead of a plain
+      // mount-effect flag, so they no longer render/redirect based on a
+      // pre-hydration empty cart. Runs even if rehydrate() errors, so the UI
+      // never gets stuck on a skeleton forever.
+      onRehydrateStorage: () => () => {
+        useCartStore.getState().setHasHydrated(true)
+      },
     }
   )
 )
@@ -219,3 +237,13 @@ export const useCartStore = create<CartStore>()(
 // Usage:  const count = useCartStore(selectCartCount)
 export const selectCartCount = (s: { items: CartItem[] }): number =>
   s.items.reduce((sum, i) => sum + i.qty, 0)
+
+// ─── Hydration-ready selector ─────────────────────────────────────────────────
+// Use in place of a generic `useEffect(() => setMounted(true), [])` guard.
+// True only after StoreHydrator's deferred `persist.rehydrate()` call has
+// actually finished applying (or attempting to apply) localStorage state —
+// see the BUG FIX comment on `_hasHydrated` in the CartStore interface above.
+//
+// Usage:  const hasHydrated = useCartStore(selectHasHydrated)
+export const selectHasHydrated = (s: { _hasHydrated: boolean }): boolean =>
+  s._hasHydrated

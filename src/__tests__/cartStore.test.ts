@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useCartStore, selectCartCount } from '@/store/cartStore'
+import { useCartStore, selectCartCount, selectHasHydrated } from '@/store/cartStore'
 import type { CartItem } from '@/types'
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -428,11 +428,10 @@ describe('cartStore persist — partialize', () => {
     useCartStore.getState().addItem(makeItem({ variantId: 'v1', maxQty: 5 }))
     const state = useCartStore.getState()
     // Access partialize directly by calling it with the current state
-    // @ts-expect-error — accessing internal persist config for test
     const partializer = useCartStore.persist?.getOptions?.()?.partialize
     if (!partializer) return // skip if internal API changed
 
-    const persisted = partializer(state)
+    const persisted = partializer(state) as { items: Array<Record<string, unknown>> }
     expect(persisted.items[0]).not.toHaveProperty('maxQty')
   })
 
@@ -440,7 +439,6 @@ describe('cartStore persist — partialize', () => {
     useCartStore.getState().addItem(makeItem())
     useCartStore.getState().applyCoupon({ code: 'TEST', discount: 50, type: 'flat' })
     const state = useCartStore.getState()
-    // @ts-expect-error — accessing internal persist config for test
     const partializer = useCartStore.persist?.getOptions?.()?.partialize
     if (!partializer) return
 
@@ -451,11 +449,10 @@ describe('cartStore persist — partialize', () => {
   it('lastAppliedCouponCode IS persisted (code hint — not discount value)', () => {
     useCartStore.getState().applyCoupon({ code: 'HINT', discount: 100, type: 'flat' })
     const state = useCartStore.getState()
-    // @ts-expect-error — accessing internal persist config for test
     const partializer = useCartStore.persist?.getOptions?.()?.partialize
     if (!partializer) return
 
-    const persisted = partializer(state)
+    const persisted = partializer(state) as { lastAppliedCouponCode: string }
     expect(persisted.lastAppliedCouponCode).toBe('HINT')
   })
 })
@@ -465,7 +462,6 @@ describe('cartStore persist — partialize', () => {
 describe('cartStore persist — migrate', () => {
   // Extract migrate function directly from Zustand store internals
   function getMigrate() {
-    // @ts-expect-error — accessing private persist API for testing
     return useCartStore.persist?.getOptions?.()?.migrate as
       | ((persisted: unknown, fromVersion: number) => unknown)
       | undefined
@@ -559,5 +555,53 @@ describe('cartStore persist — migrate', () => {
     // items defaults to [] when missing
     expect(Array.isArray(result.items)).toBe(true)
     expect((result.items as unknown[]).length).toBe(0)
+  })
+})
+
+// ─── Hydration-ready flag ───────────────────────────────────────────────────
+// BUG FIX: cart/page.tsx and useCheckoutPage previously gated on a generic
+// `mounted`/`storeReady` flag flipped by a plain useEffect, which fired
+// BEFORE StoreHydrator's deferred persist.rehydrate() resolved — causing an
+// EmptyCart flash on /cart and a false redirect-to-/cart on /checkout for
+// users with a persisted cart. _hasHydrated fixes this by only flipping true
+// inside onRehydrateStorage, once rehydration has actually completed.
+describe('cartStore — _hasHydrated flag', () => {
+  it('defaults to false before rehydration', () => {
+    // beforeEach calls clearCart(), which does not touch _hasHydrated —
+    // but a fresh store instance starts with _hasHydrated: false.
+    // We can't easily re-create the singleton store here, so instead verify
+    // the setter/selector wiring directly.
+    useCartStore.getState().setHasHydrated(false)
+    expect(useCartStore.getState()._hasHydrated).toBe(false)
+    expect(selectHasHydrated(useCartStore.getState())).toBe(false)
+  })
+
+  it('setHasHydrated(true) flips the flag and selector reflects it', () => {
+    useCartStore.getState().setHasHydrated(true)
+    expect(useCartStore.getState()._hasHydrated).toBe(true)
+    expect(selectHasHydrated(useCartStore.getState())).toBe(true)
+  })
+
+  it('onRehydrateStorage callback sets _hasHydrated to true', () => {
+    useCartStore.getState().setHasHydrated(false)
+    const onRehydrateStorage = useCartStore.persist?.getOptions?.()?.onRehydrateStorage
+    expect(typeof onRehydrateStorage).toBe('function')
+
+    // onRehydrateStorage returns the actual finish-callback
+    const finishCallback = onRehydrateStorage?.(useCartStore.getState())
+    expect(typeof finishCallback).toBe('function')
+
+    finishCallback?.(useCartStore.getState(), undefined)
+    expect(useCartStore.getState()._hasHydrated).toBe(true)
+  })
+
+  it('_hasHydrated is not included in persisted (partialized) state', () => {
+    const state = useCartStore.getState()
+    const partializer = useCartStore.persist?.getOptions?.()?.partialize
+    if (!partializer) return
+
+    const persisted = partializer(state)
+    expect(persisted).not.toHaveProperty('_hasHydrated')
+    expect(persisted).not.toHaveProperty('setHasHydrated')
   })
 })
