@@ -67,10 +67,9 @@
  *      useCallback dep. Every upsell add changes addedUpsell → recreates
  *      handleUpsellAdd → busts UpsellSection's React.memo on every tap, even
  *      though UpsellSection's props didn't change in any meaningful way.
- *      Fix: addedUpsellRef mirrors addedUpsell via a sync useEffect. The
- *      callback reads addedUpsellRef.current at call-time (always fresh) and
- *      no longer lists addedUpsell as a dep, making it stable for the lifetime
- *      of the hook — the same pattern already used for itemsRef and subtotalRef.
+ *      Fix (superseded by Fix 15 below): originally addedUpsellRef mirrored
+ *      addedUpsell via a sync useEffect so the callback could read a fresh
+ *      value without listing addedUpsell as a dep.
  *
  * Bug-fixes (third round):
  *
@@ -94,6 +93,30 @@
  *      Fix: early-return in the upsell effect when itemsRef.current is empty.
  *      The effect will re-run once hydration lands and cartKey changes to a
  *      non-empty value.
+ *
+ * Bug-fixes (fourth round):
+ *
+ *  15. [STATE DESYNC — CRITICAL] `addedUpsell` was a standalone, append-only
+ *      `useState<string[]>([])` that was NEVER reconciled with the cart.
+ *      handleUpsellAdd pushed `p.id` onto it and it was never removed.
+ *
+ *      Repro: add an upsell product to the cart -> its card shows "✓" and is
+ *      disabled. Now remove that same item from the cart (Remove button +
+ *      4s undo-timeout removal, or clearCart at checkout, or it simply drops
+ *      out of items for any reason). The item is gone from `items`, but
+ *      `addedUpsell` still contains its id — UpsellSection still renders "✓"
+ *      / disabled for that product, even across an upsell refetch (cartKey
+ *      changes and re-fetches the suggestion list, but addedUpsell — a
+ *      separate piece of state — survives unchanged). The user can no longer
+ *      re-add a product they don't have in their cart via the upsell rail.
+ *
+ *      Fix: `addedUpsell` is now DERIVED from `items` (`items.map(i =>
+ *      i.variantId)`), since handleUpsellAdd always uses `p.id` as the cart
+ *      item's `variantId`. "Added" status is therefore always a live
+ *      reflection of the cart — add it, see "✓"; remove it by any code path,
+ *      the card automatically reverts to "+ Add". The old addedUpsellRef
+ *      sync-effect is replaced by itemVariantIdsRef (same stable-callback
+ *      pattern, now sourced from `items` instead of the removed state).
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -169,7 +192,6 @@ export function useCartPage() {
   const [upsellItems,     setUpsellItems]     = useState<UpsellItem[]>([])
   const [upsellLoading,   setUpsellLoading]   = useState(true)
   const [upsellError,     setUpsellError]     = useState(false)
-  const [addedUpsell,     setAddedUpsell]     = useState<string[]>([])
 
   const [reviews,         setReviews]         = useState<CartReview[]>(FALLBACK_REVIEWS)
   const [qtyAnim,         setQtyAnim]         = useState<Record<string, 'up' | 'down' | null>>({})
@@ -189,10 +211,36 @@ export function useCartPage() {
     return () => { mountedRef.current = false }
   }, [])
 
-  // addedUpsellRef always holds the latest addedUpsell array so handleUpsellAdd
-  // can read it without listing `addedUpsell` as a useCallback dep.
-  const addedUpsellRef = useRef(addedUpsell)
-  useEffect(() => { addedUpsellRef.current = addedUpsell }, [addedUpsell])
+  // ── addedUpsell (derived, not standalone state) ───────────────────────────
+  //
+  // BUG FIX: addedUpsell used to be its own `useState<string[]>([])`, appended
+  // to (never removed from) every time handleUpsellAdd fired. Once a user
+  // added an upsell product to the cart, its card stayed permanently marked
+  // "✓ Added" / disabled in UpsellSection — even if the user later removed
+  // that exact item from the cart (Remove button, undo-timeout removal,
+  // clearCart, or the item dropping out of a refreshed upsell list and being
+  // re-suggested later). The user had no way to re-add a product they no
+  // longer had in their cart, because addedUpsell never reconciled with the
+  // actual cart contents.
+  //
+  // handleUpsellAdd uses `p.id` as the cart item's `variantId` (see addItem
+  // call below), so "is this upsell item in the cart" is exactly
+  // `items.some(i => i.variantId === p.id)`. Deriving addedUpsell from
+  // `items` makes the UI always reflect the true cart state — add it, see
+  // "✓"; remove it (by any path), the card goes back to "+ Add" automatically.
+  const addedUpsell = useMemo(
+    () => items.map(i => i.variantId),
+    [items],
+  )
+
+  // itemVariantIdsRef always holds the latest set of cart variantIds so
+  // handleUpsellAdd can check membership without listing `items` (or the
+  // derived `addedUpsell`) as a useCallback dep — same stable-callback
+  // pattern as itemsRef / subtotalRef / addedUpsellRef previously used.
+  const itemVariantIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    itemVariantIdsRef.current = new Set(items.map(i => i.variantId))
+  }, [items])
 
   // ── Visible items (excludes pending removals) ─────────────────────────────
   //
@@ -418,7 +466,7 @@ export function useCartPage() {
   }, [])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
-    if (addedUpsellRef.current.includes(p.id)) return
+    if (itemVariantIdsRef.current.has(p.id)) return
     addItem({
       productId:   p.productId,
       variantId:   p.id,
@@ -436,8 +484,14 @@ export function useCartPage() {
       isBestseller: p.isBestseller ?? false,
     })
     trackUpsellAdded(p.name, p.price)
-    setAddedUpsell(a => [...a, p.id])
   }, [addItem, trackUpsellAdded])
+
+  // ── Coupon revalidation tracking ───────────────────────────────────────────
+  // Tracks the subtotal value the currently-applied coupon's discount was last
+  // validated against. Seeded by applyCouponCode on a successful manual apply
+  // (so the revalidation effect below doesn't immediately re-fire for the
+  // subtotal that was just validated), and read/updated by that effect.
+  const lastValidatedSubtotalRef = useRef<number | null>(null)
 
   // ── Shared coupon apply helper ─────────────────────────────────────────────
   // Fix 13: all post-await setState / store-action calls now check mountedRef.current
@@ -463,6 +517,10 @@ export function useCartPage() {
         return
       }
       applyCoupon(data.coupon)
+      // Seed revalidation tracking with the subtotal this discount was just
+      // computed against, so the revalidation effect doesn't immediately
+      // re-fire a redundant request for the same subtotal.
+      lastValidatedSubtotalRef.current = subtotalRef.current
       trackCouponApplied(data.coupon.code, data.coupon.discount)
       setCouponCode('')
     } catch (e: unknown) {
@@ -475,6 +533,98 @@ export function useCartPage() {
       if (mountedRef.current) setCouponLoading(false)
     }
   }, [applyCoupon, trackCouponApplied, trackCouponError])
+
+
+  // ── Coupon revalidation on subtotal change ─────────────────────────────────
+  //
+  // BUG FIX [STATE DESYNC]: `coupon.discount` is a frozen ₹ amount computed by
+  // validateCouponServer() at the moment the coupon was applied — for
+  // percent-type coupons it's `round(subtotal_at_apply_time * percent / 100)`,
+  // capped by the coupon's (server-only) max_discount. Nothing in the client
+  // ever recomputed it afterwards.
+  //
+  // Repro: apply a 10% coupon on a ₹1000 cart -> coupon.discount = 100.
+  // Then change quantities:
+  //   - Remove items so subtotal drops to ₹400. CartSummary still shows
+  //     "Discount (CODE) −₹100" and Total = afterDiscount + shipping, where
+  //     afterDiscount = max(0, 400 - 100) = 300 — a stale 25%-equivalent
+  //     discount being displayed as if the coupon were still "10% off ₹400".
+  //     If the coupon also has min_order (say ₹500), the coupon is now
+  //     INVALID but the UI keeps showing it applied with a discount, right up
+  //     until the order-creation step on the server rejects it — the user
+  //     only discovers their coupon doesn't apply at the final step.
+  //   - Add items so subtotal rises to ₹3000. coupon.discount is still ₹100
+  //     (10% of the OLD ₹1000), so the user effectively gets ~3.3% off
+  //     instead of the 10% the coupon code implies — understating savings.
+  //
+  // Fix: whenever `pricing.subtotal` changes while a coupon is applied,
+  // silently re-POST /api/v1/coupons with the new subtotal (debounced, since
+  // the route is rate-limited to 5/min/IP — see coupons/route.ts). On success,
+  // applyCoupon() is called again with the freshly recomputed discount, so
+  // coupon.discount always reflects the current cart. On failure (min_order no
+  // longer met, coupon expired, usage limit hit since it was applied), the
+  // coupon is removed via removeCoupon() and a user-facing message explains
+  // why — instead of silently showing a number that checkout will reject.
+  //
+  // Guards:
+  //   - Skipped entirely when no coupon is applied (coupon === null).
+  //   - Skipped while a manual apply/hint request is in flight (couponLoading)
+  //     to avoid two concurrent /api/v1/coupons calls racing each other.
+  //   - lastValidatedSubtotalRef avoids re-validating against a subtotal we've
+  //     already confirmed (e.g. effect re-running due to an unrelated dep
+  //     change without subtotal actually moving).
+  //   - mountedRef guards every post-await setState/store call, matching the
+  //     pattern used by applyCouponCode.
+  useEffect(() => {
+    if (!coupon) {
+      lastValidatedSubtotalRef.current = null
+      return
+    }
+    if (couponLoading) return
+    if (lastValidatedSubtotalRef.current === pricing.subtotal) return
+
+    const ac = new AbortController()
+    const timer = setTimeout(() => {
+      lastValidatedSubtotalRef.current = pricing.subtotal
+      fetchWithRetry('/api/v1/coupons', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code: coupon.code, subtotal: pricing.subtotal }),
+        signal:  ac.signal,
+      }, /* maxRetries */ 1)
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          if (ac.signal.aborted || !mountedRef.current) return
+          if (!ok) {
+            // Coupon no longer valid for the new subtotal (min_order, expiry,
+            // usage limit). Remove it so the UI never shows a discount the
+            // server would reject at checkout, and surface why.
+            removeCoupon()
+            setCouponError(data.error ?? 'Coupon no longer applies to your updated cart')
+            return
+          }
+          // Re-apply with the recomputed discount for the current subtotal.
+          // Only update if the discount actually changed, to avoid an
+          // unnecessary store write (and re-render) when it didn't.
+          if (data.coupon.discount !== coupon.discount) {
+            applyCoupon(data.coupon)
+          }
+        })
+        .catch((err: unknown) => {
+          if ((err as { name?: string }).name === 'AbortError') return
+          // Network/server error revalidating — leave the existing coupon
+          // and discount as-is rather than removing a possibly-still-valid
+          // coupon on a transient failure. The server re-validates again at
+          // order creation regardless.
+          console.error('[useCartPage] coupon revalidation failed:', err)
+        })
+    }, 800) // debounced — coalesces rapid +/- taps into one revalidation call
+
+    return () => {
+      clearTimeout(timer)
+      ac.abort()
+    }
+  }, [coupon, pricing.subtotal, couponLoading, applyCoupon, removeCoupon])
 
   const handleCoupon = useCallback(async () => {
     const trimmed = couponCode.trim().toUpperCase()
