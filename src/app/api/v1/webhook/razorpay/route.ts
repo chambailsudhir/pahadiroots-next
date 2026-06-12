@@ -18,6 +18,25 @@ interface RazorpayWebhookEvent {
 }
 
 export async function POST(req: Request) {
+  // BUG FIX: no body size limit — an attacker could send a multi-MB payload,
+  // forcing the lambda to buffer the entire request body into memory before
+  // HMAC verification even starts. The HMAC will fail for anything not from
+  // Razorpay, but only AFTER the memory allocation. Cap at 1 MB: legitimate
+  // Razorpay webhook payloads are well under 10 KB.
+  const contentLength = parseInt(req.headers.get('content-length') || '0', 10)
+  if (contentLength > 1_048_576) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
+
+  // BUG FIX: no Content-Type check — non-JSON payloads (including binary) would
+  // pass signature verification (HMAC is over raw bytes) but then crash JSON.parse.
+  // The crash is caught by the outer try/catch and returns 400, but the webhook log
+  // records it as a processing error rather than a rejected bad request. Reject early.
+  const ct = req.headers.get('content-type') || ''
+  if (!ct.includes('application/json')) {
+    return NextResponse.json({ error: 'Unsupported content type' }, { status: 415 })
+  }
+
   // Read raw body for HMAC verification
   const rawBody = await req.text()
   const signature = req.headers.get('x-razorpay-signature') || ''

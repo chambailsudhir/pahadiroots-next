@@ -61,9 +61,14 @@ export async function POST(req: NextRequest) {
 
       const { email, name } = parsed.data
 
+      // BUG FIX: name was inserted raw into the subscribers table with no HTML
+      // stripping. A bot could store "<script>alert(1)</script>" as a subscriber
+      // name which would be rendered as HTML in any admin email export.
+      const safeName = name ? stripTags(name) : null
+
       // Upsert to subscribers table
       await db.from('subscribers').upsert(
-        { email, name: name || null, subscribed_at: new Date().toISOString() },
+        { email, name: safeName, subscribed_at: new Date().toISOString() },
         { onConflict: 'email' }
       )
       return NextResponse.json({ success: true })
@@ -105,10 +110,26 @@ export async function POST(req: NextRequest) {
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
       try {
+        // BUG FIX: no length validation on name/email/message — an attacker
+        // could submit megabyte-sized fields which would be relayed in the
+        // email body and logged. Truncate before escape+send.
+        const rawName    = String(body.name    ?? '').slice(0, 200)
+        const rawEmail   = String(body.email   ?? '').slice(0, 200)
+        const rawMessage = String(body.message ?? '').slice(0, 5000)
+
+        // BUG FIX: email field was not validated as a real email address —
+        // any string (including garbage like "><script>") could be relayed in
+        // the admin email subject and body. Validate with a simple RFC-5321
+        // compatible check before using it.
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
+        if (!emailValid) {
+          return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
+        }
+
         // HTML-escape before interpolating into email HTML to prevent injection
-        const safeName    = esc(String(body.name    ?? ''))
-        const safeEmail   = esc(String(body.email   ?? ''))
-        const safeMessage = esc(String(body.message ?? ''))
+        const safeName    = esc(rawName)
+        const safeEmail   = esc(rawEmail)
+        const safeMessage = esc(rawMessage)
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',

@@ -133,6 +133,10 @@ function _sbSvcKey()  { return process.env.SUPABASE_SERVICE_KEY! }
 async function sbGet(table: string, query: string) {
   const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
     headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+    // BUG FIX: no timeout was set — a slow Supabase response would hang this
+    // serverless function until Vercel's hard 15-second limit fired, blocking
+    // order creation entirely. 8 s matches sbAdmin in serverUtils.ts.
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => res.status.toString())
@@ -151,6 +155,8 @@ async function sbPost(table: string, query: string, body: object, method = 'POST
       Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
     },
     body: JSON.stringify(body),
+    // BUG FIX: no timeout — slow Supabase hangs the lambda until Vercel's 15 s hard limit.
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => res.status.toString())
@@ -162,6 +168,8 @@ async function sbPost(table: string, query: string, body: object, method = 'POST
 async function sbGetOne(table: string, query: string) {
   const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
     headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+    // BUG FIX: no timeout — slow Supabase hangs the lambda until Vercel's 15 s hard limit.
+    signal: AbortSignal.timeout(8_000),
   })
   if (!res.ok) return null
   const rows = await res.json()

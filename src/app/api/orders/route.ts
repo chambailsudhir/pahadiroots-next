@@ -145,7 +145,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const page   = Math.max(1, parseInt(searchParams.get('page')  || '1', 10))
   const limit  = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
-  const search = (searchParams.get('search') || '').trim()
+  // BUG FIX: no length cap on the search param — an arbitrarily long value was
+  // interpolated directly into the Supabase ilike filter URL (unbounded string
+  // in a serverless HTTP call). Cap at 100 chars to match the searchSchema limit.
+  const search = (searchParams.get('search') || '').trim().slice(0, 100)
   const status = (searchParams.get('status') || '').trim()
 
   try {

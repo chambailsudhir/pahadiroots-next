@@ -67,11 +67,15 @@ export async function GET(req: NextRequest) {
     // ── Step 1: fetch top-80 in-stock variants ─────────────────────────────
     // This is the cheapest fetch and gives us the candidate product IDs we need
     // to filter the more expensive product + image queries.
+    // BUG FIX: the first sbGet call had no timeout — a slow Supabase response
+    // would hang this serverless function until Vercel's hard 15-second limit.
+    // Added 5 s timeout to match the parallel product+image fetches below.
     const variants = await sbGet<RawVariant[]>(
       'product_variants',
       'is_active=eq.true&available_stock=gt.0'
       + '&order=available_stock.desc&limit=80'
       + '&select=id,product_id,is_active,available_stock,price,mrp,size,weight',
+      5000,
     )
 
     // Determine candidate product IDs (non-cart, deduped) — capped at 20 so the

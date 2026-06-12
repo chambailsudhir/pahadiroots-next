@@ -95,6 +95,15 @@ export async function POST(req: NextRequest) {
     const body   = await req.json()
     const action = body.action as string
 
+    // BUG FIX: action was not validated against a known set of values. An unknown
+    // action would fall through all if-blocks and return fail(400, 'Unknown action'),
+    // but the user/profile DB queries above already ran — wasted DB calls for every
+    // garbage action value. Reject early before any DB work.
+    const ALLOWED_ACTIONS = new Set(['validate', 'history'])
+    if (!action || !ALLOWED_ACTIONS.has(action)) {
+      return fail(400, 'Unknown action')
+    }
+
     const user    = await sbAuth('/user', null, token!)
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
@@ -108,6 +117,18 @@ export async function POST(req: NextRequest) {
 
       if (!Number.isInteger(points_to_redeem) || points_to_redeem <= 0) {
         return fail(400, 'Invalid points amount')
+      }
+
+      // BUG FIX: order_subtotal was not validated — a missing, NaN, negative, or
+      // non-numeric value causes maxValueCap = NaN (or a negative cap), making the
+      // `redeemValue > maxValueCap` guard always false and letting any redemption
+      // amount pass as valid. Validate before using it in arithmetic.
+      if (
+        typeof order_subtotal !== 'number' ||
+        !Number.isFinite(order_subtotal)   ||
+        order_subtotal < 0
+      ) {
+        return fail(400, 'Invalid order subtotal')
       }
 
       const [customerRow, settings] = await Promise.all([
@@ -146,13 +167,22 @@ export async function POST(req: NextRequest) {
     }
 
     // ── action=history ─────────────────────────────────────────
+    // BUG FIX: this action is dead code — GET /api/v1/loyalty/history now owns
+    // paginated history. This branch still exists for backwards compatibility with
+    // any client that sends `action=history` via POST, but it now also applies
+    // pagination (previously hardcoded to 30, no offset). Callers should migrate
+    // to GET /api/v1/loyalty/history?page=N&limit=M.
     if (action === 'history') {
+      const page  = Math.max(1, Number.isInteger(body.page)  ? body.page  : 1)
+      const limit = Math.min(50, Math.max(1, Number.isInteger(body.limit) ? body.limit : 20))
+      const offset = (page - 1) * limit
+
       const rows = await sbAdmin(
         'GET',
-        `/rest/v1/loyalty_transactions?customer_id=eq.${profile.id}&select=id,type,points,balance_after,note,created_at,order_id&order=created_at.desc&limit=30`,
+        `/rest/v1/loyalty_transactions?customer_id=eq.${profile.id}&select=id,type,points,balance_after,note,created_at,order_id&order=created_at.desc&limit=${limit}&offset=${offset}`,
       ).catch(() => [])
 
-      const res = ok({ transactions: rows ?? [] })
+      const res = ok({ transactions: rows ?? [], page, limit })
       if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
       return res
     }

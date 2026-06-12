@@ -121,14 +121,17 @@ function mockRes(body: unknown, ok = true, status = 200) {
  *   - Returns `couponRes` for POST /api/v1/coupons
  */
 function makeFetchMock(couponRes: Response) {
-  return vi.fn(async (url: string) => {
-    if (typeof url === 'string' && url.includes('/api/v1/coupons')) {
+  const fn = vi.fn(async (url: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
+    const urlStr = url instanceof URL ? url.toString() : typeof url === 'string' ? url : (url as Request).url
+    if (urlStr.includes('/api/v1/coupons')) {
       return couponRes
     }
     // Everything else (settings, hints, upsells, loyalty) fails silently —
     // the hook handles these with try/catch and won't throw in tests.
     return mockRes({}, false, 500)
   })
+  // Expose as global.fetch-compatible type; cast needed because vi.fn overloads don't match exactly
+  return fn as typeof fn & { mock: typeof fn['mock'] }
 }
 
 // ─── Setup / teardown ─────────────────────────────────────────────────────────
@@ -167,7 +170,7 @@ describe('useCartPage — coupon revalidation effect', () => {
     await act(async () => { vi.advanceTimersByTime(PAST_DEBOUNCE) })
 
     const couponCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     expect(couponCalls).toHaveLength(0)
   })
@@ -190,7 +193,7 @@ describe('useCartPage — coupon revalidation effect', () => {
     // Should have fired at most once (the initial validation when subtotal
     // was first seen), but NOT a second time for the same value.
     const couponCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     // At most 1 call (initial seed, if lastValidatedSubtotalRef was null).
     // What we assert is there's no second call for the unchanged subtotal.
@@ -227,7 +230,7 @@ describe('useCartPage — coupon revalidation effect', () => {
 
     // fetchWithRetry should have been called with the new subtotal (2000)
     const couponCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     expect(couponCalls.length).toBeGreaterThanOrEqual(1)
     const lastBody = JSON.parse(
@@ -317,7 +320,7 @@ describe('useCartPage — coupon revalidation effect', () => {
 
     // Before full debounce has elapsed — no coupon request yet
     const beforeCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     expect(beforeCalls).toHaveLength(0)
 
@@ -325,7 +328,7 @@ describe('useCartPage — coupon revalidation effect', () => {
     await act(async () => { await vi.runAllTimersAsync() })
 
     const afterCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     // Exactly one request, for the final subtotal (10+1+1+1 = 13 items × ₹100 = ₹1 300)
     expect(afterCalls).toHaveLength(1)
@@ -360,12 +363,13 @@ describe('useCartPage — coupon revalidation effect', () => {
     seedStore([{ ...makeItem(), qty: 8 }], coupon)
 
     // Simulate a network failure on the coupon route
-    global.fetch = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/v1/coupons')) {
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      const urlStr = url instanceof URL ? url.toString() : typeof url === 'string' ? url : (url as Request).url
+      if (urlStr.includes('/api/v1/coupons')) {
         throw new Error('Network timeout')
       }
       return mockRes({}, false, 500)
-    })
+    }) as unknown as typeof globalThis.fetch
 
     renderHook(() => useCartPage())
 
@@ -399,7 +403,7 @@ describe('useCartPage — coupon revalidation effect', () => {
     await act(async () => { vi.advanceTimersByTime(PAST_DEBOUNCE) })
 
     const couponCalls = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     )
     // No fetch should have fired after unmount
     expect(couponCalls).toHaveLength(0)
@@ -429,13 +433,13 @@ describe('useCartPage — coupon revalidation effect', () => {
     // The effect should now see coupon !== null AND lastValidatedSubtotalRef = null,
     // so it should fire another request.
     const beforeSecondFire = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     ).length
 
     await act(async () => { vi.advanceTimersByTime(PAST_DEBOUNCE) })
 
     const afterSecondFire = fetchMock.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/api/v1/coupons'),
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
     ).length
 
     // A new validation request was sent after re-apply

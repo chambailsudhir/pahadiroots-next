@@ -23,6 +23,16 @@ export async function GET(
   const { id } = params
   if (!id) return fail(400, 'Order ID is required')
 
+  // BUG FIX: raw `id` from the URL path was interpolated directly into the
+  // Supabase REST URL with no format validation. A crafted path like
+  // /api/orders/1;DROP TABLE orders-- would be sent verbatim to the DB REST API.
+  // PostgREST parameterises values, so SQL injection is unlikely, but rejecting
+  // invalid formats early is defence-in-depth and prevents log noise.
+  const isValidId =
+    /^[0-9]+$/.test(id) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  if (!isValidId) return fail(400, 'Invalid order ID')
+
   let token = getToken(req)
   let refreshed = !token ? await tryRefresh(req) : null
   if (!token && !refreshed) return fail(401, 'Not logged in')

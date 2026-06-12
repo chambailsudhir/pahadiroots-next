@@ -47,7 +47,11 @@ export function calcPriceSummary(
     ? Math.round(afterDiscount * prepaidPct / 100)
     : 0
 
-  const total = afterDiscount + shipping - prepaidDiscount
+  // BUG FIX: total could go negative if an admin sets prepaid_discount_pct > 100
+  // (e.g. 150%). afterDiscount=100, prepaidDiscount=150 → total=-50.
+  // A negative total is passed to Razorpay as a negative paise amount which
+  // causes the API call to fail with a cryptic error. Clamp to 0.
+  const total = Math.max(0, afterDiscount + shipping - prepaidDiscount)
 
   return {
     subtotal,

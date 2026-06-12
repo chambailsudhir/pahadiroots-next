@@ -26,6 +26,12 @@ async function callLoyaltyRpc(
       'Content-Type':  'application/json',
     },
     body: JSON.stringify(params),
+    // BUG FIX: no timeout — a slow Supabase RPC response would hang the calling
+    // lambda (orders/route.ts, payments/route.ts) indefinitely. Loyalty calls are
+    // non-fatal (failures are caught and logged) so a tight 5 s budget is safe:
+    // if the RPC hasn't responded in 5 s we abort and let the order succeed without
+    // loyalty credits, which is far better than hanging the entire checkout.
+    signal: AbortSignal.timeout(5_000),
   })
 }
 

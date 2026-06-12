@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createOrderSchema } from '@/lib/schemas'
+import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
@@ -69,6 +69,10 @@ async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrd
       receipt:  receiptId.slice(0, 40),
       notes:    { db_order_id: String(dbOrderId) },
     }),
+    // BUG FIX: no timeout — a slow or unresponsive Razorpay API would hang the
+    // lambda until Vercel's hard 15-second limit, blocking the entire checkout.
+    // 10 s is generous for a simple order-creation call to a financial API.
+    signal: AbortSignal.timeout(10_000),
   })
   if (!res.ok) {
     const err  = await res.json().catch(() => ({ error: { description: res.statusText } }))
@@ -200,18 +204,21 @@ export async function POST(req: NextRequest) {
 
     // ── ACTION 2: Verify payment after Razorpay success callback ─────────
     if (action === 'verify_payment') {
+      // BUG FIX: previously used hand-rolled type/length checks duplicated from
+      // verifyPaymentSchema. Now uses the canonical schema (which also has the
+      // regex constraint on razorpay_signature). Single source of truth.
+      const vParsed = verifyPaymentSchema.safeParse(body)
+      if (!vParsed.success) {
+        return NextResponse.json({ error: 'Invalid payment verification fields' }, { status: 400 })
+      }
       const {
         razorpay_order_id,
         razorpay_payment_id,
         razorpay_signature,
         order_id,
-      } = body
+      } = vParsed.data
 
       // P2 SECURITY FIX: loyalty_points_redeemed is read from the DB, not the client body.
-
-      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !order_id) {
-        return NextResponse.json({ error: 'Missing required payment verification fields' }, { status: 400 })
-      }
 
       // 1. Verify HMAC — proves Razorpay generated this callback and the payment is real.
       const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()

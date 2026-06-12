@@ -33,12 +33,15 @@ export const createOrderSchema = z.object({
 })
 
 // ─── Payment Schema ────────────────────────────────────────────────────────────
-
+// BUG FIX: all fields were z.string() with no length or format constraints.
+// An attacker could send arbitrarily long strings into the HMAC computation.
+// Added explicit caps and a regex on razorpay_signature (SHA-256 = 64 hex chars).
 export const verifyPaymentSchema = z.object({
-  razorpay_order_id:   z.string(),
-  razorpay_payment_id: z.string(),
-  razorpay_signature:  z.string(),
-  order_id:            z.string().min(1),
+  razorpay_order_id:   z.string().min(1).max(64),
+  razorpay_payment_id: z.string().min(1).max(64),
+  // SHA-256 HMAC digest is always exactly 64 lowercase hex characters
+  razorpay_signature:  z.string().regex(/^[0-9a-f]{64}$/, 'Invalid signature format'),
+  order_id:            z.string().min(1).max(50),
 })
 
 // ─── Coupon Schema ─────────────────────────────────────────────────────────────

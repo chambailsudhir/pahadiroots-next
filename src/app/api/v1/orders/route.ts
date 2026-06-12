@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { Resend } from 'resend'
 import { checkCsrf } from '@/lib/api/serverUtils'
+// BUG FIX: local `orderSchema` was a duplicate of `createOrderSchema` in @/lib/schemas.
+// Two schemas for the same shape means they can silently drift. Removed the local copy
+// and import the single canonical schema — payments/route.ts already uses this.
+import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
@@ -64,29 +67,9 @@ function sanitize(str: string): string {
   return str.replace(/<[^>]*>/g, '').trim()
 }
 
-// Input schema — loyalty_points_redeemed added
-// NOTE: coupon_code is accepted here but the DISCOUNT is never trusted from
-// the client. createOrder() re-validates the code against the DB and computes
-// the authoritative discount amount server-side.
-const orderSchema = z.object({
-  address: z.object({
-    name:    z.string().trim().min(2).max(100),
-    phone:   z.string().trim().regex(/^[6-9]\d{9}$/, 'Invalid mobile number'),
-    flat:    z.string().trim().min(1).max(200),
-    area:    z.string().trim().max(200).optional().default(''),
-    city:    z.string().trim().min(2).max(100),
-    state:   z.string().trim().min(2).max(100),
-    pincode: z.string().trim().regex(/^\d{6}$/, 'Invalid pincode'),
-    label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
-  }),
-  customer_email:          z.string().email().optional().or(z.literal('')),
-  items:                   z.array(z.object({ productId: z.string().min(1), variantId: z.string().min(1), qty: z.number().int().min(1).max(50) })).min(1).max(30),
-  payment_method:          z.enum(['razorpay', 'cod']),
-  coupon_code:             z.string().trim().max(50).optional(),
-  idempotency_key:         z.string().uuid(),
-  // ── Loyalty ─────────────────────────────────────────────────────────────
-  loyalty_points_redeemed: z.number().int().min(0).max(100_000).optional().default(0),
-})
+// NOTE: createOrderSchema (imported from @/lib/schemas) is the canonical validation
+// schema for this route. coupon_code is accepted but the DISCOUNT is never trusted
+// from the client — createOrder() re-validates and recomputes server-side.
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout ${ms}ms`)), ms))])
@@ -119,7 +102,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body   = await req.json()
-    const parsed = orderSchema.safeParse(body)
+    const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten().fieldErrors }, { status: 400 })
     }

@@ -11,7 +11,6 @@
 
 import { NextResponse } from 'next/server'
 
-const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // Use anon key for this read-only GET endpoint — the service key grants full DB
 // write access and should be reserved for mutations and admin operations.
 // Ensure the `site_settings` table RLS policy allows anon SELECT on key+value.
@@ -48,12 +47,15 @@ const CART_SETTING_KEYS = [
 
 export type CartSettingKey = (typeof CART_SETTING_KEYS)[number]
 
-async function fetchCartSettings(): Promise<Record<string, string>> {
-  // Build an `or` filter so Supabase returns only the keys we care about.
-  const filter = CART_SETTING_KEYS.map(k => `key.eq.${k}`).join(',')
-  const url    = `${SUPABASE_URL}/rest/v1/site_settings?or=(${filter})&select=key,value`
+// BUG FIX: the filter string and URL were rebuilt on every request even though
+// CART_SETTING_KEYS is a static module-level constant. Hoisting to module level
+// means the string concatenation runs once on cold-start, not per request.
+const _CART_SETTINGS_FILTER = CART_SETTING_KEYS.map(k => `key.eq.${k}`).join(',')
+const _CART_SETTINGS_URL    = `${process.env.NEXT_PUBLIC_SUPABASE_URL!}/rest/v1/site_settings?or=(${_CART_SETTINGS_FILTER})&select=key,value`
 
-  const res = await fetch(url, {
+async function fetchCartSettings(): Promise<Record<string, string>> {
+  // Use the module-level pre-built URL (hoisted from per-request rebuild)
+  const res = await fetch(_CART_SETTINGS_URL, {
     headers: {
       apikey:        SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,

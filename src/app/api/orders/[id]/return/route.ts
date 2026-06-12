@@ -45,7 +45,10 @@ export async function POST(
   try {
     const body  = await req.json()
     reason      = (body?.reason       ?? '').trim()
-    otherDetail = (body?.other_detail ?? '').trim()
+    // BUG FIX: otherDetail had no length cap and was stored raw in the DB.
+    // An attacker could submit a multi-MB "Other" reason, bloating the DB row
+    // and potentially the admin email. Cap at 500 chars and strip HTML tags.
+    otherDetail = (body?.other_detail ?? '').toString().slice(0, 500).trim().replace(/<[^>]*>/g, '')
   } catch {
     return fail(400, 'Invalid request body')
   }
@@ -87,6 +90,20 @@ export async function POST(
       order_number: string
     }
 
+    // BUG FIX: RETURN_IN_PROGRESS was checked AFTER the `order_status !== 'delivered'`
+    // guard. Since 'return_requested', 'return_approved' etc. are all non-delivered
+    // statuses, they triggered "Only delivered orders can be returned" (422) before
+    // the idempotency check could fire — the guard was permanently dead code.
+    // A user submitting a second return request got a misleading error.
+    // Fix: check in-progress states first and return the correct 409 message.
+    const RETURN_IN_PROGRESS = [
+      'return_requested', 'return_approved', 'return_received',
+      'refunded', 'refund_initiated', 'refund_completed',
+    ]
+    if (RETURN_IN_PROGRESS.includes(order.order_status)) {
+      return fail(409, 'A return request is already in progress for this order')
+    }
+
     // Only delivered orders can be returned
     if (order.order_status !== 'delivered') {
       return fail(422, 'Only delivered orders can be returned')
@@ -99,15 +116,6 @@ export async function POST(
       if (daysSince > RETURNABLE_WINDOW_DAYS) {
         return fail(422, `Return window has closed (${RETURNABLE_WINDOW_DAYS} days from delivery)`)
       }
-    }
-
-    // Guard against duplicate return requests
-    const RETURN_IN_PROGRESS = [
-      'return_requested', 'return_approved', 'return_received',
-      'refunded', 'refund_initiated', 'refund_completed',
-    ]
-    if (RETURN_IN_PROGRESS.includes(order.order_status)) {
-      return fail(409, 'A return request is already in progress for this order')
     }
 
     // Store enriched reason: "Other: <user explanation>" so admin staff
