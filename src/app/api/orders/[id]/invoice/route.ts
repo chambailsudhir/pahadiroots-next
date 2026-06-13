@@ -21,6 +21,32 @@ function fail(status: number, msg: string) {
   return new NextResponse(msg, { status, headers: { 'Content-Type': 'text/plain' } })
 }
 
+// ── HTML escape — CRITICAL for this route ────────────────────
+// This endpoint returns text/html directly rendered in the browser.
+// Unlike JSON API routes where values are JSON-encoded, here every
+// user-supplied value is interpolated into a raw HTML string.
+// Without escaping, a customer who sets first_name to:
+//   <script>fetch('/api/auth',{method:'POST',body:JSON.stringify({action:'logout'})})</script>
+// would have that script execute every time they (or admin staff) open
+// the invoice.  This is a stored XSS via the customers table.
+//
+// BUG FIX: added escHtml() and applied it to every user-controlled
+// value before it is placed inside an HTML template string.
+// Affected fields: customerName, customerPhone, user.email,
+// addrBlock (shipping address snapshot), item names, item variants,
+// order_number, order_status.
+//
+// We deliberately do NOT import from @/lib/server/htmlEscape so this
+// file stays self-contained (the invoice route has no other server-only
+// imports and adding one for a 5-line helper would be overkill).
+const HTML_ESC: Record<string, string> = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;',
+}
+function escHtml(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  return String(value).replace(/[&<>"']/g, ch => HTML_ESC[ch] ?? ch)
+}
+
 // ── Format helpers (no external deps) ────────────────────────
 function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -77,11 +103,21 @@ export async function GET(
     const shipping       = Number(o.shipping_charge)  || 0
     const tax            = Number(o.tax)              || 0
     const grandTotal     = Number(o.total_amount)     || subtotal - discount + shipping + tax
-    const customerName   = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Customer'
-    const customerPhone  = (profile.phone || '').replace(/^\+91/, '')
-    const orderDate      = o.created_at ? fmtDate(String(o.created_at)) : '—'
-    const orderNum       = String(o.order_number || o.id)
-    const paymentMethod  = String(o.payment_method || '').toUpperCase() === 'COD' ? 'Cash on Delivery' : 'Online Payment'
+    // BUG FIX: escape every user-controlled value before HTML interpolation.
+    // Raw profile fields (first_name, last_name, phone) come from the customers
+    // table and are user-editable via POST /api/profile with no HTML stripping.
+    const customerName   = escHtml(
+      [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Customer'
+    )
+    const customerPhone  = escHtml((profile.phone || '').replace(/^\+91/, ''))
+    const customerEmail  = escHtml(String(user.email || ''))
+    const orderDate      = o.created_at ? escHtml(fmtDate(String(o.created_at))) : '—'
+    const orderNum       = escHtml(String(o.order_number || o.id))
+    const paymentMethod  = String(o.payment_method || '').toUpperCase() === 'COD'
+      ? 'Cash on Delivery'
+      : 'Online Payment'
+    // order_status is DB-generated but escape defensively
+    const orderStatus    = escHtml(String(o.order_status || '').replace(/_/g, ' '))
 
     let addrBlock = ''
     try {
@@ -89,13 +125,18 @@ export async function GET(
         ? JSON.parse(o.shipping_address)
         : (o.shipping_address as Record<string, string> | null)
       if (addr) {
-        addrBlock = [addr.name, addr.addr, addr.city, addr.state, addr.pin].filter(Boolean).join(', ')
+        // escHtml each address field individually before joining — the joined
+        // string goes straight into HTML so each part must be safe.
+        addrBlock = [addr.name, addr.addr, addr.city, addr.state, addr.pin]
+          .filter(Boolean)
+          .map(v => escHtml(v))
+          .join(', ')
       }
     } catch { /* no address */ }
 
     const itemRows = items.map(i => `
       <tr>
-        <td>${i.name}${i.variant ? ` <span class="var">(${i.variant})</span>` : ''}</td>
+        <td>${escHtml(i.name)}${i.variant ? ` <span class="var">(${escHtml(i.variant)})</span>` : ''}</td>
         <td class="num">${i.qty}</td>
         <td class="num">${fmt(i.price)}</td>
         <td class="num">${fmt(i.total)}</td>
@@ -107,7 +148,6 @@ export async function GET(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invoice · ${orderNum} · 5 Pahadi Roots</title>
-  <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body   { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; padding: 32px; max-width: 780px; margin: 0 auto; }
     .hdr   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #1a3a1e; }
@@ -175,7 +215,7 @@ export async function GET(
     <p>
       <strong>${customerName}</strong><br/>
       ${customerPhone ? '+91 ' + customerPhone + '<br/>' : ''}
-      ${user.email ? user.email + '<br/>' : ''}
+      ${customerEmail ? customerEmail + '<br/>' : ''}
       ${addrBlock || ''}
     </p>
   </div>
@@ -185,7 +225,7 @@ export async function GET(
       <strong>Order #:</strong> ${orderNum}<br/>
       <strong>Date:</strong> ${orderDate}<br/>
       <strong>Payment:</strong> ${paymentMethod}<br/>
-      <strong>Status:</strong> <span class="badge">${String(o.order_status || '').replace(/_/g, ' ')}</span>
+      <strong>Status:</strong> <span class="badge">${orderStatus}</span>
     </p>
   </div>
 </div>

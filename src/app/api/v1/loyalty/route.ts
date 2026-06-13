@@ -93,7 +93,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const body   = await req.json()
-    const action = body.action as string
+    const action = typeof body.action === 'string' ? body.action : null
+    if (!action) {
+      return fail(400, 'Missing or invalid action field')
+    }
 
     // BUG FIX: action was not validated against a known set of values. An unknown
     // action would fall through all if-blocks and return fail(400, 'Unknown action'),

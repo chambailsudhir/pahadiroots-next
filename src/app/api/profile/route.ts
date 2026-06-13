@@ -202,10 +202,39 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Scalar profile fields ──────────────────────────────────
-    const ALLOWED = ['first_name','last_name','address_line1','city','state','postal_code','phone']
+    // BUG FIX: the previous loop used `patch[key] = body[key]` with no type or
+    // length validation.  A client could send:
+    //   first_name: "<script>alert(1)</script>"  → stored in DB → XSS in invoice
+    //   first_name: "A".repeat(1_000_000)        → stored verbatim, bloats DB row
+    //   first_name: { "$ne": null }              → object stored in text column,
+    //                                              breaks reads expecting a string
+    // Fix: (a) enforce string type — non-strings are rejected with 400,
+    //      (b) cap each field at a generous but bounded length,
+    //      (c) strip HTML tags (same sanitize() treatment as orders/route.ts).
+    // Stripping tags here means invoice/route.ts has a second line of defence,
+    // but the primary fix is escaping at render time (invoice route Bug 1 above).
+    const FIELD_LIMITS: Record<string, number> = {
+      first_name:    100,
+      last_name:     100,
+      address_line1: 200,
+      city:          100,
+      state:         100,
+      postal_code:    20,
+      phone:          20,
+    }
+    const ALLOWED = Object.keys(FIELD_LIMITS)
     const patch: Record<string, unknown> = {}
     for (const key of ALLOWED) {
-      if (key in body) patch[key] = body[key]
+      if (!(key in body)) continue
+      const val = body[key]
+      if (typeof val !== 'string') {
+        return fail(400, `${key} must be a string`)
+      }
+      if (val.length > FIELD_LIMITS[key]) {
+        return fail(400, `${key} must be at most ${FIELD_LIMITS[key]} characters`)
+      }
+      // Strip HTML tags to prevent stored XSS via DB → invoice HTML template
+      patch[key] = val.replace(/<[^>]*>/g, '').trim()
     }
     if (Object.keys(patch).length > 0) {
       await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, {

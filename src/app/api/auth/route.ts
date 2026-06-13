@@ -508,10 +508,15 @@ export async function POST(req: NextRequest) {
       return err(500, 'Email service not configured')
     }
     try {
+      // BUG FIX: no timeout on either the generate_link or Resend fetch — a slow
+      // Supabase or Resend response would hang the serverless function until
+      // Vercel's hard 15 s limit.  Added AbortSignal.timeout(8_000) to both,
+      // matching the timeout used by every other auth fetch in this file.
       const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
         body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
+        signal: AbortSignal.timeout(8_000),
       })
       const genText = await genRes.text()
       interface GenLinkResponse {
@@ -529,6 +534,7 @@ export async function POST(req: NextRequest) {
       const resendRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
+        signal: AbortSignal.timeout(8_000),
         body: JSON.stringify({
           from: '5 Pahadi Roots <noreply@pahadiroots.com>', to: [email],
           subject: '🔑 Reset Your Password — 5 Pahadi Roots',
@@ -553,10 +559,12 @@ export async function POST(req: NextRequest) {
     if (!token)   return err(401, 'Invalid or expired reset link')
     if (!password || password.length < 6) return err(400, 'Password must be at least 6 characters')
     try {
+      // BUG FIX: no timeout — hung until Vercel's 15 s limit on slow Supabase.
       const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ password }),
+        signal: AbortSignal.timeout(8_000),
       })
       const data = await res.json()
       if (!res.ok) throw { status: res.status, message: data.msg || data.message || 'Reset failed' }
@@ -610,11 +618,36 @@ export async function POST(req: NextRequest) {
     const token = req.cookies.get(COOKIE_TOKEN)?.value
                || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     if (!token) return err(401, 'Not logged in')
-    const { order_id, order_number, customer_name, reason, description, refund_amount, selected_items, is_partial } = body as {
+    const {
+      order_id, order_number, customer_name, reason, description,
+      refund_amount, selected_items, is_partial,
+    } = body as {
       order_id?: string | number; order_number?: string; customer_name?: string; reason?: string
       description?: string; refund_amount?: string; selected_items?: Array<{ name?: string }>; is_partial?: boolean
     }
     if (!order_id || !reason) return err(400, 'order_id and reason required')
+
+    // BUG FIX: reason was accepted as any string with no allowlist validation.
+    // /api/orders/[id]/return validates against RETURN_REASONS — this path must
+    // apply the same check so the two return-creation routes are consistent.
+    // Arbitrary reason strings end up stored in the returns table and shown in
+    // the admin panel; without validation an attacker could store arbitrary text
+    // (or HTML if the admin UI doesn't escape) in the reason column.
+    const VALID_REASONS = [
+      'Wrong item received', 'Damaged product', 'Product not as described',
+      'Changed my mind', 'Quality not satisfactory', 'Other',
+    ] as const
+    if (!VALID_REASONS.includes(reason as typeof VALID_REASONS[number])) {
+      return err(400, `Invalid reason. Must be one of: ${VALID_REASONS.join(', ')}`)
+    }
+
+    // BUG FIX: description had no length cap and no HTML stripping — a multi-MB
+    // "Other" description would be stored verbatim in the DB and echoed in the
+    // admin panel.  Cap at 500 characters and strip HTML tags (same treatment as
+    // /api/orders/[id]/return/route.ts).
+    const safeDescription = description
+      ? description.toString().slice(0, 500).trim().replace(/<[^>]*>/g, '')
+      : undefined
     try {
       const user = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
@@ -632,7 +665,11 @@ export async function POST(req: NextRequest) {
       const returnRecord = await sbAdmin('POST', '/rest/v1/returns', {
         order_id: Number(order_id), order_number: order_number || order.order_number,
         customer_name: customer_name || null, reason,
-        description: description ? description : (is_partial && selected_items?.length) ? `Partial return: ${selected_items.map(i => i.name).join(', ')}` : null,
+        description: safeDescription
+          ? safeDescription
+          : (is_partial && selected_items?.length)
+            ? `Partial return: ${selected_items.map(i => i.name).join(', ')}`
+            : null,
         refund_amount: refund_amount ? parseFloat(refund_amount) : null,
         status: 'requested', restock: true,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -644,5 +681,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return err(400, `Unknown action: ${action}`)
+  // BUG FIX: the previous response was `Unknown action: ${action}` — it reflected
+  // the raw action value (from req.json()) directly into the response body.
+  // If action contained special characters they'd be echoed verbatim.  Since this
+  // is JSON the XSS risk is minimal, but echoing unvalidated user input in error
+  // messages is against defensive coding practice and can aid enumeration.
+  return err(400, 'Unknown action')
 }
