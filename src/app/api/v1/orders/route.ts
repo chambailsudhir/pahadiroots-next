@@ -3,64 +3,14 @@ import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { Resend } from 'resend'
 import { checkCsrf } from '@/lib/api/serverUtils'
-// BUG FIX: local `orderSchema` was a duplicate of `createOrderSchema` in @/lib/schemas.
-// Two schemas for the same shape means they can silently drift. Removed the local copy
-// and import the single canonical schema — payments/route.ts already uses this.
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
-
-// ── Distributed rate limiters (Upstash KV) ───────────────────────────────────
-// SEC-2 FIX: the previous checkRateLimit() calls used an in-process Map that is
-// NOT shared across Vercel instances. On a multi-replica deployment an attacker
-// could make (10 × N) IP attempts or (3 × N) phone attempts per minute.
-// These functions use the same Upstash KV pipeline as middleware.ts and
-// coupons/route.ts — counters are global and consistent across all replicas.
-//
-// Falls back to allowing the request (fail-open) if Upstash is unreachable so
-// legitimate users are not blocked by an infra outage. Middleware's general
-// API rate limit (20/min) still provides defence in that case.
-async function checkOrderIpLimit(ip: string): Promise<boolean> {
-  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
-  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!kvUrl || !kvToken) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[orders] Upstash KV not configured — IP rate limit disabled. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.')
-    }
-    return true
-  }
-  try {
-    const rlKey = `mw:rl:orders_ip:${ip}`
-    const res = await fetch(`${kvUrl}/pipeline`, {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify([['INCR', rlKey], ['EXPIRE', rlKey, 60, 'NX']]),
-      signal:  AbortSignal.timeout(1500),
-    })
-    if (!res.ok) return true
-    const result = await res.json() as [[string, number], [string, number]]
-    return result[0][1] <= 10
-  } catch { return true }
-}
-
-async function checkOrderPhoneLimit(phone: string): Promise<boolean> {
-  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
-  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
-  if (!kvUrl || !kvToken) return true
-  try {
-    const rlKey = `mw:rl:orders_phone:${phone}`
-    const res = await fetch(`${kvUrl}/pipeline`, {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-      body:    JSON.stringify([['INCR', rlKey], ['EXPIRE', rlKey, 60, 'NX']]),
-      signal:  AbortSignal.timeout(1500),
-    })
-    if (!res.ok) return true
-    const result = await res.json() as [[string, number], [string, number]]
-    return result[0][1] <= 3 // max 3 order attempts per phone number per minute
-  } catch { return true }
-}
+// REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
+// (~80 lines of duplicated Upstash boilerplate) with the shared helper.
+// Keys are unchanged so all existing middleware counters are preserved.
+import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 
 // Lightweight server-side sanitizer (strips HTML tags from address fields)
 function sanitize(str: string): string {
@@ -96,7 +46,7 @@ export async function POST(req: NextRequest) {
   // ── Rate limit: IP-level pre-check (distributed via Upstash KV) ──────────
   // Applied before body parsing so bots are rejected cheaply without DB work.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  if (!await checkOrderIpLimit(ip)) {
+  if (!await checkRateLimitKv(`mw:rl:orders_ip:${ip}`, 10)) {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
@@ -111,13 +61,24 @@ export async function POST(req: NextRequest) {
     const a = d.address
 
     // ── Phone-level rate limit (after parse, so we have the phone number) ──
-    if (!await checkOrderPhoneLimit(a.phone)) {
+    if (!await checkRateLimitKv(`mw:rl:orders_phone:${a.phone}`, 3)) {
       return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
     }
 
-    const name = sanitize(a.name)
-    const flat = sanitize(a.flat)
-    const area = sanitize(a.area || '')
+    const name  = sanitize(a.name)
+    const flat  = sanitize(a.flat)
+    const area  = sanitize(a.area || '')
+    // BUG FIX: city and state were passed directly to createOrder() and into
+    // email templates without going through sanitize(). The admin-email comment
+    // even claimed "name/phone/city/state come through sanitize() above" — that
+    // was wrong. Raw HTML tags (e.g. <script>) could reach the DB and, in the
+    // admin notification email, bypass esc() because esc() only HTML-encodes
+    // characters — it doesn't strip tags, so a value like
+    // `<b onclick="…">Mumbai</b>` would render as bold in an email client.
+    // Fix: run sanitize() (strips all HTML tags) on every free-text address field
+    // before passing to createOrder() or building email HTML.
+    const city  = sanitize(a.city)
+    const state = sanitize(a.state)
 
     const settings = await getSiteSettings()
 
@@ -126,8 +87,8 @@ export async function POST(req: NextRequest) {
       customerPhone:  a.phone,
       customerEmail:  d.customer_email || undefined,
       flat, area,
-      city:    a.city,
-      state:   a.state,
+      city,
+      state,
       pincode: a.pincode,
       label:   a.label,
       items:          d.items,
@@ -170,8 +131,8 @@ export async function POST(req: NextRequest) {
         const safeName    = esc(name)
         const safeFlat    = esc(flat)
         const safeArea    = esc(area)
-        const safeCity    = esc(a.city)
-        const safeState   = esc(a.state)
+        const safeCity    = esc(city)
+        const safeState   = esc(state)
         const safePincode = esc(a.pincode)
 
         const itemsHtml = emailItems.map(i =>
@@ -262,9 +223,9 @@ export async function POST(req: NextRequest) {
           from:    'Pahadi Roots <noreply@pahadiroots.com>',
           to:      [settings.admin_notify_email],
           subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
-          // Admin email uses safe values: order_number and total_amount are DB-generated,
-          // name/phone/city/state come through sanitize() above.
-          html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(a.city)}, ${esc(a.state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
+          // Admin email — all user-supplied fields go through sanitize() above
+          // (name, flat, area, city, state) then esc() for HTML encoding.
+          html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
         }), 5000)
       } catch { /* non-fatal */ }
     }

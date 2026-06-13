@@ -48,7 +48,15 @@ export const verifyPaymentSchema = z.object({
 
 export const validateCouponSchema = z.object({
   code:     z.string().trim().min(1).max(50),
-  subtotal: z.number().positive(),
+  // BUG FIX: subtotal had no upper bound — a client could send Number.MAX_SAFE_INTEGER.
+  // That value flows into `Math.round(subtotal * data.value / 100)` inside
+  // validateCouponServer, producing a discount equal to MAX_SAFE_INTEGER (when
+  // max_discount is null it falls back to subtotal).  That discount then reaches
+  // calcPriceSummary where `afterDiscount = Math.max(0, subtotal - discount - loyalty)`
+  // = 0, making the entire order total equal to just the shipping charge regardless
+  // of actual order value.  Cap at 1,000,000 (₹10 lakh) — well above any realistic
+  // single order while still defending against arithmetic abuse.
+  subtotal: z.number().positive().max(1_000_000),
 })
 
 // ─── Review Schema ─────────────────────────────────────────────────────────────

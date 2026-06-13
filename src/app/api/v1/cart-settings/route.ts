@@ -79,7 +79,17 @@ export async function GET() {
     const settings = await fetchCartSettings()
     return NextResponse.json(
       { settings },
-      { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' } },
+      // BUG FIX: the previous header was `s-maxage=60, stale-while-revalidate=120`.
+      // s-maxage is a CDN/edge directive — it tells Vercel's edge cache to hold the
+      // response for 60 s.  It has NO effect on the browser.  Every page mount
+      // therefore fired a fresh HTTP request to this route even though the settings
+      // change at most once a day.  Adding `public, max-age=60` lets the browser
+      // also cache the response for 60 s, eliminating the redundant round-trips.
+      {
+        headers: {
+          'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=120',
+        },
+      },
     )
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'

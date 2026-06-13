@@ -56,12 +56,33 @@ async function sbGet<T>(table: string, query = '', timeoutMs?: number): Promise<
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
 
-  const excludedVariantIds = new Set(
-    (searchParams.get('variantIds') ?? '').split(',').filter(Boolean),
-  )
-  const excludedProductIds = new Set(
-    (searchParams.get('productIds') ?? '').split(',').filter(Boolean),
-  )
+  // BUG FIX: the query params were split into Sets with no cap on length or
+  // format validation.  A malicious request could send a single `variantIds`
+  // param containing millions of comma-separated characters, forcing the server
+  // to allocate a huge Set and iterate it on every filter step — a cheap DoS.
+  //
+  // Fixes applied:
+  //   1. Raw param length capped at 4 KB before splitting (rejects obvious bombs).
+  //   2. Individual ID count capped at MAX_IDS_PER_PARAM (50 — a realistic cart
+  //      has at most 30 items per createOrderSchema, so 50 is generous).
+  //   3. Each ID filtered to UUID-like characters only (hex digits + hyphens,
+  //      ≤ 40 chars) so arbitrary strings cannot be stored or logged.
+  const MAX_PARAM_BYTES = 4096
+  const MAX_IDS_PER_PARAM = 50
+  // UUID v4 = 36 chars; allow up to 40 for any variant format.
+  const SAFE_ID_RE = /^[0-9a-f-]{1,40}$/i
+
+  function parseIdParam(raw: string | null): Set<string> {
+    if (!raw || raw.length > MAX_PARAM_BYTES) return new Set()
+    return new Set(
+      raw.split(',')
+        .filter(id => id.length > 0 && SAFE_ID_RE.test(id))
+        .slice(0, MAX_IDS_PER_PARAM),
+    )
+  }
+
+  const excludedVariantIds = parseIdParam(searchParams.get('variantIds'))
+  const excludedProductIds = parseIdParam(searchParams.get('productIds'))
 
   try {
     // ── Step 1: fetch top-80 in-stock variants ─────────────────────────────
