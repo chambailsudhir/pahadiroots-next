@@ -65,9 +65,26 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   try {
     // Use service client server-side to bypass RLS on site_settings
     const client = (() => { try { return getServiceClient() } catch { return supabase } })()
-    const { data, error } = await client
-      .from('site_settings')
-      .select('key, value')
+
+    // BUG FIX: the Supabase JS SDK does not support AbortSignal or built-in
+    // timeouts.  Without a timeout, a slow or unresponsive Supabase instance
+    // hangs this call indefinitely — blocking any route that calls getSiteSettings()
+    // (orders, payments) until Vercel's hard 15-second limit fires and kills the
+    // entire request.  getSiteSettings is in the critical path of order creation.
+    //
+    // Fix: race the SDK call against an 8-second timeout Promise.  On timeout we
+    // throw so the catch block returns DEFAULTS — the site continues to function
+    // with sensible fallback values rather than hanging and returning a 500 to
+    // the customer mid-checkout.  8 s matches the AbortSignal.timeout used by
+    // every other Supabase fetch in the codebase (sbAdmin in serverUtils.ts,
+    // sbGet in orderService.ts).
+    const timeoutMs = 8_000
+    const queryPromise = client.from('site_settings').select('key, value')
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`getSiteSettings timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise])
 
     if (error) throw error
 

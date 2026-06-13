@@ -18,13 +18,16 @@ interface RazorpayWebhookEvent {
 }
 
 export async function POST(req: Request) {
-  // BUG FIX: no body size limit — an attacker could send a multi-MB payload,
-  // forcing the lambda to buffer the entire request body into memory before
-  // HMAC verification even starts. The HMAC will fail for anything not from
-  // Razorpay, but only AFTER the memory allocation. Cap at 1 MB: legitimate
-  // Razorpay webhook payloads are well under 10 KB.
-  const contentLength = parseInt(req.headers.get('content-length') || '0', 10)
-  if (contentLength > 1_048_576) {
+  // BUG FIX: the previous check used parseInt() on the Content-Length header,
+  // but parseInt('abc', 10) returns NaN and NaN > 1_048_576 is false — a
+  // malformed or attacker-controlled `Content-Length: abc` header bypasses the
+  // size gate entirely, letting a multi-MB payload through to rawBody.
+  // Fix: use Number() (returns NaN for non-numeric) and guard with Number.isFinite
+  // before the comparison, treating any non-numeric value as "unknown size" and
+  // enforcing the limit conservatively.
+  const contentLengthRaw = req.headers.get('content-length')
+  const contentLength    = Number(contentLengthRaw)
+  if (Number.isFinite(contentLength) && contentLength > 1_048_576) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
   }
 

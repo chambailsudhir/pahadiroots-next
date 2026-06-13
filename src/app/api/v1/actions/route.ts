@@ -52,7 +52,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const body   = await req.json()
-    const action = body.action as string
+
+    // BUG FIX: `body.action as string` is an unsafe TypeScript cast with no
+    // runtime effect — if a client sends action: null, action: 42, or omits
+    // the field, the string comparisons below silently fall through and return
+    // the generic "Unknown action" 400. This is safe from a security standpoint
+    // but identical to the pattern we already fixed in payments/route.ts.
+    // Validate explicitly so malformed payloads are logged with a clear message
+    // rather than silently hitting the Unknown action fallback.
+    const action = typeof body.action === 'string' ? body.action : null
+    if (!action) {
+      return NextResponse.json({ error: 'Missing or invalid action field' }, { status: 400 })
+    }
     const db     = getServiceClient()
 
     if (action === 'subscribe') {

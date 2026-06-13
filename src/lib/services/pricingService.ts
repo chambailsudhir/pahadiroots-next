@@ -87,7 +87,13 @@ export async function validateCouponServer(
   if (error || !data) return { valid: false, error: 'Invalid or expired coupon' }
 
   // Check usage limit
-  if (data.max_uses && data.uses_count >= data.max_uses) {
+  // BUG FIX: the original check was `if (data.max_uses && ...)`.
+  // When an admin sets max_uses = 0 (intended to mean "disable this coupon
+  // immediately"), the JS truthiness check treats 0 as falsy and skips the
+  // guard entirely — the coupon passes as valid and is applied forever.
+  // Fix: use `!= null` (strict null/undefined check) so 0 is treated as a
+  // real limit. orderService.ts already uses this pattern correctly.
+  if (data.max_uses != null && data.uses_count >= data.max_uses) {
     return { valid: false, error: 'Coupon usage limit reached' }
   }
 

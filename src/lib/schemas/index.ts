@@ -23,7 +23,29 @@ export const orderItemSchema = z.object({
 
 export const createOrderSchema = z.object({
   address:                addressSchema,
-  items:                  z.array(orderItemSchema).min(1).max(30),
+  // BUG FIX: no uniqueness check on variantIds.  A client could submit two items
+  // with the same variantId (e.g. qty=2 and qty=3 for the same variant).  Each
+  // item passes the per-item schema, but createOrder() processes them separately:
+  //   • reserveStockAtomicForOrder() decrements stock TWICE (stock goes negative)
+  //   • create_order_with_items RPC inserts TWO order_items rows for the variant
+  //   • the customer is charged for both quantities individually (correct total
+  //     amount but inflated shipping and loyalty calculations can diverge)
+  // Fix: superRefine rejects any payload where the same variantId appears more
+  // than once.  The client should merge duplicate items into a single item with
+  // a combined qty before submitting.
+  items: z.array(orderItemSchema).min(1).max(30).superRefine((items, ctx) => {
+    const seen = new Set<string>()
+    items.forEach((item, i) => {
+      if (seen.has(item.variantId)) {
+        ctx.addIssue({
+          code:    z.ZodIssueCode.custom,
+          path:    [i, 'variantId'],
+          message: `Duplicate variantId "${item.variantId}" — merge into a single item`,
+        })
+      }
+      seen.add(item.variantId)
+    })
+  }),
   payment_method:         z.enum(['razorpay', 'cod']),
   coupon_code:            z.string().trim().max(50).optional(),
   idempotency_key:        z.string().uuid(),
