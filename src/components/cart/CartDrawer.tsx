@@ -117,6 +117,13 @@ export default function CartDrawer({ settings }: Props) {
     [items, settings, coupon]
   )
 
+  // PERF FIX: memoize total qty — was an inline items.reduce() call in JSX,
+  // running O(n) on every render regardless of whether items changed.
+  const totalQty = useMemo(
+    () => items.reduce((s, i) => s + i.qty, 0),
+    [items],
+  )
+
   // A1: compute progress percentage once for the progressbar aria-valuenow.
   const shipProgressPct = pricing.freeShippingMin > 0
     ? Math.round(Math.min(100, (pricing.progressBase / pricing.freeShippingMin) * 100))
@@ -150,7 +157,7 @@ export default function CartDrawer({ settings }: Props) {
             <h2 id="cart-drawer-title" className={styles.title}>Your Cart</h2>
             {items.length > 0 && (
               <span className={styles.count}>
-                {items.reduce((s, i) => s + i.qty, 0)}
+                {totalQty}
               </span>
             )}
           </div>

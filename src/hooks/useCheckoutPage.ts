@@ -196,16 +196,23 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const s = settings
 
   // ── Settings-derived constants ─────────────────────────────────────────────
-  const codEnabled      = s.cod_enabled  !== 'false'
-  const upiAdminOn      = s.upi_enabled  !== 'false'
+  // PERF FIX: memoized so that a new `settings` object reference (common when
+  // the parent fetches settings on every render) doesn't force recomputation
+  // and new primitive values that could invalidate downstream useMemo/useCallback
+  // deps unnecessarily. Each constant depends only on its specific setting key.
+  const codEnabled = useMemo(() => s.cod_enabled !== 'false', [s.cod_enabled])
+  const upiAdminOn = useMemo(() => s.upi_enabled !== 'false', [s.upi_enabled])
+  // razorpayKeyId is a compile-time constant — no need to memoize
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
-  const razorpayEnabled = !!razorpayKeyId && upiAdminOn
-  const codMax          = parseFloat(s.cod_max_value        || '3000')
-  const prepaidPct      = parseInt(s.prepaid_discount_pct   || '5')
-  const freeShipMin     = parseFloat(s.free_shipping_min    || '0')
-  const minOrderAmt     = parseFloat(s.min_order_amount     || '0')
-  const _waRaw          = (s.whatsapp_number || '919899984895').replace(/\D/g, '')
-  const waNumber        = _waRaw.length >= 7 ? _waRaw : '919899984895'
+  const razorpayEnabled = useMemo(() => !!razorpayKeyId && upiAdminOn, [razorpayKeyId, upiAdminOn])
+  const codMax      = useMemo(() => parseFloat(s.cod_max_value      || '3000'), [s.cod_max_value])
+  const prepaidPct  = useMemo(() => parseInt(s.prepaid_discount_pct || '5'),    [s.prepaid_discount_pct])
+  const freeShipMin = useMemo(() => parseFloat(s.free_shipping_min  || '0'),    [s.free_shipping_min])
+  const minOrderAmt = useMemo(() => parseFloat(s.min_order_amount   || '0'),    [s.min_order_amount])
+  const waNumber    = useMemo(() => {
+    const raw = (s.whatsapp_number || '919899984895').replace(/\D/g, '')
+    return raw.length >= 7 ? raw : '919899984895'
+  }, [s.whatsapp_number])
 
   // ── State ──────────────────────────────────────────────────────────────────
   // BUG FIX (hydration-race): storeReady used to be its own `useState(false)`
@@ -327,9 +334,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     [items, s, coupon, payMethod, loyaltyRedemption],
   )
 
-  const codOk         = codEnabled && pricing.subtotal <= codMax
-  const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
-  const bothPayOff    = !codOk && !razorpayEnabled
+  // PERF FIX: memoized — these are derived from `pricing` (already memoized)
+  // and the settings constants above (also memoized). Without useMemo they
+  // recompute on every render regardless of whether their inputs changed, and
+  // their boolean values are passed as props to memoized child components,
+  // where a spurious new primitive (same value, different render) is harmless
+  // but causes the effect dep-array on [codOk, razorpayEnabled] to see a
+  // "changed" value even when it hasn't — triggering the payment-method
+  // correction effect more often than necessary.
+  const codOk         = useMemo(() => codEnabled && pricing.subtotal <= codMax,        [codEnabled, pricing.subtotal, codMax])
+  const belowMinOrder = useMemo(() => minOrderAmt > 0 && pricing.subtotal < minOrderAmt, [minOrderAmt, pricing.subtotal])
+  const bothPayOff    = useMemo(() => !codOk && !razorpayEnabled,                      [codOk, razorpayEnabled])
 
   // Primitive snapshots for stable useCallback deps inside handlePlace
   const pricingShipping = pricing.shipping
@@ -555,17 +570,24 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   }, [removeCouponFromStore])
 
   // ── Handlers ───────────────────────────────────────────────────────────────
+  // PERF FIX: all handlers are wrapped in useCallback so their references are
+  // stable across renders. Previously they were plain `function` declarations,
+  // which produce new function references on every render. Child components
+  // that receive them as props (AddressForm, SavedAddressSelector, OrderSummary,
+  // PaymentSection) use React.memo — but memo is defeated if any prop changes
+  // identity on every render. Each handler's dep array lists only the values
+  // it actually reads or calls.
 
-  function setAddrField(field: keyof OrderAddress, value: string) {
+  const setAddrField = useCallback((field: keyof OrderAddress, value: string) => {
     setAddr(prev => ({ ...prev, [field]: value }))
     if (field !== 'label') setSelectedSavedIdx(null)
-  }
+  }, [])   // setAddr / setSelectedSavedIdx are stable setState dispatchers
 
-  function touchField(field: string) {
+  const touchField = useCallback((field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }))
-  }
+  }, [])   // setTouched is stable
 
-  function applySaved(saved: SavedAddress, idx: number) {
+  const applySaved = useCallback((saved: SavedAddress, idx: number) => {
     const validLabels = ['Home','Office','Parents','Friends','Others'] as const
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
@@ -575,13 +597,16 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }))
     setSelectedSavedIdx(idx)
     setTouched({ name:true, phone:true, flat:true, city:true, state:true, pincode:true })
-  }
+  }, [])   // only uses stable state dispatchers and module-level matchState
 
   // BUG FIX: mountedRef guards added to both coupon handlers.
   // Previously all post-await setState/store-action calls in handleCoupon and
   // handleApplyCouponHint fired unconditionally, meaning a fast back-navigation
   // mid-request would cause setState on an unmounted component.
-  async function handleCoupon() {
+  // PERF FIX: wrapped in useCallback. `pricing.subtotal` is read via closure;
+  // `lastValidatedCouponSubtotalRef` is a ref (stable identity), so neither
+  // appears in the dep array. couponCode is read at call-time.
+  const handleCoupon = useCallback(async () => {
     if (!couponCode.trim()) return
     setCouponLoading(true)
     setCouponError('')
@@ -610,9 +635,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }
+  }, [couponCode, pricing.subtotal, applyCoupon, trackCouponApplied, trackCouponError])
 
-  async function handleApplyCouponHint(code: string) {
+  // PERF FIX: wrapped in useCallback. pricing.subtotal is a dep; stable
+  // dispatcher/store refs and mountedRef (a ref) are not.
+  const handleApplyCouponHint = useCallback(async (code: string) => {
     const upper = code.trim().toUpperCase()
     if (!upper) return
     setCouponLoading(true)
@@ -644,7 +671,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }
+  }, [pricing.subtotal, applyCoupon, trackCouponApplied, trackCouponError])
 
   // BUG FIX: mountedRef guards added — same class of bug as handleCoupon /
   // handleApplyCouponHint (fixed in the previous pass, Fix 13 in useCartPage).
@@ -653,7 +680,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // validate request is in-flight would fire setLoyaltyError, setLoyaltyRedemption,
   // and setLoyaltyLoading on an unmounted component, producing StrictMode
   // warnings and potential state corruption on re-mount.
-  async function handleApplyLoyalty(ptsToRedeem: number) {
+  // PERF FIX: wrapped in useCallback. loyaltyLoading is a dep because the
+  // guard `if (loyaltyLoading) return` reads it at call-time.
+  const handleApplyLoyalty = useCallback(async (ptsToRedeem: number) => {
     if (loyaltyLoading) return
     setLoyaltyLoading(true)
     setLoyaltyError('')
@@ -681,13 +710,15 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setLoyaltyLoading(false)
     }
-  }
+  }, [loyaltyLoading, pricing.subtotal])
 
-  function handleRemoveLoyalty() {
+  // PERF FIX: wrapped in useCallback. No external deps — only calls stable
+  // state dispatchers and writes to a ref.
+  const handleRemoveLoyalty = useCallback(() => {
     setLoyaltyRedemption(null)
     setLoyaltyError('')
     lastValidatedLoyaltySubtotalRef.current = null
-  }
+  }, [])
 
   const handlePlace = useCallback(async () => {
     const required = ['name','phone','flat','city','state','pincode'] as const
