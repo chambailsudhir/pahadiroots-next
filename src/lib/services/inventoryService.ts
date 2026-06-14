@@ -25,12 +25,23 @@ export interface StockCheckResult {
 // Handles both variant products (product_variants table) and no-variant
 // products (products table, where app-layer variantId === productId).
 //
-// Caller must roll back / delete the order if a subsequent step fails.
-// Stock is restored via restoreStock() on cancellation / payment failure.
+// BUG FIX (partial-reservation leak): the previous implementation returned
+// { ok: false } immediately when any item in the loop failed, leaving items
+// 1..N-1 permanently decremented without an order.  Because createOrder()
+// throws *before* its try/finally block on stockReservation.ok === false,
+// the finally clause (restoreStock) was never reached for these items.
+//
+// Fix: we now track each successfully reserved item and roll them back inside
+// this function before returning failure, so the caller never needs to clean
+// up a partial reservation.
 export async function reserveStockAtomicForOrder(
   items: StockCheckItem[]
 ): Promise<{ ok: boolean; failedVariantId?: string }> {
   const db = getServiceClient()
+
+  // Track items whose stock has been successfully decremented so we can
+  // restore them if a later item in the loop fails.
+  const reserved: StockCheckItem[] = []
 
   for (const item of items) {
     const isNoVariant = item.productId && item.variantId === item.productId
@@ -42,6 +53,8 @@ export async function reserveStockAtomicForOrder(
         p_qty:        item.qty,
       })
       if (error || !data) {
+        // Roll back all items that were already reserved before returning failure
+        await _restoreReserved(reserved)
         return { ok: false, failedVariantId: item.variantId }
       }
     } else {
@@ -51,12 +64,44 @@ export async function reserveStockAtomicForOrder(
         p_qty:        item.qty,
       })
       if (error || !data) {
+        // Roll back all items that were already reserved before returning failure
+        await _restoreReserved(reserved)
         return { ok: false, failedVariantId: item.variantId }
       }
     }
+
+    // Mark this item as successfully reserved — must happen AFTER the RPC
+    // succeeds so we never try to restore an item that was never decremented.
+    reserved.push(item)
   }
 
   return { ok: true }
+}
+
+// Internal helper — restores a partial list of already-reserved items.
+// Errors are swallowed individually so one failure does not block others;
+// all restore errors are logged so ops can fix manually if needed.
+async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
+  if (items.length === 0) return
+  const db = getServiceClient()
+  for (const item of items) {
+    const isNoVariant = item.productId && item.variantId === item.productId
+    if (isNoVariant) {
+      await db.rpc('restore_product_stock', {
+        p_product_id: item.productId!,
+        p_qty:        item.qty,
+      }).catch((err: unknown) =>
+        console.error('[inventoryService] _restoreReserved (product) failed:', err)
+      )
+    } else {
+      await db.rpc('restore_stock', {
+        p_variant_id: item.variantId,
+        p_qty:        item.qty,
+      }).catch((err: unknown) =>
+        console.error('[inventoryService] _restoreReserved (variant) failed:', err)
+      )
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

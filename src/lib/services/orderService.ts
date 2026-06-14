@@ -585,8 +585,19 @@ export async function createOrder(
     p_coupon_discount:          pricing.discount,
     p_tax:                      pricing.gstTotal,
     p_shipping_charge:          pricing.shipping,
-    p_order_status:             'pending',
-    p_payment_status:           'pending',
+    // BUG FIX: COD orders were created with order_status='pending', meaning the
+    // storefront sent a "Order Confirmed!" email but the DB row said 'pending'.
+    // This caused inconsistency in the admin panel (orders showed as unconfirmed)
+    // and broke any dashboard query filtering on order_status='confirmed'.
+    //
+    // COD requires no online payment verification: the customer pays on delivery,
+    // so the order is confirmed the moment it is placed.  Set status accordingly.
+    // Razorpay orders remain 'pending' until verify_payment or the webhook fires.
+    p_order_status:             input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
+    // payment_status: 'cod_pending' = payment expected on delivery (not yet paid,
+    // not failed).  Distinct from 'pending' (online payment in progress) so that
+    // admin queries can correctly separate the two payment flows.
+    p_payment_status:           input.paymentMethod === 'cod' ? 'cod_pending' : 'pending',
     p_payment_method:           input.paymentMethod,
     p_idempotency_key:          input.idempotencyKey,
     p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,

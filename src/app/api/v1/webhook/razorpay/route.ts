@@ -167,7 +167,37 @@ export async function POST(req: Request) {
         .single()
 
       if (order && order.order_status === 'pending') {
+        // BUG FIX 1 — stock never restored on payment failure.
+        // Stock is atomically reserved at order-creation time.  When payment
+        // fails the reservation must be released so the items can be purchased
+        // again.  Fetch order_items and call restoreStock() before updating
+        // the order row, so that even a DB crash after restore still leaves
+        // the order in 'pending' and allows an ops retry.
+        const { data: orderItems } = await db
+          .from('order_items')
+          .select('product_id, variant_id, quantity')
+          .eq('order_id', order.id)
+
+        if (orderItems && orderItems.length > 0) {
+          const { restoreStock } = await import('@/lib/services/inventoryService')
+          await restoreStock(
+            orderItems.map((i: { product_id: unknown; variant_id: unknown; quantity: unknown }) => ({
+              variantId: String(i.variant_id),
+              productId: String(i.product_id),
+              qty:       Number(i.quantity),
+            }))
+          ).catch(err =>
+            console.error('[webhook] restoreStock failed on payment.failed:', err)
+          )
+        }
+
+        // BUG FIX 2 — order_status left as 'pending' after payment failure.
+        // 'pending' implies the order is still awaiting payment, but the
+        // payment has definitively failed.  Setting it to 'payment_failed'
+        // prevents the payment.failed guard from triggering again on a retry
+        // webhook delivery, which would attempt a double stock-restore.
         await db.from('orders').update({
+          order_status:   'payment_failed',
           payment_status: 'failed',
           updated_at:     new Date().toISOString(),
         }).eq('id', order.id)

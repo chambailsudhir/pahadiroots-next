@@ -12,6 +12,17 @@ import { esc } from '@/lib/server/htmlEscape'
 // Upstash boilerplate) with the shared helper. Key is unchanged.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 
+// BUG FIX: address fields passed directly to createOrder() without sanitization.
+// The orders/route.ts path correctly strips HTML tags via sanitize(), but
+// create_payment was missing the same step — raw user input including <script>
+// or HTML fragments would reach the DB and confirmation email templates.
+// Using the same strip-tags logic applied in orders/route.ts for consistency.
+function sanitize(str: string | undefined | null): string {
+  if (!str) return ''
+  // Strip all HTML tags and trim surrounding whitespace
+  return str.replace(/<[^>]*>/g, '').trim()
+}
+
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
   const keyId     = process.env.RAZORPAY_KEY_ID?.trim()
@@ -79,15 +90,15 @@ export async function POST(req: NextRequest) {
       const pd       = parsed.data
 
       const { order, alreadyExists, customerId } = await createOrder({
-        customerName:   pd.address.name,
-        customerPhone:  pd.address.phone,
-        customerEmail:  pd.customer_email || undefined,
-        flat:           pd.address.flat,
-        area:           pd.address.area || '',
-        city:           pd.address.city,
-        state:          pd.address.state,
-        pincode:        pd.address.pincode,
-        label:          pd.address.label,
+        customerName:   sanitize(pd.address.name),
+        customerPhone:  sanitize(pd.address.phone),
+        customerEmail:  pd.customer_email ? sanitize(pd.customer_email) : undefined,
+        flat:           sanitize(pd.address.flat),
+        area:           sanitize(pd.address.area) || '',
+        city:           sanitize(pd.address.city),
+        state:          sanitize(pd.address.state),
+        pincode:        pd.address.pincode,   // numeric string — sanitize not needed
+        label:          sanitize(pd.address.label),
         items:          pd.items.map(i => ({ ...i, productId: String(i.productId), variantId: String(i.variantId) })),
         paymentMethod:  'razorpay',
         couponCode:     pd.coupon_code,
