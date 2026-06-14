@@ -190,7 +190,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const ensureIdempotencyKey = useCartStore(s => s.ensureIdempotencyKey)
   const clearCart           = useCartStore(s => s.clearCart)
   const applyCoupon         = useCartStore(s => s.applyCoupon)
-  const removeCoupon        = useCartStore(s => s.removeCoupon)
+  const removeCouponFromStore = useCartStore(s => s.removeCoupon)
   const user                = useUserStore(s => s.user)
 
   const s = settings
@@ -306,6 +306,18 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // but keeping the ref pattern is defensive against any future closure captures).
   const applyProfileDataRef = useRef(applyProfileData)
 
+  // ── Revalidation tracking refs (DATA INTEGRITY FIX — see effects below) ────
+  // The global CartDrawer (rendered in the root layout — see CartDrawer.tsx)
+  // is reachable from every page, including /checkout. A user can open it and
+  // change quantities or remove items while sitting on the checkout page.
+  // `coupon.discount` and `loyaltyRedemption.discount_inr` are both ₹ snapshots
+  // frozen at the subtotal they were validated against — without revalidation,
+  // editing the cart from the drawer leaves both stale relative to the new
+  // pricing.subtotal, exactly the class of bug already fixed for /cart in
+  // useCartPage's coupon-revalidation effect. These refs mirror that pattern.
+  const lastValidatedCouponSubtotalRef  = useRef<number | null>(null)
+  const lastValidatedLoyaltySubtotalRef = useRef<number | null>(null)
+
   // ── Pricing ────────────────────────────────────────────────────────────────
   const pricing = useMemo(
     () => calcPriceSummary(
@@ -407,6 +419,133 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     return () => ac.abort()
   }, [])
 
+  // DATA INTEGRITY FIX — coupon revalidation on checkout.
+  //
+  // `coupon.discount` is a ₹ snapshot frozen by validateCouponServer() against
+  // the subtotal at apply time. The cart page already revalidates this on
+  // subtotal change (useCartPage), but the checkout page never did — even
+  // though the global CartDrawer (root layout) lets the user edit quantities
+  // or remove items while sitting on /checkout, changing pricing.subtotal
+  // out from under the frozen discount.
+  //
+  // Repro without this fix: apply PAHADI10 (10% off) on a ₹1000 cart →
+  // discount=₹100. Open the header's cart drawer on the checkout page and
+  // remove an item, dropping the subtotal to ₹400. coupon.discount stays
+  // ₹100 (10% of the OLD ₹1000), so the displayed total understates the real
+  // total by ₹60 (10% of 400 = 40, not 100). createOrder() recomputes the
+  // discount from the live subtotal at order time, so the *charge* is
+  // correct — but the customer is shown a lower total right up until they
+  // submit, and (for a flat coupon whose min_order is no longer met) the
+  // server may reject the coupon entirely, producing a higher final charge
+  // than what was displayed.
+  //
+  // Fix: debounce on pricing.subtotal change and re-POST /api/v1/coupons,
+  // mirroring useCartPage's revalidation effect. If the coupon is no longer
+  // valid for the new subtotal (e.g. min_order unmet), remove it and surface
+  // the server's reason so the customer understands why the total changed.
+  useEffect(() => {
+    if (!coupon) {
+      lastValidatedCouponSubtotalRef.current = null
+      return
+    }
+    if (lastValidatedCouponSubtotalRef.current === pricing.subtotal) return
+
+    const ac = new AbortController()
+    const code = coupon.code
+    const timer = setTimeout(() => {
+      fetch('/api/v1/coupons', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal }),
+        signal:  ac.signal,
+      })
+        .then(async res => {
+          if (!mountedRef.current) return
+          const data = await res.json()
+          if (!mountedRef.current) return
+          if (!res.ok) {
+            // Coupon no longer valid for the new subtotal (e.g. min_order
+            // unmet after items were removed) — remove it rather than leave
+            // a discount on screen that the server will reject at order time.
+            removeCouponFromStore()
+            lastValidatedCouponSubtotalRef.current = null
+            setCouponError(data.error || `Coupon ${code} no longer applies to this order`)
+            return
+          }
+          applyCoupon(data.coupon)
+          lastValidatedCouponSubtotalRef.current = pricing.subtotal
+        })
+        .catch((err: unknown) => {
+          if ((err as { name?: string }).name === 'AbortError') return
+        })
+    }, 800)
+
+    return () => { clearTimeout(timer); ac.abort() }
+  }, [coupon, pricing.subtotal, applyCoupon, removeCouponFromStore])
+
+  // DATA INTEGRITY FIX — loyalty redemption revalidation on checkout.
+  //
+  // `loyaltyRedemption.discount_inr` is a ₹ snapshot for a fixed number of
+  // points, but /api/v1/loyalty's validate cap (`maxRedeemPct% of subtotal`)
+  // depends on the *current* subtotal. If the cart shrinks via the CartDrawer
+  // while loyalty coins are applied, the previously-valid redemption can
+  // exceed the new cap. createOrder() clamps server-side
+  // (`Math.min(requestedDiscount, maxAllowed)`), so the *charge* is correct,
+  // but the client keeps showing the larger, now-invalid discount — the
+  // displayed total understates the real total.
+  //
+  // Fix: re-run action=validate on subtotal change. If the redemption no
+  // longer fits the new cap, remove it and surface why — mirroring the
+  // coupon revalidation effect above.
+  useEffect(() => {
+    if (!loyaltyRedemption) {
+      lastValidatedLoyaltySubtotalRef.current = null
+      return
+    }
+    if (lastValidatedLoyaltySubtotalRef.current === pricing.subtotal) return
+
+    const ac = new AbortController()
+    const points = loyaltyRedemption.points
+    const timer = setTimeout(() => {
+      fetch('/api/v1/loyalty', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          action:           'validate',
+          points_to_redeem: points,
+          order_subtotal:   pricing.subtotal,
+        }),
+        signal: ac.signal,
+      })
+        .then(async res => {
+          if (!mountedRef.current) return
+          const data = await res.json()
+          if (!mountedRef.current) return
+          if (!res.ok) {
+            setLoyaltyRedemption(null)
+            lastValidatedLoyaltySubtotalRef.current = null
+            setLoyaltyError(data.error || 'Coins redemption no longer applies to this order')
+            return
+          }
+          setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
+          lastValidatedLoyaltySubtotalRef.current = pricing.subtotal
+        })
+        .catch((err: unknown) => {
+          if ((err as { name?: string }).name === 'AbortError') return
+        })
+    }, 800)
+
+    return () => { clearTimeout(timer); ac.abort() }
+  }, [loyaltyRedemption, pricing.subtotal])
+
+  // Wrap the store's removeCoupon to also clear revalidation tracking —
+  // otherwise a stale lastValidatedCouponSubtotalRef value could suppress
+  // the revalidation effect if the same coupon code is re-applied later.
+  const removeCoupon = useCallback(() => {
+    removeCouponFromStore()
+    lastValidatedCouponSubtotalRef.current = null
+  }, [removeCouponFromStore])
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   function setAddrField(field: keyof OrderAddress, value: string) {
@@ -457,11 +596,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       applyCoupon(data.coupon)
       setCouponCode('')
       trackCouponApplied(data.coupon.code, data.coupon.discount)
-    } catch (e: unknown) {
-      if (!mountedRef.current) return
-      const reason = e instanceof Error ? e.message : 'network_error'
-      setCouponError('Failed to apply coupon')
-      trackCouponError(couponCode, reason)
+      // Seed revalidation tracking with the subtotal this discount was
+      // computed against — see the revalidation effect below.
+      lastValidatedCouponSubtotalRef.current = pricing.subtotal
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
@@ -488,6 +625,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       applyCoupon(data.coupon)
       setCouponCode('')
       trackCouponApplied(data.coupon.code, data.coupon.discount)
+      // Seed revalidation tracking with the subtotal this discount was
+      // computed against — see the revalidation effect below.
+      lastValidatedCouponSubtotalRef.current = pricing.subtotal
     } catch (e: unknown) {
       if (!mountedRef.current) return
       const reason = e instanceof Error ? e.message : 'network_error'
@@ -524,6 +664,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       if (!mountedRef.current) return
       if (!res.ok) { setLoyaltyError(data.error || 'Invalid redemption'); return }
       setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
+      // Seed revalidation tracking with the subtotal this discount was
+      // computed against — see the revalidation effect below.
+      lastValidatedLoyaltySubtotalRef.current = pricing.subtotal
     } catch {
       if (!mountedRef.current) return
       setLoyaltyError('Failed to apply coins')
@@ -535,6 +678,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   function handleRemoveLoyalty() {
     setLoyaltyRedemption(null)
     setLoyaltyError('')
+    lastValidatedLoyaltySubtotalRef.current = null
   }
 
   const handlePlace = useCallback(async () => {

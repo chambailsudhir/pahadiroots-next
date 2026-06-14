@@ -98,11 +98,35 @@ export const useCartStore = create<CartStore>()(
       // Fix: when removeItem empties the cart, reset idempotencyKey to ''
       // exactly like clearCart does. updateQty's qty<=0 branch calls
       // removeItem internally, so it is covered automatically.
+      //
+      // DATA INTEGRITY BUG FIX: this branch reset idempotencyKey but NOT
+      // `coupon` / `lastAppliedCouponCode` — unlike clearCart(), which resets
+      // all three. A coupon's `discount` is a frozen ₹ snapshot computed by
+      // validateCouponServer() against the subtotal *at the moment it was
+      // applied*. If the user removes every item one-by-one (e.g. via the
+      // global CartDrawer) rather than using clearCart, the cart becomes
+      // empty but `coupon` (with its now-meaningless frozen discount for a
+      // ₹0 cart) and `lastAppliedCouponCode` survive in the store.
+      //
+      // Repro: apply PAHADI10 (10% off ₹1000 → discount=100), remove the
+      // single item in the cart one-by-one. items=[] but coupon still =
+      // { code: 'PAHADI10', discount: 100 }. Add a completely different
+      // product (₹300). CartSummary/CartDrawer now show "Coupon (PAHADI10)
+      // −₹100" applied to a ₹300 cart — a discount larger than the subtotal,
+      // for a coupon never validated against this cart's contents. The /cart
+      // page's revalidation effect will eventually correct this (next
+      // subtotal-change tick), but CartDrawer and any other surface that
+      // reads `coupon` directly show the stale, oversized discount until then
+      // — and a checkout placed in that window would send `coupon_code` for
+      // a coupon the user never (re-)applied to this cart.
+      //
+      // Fix: clear `coupon` and `lastAppliedCouponCode` whenever removeItem
+      // empties the cart, exactly as clearCart() already does.
       removeItem: (variantId) =>
         set(state => {
           const items = state.items.filter(i => i.variantId !== variantId)
           return items.length === 0
-            ? { items, idempotencyKey: '' }
+            ? { items, idempotencyKey: '', coupon: null, lastAppliedCouponCode: '' }
             : { items }
         }),
 

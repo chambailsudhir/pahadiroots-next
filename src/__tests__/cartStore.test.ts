@@ -197,6 +197,55 @@ describe('cartStore.removeItem', () => {
     expect(useCartStore.getState().items).toHaveLength(1)
     expect(useCartStore.getState().idempotencyKey).toBe(keyBefore)
   })
+
+  // DATA INTEGRITY BUG FIX: removeItem emptying the cart must clear `coupon`
+  // and `lastAppliedCouponCode` — same guarantee as clearCart(). Otherwise a
+  // coupon's frozen `discount` (validated against the now-gone cart's
+  // subtotal) survives onto whatever the user adds to the cart next.
+  it('clears coupon and lastAppliedCouponCode when removeItem empties the cart', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    store.applyCoupon({ code: 'PAHADI10', discount: 100, type: 'flat' })
+
+    store.removeItem('v1')
+
+    const state = useCartStore.getState()
+    expect(state.items).toHaveLength(0)
+    expect(state.coupon).toBeNull()
+    expect(state.lastAppliedCouponCode).toBe('')
+  })
+
+  // updateQty(0) delegates to removeItem — same coupon-clearing guarantee
+  // must hold for that path too.
+  it('clears coupon when updateQty(0) empties the cart', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    store.applyCoupon({ code: 'PAHADI10', discount: 100, type: 'flat' })
+
+    store.updateQty('v1', 0)
+
+    const state = useCartStore.getState()
+    expect(state.items).toHaveLength(0)
+    expect(state.coupon).toBeNull()
+    expect(state.lastAppliedCouponCode).toBe('')
+  })
+
+  // Removing one of several items must NOT clear the coupon — it's still
+  // valid for the remaining cart contents (subject to the /cart page's
+  // revalidation effect re-checking min_order etc. against the new subtotal).
+  it('preserves coupon when removeItem leaves items behind', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v1' }))
+    store.addItem(makeItem({ variantId: 'v2' }))
+    store.applyCoupon({ code: 'PAHADI10', discount: 100, type: 'flat' })
+
+    store.removeItem('v1')
+
+    const state = useCartStore.getState()
+    expect(state.items).toHaveLength(1)
+    expect(state.coupon?.code).toBe('PAHADI10')
+    expect(state.lastAppliedCouponCode).toBe('PAHADI10')
+  })
 })
 
 // ─── updateQty ────────────────────────────────────────────────────────────────

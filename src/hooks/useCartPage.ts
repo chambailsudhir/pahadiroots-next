@@ -500,11 +500,33 @@ export function useCartPage() {
   const applyCouponCode = useCallback(async (code: string) => {
     setCouponLoading(true)
     setCouponError('')
+    // DATA INTEGRITY BUG FIX: capture the subtotal THIS REQUEST is validated
+    // against, before the await. Previously `lastValidatedSubtotalRef.current`
+    // was set to `subtotalRef.current` AFTER the await — i.e. whatever the
+    // subtotal happened to be when the response arrived, not the subtotal the
+    // server actually computed `data.coupon.discount` for.
+    //
+    // Repro: subtotal = ₹1000 when Apply is clicked → request sent with
+    // subtotal=1000 → server returns discount=100 (10% of 1000). While the
+    // request is in flight, the user bumps a qty so pricing.subtotal becomes
+    // ₹1500. On response, applyCoupon sets discount=100 (still for ₹1000),
+    // but the old code then set lastValidatedSubtotalRef.current = 1500 (the
+    // POST-await value) — which now happens to equal pricing.subtotal (1500).
+    // The revalidation effect's guard `lastValidatedSubtotalRef.current ===
+    // pricing.subtotal` is true, so it SKIPS revalidation — the stale ₹100
+    // discount (computed for a ₹1000 cart) is permanently displayed against
+    // the ₹1500 cart with no re-check.
+    //
+    // Fix: seed the ref with the subtotal the request was actually sent for.
+    // If the cart changed mid-flight, this value will differ from the current
+    // pricing.subtotal, so the revalidation effect fires on its next run and
+    // recomputes the discount for the cart's true current subtotal.
+    const requestSubtotal = subtotalRef.current
     try {
       const res  = await fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: subtotalRef.current }),
+        body:    JSON.stringify({ code, subtotal: requestSubtotal }),
       })
       // Guard: component may have unmounted while the request was in-flight.
       if (!mountedRef.current) return
@@ -518,9 +540,11 @@ export function useCartPage() {
       }
       applyCoupon(data.coupon)
       // Seed revalidation tracking with the subtotal this discount was just
-      // computed against, so the revalidation effect doesn't immediately
-      // re-fire a redundant request for the same subtotal.
-      lastValidatedSubtotalRef.current = subtotalRef.current
+      // computed against (request-time, not response-time — see comment
+      // above), so the revalidation effect doesn't immediately re-fire a
+      // redundant request for that same subtotal, but DOES fire if the cart
+      // changed while this request was in flight.
+      lastValidatedSubtotalRef.current = requestSubtotal
       trackCouponApplied(data.coupon.code, data.coupon.discount)
       setCouponCode('')
     } catch (e: unknown) {
