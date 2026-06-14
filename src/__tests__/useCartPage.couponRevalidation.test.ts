@@ -448,4 +448,54 @@ describe('useCartPage — coupon revalidation effect', () => {
     expect(result.current.couponError).toBe('')
   })
 
+  // ── 11. "Ghost subtotal" — pending removal of the last item must not drop the coupon ──
+
+  it('does not drop the coupon when the only item is pending removal (visibleItems empty but items non-empty)', async () => {
+    // Single-item cart with a coupon applied (subtotal = ₹1000, 10% off = ₹100)
+    const coupon: AppliedCoupon = { code: 'GHOST10', discount: 100, type: 'percent', percent: 10 }
+    seedStore([{ ...makeItem(), qty: 10 }], coupon)
+
+    const fetchMock = makeFetchMock(mockRes({ coupon }))
+    global.fetch = fetchMock
+
+    const { result } = renderHook(() => useCartPage())
+
+    // Let the initial (subtotal=1000) validation settle.
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    // Click "Remove" on the only item. This adds it to `pendingRemovals` (4 s
+    // Undo window) WITHOUT calling cartStore.removeItem() yet — `items` and
+    // `coupon` remain untouched, but `visibleItems` (and therefore
+    // `pricing.subtotal`) drops to 0.
+    act(() => {
+      result.current.handleRemove('v1', 'Test Ghee', PRICE)
+    })
+
+    // Advance past the 800 ms debounce but stay well under the 4 s undo timer,
+    // so any spurious revalidation fetch (and the real removeItem) would have
+    // fired by now if the ghost-subtotal guard were missing.
+    await act(async () => { vi.advanceTimersByTime(PAST_DEBOUNCE) })
+
+    // The coupon must survive — a subtotal=0 request must never have been sent.
+    const couponCalls = fetchMock.mock.calls.filter(
+      ([u]) => { const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url; return s.includes('/api/v1/coupons') },
+    )
+    const subtotalsSent = couponCalls.map(([, init]) => {
+      try { return JSON.parse((init as RequestInit).body as string).subtotal } catch { return null }
+    })
+    expect(subtotalsSent).not.toContain(0)
+
+    expect(useCartStore.getState().coupon?.code).toBe('GHOST10')
+    expect(useCartStore.getState().lastAppliedCouponCode).toBe('GHOST10')
+    expect(result.current.couponError).toBe('')
+
+    // Undo the removal — the item (and its full ₹1000 subtotal) returns.
+    act(() => { result.current.handleUndoRemove('v1') })
+
+    // Coupon should still be intact and unchanged after the round trip.
+    expect(useCartStore.getState().coupon?.code).toBe('GHOST10')
+    expect(useCartStore.getState().coupon?.discount).toBe(100)
+    expect(useCartStore.getState().lastAppliedCouponCode).toBe('GHOST10')
+  })
+
 })
