@@ -1,4 +1,5 @@
 'use client'
+import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
 
 interface Props {
@@ -14,7 +15,8 @@ interface Props {
   remainingForFreeShip: number
 }
 
-export default function ShippingProgress({ progressBase, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
+// PERF FIX: memo — only re-renders when shipping progress values change.
+const ShippingProgress = memo(function ShippingProgress({ progressBase, freeShipMin, isFreeShipping, remainingForFreeShip }: Props) {
   if (!freeShipMin || freeShipMin <= 0) {
     return null
   }
@@ -114,4 +116,6 @@ export default function ShippingProgress({ progressBase, freeShipMin, isFreeShip
       `}</style>
     </div>
   )
-}
+})
+
+export default ShippingProgress

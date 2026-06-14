@@ -34,6 +34,7 @@
 import './checkout.css'
 
 import Script from 'next/script'
+import { useCallback }  from 'react'
 import { formatPrice }  from '@/lib/utils'
 import { INDIA_STATES } from '@/lib/account/constants'
 import { useCheckoutPage } from '@/hooks/useCheckoutPage'
@@ -73,6 +74,30 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     handleApplyLoyalty, handleRemoveLoyalty,
     handlePlace,
   } = useCheckoutPage(settings)
+
+  // PERF FIX: stable callbacks for JSX props that were previously inline arrow
+  // functions, recreated on every render. Inline arrows defeat React.memo on
+  // any child component that receives them and cause downstream useCallback
+  // dep chains to invalidate unnecessarily.
+
+  // Toggles the mobile order summary accordion in OrderSummary.
+  const handleToggleSummary = useCallback(
+    () => setSummaryOpen(o => !o),
+    [setSummaryOpen],
+  )
+
+  // Mobile sticky CTA: opens summary, fires handlePlace, then scrolls to error
+  // if one appears. setSummaryOpen is a stable useState dispatcher.
+  const handleMobCTA = useCallback(() => {
+    setSummaryOpen(true)
+    handlePlace().then(() => {
+      setTimeout(() => {
+        const errEl = document.querySelector('.os-error-box')
+        if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    })
+  }, [setSummaryOpen, handlePlace])
+
 
   if (!storeReady) return <CheckoutSkeleton />
   if (items.length === 0) return null
@@ -239,7 +264,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               onPlaceOrder={handlePlace}
               payMethod={payMethod}
               summaryOpen={summaryOpen}
-              onToggleSummary={() => setSummaryOpen(o => !o)}
+              onToggleSummary={handleToggleSummary}
             />
           </aside>
         </div>
@@ -268,15 +293,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           type="button"
           className="ck-mob-cta"
           disabled={placing || bothPayOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded)}
-          onClick={() => {
-            setSummaryOpen(true)
-            handlePlace().then(() => {
-              setTimeout(() => {
-                const errEl = document.querySelector('.os-error-box')
-                if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              }, 100)
-            })
-          }}
+          onClick={handleMobCTA}
         >
           {mobCtaLabel}
         </button>

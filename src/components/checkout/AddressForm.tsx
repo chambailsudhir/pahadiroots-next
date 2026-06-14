@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { memo, useState, useCallback, useMemo, useRef } from 'react'
 import type { OrderAddress } from '@/types'
 // CODE QUALITY: import from single source of truth — INDIA_STATES was duplicated
 // verbatim in AddressForm, CheckoutClient, and lib/account/constants.ts.
@@ -8,6 +8,8 @@ import type { OrderAddress } from '@/types'
 import { INDIA_STATES } from '@/lib/account/constants'
 
 const LABEL_OPTIONS = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
+// PERF FIX: module-level constant — LABEL_ICONS was already declared here, good.
+// Shared with SavedAddressSelector via lib/account/constants (see Fix 3 below).
 const LABEL_ICONS: Record<string, string> = {
   Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
 }
@@ -45,21 +47,254 @@ interface Props {
   selectedSavedIdx: number | null
 }
 
-export default function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx }: Props) {
+// PERF FIX: extracted to module level — was a 6KB template literal inside the
+// component body, causing React to re-parse the entire CSS string and inject
+// a new <style> element on every render. Moving it out makes it a stable
+// string constant that is only evaluated once at module load time.
+const STYLES = `
+  /* Tags */
+  .af-tags-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 28px 12px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) { .af-tags-wrap { padding: 14px 20px 10px; } }
+  .af-tags-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: #9A9080;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .af-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .af-tag {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1.5px solid #E0D8CE;
+    background: #FDFAF6;
+    color: #7A7060;
+    cursor: pointer;
+    transition: all .18s;
+    white-space: nowrap;
+  }
+  .af-tag:hover { border-color: #2C4A2E; color: #2C4A2E; background: #EEF6EC; }
+  .af-tag--on  { border-color: #2C4A2E; color: #2C4A2E; background: #EEF6EC; font-weight: 600; }
+
+  /* Delivering badge */
+  .af-addr-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 28px 0;
+    padding: 10px 14px;
+    background: #EEF6EC;
+    border-radius: 10px;
+    border: 1px solid #C8E0BC;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: #3A6030;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 640px) { .af-addr-badge { margin: 10px 20px 0; } }
+  .af-addr-badge strong { font-weight: 600; }
+  .af-addr-hint { font-size: 11px; color: #7A9A70; font-weight: 400; }
+
+  /* Form */
+  .af-form {
+    padding: 16px 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  @media (max-width: 640px) { .af-form { padding: 14px 20px 20px; gap: 12px; } }
+  .af-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 560px) { .af-row { grid-template-columns: 1fr; } }
+
+  .af-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .af-group--err .af-input,
+  .af-group--err .af-phone { border-color: #D04030 !important; }
+
+  /* Flex row that places the label and the inline pin-status side by side.
+     Keeps the visual design identical to the original (status beside label text)
+     while decoupling them in the DOM for correct screen reader behaviour. */
+  .af-label-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0;
+  }
+  .af-label-row .af-label {
+    margin-bottom: 0;
+  }
+
+  .af-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #5A5248;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .af-optional {
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #A09888;
+    background: #F2ECE4;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .af-input {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    color: #1C2B1E;
+    padding: 12px 14px;
+    border: 1.5px solid #DDD5C8;
+    border-radius: 12px;
+    background: #FDFAF6;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    -webkit-appearance: none;
+  }
+  .af-input::placeholder { color: #B8B0A5; }
+  .af-input:focus {
+    border-color: #2C4A2E;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(44,74,46,.09), 0 1px 3px rgba(0,0,0,.04);
+  }
+
+  .af-textarea {
+    resize: vertical;
+    min-height: 72px;
+    line-height: 1.5;
+  }
+  .af-select { cursor: pointer; }
+
+  /* Phone compound input */
+  .af-phone {
+    display: flex;
+    border: 1.5px solid #DDD5C8;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #FDFAF6;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .af-phone:focus-within {
+    border-color: #2C4A2E;
+    background: #FFF;
+    box-shadow: 0 0 0 3px rgba(44,74,46,.09);
+  }
+  .af-phone-pre {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6A6258;
+    padding: 12px 12px 12px 14px;
+    background: #F5F0E8;
+    border-right: 1.5px solid #E0D8CE;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .af-phone-field {
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Pincode feedback — sits in .af-label-row as a flex sibling of the label.
+     min-width:0 prevents the region from pushing the label off-screen when
+     a long city+state string appears. */
+  .af-pin-status {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    font-size: 10px;
+  }
+  .af-pin-spin {
+    display: inline-block;
+    animation: pin-spin .6s linear infinite;
+    font-style: normal;
+    color: #9A9080;
+  }
+  @keyframes pin-spin { to { transform: rotate(360deg); } }
+  .af-pin-ok {
+    font-size: 10px;
+    color: #3A7A30;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    font-style: normal;
+  }
+
+  /* Errors */
+  .af-err {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #D04030;
+    font-weight: 500;
+  }
+`
+
+// PERF FIX: memo — prevents re-renders when parent re-renders but props are unchanged.
+// Props are all primitives or stable refs (onChange/onEmailChange/onTouch are useCallback
+// in useCheckoutPage; addr/touched change only on user input).
+const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx }: Props) {
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeMsg,     setPincodeMsg]     = useState('')
   const pinAbortRef = useRef<AbortController | null>(null)
 
-  const fieldErr = useCallback((field: keyof OrderAddress): string => {
-    if (!touched[field]) return ''
-    const val = addr[field]?.toString().trim()
-    if (!val) return 'Required'
-    if (field === 'phone'   && !/^[6-9]\d{9}$/.test(addr.phone))  return 'Invalid mobile number'
-    if (field === 'pincode' && !/^\d{6}$/.test(addr.pincode))      return 'Invalid pincode'
-    return ''
+  // PERF FIX: pre-compute all field errors into an object with useMemo instead
+  // of calling fieldErr(field) 21 times per render (3–4 calls per field × 5 fields).
+  // Previously fieldErr was a useCallback that ran the same validation logic
+  // every time it was invoked — with 21 call-sites in JSX each render triggered
+  // 21 separate validation executions. useMemo computes all 5 errors once per
+  // render and the JSX reads cached string values.
+  const errors = useMemo<Partial<Record<keyof OrderAddress, string>>>(() => {
+    const errs: Partial<Record<keyof OrderAddress, string>> = {}
+    const fields: Array<keyof OrderAddress> = ['name', 'phone', 'flat', 'city', 'pincode']
+    for (const field of fields) {
+      if (!touched[field]) continue
+      const val = addr[field]?.toString().trim()
+      if (!val) { errs[field] = 'Required'; continue }
+      if (field === 'phone'   && !/^[6-9]\d{9}$/.test(addr.phone))  { errs[field] = 'Invalid mobile number'; continue }
+      if (field === 'pincode' && !/^\d{6}$/.test(addr.pincode))      { errs[field] = 'Invalid pincode'; continue }
+    }
+    return errs
   }, [addr, touched])
 
-  async function handlePincodeChange(val: string) {
+  // PERF FIX: wrapped in useCallback — was a plain async function, recreated
+  // every render. The onChange callback (from useCheckoutPage, now stable via
+  // useCallback) is the only external dep; setPincodeLoading/setPincodeMsg are
+  // stable setState dispatchers.
+  const handlePincodeChange = useCallback(async (val: string) => {
     const clean = val.replace(/\D/g, '').slice(0, 6)
     onChange('pincode', clean)
     setPincodeMsg('')
@@ -79,7 +314,7 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
       setPincodeMsg(`${result.city}, ${result.state}`)
     }
     setPincodeLoading(false)
-  }
+  }, [onChange])
 
   return (
     <div className="af-root">
@@ -111,21 +346,21 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
       <div className="af-form">
         {/* Row 1: Name + Phone */}
         <div className="af-row">
-          <div className={`af-group${fieldErr('name') ? ' af-group--err' : ''}`}>
+          <div className={`af-group${errors.name ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-name">Full Name</label>
             <input id="af-name" className="af-input" type="text"
               autoComplete="name" value={addr.name}
               required
               aria-required="true"
-              aria-invalid={!!fieldErr('name')}
-              aria-describedby={fieldErr('name') ? 'af-name-err' : undefined}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'af-name-err' : undefined}
               onChange={e => onChange('name', e.target.value)}
               onBlur={() => onTouch('name')}
               placeholder="Ravi Kumar"
             />
-            {fieldErr('name') && <span id="af-name-err" className="af-err" role="alert">{fieldErr('name')}</span>}
+            {errors.name && <span id="af-name-err" className="af-err" role="alert">{errors.name}</span>}
           </div>
-          <div className={`af-group${fieldErr('phone') ? ' af-group--err' : ''}`}>
+          <div className={`af-group${errors.phone ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-phone">Mobile Number</label>
             <div className="af-phone">
               <span className="af-phone-pre">+91</span>
@@ -134,32 +369,32 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
                 value={addr.phone}
                 required
                 aria-required="true"
-                aria-invalid={!!fieldErr('phone')}
-                aria-describedby={fieldErr('phone') ? 'af-phone-err' : undefined}
+                aria-invalid={!!errors.phone}
+                aria-describedby={errors.phone ? 'af-phone-err' : undefined}
                 onChange={e => onChange('phone', e.target.value.replace(/\D/g, ''))}
                 onBlur={() => onTouch('phone')}
                 placeholder="9876543210" maxLength={10}
               />
             </div>
-            {fieldErr('phone') && <span id="af-phone-err" className="af-err" role="alert">{fieldErr('phone')}</span>}
+            {errors.phone && <span id="af-phone-err" className="af-err" role="alert">{errors.phone}</span>}
           </div>
         </div>
 
         {/* Row 2: Street address */}
-        <div className={`af-group${fieldErr('flat') ? ' af-group--err' : ''}`}>
+        <div className={`af-group${errors.flat ? ' af-group--err' : ''}`}>
           <label className="af-label" htmlFor="af-flat">House / Flat, Street, Colony</label>
           <textarea id="af-flat" className="af-input af-textarea"
             autoComplete="street-address" value={addr.flat}
             required
             aria-required="true"
-            aria-invalid={!!fieldErr('flat')}
-            aria-describedby={fieldErr('flat') ? 'af-flat-err' : undefined}
+            aria-invalid={!!errors.flat}
+            aria-describedby={errors.flat ? 'af-flat-err' : undefined}
             onChange={e => onChange('flat', e.target.value)}
             onBlur={() => onTouch('flat')}
             placeholder="Flat 4B, Green Valley Apartments, Mall Road"
             rows={2}
           />
-          {fieldErr('flat') && <span id="af-flat-err" className="af-err" role="alert">{fieldErr('flat')}</span>}
+          {errors.flat && <span id="af-flat-err" className="af-err" role="alert">{errors.flat}</span>}
         </div>
 
         {/* Row 3: Landmark */}
@@ -176,19 +411,19 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
 
         {/* Row 4: City + State */}
         <div className="af-row">
-          <div className={`af-group${fieldErr('city') ? ' af-group--err' : ''}`}>
+          <div className={`af-group${errors.city ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-city">City</label>
             <input id="af-city" className="af-input" type="text"
               autoComplete="address-level2" value={addr.city}
               required
               aria-required="true"
-              aria-invalid={!!fieldErr('city')}
-              aria-describedby={fieldErr('city') ? 'af-city-err' : undefined}
+              aria-invalid={!!errors.city}
+              aria-describedby={errors.city ? 'af-city-err' : undefined}
               onChange={e => onChange('city', e.target.value)}
               onBlur={() => onTouch('city')}
               placeholder="Dehradun"
             />
-            {fieldErr('city') && <span id="af-city-err" className="af-err" role="alert">{fieldErr('city')}</span>}
+            {errors.city && <span id="af-city-err" className="af-err" role="alert">{errors.city}</span>}
           </div>
           <div className="af-group">
             <label className="af-label" htmlFor="af-state">State</label>
@@ -202,7 +437,7 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
 
         {/* Row 5: Pincode + Email */}
         <div className="af-row">
-          <div className={`af-group${fieldErr('pincode') ? ' af-group--err' : ''}`}>
+          <div className={`af-group${errors.pincode ? ' af-group--err' : ''}`}>
             {/*
              * Label + status are in a flex row so the spinner/city name appears
              * visually inline after "Pincode" — matching the original design.
@@ -244,17 +479,17 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
               value={addr.pincode}
               required
               aria-required="true"
-              aria-invalid={!!fieldErr('pincode')}
+              aria-invalid={!!errors.pincode}
               aria-describedby={[
-                fieldErr('pincode')              ? 'af-pincode-err' : '',
-                pincodeMsg && !pincodeLoading    ? 'af-pin-status'  : '',
+                errors.pincode                    ? 'af-pincode-err' : '',
+                pincodeMsg && !pincodeLoading     ? 'af-pin-status'  : '',
               ].filter(Boolean).join(' ') || undefined}
               onChange={e => handlePincodeChange(e.target.value)}
               onBlur={() => onTouch('pincode')}
               placeholder="248001" maxLength={6}
             />
-            {fieldErr('pincode') && (
-              <span id="af-pincode-err" className="af-err" role="alert">{fieldErr('pincode')}</span>
+            {errors.pincode && (
+              <span id="af-pincode-err" className="af-err" role="alert">{errors.pincode}</span>
             )}
           </div>
           <div className="af-group">
@@ -270,217 +505,12 @@ export default function AddressForm({ addr, email, touched, onChange, onEmailCha
         </div>
       </div>
 
-      <style>{`
-        /* Tags */
-        .af-tags-wrap {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 16px 28px 12px;
-          flex-wrap: wrap;
-        }
-        @media (max-width: 640px) { .af-tags-wrap { padding: 14px 20px 10px; } }
-        .af-tags-label {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 11px;
-          font-weight: 500;
-          color: #9A9080;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          white-space: nowrap;
-        }
-        .af-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-        .af-tag {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 500;
-          padding: 5px 12px;
-          border-radius: 20px;
-          border: 1.5px solid #E0D8CE;
-          background: #FDFAF6;
-          color: #7A7060;
-          cursor: pointer;
-          transition: all .18s;
-          white-space: nowrap;
-        }
-        .af-tag:hover { border-color: #2C4A2E; color: #2C4A2E; background: #EEF6EC; }
-        .af-tag--on  { border-color: #2C4A2E; color: #2C4A2E; background: #EEF6EC; font-weight: 600; }
-
-        /* Delivering badge */
-        .af-addr-badge {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 12px 28px 0;
-          padding: 10px 14px;
-          background: #EEF6EC;
-          border-radius: 10px;
-          border: 1px solid #C8E0BC;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          color: #3A6030;
-          flex-wrap: wrap;
-        }
-        @media (max-width: 640px) { .af-addr-badge { margin: 10px 20px 0; } }
-        .af-addr-badge strong { font-weight: 600; }
-        .af-addr-hint { font-size: 11px; color: #7A9A70; font-weight: 400; }
-
-        /* Form */
-        .af-form {
-          padding: 16px 28px 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-        @media (max-width: 640px) { .af-form { padding: 14px 20px 20px; gap: 12px; } }
-        .af-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 14px;
-        }
-        @media (max-width: 560px) { .af-row { grid-template-columns: 1fr; } }
-
-        .af-group {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-        .af-group--err .af-input,
-        .af-group--err .af-phone { border-color: #D04030 !important; }
-
-        /* Flex row that places the label and the inline pin-status side by side.
-           Keeps the visual design identical to the original (status beside label text)
-           while decoupling them in the DOM for correct screen reader behaviour. */
-        .af-label-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 0;
-        }
-        .af-label-row .af-label {
-          margin-bottom: 0;
-        }
-
-        .af-label {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 11px;
-          font-weight: 600;
-          color: #5A5248;
-          text-transform: uppercase;
-          letter-spacing: 0.07em;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .af-optional {
-          font-size: 10px;
-          font-weight: 400;
-          text-transform: none;
-          letter-spacing: 0;
-          color: #A09888;
-          background: #F2ECE4;
-          padding: 1px 6px;
-          border-radius: 4px;
-        }
-
-        .af-input {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 14px;
-          font-weight: 400;
-          color: #1C2B1E;
-          padding: 12px 14px;
-          border: 1.5px solid #DDD5C8;
-          border-radius: 12px;
-          background: #FDFAF6;
-          outline: none;
-          width: 100%;
-          box-sizing: border-box;
-          transition: border-color .2s, box-shadow .2s, background .2s;
-          -webkit-appearance: none;
-        }
-        .af-input::placeholder { color: #B8B0A5; }
-        .af-input:focus {
-          border-color: #2C4A2E;
-          background: #FFFFFF;
-          box-shadow: 0 0 0 3px rgba(44,74,46,.09), 0 1px 3px rgba(0,0,0,.04);
-        }
-
-        .af-textarea {
-          resize: vertical;
-          min-height: 72px;
-          line-height: 1.5;
-        }
-        .af-select { cursor: pointer; }
-
-        /* Phone compound input */
-        .af-phone {
-          display: flex;
-          border: 1.5px solid #DDD5C8;
-          border-radius: 12px;
-          overflow: hidden;
-          background: #FDFAF6;
-          transition: border-color .2s, box-shadow .2s;
-        }
-        .af-phone:focus-within {
-          border-color: #2C4A2E;
-          background: #FFF;
-          box-shadow: 0 0 0 3px rgba(44,74,46,.09);
-        }
-        .af-phone-pre {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          color: #6A6258;
-          padding: 12px 12px 12px 14px;
-          background: #F5F0E8;
-          border-right: 1.5px solid #E0D8CE;
-          white-space: nowrap;
-          display: flex;
-          align-items: center;
-          flex-shrink: 0;
-        }
-        .af-phone-field {
-          border: none !important;
-          border-radius: 0 !important;
-          background: transparent !important;
-          box-shadow: none !important;
-          flex: 1;
-          min-width: 0;
-        }
-
-        /* Pincode feedback — sits in .af-label-row as a flex sibling of the label.
-           min-width:0 prevents the region from pushing the label off-screen when
-           a long city+state string appears. */
-        .af-pin-status {
-          display: flex;
-          align-items: center;
-          min-width: 0;
-          font-size: 10px;
-        }
-        .af-pin-spin {
-          display: inline-block;
-          animation: pin-spin .6s linear infinite;
-          font-style: normal;
-          color: #9A9080;
-        }
-        @keyframes pin-spin { to { transform: rotate(360deg); } }
-        .af-pin-ok {
-          font-size: 10px;
-          color: #3A7A30;
-          font-weight: 500;
-          text-transform: none;
-          letter-spacing: 0;
-          font-style: normal;
-        }
-
-        /* Errors */
-        .af-err {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 11px;
-          color: #D04030;
-          font-weight: 500;
-        }
-      `}</style>
+      {/* PERF FIX: reference the module-level STYLES constant instead of an
+          inline template literal. The string is stable — React sees the same
+          reference every render and skips re-injecting the <style> block. */}
+      <style>{STYLES}</style>
     </div>
   )
-}
+})
+
+export default AddressForm

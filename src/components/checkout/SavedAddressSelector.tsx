@@ -1,6 +1,8 @@
 'use client'
 
+import { memo } from 'react'
 import type { SavedAddress } from '@/types'
+import './SavedAddressSelector.css'  // PERF FIX: extracted from inline <style>
 
 const LABEL_ICONS: Record<string, string> = {
   Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
@@ -26,7 +28,8 @@ interface Props {
   indiaStates: string[]
 }
 
-export default function SavedAddressSelector({ addresses, selectedIdx, onSelect, indiaStates }: Props) {
+// PERF FIX: memo — addresses and selectedIdx rarely change once the page loads.
+const SavedAddressSelector = memo(function SavedAddressSelector({ addresses, selectedIdx, onSelect, indiaStates }: Props) {
   if (!addresses.length) return null
   return (
     <div className="sas-root">
@@ -61,73 +64,8 @@ export default function SavedAddressSelector({ addresses, selectedIdx, onSelect,
           </div>
         ))}
       </div>
-      <style>{`
-        .sas-root { padding: 20px 28px 8px; }
-        @media (max-width: 640px) { .sas-root { padding: 16px 20px 6px; } }
-        .sas-label {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 10px;
-          font-weight: 600;
-          color: #9A9080;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin: 0 0 10px;
-        }
-        .sas-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
-        .sas-card {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 12px 16px;
-          border: 1.5px solid #E0D8CE;
-          border-radius: 14px;
-          cursor: pointer;
-          background: #FDFAF6;
-          transition: all .2s ease;
-          outline: none;
-        }
-        .sas-card:hover { border-color: #2C4A2E; background: #EEF6EC; }
-        .sas-card:focus-visible { box-shadow: 0 0 0 3px rgba(44,74,46,.15); }
-        .sas-card--on {
-          border-color: #2C4A2E;
-          background: #EEF6EC;
-          box-shadow: 0 0 0 1px #2C4A2E inset;
-        }
-        .sas-check {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          border: 1.5px solid #CCC8C0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          transition: all .2s;
-          margin-top: 1px;
-        }
-        .sas-card--on .sas-check {
-          background: #2C4A2E;
-          border-color: #2C4A2E;
-          color: #FFFFFF;
-        }
-        .sas-body { flex: 1; min-width: 0; }
-        .sas-tag {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          color: #2C4A2E;
-          margin-bottom: 3px;
-        }
-        .sas-addr {
-          font-family: 'DM Sans', sans-serif;
-          font-size: 12px;
-          color: #7A7060;
-          line-height: 1.5;
-        }
-      `}</style>
     </div>
   )
-}
+})
+
+export default SavedAddressSelector

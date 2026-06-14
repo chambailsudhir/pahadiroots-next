@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
 import styles from './PaymentSection.module.css'
 
@@ -15,7 +16,8 @@ interface Props {
   total: number
 }
 
-export default function PaymentSection({
+// PERF FIX: memo — PaymentSection only changes when payMethod, codOk, or pricing changes.
+const PaymentSection = memo(function PaymentSection({
   payMethod, onChange, razorpayEnabled, codOk, codEnabled,
   prepaidPct, prepaidDiscount, codMax, total,
 }: Props) {
@@ -129,4 +131,6 @@ export default function PaymentSection({
       </div>
     </div>
   )
-}
+})
+
+export default PaymentSection
