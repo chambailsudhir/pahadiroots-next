@@ -457,7 +457,29 @@ export async function createOrder(
     loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed)
   }
 
-  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, 'cod', loyaltyDiscountInr)
+  // DATA INTEGRITY / PAYMENT INTEGRITY FIX: this was hardcoded to 'cod', which
+  // means calcPriceSummary's prepaidPct discount (applied only when
+  // paymentMethod === 'razorpay') was NEVER applied server-side — regardless
+  // of what the customer actually selected.
+  //
+  // The checkout UI (useCheckoutPage.ts) computes its displayed pricing with
+  // `calcPriceSummary(items, s, coupon, payMethod, ...)`, where payMethod can
+  // be 'razorpay'. For a Razorpay checkout, that client-side total already has
+  // the prepaid discount (default 5%) subtracted — e.g. a ₹1000 cart shows a
+  // total of ₹950 (after free-shipping threshold).
+  //
+  // With 'cod' hardcoded here, order.total_amount came out as ₹1000 (no
+  // prepaid discount). /api/v1/payments then converts that DB-authoritative
+  // total_amount directly to paise and creates the Razorpay order for ₹1000 —
+  // ₹50 MORE than what the customer saw and agreed to on the checkout page.
+  // Every Razorpay order silently overcharged customers by the prepaid-discount
+  // amount (5% of afterDiscount by default).
+  //
+  // Fix: pass the real input.paymentMethod through. For 'cod' orders this is
+  // a no-op (prepaidDiscount is already 0 for 'cod' inside calcPriceSummary),
+  // so COD pricing is unaffected — only Razorpay totals change, and they now
+  // match what the customer was shown.
+  const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, input.paymentMethod, loyaltyDiscountInr)
 
   // 6. COD availability check
   if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {
