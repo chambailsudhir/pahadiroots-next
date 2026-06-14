@@ -633,17 +633,53 @@ export function useCartPage() {
   //   - Skipped entirely when no coupon is applied (coupon === null).
   //   - Skipped while a manual apply/hint request is in flight (couponLoading)
   //     to avoid two concurrent /api/v1/coupons calls racing each other.
+  //   - Skipped when pricing.subtotal <= 0 — see "ghost subtotal" bug fix below.
   //   - lastValidatedSubtotalRef avoids re-validating against a subtotal we've
   //     already confirmed (e.g. effect re-running due to an unrelated dep
   //     change without subtotal actually moving).
   //   - mountedRef guards every post-await setState/store call, matching the
   //     pattern used by applyCouponCode.
+  //
+  // DATA INTEGRITY BUG FIX [GHOST SUBTOTAL]: `pricing.subtotal` is derived from
+  // `visibleItems` (items minus anything in `pendingRemovals`), NOT `items`.
+  //
+  // Repro: a coupon is applied to a single-item cart. The user clicks "Remove"
+  // on that item. handleRemove immediately adds it to `pendingRemovals` (for
+  // the 4 s Undo toast) WITHOUT calling cartStore.removeItem() yet — so
+  // `items` (and therefore `coupon`, which cartStore only nulls out once
+  // `items` itself becomes empty — see removeItem/clearCart) is still
+  // non-empty, but `visibleItems` is now `[]`, so `pricing.subtotal` is 0.
+  //
+  // This effect re-runs (pricing.subtotal changed), `coupon` is still
+  // non-null, so after the debounce it POSTs `{ subtotal: 0 }` to
+  // /api/v1/coupons. validateCouponSchema requires `subtotal` to be positive,
+  // so the request fails with a generic 400 "Invalid request". The `!ok`
+  // branch below then calls removeCoupon() — wiping `coupon` AND
+  // `lastAppliedCouponCode` — even though the cart isn't actually empty. If
+  // the user then clicks "Undo" within the 4 s window, `visibleItems` /
+  // `pricing.subtotal` revert to their prior values, but the coupon the user
+  // applied is permanently gone and must be manually re-entered.
+  //
+  // A *real* (non-transient) subtotal of 0 can't reach this branch: cartStore
+  // sets `coupon: null` the instant `items` becomes empty, so `coupon !== null`
+  // guarantees `items.length > 0` and therefore a positive subtotal under
+  // normal pricing. `pricing.subtotal <= 0` while `coupon` is still set is
+  // therefore always this transient pending-removal ("ghost") state.
+  //
+  // Fix: skip silently (without touching lastValidatedSubtotalRef) when
+  // pricing.subtotal <= 0. The effect re-fires once `visibleItems` is
+  // non-empty again — either because the user clicked Undo (subtotal returns
+  // to its prior, already-validated value, so the ref comparison below
+  // correctly suppresses a redundant call) or because the 4 s timer elapsed
+  // and `items` truly emptied (in which case `coupon` is already null and the
+  // first guard above handles it).
   useEffect(() => {
     if (!coupon) {
       lastValidatedSubtotalRef.current = null
       return
     }
     if (couponLoading) return
+    if (pricing.subtotal <= 0) return
     if (lastValidatedSubtotalRef.current === pricing.subtotal) return
 
     const ac = new AbortController()

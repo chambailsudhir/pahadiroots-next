@@ -448,6 +448,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       lastValidatedCouponSubtotalRef.current = null
       return
     }
+    // DEFENSIVE GUARD (mirrors the "ghost subtotal" fix in useCartPage):
+    // /api/v1/coupons requires subtotal > 0 (validateCouponSchema). On this
+    // page `pricing` is derived from `items` directly (no pendingRemovals),
+    // and cartStore nulls `coupon` the instant `items` becomes empty, so
+    // `coupon !== null` should already guarantee subtotal > 0. This guard is
+    // cheap insurance against ever POSTing subtotal <= 0 and having the
+    // resulting generic 400 wrongly strip an otherwise-valid coupon.
+    if (pricing.subtotal <= 0) return
     if (lastValidatedCouponSubtotalRef.current === pricing.subtotal) return
 
     const ac = new AbortController()
