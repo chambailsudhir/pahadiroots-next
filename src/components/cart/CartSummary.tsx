@@ -82,6 +82,11 @@ interface Props {
   couponHints?: CouponHint[]
   onApplyHint?: (code: string) => void
   minOrderAmt?: number
+  // DATA INTEGRITY FIX: called (synchronously, before navigation) when the
+  // user clicks "Proceed to Checkout". Flushes any items still inside the
+  // 4-second Undo-removal window so cartStore.items matches exactly what
+  // this summary just displayed — see flushPendingRemovals in useCartPage.ts.
+  onCheckout?: () => void
 }
 
 const CartSummary = memo(function CartSummary({
@@ -91,6 +96,7 @@ const CartSummary = memo(function CartSummary({
   couponLoading, couponError,
   couponHints = [], onApplyHint,
   minOrderAmt = 0,
+  onCheckout,
 }: Props) {
   const belowMinOrder = minOrderAmt > 0 && pricing.subtotal < minOrderAmt
 
@@ -243,7 +249,7 @@ const CartSummary = memo(function CartSummary({
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </button>
       ) : (
-        <Link href="/checkout" className={styles.cta}>
+        <Link href="/checkout" className={styles.cta} onClick={onCheckout}>
           <span aria-hidden="true">🔒</span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>

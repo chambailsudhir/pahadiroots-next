@@ -19,6 +19,11 @@ interface StickyProps {
   orderSubtotal?: number
   totalQty: number
   minOrderAmt?: number
+  // DATA INTEGRITY FIX: called (synchronously, before navigation) when the
+  // user taps "Checkout". Flushes any items still inside the 4-second
+  // Undo-removal window so cartStore.items matches exactly what this bar
+  // just displayed — see flushPendingRemovals in useCartPage.ts.
+  onCheckout?: () => void
 }
 
 export const StickyCartCTA = memo(function StickyCartCTA({
@@ -26,6 +31,7 @@ export const StickyCartCTA = memo(function StickyCartCTA({
   orderSubtotal,
   totalQty,
   minOrderAmt = 0,
+  onCheckout,
 }: StickyProps) {
   const belowMinOrder = minOrderAmt > 0 && (orderSubtotal ?? total) < minOrderAmt
 
@@ -89,7 +95,7 @@ export const StickyCartCTA = memo(function StickyCartCTA({
           </button>
         </>
       ) : (
-        <Link href="/checkout" className={styles.sccBtn}>
+        <Link href="/checkout" className={styles.sccBtn} onClick={onCheckout}>
           <span aria-hidden="true">🔒</span> Checkout
         </Link>
       )}

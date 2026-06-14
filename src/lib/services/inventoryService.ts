@@ -87,19 +87,29 @@ async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
   for (const item of items) {
     const isNoVariant = item.productId && item.variantId === item.productId
     if (isNoVariant) {
-      await db.rpc('restore_product_stock', {
-        p_product_id: item.productId!,
-        p_qty:        item.qty,
-      }).catch((err: unknown) =>
+      // BUILD FIX: the Supabase RPC call returns a `PostgrestFilterBuilder`
+      // typed for the "restore_product_stock" RPC. It's PromiseLike (has
+      // `.then`) so `await` works, but its TS type does NOT extend `Promise`
+      // and has no `.catch` method — chaining `.catch(...)` directly on the
+      // builder fails type-checking ("Property 'catch' does not exist...").
+      // Fix: await inside try/catch, same error-swallowing behavior as before.
+      try {
+        await db.rpc('restore_product_stock', {
+          p_product_id: item.productId!,
+          p_qty:        item.qty,
+        })
+      } catch (err: unknown) {
         console.error('[inventoryService] _restoreReserved (product) failed:', err)
-      )
+      }
     } else {
-      await db.rpc('restore_stock', {
-        p_variant_id: item.variantId,
-        p_qty:        item.qty,
-      }).catch((err: unknown) =>
+      try {
+        await db.rpc('restore_stock', {
+          p_variant_id: item.variantId,
+          p_qty:        item.qty,
+        })
+      } catch (err: unknown) {
         console.error('[inventoryService] _restoreReserved (variant) failed:', err)
-      )
+      }
     }
   }
 }

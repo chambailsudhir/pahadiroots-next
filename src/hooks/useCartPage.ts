@@ -465,6 +465,45 @@ export function useCartPage() {
     })
   }, [])
 
+  // DATA INTEGRITY BUG FIX: pending removals weren't flushed before checkout.
+  //
+  // handleRemove hides an item from `visibleItems` immediately (so "Your
+  // Items (N)", CartSummary's subtotal, and the sticky bar all update at
+  // once — see the visibleItems BUG FIX above) but defers the actual
+  // `removeItem()` store call for 4 seconds to allow Undo. That 4-second
+  // timer is a plain setTimeout, independent of this component's lifecycle.
+  //
+  // "Proceed to Checkout" (CartSummary) and the sticky "Checkout" CTA
+  // (StickyCartCTA) are plain <Link href="/checkout"> with no handler. If a
+  // user clicks Remove and immediately proceeds to checkout (well within the
+  // 4-second window), `cartStore.items` STILL contains the "removed" item —
+  // useCheckoutPage reads `items` directly (not visibleItems), so:
+  //
+  //   - Checkout's pricing.total INCLUDES an item the cart page just showed
+  //     as removed (the cart page displayed a lower total moments earlier —
+  //     a direct, visible inconsistency between the two pages).
+  //   - If the user places the order before the 4s timer fires, the order
+  //     includes an item they explicitly removed.
+  //   - If they don't, the timer fires mid-checkout, removeItem() mutates
+  //     the shared store, and the checkout page's items/pricing change out
+  //     from under the user while they're filling in their address.
+  //
+  // Fix: flush every pending removal synchronously — clear each timer and
+  // call removeItem() immediately — before navigating to /checkout. Wired as
+  // an onClick on both checkout links (see CartSummary.tsx, CartUIComponents.tsx).
+  // After this runs, cartStore.items === visibleItems, so checkout starts
+  // from exactly what the cart page displayed.
+  const flushPendingRemovals = useCallback(() => {
+    setPendingRemovals(prev => {
+      if (prev.size === 0) return prev
+      for (const [variantId, entry] of prev) {
+        clearTimeout(entry.timerId)
+        removeItem(variantId)
+      }
+      return new Map()
+    })
+  }, [removeItem])
+
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
     if (itemVariantIdsRef.current.has(p.id)) return
     addItem({
@@ -707,6 +746,7 @@ export function useCartPage() {
     handleQtyChange,
     handleRemove,
     handleUndoRemove,
+    flushPendingRemovals,
     handleUpsellAdd,
     handleCoupon,
     handleApplyHint,

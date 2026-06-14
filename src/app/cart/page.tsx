@@ -94,7 +94,7 @@ export default function CartPage() {
     reviews, settings,
     qtyAnim, pendingRemovals,
     freeShipMin, pricing, progressPct, totalQty,
-    handleQtyChange, handleRemove, handleUndoRemove,
+    handleQtyChange, handleRemove, handleUndoRemove, flushPendingRemovals,
     handleUpsellAdd, handleCoupon, handleApplyHint,
     couponHints,
   } = useCartPage()
@@ -298,6 +298,7 @@ export default function CartPage() {
               couponHints={couponHints}
               onApplyHint={handleApplyHint}
               minOrderAmt={minOrderAmt}
+              onCheckout={flushPendingRemovals}
             />
           </div>
         </div>
@@ -308,6 +309,7 @@ export default function CartPage() {
         orderSubtotal={pricing.subtotal}
         totalQty={totalQty}
         minOrderAmt={minOrderAmt}
+        onCheckout={flushPendingRemovals}
       />
 
     </main>
