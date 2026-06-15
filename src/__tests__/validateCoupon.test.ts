@@ -137,6 +137,18 @@ describe('validateCouponServer — usage limit', () => {
     const result = await validateCouponServer('UNLIMITED', 500)
     expect(result.valid).toBe(true)
   })
+
+  // BUG REGRESSION: the original guard was `if (data.max_uses && ...)`.
+  // max_uses = 0 is falsy in JS, so the check was skipped entirely and the
+  // coupon passed as valid — even though the admin set it to 0 specifically
+  // to immediately disable it. The fix uses `!= null` so 0 is treated as a
+  // real limit (0 uses allowed → always rejected once uses_count >= 0).
+  it('treats max_uses = 0 as "disabled" — rejects even when uses_count is 0', async () => {
+    mockCoupon(couponRecord({ max_uses: 0, uses_count: 0 }))
+    const result = await validateCouponServer('DISABLED', 500)
+    expect(result.valid).toBe(false)
+    expect(result.error).toBe('Coupon usage limit reached')
+  })
 })
 
 // ─── Minimum order ────────────────────────────────────────────────────────────

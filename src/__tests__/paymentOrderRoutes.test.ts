@@ -560,3 +560,174 @@ describe('POST /api/v1/orders — COD', () => {
     expect(json.error).toMatch(/unknown action/i)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payments route: create_payment — additional idempotency edge cases
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/payments — create_payment idempotency edge cases', () => {
+  async function callPayments(body: object) {
+    const { POST } = await import('@/app/api/v1/payments/route')
+    return POST(makeReq(body) as any)
+  }
+
+  // BUG C FIX regression test: when alreadyExists=true AND payment_status='paid',
+  // the route must return already_confirmed:true so the client skips Razorpay and
+  // redirects to order-success. Before the fix it returned payment_id as
+  // razorpay_order_id — but after confirmation payment_id holds "pay_xxx" (a
+  // Razorpay payment ID), not "order_xxx". Passing a payment ID as Razorpay's
+  // order_id crashes the SDK silently on the client.
+  it('create_payment with alreadyExists + already paid → returns already_confirmed, no Razorpay call', async () => {
+    mockCreateOrder.mockResolvedValueOnce({
+      order: { id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1000, cartItems: [] },
+      alreadyExists: true,
+      customerId:    null,
+    })
+
+    // DB row shows order is already paid (webhook fired first, or prior verify_payment)
+    mockDb.responses['orders'] = {
+      payment_id:     'pay_abc123',  // pay_ prefix — this is a payment ID, NOT an order ID
+      payment_status: 'paid',
+      total_amount:   1000,
+      order_number:   'PR1A2B3C4D',
+    }
+
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.already_confirmed).toBe(true)
+    expect(json.order_number).toBeTruthy()
+    // Must NOT expose a razorpay_order_id — the client should not open Razorpay
+    expect(json.razorpay_order_id).toBeUndefined()
+    // Razorpay API must NOT be called for an already-paid order
+    const rzpCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+      String(c[0]).includes('razorpay.com')
+    )
+    expect(rzpCalls).toHaveLength(0)
+  })
+
+  // When alreadyExists=true but payment_id doesn't start with 'order_' (e.g.
+  // pay_ from a partial webhook update), fall through and create a new Razorpay
+  // order rather than passing a broken ID to the client.
+  it('create_payment with alreadyExists + non-order_ payment_id → creates new Razorpay order', async () => {
+    mockCreateOrder.mockResolvedValueOnce({
+      order: { id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1000, cartItems: [] },
+      alreadyExists: true,
+      customerId:    null,
+    })
+
+    mockDb.responses['orders'] = {
+      payment_id:     'pay_partial_123',  // pay_ prefix — should fall through
+      payment_status: 'pending',
+      total_amount:   1000,
+    }
+
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.razorpay_order_id).toBe(RAZORPAY_ORDER_ID)  // fresh Razorpay order created
+    const rzpCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+      String(c[0]).includes('razorpay.com')
+    )
+    expect(rzpCalls).toHaveLength(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payments route: verify_payment — security cross-verify (BUG A FIX)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/payments — verify_payment security (BUG A FIX)', () => {
+  const RZP_ORDER_ID   = 'order_rzp_verify_001'
+  const RZP_PAYMENT_ID = 'pay_verify_001'
+  const DB_ORDER_ID    = 'order-db-uuid-001'
+  const KEY_SECRET     = 'test_razorpay_secret'
+
+  function makeSignature(rzpOrderId: string, rzpPaymentId: string, secret = KEY_SECRET) {
+    return crypto
+      .createHmac('sha256', secret)
+      .update(`${rzpOrderId}|${rzpPaymentId}`)
+      .digest('hex')
+  }
+
+  // BUG A FIX regression test: HMAC only proves a real Razorpay payment happened;
+  // it does NOT bind that payment to a specific DB order. Without the cross-check,
+  // an attacker who paid for cheap order A could submit those valid credentials
+  // with order_id = B (an expensive unpaid order) and confirm B for free.
+  // The fix rejects when razorpay_order_id ≠ currentOrder.payment_id.
+  it('rejects when razorpay_order_id does not match the stored order payment_id → 400', async () => {
+    // DB order has payment_id = order_rzp_for_THIS_order
+    // Attacker submits razorpay_order_id from a DIFFERENT (cheaper) order they paid
+    const attackerOrderId   = 'order_attacker_paid_this_one'
+    const attackerPaymentId = 'pay_attacker_paid_this'
+    const validHmac = makeSignature(attackerOrderId, attackerPaymentId)
+
+    mockDb.responses['orders'] = {
+      id:                      DB_ORDER_ID,
+      payment_id:              'order_rzp_for_THIS_order',  // stored on target order
+      payment_status:          'pending',
+      order_number:            'PR1A2B3C4D',
+      total_amount:            5000,  // expensive order
+      customer_id:             'cust-uuid-001',
+      loyalty_points_redeemed: 0,
+    }
+
+    const body = {
+      action:              'verify_payment',
+      razorpay_order_id:   attackerOrderId,   // ← mismatch with stored payment_id
+      razorpay_payment_id: attackerPaymentId,
+      razorpay_signature:  validHmac,
+      order_id:            DB_ORDER_ID,        // ← targeting the expensive order
+    }
+
+    process.env.RAZORPAY_KEY_SECRET = KEY_SECRET
+    const { POST } = await import('@/app/api/v1/payments/route')
+    const res  = await POST(makeReq(body) as any)
+    const json = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(json.error).toMatch(/verification failed/i)
+  })
+
+  // When order is already 'paid' at the initial SELECT (payment_status='paid'
+  // on the single() fetch), verify_payment should return success immediately
+  // without re-awarding loyalty or re-sending email.
+  it('already-paid order at fetch time → 200 success, no re-processing', async () => {
+    const sig = makeSignature(RZP_ORDER_ID, RZP_PAYMENT_ID)
+
+    mockDb.responses['orders'] = {
+      id:                      DB_ORDER_ID,
+      payment_id:              RZP_ORDER_ID,
+      payment_status:          'paid',   // ← already confirmed
+      order_number:            'PR1A2B3C4D',
+      total_amount:            1000,
+      customer_id:             'cust-uuid-001',
+      loyalty_points_redeemed: 0,
+    }
+
+    const body = {
+      action:              'verify_payment',
+      razorpay_order_id:   RZP_ORDER_ID,
+      razorpay_payment_id: RZP_PAYMENT_ID,
+      razorpay_signature:  sig,
+      order_id:            DB_ORDER_ID,
+    }
+
+    process.env.RAZORPAY_KEY_SECRET = KEY_SECRET
+    const { POST } = await import('@/app/api/v1/payments/route')
+    const res  = await POST(makeReq(body) as any)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
+    expect(json.order_number).toBeTruthy()
+
+    // Loyalty must NOT be re-awarded for an already-confirmed order
+    const { awardLoyaltyPoints } = await import('@/lib/server/loyalty')
+    expect(awardLoyaltyPoints).not.toHaveBeenCalled()
+  })
+})

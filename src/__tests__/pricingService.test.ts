@@ -380,4 +380,21 @@ describe('calcPriceSummary — edge cases', () => {
     const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
     expect(Number.isInteger(result.gstTotal)).toBe(true)
   })
+
+  // BUG REGRESSION: if an admin sets prepaid_discount_pct > 100 (e.g. 150),
+  // the old formula `total = afterDiscount + shipping - prepaidDiscount` could
+  // go negative — e.g. afterDiscount=100, shipping=0, prepaidDiscount=150 →
+  // total=-50. A negative total sent to Razorpay as paise causes a cryptic
+  // API failure. The fix clamps total to Math.max(0, ...).
+  it('clamps total to 0 when prepaid_discount_pct is absurdly high (> 100)', () => {
+    const settings = makeSettings({ prepaid_discount_pct: '150', free_shipping_min: '0' })
+    const items    = [makeItem({ price: 100, qty: 1 })]
+    // afterDiscount=100, shipping=0, prepaidDiscount=round(100*150/100)=150
+    // Without the clamp: total = 100 + 0 - 150 = -50  ← BUG
+    // With the clamp:    total = max(0, -50) = 0       ← FIX
+    const result = calcPriceSummary(items, settings, null, 'razorpay')
+    expect(result.prepaidDiscount).toBe(150)
+    expect(result.total).toBe(0)
+    expect(result.total).toBeGreaterThanOrEqual(0)
+  })
 })
