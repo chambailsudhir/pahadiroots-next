@@ -2,6 +2,29 @@ import { defineConfig } from 'vitest/config'
 import path from 'path'
 
 export default defineConfig({
+  // PERF-ROUND ADDITION: tsconfig.json sets "jsx": "preserve" (Next.js's SWC
+  // compiler does the JSX transform for the actual app build — verified via
+  // `npm run build`, unaffected by this file). Vitest's default oxc-based
+  // transform reads that same tsconfig setting, so any .tsx file containing
+  // JSX (including component source files merely *imported* by a test, even
+  // if the test itself has no JSX) fails with "Unexpected JSX expression" /
+  // "vite:import-analysis ... contains invalid JS syntax". This previously
+  // limited tests to .ts files with no JSX (hooks/stores/services).
+  //
+  // `oxc: false` + `esbuild.jsx: 'automatic'` overrides this for the TEST RUN
+  // ONLY — it does not change tsconfig.json or the Next.js build pipeline —
+  // and unblocks component-level render tests (e.g.
+  // CartDrawer.itemMemo.test.ts) that import .tsx components directly.
+  esbuild: {
+    // @ts-expect-error — under Vite 8's oxc pipeline, `esbuild` is not an
+    // installed dependency, so Vite's `ESBuildOptions` type (which extends
+    // `esbuild.TransformOptions`) can't resolve `jsx` as a known property
+    // here. The option is still read and honoured at runtime once oxc is
+    // disabled below — without it, .tsx imports fail to parse (see comment
+    // above).
+    jsx: 'automatic',
+  },
+  oxc: false,
   test: {
     // Default environment is node. Individual test files can override with
     // the `// @vitest-environment jsdom` file-level directive when they need

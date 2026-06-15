@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
@@ -39,6 +39,18 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
   const openCart = useUIStore(s => s.openCart)
   const [btnText, setBtnText] = useState('+ Add to Cart')
 
+  // BUG FIX: handleATC's setTimeout(() => setBtnText(...), 1500) fired on an
+  // unmounted component if the user clicked "Add to Cart" and then
+  // immediately clicked the card (router.push to the product page) before
+  // the 1.5s reset elapsed — same class of bug already fixed in
+  // AddToCartSection (timersRef + cleanup-on-unmount pattern, reused here).
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(clearTimeout)
+    }
+  }, [])
+
   const baseVariant = p._variants?.[0] ?? null
   const price = baseVariant?.price ?? p.price ?? 0
   const mrp   = baseVariant?.mrp ?? p.mrp ?? 0
@@ -67,7 +79,9 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
     })
     openCart()
     setBtnText('✅ Added!')
-    setTimeout(() => setBtnText('+ Add to Cart'), 1500)
+    // BUG FIX: capture the timer ID so the cleanup effect can cancel it on unmount.
+    const t = setTimeout(() => setBtnText('+ Add to Cart'), 1500)
+    timersRef.current.push(t)
   }
 
   return (

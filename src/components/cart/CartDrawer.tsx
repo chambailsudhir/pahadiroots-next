@@ -58,7 +58,7 @@ interface CartDrawerItemProps {
   closeCart:  () => void
 }
 
-const CartDrawerItem = memo(function CartDrawerItem({
+export const CartDrawerItem = memo(function CartDrawerItem({
   item, updateQty, removeItem, closeCart,
 }: CartDrawerItemProps) {
   const handleDecr = useCallback(
