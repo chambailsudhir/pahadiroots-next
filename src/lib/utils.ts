@@ -1,7 +1,27 @@
 // ─── Price ────────────────────────────────────────────────────────────────────
 
+// PERF FIX: cache a single Intl.NumberFormat instance instead of calling
+// `n.toLocaleString('en-IN')` on every invocation.
+//
+// `Number.prototype.toLocaleString()` with no pre-built formatter constructs a
+// brand-new Intl.NumberFormat internally on EVERY call — constructing an
+// Intl.NumberFormat is one of the more expensive operations in the Intl API
+// (locale data lookup + plural/grouping rule compilation).
+//
+// formatPrice is called dozens of times per render across the cart and
+// checkout pages — every line item (price, MRP, savings) in CartItemCard and
+// CartDrawer, every row in CartSummary/OrderSummary, the sticky CTA, upsell
+// cards, etc. On a cart page with even a handful of items this adds up to 30+
+// Intl.NumberFormat constructions per render — all producing an identical
+// 'en-IN' formatter.
+//
+// Fix: build the formatter once at module load and reuse it via .format().
+// `.format()` on an existing instance is dramatically cheaper than
+// `toLocaleString()`, with byte-for-byte identical output for the same locale.
+const INR_NUMBER_FORMAT = new Intl.NumberFormat('en-IN')
+
 export function formatPrice(n: number): string {
-  return '₹' + Math.round(n).toLocaleString('en-IN')
+  return '₹' + INR_NUMBER_FORMAT.format(Math.round(n))
 }
 
 export function savingsPercent(mrp: number, price: number): number {

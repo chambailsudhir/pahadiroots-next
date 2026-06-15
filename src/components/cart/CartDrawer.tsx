@@ -22,17 +22,131 @@
  *   3. All interactive <button> elements missing type="button".
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
-import type { SiteSettings } from '@/types'
+import type { CartItem, SiteSettings } from '@/types'
 import styles from './CartDrawer.module.css'
 
 interface Props { settings: SiteSettings }
+
+// ─── Memoized item row ─────────────────────────────────────────────────────────
+//
+// PERF FIX: each row was previously inline JSX inside `items.map(...)`, with
+// `onClick={() => updateQty(...)}` / `() => removeItem(...)}` arrow functions
+// recreated on every CartDrawer render. CartDrawer is mounted once globally
+// (layout.tsx) and subscribes to the *entire* `items` array, so it re-renders
+// on EVERY cart mutation — bumping the qty of one item re-ran the JSX for
+// every OTHER row too, even though their props hadn't changed at all.
+//
+// Fix: extract each row into its own React.memo'd component, mirroring the
+// pattern already used by CartItemCard on the /cart page. `updateQty`,
+// `removeItem`, and `closeCart` are stable Zustand action references (their
+// identity never changes), and Zustand's immutable `items` update only
+// creates a new object for the item that actually changed — every other
+// item keeps its previous object reference. With React.memo's default
+// shallow-prop comparison, only the row whose `item` reference changed
+// re-renders; all other rows (and their <Image> children) are skipped.
+interface CartDrawerItemProps {
+  item:       CartItem
+  updateQty:  (variantId: string, qty: number) => void
+  removeItem: (variantId: string) => void
+  closeCart:  () => void
+}
+
+const CartDrawerItem = memo(function CartDrawerItem({
+  item, updateQty, removeItem, closeCart,
+}: CartDrawerItemProps) {
+  const handleDecr = useCallback(
+    () => updateQty(item.variantId, item.qty - 1),
+    [item.variantId, item.qty, updateQty],
+  )
+  const handleIncr = useCallback(
+    () => updateQty(item.variantId, item.qty + 1),
+    [item.variantId, item.qty, updateQty],
+  )
+  const handleRemove = useCallback(
+    () => removeItem(item.variantId),
+    [item.variantId, removeItem],
+  )
+
+  return (
+    <div className="flex gap-3">
+      {/* Image */}
+      <div className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-stone-50 border border-stone-100">
+        {item.image ? (
+          <Image src={item.image} alt={item.name} fill sizes="64px" className="object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-2xl" aria-hidden="true">
+            {item.emoji || '🌿'}
+          </div>
+        )}
+      </div>
+
+      {/* Details */}
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/products/${item.slug}`}
+          onClick={closeCart}
+          className="text-sm font-semibold text-stone-800 line-clamp-2 hover:text-forest-700 transition-colors"
+        >
+          {item.name}
+        </Link>
+        {item.size && (
+          <div className="text-xs text-stone-400 mt-0.5">{item.size}</div>
+        )}
+        <div className="flex items-center justify-between mt-2">
+          {/* Qty stepper */}
+          <div
+            className="flex items-center border border-stone-200 rounded-lg overflow-hidden"
+            role="group"
+            aria-label={`Quantity for ${item.name}`}
+          >
+            <button
+              type="button"
+              onClick={handleDecr}
+              disabled={item.qty <= 1}
+              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label={`Decrease quantity of ${item.name}`}
+            >−</button>
+            <span
+              className="w-7 text-center text-xs font-bold text-stone-700"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-label={`${item.qty} in cart`}
+            >{item.qty}</span>
+            <button
+              type="button"
+              onClick={handleIncr}
+              disabled={item.qty >= (item.maxQty ?? 99)}
+              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label={`Increase quantity of ${item.name}`}
+            >+</button>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-stone-900">
+              {formatPrice(item.price * item.qty)}
+            </span>
+            <button
+              type="button"
+              onClick={handleRemove}
+              aria-label={`Remove ${item.name} from cart`}
+              className="text-stone-300 hover:text-red-400 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
 
 export default function CartDrawer({ settings }: Props) {
   const isOpen    = useUIStore(s => s.isCartOpen)
@@ -189,76 +303,13 @@ export default function CartDrawer({ settings }: Props) {
             </div>
           ) : (
             items.map(item => (
-              <div key={item.variantId} className="flex gap-3">
-                {/* Image */}
-                <div className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-stone-50 border border-stone-100">
-                  {item.image ? (
-                    <Image src={item.image} alt={item.name} fill sizes="64px" className="object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-2xl" aria-hidden="true">
-                      {item.emoji || '🌿'}
-                    </div>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <Link
-                    href={`/products/${item.slug}`}
-                    onClick={closeCart}
-                    className="text-sm font-semibold text-stone-800 line-clamp-2 hover:text-forest-700 transition-colors"
-                  >
-                    {item.name}
-                  </Link>
-                  {item.size && (
-                    <div className="text-xs text-stone-400 mt-0.5">{item.size}</div>
-                  )}
-                  <div className="flex items-center justify-between mt-2">
-                    {/* Qty stepper */}
-                    <div
-                      className="flex items-center border border-stone-200 rounded-lg overflow-hidden"
-                      role="group"
-                      aria-label={`Quantity for ${item.name}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => updateQty(item.variantId, item.qty - 1)}
-                        disabled={item.qty <= 1}
-                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label={`Decrease quantity of ${item.name}`}
-                      >−</button>
-                      <span
-                        className="w-7 text-center text-xs font-bold text-stone-700"
-                        aria-live="polite"
-                        aria-atomic="true"
-                        aria-label={`${item.qty} in cart`}
-                      >{item.qty}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQty(item.variantId, item.qty + 1)}
-                        disabled={item.qty >= (item.maxQty ?? 99)}
-                        className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label={`Increase quantity of ${item.name}`}
-                      >+</button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-stone-900">
-                        {formatPrice(item.price * item.qty)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.variantId)}
-                        aria-label={`Remove ${item.name} from cart`}
-                        className="text-stone-300 hover:text-red-400 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <CartDrawerItem
+                key={item.variantId}
+                item={item}
+                updateQty={updateQty}
+                removeItem={removeItem}
+                closeCart={closeCart}
+              />
             ))
           )}
         </div>

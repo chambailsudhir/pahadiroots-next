@@ -117,6 +117,20 @@
  *      the card automatically reverts to "+ Add". The old addedUpsellRef
  *      sync-effect is replaced by itemVariantIdsRef (same stable-callback
  *      pattern, now sourced from `items` instead of the removed state).
+ *
+ * Bug-fixes (fifth round — cart performance pass):
+ *
+ *  16. [PERF] `addedUpsell` (Fix 15) derived directly from `items`, which gets
+ *      a brand-new array reference on EVERY cart mutation — including pure
+ *      qty +/- taps (updateQty does `state.items.map(i => i.variantId === id
+ *      ? {...i, qty} : i)`, a new array even though the variantId SET is
+ *      unchanged). Every qty +/- click therefore produced a new `addedUpsell`
+ *      array, busting UpsellSection's React.memo and re-rendering its whole
+ *      grid (up to 4 product cards + <Image>s) for no reason.
+ *      Fix: `addedUpsell` is now derived from `cartKey` (already memoized to
+ *      change only when the variantId SET changes) via `cartKey.split(',')`,
+ *      restoring a stable reference across qty-only updates. `cartKey`'s
+ *      useMemo was moved above `addedUpsell` to support this.
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -211,6 +225,16 @@ export function useCartPage() {
     return () => { mountedRef.current = false }
   }, [])
 
+  // ── Stable cart fingerprint ────────────────────────────────────────────────
+  // A sorted string of variantIds that only changes when items are added or
+  // removed — NOT when quantities change. Used as the sole dep for the upsell
+  // fetch effect so +/− taps never trigger a refetch, and (below) as the basis
+  // for `addedUpsell` so qty-only changes don't bust UpsellSection's memo either.
+  const cartKey = useMemo(
+    () => items.map(i => i.variantId).sort().join(','),
+    [items],
+  )
+
   // ── addedUpsell (derived, not standalone state) ───────────────────────────
   //
   // BUG FIX: addedUpsell used to be its own `useState<string[]>([])`, appended
@@ -225,12 +249,29 @@ export function useCartPage() {
   //
   // handleUpsellAdd uses `p.id` as the cart item's `variantId` (see addItem
   // call below), so "is this upsell item in the cart" is exactly
-  // `items.some(i => i.variantId === p.id)`. Deriving addedUpsell from
-  // `items` makes the UI always reflect the true cart state — add it, see
-  // "✓"; remove it (by any path), the card goes back to "+ Add" automatically.
+  // `items.some(i => i.variantId === p.id)`. Deriving addedUpsell from the
+  // cart makes the UI always reflect the true cart state — add it, see "✓";
+  // remove it (by any path), the card goes back to "+ Add" automatically.
+  //
+  // PERF FIX: this used to derive directly from `items`
+  // (`items.map(i => i.variantId)`). `items` gets a brand-new array reference
+  // on EVERY cart store mutation — including pure qty +/- taps, where
+  // updateQty does `state.items.map(i => i.variantId === id ? {...i, qty} : i)`.
+  // So every qty +/- click produced a brand-new `addedUpsell` array (same
+  // string contents, new reference) → UpsellSection's `addedIds` prop changed
+  // reference → React.memo on UpsellSection bailed out → the entire upsell
+  // grid (up to 4 cards + their <Image>s) re-rendered on every qty tap, even
+  // though which products are "in the cart" hadn't actually changed.
+  //
+  // Fix: derive from `cartKey` instead — a sorted, comma-joined string of
+  // variantIds that's memoized to only change when the variantId SET changes
+  // (items added/removed), not when an existing item's qty changes. Splitting
+  // that string back into an array gives the same membership information as
+  // before, but with a stable reference across qty-only updates, so
+  // UpsellSection no longer re-renders on +/- taps.
   const addedUpsell = useMemo(
-    () => items.map(i => i.variantId),
-    [items],
+    () => cartKey ? cartKey.split(',') : [],
+    [cartKey],
   )
 
   // itemVariantIdsRef always holds the latest set of cart variantIds so
@@ -299,15 +340,6 @@ export function useCartPage() {
   const totalQty = useMemo(
     () => visibleItems.reduce((sum, i) => sum + i.qty, 0),
     [visibleItems],
-  )
-
-  // ── Stable cart fingerprint ────────────────────────────────────────────────
-  // A sorted string of variantIds that only changes when items are added or
-  // removed — NOT when quantities change. Used as the sole dep for the upsell
-  // fetch effect so +/− taps never trigger a refetch.
-  const cartKey = useMemo(
-    () => items.map(i => i.variantId).sort().join(','),
-    [items],
   )
 
   // itemsRef always holds the latest items so the fetch effect can read IDs
