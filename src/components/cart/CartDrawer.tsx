@@ -3,23 +3,70 @@
 /**
  * CartDrawer — slide-in mini-cart with full accessibility support.
  *
- * Accessibility fix applied (this round):
+ * A11y fixes (this round — full a11y audit):
  *
- *   A1. Free-shipping progress bar missing ARIA roles and values (WCAG 1.3.1).
- *       The inner progress fill `<div>` had no semantic meaning. Screen readers
- *       announced nothing when the bar was present, so users navigating by
- *       keyboard had no way to know how close they were to free shipping.
- *       Fix: role="progressbar" + aria-valuenow / aria-valuemin / aria-valuemax
- *       + aria-label added to the track element. Values are kept as integer
- *       percentages (0–100) for compatibility with all AT implementations.
- *       The fill div retains its visual role and is aria-hidden.
+ *   A2. Item count badge has no accessible label (WCAG 1.3.1).
+ *       The badge `<span>` rendered a bare number (e.g. "3") with no label.
+ *       Screen readers announced "3" with no context of what it counted.
+ *       Fix: aria-label="3 items in cart" (singular/plural handled).
  *
- * Prior bug-fixes already present (kept for reference):
+ *   A3. Items list has no semantic list structure (WCAG 1.3.1).
+ *       Items were rendered as bare siblings inside a `<div>`. Screen readers
+ *       couldn't tell users how many items were in the cart or navigate by
+ *       list item. Fix: <ul aria-label="Cart items, N products"> with each
+ *       CartDrawerItem wrapped in <li>.
  *
- *   1. Focus setTimeout not cleaned up — timer ID captured and cleared in cleanup.
- *   2. Scroll-lock layout shift — scrollbar width measured and compensated with
- *      paddingRight before setting overflow:hidden.
- *   3. All interactive <button> elements missing type="button".
+ *   A4. Item price span has no accessible label (WCAG 1.3.1).
+ *       Each row showed a formatted price (e.g. "₹500") with no context.
+ *       Screen readers announced the number with no link to "item total".
+ *       Fix: aria-label="Item total: ₹500".
+ *
+ *   A5. Decorative arrow "→" in "Continue Shopping" button read by AT (WCAG 1.3.3).
+ *       The arrow character was part of the button's accessible name, so AT
+ *       announced "Continue Shopping right-pointing arrow" or similar.
+ *       Fix: wrapped in <span aria-hidden="true">.
+ *
+ *   A6. Price summary rows are plain <div> pairs — no key-value semantics (WCAG 1.3.1).
+ *       "Subtotal ₹500 / Shipping FREE / Total ₹500" were three separate
+ *       `<div className="flex justify-between">` blocks. Screen readers read
+ *       the label and the value as unrelated text. Fix: <dl>/<dt>/<dd> gives
+ *       the correct description-list semantics so AT knows each value belongs
+ *       to its label.
+ *
+ *   A7. Qty stepper buttons have no :focus-visible style (WCAG 2.4.7).
+ *       Tailwind-classed − / + buttons had no focus ring for keyboard users.
+ *       Fix: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400.
+ *
+ *   A8. Remove (×) button has no :focus-visible style (WCAG 2.4.7).
+ *       Fix: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400
+ *       focus-visible:rounded.
+ *
+ *   A9. Product name Link has no :focus-visible style (WCAG 2.4.7).
+ *       Fix: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-600
+ *       focus-visible:rounded.
+ *
+ *  A10. "Continue Shopping" empty-cart button has no :focus-visible style (WCAG 2.4.7).
+ *       Fix: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-700.
+ *
+ *  A11. "Proceed to Checkout" Link has no :focus-visible style (WCAG 2.4.7).
+ *       The primary checkout CTA — most critical keyboard target in the drawer —
+ *       had no visible focus indicator.
+ *       Fix: white ring with forest-700 offset, clearly visible on dark green.
+ *
+ *  A12. "View Full Cart" Link has no :focus-visible style (WCAG 2.4.7).
+ *       Fix: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400.
+ *
+ * Prior a11y fixes already present (kept for reference):
+ *
+ *   A1. Free-shipping progressbar missing ARIA roles and values (WCAG 1.3.1).
+ *       Fix: role="progressbar" + aria-valuenow / aria-valuemin / aria-valuemax.
+ *
+ * Prior bug-fixes already present:
+ *
+ *   1. Focus setTimeout not cleaned up.
+ *   2. Scroll-lock layout shift compensated with scrollbar-width paddingRight.
+ *   3. All interactive <button> elements have type="button".
+ *   4. PERF: CartDrawerItem memoized; stable useCallback handlers per row.
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
@@ -35,22 +82,6 @@ import styles from './CartDrawer.module.css'
 interface Props { settings: SiteSettings }
 
 // ─── Memoized item row ─────────────────────────────────────────────────────────
-//
-// PERF FIX: each row was previously inline JSX inside `items.map(...)`, with
-// `onClick={() => updateQty(...)}` / `() => removeItem(...)}` arrow functions
-// recreated on every CartDrawer render. CartDrawer is mounted once globally
-// (layout.tsx) and subscribes to the *entire* `items` array, so it re-renders
-// on EVERY cart mutation — bumping the qty of one item re-ran the JSX for
-// every OTHER row too, even though their props hadn't changed at all.
-//
-// Fix: extract each row into its own React.memo'd component, mirroring the
-// pattern already used by CartItemCard on the /cart page. `updateQty`,
-// `removeItem`, and `closeCart` are stable Zustand action references (their
-// identity never changes), and Zustand's immutable `items` update only
-// creates a new object for the item that actually changed — every other
-// item keeps its previous object reference. With React.memo's default
-// shallow-prop comparison, only the row whose `item` reference changed
-// re-renders; all other rows (and their <Image> children) are skipped.
 interface CartDrawerItemProps {
   item:       CartItem
   updateQty:  (variantId: string, qty: number) => void
@@ -89,10 +120,11 @@ export const CartDrawerItem = memo(function CartDrawerItem({
 
       {/* Details */}
       <div className="flex-1 min-w-0">
+        {/* A9: focus-visible ring on product name link */}
         <Link
           href={`/products/${item.slug}`}
           onClick={closeCart}
-          className="text-sm font-semibold text-stone-800 line-clamp-2 hover:text-forest-700 transition-colors"
+          className="text-sm font-semibold text-stone-800 line-clamp-2 hover:text-forest-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-600 focus-visible:rounded"
         >
           {item.name}
         </Link>
@@ -106,11 +138,12 @@ export const CartDrawerItem = memo(function CartDrawerItem({
             role="group"
             aria-label={`Quantity for ${item.name}`}
           >
+            {/* A7: focus-visible ring on stepper buttons */}
             <button
               type="button"
               onClick={handleDecr}
               disabled={item.qty <= 1}
-              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-400"
               aria-label={`Decrease quantity of ${item.name}`}
             >−</button>
             <span
@@ -123,19 +156,24 @@ export const CartDrawerItem = memo(function CartDrawerItem({
               type="button"
               onClick={handleIncr}
               disabled={item.qty >= (item.maxQty ?? 99)}
-              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-400"
               aria-label={`Increase quantity of ${item.name}`}
             >+</button>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-stone-900">
+            {/* A4: aria-label gives AT the context "Item total: ₹500" */}
+            <span
+              className="text-sm font-bold text-stone-900"
+              aria-label={`Item total: ${formatPrice(item.price * item.qty)}`}
+            >
               {formatPrice(item.price * item.qty)}
             </span>
+            {/* A8: focus-visible ring on remove button */}
             <button
               type="button"
               onClick={handleRemove}
               aria-label={`Remove ${item.name} from cart`}
-              className="text-stone-300 hover:text-red-400 transition-colors"
+              className="text-stone-300 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:rounded"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -231,8 +269,6 @@ export default function CartDrawer({ settings }: Props) {
     [items, settings, coupon]
   )
 
-  // PERF FIX: memoize total qty — was an inline items.reduce() call in JSX,
-  // running O(n) on every render regardless of whether items changed.
   const totalQty = useMemo(
     () => items.reduce((s, i) => s + i.qty, 0),
     [items],
@@ -270,7 +306,11 @@ export default function CartDrawer({ settings }: Props) {
             <span className={styles.cartIcon} aria-hidden="true">🛒</span>
             <h2 id="cart-drawer-title" className={styles.title}>Your Cart</h2>
             {items.length > 0 && (
-              <span className={styles.count}>
+              /* A2: aria-label gives AT the context "3 items in cart" not just "3" */
+              <span
+                className={styles.count}
+                aria-label={`${totalQty} item${totalQty !== 1 ? 's' : ''} in cart`}
+              >
                 {totalQty}
               </span>
             )}
@@ -287,30 +327,45 @@ export default function CartDrawer({ settings }: Props) {
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10">
               <div className="text-5xl mb-4" aria-hidden="true">🛒</div>
               <h3 className="text-base font-semibold text-stone-700 mb-1">Your cart is empty</h3>
               <p className="text-stone-400 text-sm mb-5">Add products to get started</p>
+              {/* A5: arrow wrapped in aria-hidden so AT reads "Continue Shopping" only */}
+              {/* A10: focus-visible ring for keyboard users */}
               <button
                 type="button"
                 onClick={closeCart}
-                className="text-sm font-semibold text-forest-700 hover:text-forest-900"
+                className="text-sm font-semibold text-forest-700 hover:text-forest-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-700 focus-visible:rounded"
               >
-                Continue Shopping →
+                Continue Shopping <span aria-hidden="true">→</span>
               </button>
             </div>
           ) : (
-            items.map(item => (
-              <CartDrawerItem
-                key={item.variantId}
-                item={item}
-                updateQty={updateQty}
-                removeItem={removeItem}
-                closeCart={closeCart}
-              />
-            ))
+            /*
+             * A3: <ul> gives screen readers list semantics — they announce
+             * "list, N items" and let users navigate by list item (VoiceOver:
+             * VO+Right; NVDA: L then I). The aria-label provides context.
+             * Each CartDrawerItem is wrapped in <li>; the component itself
+             * renders a <div> which is a valid child of <li>.
+             */
+            <ul
+              aria-label={`Cart items, ${items.length} product${items.length !== 1 ? 's' : ''}`}
+              className="space-y-4 list-none p-0 m-0"
+            >
+              {items.map(item => (
+                <li key={item.variantId}>
+                  <CartDrawerItem
+                    item={item}
+                    updateQty={updateQty}
+                    removeItem={removeItem}
+                    closeCart={closeCart}
+                  />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
@@ -326,13 +381,7 @@ export default function CartDrawer({ settings }: Props) {
                   Add {formatPrice(pricing.remainingForFreeShip)} more for{' '}
                   <span className="font-bold">FREE shipping</span>
                 </p>
-                {/*
-                 * A1: role="progressbar" + aria-value* attributes added.
-                 *     The track element now communicates progress semantically.
-                 *     aria-label gives context; aria-valuenow is the integer
-                 *     percentage (0–100). The inner fill div is aria-hidden
-                 *     since it's purely visual — the parent carries all info.
-                 */}
+                {/* A1: role="progressbar" + aria-value* attributes */}
                 <div
                   className="mt-2 h-1.5 bg-earth-100 rounded-full overflow-hidden"
                   role="progressbar"
@@ -350,42 +399,49 @@ export default function CartDrawer({ settings }: Props) {
               </div>
             )}
 
-            {/* Price summary */}
-            <div className="space-y-1.5 text-sm">
+            {/*
+             * A6: <dl>/<dt>/<dd> gives screen readers proper key-value semantics.
+             * Plain <div className="flex justify-between"> pairs meant AT read
+             * "Subtotal" and "₹500" as unrelated text. With <dt>/<dd> they are
+             * announced as a description list — e.g. "Subtotal: ₹500".
+             * <dl> wrapping <div>s containing <dt>/<dd> pairs is valid HTML5.
+             */}
+            <dl className="space-y-1.5 text-sm">
               <div className="flex justify-between text-stone-600">
-                <span>Subtotal</span>
-                <span>{formatPrice(pricing.subtotal)}</span>
+                <dt>Subtotal</dt>
+                <dd>{formatPrice(pricing.subtotal)}</dd>
               </div>
               {coupon && (
                 <div className="flex justify-between text-forest-600">
-                  <span>Discount ({coupon.code})</span>
-                  <span>−{formatPrice(pricing.discount)}</span>
+                  <dt>Discount ({coupon.code})</dt>
+                  <dd>−{formatPrice(pricing.discount)}</dd>
                 </div>
               )}
               <div className="flex justify-between text-stone-600">
-                <span>Shipping</span>
-                <span className={pricing.isFreeShipping ? 'text-forest-600 font-semibold' : ''}>
+                <dt>Shipping</dt>
+                <dd className={pricing.isFreeShipping ? 'text-forest-600 font-semibold' : ''}>
                   {pricing.isFreeShipping ? 'FREE' : formatPrice(pricing.shipping)}
-                </span>
+                </dd>
               </div>
               <div className="flex justify-between font-bold text-stone-900 text-base pt-1 border-t border-stone-100">
-                <span>Total</span>
-                <span>{formatPrice(pricing.total)}</span>
+                <dt>Total</dt>
+                <dd>{formatPrice(pricing.total)}</dd>
               </div>
-            </div>
+            </dl>
 
-            {/* CTA */}
+            {/* A11: focus-visible ring on primary checkout CTA */}
             <Link
               href="/checkout"
               onClick={closeCart}
-              className="block w-full text-center bg-forest-700 hover:bg-forest-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors"
+              className="block w-full text-center bg-forest-700 hover:bg-forest-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-forest-700"
             >
               Proceed to Checkout
             </Link>
+            {/* A12: focus-visible ring on View Full Cart link */}
             <Link
               href="/cart"
               onClick={closeCart}
-              className="block w-full text-center text-stone-500 hover:text-stone-700 text-sm font-medium py-1 transition-colors"
+              className="block w-full text-center text-stone-500 hover:text-stone-700 text-sm font-medium py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:rounded"
             >
               View Full Cart
             </Link>

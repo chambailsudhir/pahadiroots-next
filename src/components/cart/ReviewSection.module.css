@@ -87,3 +87,14 @@
 .dot:hover:not(.active) {
   background: #b8a888;
 }
+
+/*
+ * A11y fix: :focus-visible on review carousel dot buttons (WCAG 2.4.7).
+ * Keyboard users navigating the review carousel had no visible focus on the
+ * dot buttons. Fix: gold outline matching the active dot colour.
+ */
+.dot:focus-visible:not(.active) {
+  outline: 2px solid #c9a240;
+  outline-offset: 2px;
+  background: #b8a888;
+}

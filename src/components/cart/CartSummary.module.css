@@ -97,6 +97,18 @@
   box-shadow: 0 5px 14px rgba(26, 58, 30, 0.3);
 }
 
+/*
+ * A11y fix: :focus-visible on Apply coupon button (WCAG 2.4.7).
+ * Keyboard users had no visible focus indicator on the primary coupon action.
+ * Fix: white ring clearly visible on dark green background.
+ */
+.couponBtn:focus-visible:not(:disabled) {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  background: linear-gradient(135deg, #22472a, #376340);
+  box-shadow: 0 5px 14px rgba(26, 58, 30, 0.3);
+}
+
 .couponBtn:active:not(:disabled) {
   transform: translateY(0);
 }
@@ -156,6 +168,17 @@
   background: #d4ecd4;
 }
 
+/*
+ * A11y fix: :focus-visible on Remove coupon button (WCAG 2.4.7).
+ * Keyboard users had no visible focus indicator when tabbing to the ✕ remove
+ * button inside the applied coupon pill. Fix: green outline on light background.
+ */
+.couponRm:focus-visible {
+  outline: 2px solid #276141;
+  outline-offset: 2px;
+  background: #d4ecd4;
+}
+
 .couponLive {
   min-height: 0;
 }
@@ -191,6 +214,18 @@
 }
 
 .couponHintBtn:hover {
+  background: #eef7ee;
+  border-color: #b8dab8;
+}
+
+/*
+ * A11y fix: :focus-visible on coupon hint pills (WCAG 2.4.7).
+ * Each hint pill is a keyboard-activatable button but had no focus indicator.
+ * Fix: green outline on the light cream background.
+ */
+.couponHintBtn:focus-visible {
+  outline: 2px solid #1a3a1e;
+  outline-offset: 2px;
   background: #eef7ee;
   border-color: #b8dab8;
 }
@@ -321,6 +356,20 @@
   background-position: right center;
 }
 
+/*
+ * A11y fix: :focus-visible on primary Checkout CTA (WCAG 2.4.7).
+ * The most important button on the cart page had no keyboard focus indicator.
+ * This is a critical WCAG 2.4.7 violation — the action a keyboard user is
+ * most likely to want had no visible affordance.
+ * Fix: white ring, clearly visible on the dark green gradient.
+ */
+.cta:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(26, 58, 30, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .cta:active {
   transform: translateY(0);
 }
@@ -359,6 +408,17 @@
 }
 
 .continue:hover {
+  color: #1a3a1e;
+}
+
+/*
+ * A11y fix: :focus-visible on Continue Shopping link (WCAG 2.4.7).
+ * Fix: dark green colour change + underline on keyboard focus, matching hover.
+ */
+.continue:focus-visible {
+  outline: 2px solid #1a3a1e;
+  outline-offset: 2px;
+  border-radius: 3px;
   color: #1a3a1e;
 }
 

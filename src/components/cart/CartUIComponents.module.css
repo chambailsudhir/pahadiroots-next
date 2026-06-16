@@ -82,6 +82,18 @@
   box-shadow: 0 7px 20px rgba(26, 58, 30, 0.38);
 }
 
+/*
+ * A11y fix: :focus-visible on sticky checkout CTA (WCAG 2.4.7).
+ * Keyboard users tabbing to the primary checkout button on mobile got no
+ * visible focus indicator. Fix: white ring clearly visible on dark green.
+ */
+.sccBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  transform: translateY(-1px);
+  box-shadow: 0 7px 20px rgba(26, 58, 30, 0.38);
+}
+
 .sccBtnDisabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -155,6 +167,18 @@
 }
 
 .ecBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(26, 58, 30, 0.38);
+}
+
+/*
+ * A11y fix: :focus-visible on Browse Products link (WCAG 2.4.7).
+ * Empty-cart CTA had hover lift but no keyboard focus indicator.
+ * Fix: white ring clearly visible on dark green background.
+ */
+.ecBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
   transform: translateY(-2px);
   box-shadow: 0 10px 28px rgba(26, 58, 30, 0.38);
 }

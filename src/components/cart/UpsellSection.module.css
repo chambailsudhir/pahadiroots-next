@@ -86,6 +86,20 @@
   box-shadow: 0 5px 16px rgba(26, 22, 17, 0.1);
 }
 
+/*
+ * A11y fix: :focus-within on upsell card (WCAG 2.4.7).
+ * Mouse hover highlighted the entire card with a gold border + lift, but
+ * keyboard users tabbing to the Add button inside saw no card-level feedback.
+ * Fix: :focus-within applies the same visual treatment when any child
+ * (the Add button) has keyboard focus, so keyboard users clearly know
+ * which product they are about to add to the cart.
+ */
+.item:focus-within {
+  border-color: #c9a240;
+  background: linear-gradient(135deg, #fdf9f0, #faf3e0);
+  box-shadow: 0 5px 16px rgba(26, 22, 17, 0.1);
+}
+
 .item.added {
   opacity: 0.65;
 }
@@ -177,6 +191,18 @@
 .btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #22472a, #376340);
   transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(26, 58, 30, 0.3);
+}
+
+/*
+ * A11y fix: :focus-visible on upsell Add button (WCAG 2.4.7).
+ * Keyboard users tabbing to Add buttons in the upsell grid got no visible
+ * focus indicator. Fix: white ring on dark green, matching the dark background.
+ */
+.btn:focus-visible:not(:disabled) {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  background: linear-gradient(135deg, #22472a, #376340);
   box-shadow: 0 4px 12px rgba(26, 58, 30, 0.3);
 }
 

@@ -10,12 +10,51 @@
  * of how many CartItemCard instances mount.
  *
  * Imported by: src/components/cart/CartItemCard.tsx
+ *
+ * A11y fixes (this round):
+ *
+ *   A1. cic-enter animation not wrapped in prefers-reduced-motion guard.
+ *       Users with vestibular disorders who have prefers-reduced-motion:reduce set
+ *       still saw the entry animation fire. The qty animations were already
+ *       correctly guarded; the enter animation was not. Fix: moved inside
+ *       @media (prefers-reduced-motion: no-preference).
+ *
+ *   A2. No :focus-visible style on qty stepper buttons (WCAG 2.4.7).
+ *       Keyboard users tabbing to − / + got the browser default focus ring (often
+ *       invisible or barely visible). Fix: :focus-visible mirrors the :hover style
+ *       with a high-contrast green ring so keyboard focus is unambiguous.
+ *
+ *   A3. No :focus-visible style on the product name link (WCAG 2.4.7).
+ *       Fix: :focus-visible matches the :hover colour change and adds a
+ *       rounded outline so keyboard users see clear focus.
+ *
+ *   A4. No :focus-visible style on the Remove button (WCAG 2.4.7).
+ *       Fix: :focus-visible matches :hover and adds a visible outline.
+ *
+ *   A5. :focus-within on .cic-wrap mirrors :hover for keyboard users (WCAG 2.4.7).
+ *       Mouse hover showed a gold left-border accent, but keyboard users who
+ *       tabbed into the row got nothing. Fix: :focus-within applies the same
+ *       background gradient and gold accent so the focused row is equally
+ *       visible for keyboard navigation.
  */
 
 /* ── Enter animation ─────────────────────────────────────────────────────────── */
-@keyframes cic-enter {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+/*
+ * A1: wrapped in prefers-reduced-motion: no-preference.
+ * Without this guard, the slide-in animation ran for users who have opted into
+ * reduced motion via OS accessibility settings. Wrapping it means the animation
+ * plays only when the user has not requested reduced motion.
+ * The `animation` property on .cic-wrap is removed from the base rule; the
+ * animation plays ONLY inside this media query.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes cic-enter {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .cic-wrap {
+    animation: cic-enter .35s cubic-bezier(.4,0,.2,1) both;
+  }
 }
 
 /* ── Qty animation (respects prefers-reduced-motion) ─────────────────────────── */
@@ -41,7 +80,6 @@
   padding: 20px 22px;
   border-bottom: 1px solid #ece4d8;
   transition: background .22s, box-shadow .22s;
-  animation: cic-enter .35s cubic-bezier(.4,0,.2,1) both;
   position: relative;
 }
 
@@ -49,6 +87,17 @@
 
 /* Gold left-border accent on hover — the signature luxury tell */
 .cic-wrap:hover {
+  background: linear-gradient(to right, #fdf9f2, #fff);
+  box-shadow: inset 3px 0 0 #c9a240;
+}
+
+/*
+ * A5: :focus-within mirrors :hover for keyboard navigation.
+ * When any interactive child (qty button, remove button, name link) receives
+ * focus via Tab/Shift-Tab, the entire row gets the same gold accent as :hover,
+ * so sighted keyboard users always know which row they are in.
+ */
+.cic-wrap:focus-within {
   background: linear-gradient(to right, #fdf9f2, #fff);
   box-shadow: inset 3px 0 0 #c9a240;
 }
@@ -101,6 +150,18 @@
 }
 
 .cic-name:hover { color: #1a3a1e; }
+
+/*
+ * A3: :focus-visible on product name link.
+ * Keyboard users who Tab to the product name link now see a clear green
+ * outline, consistent with the :hover colour change.
+ */
+.cic-name:focus-visible {
+  color: #1a3a1e;
+  outline: 2px solid #1a3a1e;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 
 .cic-size {
   font-size: 11px;
@@ -175,6 +236,20 @@
   box-shadow: 0 4px 12px rgba(26,58,30,.28);
 }
 
+/*
+ * A2: :focus-visible on qty stepper buttons.
+ * Mirrors the :hover appearance so keyboard-only users see a clear, high-contrast
+ * indication of which button has focus. The green ring contrasts against both
+ * the white button background and the cream stepper background.
+ */
+.cic-qty-btn:focus-visible:not(:disabled) {
+  outline: 2px solid #1a3a1e;
+  outline-offset: 2px;
+  background: linear-gradient(135deg, #1a3a1e, #2d5233);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(26,58,30,.28);
+}
+
 .cic-qty-btn:active:not(:disabled) { transform: scale(.92); }
 .cic-qty-btn:disabled { opacity: .28; cursor: not-allowed; }
 
@@ -230,6 +305,19 @@
 }
 
 .cic-remove:hover {
+  background: #fdf0f0;
+  border-color: #a83232;
+  box-shadow: 0 2px 8px rgba(168,50,50,.12);
+}
+
+/*
+ * A4: :focus-visible on Remove button.
+ * Mirrors the :hover red accent so keyboard users know exactly which
+ * item they are about to remove.
+ */
+.cic-remove:focus-visible {
+  outline: 2px solid #a83232;
+  outline-offset: 2px;
   background: #fdf0f0;
   border-color: #a83232;
   box-shadow: 0 2px 8px rgba(168,50,50,.12);
