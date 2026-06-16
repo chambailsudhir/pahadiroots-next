@@ -79,29 +79,6 @@
   background: rgba(255, 255, 255, 0.22);
 }
 
-/*
- * A11y fix: :focus-visible on Close button (WCAG 2.4.7).
- * Keyboard users tabbing to the close button now see a clear white ring
- * that contrasts against the dark green header background.
- */
-.closeBtn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
-  outline-offset: 2px;
-  background: rgba(255, 255, 255, 0.22);
-}
-
-/*
- * A11y fix: :focus-visible for the close button (WCAG 2.4.7 — Focus Visible).
- * Keyboard users tabbing to "Close" got no visible ring — the button's
- * semi-transparent background made the browser default invisible against the
- * dark green header. Fix: explicit white ring on focus.
- */
-.closeBtn:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
-  outline-offset: 2px;
-  background: rgba(255, 255, 255, 0.22);
-}
-
 /* Overlay */
 .overlay {
   position: fixed;
