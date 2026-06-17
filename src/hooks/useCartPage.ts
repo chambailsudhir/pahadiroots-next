@@ -216,6 +216,13 @@ export function useCartPage() {
     Map<string, { name: string; timerId: ReturnType<typeof setTimeout> }>
   >(new Map())
 
+  // Mirrors `pendingRemovals` so flushPendingRemovals can read the current
+  // keys AFTER calling setPendingRemovals, without listing `pendingRemovals`
+  // itself as a useCallback dep (same stable-callback pattern as itemsRef /
+  // subtotalRef / itemVariantIdsRef elsewhere in this file).
+  const pendingRemovalsRef = useRef(pendingRemovals)
+  useEffect(() => { pendingRemovalsRef.current = pendingRemovals }, [pendingRemovals])
+
   // ── Mounted guard (Fix 11 + Fix 13) ───────────────────────────────────────
   // Used to skip deferred setState calls after the component unmounts.
   // Fix 13: also guards applyCouponCode's post-await setState calls.
@@ -525,15 +532,27 @@ export function useCartPage() {
   // an onClick on both checkout links (see CartSummary.tsx, CartUIComponents.tsx).
   // After this runs, cartStore.items === visibleItems, so checkout starts
   // from exactly what the cart page displayed.
+  // BUG FIX [REACT PURITY]: the previous version called removeItem(variantId)
+  // — a side effect mutating a DIFFERENT store (cartStore) — directly inside
+  // the setPendingRemovals updater function. React requires updater functions
+  // passed to setState to be pure; calling another store's setState from
+  // inside one fires "Cannot update a component while rendering a different
+  // component" and, more importantly, is unsafe under React 18 strict mode /
+  // concurrent rendering, where an updater function may be invoked more than
+  // once (e.g. for offscreen pre-rendering) — which would call removeItem()
+  // twice for the same variantId.
+  // Fix: read `prev` out of the updater (pure, no side effects), then run the
+  // removeItem side effects AFTER setPendingRemovals has been called, not from
+  // inside its updater.
   const flushPendingRemovals = useCallback(() => {
     setPendingRemovals(prev => {
       if (prev.size === 0) return prev
-      for (const [variantId, entry] of prev) {
-        clearTimeout(entry.timerId)
-        removeItem(variantId)
-      }
+      for (const entry of prev.values()) clearTimeout(entry.timerId)
       return new Map()
     })
+    for (const variantId of pendingRemovalsRef.current.keys()) {
+      removeItem(variantId)
+    }
   }, [removeItem])
 
   const handleUpsellAdd = useCallback((p: UpsellItem) => {

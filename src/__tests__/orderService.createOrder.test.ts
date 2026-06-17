@@ -75,7 +75,7 @@ function buildQueryBuilder(table: string) {
     order:       () => builder,
     maybeSingle: () => Promise.resolve(response()),
     single:      () => Promise.resolve(response()),
-    then:        (res: (v: unknown) => unknown) => Promise.resolve(response()).then(res),
+    then:        (...a: unknown[]) => Promise.resolve(response()).then(a[0] as (v: unknown) => unknown),
   }
   return builder
 }
