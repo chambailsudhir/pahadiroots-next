@@ -1,14 +1,57 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Image from 'next/image'
 
 interface GalleryImage { url: string; alt: string }
 interface Props { images: GalleryImage[]; productName: string; savings?: number }
 
 export default function ProductGallery({ images, productName, savings = 0 }: Props) {
-  const [active, setActive] = useState(0)
-  const [zoomed, setZoomed] = useState(false)
+  const [active, setActive]   = useState(0)
+  const [zoomed, setZoomed]   = useState(false)
+  // BUG FIX (3.7 + A11y): track the trigger element so focus can be restored
+  // to it when the lightbox closes (WCAG 2.1 SC 2.4.3)
+  const triggerRef            = useRef<HTMLDivElement>(null)
+  // BUG FIX (A11y): first focusable element inside lightbox for focus trap
+  const closeBtnRef           = useRef<HTMLButtonElement>(null)
+
+  const openZoom  = useCallback(() => setZoomed(true),  [])
+  const closeZoom = useCallback(() => {
+    setZoomed(false)
+    // Restore focus to the gallery trigger (WCAG 2.4.3)
+    setTimeout(() => triggerRef.current?.focus(), 0)
+  }, [])
+
+  // BUG FIX (A11y): Escape key closes the lightbox
+  useEffect(() => {
+    if (!zoomed) return
+    // Move focus into the lightbox when it opens
+    closeBtnRef.current?.focus()
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { closeZoom(); return }
+      // Basic focus trap — keep Tab cycling within the lightbox
+      if (e.key === 'Tab') {
+        const modal = document.getElementById('pdp-zoom-modal')
+        if (!modal) return
+        const focusable = Array.from(
+          modal.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled'))
+        if (!focusable.length) return
+        const first = focusable[0]
+        const last  = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault(); last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault(); first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [zoomed, closeZoom])
 
   if (!images.length) {
     return (
@@ -30,16 +73,18 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
     <>
       {/* Main image */}
       <div
+        ref={triggerRef}
         style={{
           position: 'relative', borderRadius: '20px', overflow: 'hidden',
           background: '#f8f5f0', aspectRatio: '4/5', cursor: 'zoom-in',
           boxShadow: '0 8px 40px rgba(0,0,0,.14)'
         }}
-        onClick={() => setZoomed(true)}
+        onClick={openZoom}
         role="button"
         aria-label="View full image"
         tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && setZoomed(true)}
+        onKeyDown={e => e.key === 'Enter' && openZoom()}
+        className="pdp-gallery-trigger"
       >
         {/* Discount badge */}
         {savings >= 5 && (
@@ -53,16 +98,23 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
           </div>
         )}
 
-        {/* Zoom icon */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%,-50%) scale(0)',
-          width: '54px', height: '54px', background: 'rgba(255,255,255,.92)',
-          borderRadius: '50%', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 4, pointerEvents: 'none',
-          transition: 'transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s',
-          opacity: 0,
-        }} className="pdp-gallery-zoom-icon">
+        {/* BUG FIX (3.7): zoom icon was permanently invisible because class
+            pdp-gallery-zoom-icon had zero matching CSS rules anywhere in the
+            project. Now uses the pdp-gallery-trigger:hover CSS rule added in
+            globals.css to reveal it on hover. */}
+        <div
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%,-50%) scale(0)',
+            width: '54px', height: '54px', background: 'rgba(255,255,255,.92)',
+            borderRadius: '50%', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 4, pointerEvents: 'none',
+            transition: 'transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s',
+            opacity: 0,
+          }}
+          className="pdp-gallery-zoom-icon"
+          aria-hidden="true"
+        >
           <svg viewBox="0 0 24 24" style={{ width: '24px', height: '24px', stroke: '#1a3a1e', strokeWidth: 2, fill: 'none' }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
@@ -131,6 +183,7 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
               type="button"
               onClick={() => setActive(i)}
               aria-label={`Image ${i + 1}`}
+              aria-pressed={i === active}
               style={{
                 width: '80px', height: '80px', borderRadius: '12px',
                 overflow: 'hidden', cursor: 'pointer', position: 'relative',
@@ -152,22 +205,28 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
         </div>
       )}
 
-      {/* Zoom lightbox */}
+      {/* BUG FIX (A11y): Zoom lightbox now has:
+          - Escape key to close (via useEffect above)
+          - Focus trap cycling within the modal (Tab / Shift+Tab)
+          - Focus moves to the close button when it opens
+          - Focus restored to trigger element when it closes */}
       {zoomed && (
         <div
-          onClick={() => setZoomed(false)}
+          id="pdp-zoom-modal"
+          onClick={closeZoom}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,.88)',
             zIndex: 2000, display: 'flex', alignItems: 'center',
             justifyContent: 'center', cursor: 'zoom-out',
           }}
           role="dialog"
-          aria-modal
-          aria-label="Image zoom"
+          aria-modal={true}
+          aria-label={`${productName} — full size image`}
         >
           <button
+            ref={closeBtnRef}
             type="button"
-            onClick={() => setZoomed(false)}
+            onClick={closeZoom}
             style={{
               position: 'absolute', top: '20px', right: '24px',
               background: 'rgba(255,255,255,.15)', border: 'none',
@@ -175,14 +234,16 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
               borderRadius: '50%', width: '44px', height: '44px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
-            aria-label="Close"
+            aria-label="Close image zoom (Escape)"
           >×</button>
           {images.length > 1 && (
             <>
               <button type="button" onClick={e => { e.stopPropagation(); prev() }}
+                aria-label="Previous image"
                 style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: '32px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >‹</button>
               <button type="button" onClick={e => { e.stopPropagation(); next() }}
+                aria-label="Next image"
                 style={{ position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: '32px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >›</button>
             </>

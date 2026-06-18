@@ -2,12 +2,14 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData } from '@/lib/storeData'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { savingsPercent, parseJsonArray } from '@/lib/utils'
+import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
+import { sanitizeHtml } from '@/lib/server/sanitize'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 import ProductGallery from '@/components/product/ProductGallery'
 import AddToCartSection from '@/components/product/AddToCartSection'
 import ReviewsSection from '@/components/product/ReviewsSection'
 import RelatedProducts from '@/components/product/RelatedProducts'
+import PincodeRow from '@/components/product/PincodeRow'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -19,21 +21,46 @@ interface Props { params: { slug: string } }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { product } = await fetchProductData(params.slug)
   if (!product) return { title: 'Product Not Found' }
-  const desc = (product.ai_description || product.short_description || `Buy ${product.name} online — pure Himalayan.`)
-    .replace(/<[^>]+>/g, '').slice(0, 155)
+
+  const rawDesc = product.ai_description || product.short_description || `Buy ${product.name} online — pure Himalayan.`
+  // BUG FIX (3.1 + 5.3): use product.name only so the layout template
+  // appends " | 5 Pahadi Roots" exactly once.
+  // BUG FIX (5.3): use the existing truncate() utility (word-boundary aware,
+  // adds ellipsis) instead of the raw .slice(0,155) that cut mid-word.
+  const desc = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
+  const canonicalUrl = `https://pahadiroots.com/products/${product.slug}`
+  const ogImage = product.image_url
+    ? [{ url: product.image_url, width: 800, height: 800, alt: product.name }]
+    : []
+
   return {
-    title: `${product.name} — 5 Pahadi Roots`,
+    // BUG FIX (3.1): was `${product.name} — 5 Pahadi Roots` which rendered
+    // "Lakadong Turmeric — 5 Pahadi Roots | 5 Pahadi Roots" (brand name twice)
+    title: product.name,
     description: desc,
+    // BUG FIX (5.1): add canonical so the slug URL is always authoritative
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       title: `${product.name} | 5 Pahadi Roots`,
       description: desc,
-      images: product.image_url ? [{ url: product.image_url, width: 800, height: 800, alt: product.name }] : [],
+      // BUG FIX (3.2): og:url was missing — Meta uses it as the share-cache
+      // de-dup key, so every product shared the homepage card
+      url: canonicalUrl,
+      images: ogImage,
+    },
+    // BUG FIX (3.2): twitter was never overridden so all product pages
+    // inherited the layout's generic hardcoded Twitter card
+    twitter: {
+      card:        'summary_large_image',
+      title:       `${product.name} | 5 Pahadi Roots`,
+      description: desc,
+      images:      ogImage.map(i => i.url),
     },
   }
 }
 
 export default async function ProductPage({ params }: Props) {
-  const [{ product, variants, images, stateData, related, settings: storeSettings }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, related, reviewStats, settings: storeSettings }, siteSettings] = await Promise.all([
     fetchProductData(params.slug),
     getSiteSettings(),
   ])
@@ -82,38 +109,50 @@ export default async function ProductPage({ params }: Props) {
     'Meghalaya': '☁️', 'Ladakh': '⛰️' } as Record<string, string>)[regionName] || '🏔️'
 
   // Description: 4-layer fallback matching old site
-  const descHtml = (product.ai_description?.trim())
+  // BUG FIX (02): sanitize HTML from DB/AI pipeline before dangerouslySetInnerHTML
+  const descHtml = sanitizeHtml(
+    (product.ai_description?.trim())
     || (product.long_description?.trim())
     || (product.short_description ? `<p>${product.short_description}</p>` : '')
     || '<p>Authentic Himalayan product sourced directly from local farmers. No preservatives, no additives — pure and natural.</p>'
+  )
 
-  // Highlights (tags or defaults)
-  const highlights: string[] = product.tags
-    ? JSON.parse(product.tags).slice(0, 5)
-    : ['100% Pure & Natural', 'Directly from Himalayan farmers', 'No preservatives or additives', 'Lab tested for purity', 'FSSAI Certified']
+  // BUG FIX (02): sanitize ai_who_should_buy before dangerouslySetInnerHTML
+  const whoHtml = product.ai_who_should_buy ? sanitizeHtml(product.ai_who_should_buy) : ''
+
+  // BUG FIX (3.8): highlights were computed from product.tags but never
+  // rendered, and the JSON.parse had no try/catch. Removed entirely.
 
   // WhatsApp
   const waNumber = (settings.whatsapp_number || '919899984895').replace(/\D/g, '')
   const waNumDisplay = waNumber.replace('91', '').replace(/(\d{5})(\d{5})/, '$1 $2')
 
-  // Product JSON-LD
-  const jsonLd = {
+  // BUG FIX (3.3): aggregateRating was hardcoded to 4.8 / 39 on every product.
+  // Now wired to real review data from fetchProductData.
+  // JSON-LD: only include aggregateRating when there are real reviews.
+  const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org/',
-    '@type': 'Product',
-    name: product.name,
+    '@type':    'Product',
+    name:        product.name,
     description: (product.short_description || ''),
-    image: allImages.map((i: any) => i.url),
-    url: `https://pahadiroots.com/products/${product.slug}`,
-    brand: { '@type': 'Brand', name: '5 Pahadi Roots' },
-    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.8', reviewCount: '39' },
+    image:       allImages.map((i: any) => i.url),
+    url:         `https://pahadiroots.com/products/${product.slug}`,
+    brand:       { '@type': 'Brand', name: '5 Pahadi Roots' },
+    ...(reviewStats && reviewStats.count > 0 ? {
+      aggregateRating: {
+        '@type':      'AggregateRating',
+        ratingValue:  reviewStats.avg.toFixed(1),
+        reviewCount:  String(reviewStats.count),
+      },
+    } : {}),
     ...(displayPrice ? {
       offers: {
-        '@type': 'Offer',
-        priceCurrency: 'INR',
-        price: String(displayPrice),
-        availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        seller: { '@type': 'Organization', name: '5 Pahadi Roots' },
-      }
+        '@type':        'Offer',
+        priceCurrency:  'INR',
+        price:          String(displayPrice),
+        availability:   inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        seller:         { '@type': 'Organization', name: '5 Pahadi Roots' },
+      },
     } : {}),
   }
 
@@ -163,18 +202,24 @@ export default async function ProductPage({ params }: Props) {
               <p className="pdp-tagline">{product.short_description}</p>
             )}
 
-            {/* Rating row */}
-            <div className="pdp-rating-row">
-              <div className="pdp-stars">
-                {[1,2,3,4,5].map(i => (
-                  <svg key={i} className="pdp-star" viewBox="0 0 24 24">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                ))}
+            {/* BUG FIX (3.3 + 3.6): Rating row — no longer hardcoded to 4.8/39.
+                Only shown when real review data exists (reviewStats from DB).
+                The "(N reviews)" span now scrolls to the reviews section on
+                click instead of faking interactivity with no handler. */}
+            {reviewStats && reviewStats.count > 0 && (
+              <div className="pdp-rating-row">
+                <div className="pdp-stars">
+                  {[1,2,3,4,5].map(i => (
+                    <svg key={i} className="pdp-star" viewBox="0 0 24 24">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="pdp-rating-num">{reviewStats.avg.toFixed(1)}</span>
+                {/* BUG FIX (3.6): was styled as link but had no href/onClick */}
+                <a href="#reviews" className="pdp-rating-count">({reviewStats.count} reviews)</a>
               </div>
-              <span className="pdp-rating-num">4.8</span>
-              <span className="pdp-rating-count">(39 reviews)</span>
-            </div>
+            )}
 
             {/* Price block */}
             <div className="pdp-price-block">
@@ -190,11 +235,29 @@ export default async function ProductPage({ params }: Props) {
               <p className="pdp-tax-note">
                 MRP inclusive of all taxes{activeVariants.length > 0 && baseVariant ? ` · ${baseVariant.size}` : ''}
               </p>
+              {/* BUG FIX (3.4): urgency bar was always capped at 95% because
+                  (100 - x) * 2 >= 95 for any x <= 52, and the bar only renders
+                  when stockCount < 50. Now uses initial_stock when available for
+                  a real sold-percentage; falls back to a proportional formula. */}
               {stockCount > 0 && stockCount < 50 && (
                 <div className="pdp-urgency">
                   <div className="pdp-urgency-label">🔥 Only {stockCount} left — selling fast!</div>
                   <div className="pdp-urgency-track">
-                    <div className="pdp-urgency-fill" style={{ width: `${Math.min((100 - stockCount) * 2, 95)}%` }} />
+                    <div
+                      className="pdp-urgency-fill"
+                      style={{
+                        width: (() => {
+                          const initial = (product as any).initial_stock
+                          if (initial && initial > 0) {
+                            // Real sold-percentage based on initial stock
+                            return `${Math.min(Math.round((1 - stockCount / initial) * 100), 95)}%`
+                          }
+                          // Fallback: proportional within the 1–49 visible range
+                          // 1 unit → ~95%, 49 units → ~2%
+                          return `${Math.round(((50 - stockCount) / 49) * 93 + 2)}%`
+                        })(),
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -232,7 +295,9 @@ export default async function ProductPage({ params }: Props) {
               </span>
             </div>
 
-            {/* Pincode check row */}
+            {/* BUG FIX (3.5): PincodeRow is now a real client component with
+                state, validation, and a WhatsApp-based delivery-check handler.
+                waNumber is actually used. */}
             <PincodeRow waNumber={waNumber} />
 
             {/* Share row */}
@@ -289,6 +354,7 @@ export default async function ProductPage({ params }: Props) {
           <div className="pdp-acc-list">
 
             <AccItem title="Description" icon="desc" open>
+              {/* BUG FIX (02): sanitized above with server-safe sanitizeHtml() */}
               <div dangerouslySetInnerHTML={{ __html: descHtml }} />
             </AccItem>
 
@@ -312,9 +378,10 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {product.ai_who_should_buy && (
+            {whoHtml && (
               <AccItem title="Who Should Buy" icon="who">
-                <div dangerouslySetInnerHTML={{ __html: product.ai_who_should_buy }} />
+                {/* BUG FIX (02): sanitized above with server-safe sanitizeHtml() */}
+                <div dangerouslySetInnerHTML={{ __html: whoHtml }} />
               </AccItem>
             )}
 
@@ -347,15 +414,20 @@ export default async function ProductPage({ params }: Props) {
 
         {/* ── Reviews ── */}
         {showReviews && (
-          <div className="pdp-reviews-wrap">
+          <div id="reviews" className="pdp-reviews-wrap">
             <ReviewsSection productId={product.id} />
           </div>
         )}
 
-        {/* ── Related ── */}
+        {/* ── Related ──
+            BUG FIX (3.9): was calling RelatedProducts with categoryId/excludeId
+            which caused it to independently re-fetch the full catalog (a second
+            getStoreData() call) and filter by category_id only — ignoring the
+            already-computed `related` array (which matched state OR category).
+            Now passes the pre-fetched array directly. */}
         {showRelated && related.length > 0 && (
           <div className="pdp-related-wrap">
-            <RelatedProducts categoryId={product.category_id} excludeId={product.id} />
+            <RelatedProducts products={related} />
           </div>
         )}
 
@@ -398,18 +470,6 @@ function AccItem({ title, icon, open = false, children }: {
   )
 }
 
-function PincodeRow({ waNumber }: { waNumber: string }) {
-  return (
-    <div className="pdp-pincode-row">
-      <span>📍</span>
-      <span className="pdp-pincode-label">Check delivery:</span>
-      <input className="pdp-pincode-input" type="text" placeholder="Enter PIN" maxLength={6} />
-      <button className="pdp-pincode-btn" type="button">Check</button>
-      <span className="pdp-vendor-chip">VENDOR : 5 PAHADI ROOTS</span>
-    </div>
-  )
-}
-
 function ShareRow({ productName, productSlug, productImage, productPrice }: {
   productName: string; productSlug: string; productImage: string | null; productPrice: number
 }) {
@@ -448,7 +508,7 @@ function WhySection() {
         <p className="pdp-why-sub">Four pillars that define everything we do — mountain to doorstep.</p>
       </div>
       <div className="pdp-why-grid">
-        {/* PILLAR 1: Lab Tested — exact SVG from old site */}
+        {/* PILLAR 1: Lab Tested */}
         <div className="pdp-why-pillar">
           <div className="pdp-why-num">01</div>
           <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
@@ -468,8 +528,6 @@ function WhySection() {
             <polyline points="100,44 106,50 118,36" stroke="#1a4828" strokeWidth="3.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
             <rect x="88" y="66" width="40" height="12" rx="3" fill="#1a4828" opacity=".85"/>
             <text x="108" y="75" fontSize="7" fontWeight="700" fill="white" textAnchor="middle">CERTIFIED</text>
-            <circle cx="30" cy="44" r="4" fill="#c8920a" opacity=".5"/>
-            <circle cx="22" cy="58" r="3" fill="#c8920a" opacity=".4"/>
             <circle cx="28" cy="30" r="11" fill="#f0c840" opacity=".88"/>
             <text x="22" y="35" fontSize="9" fontWeight="700" fill="#7a6000">LAB</text>
           </svg>
@@ -484,24 +542,6 @@ function WhySection() {
             <circle cx="74" cy="74" r="74" fill="url(#fd2)"/>
             <polygon points="0,90 24,52 50,72 74,42 98,68 124,48 148,80 148,148 0,148" fill="#2a6840" opacity=".4"/>
             <polygon points="0,106 20,72 46,88 74,58 102,84 128,66 148,96 148,148 0,148" fill="#1a4828"/>
-            <polygon points="74,58 66,72 82,72" fill="white" opacity=".9"/>
-            <polygon points="24,52 18,62 30,62" fill="white" opacity=".7"/>
-            <rect x="8" y="100" width="20" height="16" rx="2" fill="#e8c870"/>
-            <polygon points="4,102 18,88 32,102" fill="#c84820"/>
-            <line x1="30" y1="100" x2="32" y2="84" stroke="#c8920a" strokeWidth="2"/>
-            <ellipse cx="32" cy="81" rx="4" ry="8" fill="#c8920a"/>
-            <line x1="40" y1="102" x2="42" y2="86" stroke="#c8920a" strokeWidth="2"/>
-            <ellipse cx="42" cy="83" rx="4" ry="8" fill="#d4a030"/>
-            <path d="M46,92 Q74,64 102,92" stroke="#c8920a" strokeWidth="3" fill="none" strokeLinecap="round"/>
-            <polygon points="100,86 107,93 98,96" fill="#c8920a"/>
-            <circle cx="74" cy="80" r="13" fill="white" opacity=".9"/>
-            <line x1="66" y1="72" x2="82" y2="88" stroke="#e84848" strokeWidth="2.5"/>
-            <circle cx="74" cy="76" r="4" fill="#888"/>
-            <path d="M69,84 Q74,81 79,84" stroke="#888" strokeWidth="1.5" fill="none"/>
-            <rect x="108" y="100" width="26" height="22" rx="2" fill="#e8c870"/>
-            <polygon points="104,102 121,86 138,102" fill="#c84820"/>
-            <rect x="116" y="108" width="10" height="14" rx="1" fill="#c8a050"/>
-            <rect x="109" y="102" width="8" height="8" rx="1" fill="#88c8f8"/>
             <circle cx="116" cy="26" r="13" fill="#f0c840" opacity=".9"/>
             <text x="108" y="30" fontSize="7" fontWeight="700" fill="#7a6000">FARM</text>
             <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
@@ -516,12 +556,6 @@ function WhySection() {
             <defs><radialGradient id="ed3" cx="45%" cy="42%" r="65%"><stop offset="0%" stopColor="#c8e8f8"/><stop offset="100%" stopColor="#5890c0"/></radialGradient></defs>
             <circle cx="74" cy="74" r="74" fill="url(#ed3)"/>
             <circle cx="74" cy="80" r="46" fill="#2878b8" opacity=".7"/>
-            <circle cx="74" cy="80" r="46" fill="none" stroke="#60a8e0" strokeWidth="2"/>
-            <path d="M46,60 Q52,50 64,52 Q70,58 66,68 Q58,72 50,68 Z" fill="#50a840" opacity=".85"/>
-            <path d="M70,56 Q80,48 92,52 Q96,62 90,70 Q80,74 72,68 Z" fill="#50a840" opacity=".85"/>
-            <path d="M54,76 Q62,70 70,74 Q72,84 66,90 Q56,88 54,76 Z" fill="#50a840" opacity=".85"/>
-            <path d="M80,78 Q90,72 100,78 Q102,90 94,96 Q84,94 80,84 Z" fill="#50a840" opacity=".85"/>
-            <path d="M60,96 Q68,92 74,98 Q72,108 64,108 Q58,104 60,96 Z" fill="#50a840" opacity=".7"/>
             <line x1="74" y1="34" x2="74" y2="18" stroke="#38b040" strokeWidth="3.5" strokeLinecap="round"/>
             <path d="M74,28 Q58,20 60,8 Q70,16 74,28Z" fill="#50c850"/>
             <path d="M74,24 Q90,16 88,4 Q78,12 74,24Z" fill="#60d860"/>
@@ -537,20 +571,7 @@ function WhySection() {
           <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
             <defs><radialGradient id="gb3" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#c8e8f8"/><stop offset="100%" stopColor="#5888b8"/></radialGradient></defs>
             <circle cx="74" cy="74" r="74" fill="url(#gb3)"/>
-            <polygon points="0,90 24,52 50,72 74,42 98,68 124,48 148,80 148,148 0,148" fill="#4a7850" opacity=".4"/>
             <polygon points="0,106 20,72 46,88 74,58 102,84 128,66 148,96 148,148 0,148" fill="#2a5838"/>
-            <polygon points="74,58 66,72 82,72" fill="white" opacity=".9"/>
-            <polygon points="128,66 121,77 135,77" fill="white" opacity=".8"/>
-            <polygon points="20,72 14,82 26,82" fill="white" opacity=".75"/>
-            <path d="M0,130 Q20,120 40,128 Q60,136 80,124 Q100,112 120,120 Q134,126 148,118" stroke="#60b8e8" strokeWidth="8" fill="none" strokeLinecap="round"/>
-            <rect x="54" y="100" width="22" height="18" rx="2" fill="#e8c870"/>
-            <polygon points="50,102 65,90 80,102" fill="#c84820"/>
-            <rect x="61" y="108" width="8" height="10" rx="1" fill="#c8a050"/>
-            <rect x="55" y="103" width="7" height="7" rx="1" fill="#88c8f8"/>
-            <polygon points="100,118 94,102 106,102" fill="#1a4020"/>
-            <polygon points="100,106 93,92 107,92" fill="#1a4020"/>
-            <polygon points="100,96 94,82 106,82" fill="#225030"/>
-            <circle cx="112" cy="26" r="13" fill="#fde080" opacity=".85"/>
             <circle cx="30" cy="38" r="13" fill="#f0c840" opacity=".88"/>
             <text x="24" y="43" fontSize="10" fontWeight="700" fill="#7a6000">5%</text>
           </svg>
@@ -572,7 +593,7 @@ async function fetchProductData(slug: string) {
       (p.slug || '').toLowerCase() === slug.toLowerCase()
     )
     if (!rawProduct) rawProduct = storeData.products.find((p: any) => String(p.id) === slug)
-    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], settings: {} }
+    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, settings: {} }
 
     // Normalize badges
     const badges: string[] = Array.isArray(rawProduct.badges) ? rawProduct.badges : []
@@ -599,20 +620,66 @@ async function fetchProductData(slug: string) {
       : null
 
     // Related: same state OR same category, exclude self, max 4
-    const related = storeData.products
+    // BUG FIX (3.9): attach images and variants here so RelatedProducts
+    // doesn't need a second getStoreData() call
+    const relatedRaw = storeData.products
       .filter((p: any) =>
         p.id !== product.id &&
         (p.state_id === product.state_id || p.category_id === product.category_id)
       )
       .slice(0, 4)
 
+    const related = relatedRaw.map((p: any) => {
+      const imgs = storeData.product_images
+        .filter((i: any) => String(i.product_id) === String(p.id))
+        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      const vars = storeData.product_variants
+        .filter((v: any) => String(v.product_id) === String(p.id) && v.is_active)
+        .sort((a: any, b: any) => a.price - b.price)
+      const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []
+      return {
+        ...p,
+        badges_bestseller: badgeArr.includes('bestseller'),
+        badges_new:        badgeArr.includes('new'),
+        badges_organic:    badgeArr.includes('organic'),
+        _firstImage:       imgs[0]?.image_url || p.image_url || '',
+        _variants:         vars,
+      }
+    })
+
     // Settings object
     const settings = storeData.settings
 
-    return { product, variants, images, stateData, related, settings }
+    // BUG FIX (3.3): fetch real review aggregate from Supabase.
+    // Uses the anon client — reviews are public data.
+    // Wrapped in its own try/catch so a reviews DB error never 404s the PDP.
+    let reviewStats: { avg: number; count: number } | null = null
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      const anonClient = createClient(supabaseUrl, supabaseAnonKey)
+      const { data: reviewRows } = await anonClient
+        .from('reviews')
+        .select('rating')
+        .eq('product_id', product.id)
+        .eq('status', 'approved')
+      if (reviewRows && reviewRows.length > 0) {
+        const sum = reviewRows.reduce((acc: number, r: any) => acc + (r.rating || 0), 0)
+        reviewStats = {
+          avg:   sum / reviewRows.length,
+          count: reviewRows.length,
+        }
+      }
+    } catch (reviewErr) {
+      // Non-fatal — PDP renders fine without aggregate rating
+      console.warn('[fetchProductData] review stats fetch failed:', reviewErr)
+    }
+
+    return { product, variants, images, stateData, related, reviewStats, settings }
   } catch (err) {
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, related: [], settings: {} }
+    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, settings: {} }
   }
 }
 

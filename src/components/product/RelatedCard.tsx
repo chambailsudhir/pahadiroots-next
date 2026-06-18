@@ -1,8 +1,8 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 
@@ -34,7 +34,6 @@ interface RelatedProduct {
 }
 
 export default function RelatedCard({ product: p }: { product: RelatedProduct }) {
-  const router   = useRouter()
   const addItem  = useCartStore(s => s.addItem)
   const openCart = useUIStore(s => s.openCart)
   const [btnText, setBtnText] = useState('+ Add to Cart')
@@ -84,9 +83,14 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
     timersRef.current.push(t)
   }
 
+  // BUG FIX (A11y + SEO): was a plain <div onClick={router.push(...)}> with
+  // no tabIndex, role, or onKeyDown — keyboard/screen-reader users could not
+  // navigate to related products, and crawlers had no <a href> to follow.
+  // Changed to Link so it's keyboard-reachable, screen-reader accessible, and
+  // crawlable (matching ProductCard.tsx on the listing page).
   return (
-    <div
-      onClick={() => router.push(`/products/${slug}`)}
+    <Link
+      href={`/products/${slug}`}
       style={{
         border: '1.5px solid #e8e0d0', borderRadius: '16px', overflow: 'hidden',
         cursor: 'pointer', transition: 'all .25s', background: '#fff',
@@ -141,7 +145,8 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
       <style>{`
         .pdp-rel-card:hover{border-color:#3d6b42!important;box-shadow:0 12px 40px rgba(0,0,0,.14);transform:translateY(-4px)}
         .pdp-rel-card:hover .pdp-rel-img{transform:scale(1.07)}
+        .pdp-rel-card{text-decoration:none;display:block;color:inherit}
       `}</style>
-    </div>
+    </Link>
   )
 }

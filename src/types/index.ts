@@ -23,16 +23,23 @@ export interface State {
   // flag_emoji does NOT exist in DB — removed
 }
 
+// BUG FIX (code quality): previously this shape differed from the one in
+// src/lib/storeData.ts (which has variant_value, no sku/cost_price) causing
+// fetchProductData callbacks to use `any` to avoid type errors.
+// Unified here to match the actual DB schema.
 export interface ProductVariant {
   id: number
   product_id: number
-  size: string           // e.g. "250g", "500ml"
-  sku: string
-  price: number          // selling price
-  mrp: number
-  cost_price: number | null
+  /** Normalised size label — populated from variant_value / size / variant_label */
+  size: string
+  sku?: string | null
+  price: number
+  mrp: number | null
+  cost_price?: number | null
   available_stock: number
   is_active: boolean
+  variant_value?: string | null
+  sort_order?: number | null
 }
 
 export interface Product {
