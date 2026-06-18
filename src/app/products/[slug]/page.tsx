@@ -127,11 +127,9 @@ export default async function ProductPage({ params }: Props) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      {/* ── Back button ── small, non-sticky, scrolls away with the page
-          (previously a full-width bar pinned at top:0 with z-index:200,
-          stacking on top of the also-sticky header — replaced per request
-          with a compact button matching standard PDP back-navigation) */}
-      <div className="pdp-top-row">
+      {/* ── Breadcrumb + Back pill in one compact row ── */}
+      <div className="pdp-nav-row">
+        <Breadcrumb crumbs={crumbs} className="pdp-breadcrumb" />
         <Link href="/products" className="pdp-back-pill">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="15,18 9,12 15,6" />
@@ -139,9 +137,6 @@ export default async function ProductPage({ params }: Props) {
           All Products
         </Link>
       </div>
-
-      {/* ── Breadcrumb ── */}
-      <Breadcrumb crumbs={crumbs} className="pdp-breadcrumb" />
 
       <div className="pdp-page-bg">
 
