@@ -35,7 +35,12 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ success: true, coupon: result.coupon })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error'
+    // BUG FIX [ERROR HANDLING]: previously exposed raw e.message in production
+    // (Supabase internals, table names, constraint violations) with no logging.
+    console.error('[coupons POST]', err)
+    const message = process.env.NODE_ENV === 'production'
+      ? 'Coupon validation failed — please try again'
+      : (err instanceof Error ? err.message : 'Server error')
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

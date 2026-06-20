@@ -331,14 +331,39 @@ describe('POST /api/v1/payments — create_payment', () => {
     expect(rzpCalls).toHaveLength(0)
   })
 
-  it('propagates stock error as 5xx from createOrder', async () => {
+  // BUG FIX regression: previously this route wrapped EVERY createOrder()
+  // error in a blanket 500 with a generic message, even user-actionable ones
+  // like "insufficient stock" — while the COD path (orders/route.ts) correctly
+  // exposed the same message with a 409. That inconsistency meant a Razorpay
+  // customer got a useless "Payment processing failed" with zero indication
+  // their cart had a stock problem, while a COD customer hitting the IDENTICAL
+  // createOrder() error saw the real reason. Fixed so both checkout paths
+  // classify and expose the same set of user-actionable errors consistently.
+  it('exposes a stock error from createOrder as 409 with the real message (consistent with orders/route.ts)', async () => {
     mockCreateOrder.mockRejectedValueOnce(
       new Error('Insufficient stock for item var-uuid-1 — please reduce quantity')
     )
     const body = { action: 'create_payment', ...BASE_ORDER_BODY }
     const res  = await callPayments(body)
-    // payments route wraps all errors in 500 (stock messaging is for orders route)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/insufficient stock/i)
+  })
+
+  it('still hides genuinely internal errors (DB/RPC failures) behind a generic message in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    mockCreateOrder.mockRejectedValueOnce(new Error('Failed to create order: connection refused'))
+
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
     expect(res.status).toBe(500)
+    expect(json.error).toBe('Payment processing failed. Please try again or contact support.')
+    expect(json.error).not.toMatch(/connection refused/i)
+
+    vi.unstubAllEnvs()
   })
 })
 

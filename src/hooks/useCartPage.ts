@@ -149,23 +149,50 @@ async function fetchWithRetry(
   init?: RequestInit,
   maxRetries = 2,
 ): Promise<Response> {
+  // Shared exponential-backoff wait, cancellable via the same AbortSignal
+  // the caller passed in. Factored out so both the network-error path and
+  // the 5xx-response path use identical timing/cancellation behavior.
+  const backoff = (attempt: number) => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, 300 * 2 ** attempt) // 600 ms, 1200 ms
+    // Cancel the back-off wait if aborted mid-retry
+    init?.signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }, { once: true })
+  })
+
   let attempt = 0
   while (true) {
     // Bail out immediately if already aborted before the fetch begins
     if (init?.signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError')
     }
-    const res = await fetch(input, init)
-    if (res.ok || res.status < 500 || attempt >= maxRetries) return res
-    attempt++
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(resolve, 300 * 2 ** attempt) // 600 ms, 1200 ms
-      // Cancel the back-off wait if aborted mid-retry
-      init?.signal?.addEventListener('abort', () => {
-        clearTimeout(timer)
-        reject(new DOMException('Aborted', 'AbortError'))
-      }, { once: true })
-    })
+    try {
+      const res = await fetch(input, init)
+      if (res.ok || res.status < 500 || attempt >= maxRetries) return res
+      attempt++
+      await backoff(attempt)
+    } catch (err) {
+      // BUG FIX [ERROR HANDLING]: this catch block did not exist before — a
+      // genuine network-level failure (offline, DNS failure, connection
+      // reset, CORS error — i.e. fetch() REJECTING rather than resolving
+      // with a 5xx status) propagated immediately with zero retry, despite
+      // this function's own docstring promising "Retries ... on network /
+      // 5xx errors". Only the less common HTTP-5xx-response case was ever
+      // actually retried. The more common real-world case — a mobile user's
+      // connection blipping mid-request — bypassed retry entirely and went
+      // straight to the caller's fallback/error state. Now genuine network
+      // errors get the same exponential-backoff retry treatment as 5xx
+      // responses, up to maxRetries.
+      //
+      // AbortError is intentional cancellation (component unmounted, or a
+      // newer request superseded this one) — it must still propagate
+      // immediately rather than being retried.
+      if (err instanceof DOMException && err.name === 'AbortError') throw err
+      if (attempt >= maxRetries) throw err
+      attempt++
+      await backoff(attempt)
+    }
   }
 }
 

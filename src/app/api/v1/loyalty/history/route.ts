@@ -49,6 +49,11 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err?.status === 401) return fail(401, 'Session expired')
-    return fail(500, err?.message || 'Failed to fetch loyalty history')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw e.message (Supabase internals) with no logging.
+    console.error('[loyalty/history GET]', e)
+    const msg = process.env.NODE_ENV === 'production'
+      ? 'Failed to fetch loyalty history — please try again'
+      : (err?.message || 'Failed to fetch loyalty history')
+    return fail(500, msg)
   }
 }

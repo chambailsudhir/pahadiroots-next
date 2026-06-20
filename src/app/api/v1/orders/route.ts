@@ -227,7 +227,16 @@ export async function POST(req: NextRequest) {
           // (name, flat, area, city, state) then esc() for HTML encoding.
           html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
         }), 5000)
-      } catch { /* non-fatal */ }
+      } catch (e) {
+        // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
+        // with zero logging — if the admin notification email failed (bad
+        // RESEND_API_KEY, rate limit, admin_notify_email misconfigured), there
+        // was NO trace anywhere that admin was never notified of a new order.
+        // The customer-email catch two blocks above already logs correctly;
+        // this one silently ate the same class of failure. Now logged for
+        // ops visibility, matching the customer-email path.
+        console.error('[orders] Admin notification email failed:', e)
+      }
     }
 
     return NextResponse.json(
@@ -240,7 +249,25 @@ export async function POST(req: NextRequest) {
     // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
     // but never expose raw DB error messages in production — they leak table names,
     // constraint names, and Supabase internals to attackers.
-    const isUserFacing = internalMessage.includes('stock') || internalMessage.includes('COD')
+    //
+    // BUG FIX [ERROR HANDLING]: the original check only matched 'stock' and 'COD',
+    // so every other user-actionable error thrown by createOrder() — an expired
+    // or usage-capped coupon, a below-minimum-order coupon, a product that became
+    // unavailable between add-to-cart and checkout, or a loyalty-balance race —
+    // fell through to the generic "Order placement failed. Please try again or
+    // contact support." message in production. The user had no way to know they
+    // needed to remove their coupon or an unavailable item; clicking "try again"
+    // would fail identically every time, and "contact support" for something they
+    // could have fixed themselves in five seconds. Widened to a case-insensitive
+    // check covering every user-actionable message createOrder() can throw, while
+    // still hiding genuinely internal failures (DB/RPC errors, "could not create
+    // customer record", etc.) behind the generic message.
+    const lowerMessage = internalMessage.toLowerCase()
+    const isUserFacing = lowerMessage.includes('stock')
+      || lowerMessage.includes('cod is not available')
+      || lowerMessage.includes('coupon')
+      || lowerMessage.includes('no longer available')
+      || lowerMessage.includes('insufficient loyalty balance')
     const status  = isUserFacing ? 409 : 500
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
       ? internalMessage

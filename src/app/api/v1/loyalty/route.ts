@@ -74,7 +74,11 @@ export async function GET(req: NextRequest) {
 
   } catch (e: unknown) {
     if (typeof e === 'object' && e !== null && 'status' in e && (e as { status: number }).status === 401) return fail(401, 'Session expired')
-    const msg = e instanceof Error ? e.message : 'Loyalty fetch failed'
+    // BUG FIX [ERROR HANDLING]: previously exposed raw e.message (Supabase internals) with no logging.
+    console.error('[loyalty GET]', e)
+    const msg = process.env.NODE_ENV === 'production'
+      ? 'Failed to fetch loyalty balance — please try again'
+      : (e instanceof Error ? e.message : 'Loyalty fetch failed')
     return fail(500, msg)
   }
 }
@@ -194,7 +198,11 @@ export async function POST(req: NextRequest) {
 
   } catch (e: unknown) {
     if (typeof e === 'object' && e !== null && 'status' in e && (e as { status: number }).status === 401) return fail(401, 'Session expired')
-    const msg = e instanceof Error ? e.message : 'Loyalty error'
+    // BUG FIX [ERROR HANDLING]: previously exposed raw e.message (Supabase internals) with no logging.
+    console.error('[loyalty POST]', e)
+    const msg = process.env.NODE_ENV === 'production'
+      ? 'Loyalty request failed — please try again'
+      : (e instanceof Error ? e.message : 'Loyalty error')
     return fail(500, msg)
   }
 }

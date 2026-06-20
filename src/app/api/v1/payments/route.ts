@@ -23,6 +23,17 @@ function sanitize(str: string | undefined | null): string {
   return str.replace(/<[^>]*>/g, '').trim()
 }
 
+// BUG FIX [ERROR HANDLING]: the verify_payment confirmation email had no
+// timeout guard, unlike create_payment's Razorpay order call (10s) and
+// orders/route.ts's customer/admin emails (5s). A slow or hung Resend
+// response would block this lambda until Vercel's hard limit, even though
+// the order was ALREADY confirmed in the DB by this point — the customer's
+// payment success would be needlessly delayed or turn into a false-failure
+// timeout response for a request that had, in substance, already succeeded.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout ${ms}ms`)), ms))])
+}
+
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
   const keyId     = process.env.RAZORPAY_KEY_ID?.trim()
@@ -346,7 +357,18 @@ export async function POST(req: NextRequest) {
 
           const { Resend } = await import('resend')
           const resend = new Resend(process.env.RESEND_API_KEY)
-          await resend.emails.send({
+          // BUG FIX [ERROR HANDLING]: previously `.catch(() => null)` swallowed
+          // any send failure right here, BEFORE the surrounding try/catch's
+          // `console.error('[payments] Email failed:', e)` could ever see it —
+          // that outer catch only fired for errors elsewhere in this block (e.g.
+          // the customer lookup query), never for the actual email send. The
+          // result: if Resend failed for a payment confirmation email, there was
+          // no log line anywhere — a complete observability gap on a customer-
+          // facing notification for real money paid. Removing the inner .catch
+          // lets the outer try/catch do its job and log it, and withTimeout
+          // prevents a hung Resend call from blocking this response (mirrors the
+          // 5s budget already used for orders/route.ts's emails).
+          await withTimeout(resend.emails.send({
             from:    'Pahadi Roots <noreply@pahadiroots.com>',
             to:      [customer.email],
             subject: `Payment Confirmed #${currentOrder.order_number} — Pahadi Roots 🌿`,
@@ -371,7 +393,7 @@ export async function POST(req: NextRequest) {
                   Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
                 </div>
               </div>`,
-          }).catch(() => null)
+          }), 5000)
         }
       } catch (e) { console.error('[payments] Email failed:', e) }
 
@@ -385,10 +407,28 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Payment error'
     console.error('[payments POST] Error:', internalMessage)
+    // BUG FIX [ERROR HANDLING]: this previously had NO user-facing carve-out at
+    // all in production — every error, including the exact same user-actionable
+    // messages createOrder() throws in the COD path (insufficient stock, expired/
+    // capped coupon, below-minimum-order coupon, unavailable product, insufficient
+    // loyalty balance), was flattened to a single generic "Payment processing
+    // failed. Please try again or contact support." A Razorpay customer had zero
+    // way to know their coupon expired or an item went out of stock, while a COD
+    // customer hitting the identical createOrder() failure saw the real reason —
+    // an inconsistency between the two checkout paths for the same underlying
+    // errors. Genuine internal failures (Razorpay API/config errors, DB/RPC
+    // errors) still stay hidden behind the generic message in production.
+    const lowerMessage = internalMessage.toLowerCase()
+    const isUserFacing = lowerMessage.includes('stock')
+      || lowerMessage.includes('cod is not available')
+      || lowerMessage.includes('coupon')
+      || lowerMessage.includes('no longer available')
+      || lowerMessage.includes('insufficient loyalty balance')
     // Never leak Razorpay / Supabase internals to the client in production
-    const clientMessage = process.env.NODE_ENV === 'production'
-      ? 'Payment processing failed. Please try again or contact support.'
-      : internalMessage
-    return NextResponse.json({ error: clientMessage }, { status: 500 })
+    const status = isUserFacing ? 409 : 500
+    const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
+      ? internalMessage
+      : 'Payment processing failed. Please try again or contact support.'
+    return NextResponse.json({ error: clientMessage }, { status })
   }
 }

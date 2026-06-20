@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired')
-    return fail(500, err.message || 'Wishlist fetch failed')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    console.error('[wishlist GET]', e)
+    return fail(500, process.env.NODE_ENV === 'production' ? 'Wishlist fetch failed' : (err.message || 'Wishlist fetch failed'))
   }
 }
 
@@ -121,6 +123,8 @@ export async function PUT(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired')
-    return fail(500, err.message || 'Wishlist save failed')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message with no logging.
+    console.error('[wishlist PUT]', e)
+    return fail(500, process.env.NODE_ENV === 'production' ? 'Wishlist save failed' : (err.message || 'Wishlist save failed'))
   }
 }

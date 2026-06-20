@@ -415,7 +415,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs)
         if (all.length > 0) setSelectedSavedIdx(0)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
+        // zero logging. If the profile API is broken (expired session, 500, etc.)
+        // users arrive at checkout with no pre-filled address and no indication
+        // why — they see blank fields with no error message. More importantly,
+        // ops had no visibility that profile prefill was failing at checkout time.
+        // Added console.error so the failure shows up in Vercel logs; the UX
+        // behavior (blank fields, user can still fill manually) is unchanged.
+        if ((err as { name?: string }).name === 'AbortError') return
+        console.error('[useCheckoutPage] profile prefill failed:', err)
+      })
     return () => ctrl.abort()
   }, []) // mount-only: background profile prefill
 

@@ -685,3 +685,87 @@ describe('useCartPage — settings/reviews fetch', () => {
     expect(result.current.freeShipMin).toBe(799)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fetchWithRetry — not exported, so exercised indirectly through the
+// cart-settings fetch effect. Covers the BUG FIX: a genuine network-level
+// rejection (fetch() throwing, not just resolving with a 5xx) must now be
+// retried with the same exponential backoff as a 5xx response.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCartPage — fetchWithRetry retry behavior (BUG FIX: network errors now retried)', () => {
+  it('retries after a genuine network-level rejection (fetch() throwing) and succeeds on a later attempt', async () => {
+    seedStore([])
+    let callCount = 0
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (!urlOf(url).includes('/api/v1/cart-settings')) return mockRes({}, false, 500)
+      callCount++
+      // First attempt: a real network failure (TypeError, as a browser throws
+      // for "Failed to fetch") — NOT an HTTP response, fetch() itself rejects.
+      if (callCount === 1) throw new TypeError('Failed to fetch')
+      return mockRes({ settings: { free_shipping_min: '799' } })
+    }) as unknown as typeof globalThis.fetch
+
+    const { result } = renderHook(() => useCartPage())
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    // BEFORE the fix: the network rejection on attempt 1 would propagate
+    // immediately, the settings fetch would be treated as failed, and
+    // freeShipMin would stay at the 0 fallback. AFTER the fix: attempt 1's
+    // rejection is caught and retried, attempt 2 succeeds, and the real
+    // value is used.
+    expect(callCount).toBeGreaterThanOrEqual(2)
+    expect(result.current.freeShipMin).toBe(799)
+  })
+
+  it('still retries on a 5xx HTTP response (pre-existing behavior, unaffected by the fix)', async () => {
+    seedStore([])
+    let callCount = 0
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (!urlOf(url).includes('/api/v1/cart-settings')) return mockRes({}, false, 500)
+      callCount++
+      if (callCount === 1) return mockRes({}, false, 503)
+      return mockRes({ settings: { free_shipping_min: '799' } })
+    }) as unknown as typeof globalThis.fetch
+
+    const { result } = renderHook(() => useCartPage())
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(callCount).toBe(2)
+    expect(result.current.freeShipMin).toBe(799)
+  })
+
+  it('does NOT retry on a 4xx response — fails fast with exactly one call', async () => {
+    seedStore([])
+    let callCount = 0
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (!urlOf(url).includes('/api/v1/cart-settings')) return mockRes({}, false, 500)
+      callCount++
+      return mockRes({ error: 'bad request' }, false, 400)
+    }) as unknown as typeof globalThis.fetch
+
+    const { result } = renderHook(() => useCartPage())
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(callCount).toBe(1) // no retry attempts for a 4xx
+    expect(result.current.freeShipMin).toBe(0) // falls back to default
+  })
+
+  it('gives up after maxRetries consecutive network failures and falls back to defaults', async () => {
+    seedStore([])
+    let callCount = 0
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      if (!urlOf(url).includes('/api/v1/cart-settings')) return mockRes({}, false, 500)
+      callCount++
+      throw new TypeError('Failed to fetch') // always fails
+    }) as unknown as typeof globalThis.fetch
+
+    const { result } = renderHook(() => useCartPage())
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    // maxRetries=2 -> 1 initial attempt + 2 retries = 3 total calls, then give up
+    expect(callCount).toBe(3)
+    expect(result.current.freeShipMin).toBe(0)
+    expect(result.current.reviews[0].name).toBe('Priya M.') // fallback reviews used
+  })
+})

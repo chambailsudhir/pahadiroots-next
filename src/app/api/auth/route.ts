@@ -478,7 +478,12 @@ export async function POST(req: NextRequest) {
       return ok({ success: true, profile: { ...profile, ...updates } })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 500, e2.message || 'Update failed')
+      // BUG FIX [ERROR HANDLING]: e2.message here comes from sbAdmin() which throws
+      // the raw Supabase REST error text (e.g. "duplicate key value violates unique
+      // constraint customers_phone_key"). Exposing this leaks DB schema details.
+      console.error('[update_profile]', e)
+      const msg = process.env.NODE_ENV === 'production' ? 'Update failed' : (e2.message || 'Update failed')
+      return err(e2.status || 500, msg)
     }
   }
 
@@ -609,7 +614,10 @@ export async function POST(req: NextRequest) {
       return ok({ success: true, message: 'Password updated successfully' })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 400, e2.message || 'Password update failed')
+      // BUG FIX [ERROR HANDLING]: e2.message from sbAdmin() exposes raw Supabase errors.
+      console.error('[change_password]', e)
+      const msg = process.env.NODE_ENV === 'production' ? 'Password update failed' : (e2.message || 'Password update failed')
+      return err(e2.status || 400, msg)
     }
   }
 
@@ -677,7 +685,10 @@ export async function POST(req: NextRequest) {
       return ok({ success: true, return: returnRecord })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 500, e2.message || 'Return request failed')
+      // BUG FIX [ERROR HANDLING]: e2.message from sbAdmin() exposes raw Supabase errors.
+      console.error('[create_return]', e)
+      const msg = process.env.NODE_ENV === 'production' ? 'Return request failed' : (e2.message || 'Return request failed')
+      return err(e2.status || 500, msg)
     }
   }
 

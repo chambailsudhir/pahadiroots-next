@@ -132,8 +132,16 @@ if (typeof window !== 'undefined') {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ wishlist: useUserStore.getState().wishlist }),
-      }).catch(() => {
-        // Silently ignore — next change will retry
+      }).catch((err: unknown) => {
+        // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
+        // zero logging. A persistent failure (e.g. the wishlist API broken,
+        // an expired auth token that never refreshes) meant wishlist updates
+        // silently never reached the server — the debounce comment "next change
+        // will retry" is only true for transient failures. A permanent break
+        // would quietly lose all wishlist changes with no ops visibility at all.
+        // Added a console.warn (not error — this is a background sync, not a
+        // critical path) so it shows up in Vercel logs without overwhelming them.
+        console.warn('[userStore] wishlist sync failed:', err)
       })
     }, 800)   // 800ms debounce — coalesces rapid add/remove taps
   })

@@ -203,7 +203,19 @@ export async function deductStockAtomic(
   return { ok: true }
 }
 
-// Restore stock on order cancellation/return
+// Restore stock on order cancellation/return or payment failure.
+//
+// BUG FIX [ERROR HANDLING]: the previous implementation called db.rpc()
+// with no error check and no try/catch. If any single item's restore RPC
+// failed (transient DB error, variant deleted since order time, connection
+// reset), the function threw immediately, leaving every SUBSEQUENT item in
+// the list permanently unreserved — a silent stock leak. Unlike the
+// internal _restoreReserved helper (which already had per-item try/catch),
+// this public function had no protection at all.
+//
+// Fix: per-item try/catch that logs and continues, mirroring _restoreReserved.
+// All restore errors are logged for ops; a single RPC failure no longer
+// prevents the remaining items from being restored.
 export async function restoreStock(
   items: StockCheckItem[]
 ): Promise<void> {
@@ -212,15 +224,23 @@ export async function restoreStock(
   for (const item of items) {
     const isNoVariant = item.productId && item.variantId === item.productId
     if (isNoVariant) {
-      await db.rpc('restore_product_stock', {
-        p_product_id: item.productId!,
-        p_qty: item.qty,
-      })
+      try {
+        await db.rpc('restore_product_stock', {
+          p_product_id: item.productId!,
+          p_qty: item.qty,
+        })
+      } catch (err) {
+        console.error('[inventoryService] restoreStock (product) failed for product', item.productId, err)
+      }
     } else {
-      await db.rpc('restore_stock', {
-        p_variant_id: item.variantId,
-        p_qty: item.qty,
-      })
+      try {
+        await db.rpc('restore_stock', {
+          p_variant_id: item.variantId,
+          p_qty: item.qty,
+        })
+      } catch (err) {
+        console.error('[inventoryService] restoreStock (variant) failed for variant', item.variantId, err)
+      }
     }
   }
 }

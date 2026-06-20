@@ -716,20 +716,54 @@ export async function updateOrderStatus(
   }).eq('id', orderId)
 }
 
+/**
+ * Records an audit-trail event for an order (e.g. 'order_created',
+ * 'payment_verified', 'payment_signature_mismatch').
+ *
+ * BUG FIX [ERROR HANDLING]: this function previously let `db.insert()`
+ * errors propagate to the caller. The single call site inside createOrder()
+ * (step 11, "Log creation event") runs AFTER the order has already been
+ * durably committed via the create_order_with_items RPC — so a transient
+ * failure on this audit-only insert (e.g. a momentary RLS hiccup, the
+ * order_events table briefly unavailable) would throw, get caught by the
+ * outer try/catch in orders/route.ts or payments/route.ts, and return a
+ * scary "Order placement failed" error to a customer whose order had
+ * ALREADY succeeded. The customer could not tell their order actually went
+ * through; a retry would correctly hit the idempotency-key short-circuit
+ * and report success, but only after needless confusion (and possibly an
+ * abandoned cart or a support ticket for a non-issue).
+ *
+ * It also meant every call site in payments/route.ts and webhook/route.ts
+ * had to defensively wrap this call in `.catch(() => null)` to avoid the
+ * same risk — silently discarding the error with NO log line anywhere,
+ * leaving zero trace if the audit table genuinely breaks.
+ *
+ * Fix: catch and log internally, mirroring the same non-fatal pattern
+ * already used by awardLoyaltyPoints() in lib/server/loyalty.ts. Order
+ * creation (and payment confirmation) must never fail because the audit
+ * log couldn't be written — but ops should still see it in server logs.
+ */
 export async function logOrderEvent(
   orderId:  string,
   event:    string,
   actor:    string,
   metadata: Record<string, unknown> = {},
 ): Promise<void> {
-  const db = getServiceClient()
-  await db.from('order_events').insert({
-    order_id:   orderId,
-    event,
-    actor,
-    metadata,
-    created_at: new Date().toISOString(),
-  })
-  // Non-fatal — if order_events table doesn't exist yet, silently continue
-  // .then() not needed — fire and forget pattern for audit log
+  try {
+    const db = getServiceClient()
+    const { error } = await db.from('order_events').insert({
+      order_id:   orderId,
+      event,
+      actor,
+      metadata,
+      created_at: new Date().toISOString(),
+    })
+    if (error) {
+      console.error(`[logOrderEvent] insert failed for order ${orderId}, event "${event}":`, error.message)
+    }
+  } catch (e) {
+    // Network failure, table missing, or any other unexpected error —
+    // never let an audit-log problem fail the caller's order flow.
+    console.error(`[logOrderEvent] unexpected error for order ${orderId}, event "${event}":`, e)
+  }
 }

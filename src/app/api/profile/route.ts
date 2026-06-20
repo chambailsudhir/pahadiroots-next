@@ -99,7 +99,9 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Profile fetch failed')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    console.error('[profile GET]', e)
+    return fail(500, process.env.NODE_ENV === 'production' ? 'Profile fetch failed' : (err.message || 'Profile fetch failed'))
   }
 }
 
@@ -249,6 +251,8 @@ export async function POST(req: NextRequest) {
 
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
-    return fail(err.status || 500, err.message || 'Profile update failed')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    console.error('[profile POST]', e)
+    return fail(err.status || 500, process.env.NODE_ENV === 'production' ? 'Profile update failed' : (err.message || 'Profile update failed'))
   }
 }
