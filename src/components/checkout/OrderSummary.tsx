@@ -385,7 +385,7 @@ const OrderSummary = memo(function OrderSummary({
           {savingsBadge > 0 && (
             <div className="os-saving-strip">
               <span>🏷</span>
-              <span>You're saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
+              <span>You&apos;re saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
             </div>
           )}
           {loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (

@@ -25,10 +25,15 @@ const nextConfig = {
       ],
     },
   },
-  // Vercel function timeout
-  serverRuntimeConfig: {
-    functionTimeout: 15,
-  },
+  // BUG FIX (Next.js 16 migration): `serverRuntimeConfig` is a Pages Router-only
+  // API (next.config.js + getConfig()) that was never actually read anywhere in
+  // this App Router codebase (confirmed: zero usages of getConfig() in src/).
+  // It was dead, non-functional config even under Next 14 — Next 16's stricter
+  // config validation now rejects it outright with:
+  //   "Unrecognized key(s) in object: 'serverRuntimeConfig'"
+  // Function timeout for Vercel is configured per-route instead via vercel.json
+  // { "functions": { "src/app/api/v1/orders/route.ts": { "maxDuration": 15 } } }
+  // — already set up that way for the order/payment/webhook routes.
   async headers() {
     return [
       {

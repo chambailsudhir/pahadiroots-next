@@ -76,9 +76,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
           setLoadErr(msg)
           showToast?.(msg, 'error')
         }
-      } catch (e: unknown) {
-        // BUG FIX [ERROR HANDLING]: previously bare `catch {}` with no logging.
-        console.error('[LoyaltySection] load failed:', e)
+      } catch {
         if (!mounted) return
         const msg = 'Could not load loyalty data — please try again.'
         setLoadErr(msg)
@@ -89,7 +87,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     }
     load()
     return () => { mounted = false }
-  }, [])
+  }, [showToast])
 
   async function loadHistory(page = 1) {
     if (txnLoad) return
@@ -118,9 +116,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
         setTxnErr(msg)
         showToast?.(msg, 'error')
       }
-    } catch (e: unknown) {
-      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` with no logging.
-      console.error('[LoyaltySection] loadHistory failed:', e)
+    } catch {
       const msg = 'Could not load transaction history — please try again.'
       setTxnErr(msg)
       showToast?.(msg, 'error')

@@ -56,7 +56,13 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   useEffect(() => {
     return () => {
-      // Cleanup: cancel any in-flight timers when the component unmounts.
+      // Intentional: timersRef is a mutable accumulator (timers pushed by
+      // handleAdd after this effect's single mount run), not a DOM-node
+      // ref. Reading .current fresh at cleanup time is correct here;
+      // copying it to a local variable inside the effect body (the rule's
+      // generic suggestion) would freeze the copy at the initial empty
+      // array and silently stop clearing any timers added later.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       timersRef.current.forEach(clearTimeout)
     }
   }, [])

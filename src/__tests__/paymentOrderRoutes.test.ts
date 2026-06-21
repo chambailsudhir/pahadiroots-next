@@ -134,7 +134,6 @@ function buildQueryBuilder(table: string) {
     order:        (..._) => builder,
     maybeSingle:  () =>     Promise.resolve(response()),
     single:       () =>     Promise.resolve(response()),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     then:         (res: any) => Promise.resolve(response()).then(res),
   }
   return builder

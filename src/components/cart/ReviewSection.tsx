@@ -56,7 +56,7 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
         aria-atomic="true"
       >
         <div className={styles.stars} aria-label="5 out of 5 stars">★★★★★</div>
-        <p className={styles.text}>"{reviews[idx].text}"</p>
+        <p className={styles.text}>&quot;{reviews[idx].text}&quot;</p>
         <div className={styles.author}>— {reviews[idx].name}, {reviews[idx].location}</div>
       </div>
       {reviews.length > 1 && (

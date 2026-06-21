@@ -9,11 +9,13 @@ import type { Product } from '@/types'
 
 export const revalidate = 300 // 5 min
 
-interface Props { params: { slug: string } }
+// BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+interface Props { params: Promise<{ slug: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params
   const storeData = await getStoreData()
-  const state = (storeData.states || []).find((s: any) => String(s.id) === params.slug)
+  const state = (storeData.states || []).find((s: any) => String(s.id) === slug)
   if (!state) return { title: 'Region Not Found' }
   return {
     title:       `${state.name} Products — Shop Authentic Himalayan Products | Pahadi Roots`,
@@ -22,10 +24,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function RegionPage({ params }: Props) {
+  const { slug } = await params
   const storeData = await getStoreData()
 
   // Find state by id (e.g. "hp", "uk")
-  const state = (storeData.states || []).find((s: any) => String(s.id) === params.slug)
+  const state = (storeData.states || []).find((s: any) => String(s.id) === slug)
   if (!state) notFound()
 
   // Get state image

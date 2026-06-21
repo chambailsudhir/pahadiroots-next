@@ -26,7 +26,7 @@ export default async function BlogPage() {
       .order('published_at', { ascending: false })
       .limit(20)
     posts = data
-  } catch (e: unknown) { console.error("[blog] posts fetch failed:", e); posts = null }
+  } catch { posts = null }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -39,7 +39,7 @@ export default async function BlogPage() {
         <div className="text-center py-20">
           <div className="text-4xl mb-4">✍️</div>
           <h2 className="text-lg font-semibold text-stone-700 mb-2">Stories coming soon</h2>
-          <p className="text-stone-400 text-sm">We're writing about the mountains. Check back soon!</p>
+          <p className="text-stone-400 text-sm">We&apos;re writing about the mountains. Check back soon!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

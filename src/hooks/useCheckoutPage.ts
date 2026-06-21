@@ -372,10 +372,26 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }
   }, [items, storeReady, router])
 
-  useEffect(() => {
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule): was an
+  // effect depending on [codOk, payMethod, razorpayEnabled] calling
+  // setPayMethod synchronously in the body. Restructured using React's
+  // documented "adjusting state during render" pattern, keyed on the actual
+  // availability inputs (codOk, razorpayEnabled) rather than payMethod
+  // itself — payMethod is both read and written here, so tracking it as the
+  // change-trigger would be self-referential. This only fires the
+  // auto-swap when a payment method's availability actually flips, which is
+  // the real intent; a user manually selecting an option elsewhere no
+  // longer redundantly re-triggers this check (the original effect also
+  // re-ran after every payMethod change, including its own corrections,
+  // which was harmless but unnecessary).
+  const [prevCodOk, setPrevCodOk] = useState(codOk)
+  const [prevRazorpayEnabled, setPrevRazorpayEnabled] = useState(razorpayEnabled)
+  if (prevCodOk !== codOk || prevRazorpayEnabled !== razorpayEnabled) {
+    setPrevCodOk(codOk)
+    setPrevRazorpayEnabled(razorpayEnabled)
     if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
     if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
-  }, [codOk, payMethod, razorpayEnabled])
+  }
 
   // Loyalty balance
   useEffect(() => {

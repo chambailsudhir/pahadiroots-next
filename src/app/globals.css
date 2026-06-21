@@ -1,12 +1,19 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* ════════════════════════════════════════════
    PAHADI ROOTS — Global CSS (Next.js site)
    Matching old site design exactly
 ════════════════════════════════════════════ */
+/* BUG FIX (Next.js 16 / Turbopack): @import must be the very first statement
+   in a CSS file per spec (only @charset/@layer may precede it). It was
+   previously placed after the three @tailwind directives below — those
+   expand into real CSS rules during the build, which made this an invalid
+   "@import after rules" file. Next 14's webpack CSS pipeline silently
+   tolerated the violation; Next 16's Turbopack CSS parser correctly rejects
+   it with a hard build error. Moved @import to line 1 to fix at the root. */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lato:wght@300;400;700;900&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --g:   #1a3a1e;

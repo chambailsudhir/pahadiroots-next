@@ -53,10 +53,26 @@ export default function AuthModal() {
   const emailRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule):
+  // Same pattern as SearchOverlay.tsx — this modal stays mounted (returns
+  // null below when closed rather than unmounting), so state persists
+  // across opens. Using React's documented "adjusting state during render"
+  // pattern instead of setState-in-effect (see
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const [prevIsAuthOpen, setPrevIsAuthOpen] = useState(isAuthOpen)
+  if (prevIsAuthOpen !== isAuthOpen) {
+    setPrevIsAuthOpen(isAuthOpen)
     if (isAuthOpen) {
       setError(''); setSuccess(''); setLoading(false)
-      setTimeout(() => emailRef.current?.focus(), 100)
+    }
+  }
+
+  // Focusing the input is a genuine external-system side effect (the DOM),
+  // so this still correctly belongs in an effect.
+  useEffect(() => {
+    if (isAuthOpen) {
+      const t = setTimeout(() => emailRef.current?.focus(), 100)
+      return () => clearTimeout(t)
     }
   }, [isAuthOpen])
 
@@ -259,7 +275,7 @@ export default function AuthModal() {
                     {error   && <div className="am-err">{error}</div>}
                     {success && <div className="am-success">{success}</div>}
                     <button className="am-submit" disabled={loading}>{loading ? 'Logging in…' : 'Login'}</button>
-                    <p className="am-switch">Don't have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('signup'); setError('') }}>Sign Up</button></p>
+                    <p className="am-switch">Don&apos;t have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('signup'); setError('') }}>Sign Up</button></p>
                   </form>
                 : <form onSubmit={handleSignup}>
                     <div className="am-greeting">Create Account 🌿</div>

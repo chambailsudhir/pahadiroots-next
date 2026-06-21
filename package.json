@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -15,28 +15,32 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
     "framer-motion": "^11.2.11",
-    "isomorphic-dompurify": "^2.15.0",
-    "next": "14.2.29",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "next": "16.2.9",
+    "postcss": "8.5.10",
+    "react": "^19",
+    "react-dom": "^19",
     "resend": "^3.2.0",
+    "server-only": "^0.0.1",
     "swr": "^2.2.5",
     "zod": "^3.23.8",
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@testing-library/dom": "^9.3.4",
-    "@testing-library/react": "^14.3.1",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.29",
-    "postcss": "^8",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.9",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^3.4.4",
     "typescript": "^5",
     "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
   }
 }

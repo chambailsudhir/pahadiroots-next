@@ -29,7 +29,6 @@ function emit(level: LogLevel, message: string, context?: LogContext) {
       env:     IS_BROWSER ? 'browser' : 'server',
       ...context,
     })
-    // eslint-disable-next-line no-console
     if (level === 'error' || level === 'warn') console.error(entry)
     else console.log(entry)
   } else {
@@ -40,7 +39,6 @@ function emit(level: LogLevel, message: string, context?: LogContext) {
       warn:  '⚠️  [WARN] ',
       error: '🔴 [ERROR]',
     }[level]
-    // eslint-disable-next-line no-console
     const fn = level === 'error' ? console.error
              : level === 'warn'  ? console.warn
              : console.log

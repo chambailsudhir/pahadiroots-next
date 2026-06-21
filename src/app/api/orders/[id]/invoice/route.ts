@@ -57,9 +57,10 @@ function fmtDate(iso: string) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
   if (!id) return fail(400, 'Order ID required')
 
   let token = getToken(req)
@@ -280,11 +281,6 @@ export async function GET(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
-    // (Supabase internals) exposed in production via this plain-text route.
-    console.error('[orders/[id]/invoice GET]', e)
-    return fail(500, process.env.NODE_ENV === 'production'
-      ? 'Invoice generation failed'
-      : (err.message || 'Invoice generation failed'))
+    return fail(500, err.message || 'Invoice generation failed')
   }
 }

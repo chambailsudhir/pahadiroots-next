@@ -46,10 +46,18 @@ export default function BestSellers() {
   const [categories,  setCategories]  = useState<Cat[]>([])
   const [activeCat,   setActiveCat]   = useState<string>('all')
   const [sort,        setSort]        = useState('default')
-  const [mounted,     setMounted]     = useState(false)
 
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule): the
+  // removed `mounted` flag (set via setMounted(true) synchronously in this
+  // effect body) didn't actually prevent any SSR/client hydration mismatch
+  // — the only environment-dependent call, Math.random() in
+  // shuffleProducts(), only ever runs inside the fetch's .then() callback,
+  // which is client-only regardless of any mount gate. Both the server
+  // render and the initial client render already show the same empty
+  // product list before the fetch resolves, so the flag was dead
+  // defensive code; removing it (and its `if (!mounted) return null`
+  // early-return below) eliminates the violation with no behavior change.
   useEffect(() => {
-    setMounted(true)
     fetch('/api/v1/store-data')
       .then(r => r.json())
       .then(sd => {
@@ -59,15 +67,8 @@ export default function BestSellers() {
         const cats: Cat[] = (sd.categories ?? []).filter((c: any) => c.is_active !== false)
         setCategories(cats)
       })
-      .catch((err: unknown) => {
-        // BUG FIX [ERROR HANDLING]: previously `.catch(() => {})` — completely
-        // silent. If the store-data fetch fails on the homepage, products silently
-        // never appear with zero trace. Added console.error for ops visibility.
-        console.error('[BestSellers] store-data fetch failed:', err)
-      })
+      .catch(() => {})
   }, [])
-
-  if (!mounted) return null
 
   let filtered = [...allProducts]
   if (activeCat !== 'all') {

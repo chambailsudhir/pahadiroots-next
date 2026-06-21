@@ -16,10 +16,12 @@ import Image from 'next/image'
 
 export const revalidate = 3600
 
-interface Props { params: { slug: string } }
+// BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+interface Props { params: Promise<{ slug: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { product } = await fetchProductData(params.slug)
+  const { slug } = await params
+  const { product } = await fetchProductData(slug)
   if (!product) return { title: 'Product Not Found' }
 
   const rawDesc = product.ai_description || product.short_description || `Buy ${product.name} online — pure Himalayan.`
@@ -60,8 +62,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductPage({ params }: Props) {
+  const { slug } = await params
   const [{ product, variants, images, stateData, related, reviewStats, settings: storeSettings }, siteSettings] = await Promise.all([
-    fetchProductData(params.slug),
+    fetchProductData(slug),
     getSiteSettings(),
   ])
 

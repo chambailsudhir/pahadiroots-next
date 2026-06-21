@@ -34,6 +34,16 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
+    // Genuinely necessary exception: this is client-mount detection to
+    // avoid hydration mismatches (React errors #418/#423/#425) when
+    // rendering Zustand `persist`-middleware state that reads localStorage,
+    // which doesn't exist during SSR. Whether we're mounted on the client
+    // cannot be known during ANY render phase (server or client) — only
+    // after the effect phase runs — so there is no render-time-adjustment
+    // equivalent here, unlike the prop-driven cases elsewhere in this
+    // codebase (see SearchOverlay.tsx / AuthModal.tsx for the pattern that
+    // DOES apply).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     setIsDark(document.documentElement.classList.contains('dark'))
     const onScroll = () => setScrolled(window.scrollY > 60)

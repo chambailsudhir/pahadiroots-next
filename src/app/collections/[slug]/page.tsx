@@ -10,9 +10,11 @@ import Link from 'next/link'
 
 export const revalidate = 60
 
+// BUG FIX (Next.js 15+/16 migration): both `params` and `searchParams` are
+// now Promises in Server Components — must be awaited before use.
 interface Props {
-  params:       { slug: string }
-  searchParams: { sort?: string; page?: string; instock?: string }
+  params:       Promise<{ slug: string }>
+  searchParams: Promise<{ sort?: string; page?: string; instock?: string }>
 }
 
 const PAGE_SIZE = 24
@@ -40,8 +42,9 @@ function emojiFor(name: string): string {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params
   const storeData = await getStoreData()
-  const cat = storeData.categories.find(c => c.slug === params.slug)
+  const cat = storeData.categories.find(c => c.slug === slug)
   if (!cat) return { title: 'Collection Not Found' }
   return {
     title:       `${cat.name} — Himalayan ${cat.name} | Pahadi Roots`,
@@ -51,10 +54,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CollectionPage({ params, searchParams }: Props) {
-  const [storeData, settings] = await Promise.all([getStoreData(), getSiteSettings()])
+  const [{ slug }, sp, storeData, settings] = await Promise.all([
+    params, searchParams, getStoreData(), getSiteSettings(),
+  ])
 
   // Find category using SERVICE KEY data (no RLS issues)
-  const cat = storeData.categories.find(c => c.slug === params.slug)
+  const cat = storeData.categories.find(c => c.slug === slug)
   if (!cat) notFound()
 
   // Get image via same imgFor() logic as old site
@@ -63,9 +68,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   // All categories for the nav bar (apply images same way)
   const allCategories = buildCategories(storeData)
 
-  const sort    = searchParams.sort    || 'newest'
-  const page    = Math.max(1, parseInt(searchParams.page || '1'))
-  const instock = searchParams.instock === 'true'
+  const sort    = sp.sort    || 'newest'
+  const page    = Math.max(1, parseInt(sp.page || '1'))
+  const instock = sp.instock === 'true'
   const offset  = (page - 1) * PAGE_SIZE
 
   // Get ALL products with images applied (SERVICE KEY — same as old site)

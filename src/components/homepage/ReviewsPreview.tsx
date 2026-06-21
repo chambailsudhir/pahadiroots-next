@@ -25,9 +25,9 @@ export default function ReviewsPreview() {
       <div className="rgrid">
         {REVIEWS.map((r, i) => (
           <div key={i} className="rcard">
-            <div className="rq">"</div>
+            <div className="rq">&quot;</div>
             <div className="rstars">★★★★★</div>
-            <p className="rtxt">"{r.text}"</p>
+            <p className="rtxt">&quot;{r.text}&quot;</p>
             <div className="rauth">
               <div className="rav">{r.initial}</div>
               <div>

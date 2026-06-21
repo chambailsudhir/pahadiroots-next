@@ -99,7 +99,6 @@ export default function CategoryTiles({ categories }: Props) {
     window.addEventListener('resize', onResize)
 
     return () => { clearInterval(timer); window.removeEventListener('resize', onResize) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.length])
 
   if (!active.length) return null

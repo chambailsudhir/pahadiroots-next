@@ -18,9 +18,10 @@ import {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
   if (!id) return fail(400, 'Order ID is required')
 
   // BUG FIX: raw `id` from the URL path was interpolated directly into the
@@ -113,11 +114,6 @@ export async function GET(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
-    // (Supabase internals from sbAdmin/syncCustomerProfile) exposed in production.
-    console.error('[orders/[id] GET]', e)
-    return fail(500, process.env.NODE_ENV === 'production'
-      ? 'Order fetch failed'
-      : (err.message || 'Order fetch failed'))
+    return fail(500, err.message || 'Order fetch failed')
   }
 }

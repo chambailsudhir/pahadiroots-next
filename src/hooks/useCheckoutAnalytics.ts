@@ -106,7 +106,16 @@ export function useCheckoutAnalytics({
   const startedRef     = useRef(false)
   const prevPayMethod  = useRef(payMethod)
   const prevFreeShip   = useRef(isFreeShipping)
-  const startTime      = useRef(Date.now())
+  // BUG FIX (React 19 / react-hooks/purity lint rule): Date.now() is impure
+  // — calling it as a useRef initializer means it executes on every render
+  // even though React only keeps the result from the very first call. The
+  // initial value here is never actually read: the only read-site (in
+  // handleUnload below) is gated by startedRef.current, which only becomes
+  // true inside the effect that also overwrites startTime.current right
+  // after — so by the time it's ever read, it's always already been set to
+  // a real timestamp. A pure literal is therefore a safe, fully
+  // behavior-equivalent replacement.
+  const startTime      = useRef(0)
 
   // Fire checkout_started once
   useEffect(() => {

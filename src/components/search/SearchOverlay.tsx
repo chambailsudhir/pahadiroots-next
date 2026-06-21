@@ -28,11 +28,36 @@ export default function SearchOverlay() {
   const [query, setQuery] = useState('')
   const [recent, setRecent] = useState<string[]>([])
 
-  useEffect(() => {
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule):
+  // This component never actually unmounts — it stays mounted in the tree
+  // and just returns `null` below when closed, so state persists across
+  // opens. The old code called setRecent()/setQuery() synchronously inside
+  // a useEffect reacting to `isOpen`, which the new React Compiler-readiness
+  // lint flags (effect-triggered setState causes an extra render pass).
+  //
+  // Fixed using React's documented "adjusting state during render" pattern
+  // (see https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  // Note this must use useState — NOT useRef — for the previous-value
+  // comparison: refs can't be safely read/written during render (React may
+  // call a render function multiple times without committing in concurrent
+  // mode, so ref mutations could leak across attempts). useState's setter
+  // is what makes this pattern safe — React applies it within the same
+  // render pass instead of scheduling a second one.
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen)
     if (isOpen) {
       setRecent(getRecent())
-      setTimeout(() => inputRef.current?.focus(), 50)
       setQuery('')
+    }
+  }
+
+  // Focusing the input is a genuine external-system side effect (the DOM),
+  // so this still correctly belongs in an effect.
+  useEffect(() => {
+    if (isOpen) {
+      const t = setTimeout(() => inputRef.current?.focus(), 50)
+      return () => clearTimeout(t)
     }
   }, [isOpen])
 
@@ -116,7 +141,7 @@ export default function SearchOverlay() {
           <div className="max-h-80 overflow-y-auto">
             {query.length >= 2 && results?.length === 0 && (
               <div className="text-center py-8 text-sm text-stone-400">
-                No products found for "{query}"
+                No products found for &quot;{query}&quot;
               </div>
             )}
 
@@ -155,7 +180,7 @@ export default function SearchOverlay() {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
-                    See all results for "{query}"
+                    See all results for &quot;{query}&quot;
                   </Link>
                 </li>
               </ul>

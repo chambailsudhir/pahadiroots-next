@@ -1,6 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
@@ -38,7 +39,7 @@ function SearchContent() {
       <div className="text-center py-20">
         <div className="text-5xl mb-4">🔍</div>
         <h2 className="text-lg font-semibold text-stone-700">Search for products</h2>
-        <p className="text-stone-400 text-sm mt-1">Try "honey", "turmeric", "ghee"…</p>
+        <p className="text-stone-400 text-sm mt-1">Try &quot;honey&quot;, &quot;turmeric&quot;, &quot;ghee&quot;…</p>
       </div>
     )
   }
@@ -64,9 +65,9 @@ function SearchContent() {
           <div className="text-5xl mb-4">🌿</div>
           <h3 className="text-lg font-semibold text-stone-700 mb-2">No products found</h3>
           <p className="text-stone-400 text-sm mb-5">Try a different search term</p>
-          <a href="/products" className="text-forest-700 font-semibold text-sm hover:underline">
+          <Link href="/products" className="text-forest-700 font-semibold text-sm hover:underline">
             Browse all products →
-          </a>
+          </Link>
         </div>
       )}
     </div>

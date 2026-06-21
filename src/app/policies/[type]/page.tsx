@@ -4,7 +4,8 @@ import Link from 'next/link'
 
 export const revalidate = 86400 // 24hr
 
-interface Props { params: { type: string } }
+// BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+interface Props { params: Promise<{ type: string }> }
 
 const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
   shipping: {
@@ -125,13 +126,15 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const policy = POLICIES[params.type]
+  const { type } = await params
+  const policy = POLICIES[type]
   if (!policy) return { title: 'Policy Not Found' }
   return { title: `${policy.title} — Pahadi Roots` }
 }
 
-export default function PolicyPage({ params }: Props) {
-  const policy = POLICIES[params.type]
+export default async function PolicyPage({ params }: Props) {
+  const { type } = await params
+  const policy = POLICIES[type]
   if (!policy) notFound()
 
   const allPolicies = [
@@ -154,7 +157,7 @@ export default function PolicyPage({ params }: Props) {
                 key={p.href}
                 href={p.href}
                 className={`block text-sm px-3 py-2 rounded-xl transition-colors ${
-                  p.href.endsWith(params.type)
+                  p.href.endsWith(type)
                     ? 'bg-forest-700 text-white font-semibold'
                     : 'text-stone-600 hover:bg-stone-100'
                 }`}

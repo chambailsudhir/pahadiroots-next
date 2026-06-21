@@ -31,7 +31,7 @@
  *   2. Add-to-cart button missing type="button".
  */
 
-import { memo, useMemo, useRef } from 'react'
+import { memo, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { UpsellItem } from '@/types'
@@ -81,11 +81,35 @@ const UpsellSection = memo(function UpsellSection({
   // preventing the jarring jump from 4 shimmers → 1–3 real items.
   // On the very first load (no prior data) we default to 2 (the median expected
   // result) instead of always showing 4, avoiding unnecessary layout shift.
-  const prevCountRef = useRef(2)
-  if (!loading && !error && visibleItems.length > 0) {
-    prevCountRef.current = visibleItems.length
+  //
+  // BUG FIX (React 19 / react-hooks/refs lint rule): was a useRef mutated
+  // directly during render (`prevCountRef.current = ...`). Refs can't be
+  // safely read or written during render — React may call a render function
+  // multiple times without committing in concurrent mode, so ref mutations
+  // could leak across attempts.
+  //
+  // BUG FIX (regression from the first useState attempt): the first
+  // rewrite called setPrevCount(visibleItems.length) unconditionally
+  // whenever `!loading && !error && visibleItems.length > 0`, relying
+  // purely on React's Object.is bailout to avoid extra renders. That
+  // caused an actual "Too many re-renders" failure in this component
+  // under test — calling a state setter during render without an explicit
+  // transition-gate isn't safe to rely on for stabilization. Fixed using
+  // the same explicit-transition-gate pattern used correctly everywhere
+  // else in this codebase (SearchOverlay, AuthModal, useCartPage,
+  // useCheckoutPage): track the previous visibleItems.length via its own
+  // useState, and only ever touch prevCount inside the gated branch — so
+  // on any render where the length hasn't changed, ZERO setState calls
+  // happen at all, sidestepping any reliance on bailout behavior.
+  const [prevVisibleCount, setPrevVisibleCount] = useState(0)
+  const [prevCount, setPrevCount] = useState(2)
+  if (visibleItems.length !== prevVisibleCount) {
+    setPrevVisibleCount(visibleItems.length)
+    if (!loading && !error && visibleItems.length > 0) {
+      setPrevCount(visibleItems.length)
+    }
   }
-  const shimmerCount = loading ? Math.max(1, Math.min(4, prevCountRef.current)) : 0
+  const shimmerCount = loading ? Math.max(1, Math.min(4, prevCount)) : 0
 
   return (
     <div className={styles.card}>

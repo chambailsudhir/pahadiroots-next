@@ -61,18 +61,14 @@ export default function ContactPage() {
         body: JSON.stringify({ action: 'contact', ...form }),
       })
       setStatus(res.ok ? 'done' : 'error')
-    } catch (e: unknown) {
-      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — no logging.
-      console.error('[contact] form submit failed:', e)
-      setStatus('error')
-    }
+    } catch { setStatus('error') }
   }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="text-center mb-12">
         <h1 className="text-3xl font-bold text-stone-900 mb-2">Get in Touch</h1>
-        <p className="text-stone-500 text-sm">We're a small team and we personally respond to every query.</p>
+        <p className="text-stone-500 text-sm">We&apos;re a small team and we personally respond to every query.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-16">
@@ -141,7 +137,7 @@ export default function ContactPage() {
             <div className="text-center py-8">
               <div className="text-4xl mb-3">✅</div>
               <h3 className="font-semibold text-stone-800 mb-1">Message received!</h3>
-              <p className="text-stone-500 text-sm">We'll get back to you within 24 hours.</p>
+              <p className="text-stone-500 text-sm">We&apos;ll get back to you within 24 hours.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

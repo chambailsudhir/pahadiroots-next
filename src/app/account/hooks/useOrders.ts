@@ -4,7 +4,7 @@
 // Updated: stats now includes loyalty_points from RPC
 // ─────────────────────────────────────────────────────────────
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetchOrders, type Order, type OrdersResponse } from '@/lib/services/orderService'
 import { ServiceError } from '@/lib/services/profileService'
@@ -185,6 +185,16 @@ export function useOrders(markExpired?: () => void) {
     }
   }, [data, totalCount, serverStats, extraOrders])
 
+  // BUG FIX: both were inline arrow literals in the return object, recreated
+  // with a new reference on every render — the same instability pattern
+  // fixed in useToast.ts's `show`. Everything each calls (useState setters,
+  // SWR's `mutate`) is itself referentially stable, so an empty dependency
+  // array is correct. This is what let account/page.tsx safely depend on
+  // `orders.fetchOrders` instead of needing the whole unstable `orders`
+  // object in its effect's dependency array.
+  const stableFetchOrders = useCallback(() => setEnabled(true), [])
+  const stableRefresh     = useCallback(() => { mutate(); setExtraOrders([]); setLoadedPage(1) }, [mutate])
+
   return {
     orders:      allOrders.length > 0 ? allOrders : null,
     loading:     isLoading,
@@ -194,8 +204,8 @@ export function useOrders(markExpired?: () => void) {
     search,      setSearch,
     filtered:    allOrders,
     stats,
-    fetchOrders: () => setEnabled(true),
-    refresh:     () => { mutate(); setExtraOrders([]); setLoadedPage(1) },
+    fetchOrders: stableFetchOrders,
+    refresh:     stableRefresh,
     canReturn,
     page:        loadedPage,
     totalPages,

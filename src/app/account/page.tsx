@@ -26,6 +26,21 @@ import styles from './styles/account.module.css'
 
 const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifications', 'privacy', 'loyalty']
 
+// BUG FIX (react-hooks/exhaustive-deps): was defined inside AccountPageInner,
+// recreated with a new reference on every render even though it has no
+// closure over any component state — it's a pure function of its
+// parameter. Moved to module scope so it has a permanently stable
+// reference, the same fix-shape as memoizing useToast's `show` and
+// useOrders' `fetchOrders`/`refresh` above, just achieved by relocation
+// instead of useCallback since no closure is needed at all.
+function getProfileSig(p: { first_name?: string; last_name?: string; address_line1?: string; city?: string; state?: string; postal_code?: string; phone?: string }): string {
+  return [
+    p.first_name, p.last_name,
+    p.address_line1, p.city, p.state, p.postal_code,
+    p.phone,
+  ].join('\x00')
+}
+
 function AccountPageInner() {
   const searchParams = useSearchParams()
   const router       = useRouter()
@@ -58,15 +73,16 @@ function AccountPageInner() {
   // we re-init the form so the user always sees current data.
   const profileSig = useRef<string>('')
 
-  function getProfileSig(p: NonNullable<typeof auth.profile>): string {
-    return [
-      p.first_name, p.last_name,
-      p.address_line1, p.city, p.state, p.postal_code,
-      p.phone,
-    ].join('\x00')
-  }
-
-  useEffect(() => { auth.init() }, [])
+  // auth.init is memoized in useAuth.ts (useCallback, stable deps:
+  // syncStore, storeSetWishlist — both themselves stable). The rule wants
+  // the whole `auth` object even though only this stable property is used;
+  // `auth` itself is a new object literal every render, so depending on it
+  // would cause this effect to re-run on every unrelated render. Safe to
+  // disable: init() is itself guarded by an internal initDone ref, so even
+  // an extra re-run would be a no-op, not a real bug — this disable avoids
+  // the unnecessary re-evaluation entirely.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { auth.init() }, [auth.init])
 
   useEffect(() => {
     if (!auth.profile) return
@@ -77,11 +93,25 @@ function AccountPageInner() {
       profileInitialised.current = true
       profileSig.current         = sig
     }
-  }, [auth.profile])
+    // getProfileSig is module-scope (stable, no closure) — doesn't need to
+    // be listed. profile.initFromProfile is memoized in useProfile.ts
+    // (empty deps). The rule still wants the whole `profile` object, which
+    // is a new literal every render — depending on it would re-run this
+    // effect constantly. Safe to disable: the profileInitialised/profileSig
+    // ref guard already makes re-runs a no-op unless the profile signature
+    // actually changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.profile, profile.initFromProfile])
 
+  // orders.fetchOrders is memoized in useOrders.ts (useCallback, empty
+  // deps). The rule still wants the whole `orders` object (a new literal
+  // every render) — depending on it would re-run this effect constantly.
+  // Safe to disable: fetchOrders() just flips a boolean that's already
+  // checked via hasFetched, so a re-run is a no-op once orders are loaded.
   useEffect(() => {
     if (auth.loggedIn && !orders.hasFetched) orders.fetchOrders()
-  }, [auth.loggedIn, orders.hasFetched])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.loggedIn, orders.hasFetched, orders.fetchOrders])
 
   if (!auth.loaded) return (
     <div className={styles.accLoading}>

@@ -64,7 +64,7 @@ export default function ReviewsSection({ productId }: { productId: string | numb
               <span className="text-[11px] text-stone-400">{formatDate(r.created_at)}</span>
             </div>
             {r.review_text && (
-              <p className="text-sm text-stone-600 leading-relaxed mb-3 line-clamp-3">"{r.review_text}"</p>
+              <p className="text-sm text-stone-600 leading-relaxed mb-3 line-clamp-3">&quot;{r.review_text}&quot;</p>
             )}
             <div className="text-xs font-semibold text-stone-700">{r.customer_name}{r.location ? ` · ${r.location}` : ''}</div>
           </div>

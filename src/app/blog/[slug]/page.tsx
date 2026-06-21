@@ -10,26 +10,29 @@ import type { Product } from '@/types'
 
 export const revalidate = 86400
 
-interface Props { params: { slug: string } }
+// BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
+interface Props { params: Promise<{ slug: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params
   let post = null
-  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', params.slug).single(); post = data } catch (e: unknown) { console.error('[blog/slug] post meta fetch failed:', e) }
+  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', slug).single(); post = data } catch {}
   if (!post) return { title: 'Article Not Found' }
   return { title: post.title, description: post.excerpt || '' }
 }
 
 export default async function BlogArticlePage({ params }: Props) {
+  const { slug } = await params
   let post = null
   try {
     const { data } = await supabase
       .from('blog_posts')
       .select('id, title, slug, content, cover_image, published_at, excerpt, related_product_id')
-      .eq('slug', params.slug)
+      .eq('slug', slug)
       .eq('is_published', true)
       .single()
     post = data
-  } catch (e: unknown) { console.error('[blog/slug] post fetch failed:', e); post = null }
+  } catch { post = null }
 
   if (!post) notFound()
 
@@ -47,7 +50,7 @@ export default async function BlogArticlePage({ params }: Props) {
         const b: string[] = Array.isArray(d.badges) ? d.badges : []
         relatedProduct = { ...d, badges_bestseller: b.includes('bestseller'), badges_new: b.includes('new'), badges_organic: b.includes('organic'), product_variants: (d.product_variants ?? []).map((v: any) => ({ ...v, size: v.variant_value ?? '' })) } as Product
       }
-    } catch (e: unknown) { console.error('[blog/slug] relatedProduct fetch failed:', e); relatedProduct = null }
+    } catch { relatedProduct = null }
   }
 
   return (
@@ -107,6 +110,6 @@ export default async function BlogArticlePage({ params }: Props) {
 
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch (e: unknown) { console.error('[blog/slug] generateStaticParams failed:', e) }
+  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch {}
   return (data || []).map(p => ({ slug: p.slug }))
 }

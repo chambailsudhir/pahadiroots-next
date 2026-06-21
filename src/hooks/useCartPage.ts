@@ -387,17 +387,25 @@ export function useCartPage() {
   useEffect(() => { subtotalRef.current = pricing.subtotal }, [pricing.subtotal])
 
   // ── Coupon pre-fill (runs once after store hydrates) ──────────────────────
-  // Fix 8: only mark the ref done after we actually have a non-empty
-  // lastAppliedCouponCode value, so the effect stays ready until hydration lands.
-  const couponInitRef = useRef(false)
-  useEffect(() => {
-    if (couponInitRef.current) return
-    if (!lastAppliedCouponCode) return
-    couponInitRef.current = true
+  // Fix 8: only pre-fill after we actually have a non-empty
+  // lastAppliedCouponCode value, so this stays ready until hydration lands.
+  //
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule): was a
+  // ref-guarded effect (couponInitRef) calling setCouponCode synchronously
+  // in the body. Restructured using React's documented "adjusting state
+  // during render" pattern. Uses a boolean useState lock (not value-equality
+  // tracking) to precisely preserve the original "runs once, ever" semantics
+  // — once lastAppliedCouponCode is seen truthy the first time, this never
+  // re-checks again, even if lastAppliedCouponCode changes again later in
+  // the session. useState replaces the ref because refs can't be safely
+  // written during render (see SearchOverlay.tsx for the same reasoning).
+  const [hasPreFilledCoupon, setHasPreFilledCoupon] = useState(false)
+  if (!hasPreFilledCoupon && lastAppliedCouponCode) {
+    setHasPreFilledCoupon(true)
     if (!coupon) {
       setCouponCode(lastAppliedCouponCode)
     }
-  }, [lastAppliedCouponCode, coupon])
+  }
 
   // ── Settings + reviews fetch ───────────────────────────────────────────────
   useEffect(() => {
@@ -447,6 +455,28 @@ export function useCartPage() {
     return () => ac.abort()
   }, [])
 
+  // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule): the
+  // empty-cartKey reset (loading=false, error=false, items=[]) was the
+  // early-return branch of the fetch effect below, calling setState
+  // synchronously in the body. This part is a true value-transition case
+  // (reacting to cartKey going empty), so it's pulled out using React's
+  // documented "adjusting state during render" pattern. The effect below
+  // keeps the actual async fetch — a genuine external-system interaction
+  // that correctly belongs in an effect. Sentinel `null` default (distinct
+  // from cartKey's real '' empty-cart value) makes this also fire on the
+  // very first render, which matters because upsellLoading defaults to
+  // `true` — without this firing on mount too, a cart that starts empty
+  // would show a permanent loading spinner with no fetch ever clearing it.
+  const [prevCartKeyForUpsells, setPrevCartKeyForUpsells] = useState<string | null>(null)
+  if (prevCartKeyForUpsells !== cartKey) {
+    setPrevCartKeyForUpsells(cartKey)
+    if (!cartKey) {
+      setUpsellLoading(false)
+      setUpsellError(false)
+      setUpsellItems([])
+    }
+  }
+
   // ── Upsells fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
     // Fix 14: skip the fetch entirely when the cart is empty.
@@ -454,13 +484,9 @@ export function useCartPage() {
     // request with ?variantIds=&productIds= wastes a round-trip and triggers
     // a loading spinner the user will never see resolve into anything useful.
     // The effect will re-fire once cartKey becomes non-empty (after hydration
-    // adds items to the store).
-    if (!cartKey) {
-      setUpsellLoading(false)
-      setUpsellError(false)
-      setUpsellItems([])
-      return
-    }
+    // adds items to the store). The reset for this case now happens above,
+    // during render, before this effect even runs.
+    if (!cartKey) return
 
     const ac = new AbortController()
     const current    = itemsRef.current
@@ -468,6 +494,13 @@ export function useCartPage() {
     const productIds = [...new Set(current.map(i => i.productId))].join(',')
     const params     = new URLSearchParams({ variantIds, productIds })
 
+    // Standard "reset state before initiating an async fetch" pattern —
+    // this is React's own documented idiom for effect-based data fetching
+    // (see https://react.dev/reference/react/useEffect#fetching-data-with-effects,
+    // whose literal example calls setBio(null) synchronously immediately
+    // before the fetch call, for the same reason: preparing loading/error
+    // state right before the async work it describes begins).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUpsellLoading(true)
     setUpsellError(false)
 

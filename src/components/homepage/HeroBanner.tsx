@@ -70,7 +70,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 Born in the<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>For Your Table
               </h1>
               <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color:'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 28px', maxWidth:440 }}>
-                Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature's finest.
+                Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature&apos;s finest.
               </p>
               <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
                 <Link href="/products" style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px' }}>
