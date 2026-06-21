@@ -3,7 +3,7 @@ import { subscribeSchema, reviewSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
 import { esc } from '@/lib/server/htmlEscape'
-import { Resend } from 'resend'
+import { sendTransactionalEmail } from '@/lib/server/email'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
 // resolution errors in Next.js 14 App Router server routes. The original import
@@ -141,20 +141,24 @@ export async function POST(req: NextRequest) {
         const safeName    = esc(rawName)
         const safeEmail   = esc(rawEmail)
         const safeMessage = esc(rawMessage)
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
+        // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
+        // directly. The Resend SDK resolves (never rejects) on API-level
+        // failures, so the catch below never actually fired for the most
+        // common failure mode — see lib/server/email.ts for the full
+        // explanation. sendTransactionalEmail() checks the resolved `error`
+        // field and dead-letters into `failed_emails` for retry instead of
+        // the contact-form notification simply vanishing.
+        await sendTransactionalEmail({
+          type:    'contact_form',
+          to:      process.env.ADMIN_EMAIL || 'hello@pahadiroots.com',
           from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',
-          to:      [process.env.ADMIN_EMAIL || 'hello@pahadiroots.com'],
           subject: `Contact form: ${safeName}`,
           html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
+          context: { submitted_email: rawEmail },
         })
       } catch (e) {
-        // BUG FIX [ERROR HANDLING]: previously `catch { /* non-fatal */ }` with
-        // zero logging. If Resend was down, rate-limited, or misconfigured, there
-        // was NO trace in server logs — ops had no way to know contact-form
-        // submissions were silently disappearing. Non-fatal is correct (the user
-        // still gets a success response so they don't retry-spam), but the
-        // failure must be visible to ops.
+        // Catches errors from validating/building the email above —
+        // sendTransactionalEmail() itself never throws.
         console.error('[actions/contact] Email send failed:', e)
       }
       return NextResponse.json({ success: true })

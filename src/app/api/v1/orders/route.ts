@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrder } from '@/lib/services/orderService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import { Resend } from 'resend'
+import { sendTransactionalEmail } from '@/lib/server/email'
 import { checkCsrf } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
@@ -20,10 +20,6 @@ function sanitize(str: string): string {
 // NOTE: createOrderSchema (imported from @/lib/schemas) is the canonical validation
 // schema for this route. coupon_code is accepted but the DISCOUNT is never trusted
 // from the client — createOrder() re-validates and recomputes server-side.
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout ${ms}ms`)), ms))])
-}
 
 function getDeliveryEstimate(): string {
   const d = new Date()
@@ -121,7 +117,6 @@ export async function POST(req: NextRequest) {
     const customerEmail = d.customer_email?.trim()
     if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
       try {
-        const resend     = new Resend(process.env.RESEND_API_KEY)
         const emailItems = order.cartItems ?? []
         const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
         const estDate    = getDeliveryEstimate()
@@ -204,29 +199,41 @@ export async function POST(req: NextRequest) {
 </div>
 </body></html>`
 
-        await withTimeout(resend.emails.send({
-          from:    'Pahadi Roots <noreply@pahadiroots.com>',
-          to:      [customerEmail],
+        // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
+        // directly inside this try/catch. The Resend SDK resolves (never
+        // rejects) on API-level failures, so this catch never fired for the
+        // most common failure mode — see lib/server/email.ts for the full
+        // explanation. sendTransactionalEmail() checks the resolved `error`
+        // field explicitly and dead-letters into `failed_emails` for retry
+        // via the cron sweep instead of the email simply vanishing.
+        await sendTransactionalEmail({
+          type:    'order_confirmation',
+          to:      customerEmail,
           subject: `Order Confirmed - ${order.order_number}`,
           html:    emailHtml,
-        }), 5000)
-      } catch (e) { console.error('[orders] Customer email failed:', e) }
+          context: { order_id: order.id, order_number: order.order_number },
+        })
+      } catch (e) {
+        // Catches errors from BUILDING the email (template interpolation,
+        // etc.) — sendTransactionalEmail() itself never throws.
+        console.error('[orders] Customer email failed:', e)
+      }
     }
 
     // Notify admin
     if (settings.admin_notify_email && !alreadyExists) {
       try {
-        const resend = new Resend(process.env.RESEND_API_KEY)
         const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
           ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
-        await withTimeout(resend.emails.send({
-          from:    'Pahadi Roots <noreply@pahadiroots.com>',
-          to:      [settings.admin_notify_email],
+        await sendTransactionalEmail({
+          type:    'admin_order_notify',
+          to:      settings.admin_notify_email,
           subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
           // Admin email — all user-supplied fields go through sanitize() above
           // (name, flat, area, city, state) then esc() for HTML encoding.
           html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
-        }), 5000)
+          context: { order_id: order.id, order_number: order.order_number },
+        })
       } catch (e) {
         // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
         // with zero logging — if the admin notification email failed (bad

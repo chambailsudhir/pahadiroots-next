@@ -59,6 +59,9 @@ export default defineConfig({
         'src/app/api/health/route.ts',
         'src/lib/services/inventoryService.ts',
         'src/hooks/useCartPage.ts',
+        // ── Email dead-letter queue (audit gap closed) ──
+        'src/lib/server/email.ts',
+        'src/app/api/v1/cron/retry-failed-emails/route.ts',
       ],
     },
   },
