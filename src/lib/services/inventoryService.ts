@@ -99,7 +99,15 @@ async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
           p_qty:        item.qty,
         })
       } catch (err: unknown) {
-        console.error('[inventoryService] _restoreReserved (product) failed:', err)
+        // BUG FIX 22b: captureError with alert:true — stock locked permanently.
+        import('@/lib/logger').then(({ captureError }) =>
+          captureError(err, {
+            action:     'inventoryService._restoreReserved.product',
+            product_id: item.productId,
+            qty:        item.qty,
+            alert:      true,
+          })
+        ).catch(() => null)
       }
     } else {
       try {
@@ -108,7 +116,17 @@ async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
           p_qty:        item.qty,
         })
       } catch (err: unknown) {
-        console.error('[inventoryService] _restoreReserved (variant) failed:', err)
+        // BUG FIX 22a: use captureError with alert:true — a failed stock restore
+        // after a partial reservation means inventory is permanently locked (stock
+        // decremented but never restored). Ops must correct manually via the DB.
+        import('@/lib/logger').then(({ captureError }) =>
+          captureError(err, {
+            action:     'inventoryService._restoreReserved.variant',
+            variant_id: item.variantId,
+            qty:        item.qty,
+            alert:      true,
+          })
+        ).catch(() => null)
       }
     }
   }
@@ -230,7 +248,16 @@ export async function restoreStock(
           p_qty: item.qty,
         })
       } catch (err) {
-        console.error('[inventoryService] restoreStock (product) failed for product', item.productId, err)
+        // BUG FIX 22c: captureError with alert:true — stock restore failure on
+        // cancellation/payment-failure means inventory stays permanently locked.
+        import('@/lib/logger').then(({ captureError }) =>
+          captureError(err, {
+            action:     'inventoryService.restoreStock.product',
+            product_id: item.productId,
+            qty:        item.qty,
+            alert:      true,
+          })
+        ).catch(() => null)
       }
     } else {
       try {
@@ -239,7 +266,15 @@ export async function restoreStock(
           p_qty: item.qty,
         })
       } catch (err) {
-        console.error('[inventoryService] restoreStock (variant) failed for variant', item.variantId, err)
+        // BUG FIX 22d: captureError with alert:true — see above.
+        import('@/lib/logger').then(({ captureError }) =>
+          captureError(err, {
+            action:     'inventoryService.restoreStock.variant',
+            variant_id: item.variantId,
+            qty:        item.qty,
+            alert:      true,
+          })
+        ).catch(() => null)
       }
     }
   }

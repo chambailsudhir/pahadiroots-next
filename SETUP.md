@@ -51,16 +51,45 @@ cp .env.example .env.local
 Edit `.env.local` with your real values:
 
 ```env
+# ── Supabase ─────────────────────────────────────────────────────────────────
 NEXT_PUBLIC_SUPABASE_URL=https://ulyrhnpoiypuvaurlqqi.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here        # Supabase → Settings → API → anon public
 SUPABASE_SERVICE_KEY=your_service_key_here              # Supabase → Settings → API → service_role
 
+# ── Razorpay ─────────────────────────────────────────────────────────────────
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx       # Razorpay dashboard → Settings → API Keys
-RAZORPAY_KEY_SECRET=your_razorpay_secret_here
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret_here
+# BUG FIX 23a: RAZORPAY_WEBHOOK_SECRET is a DIFFERENT value from RAZORPAY_KEY_SECRET.
+# Set this in Razorpay dashboard → Settings → Webhooks → Secret (generate separately).
+# Without this, webhook signature verification is disabled → replay attack risk.
+RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
 
+# ── Email ─────────────────────────────────────────────────────────────────────
 RESEND_API_KEY=re_xxxxxxxxxxxx                          # resend.com → API Keys
+ADMIN_EMAIL=ops@yourdomain.com                          # receives new order notifications
 
+# ── Site ──────────────────────────────────────────────────────────────────────
 NEXT_PUBLIC_SITE_URL=https://pahadiroots.com
+
+# ── Observability ─────────────────────────────────────────────────────────────
+# Version string emitted in /api/health and every JSON log line.
+# Set to your semver (e.g. "1.4.2") so each deployment is identifiable in logs.
+# Falls back to VERCEL_GIT_COMMIT_SHA automatically if not set.
+NEXT_PUBLIC_APP_VERSION=1.0.0
+
+# ── Cron auth ─────────────────────────────────────────────────────────────────
+# Random secret Vercel sends in Authorization: Bearer <CRON_SECRET> on cron calls.
+# Without this, /api/v1/cron/retry-failed-emails returns 500 and dead-letter
+# emails (including payment confirmations) are never retried.
+# Generate: openssl rand -hex 32
+CRON_SECRET=your_random_secret_here
+
+# ── Rate limiting (Upstash KV) — optional but strongly recommended ────────────
+# Without these, distributed rate limits on orders/payments/coupons are disabled
+# (only per-replica in-process fallback applies — NOT shared across instances).
+# Create a free Redis DB at upstash.com → copy the REST URL and token.
+UPSTASH_REDIS_REST_URL=https://xxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AXxx...
 ```
 
 ---
@@ -113,7 +142,9 @@ In **Razorpay dashboard → Settings → Webhooks → Add new webhook:**
 
 - URL: `https://pahadiroots-next.vercel.app/api/v1/webhook/razorpay`  
   *(replace with your actual Vercel URL or custom domain)*
-- Secret: same value as your `RAZORPAY_KEY_SECRET`
+- Secret: generate a new random string (`openssl rand -hex 32`) and set it as
+  **both** the webhook secret in the Razorpay dashboard **and** `RAZORPAY_WEBHOOK_SECRET` in Vercel  
+  ⚠️  `RAZORPAY_WEBHOOK_SECRET` is a DIFFERENT value from `RAZORPAY_KEY_SECRET` (the API key secret)
 - Events to enable:
   - `payment.captured`
   - `payment.failed`

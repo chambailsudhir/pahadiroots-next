@@ -38,7 +38,13 @@ interface RawHint {
 
 export async function GET() {
   try {
-    const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&select=${HINT_SELECT}&order=value.desc&limit=5`
+    // BUG FIX 28: expired coupons were fetched from DB then filtered in JS.
+    // The now() comparison should happen in the DB (pushes work to Postgres,
+    // reduces payload, avoids a JS Date parsing step for each row).
+    // Supabase PostgREST supports gte/lte filter operators on timestamp columns.
+    // We keep the JS filter as a belt-and-suspenders guard for timezone edge cases.
+    const nowIso = new Date().toISOString()
+    const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&or=(expires_at.is.null,expires_at.gte.${nowIso})&select=${HINT_SELECT}&order=value.desc&limit=5`
     const res = await fetch(url, {
       headers: {
         apikey:        ANON_KEY,
@@ -76,8 +82,12 @@ export async function GET() {
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    console.error('[coupon-hints] error:', message)
-    // Return empty hints on error — checkout still works without them
-    return NextResponse.json({ hints: [] })
+    import('@/lib/logger').then(({ logger }) => logger.error('coupon-hints fetch error', { action: 'coupon_hints.fetch', error: message })).catch(() => null)
+    // BUG FIX 10: previously returned HTTP 200 on all errors.
+    // A 200 with empty hints is indistinguishable from "no active coupons"
+    // to any monitoring tool — a broken DB connection would look identical to
+    // a store with no coupons. Return 500 so uptime monitors can detect it.
+    // The checkout page already handles empty hints gracefully.
+    return NextResponse.json({ hints: [] }, { status: 500 })
   }
 }

@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
-import { updateOrderStatus, logOrderEvent } from '@/lib/services/orderService'
+// BUG FIX: updateOrderStatus was imported but never called in this file —
+// the webhook updates order status directly via db.from('orders').update() so
+// it can apply the .eq('order_status', 'pending') atomic guard. The imported
+// function does not accept a WHERE condition and would allow a replay attack to
+// re-confirm an already-confirmed order. Removed the dead import.
+import { logOrderEvent } from '@/lib/services/orderService'
+// OBSERVABILITY FIX: use structured logger/captureError throughout so all
+// webhook events emit consistent JSON log lines filterable by aggregators.
+// alert:true on security events and processing failures means ops get paged.
+import { logger, captureError } from '@/lib/logger'
 
 // Minimal typed shape for Razorpay webhook events we handle
 interface RazorpayPaymentEntity {
@@ -50,7 +59,12 @@ export async function POST(req: Request) {
   // forge valid webhook signatures — the webhook secret is the correct credential.
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET
   if (!webhookSecret) {
-    console.error('[webhook] RAZORPAY_WEBHOOK_SECRET env var not set')
+    // BUG FIX: missing env var is a security configuration error — alert:true
+    // so ops are paged immediately (no webhook verification = replay attack risk).
+    captureError(new Error('RAZORPAY_WEBHOOK_SECRET not configured'), {
+      action: 'webhook.razorpay.config',
+      alert:  true,
+    })
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
   }
   const expectedSig = crypto
@@ -59,7 +73,13 @@ export async function POST(req: Request) {
     .digest('hex')
 
   if (expectedSig !== signature) {
-    console.error('[webhook] Invalid signature')
+    // BUG FIX: signature mismatch is a security event (forged webhook or wrong
+    // RAZORPAY_WEBHOOK_SECRET) — captureError with alert:true pages ops so this
+    // doesn't silently appear as a 400 in access logs.
+    captureError(new Error('Webhook HMAC signature mismatch'), {
+      action: 'webhook.razorpay.signature_verify',
+      alert:  true,
+    })
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -88,7 +108,16 @@ export async function POST(req: Request) {
     })
     .select('id')
     .single()
-  if (logErr) console.error('[webhook] Log failed:', logErr)
+  // BUG FIX: webhook log failure was silent in the previous version — if the
+  // webhook_logs insert fails (table missing, schema mismatch, DB overload) and
+  // webhookLog.id is null, the entire catch block at the bottom silently
+  // skips the 'failed' status update too. Both ops and the audit trail are blind.
+  if (logErr) {
+    captureError(new Error('Webhook log insert failed: ' + logErr.message), {
+      action: 'webhook.razorpay.log_insert',
+      alert:  true,
+    })
+  }
 
   // Return 200 IMMEDIATELY — process async (Audit #6)
   // Using a background-style approach (Vercel doesn't support true async after response,
@@ -107,7 +136,11 @@ export async function POST(req: Request) {
       // with the Razorpay payment ID before this webhook fires.
       const dbOrderId = payment.notes?.db_order_id
       if (!dbOrderId) {
-        console.error('[webhook] payment.captured missing notes.db_order_id', { paymentId })
+        captureError(new Error('payment.captured missing notes.db_order_id'), {
+          action:     'webhook.razorpay.payment_captured',
+          payment_id: paymentId,
+          alert:      true,
+        })
         return responsePromise
       }
 
@@ -143,7 +176,7 @@ export async function POST(req: Request) {
           })
         } else {
           // Lost the race or replayed event — another process already confirmed this order
-          console.info('[webhook] payment.captured: order already confirmed by concurrent process', {
+          logger.info('webhook: payment.captured order already confirmed by concurrent process', {
             paymentId,
             dbOrderId,
           })
@@ -156,7 +189,10 @@ export async function POST(req: Request) {
       const dbOrderId = payment.notes?.db_order_id
 
       if (!dbOrderId) {
-        console.error('[webhook] payment.failed missing notes.db_order_id')
+        captureError(new Error('payment.failed missing notes.db_order_id'), {
+          action: 'webhook.razorpay.payment_failed',
+          alert:  true,
+        })
         return responsePromise
       }
 
@@ -187,7 +223,11 @@ export async function POST(req: Request) {
               qty:       Number(i.quantity),
             }))
           ).catch(err =>
-            console.error('[webhook] restoreStock failed on payment.failed:', err)
+            captureError(err, {
+              action:   'webhook.razorpay.restoreStock',
+              order_id: order.id,
+              alert:    true,
+            })
           )
         }
 
@@ -217,7 +257,11 @@ export async function POST(req: Request) {
     }
 
   } catch (err) {
-    console.error('[webhook] Processing error:', err)
+    captureError(err, {
+      action:  'webhook.razorpay.processing',
+      log_id:  webhookLog?.id,
+      alert:   true,
+    })
     // AUDIT FIX: update webhook log to 'failed' so ops can identify stuck events.
     // Previously the catch block only logged to console; every errored event
     // appeared as 'received' indefinitely — invisible to any monitoring query
@@ -237,7 +281,7 @@ export async function POST(req: Request) {
           .eq('id', webhookLog.id)
       } catch (logUpdateErr) {
         // Non-fatal: original error is already in the console above.
-        console.error('[webhook] Failed to mark log as failed:', logUpdateErr)
+        logger.error('webhook: failed to mark webhook_log as failed', { log_id: webhookLog.id, err: logUpdateErr })
       }
     }
     // Still return 200 — Razorpay will retry on non-2xx, which could replay

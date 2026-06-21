@@ -1,40 +1,35 @@
 /**
  * rateLimitKv — shared distributed rate-limiter backed by Upstash KV.
  *
- * BEFORE: coupons/route.ts, orders/route.ts, and payments/route.ts each had
- * their own inline checkXxxRateLimit() function — ~40 identical lines apiece.
- * That means 3 copies of the same INCR+EXPIRE pipeline, 3 copies of the
- * fail-open logic, 3 copies of the timeout constant.  Any change (new header,
- * different timeout, updated warning message) had to be applied in 3 places
- * and could silently diverge between routes.
+ * OBSERVABILITY FIXES applied here:
  *
- * AFTER: single canonical implementation here.  Callers pass:
- *   key       — full KV key including the `mw:rl:` namespace so the counter
- *               is SHARED with middleware.ts (a hit at the middleware layer is
- *               also a hit here — no separate per-route counter).
- *   limit     — max allowed hits per window
- *   windowSec — rolling window length in seconds (default 60)
+ * BUG 6 — "warn once per cold-start" silent drift:
+ *   The previous _kvMissingWarned module-level boolean was set to true on the
+ *   first warning and never reset. In Vercel's Lambda model a warm instance
+ *   reuses the boolean (stays true → zero further warnings). A new cold-start
+ *   resets it to false → exactly ONE warning, then silence again.
+ *   If KV is removed from env vars mid-deployment, ops get at most one log line
+ *   per new Lambda instance spin-up — practically invisible.
  *
- * Returns true  = request allowed
- *         false = rate limit exceeded
+ *   Fix: emit captureError({alert:true}) on EVERY production request when KV
+ *   is absent. The log aggregator alert rule fires reliably; Vercel dedupes
+ *   identical log lines in the UI so the dashboard doesn't flood.
  *
- * Fail-open: if Upstash KV is unreachable the request is allowed so real users
- * are never blocked by an infra outage.  Middleware's general API rate limit
- * still applies in that case.
+ * BUG 7 — KV call failures not metriced:
+ *   Previously swallowed silently. Now emits logger.metric('kv.error', 1, 'count')
+ *   so a dashboard can chart the KV error rate over time.
  *
  * Consumed by:
- *   /api/v1/coupons/route.ts   (key mw:rl:coupon:<ip>,         limit 5)
- *   /api/v1/orders/route.ts    (key mw:rl:orders_ip:<ip>,      limit 10)
- *                              (key mw:rl:orders_phone:<phone>, limit 3)
- *   /api/v1/payments/route.ts  (key mw:rl:payments_ip:<ip>,    limit 10)
+ *   /api/v1/coupons/route.ts   (key mw:rl:coupon:<ip>,          limit 5)
+ *   /api/v1/orders/route.ts    (key mw:rl:orders_ip:<ip>,       limit 10)
+ *                              (key mw:rl:orders_phone:<phone>,  limit 3)
+ *   /api/v1/payments/route.ts  (key mw:rl:payments_ip:<ip>,     limit 10)
  */
 
-// Emit one warning per cold-start when KV is absent in production so the gap
-// surfaces in Vercel logs without flooding every request.
-let _kvMissingWarned = false
+import { captureError, logger } from '@/lib/logger'
 
 export async function checkRateLimitKv(
-  key:      string,  // full KV key, e.g. `mw:rl:coupon:${ip}`
+  key:      string,
   limit:    number,
   windowSec = 60,
 ): Promise<boolean> {
@@ -42,11 +37,16 @@ export async function checkRateLimitKv(
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
   if (!kvUrl || !kvToken) {
-    if (!_kvMissingWarned && process.env.NODE_ENV === 'production') {
-      _kvMissingWarned = true
-      console.warn(
-        '[rateLimitKv] Upstash KV not configured — route-level rate limits disabled. ' +
-        'Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN for cross-replica enforcement.',
+    // BUG FIX 6: warn on EVERY call in production (not once per cold-start).
+    // alert:true makes this filterable by log aggregators (Logtail / Datadog).
+    if (process.env.NODE_ENV === 'production') {
+      captureError(
+        new Error('Upstash KV not configured — route-level rate limits disabled'),
+        {
+          action: 'rateLimitKv.missing_config',
+          alert:  true,
+          hint:   'Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Vercel env vars',
+        },
       )
     }
     return true // fail-open: middleware general limit still applies
@@ -61,18 +61,30 @@ export async function checkRateLimitKv(
       },
       body: JSON.stringify([
         ['INCR',   key],
-        ['EXPIRE', key, windowSec, 'NX'], // NX = only set expiry on first write
+        ['EXPIRE', key, windowSec, 'NX'],
       ]),
-      // Short timeout so a slow KV doesn't block the route handler.
-      // On timeout we fail-open (return true) so users aren't locked out.
       signal: AbortSignal.timeout(1500),
     })
 
-    if (!res.ok) return true // KV unhealthy — fail-open
+    if (!res.ok) {
+      // BUG FIX 7: log KV errors as metrics so they're chartable
+      logger.metric('kv.error', 1, 'count', {
+        key_prefix: key.split(':')[2] ?? key,
+        status: res.status,
+      })
+      logger.warn('[rateLimitKv] KV responded with non-OK status', { status: res.status })
+      return true // KV unhealthy — fail-open
+    }
 
     const result = await res.json() as [[string, number], [string, number]]
-    return result[0][1] <= limit // true = allowed
-  } catch {
-    return true // network error / timeout — fail-open
+    return result[0][1] <= limit
+  } catch (e: unknown) {
+    const isTimeout = e instanceof Error && e.name === 'TimeoutError'
+    // BUG FIX 7: track connectivity failures as metrics
+    logger.metric('kv.error', 1, 'count', {
+      key_prefix: key.split(':')[2] ?? key,
+      reason:     isTimeout ? 'timeout' : 'network',
+    })
+    return true // fail-open
   }
 }

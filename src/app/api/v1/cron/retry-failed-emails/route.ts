@@ -14,6 +14,7 @@
 // it's missing rather than ever running as an open, unauthenticated endpoint.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
 import { MAX_DLQ_ATTEMPTS } from '@/lib/server/email'
@@ -52,10 +53,26 @@ export async function GET(req: NextRequest) {
   // endpoint just because the env var was never configured.
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {
-    console.error('[cron/retry-failed-emails] CRON_SECRET not configured')
+    // BUG FIX 15: missing CRON_SECRET means the entire email retry system is
+    // silently dead — every invocation returns 500 and dead-lettered emails
+    // (including payment confirmations) are never retried. Use captureError with
+    // alert:true so ops are paged immediately rather than finding out days later
+    // when customers complain they never got their order confirmation.
+    const { captureError: _captureError } = await import('@/lib/logger')
+    _captureError(new Error('CRON_SECRET not configured — email retry cron is broken'), {
+      action: 'cron.retry_failed_emails.no_secret',
+      alert:  true,
+    })
     return NextResponse.json({ error: 'Cron not configured' }, { status: 500 })
   }
-  if (req.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  // BUG FIX 24b: same timing attack as revalidate/route.ts — !== leaks secret
+  // timing information. Fix: timingSafeEqual from Node's crypto module.
+  const receivedAuth = req.headers.get('authorization') ?? ''
+  const expectedAuth = `Bearer ${cronSecret}`
+  const authBuf = Buffer.from(receivedAuth)
+  const expBuf  = Buffer.from(expectedAuth)
+  const cronAuthValid = authBuf.length === expBuf.length && timingSafeEqual(authBuf, expBuf)
+  if (!cronAuthValid) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -70,7 +87,13 @@ export async function GET(req: NextRequest) {
     .limit(BATCH_SIZE)
 
   if (fetchErr) {
-    console.error('[cron/retry-failed-emails] Fetch failed:', fetchErr)
+    // BUG FIX 15b: DB fetch failure means zero emails retried this sweep.
+    // Use structured logger.error so it's parseable by log aggregators.
+    const { logger: _logger } = await import('@/lib/logger')
+    _logger.error('cron: failed_emails fetch failed', {
+      action: 'cron.retry_failed_emails.fetch',
+      error:  fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+    })
     return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
   }
 
@@ -128,7 +151,20 @@ export async function GET(req: NextRequest) {
         last_attempt_at: nowIso,
       }).eq('id', row.id)
       dead++
-      console.error(`[cron/retry-failed-emails] ${row.type} to ${row.to_email} marked DEAD after ${newAttempts} attempts:`, errMessage)
+      // BUG FIX 15c: alert:true — a dead-letter email means a customer who
+      // paid never received their receipt. Needs immediate ops attention.
+      const { captureError: _captureError, logger: _logger } = await import('@/lib/logger')
+      _captureError(
+        new Error(`Email permanently dead: ${row.type} to ${row.to_email} after ${newAttempts} attempts`),
+        {
+          action:     'cron.retry_failed_emails.dead',
+          email_type: row.type,
+          to_email:   row.to_email,
+          attempts:   newAttempts,
+          last_error: errMessage.slice(0, 200),
+          alert:      true,
+        },
+      )
     } else {
       const nextRetryAt = new Date(Date.now() + nextRetryDelayMinutes(newAttempts) * 60_000).toISOString()
       await db.from('failed_emails').update({
@@ -141,6 +177,13 @@ export async function GET(req: NextRequest) {
       stillFailing++
     }
   }
+
+  // OBSERVABILITY FIX: emit DLQ metrics so a log aggregator can chart throughput
+  // and dead-letter rate over time without a separate APM product.
+  const { logger: _metricsLogger } = await import('@/lib/logger')
+  _metricsLogger.metric('email.dlq.sent',          sent,         'count')
+  _metricsLogger.metric('email.dlq.still_failing', stillFailing, 'count')
+  _metricsLogger.metric('email.dlq.dead',          dead,         'count')
 
   return NextResponse.json({
     candidates: candidates?.length ?? 0,

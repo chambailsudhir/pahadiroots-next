@@ -1,15 +1,24 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// lib/server/loyalty.ts
+// lib/server/loyalty.ts — server-only loyalty-point helpers
 //
-// Server-only loyalty-point helpers shared by:
-//   /api/v1/orders/route.ts   (COD path)
-//   /api/v1/payments/route.ts (Razorpay path)
+// OBSERVABILITY FIXES:
 //
-// The `import 'server-only'` guard causes a build-time error if this module
-// is ever accidentally imported into a 'use client' file, preventing
-// SUPABASE_SERVICE_KEY from leaking into the browser bundle.
-// ─────────────────────────────────────────────────────────────────────────────
+// BUG 8 — bare console.error on loyalty RPC failures.
+//   A loyalty RPC failure means a customer paid but their points were silently
+//   not awarded or deducted. The original code used console.error which:
+//     • does NOT emit a structured JSON line (breaks log aggregator filters)
+//     • does NOT set alert:true (no log-drain alert rule fires)
+//   Fix: replaced with captureError({alert:true}) throughout so a Logtail /
+//   Datadog alert rule can page ops within seconds of a failure.
+//
+// BUG 9 — no timeout on Supabase RPC calls.
+//   callLoyaltyRpc() had no AbortSignal.timeout. A slow Supabase response
+//   would hang the calling lambda (orders/route.ts, payments/route.ts) until
+//   Vercel's hard 15-second limit, causing the entire order confirmation to
+//   appear hung even though the order was already committed. Fixed: 5 s timeout
+//   (loyalty is non-fatal; a timeout fail-open is better than a hung response).
+
 import 'server-only'
+import { captureError } from '@/lib/logger'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -18,6 +27,8 @@ async function callLoyaltyRpc(
   rpc:    string,
   params: Record<string, unknown>,
 ): Promise<Response> {
+  // BUG FIX 9: added 5 s timeout — loyalty is non-fatal so a tight budget
+  // is acceptable and far better than hanging the order confirmation lambda.
   return fetch(`${SUPABASE_URL}/rest/v1/rpc/${rpc}`, {
     method: 'POST',
     headers: {
@@ -26,19 +37,11 @@ async function callLoyaltyRpc(
       'Content-Type':  'application/json',
     },
     body: JSON.stringify(params),
-    // BUG FIX: no timeout — a slow Supabase RPC response would hang the calling
-    // lambda (orders/route.ts, payments/route.ts) indefinitely. Loyalty calls are
-    // non-fatal (failures are caught and logged) so a tight 5 s budget is safe:
-    // if the RPC hasn't responded in 5 s we abort and let the order succeed without
-    // loyalty credits, which is far better than hanging the entire checkout.
     signal: AbortSignal.timeout(5_000),
   })
 }
 
-/**
- * Award loyalty points after an order is confirmed.
- * Non-fatal — a failure is logged but does not abort the order flow.
- */
+/** Award loyalty points after an order is confirmed. Non-fatal. */
 export async function awardLoyaltyPoints(
   customerId:  string | number,
   orderId:     string | number,
@@ -58,15 +61,18 @@ export async function awardLoyaltyPoints(
       p_note:        note,
     })
   } catch (e) {
-    console.error('[loyalty] awardLoyaltyPoints failed:', e)
+    // BUG FIX 8: alert:true — customer paid but points silently not awarded.
+    captureError(e, {
+      action:      'loyalty.awardLoyaltyPoints',
+      customer_id: String(customerId),
+      order_id:    String(orderId),
+      points:      pts,
+      alert:       true,
+    })
   }
 }
 
-/**
- * Atomically deduct redeemed points from a customer's balance.
- * Returns true on success (or when points === 0), false if the RPC
- * rejects (e.g. insufficient balance).
- */
+/** Atomically deduct redeemed points. Returns true on success, false on failure. */
 export async function redeemLoyaltyPoints(
   customerId: string | number,
   orderId:    string | number,
@@ -82,7 +88,15 @@ export async function redeemLoyaltyPoints(
     })
     const result = await res.json()
     return res.ok && (result === true || result?.result === true)
-  } catch {
+  } catch (e) {
+    // BUG FIX 8: alert:true — balance inconsistency if redemption skipped on paid order.
+    captureError(e, {
+      action:      'loyalty.redeemLoyaltyPoints',
+      customer_id: String(customerId),
+      order_id:    String(orderId),
+      points,
+      alert:       true,
+    })
     return false
   }
 }

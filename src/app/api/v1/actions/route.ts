@@ -47,7 +47,11 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   const rateLimitKey = `actions:${ip}`
   if (!checkRateLimit(rateLimitKey, 10, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429 })
+    // BUG FIX 12: missing Retry-After header on 429. RFC 6585 §4 requires it.
+    return NextResponse.json(
+      { error: 'Too many requests — please wait a moment' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    )
   }
 
   try {
@@ -159,7 +163,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         // Catches errors from validating/building the email above —
         // sendTransactionalEmail() itself never throws.
-        console.error('[actions/contact] Email send failed:', e)
+        import('@/lib/logger').then(({ logger }) => logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })).catch(() => null)
       }
       return NextResponse.json({ success: true })
     }
@@ -168,7 +172,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Server error'
-    console.error('[cart API]', internalMessage)
+    import('@/lib/logger').then(({ logger }) => logger.error('actions: handler error', { action: 'actions.handler', error: internalMessage })).catch(() => null)
     const clientMessage = process.env.NODE_ENV === 'production'
       ? 'Something went wrong. Please try again.'
       : internalMessage

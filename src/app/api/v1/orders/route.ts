@@ -106,7 +106,12 @@ export async function POST(req: NextRequest) {
           if (!redeemed) {
             // Non-fatal: order is committed, but redemption was skipped (balance race).
             // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
-            console.warn(`[loyalty] COD redemption skipped for order ${order.id} — insufficient balance at debit time`)
+            // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
+            // appears as a filterable JSON line in log aggregators, not a plain string.
+            const { logger: _logger } = await import('@/lib/logger')
+            _logger.warn('loyalty: COD redemption skipped — insufficient balance', {
+              order_id: order.id,
+            })
           }
         }
         await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
@@ -216,7 +221,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         // Catches errors from BUILDING the email (template interpolation,
         // etc.) — sendTransactionalEmail() itself never throws.
-        console.error('[orders] Customer email failed:', e)
+        import('@/lib/logger').then(({ logger }) => logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })).catch(() => null)
       }
     }
 
@@ -242,7 +247,7 @@ export async function POST(req: NextRequest) {
         // The customer-email catch two blocks above already logs correctly;
         // this one silently ate the same class of failure. Now logged for
         // ops visibility, matching the customer-email path.
-        console.error('[orders] Admin notification email failed:', e)
+        import('@/lib/logger').then(({ logger }) => logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })).catch(() => null)
       }
     }
 
@@ -251,7 +256,7 @@ export async function POST(req: NextRequest) {
       { status: alreadyExists ? 200 : 201 }
     )
   } catch (err: unknown) {
-    console.error('[orders POST]', err)
+    import('@/lib/logger').then(({ logger }) => logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
     // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
     // but never expose raw DB error messages in production — they leak table names,

@@ -30,6 +30,7 @@
 //   REVALIDATE_SECRET=<any long random string, shared with pahadi-admin>
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { getStoreData } from '@/lib/storeData'
 
@@ -44,11 +45,21 @@ export async function POST(req: NextRequest) {
   if (!secret) {
     // Fail closed: if the env var isn't configured, refuse rather than
     // silently accepting an unauthenticated revalidation request.
-    console.error('[revalidate] REVALIDATE_SECRET is not set')
+    import('@/lib/logger').then(({ captureError }) => captureError(new Error('REVALIDATE_SECRET not configured'), { action: 'revalidate.no_secret', alert: true })).catch(() => null)
     return NextResponse.json({ error: 'Revalidation not configured' }, { status: 503 })
   }
 
-  if (token !== secret) {
+  // BUG FIX 24a: JavaScript's !== short-circuits on the first differing character,
+  // leaking timing information about the secret value (timing attack). An attacker
+  // can enumerate the secret character-by-character by measuring response latency.
+  // Fix: timingSafeEqual() from Node's crypto module runs in constant time regardless
+  // of where the strings differ. Both buffers must be the same length; we compare
+  // Buffer.from() representations so a length difference also yields a constant-time
+  // false without short-circuiting.
+  const tokenBuf  = Buffer.from(token  ?? '')
+  const secretBuf = Buffer.from(secret ?? '')
+  const isValid = tokenBuf.length === secretBuf.length && timingSafeEqual(tokenBuf, secretBuf)
+  if (!isValid) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -89,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, revalidated })
   } catch (err) {
-    console.error('[revalidate] error:', err)
+    import('@/lib/logger').then(({ logger }) => logger.error('revalidate error', { action: 'revalidate.error', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
     return NextResponse.json({ error: 'Revalidation failed' }, { status: 500 })
   }
 }

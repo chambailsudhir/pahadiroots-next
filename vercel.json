@@ -4,24 +4,48 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "functions": {
-    "src/app/api/v1/orders/route.ts":                      { "maxDuration": 15 },
-    "src/app/api/v1/payments/route.ts":                     { "maxDuration": 15 },
-    "src/app/api/v1/webhook/razorpay/route.ts":             { "maxDuration": 10 },
-    "src/app/api/v1/cron/retry-failed-emails/route.ts":     { "maxDuration": 30 }
+    "src/app/api/v1/orders/route.ts": {
+      "maxDuration": 15
+    },
+    "src/app/api/v1/payments/route.ts": {
+      "maxDuration": 15
+    },
+    "src/app/api/v1/webhook/razorpay/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/v1/cron/retry-failed-emails/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/health/route.ts": {
+      "maxDuration": 10
+    }
   },
   "crons": [
     {
       "path": "/api/v1/cron/retry-failed-emails",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/health",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
     {
       "source": "/api/v1/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options",        "value": "DENY" },
-        { "key": "X-XSS-Protection",       "value": "1; mode=block" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
       ]
     }
   ]

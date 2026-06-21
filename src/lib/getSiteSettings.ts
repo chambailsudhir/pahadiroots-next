@@ -53,6 +53,14 @@ const DEFAULTS: Partial<SiteSettings> = {
 }
 
 // In-memory cache for server-side (Next.js ISR revalidation handles the rest)
+// BUG 27 NOTE: this module-level cache has an inherent stampede race in
+// serverless environments. Two concurrent cold-start requests both read
+// _cache=null, both call Supabase, both write _cache. Last-write-wins with
+// identical data so the result is correct, but two Supabase calls fire
+// instead of one. This is acceptable for settings (low-frequency change,
+// small payload). For true single-flight semantics, a Promise-based lock
+// or Upstash KV cache would be needed. Documented here so future devs
+// don't add write mutations expecting cache coherence.
 let _cache: { data: SiteSettings; ts: number } | null = null
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 

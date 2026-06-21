@@ -64,8 +64,6 @@ const _localRateMap = new Map<string, RateEntry>()
 
 // Emit a single warning per cold-start when KV is absent in production so the
 // issue surfaces in Vercel logs without flooding every subsequent request.
-let _kvMissingWarned = false
-
 async function rateLimit(key: string, limit: number, windowSec: number): Promise<boolean> {
   const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -92,16 +90,18 @@ async function rateLimit(key: string, limit: number, windowSec: number): Promise
     }
   }
 
-  // In-process fallback (local dev / KV not yet configured)
-  if (!_kvMissingWarned) {
-    _kvMissingWarned = true
-    if (process.env.NODE_ENV === 'production') {
-      console.warn(
-        '[middleware] Upstash KV not configured — rate-limiting falls back to a per-instance ' +
-        'Map. Burst limits are NOT enforced globally across Vercel edge replicas. ' +
-        'Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN to fix this.'
-      )
-    }
+  // BUG FIX 29: _kvMissingWarned "warn once per cold-start" bug — identical
+  // to the one in rateLimitKv.ts. After the first warm Vercel instance, no
+  // further warnings fire. Fixed: log on EVERY production request when KV absent.
+  // console.warn here (not captureError) because proxy.ts runs before the logger
+  // module is initialized in some edge cases.
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(JSON.stringify({
+      level:   'warn',
+      message: 'proxy: Upstash KV not configured — rate limiting per-instance only',
+      action:  'proxy.rateLimit.kv_missing',
+      ts:      new Date().toISOString(),
+    }))
   }
   const now   = Date.now()
   const entry = _localRateMap.get(key)

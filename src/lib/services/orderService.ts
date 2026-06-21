@@ -655,7 +655,14 @@ export async function createOrder(
       .eq('code', couponDbRow.code)
       .eq('uses_count', couponDbRow.uses_count) // optimistic lock — prevents stale write
     if (couponIncrErr) {
-      console.error('[createOrder] coupon uses_count increment failed:', couponIncrErr.message)
+      // BUG FIX 20a: use structured logger (not raw console.error) so this is
+      // parseable by log aggregators and shows up in dashboards.
+      const { logger } = await import('@/lib/logger')
+      logger.error('[createOrder] coupon uses_count increment failed', {
+        action:  'createOrder.coupon_increment',
+        code:    couponDbRow.code,
+        error:   couponIncrErr.message,
+      })
     }
   }
 
@@ -696,9 +703,14 @@ export async function createOrder(
       const { restoreStock } = await import('./inventoryService')
       await restoreStock(
         input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
-      ).catch(restoreErr => {
-        // Non-fatal — log for ops; ops team can manually correct via restore_stock RPC
-        console.error('[createOrder] stock restore failed after aborted order:', restoreErr)
+      ).catch(async restoreErr => {
+        // BUG FIX 20b: use captureError with alert:true — a failed stock restore
+        // on an aborted order means inventory is permanently locked. Ops must fix.
+        const { captureError } = await import('@/lib/logger')
+        captureError(restoreErr, {
+          action: 'createOrder.stock_restore_failed',
+          alert:  true,
+        })
       })
     }
   }
@@ -759,11 +771,27 @@ export async function logOrderEvent(
       created_at: new Date().toISOString(),
     })
     if (error) {
-      console.error(`[logOrderEvent] insert failed for order ${orderId}, event "${event}":`, error.message)
+      // BUG FIX 21: use structured logger.error — raw console.error is unparseable
+    // by log aggregators and won't appear in log-level filters.
+    import('@/lib/logger').then(({ logger }) =>
+      logger.error('logOrderEvent: insert failed', {
+        action:   'logOrderEvent.insert_failed',
+        order_id: orderId,
+        event,
+        error:    error.message,
+      })
+    ).catch(() => null)
     }
   } catch (e) {
     // Network failure, table missing, or any other unexpected error —
     // never let an audit-log problem fail the caller's order flow.
-    console.error(`[logOrderEvent] unexpected error for order ${orderId}, event "${event}":`, e)
+    import('@/lib/logger').then(({ logger }) =>
+      logger.error('logOrderEvent: unexpected error', {
+        action:   'logOrderEvent.unexpected',
+        order_id: orderId,
+        event,
+        error:    e instanceof Error ? e.message : String(e),
+      })
+    ).catch(() => null)
   }
 }

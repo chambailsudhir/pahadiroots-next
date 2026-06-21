@@ -20,7 +20,12 @@ export async function POST(req: NextRequest) {
   // middleware.ts so the counter is global and consistent across replicas.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   if (!await checkRateLimitKv(`mw:rl:coupon:${ip}`, 5)) {
-    return NextResponse.json({ error: 'Too many attempts — please wait a moment' }, { status: 429 })
+    // BUG FIX 11: missing Retry-After header on 429. RFC 6585 §4 requires it.
+    // Without it, clients don't know how long to wait and may hammer immediately.
+    return NextResponse.json(
+      { error: 'Too many attempts — please wait a moment' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    )
   }
 
   try {
@@ -37,7 +42,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     // BUG FIX [ERROR HANDLING]: previously exposed raw e.message in production
     // (Supabase internals, table names, constraint violations) with no logging.
-    console.error('[coupons POST]', err)
+    import('@/lib/logger').then(({ logger }) => logger.error('coupons POST error', { action: 'coupons.post', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
     const message = process.env.NODE_ENV === 'production'
       ? 'Coupon validation failed — please try again'
       : (err instanceof Error ? err.message : 'Server error')
