@@ -14,7 +14,7 @@ interface Props { params: { slug: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   let post = null
-  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', params.slug).single(); post = data } catch {}
+  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', params.slug).single(); post = data } catch (e: unknown) { console.error('[blog/slug] post meta fetch failed:', e) }
   if (!post) return { title: 'Article Not Found' }
   return { title: post.title, description: post.excerpt || '' }
 }
@@ -29,7 +29,7 @@ export default async function BlogArticlePage({ params }: Props) {
       .eq('is_published', true)
       .single()
     post = data
-  } catch { post = null }
+  } catch (e: unknown) { console.error('[blog/slug] post fetch failed:', e); post = null }
 
   if (!post) notFound()
 
@@ -47,7 +47,7 @@ export default async function BlogArticlePage({ params }: Props) {
         const b: string[] = Array.isArray(d.badges) ? d.badges : []
         relatedProduct = { ...d, badges_bestseller: b.includes('bestseller'), badges_new: b.includes('new'), badges_organic: b.includes('organic'), product_variants: (d.product_variants ?? []).map((v: any) => ({ ...v, size: v.variant_value ?? '' })) } as Product
       }
-    } catch { relatedProduct = null }
+    } catch (e: unknown) { console.error('[blog/slug] relatedProduct fetch failed:', e); relatedProduct = null }
   }
 
   return (
@@ -107,6 +107,6 @@ export default async function BlogArticlePage({ params }: Props) {
 
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch {}
+  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch (e: unknown) { console.error('[blog/slug] generateStaticParams failed:', e) }
   return (data || []).map(p => ({ slug: p.slug }))
 }

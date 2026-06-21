@@ -145,6 +145,9 @@ export async function POST(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
+    // BUG FIX [ERROR HANDLING]: previously no console.error — a DB failure or
+    // unexpected error here was completely invisible in server logs.
+    console.error('[orders/[id]/return POST]', e)
     // SEC-FIX: never expose raw DB/Supabase error messages in production —
     // they can leak table names, constraint names, and other internals.
     const clientMsg = process.env.NODE_ENV !== 'production'

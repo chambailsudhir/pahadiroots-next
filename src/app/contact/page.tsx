@@ -61,7 +61,11 @@ export default function ContactPage() {
         body: JSON.stringify({ action: 'contact', ...form }),
       })
       setStatus(res.ok ? 'done' : 'error')
-    } catch { setStatus('error') }
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — no logging.
+      console.error('[contact] form submit failed:', e)
+      setStatus('error')
+    }
   }
 
   return (

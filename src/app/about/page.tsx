@@ -20,7 +20,7 @@ export default async function AboutPage() {
       .eq('is_active', true)
       .order('sort_order')
     team = data
-  } catch { team = null }
+  } catch (e: unknown) { console.error("[about] team fetch failed:", e); team = null }
 
   // Fetch founder images
   let founderImages = null
@@ -31,7 +31,7 @@ export default async function AboutPage() {
       .order('sort_order')
       .limit(4)
     founderImages = data
-  } catch { founderImages = null }
+  } catch (e: unknown) { console.error("[about] founderImages fetch failed:", e); founderImages = null }
 
   return (
     <div>

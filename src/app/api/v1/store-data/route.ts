@@ -76,8 +76,16 @@ export async function GET() {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
     console.error('store-data error:', message)
+    // BUG FIX [ERROR HANDLING]: previously returned raw Supabase error text
+    // (e.g. "Supabase products: 503") directly in the JSON response body — this
+    // leaks internal infrastructure details (table names, HTTP status from the
+    // upstream Supabase REST API) to any client that reads the error field.
+    // In production return a generic message; in dev return the real one.
+    const clientMessage = process.env.NODE_ENV === 'production'
+      ? 'Failed to load store data — please try again'
+      : message
     return NextResponse.json(
-      { error: message, products: [], settings: {}, categories: [], product_images: [] },
+      { error: clientMessage, products: [], settings: {}, categories: [], product_images: [] },
       { status: 500 }
     )
   }

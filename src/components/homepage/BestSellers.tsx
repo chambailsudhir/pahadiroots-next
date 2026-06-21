@@ -59,7 +59,12 @@ export default function BestSellers() {
         const cats: Cat[] = (sd.categories ?? []).filter((c: any) => c.is_active !== false)
         setCategories(cats)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // BUG FIX [ERROR HANDLING]: previously `.catch(() => {})` — completely
+        // silent. If the store-data fetch fails on the homepage, products silently
+        // never appear with zero trace. Added console.error for ops visibility.
+        console.error('[BestSellers] store-data fetch failed:', err)
+      })
   }, [])
 
   if (!mounted) return null

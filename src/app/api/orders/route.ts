@@ -130,7 +130,12 @@ async function getStatsFromRpc(
       // New column added in db_migration_v4_loyalty.sql
       loyalty_points: Number(row.loyalty_points) || 0,
     }
-  } catch {
+  } catch (err) {
+    // BUG FIX [ERROR HANDLING]: previously bare `catch` with no logging — if the
+    // get_customer_order_stats RPC is missing, times out, or returns an error, the
+    // stats block silently returns null and the account page shows blank stats.
+    // Ops had no way to detect a broken/missing RPC. Added console.error.
+    console.error('[getStatsFromRpc] failed:', err)
     return null
   }
 }

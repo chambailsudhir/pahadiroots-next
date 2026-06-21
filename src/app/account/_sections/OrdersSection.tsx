@@ -112,7 +112,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
         setReturnOtherText('')
         orders.refresh()
       }
-    } catch {
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` with no logging.
+      console.error('[OrdersSection] return submit failed:', e)
       showToast('Network error — please try again', 'error')
     } finally {
       setSubmitting(false)

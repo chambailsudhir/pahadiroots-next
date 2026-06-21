@@ -92,7 +92,9 @@ function SuccessContent() {
       const data = await res.json()
       if (!res.ok || !data.order) throw new Error('not found')
       setOrder(data.order)
-    } catch {
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — no logging.
+      console.error('[order-success] loadOrder failed:', e)
       clearTimeout(timer)
       setError(true)
     } finally {
@@ -112,7 +114,11 @@ function SuccessContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save_row', table: 'order_ratings', data: { order_id: orderId, rating: n, created_at: new Date().toISOString() } }),
       })
-    } catch { /* non-critical */ }
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: "non-critical" comment but still zero logging.
+      // If the rating API consistently fails, ops would have no way to notice.
+      console.warn('[order-success] rateOrder failed:', e)
+    }
   }
 
   /* ── status stepper ── */

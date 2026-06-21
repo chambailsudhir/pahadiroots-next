@@ -20,7 +20,11 @@ export default function Footer({ settings }: Props) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', email }),
       })
-    } catch {}
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — completely silent.
+      // Newsletter subscription failures were invisible to ops.
+      console.error('[Footer] newsletter subscribe failed:', e)
+    }
     setSubDone(true)
     setSubLoading(false)
   }

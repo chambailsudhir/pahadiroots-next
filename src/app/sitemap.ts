@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Products
   let products = null
-  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false).eq('is_active', true); products = data } catch {}
+  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false).eq('is_active', true); products = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const productPages: MetadataRoute.Sitemap = (products || []).map(p => ({
     url:             `${BASE}/products/${p.slug}`,
@@ -27,7 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Collections
   let categories = null
-  try { const { data } = await supabase.from('categories').select('slug').eq('is_active', true); categories = data } catch {}
+  try { const { data } = await supabase.from('categories').select('slug').eq('is_active', true); categories = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const collectionPages: MetadataRoute.Sitemap = (categories || []).map(c => ({
     url:             `${BASE}/collections/${c.slug}`,
@@ -38,7 +38,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Regions
   let states = null
-  try { const { data } = await supabase.from('states').select('id'); states = data } catch {}
+  try { const { data } = await supabase.from('states').select('id'); states = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const regionPages: MetadataRoute.Sitemap = (states || []).map(s => ({
     url:             `${BASE}/regions/${s.id}`,

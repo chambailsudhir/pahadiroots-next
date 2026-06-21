@@ -148,7 +148,15 @@ export async function POST(req: NextRequest) {
           subject: `Contact form: ${safeName}`,
           html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
         })
-      } catch { /* non-fatal */ }
+      } catch (e) {
+        // BUG FIX [ERROR HANDLING]: previously `catch { /* non-fatal */ }` with
+        // zero logging. If Resend was down, rate-limited, or misconfigured, there
+        // was NO trace in server logs — ops had no way to know contact-form
+        // submissions were silently disappearing. Non-fatal is correct (the user
+        // still gets a success response so they don't retry-spam), but the
+        // failure must be visible to ops.
+        console.error('[actions/contact] Email send failed:', e)
+      }
       return NextResponse.json({ success: true })
     }
 

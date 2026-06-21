@@ -26,7 +26,7 @@ export default async function BlogPage() {
       .order('published_at', { ascending: false })
       .limit(20)
     posts = data
-  } catch { posts = null }
+  } catch (e: unknown) { console.error("[blog] posts fetch failed:", e); posts = null }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

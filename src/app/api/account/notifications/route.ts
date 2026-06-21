@@ -60,11 +60,14 @@ export async function GET(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Failed to fetch notification preferences')
+    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
+    // exposed in production (Supabase internals from syncCustomerProfile/sbAuth).
+    console.error('[notifications GET]', e)
+    return fail(500, process.env.NODE_ENV === 'production'
+      ? 'Failed to fetch notification preferences'
+      : (err.message || 'Failed to fetch notification preferences'))
   }
 }
-
-// ── POST /api/account/notifications ───────────────────────────
 export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
@@ -121,6 +124,11 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Failed to update notification preferences')
+    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
+    // exposed in production.
+    console.error('[notifications POST]', e)
+    return fail(500, process.env.NODE_ENV === 'production'
+      ? 'Failed to update notification preferences'
+      : (err.message || 'Failed to update notification preferences'))
   }
 }

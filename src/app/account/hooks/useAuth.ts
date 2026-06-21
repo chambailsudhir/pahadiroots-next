@@ -81,7 +81,14 @@ export function useAuth() {
             storeSetWishlist(json.wishlist)
           }
         })
-        .catch(() => { /* silent — local wishlist still works */ })
+        .catch((err: unknown) => {
+          // BUG FIX [ERROR HANDLING]: previously completely silent. If the
+          // wishlist fetch fails on login (expired token race, /api/wishlist 500),
+          // there was zero trace — ops couldn't distinguish "wishlist API broken"
+          // from "users just have empty wishlists". Non-fatal is still correct
+          // (local wishlist still works), but it must be visible in logs.
+          console.warn('[useAuth] wishlist fetch failed:', err)
+        })
     } catch (err: unknown) {
       if (err instanceof ServiceError && err.status === 401) {
         setAuthState('guest')

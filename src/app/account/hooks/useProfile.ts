@@ -171,7 +171,12 @@ export function useProfile(
       await sendForgotPasswordEmail(email)
       setForgotPwSent(true)
       toast('📧 Reset link sent to ' + email)
-    } catch {
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch` with no logging.
+      // If the forgot-password API call fails (Resend down, network error, etc.)
+      // there was zero trace — only the user's toast. Added console.error so
+      // ops can distinguish real failures from expected "email not found" responses.
+      console.error('[useProfile] sendForgotPassword failed:', e)
       toast('Failed to send reset link — please try again', 'error')
     } finally {
       setBusy(b => ({ ...b, forgotPw: false }))

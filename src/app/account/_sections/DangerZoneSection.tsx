@@ -100,7 +100,9 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showToast('Your data has been downloaded.', 'success')
-    } catch {
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` with no logging.
+      console.error('[DangerZoneSection] data export download failed:', e)
       showToast('Something went wrong — please try again.', 'error')
     } finally {
       setDownloading(false)

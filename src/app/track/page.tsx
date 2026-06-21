@@ -60,7 +60,9 @@ export default function TrackPage() {
         return
       }
       setResult(data as TrackResult)
-    } catch {
+    } catch (e: unknown) {
+      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — no logging.
+      console.error('[track] order lookup failed:', e)
       setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)

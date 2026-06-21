@@ -236,6 +236,14 @@ export async function DELETE(req: NextRequest) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
     console.error('[DELETE /api/account/delete]', err)
-    return fail(500, err.message || 'Account deletion failed — please contact support')
+    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message in production.
+    // deleteAuthUser() wraps the Supabase admin API response text directly in its
+    // error message (e.g. "Auth user deletion failed (500): <raw Supabase JSON>").
+    // In production this leaks internal auth infrastructure details. Also missing
+    // the console.error which existed in the comment's intention but not in code.
+    const clientMsg = process.env.NODE_ENV === 'production'
+      ? 'Account deletion failed — please contact support'
+      : (err.message || 'Account deletion failed — please contact support')
+    return fail(500, clientMsg)
   }
 }

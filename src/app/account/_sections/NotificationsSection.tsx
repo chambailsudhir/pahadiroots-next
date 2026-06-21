@@ -48,7 +48,10 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
         if (cancelled) return
         if (data?.prefs) setPrefs(data.prefs as NotifPrefs)
       })
-      .catch(() => {
+      .catch((e: unknown) => {
+        // BUG FIX [ERROR HANDLING]: previously no logging — if the notification
+        // prefs load fails (API down, auth expired), ops had no visibility.
+        console.error('[NotificationsSection] prefs load failed:', e)
         if (!cancelled) showToast('Could not load notification preferences', 'error')
       })
       .finally(() => { if (!cancelled) setLoading(false) })

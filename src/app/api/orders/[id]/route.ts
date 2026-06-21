@@ -113,6 +113,11 @@ export async function GET(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Order fetch failed')
+    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
+    // (Supabase internals from sbAdmin/syncCustomerProfile) exposed in production.
+    console.error('[orders/[id] GET]', e)
+    return fail(500, process.env.NODE_ENV === 'production'
+      ? 'Order fetch failed'
+      : (err.message || 'Order fetch failed'))
   }
 }

@@ -280,6 +280,11 @@ export async function GET(
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Invoice generation failed')
+    // BUG FIX [ERROR HANDLING]: previously no console.error and raw err.message
+    // (Supabase internals) exposed in production via this plain-text route.
+    console.error('[orders/[id]/invoice GET]', e)
+    return fail(500, process.env.NODE_ENV === 'production'
+      ? 'Invoice generation failed'
+      : (err.message || 'Invoice generation failed'))
   }
 }
