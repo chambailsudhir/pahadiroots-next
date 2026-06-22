@@ -76,6 +76,7 @@ import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
+import { pendingRemovalsRegistry } from '@/lib/pendingRemovalsRegistry'
 import type { CartItem, SiteSettings } from '@/types'
 import styles from './CartDrawer.module.css'
 
@@ -432,7 +433,17 @@ export default function CartDrawer({ settings }: Props) {
             {/* A11: focus-visible ring on primary checkout CTA */}
             <Link
               href="/checkout"
-              onClick={closeCart}
+              onClick={() => {
+                // BUG FIX: flush any items pending removal (within 4-second
+                // undo window) before navigating to checkout. Without this,
+                // a ghost item removed on the cart page survives into the
+                // checkout because cartStore.items still contains it until
+                // the deferred removeItem() timer fires. The registry is a
+                // no-op when useCartPage is not mounted (user opened drawer
+                // from a non-cart page — no pending removals can exist there).
+                pendingRemovalsRegistry.flush()
+                closeCart()
+              }}
               className="block w-full text-center bg-forest-700 hover:bg-forest-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-forest-700"
             >
               Proceed to Checkout

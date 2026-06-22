@@ -174,13 +174,53 @@ export const useCartStore = create<CartStore>()(
       name:    'pr-cart',
       version: 3,  // bumped: strips maxQty from persisted items (security fix)
       skipHydration: true,
-      storage: createJSONStorage(() =>
-        typeof window !== 'undefined' ? localStorage : {
-          getItem:    () => null,
-          setItem:    () => {},
-          removeItem: () => {},
+      storage: createJSONStorage(() => {
+        if (typeof window === 'undefined') {
+          return {
+            getItem:    () => null,
+            setItem:    () => {},
+            removeItem: () => {},
+          }
         }
-      ),
+        // BUG FIX: localStorage.setItem() throws a QuotaExceededError on iOS
+        // Safari and other browsers under storage pressure. Zustand's
+        // createJSONStorage does not catch this — it calls setItem directly,
+        // so an uncaught exception silently kills the persist middleware and
+        // the cart is lost on next refresh with no feedback to the user.
+        //
+        // Fix: wrap setItem with a try/catch. On quota errors, log a warning
+        // (visible in DevTools) so developers can diagnose. The cart continues
+        // to function in-session (Zustand still holds in-memory state); only
+        // cross-session persistence is affected — which is already degraded
+        // under storage pressure anyway.
+        return {
+          getItem: (name) => {
+            try {
+              return localStorage.getItem(name)
+            } catch {
+              return null
+            }
+          },
+          setItem: (name, value) => {
+            try {
+              localStorage.setItem(name, value)
+            } catch (err) {
+              // QuotaExceededError or SecurityError (private browsing mode in some browsers).
+              // Cart state is preserved in-memory for the current session.
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[cartStore] localStorage.setItem failed — storage may be full or blocked:', err)
+              }
+            }
+          },
+          removeItem: (name) => {
+            try {
+              localStorage.removeItem(name)
+            } catch {
+              // Ignore — nothing meaningful to do if removal fails
+            }
+          },
+        }
+      }),
       // Only persist item identity + qty + idempotency key.
       //
       // Intentionally excluded:

@@ -134,9 +134,10 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useCartStore }       from '@/store/cartStore'
-import { calcPriceSummary }   from '@/lib/services/pricingService'
-import { useCartAnalytics }   from '@/hooks/useCheckoutAnalytics'
+import { useCartStore }               from '@/store/cartStore'
+import { calcPriceSummary }           from '@/lib/services/pricingService'
+import { useCartAnalytics }           from '@/hooks/useCheckoutAnalytics'
+import { pendingRemovalsRegistry }    from '@/lib/pendingRemovalsRegistry'
 import type { SiteSettings, UpsellItem } from '@/types'
 
 // ─── Retry helper ─────────────────────────────────────────────────────────────
@@ -615,6 +616,17 @@ export function useCartPage() {
     }
   }, [removeItem])
 
+  // ── Register flush with the global registry so CartDrawer can call it ────
+  // CartDrawer renders in the root layout (server component) and cannot
+  // receive a prop from this hook. The registry bridges the gap: CartDrawer
+  // calls pendingRemovalsRegistry.flush() before navigating to /checkout, which
+  // invokes whatever this hook most recently registered. When the user is NOT
+  // on the cart page (and this hook is not mounted), flush() is a no-op.
+  useEffect(() => {
+    pendingRemovalsRegistry.register(flushPendingRemovals)
+    return () => pendingRemovalsRegistry.deregister()
+  }, [flushPendingRemovals])
+
   const handleUpsellAdd = useCallback((p: UpsellItem) => {
     if (itemVariantIdsRef.current.has(p.id)) return
     addItem({
@@ -672,11 +684,25 @@ export function useCartPage() {
     // pricing.subtotal, so the revalidation effect fires on its next run and
     // recomputes the discount for the cart's true current subtotal.
     const requestSubtotal = subtotalRef.current
+    // BUG FIX: the manual coupon apply POST had no AbortSignal or timeout.
+    // On a stalled or slow connection the loading spinner would hang forever
+    // — setCouponLoading(false) only fires in the finally block, which only
+    // runs after the fetch settles. With no signal, fetch never times out,
+    // so the loading state is permanent until the page reloads.
+    //
+    // Fix: use AbortSignal.timeout(10_000) — a 10-second hard deadline that
+    // the browser enforces natively without us managing a timer. This is the
+    // same pattern used by the coupon revalidation effect and the background
+    // cart-settings / cart-upsells fetches (via fetchWithRetry). A 10-second
+    // deadline is generous for a lightweight JSON POST but still ensures the
+    // UX recovers from a genuinely stalled connection.
+    const signal = AbortSignal.timeout(10_000)
     try {
       const res  = await fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ code, subtotal: requestSubtotal }),
+        signal,
       })
       // Guard: component may have unmounted while the request was in-flight.
       if (!mountedRef.current) return
@@ -699,8 +725,13 @@ export function useCartPage() {
       setCouponCode('')
     } catch (e: unknown) {
       if (!mountedRef.current) return
-      const reason = e instanceof Error ? e.message : 'network_error'
-      setCouponError('Failed to apply coupon')
+      // AbortSignal.timeout() raises a DOMException with name="TimeoutError"
+      // (distinct from "AbortError" which is intentional cancellation via ac.abort()).
+      // Show a more specific message so the user knows a retry might help,
+      // rather than a generic "Failed to apply coupon" that implies a bad code.
+      const isTimeout = e instanceof DOMException && e.name === 'TimeoutError'
+      const reason    = e instanceof Error ? e.message : 'network_error'
+      setCouponError(isTimeout ? 'Request timed out — please try again' : 'Failed to apply coupon')
       trackCouponError(code, reason)
     } finally {
       // Guard the finally block too — it always runs, even after early returns.
@@ -796,11 +827,21 @@ export function useCartPage() {
     const ac = new AbortController()
     const timer = setTimeout(() => {
       lastValidatedSubtotalRef.current = pricing.subtotal
+      // BUG FIX: the revalidation fetch only had ac.signal — a plain
+      // AbortController that fires only on cleanup (dep change / unmount).
+      // On a stalled connection the POST hung indefinitely with no recovery.
+      // Fix: compose ac.signal with a 10-second hard deadline. Whichever
+      // fires first cancels the fetch. AbortSignal.any() is available in
+      // all modern browsers and Node 20+ (Next.js 14 minimum). The
+      // typeof guard handles any edge-case polyfill gap gracefully.
+      const revalSignal = typeof AbortSignal.any === 'function'
+        ? AbortSignal.any([ac.signal, AbortSignal.timeout(10_000)])
+        : ac.signal
       fetchWithRetry('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ code: coupon.code, subtotal: pricing.subtotal }),
-        signal:  ac.signal,
+        signal:  revalSignal,
       }, /* maxRetries */ 1)
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
