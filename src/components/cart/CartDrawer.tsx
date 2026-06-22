@@ -76,7 +76,6 @@ import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
-import { pendingRemovalsRegistry } from '@/lib/pendingRemovalsRegistry'
 import type { CartItem, SiteSettings } from '@/types'
 import styles from './CartDrawer.module.css'
 
@@ -431,17 +430,19 @@ export default function CartDrawer({ settings }: Props) {
             </dl>
 
             {/* A11: focus-visible ring on primary checkout CTA */}
+            {/* FIX: flush any pending-removal ghost items before navigating to
+                /checkout. useCartPage's undo-toast pattern hides removed items
+                in local state for 4 s before actually calling cartStore.removeItem.
+                CartDrawer is mounted in layout.tsx (not inside CartPage), so it
+                has no access to CartPage's pendingRemovals state. Instead, we
+                read cartStore.flushPendingRemovals — which CartPage registers
+                variantIds into via markPendingRemoval — so ghost items are
+                always physically removed regardless of which checkout surface
+                the user uses. */}
             <Link
               href="/checkout"
               onClick={() => {
-                // BUG FIX: flush any items pending removal (within 4-second
-                // undo window) before navigating to checkout. Without this,
-                // a ghost item removed on the cart page survives into the
-                // checkout because cartStore.items still contains it until
-                // the deferred removeItem() timer fires. The registry is a
-                // no-op when useCartPage is not mounted (user opened drawer
-                // from a non-cart page — no pending removals can exist there).
-                pendingRemovalsRegistry.flush()
+                useCartStore.getState().flushPendingRemovals()
                 closeCart()
               }}
               className="block w-full text-center bg-forest-700 hover:bg-forest-800 text-white font-bold py-3.5 rounded-xl text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-forest-700"

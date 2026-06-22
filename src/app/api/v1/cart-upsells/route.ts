@@ -31,6 +31,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { RawVariant, RawProduct, RawImage } from '@/types/store-data'
 import type { UpsellItem } from '@/types'
+import { logger }                from '@/lib/logger'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // Use anon key for this read-only GET endpoint — service key is reserved for
@@ -200,7 +201,7 @@ export async function GET(req: NextRequest) {
     )
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    console.error('[cart-upsells]', message)
+    logger.error('cart_upsells_fetch_failed', { error: message })
     return NextResponse.json({ upsells: [] }, { status: 500 })
   }
 }

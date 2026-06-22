@@ -29,6 +29,15 @@ interface CartStore {
   resetIdempotencyKey: () => void
   ensureIdempotencyKey: () => string
 
+  // Pending-removal registry — written by useCartPage (undo-toast pattern),
+  // read by CartDrawer on checkout so ghost items are flushed regardless of
+  // which surface the user uses to navigate to /checkout.
+  // NOT persisted — session-only, like coupon.
+  pendingVariantIds:      Set<string>
+  markPendingRemoval:     (variantId: string) => void
+  cancelPendingRemoval:   (variantId: string) => void
+  flushPendingRemovals:   () => void
+
   // Derived
   /**
    * @deprecated Use the `selectCartCount` selector instead:
@@ -157,6 +166,13 @@ export const useCartStore = create<CartStore>()(
         // a duplicate order. With '' the key is generated lazily on the next
         // addItem() call, which is the only safe moment to do it.
         idempotencyKey: '',
+        // FIX: clear pending-removal registry. Without this, if useCartPage's
+        // undo-toast timers are still in flight when clearCart fires (e.g. order
+        // success clears the cart), cartStore.pendingVariantIds retains stale ids.
+        // The deferred removeItem calls are safe no-ops, but the stale Set would
+        // cause CartDrawer's next checkout to redundantly call removeItem on
+        // non-existent variantIds. Belt-and-suspenders: clear it here.
+        pendingVariantIds: new Set(),
       }),
 
       resetIdempotencyKey: () => set({ idempotencyKey: generateUUID() }),
@@ -168,57 +184,66 @@ export const useCartStore = create<CartStore>()(
         return next
       },
 
+      // ── Pending-removal registry ──────────────────────────────────────────
+      // useCartPage registers variantIds here when it schedules a 4-second
+      // undo-toast deferred removal. CartDrawer (and any other checkout surface)
+      // calls flushPendingRemovals() before navigating to /checkout so ghost
+      // items are physically removed regardless of which surface the user uses.
+      // NOT persisted: a pending removal that survives a page refresh is already
+      // gone from the visible list, so persisting this Set would permanently
+      // delete items the user never confirmed removing.
+      pendingVariantIds: new Set<string>(),
+
+      markPendingRemoval: (variantId) =>
+        set(state => ({
+          pendingVariantIds: new Set([...state.pendingVariantIds, variantId]),
+        })),
+
+      cancelPendingRemoval: (variantId) =>
+        set(state => {
+          const next = new Set(state.pendingVariantIds)
+          next.delete(variantId)
+          return { pendingVariantIds: next }
+        }),
+
+      // Snapshot before clearing so removeItem calls use the right ids.
+      flushPendingRemovals: () => {
+        const ids = [...get().pendingVariantIds]
+        if (ids.length === 0) return
+        set({ pendingVariantIds: new Set() })
+        for (const id of ids) get().removeItem(id)
+      },
+
       cartCount: () => get().items.reduce((sum, i) => sum + i.qty, 0),
     }),
     {
       name:    'pr-cart',
       version: 3,  // bumped: strips maxQty from persisted items (security fix)
       skipHydration: true,
+      // FIX: localStorage quota guard. On iOS Safari under storage pressure,
+      // localStorage.setItem() throws a QuotaExceededError silently — Zustand's
+      // persist middleware has no built-in catch, so the cart state was written
+      // only to memory and lost on the next page refresh with no user feedback.
+      // Wrap setItem to catch the error and emit a console.warn so monitoring
+      // surfaces it; a toast is intentionally avoided here (storage errors are
+      // rare and usually transient — removing items resolves them).
       storage: createJSONStorage(() => {
         if (typeof window === 'undefined') {
-          return {
-            getItem:    () => null,
-            setItem:    () => {},
-            removeItem: () => {},
-          }
+          return { getItem: () => null, setItem: () => {}, removeItem: () => {} }
         }
-        // BUG FIX: localStorage.setItem() throws a QuotaExceededError on iOS
-        // Safari and other browsers under storage pressure. Zustand's
-        // createJSONStorage does not catch this — it calls setItem directly,
-        // so an uncaught exception silently kills the persist middleware and
-        // the cart is lost on next refresh with no feedback to the user.
-        //
-        // Fix: wrap setItem with a try/catch. On quota errors, log a warning
-        // (visible in DevTools) so developers can diagnose. The cart continues
-        // to function in-session (Zustand still holds in-memory state); only
-        // cross-session persistence is affected — which is already degraded
-        // under storage pressure anyway.
         return {
-          getItem: (name) => {
-            try {
-              return localStorage.getItem(name)
-            } catch {
-              return null
-            }
-          },
-          setItem: (name, value) => {
+          getItem:    (name) => localStorage.getItem(name),
+          setItem:    (name, value) => {
             try {
               localStorage.setItem(name, value)
-            } catch (err) {
-              // QuotaExceededError or SecurityError (private browsing mode in some browsers).
-              // Cart state is preserved in-memory for the current session.
-              if (process.env.NODE_ENV !== 'production') {
-                console.warn('[cartStore] localStorage.setItem failed — storage may be full or blocked:', err)
-              }
+            } catch (e) {
+              // QuotaExceededError — storage full. Cart survives in memory for
+              // this session only. Log for monitoring; do not re-throw (would
+              // crash Zustand's persist middleware entirely).
+              console.warn('[cartStore] localStorage quota exceeded — cart not persisted', e)
             }
           },
-          removeItem: (name) => {
-            try {
-              localStorage.removeItem(name)
-            } catch {
-              // Ignore — nothing meaningful to do if removal fails
-            }
-          },
+          removeItem: (name) => localStorage.removeItem(name),
         }
       }),
       // Only persist item identity + qty + idempotency key.

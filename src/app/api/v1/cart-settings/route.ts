@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { logger }        from '@/lib/logger'
 
 // Use anon key for this read-only GET endpoint — the service key grants full DB
 // write access and should be reserved for mutations and admin operations.
@@ -93,7 +94,7 @@ export async function GET() {
     )
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    console.error('[cart-settings]', message)
+    logger.error('cart_settings_fetch_failed', { error: message })
     // Return empty settings so the cart renders with safe defaults
     return NextResponse.json({ settings: {} }, { status: 500 })
   }
