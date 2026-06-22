@@ -4,6 +4,7 @@ import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
+import { logger } from '@/lib/logger'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
 // resolution errors in Next.js 14 App Router server routes. The original import
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         // Catches errors from validating/building the email above —
         // sendTransactionalEmail() itself never throws.
-        import('@/lib/logger').then(({ logger }) => logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })).catch(() => null)
+        logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })
       }
       return NextResponse.json({ success: true })
     }
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Server error'
-    import('@/lib/logger').then(({ logger }) => logger.error('actions: handler error', { action: 'actions.handler', error: internalMessage })).catch(() => null)
+    logger.error('actions: handler error', { action: 'actions.handler', error: internalMessage })
     const clientMessage = process.env.NODE_ENV === 'production'
       ? 'Something went wrong. Please try again.'
       : internalMessage

@@ -31,6 +31,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { logger, captureError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { getStoreData } from '@/lib/storeData'
 
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (!secret) {
     // Fail closed: if the env var isn't configured, refuse rather than
     // silently accepting an unauthenticated revalidation request.
-    import('@/lib/logger').then(({ captureError }) => captureError(new Error('REVALIDATE_SECRET not configured'), { action: 'revalidate.no_secret', alert: true })).catch(() => null)
+    captureError(new Error('REVALIDATE_SECRET not configured'), { action: 'revalidate.no_secret', alert: true })
     return NextResponse.json({ error: 'Revalidation not configured' }, { status: 503 })
   }
 
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, revalidated })
   } catch (err) {
-    import('@/lib/logger').then(({ logger }) => logger.error('revalidate error', { action: 'revalidate.error', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
+    logger.error('revalidate error', { action: 'revalidate.error', error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: 'Revalidation failed' }, { status: 500 })
   }
 }

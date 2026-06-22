@@ -1,4 +1,5 @@
 import { getServiceClient } from '@/lib/supabase'
+import { captureError } from '@/lib/logger'
 
 export interface StockCheckItem {
   variantId: string   // if variantId === productId → no-variant product (use products table)
@@ -100,14 +101,12 @@ async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
         })
       } catch (err: unknown) {
         // BUG FIX 22b: captureError with alert:true — stock locked permanently.
-        import('@/lib/logger').then(({ captureError }) =>
-          captureError(err, {
-            action:     'inventoryService._restoreReserved.product',
-            product_id: item.productId,
-            qty:        item.qty,
-            alert:      true,
-          })
-        ).catch(() => null)
+        captureError(err, {
+          action:     'inventoryService._restoreReserved.product',
+          product_id: item.productId,
+          qty:        item.qty,
+          alert:      true,
+        })
       }
     } else {
       try {
@@ -119,14 +118,12 @@ async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
         // BUG FIX 22a: use captureError with alert:true — a failed stock restore
         // after a partial reservation means inventory is permanently locked (stock
         // decremented but never restored). Ops must correct manually via the DB.
-        import('@/lib/logger').then(({ captureError }) =>
-          captureError(err, {
-            action:     'inventoryService._restoreReserved.variant',
-            variant_id: item.variantId,
-            qty:        item.qty,
-            alert:      true,
-          })
-        ).catch(() => null)
+        captureError(err, {
+          action:     'inventoryService._restoreReserved.variant',
+          variant_id: item.variantId,
+          qty:        item.qty,
+          alert:      true,
+        })
       }
     }
   }
@@ -250,14 +247,12 @@ export async function restoreStock(
       } catch (err) {
         // BUG FIX 22c: captureError with alert:true — stock restore failure on
         // cancellation/payment-failure means inventory stays permanently locked.
-        import('@/lib/logger').then(({ captureError }) =>
-          captureError(err, {
-            action:     'inventoryService.restoreStock.product',
-            product_id: item.productId,
-            qty:        item.qty,
-            alert:      true,
-          })
-        ).catch(() => null)
+        captureError(err, {
+          action:     'inventoryService.restoreStock.product',
+          product_id: item.productId,
+          qty:        item.qty,
+          alert:      true,
+        })
       }
     } else {
       try {
@@ -267,14 +262,12 @@ export async function restoreStock(
         })
       } catch (err) {
         // BUG FIX 22d: captureError with alert:true — see above.
-        import('@/lib/logger').then(({ captureError }) =>
-          captureError(err, {
-            action:     'inventoryService.restoreStock.variant',
-            variant_id: item.variantId,
-            qty:        item.qty,
-            alert:      true,
-          })
-        ).catch(() => null)
+        captureError(err, {
+          action:     'inventoryService.restoreStock.variant',
+          variant_id: item.variantId,
+          qty:        item.qty,
+          alert:      true,
+        })
       }
     }
   }

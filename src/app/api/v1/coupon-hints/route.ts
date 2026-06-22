@@ -12,6 +12,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // Use the anon key for this public GET endpoint — the service key would grant
@@ -82,7 +83,7 @@ export async function GET() {
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
-    import('@/lib/logger').then(({ logger }) => logger.error('coupon-hints fetch error', { action: 'coupon_hints.fetch', error: message })).catch(() => null)
+    logger.error('coupon-hints fetch error', { action: 'coupon_hints.fetch', error: message })
     // BUG FIX 10: previously returned HTTP 200 on all errors.
     // A 200 with empty hints is indistinguishable from "no active coupons"
     // to any monitoring tool — a broken DB connection would look identical to

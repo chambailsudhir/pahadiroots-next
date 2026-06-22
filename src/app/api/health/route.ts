@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
-import { logger } from '@/lib/logger'
+import { logger, captureError } from '@/lib/logger'
 
 // /api/health — infrastructure reachability check
 //
@@ -46,7 +46,7 @@ async function checkDb(): Promise<{ ok: boolean; latencyMs: number }> {
     if (error) throw error
     return { ok: true, latencyMs: Date.now() - start }
   } catch (err) {
-    console.error('[health] DB check failed:', err instanceof Error ? err.message : err)
+    logger.error('health: DB check failed', { action: 'health.db', error: err instanceof Error ? err.message : String(err) })
     return { ok: false, latencyMs: Date.now() - start }
   }
 }
@@ -56,9 +56,7 @@ async function checkKv(): Promise<{ ok: boolean | null; latencyMs: number }> {
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!kvUrl || !kvToken) {
     // BUG FIX 17c: structured warning in production so it shows in logs
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[health] Upstash KV not configured — rate limiting is disabled')
-    }
+    logger.warn('health: Upstash KV not configured — rate limiting disabled', { action: 'health.kv.missing' })
     return { ok: null, latencyMs: 0 }
   }
   const start = Date.now()
@@ -70,7 +68,7 @@ async function checkKv(): Promise<{ ok: boolean | null; latencyMs: number }> {
     if (!res.ok) throw new Error(`KV responded ${res.status}`)
     return { ok: true, latencyMs: Date.now() - start }
   } catch (err) {
-    console.error('[health] KV check failed:', err instanceof Error ? err.message : err)
+    logger.error('health: KV check failed', { action: 'health.kv', error: err instanceof Error ? err.message : String(err) })
     return { ok: false, latencyMs: Date.now() - start }
   }
 }
@@ -82,11 +80,11 @@ function checkRazorpay(): { ok: boolean; reason?: string } {
   const keySecret  = process.env.RAZORPAY_KEY_SECRET?.trim()
   const webhookSec = process.env.RAZORPAY_WEBHOOK_SECRET?.trim()
   if (!keyId || !keySecret) {
-    console.error('[health] Razorpay keys not configured — payments will fail')
+    captureError(new Error('Razorpay keys not configured — payments will fail'), { action: 'health.razorpay.keys_missing', alert: true })
     return { ok: false, reason: 'keys_missing' }
   }
   if (!webhookSec) {
-    console.warn('[health] RAZORPAY_WEBHOOK_SECRET not configured — webhook verification disabled')
+    captureError(new Error('RAZORPAY_WEBHOOK_SECRET not configured — webhook verification disabled'), { action: 'health.razorpay.webhook_secret_missing', alert: true })
     return { ok: false, reason: 'webhook_secret_missing' }
   }
   return { ok: true }

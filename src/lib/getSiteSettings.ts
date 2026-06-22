@@ -1,5 +1,6 @@
 import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
+import { logger } from '@/lib/logger'
 
 // Default fallback values — site works even if settings are missing
 const DEFAULTS: Partial<SiteSettings> = {
@@ -106,7 +107,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     _cache = { data: settings, ts: Date.now() }
     return settings
   } catch (err) {
-    console.error('[getSiteSettings] Failed to fetch, using defaults:', err)
+    logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
     return DEFAULTS as SiteSettings
   }
 }

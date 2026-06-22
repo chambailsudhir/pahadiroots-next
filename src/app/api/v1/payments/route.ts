@@ -12,6 +12,7 @@ import { sendTransactionalEmail } from '@/lib/server/email'
 // REFACTOR: replaced inline checkPaymentRateLimit() (~40 lines of duplicated
 // Upstash boilerplate) with the shared helper. Key is unchanged.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { logger, captureError } from '@/lib/logger'
 
 // BUG FIX: address fields passed directly to createOrder() without sanitization.
 // The orders/route.ts path correctly strips HTML tags via sanitize(), but
@@ -219,8 +220,7 @@ export async function POST(req: NextRequest) {
         // BUG FIX 13b: HMAC mismatch is a security event (tampered payment response).
         // Use captureError with alert:true so ops are paged — this is not just a
         // user error, it may indicate a man-in-the-middle attack or integration breach.
-        const { captureError: _captureError } = await import('@/lib/logger')
-        _captureError(new Error('Payment HMAC signature mismatch'), {
+        captureError(new Error('Payment HMAC signature mismatch'), {
           action:             'payments.verify.hmac_mismatch',
           order_id,
           razorpay_payment_id,
@@ -244,13 +244,7 @@ export async function POST(req: NextRequest) {
       if (fetchErr || !currentOrder) {
         // BUG FIX 13d: order lookup failure logged with raw console.error —
         // not parseable by log aggregators. Use structured logger.error.
-        import('@/lib/logger').then(({ logger }) =>
-          logger.error('payments: order not found for verify_payment', {
-            action: 'payments.verify.order_not_found',
-            order_id,
-            error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
-          })
-        ).catch(() => null)
+        logger.error('payments: order not found for verify_payment', { action: 'payments.verify.order_not_found', order_id, error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
         return NextResponse.json({ error: 'Order not found' }, { status: 404 })
       }
 
@@ -281,10 +275,7 @@ export async function POST(req: NextRequest) {
       // Skip when payment_id is null: create_payment failed to persist the Razorpay
       // order ID (rare infra fault). HMAC is sufficient in that edge case.
       if (currentOrder.payment_id && currentOrder.payment_id !== razorpay_order_id) {
-        import('@/lib/logger').then(({ captureError }) => captureError(
-          new Error('razorpay_order_id mismatch in verify_payment'),
-          { action: 'payments.verify.order_id_mismatch', alert: true }
-        )).catch(() => null)
+        captureError(new Error('razorpay_order_id mismatch in verify_payment'), { action: 'payments.verify.order_id_mismatch', alert: true })
         await logOrderEvent(order_id, 'payment_order_id_mismatch', 'system', {
           razorpay_order_id, razorpay_payment_id,
           stored_payment_id: currentOrder.payment_id,
@@ -315,15 +306,7 @@ export async function POST(req: NextRequest) {
         // Use captureError with alert:true so ops are paged immediately.
         // We still throw so the outer catch returns 500; the client sees a
         // support-contact message; the webhook will retry confirmation independently.
-        import('@/lib/logger').then(({ captureError }) =>
-          captureError(new Error('Order update failed after verified payment: ' + updateErr.message), {
-            action:             'payments.verify.order_update_failed',
-            order_id,
-            razorpay_payment_id,
-            razorpay_order_id,
-            alert:              true,
-          })
-        ).catch(() => null)
+        captureError(new Error('Order update failed after verified payment: ' + updateErr.message), { action: 'payments.verify.order_update_failed', order_id, razorpay_payment_id, razorpay_order_id, alert: true })
         throw new Error('Order confirmation failed — please contact support with payment ID: ' + razorpay_payment_id)
       }
 
@@ -349,7 +332,7 @@ export async function POST(req: NextRequest) {
         if (loyalty_points_redeemed > 0) {
           const redeemed = await redeemLoyaltyPoints(custId, order_id, loyalty_points_redeemed)
           if (!redeemed) {
-            const { logger: _logger } = await import('@/lib/logger'); _logger.warn('loyalty: redemption skipped — insufficient balance', { order_id })
+            logger.warn('loyalty: redemption skipped — insufficient balance', { order_id })
           }
         }
         await awardLoyaltyPoints(custId, order_id, currentOrder.total_amount ?? 0, settings, 'Earned from online payment')
@@ -416,7 +399,7 @@ export async function POST(req: NextRequest) {
         // Catches errors from BUILDING the email (the customer lookup
         // query, template interpolation) — sendTransactionalEmail() itself
         // never throws.
-        import('@/lib/logger').then(({ logger }) => logger.error('payments: email failed after payment confirmation', { action: 'payments.email', error: e instanceof Error ? e.message : String(e) })).catch(() => null)
+        logger.error('payments: email failed after payment confirmation', { action: 'payments.email', error: e instanceof Error ? e.message : String(e) })
       }
 
       return NextResponse.json({
@@ -428,7 +411,7 @@ export async function POST(req: NextRequest) {
 
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Payment error'
-    import('@/lib/logger').then(({ logger }) => logger.error('payments POST error', { action: 'payments.post', error: internalMessage })).catch(() => null)
+    logger.error('payments POST error', { action: 'payments.post', error: internalMessage })
     // BUG FIX [ERROR HANDLING]: this previously had NO user-facing carve-out at
     // all in production — every error, including the exact same user-actionable
     // messages createOrder() throws in the COD path (insufficient stock, expired/

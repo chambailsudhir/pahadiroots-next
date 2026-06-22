@@ -1,4 +1,4 @@
-import { captureError } from '@/lib/logger'
+import { captureError, logger } from '@/lib/logger'
 // ─────────────────────────────────────────────────────────────
 // orderService — orders API calls
 //
@@ -657,7 +657,6 @@ export async function createOrder(
     if (couponIncrErr) {
       // BUG FIX 20a: use structured logger (not raw console.error) so this is
       // parseable by log aggregators and shows up in dashboards.
-      const { logger } = await import('@/lib/logger')
       logger.error('[createOrder] coupon uses_count increment failed', {
         action:  'createOrder.coupon_increment',
         code:    couponDbRow.code,
@@ -706,7 +705,6 @@ export async function createOrder(
       ).catch(async restoreErr => {
         // BUG FIX 20b: use captureError with alert:true — a failed stock restore
         // on an aborted order means inventory is permanently locked. Ops must fix.
-        const { captureError } = await import('@/lib/logger')
         captureError(restoreErr, {
           action: 'createOrder.stock_restore_failed',
           alert:  true,
@@ -773,25 +771,11 @@ export async function logOrderEvent(
     if (error) {
       // BUG FIX 21: use structured logger.error — raw console.error is unparseable
     // by log aggregators and won't appear in log-level filters.
-    import('@/lib/logger').then(({ logger }) =>
-      logger.error('logOrderEvent: insert failed', {
-        action:   'logOrderEvent.insert_failed',
-        order_id: orderId,
-        event,
-        error:    error.message,
-      })
-    ).catch(() => null)
+    logger.error('logOrderEvent: insert failed', { action: 'logOrderEvent.insert_failed', order_id: orderId, event, error: error.message })
     }
   } catch (e) {
     // Network failure, table missing, or any other unexpected error —
     // never let an audit-log problem fail the caller's order flow.
-    import('@/lib/logger').then(({ logger }) =>
-      logger.error('logOrderEvent: unexpected error', {
-        action:   'logOrderEvent.unexpected',
-        order_id: orderId,
-        event,
-        error:    e instanceof Error ? e.message : String(e),
-      })
-    ).catch(() => null)
+    logger.error('logOrderEvent: unexpected error', { action: 'logOrderEvent.unexpected', order_id: orderId, event, error: e instanceof Error ? e.message : String(e) })
   }
 }

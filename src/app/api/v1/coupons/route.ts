@@ -6,6 +6,7 @@ import { checkCsrf } from '@/lib/api/serverUtils'
 // helper.  The key `mw:rl:coupon:${ip}` is unchanged so the shared counter with
 // middleware.ts is preserved — a middleware hit still counts here.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     // BUG FIX [ERROR HANDLING]: previously exposed raw e.message in production
     // (Supabase internals, table names, constraint violations) with no logging.
-    import('@/lib/logger').then(({ logger }) => logger.error('coupons POST error', { action: 'coupons.post', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
+    logger.error('coupons POST error', { action: 'coupons.post', error: err instanceof Error ? err.message : String(err) })
     const message = process.env.NODE_ENV === 'production'
       ? 'Coupon validation failed — please try again'
       : (err instanceof Error ? err.message : 'Server error')

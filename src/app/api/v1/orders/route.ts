@@ -11,6 +11,7 @@ import { esc } from '@/lib/server/htmlEscape'
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
 // Keys are unchanged so all existing middleware counters are preserved.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { logger, captureError } from '@/lib/logger'
 
 // Lightweight server-side sanitizer (strips HTML tags from address fields)
 function sanitize(str: string): string {
@@ -108,10 +109,7 @@ export async function POST(req: NextRequest) {
             // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
             // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
             // appears as a filterable JSON line in log aggregators, not a plain string.
-            const { logger: _logger } = await import('@/lib/logger')
-            _logger.warn('loyalty: COD redemption skipped — insufficient balance', {
-              order_id: order.id,
-            })
+            logger.warn('loyalty: COD redemption skipped — insufficient balance', { order_id: order.id })
           }
         }
         await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
@@ -221,7 +219,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         // Catches errors from BUILDING the email (template interpolation,
         // etc.) — sendTransactionalEmail() itself never throws.
-        import('@/lib/logger').then(({ logger }) => logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })).catch(() => null)
+        logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
       }
     }
 
@@ -247,7 +245,7 @@ export async function POST(req: NextRequest) {
         // The customer-email catch two blocks above already logs correctly;
         // this one silently ate the same class of failure. Now logged for
         // ops visibility, matching the customer-email path.
-        import('@/lib/logger').then(({ logger }) => logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })).catch(() => null)
+        logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
       }
     }
 
@@ -256,7 +254,7 @@ export async function POST(req: NextRequest) {
       { status: alreadyExists ? 200 : 201 }
     )
   } catch (err: unknown) {
-    import('@/lib/logger').then(({ logger }) => logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })).catch(() => null)
+    logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
     // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
     // but never expose raw DB error messages in production — they leak table names,

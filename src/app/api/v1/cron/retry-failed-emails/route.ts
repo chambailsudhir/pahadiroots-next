@@ -18,6 +18,7 @@ import { timingSafeEqual } from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
 import { MAX_DLQ_ATTEMPTS } from '@/lib/server/email'
+import { logger, captureError } from '@/lib/logger'
 
 // Cap per-invocation work so this stays comfortably inside Vercel's function
 // timeout even if a large backlog accumulates during an extended Resend outage.
@@ -58,8 +59,7 @@ export async function GET(req: NextRequest) {
     // (including payment confirmations) are never retried. Use captureError with
     // alert:true so ops are paged immediately rather than finding out days later
     // when customers complain they never got their order confirmation.
-    const { captureError: _captureError } = await import('@/lib/logger')
-    _captureError(new Error('CRON_SECRET not configured — email retry cron is broken'), {
+    captureError(new Error('CRON_SECRET not configured — email retry cron is broken'), {
       action: 'cron.retry_failed_emails.no_secret',
       alert:  true,
     })
@@ -89,8 +89,7 @@ export async function GET(req: NextRequest) {
   if (fetchErr) {
     // BUG FIX 15b: DB fetch failure means zero emails retried this sweep.
     // Use structured logger.error so it's parseable by log aggregators.
-    const { logger: _logger } = await import('@/lib/logger')
-    _logger.error('cron: failed_emails fetch failed', {
+    logger.error('cron: failed_emails fetch failed', {
       action: 'cron.retry_failed_emails.fetch',
       error:  fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
     })
@@ -153,8 +152,7 @@ export async function GET(req: NextRequest) {
       dead++
       // BUG FIX 15c: alert:true — a dead-letter email means a customer who
       // paid never received their receipt. Needs immediate ops attention.
-      const { captureError: _captureError, logger: _logger } = await import('@/lib/logger')
-      _captureError(
+      captureError(
         new Error(`Email permanently dead: ${row.type} to ${row.to_email} after ${newAttempts} attempts`),
         {
           action:     'cron.retry_failed_emails.dead',
@@ -180,10 +178,9 @@ export async function GET(req: NextRequest) {
 
   // OBSERVABILITY FIX: emit DLQ metrics so a log aggregator can chart throughput
   // and dead-letter rate over time without a separate APM product.
-  const { logger: _metricsLogger } = await import('@/lib/logger')
-  _metricsLogger.metric('email.dlq.sent',          sent,         'count')
-  _metricsLogger.metric('email.dlq.still_failing', stillFailing, 'count')
-  _metricsLogger.metric('email.dlq.dead',          dead,         'count')
+  logger.metric('email.dlq.sent',          sent,         'count')
+  logger.metric('email.dlq.still_failing', stillFailing, 'count')
+  logger.metric('email.dlq.dead',          dead,         'count')
 
   return NextResponse.json({
     candidates: candidates?.length ?? 0,
