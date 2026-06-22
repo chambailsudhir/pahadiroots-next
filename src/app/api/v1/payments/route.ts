@@ -13,17 +13,9 @@ import { sendTransactionalEmail } from '@/lib/server/email'
 // Upstash boilerplate) with the shared helper. Key is unchanged.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { logger, captureError } from '@/lib/logger'
-
-// BUG FIX: address fields passed directly to createOrder() without sanitization.
-// The orders/route.ts path correctly strips HTML tags via sanitize(), but
-// create_payment was missing the same step — raw user input including <script>
-// or HTML fragments would reach the DB and confirmation email templates.
-// Using the same strip-tags logic applied in orders/route.ts for consistency.
-function sanitize(str: string | undefined | null): string {
-  if (!str) return ''
-  // Strip all HTML tags and trim surrounding whitespace
-  return str.replace(/<[^>]*>/g, '').trim()
-}
+// REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
+// Was duplicated in orders/route.ts — single source of truth now.
+import { sanitize } from '@/lib/server/sanitize'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -72,6 +64,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // ── Body size cap — 64 KB is generous for a payment payload ─────────────
+    // Mirrors the guard added to orders/route.ts — same class of risk.
+    const rawContentLength = Number(req.headers.get('content-length'))
+    if (Number.isFinite(rawContentLength) && rawContentLength > 65_536) {
+      return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+    }
+
     const body   = await req.json()
 
     // BUG FIX: `body.action as string` is an unsafe cast — if the client sends

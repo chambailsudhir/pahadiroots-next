@@ -77,6 +77,21 @@ export const useUserStore = create<UserStore>()(
       name:    'pr-user',
       version: 1,
       skipHydration: true,
+      // BUG FIX: no migrate() function was defined. Without it, Zustand's
+      // persist middleware silently discards persisted state when `version`
+      // is bumped — users lose their saved wishlist and saved addresses with
+      // no warning. The cartStore.ts pattern (sequential migration branches)
+      // is the correct model.
+      //
+      // v1 is the current schema — this function is a no-op today but
+      // establishes the structure so future engineers add a `fromVersion < 2`
+      // branch here instead of forgetting that migrate() needs to exist.
+      migrate: (persisted: unknown, _fromVersion: number) => {
+        // v1 → v?: add migration branches here when bumping `version` above.
+        // Example:
+        //   if (_fromVersion < 2) { /* rename a field */ }
+        return persisted as Record<string, unknown>
+      },
       storage: createJSONStorage(() =>
         typeof window !== 'undefined' ? localStorage : {
           getItem:    () => null,

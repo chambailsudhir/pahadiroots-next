@@ -43,6 +43,22 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 const SAFE_PROTOCOLS = /^(https?|mailto):/i
 
 /**
+ * Strip ALL HTML tags and trim whitespace from a user-supplied string.
+ * Use this on address fields and other free-text inputs before writing to the
+ * DB or interpolating into email templates. Complementary to esc(): call
+ * sanitize() first (removes tags), then esc() (encodes remaining chars).
+ *
+ * Previously duplicated inline in orders/route.ts and payments/route.ts.
+ * Single source of truth here.
+ *
+ * Returns '' for null / undefined so callers don't need null-guards.
+ */
+export function sanitize(str: string | undefined | null): string {
+  if (!str) return ''
+  return str.replace(/<[^>]*>/g, '').trim()
+}
+
+/**
  * Sanitize an HTML string for safe use with dangerouslySetInnerHTML.
  *
  * @param dirty  Raw HTML from DB / AI pipeline

@@ -85,7 +85,11 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
     ...(status && status !== 'all' ? { status } : {}),
   })
   const timeoutCtrl    = new AbortController()
-  const timeoutId      = setTimeout(() => timeoutCtrl.abort(new Error('Timeout')), 15000)
+  // BUG FIX (LOW): 15 s is too long for a client-side UI call — users see a
+  // loading spinner for 15 s before an error. 8 s matches the server-side
+  // Supabase budget (AbortSignal.timeout(8_000) in sbGet/sbGetOne) so the
+  // outer timeout fires at the same point the inner DB call would.
+  const timeoutId      = setTimeout(() => timeoutCtrl.abort(new Error('Timeout')), 8_000)
   const onCallerAbort  = () => timeoutCtrl.abort(signal?.reason)
   signal?.addEventListener('abort', onCallerAbort)
 
@@ -127,12 +131,16 @@ import { calcPriceSummary } from './pricingService'
 // BUG FIX: previously declared as SUPABASE_URL + SUPABASE_URL2 and
 // SERVICE_KEY + SERVICE_KEY2 inside the function body — identical
 // values, allocated on every call.
-function _sbUrl()     { return process.env.NEXT_PUBLIC_SUPABASE_URL! }
-function _sbSvcKey()  { return process.env.SUPABASE_SERVICE_KEY! }
+// BUG FIX (LOW): previously declared as functions (_sbUrl / _sbSvcKey) so
+// process.env was read on every sbGet/sbPost/sbGetOne call. Env vars are set
+// once at cold-start and never change — declaring as constants reads each var
+// exactly once and gives V8 a stable reference to inline into callers.
+const _sbUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const _sbSvcKey = process.env.SUPABASE_SERVICE_KEY!
 
 async function sbGet(table: string, query: string) {
-  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
-    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  const res = await fetch(`${_sbUrl}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey, Authorization: `Bearer ${_sbSvcKey}` },
     // BUG FIX: no timeout was set — a slow Supabase response would hang this
     // serverless function until Vercel's hard 15-second limit fired, blocking
     // order creation entirely. 8 s matches sbAdmin in serverUtils.ts.
@@ -146,11 +154,11 @@ async function sbGet(table: string, query: string) {
 }
 
 async function sbPost(table: string, query: string, body: object, method = 'POST') {
-  const res = await fetch(`${_sbUrl()}/rest/v1/${table}${query ? '?' + query : ''}`, {
+  const res = await fetch(`${_sbUrl}/rest/v1/${table}${query ? '?' + query : ''}`, {
     method,
     headers: {
-      apikey:         _sbSvcKey(),
-      Authorization:  `Bearer ${_sbSvcKey()}`,
+      apikey:         _sbSvcKey,
+      Authorization:  `Bearer ${_sbSvcKey}`,
       'Content-Type': 'application/json',
       Prefer:         method === 'POST' ? 'return=representation' : 'return=minimal',
     },
@@ -166,8 +174,8 @@ async function sbPost(table: string, query: string, body: object, method = 'POST
 }
 
 async function sbGetOne(table: string, query: string) {
-  const res = await fetch(`${_sbUrl()}/rest/v1/${table}?${query}`, {
-    headers: { apikey: _sbSvcKey(), Authorization: `Bearer ${_sbSvcKey()}` },
+  const res = await fetch(`${_sbUrl}/rest/v1/${table}?${query}`, {
+    headers: { apikey: _sbSvcKey, Authorization: `Bearer ${_sbSvcKey}` },
     // BUG FIX: no timeout — slow Supabase hangs the lambda until Vercel's 15 s hard limit.
     signal: AbortSignal.timeout(8_000),
   })

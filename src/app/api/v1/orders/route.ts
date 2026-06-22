@@ -12,11 +12,9 @@ import { esc } from '@/lib/server/htmlEscape'
 // Keys are unchanged so all existing middleware counters are preserved.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { logger, captureError } from '@/lib/logger'
-
-// Lightweight server-side sanitizer (strips HTML tags from address fields)
-function sanitize(str: string): string {
-  return str.replace(/<[^>]*>/g, '').trim()
-}
+// REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
+// Was duplicated in payments/route.ts — single source of truth now.
+import { sanitize } from '@/lib/server/sanitize'
 
 // NOTE: createOrderSchema (imported from @/lib/schemas) is the canonical validation
 // schema for this route. coupon_code is accepted but the DISCOUNT is never trusted
@@ -45,6 +43,15 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   if (!await checkRateLimitKv(`mw:rl:orders_ip:${ip}`, 10)) {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
+  }
+
+  // ── Body size cap — 64 KB is generous for an order payload ───────────────
+  // Without this guard, a client can POST a megabyte of junk, exhausting the
+  // lambda's memory before body parsing even starts. The webhook already has
+  // this guard (1 MB); order/payment payloads are far smaller in practice.
+  const rawContentLength = Number(req.headers.get('content-length'))
+  if (Number.isFinite(rawContentLength) && rawContentLength > 65_536) {
+    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
   }
 
   try {

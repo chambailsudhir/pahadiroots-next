@@ -31,6 +31,18 @@ export default defineConfig({
     // a browser-like context (e.g. renderHook tests for useCartPage).
     environment: 'node',
     globals: true,
+    // BUG FIX: Playwright e2e specs in e2e/ were picked up by Vitest because
+    // no exclude pattern was set. Playwright's test.describe() is incompatible
+    // with Vitest's runner — each spec errored at the file-import stage with
+    // "Playwright Test did not expect test.describe() to be called here."
+    // Result: 5 file-level errors despite all 567 unit tests passing.
+    // Fix: exclude the e2e/ directory from Vitest's glob entirely.
+    // Playwright is run separately via `npx playwright test` (or the e2e CI job).
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'e2e/**',
+    ],
     environmentOptions: {
       jsdom: {
         url: 'http://localhost:3000',
@@ -63,6 +75,17 @@ export default defineConfig({
         'src/lib/server/email.ts',
         'src/app/api/v1/cron/retry-failed-emails/route.ts',
       ],
+      // BUG FIX: no thresholds were set — a PR that deleted tests or removed a
+      // file from include would silently drop coverage to 0% without failing CI.
+      // These floors match current levels; raise them as the suite grows.
+      //   lines/functions/statements: 70% — core cart + pricing is well covered.
+      //   branches: 60% — some error paths remain deliberately untested.
+      thresholds: {
+        lines:      70,
+        functions:  70,
+        statements: 70,
+        branches:   60,
+      },
     },
   },
   resolve: {
