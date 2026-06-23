@@ -102,8 +102,8 @@ function applyProfileData(
       const lbl = validLabels.find(l => l === a.label) || 'Home'
       return {
         ...prev, name: a.name||fullName||prev.name, phone: a.phone||cleanPhone||prev.phone,
-        flat: a.flat||'', area: a.area||'', city: a.city||'',
-        state: matchState(a.state), pincode: a.pincode||'', label: lbl,
+        flat: a.flat||a.addr||'', area: a.area||'', city: a.city||'',
+        state: matchState(a.state), pincode: a.pincode||a.pin||'', label: lbl,
       }
     }
     return { ...prev, name: prev.name||fullName, phone: prev.phone||cleanPhone }
@@ -278,8 +278,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         const lbl = validLabels.find(l => l === a.label) || 'Home'
         return {
           ...BASE_ADDR, name: a.name||fullName, phone: a.phone||cleanPhone,
-          flat: a.flat||'', area: a.area||'', city: a.city||'',
-          state: matchState(a.state), pincode: a.pincode||'', label: lbl,
+          flat: a.flat||a.addr||'', area: a.area||'', city: a.city||'',
+          state: matchState(a.state), pincode: a.pincode||a.pin||'', label: lbl,
         }
       }
       return { ...BASE_ADDR, name: fullName, phone: cleanPhone }
@@ -618,8 +618,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
       ...prev, name: saved.name||prev.name, phone: saved.phone||prev.phone,
-      flat: saved.flat||'', area: saved.area||'', city: saved.city||'',
-      state: matchState(saved.state), pincode: saved.pincode||'', label: lbl,
+      flat: saved.flat||saved.addr||'', area: saved.area||'', city: saved.city||'',
+      state: matchState(saved.state), pincode: saved.pincode||saved.pin||'', label: lbl,
     }))
     setSelectedSavedIdx(idx)
     setTouched({ name:true, phone:true, flat:true, city:true, state:true, pincode:true })
