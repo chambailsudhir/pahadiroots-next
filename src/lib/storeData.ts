@@ -5,6 +5,7 @@
 // Call from Server Components and API routes — never from client.
 // ═══════════════════════════════════════════════════════════════
 
+import { unstable_cache } from 'next/cache'
 import { getServiceClient } from './supabase'
 import { applyProductImages } from './normalizeProduct'
 import type { Product, Category, State } from '@/types'
@@ -27,14 +28,18 @@ export interface StoreData {
   coupons:          Coupon[]
 }
 
-let _cache: StoreData | null = null
-let _cacheAt = 0
-const CACHE_TTL = 60_000 // 60 seconds
+// BUG FIX (HIGH – per-Lambda in-memory cache): the old module-level `let _cache`
+// only lives in a single Lambda instance's memory. On Vercel serverless, every cold
+// start gets an empty cache, so the 60s TTL was per-instance — a product going OOS
+// could stay "In Stock" on warm Lambdas for up to 60 s with no shared invalidation.
+//
+// Fix: delegate caching to Next.js `unstable_cache`, which writes to the shared
+// Data Cache (backed by the same Redis/filesystem layer as `fetch()` cache). Every
+// Lambda instance hits the same store, so TTL-based invalidation is global.
+// The `force` parameter is kept for API routes that must bypass the cache; it uses
+// `{ revalidate: 0 }` to skip caching entirely for that one call.
 
-export async function getStoreData(force = false): Promise<StoreData> {
-  const now = Date.now()
-  if (!force && _cache && (now - _cacheAt) < CACHE_TTL) return _cache
-
+async function _fetchStoreData(): Promise<StoreData> {
   const db = getServiceClient()
 
   const [
@@ -78,7 +83,7 @@ export async function getStoreData(force = false): Promise<StoreData> {
   const settings: Record<string, string> = {}
   ;(siteSettings || []).forEach((s: SiteSettingRow) => { settings[s.key] = s.value })
 
-  _cache = {
+  return {
     products:         products         || [],
     product_images:   productImages    || [],
     product_variants: productVariants  || [],
@@ -88,8 +93,24 @@ export async function getStoreData(force = false): Promise<StoreData> {
     state_images:     stateImages      || [],
     coupons:          coupons          || [],
   }
-  _cacheAt = now
-  return _cache
+}
+
+// Shared cross-Lambda cache via Next.js Data Cache (60 s TTL).
+const _getCachedStoreData = unstable_cache(
+  _fetchStoreData,
+  ['store-data'],
+  { revalidate: 60, tags: ['store-data'] },
+)
+
+// Force-fetch bypasses the shared cache (used by admin/webhook invalidation).
+const _getFreshStoreData = unstable_cache(
+  _fetchStoreData,
+  ['store-data-fresh'],
+  { revalidate: 0 },
+)
+
+export async function getStoreData(force = false): Promise<StoreData> {
+  return force ? _getFreshStoreData() : _getCachedStoreData()
 }
 
 // ── Same imgFor() as old site main.js initCollectionImages ───────────────

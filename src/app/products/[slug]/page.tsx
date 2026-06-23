@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData } from '@/lib/storeData'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
+import { supabase as anonClient } from '@/lib/supabase'
 import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
 import { sanitizeHtml } from '@/lib/server/sanitize'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
@@ -96,7 +97,11 @@ export default async function ProductPage({ params }: Props) {
   const displayPrice = baseVariant?.price ?? product.price
   const displayMRP   = baseVariant?.mrp ?? product.mrp ?? product.price
   const savings      = savingsPercent(displayMRP ?? displayPrice, displayPrice)
-  const stockCount   = baseVariant?.available_stock ?? product.available_stock
+  // BUG FIX (MEDIUM – null stockCount): product.available_stock can be null from
+  // the DB. `null > 0` = false (shows OOS correctly) but `null <= 5` = false too
+  // (silently skips the "Only X left" branch). Coerce to a number so all
+  // comparisons behave as expected: null → 0 (treated as out of stock).
+  const stockCount   = Number(baseVariant?.available_stock ?? product.available_stock ?? 0)
   const inStock      = stockCount > 0
 
   // AI content
@@ -167,7 +172,20 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {/* BUG FIX (HIGH – JSON-LD XSS): JSON.stringify does NOT escape < / > / &,
+          so a product name containing </script> would break out of the JSON-LD block
+          (stored XSS). We replace the three characters that end/escape HTML contexts
+          with their Unicode escape sequences, which are valid JSON and safe in a
+          <script> tag per the HTML5 spec. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd)
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026'),
+        }}
+      />
 
       {/* ── Breadcrumb + Back pill in one compact row ── */}
       <div className="pdp-nav-row">
@@ -211,12 +229,33 @@ export default async function ProductPage({ params }: Props) {
                 click instead of faking interactivity with no handler. */}
             {reviewStats && reviewStats.count > 0 && (
               <div className="pdp-rating-row">
-                <div className="pdp-stars">
-                  {[1,2,3,4,5].map(i => (
-                    <svg key={i} className="pdp-star" viewBox="0 0 24 24">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                  ))}
+                {/* BUG FIX (MEDIUM – stars always filled): previously rendered 5
+                    identical filled SVG stars regardless of reviewStats.avg. A product
+                    with 2.8 avg showed full stars, creating a UX + JSON-LD trust
+                    mismatch. Now each star is individually filled/half/empty based on
+                    the actual average using a per-star SVG clipPath gradient. */}
+                <div className="pdp-stars" aria-label={`${reviewStats.avg.toFixed(1)} out of 5 stars`} role="img">
+                  {[1,2,3,4,5].map(i => {
+                    const fill = Math.min(1, Math.max(0, reviewStats!.avg - (i - 1)))
+                    const pct  = Math.round(fill * 100)
+                    const uid  = `star-fill-${i}`
+                    return (
+                      <svg key={i} className="pdp-star" viewBox="0 0 24 24" aria-hidden="true">
+                        <defs>
+                          <linearGradient id={uid} x1="0" x2="1" y1="0" y2="0">
+                            <stop offset={`${pct}%`} stopColor="currentColor" />
+                            <stop offset={`${pct}%`} stopColor="transparent" />
+                          </linearGradient>
+                        </defs>
+                        <path
+                          d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                          fill={`url(#${uid})`}
+                          stroke="currentColor"
+                          strokeWidth="1"
+                        />
+                      </svg>
+                    )
+                  })}
                 </div>
                 <span className="pdp-rating-num">{reviewStats.avg.toFixed(1)}</span>
                 {/* BUG FIX (3.6): was styled as link but had no href/onClick */}
@@ -654,14 +693,12 @@ async function fetchProductData(slug: string) {
     const settings = storeData.settings
 
     // BUG FIX (3.3): fetch real review aggregate from Supabase.
-    // Uses the anon client — reviews are public data.
+    // BUG FIX (MEDIUM – duplicate Supabase client): previously called createClient()
+    // on every PDP render, opening a new connection pool entry each time. Now reuses
+    // the shared module-level anon client imported from @/lib/supabase.
     // Wrapped in its own try/catch so a reviews DB error never 404s the PDP.
     let reviewStats: { avg: number; count: number } | null = null
     try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      const anonClient = createClient(supabaseUrl, supabaseAnonKey)
       const { data: reviewRows } = await anonClient
         .from('reviews')
         .select('rating')

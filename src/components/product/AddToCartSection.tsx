@@ -97,8 +97,18 @@ export default function AddToCartSection({ product, variants, settings }: Props)
 
     if (mode === 'buy') {
       setBuying(true)
-      // BUG FIX: capture the timer ID so the cleanup effect can cancel it on unmount.
-      const t = setTimeout(() => router.push('/checkout'), 300)
+      // BUG FIX (LOW – buying state never resets): if router.push('/checkout') throws
+      // or navigation fails (e.g. network error, middleware redirect), the button
+      // stayed "Processing…" permanently for the session. Wrap in try/finally so
+      // setBuying(false) always runs on failure. On success, the page navigates away
+      // so the component unmounts before the finally can flip it back.
+      const t = setTimeout(async () => {
+        try {
+          await router.push('/checkout')
+        } catch {
+          setBuying(false)
+        }
+      }, 300)
       timersRef.current.push(t)
     } else {
       setAdded(true)
