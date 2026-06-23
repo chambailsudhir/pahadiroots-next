@@ -64,7 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, related, reviewStats, reviews, settings: storeSettings }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, related, reviewStats, settings: storeSettings }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
@@ -181,43 +181,6 @@ export default async function ProductPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(jsonLd)
-            .replace(/</g, '\\u003c')
-            .replace(/>/g, '\\u003e')
-            .replace(/&/g, '\\u0026'),
-        }}
-      />
-      {/* BUG FIX (MEDIUM – missing BreadcrumbList JSON-LD): the visual breadcrumb
-          was correct but Google had no structured data to parse for sitelinks in
-          SERPs. BreadcrumbList is a separate ld+json block — it doesn't merge with
-          the Product block above. Each crumb needs a position (1-indexed) and an
-          item URL; the last crumb (current page) has no URL per schema.org spec. */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'BreadcrumbList',
-            itemListElement: [
-              {
-                '@type': 'ListItem',
-                position: 1,
-                name: 'Home',
-                item: 'https://pahadiroots.com/',
-              },
-              {
-                '@type': 'ListItem',
-                position: 2,
-                name: 'All Products',
-                item: 'https://pahadiroots.com/products',
-              },
-              {
-                '@type': 'ListItem',
-                position: 3,
-                name: product.name,
-                // Current page — item URL omitted per schema.org BreadcrumbList spec
-              },
-            ],
-          })
             .replace(/</g, '\\u003c')
             .replace(/>/g, '\\u003e')
             .replace(/&/g, '\\u0026'),
@@ -494,10 +457,7 @@ export default async function ProductPage({ params }: Props) {
         {/* ── Reviews ── */}
         {showReviews && (
           <div id="reviews" className="pdp-reviews-wrap">
-            {/* BUG FIX (MEDIUM – ReviewsSection client-side SWR): reviews are now
-                pre-fetched server-side and passed as a prop. No SWR, no layout shift,
-                reviews are in the initial SSR HTML. */}
-            <ReviewsSection reviews={reviews} />
+            <ReviewsSection productId={product.id} />
           </div>
         )}
 
@@ -675,7 +635,7 @@ async function fetchProductData(slug: string) {
       (p.slug || '').toLowerCase() === slug.toLowerCase()
     )
     if (!rawProduct) rawProduct = storeData.products.find((p: any) => String(p.id) === slug)
-    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [], settings: {} }
+    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, settings: {} }
 
     // Normalize badges
     const badges: string[] = Array.isArray(rawProduct.badges) ? rawProduct.badges : []
@@ -733,25 +693,18 @@ async function fetchProductData(slug: string) {
     const settings = storeData.settings
 
     // BUG FIX (3.3): fetch real review aggregate from Supabase.
-    // BUG FIX (MEDIUM – duplicate Supabase client): reuses shared anon client.
-    // BUG FIX (MEDIUM – ReviewsSection client-side SWR): previously ReviewsSection
-    // fetched reviews client-side via SWR after hydration, causing a visible layout
-    // shift (skeleton → content). Now we fetch the full review rows here in the
-    // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
-    // becomes a pure display component that accepts pre-fetched rows as props.
+    // BUG FIX (MEDIUM – duplicate Supabase client): previously called createClient()
+    // on every PDP render, opening a new connection pool entry each time. Now reuses
+    // the shared module-level anon client imported from @/lib/supabase.
     // Wrapped in its own try/catch so a reviews DB error never 404s the PDP.
     let reviewStats: { avg: number; count: number } | null = null
-    let reviews: import('@/types').Review[] = []
     try {
       const { data: reviewRows } = await anonClient
         .from('reviews')
-        .select('id, customer_name, location, rating, review_text, created_at')
+        .select('rating')
         .eq('product_id', product.id)
         .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(10)
       if (reviewRows && reviewRows.length > 0) {
-        reviews = reviewRows as import('@/types').Review[]
         const sum = reviewRows.reduce((acc: number, r: any) => acc + (r.rating || 0), 0)
         reviewStats = {
           avg:   sum / reviewRows.length,
@@ -759,14 +712,14 @@ async function fetchProductData(slug: string) {
         }
       }
     } catch (reviewErr) {
-      // Non-fatal — PDP renders fine without reviews
-      console.warn('[fetchProductData] review fetch failed:', reviewErr)
+      // Non-fatal — PDP renders fine without aggregate rating
+      console.warn('[fetchProductData] review stats fetch failed:', reviewErr)
     }
 
-    return { product, variants, images, stateData, related, reviewStats, reviews, settings }
+    return { product, variants, images, stateData, related, reviewStats, settings }
   } catch (err) {
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [], settings: {} }
+    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, settings: {} }
   }
 }
 
