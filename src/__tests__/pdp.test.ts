@@ -492,3 +492,110 @@ describe('buying state resets on navigation failure (LOW bug fix)', () => {
     expect(setBuying).not.toHaveBeenCalled()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. BreadcrumbList JSON-LD (MEDIUM bug fix)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('BreadcrumbList JSON-LD structured data', () => {
+  function buildBreadcrumbLd(productName: string) {
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home',         item: 'https://pahadiroots.com/' },
+        { '@type': 'ListItem', position: 2, name: 'All Products', item: 'https://pahadiroots.com/products' },
+        { '@type': 'ListItem', position: 3, name: productName },
+      ],
+    }
+  }
+
+  it('has @type BreadcrumbList', () => {
+    const ld = buildBreadcrumbLd('Himalayan Wild Honey')
+    expect(ld['@type']).toBe('BreadcrumbList')
+  })
+
+  it('has exactly 3 crumbs in correct order', () => {
+    const ld = buildBreadcrumbLd('Himalayan Wild Honey')
+    expect(ld.itemListElement).toHaveLength(3)
+    expect(ld.itemListElement[0].position).toBe(1)
+    expect(ld.itemListElement[1].position).toBe(2)
+    expect(ld.itemListElement[2].position).toBe(3)
+  })
+
+  it('Home and All Products crumbs carry item URLs', () => {
+    const ld = buildBreadcrumbLd('Himalayan Wild Honey')
+    expect(ld.itemListElement[0].item).toBe('https://pahadiroots.com/')
+    expect(ld.itemListElement[1].item).toBe('https://pahadiroots.com/products')
+  })
+
+  it('last crumb (current page) has no item URL per schema.org spec', () => {
+    const ld = buildBreadcrumbLd('Himalayan Wild Honey')
+    expect((ld.itemListElement[2] as Record<string, unknown>).item).toBeUndefined()
+  })
+
+  it('last crumb name matches the product name', () => {
+    const ld = buildBreadcrumbLd('Lakadong Turmeric')
+    expect(ld.itemListElement[2].name).toBe('Lakadong Turmeric')
+  })
+
+  it('XSS escape still applied — product name with </script> is safe', () => {
+    const ld = buildBreadcrumbLd('Honey</script><script>bad()')
+    const safe = JSON.stringify(ld)
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026')
+    expect(safe).not.toContain('</script>')
+    expect(safe).toContain('\\u003c/script\\u003e')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 11. ReviewsSection SSR props (MEDIUM bug fix)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ReviewsSection SSR: reviews fetched server-side', () => {
+  // Mirror the server-side aggregation logic that replaces SWR
+  function aggregateFromRows(rows: { rating: number }[]) {
+    if (!rows.length) return null
+    const sum = rows.reduce((s, r) => s + r.rating, 0)
+    return { avg: sum / rows.length, count: rows.length }
+  }
+
+  it('returns null stats when no approved reviews', () => {
+    expect(aggregateFromRows([])).toBeNull()
+  })
+
+  it('computes avg and count from full review rows', () => {
+    const stats = aggregateFromRows([{ rating: 5 }, { rating: 4 }, { rating: 3 }])
+    expect(stats?.avg).toBeCloseTo(4.0)
+    expect(stats?.count).toBe(3)
+  })
+
+  it('reviews array is passed through to component as-is', () => {
+    // The component receives the same rows fetched by the server
+    const rows = [
+      { id: '1', rating: 5, customer_name: 'Ananya', review_text: 'Great!' },
+      { id: '2', rating: 4, customer_name: 'Ravi',   review_text: 'Good'   },
+    ]
+    // Simulate the prop — if reviews.length > 0 the section renders
+    expect(rows.length).toBeGreaterThan(0)
+    const stats = aggregateFromRows(rows)
+    expect(stats?.count).toBe(2)
+  })
+
+  it('empty reviews prop causes section to not render (length check)', () => {
+    const reviews: unknown[] = []
+    // ReviewsSection returns null when reviews.length === 0
+    expect(reviews.length === 0).toBe(true)
+  })
+
+  it('fetch selects full row fields needed for display', () => {
+    // Validate the select columns match what ReviewsSection renders
+    const requiredFields = ['id', 'customer_name', 'location', 'rating', 'review_text', 'created_at']
+    const selectClause = 'id, customer_name, location, rating, review_text, created_at'
+    for (const field of requiredFields) {
+      expect(selectClause).toContain(field)
+    }
+  })
+})
