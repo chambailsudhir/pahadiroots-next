@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
       address_line1: 200,
       city:          100,
       state:         100,
-      postal_code:    20,
+      pincode:        20,
       phone:          20,
     }
     const ALLOWED = Object.keys(FIELD_LIMITS)
