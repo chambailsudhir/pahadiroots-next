@@ -1,0 +1,181 @@
+/* PaymentSection.module.css
+ * P3 Style fix: moved from inline <style> template literal inside PaymentSection.tsx.
+ * Migrating to CSS Modules gives Next.js style deduplication and keeps JSX clean.
+ */
+
+.root {}
+
+.opts {
+  padding: 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .opts {
+    padding: 16px 20px;
+  }
+}
+
+/* ── Payment option card ── */
+.opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1.5px solid #e0d8ce;
+  border-radius: 16px;
+  cursor: pointer;
+  background: #fdfaf6;
+  transition: all 0.22s ease;
+}
+
+.opt:hover {
+  border-color: #2c4a2e;
+  background: #f5faf3;
+  box-shadow: 0 3px 12px rgba(44, 74, 46, 0.08);
+}
+
+.optOn {
+  border-color: #2c4a2e;
+  background: #eef6ec;
+  box-shadow: 0 0 0 1px #2c4a2e inset, 0 4px 16px rgba(44, 74, 46, 0.1);
+}
+
+.radio {
+  accent-color: #2c4a2e;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.optInner {
+  flex: 1;
+}
+
+.optHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.optTitle {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1c2b1e;
+  letter-spacing: -0.1px;
+}
+
+.optTitleOff {
+  color: #b0a898;
+}
+
+.saveBadge {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: #2c4a2e;
+  background: #c8e8b8;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+
+.codIcon {
+  font-size: 18px;
+}
+
+.logos {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.logo {
+  height: 22px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.optSub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #7a7060;
+  margin: 0;
+}
+
+.disc {
+  display: inline-block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2c6030;
+  background: #d8f0c8;
+  padding: 4px 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+/* ── COD disabled state ── */
+.codDisabled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border: 1.5px dashed #e0d8ce;
+  border-radius: 16px;
+  background: #f8f6f2;
+  opacity: 0.7;
+}
+
+.codDisabledLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.codReason {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #c04030;
+  font-weight: 600;
+  background: #feecea;
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+/* ── Security seals ── */
+.seals {
+  display: flex;
+  padding: 12px 28px;
+  background: #f7f2eb;
+  border-top: 1px solid #ede5d8;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .seals {
+    padding: 12px 20px;
+  }
+}
+
+.seal {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #7a7060;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e0d8ce;
+  white-space: nowrap;
+}

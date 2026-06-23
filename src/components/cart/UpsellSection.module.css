@@ -1,0 +1,288 @@
+@keyframes usPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes usShimmerSlide {
+    0% { background-position: -200px 0; }
+    100% { background-position: calc(200px + 100%) 0; }
+  }
+
+  .shImg,
+  .shLine,
+  .shBtn {
+    animation: usShimmerSlide 1.4s ease-in-out infinite;
+    background: linear-gradient(90deg, #ece4d8 25%, #f5ede0 50%, #ece4d8 75%);
+  }
+}
+
+.shImg,
+.shLine,
+.shBtn {
+  background: #ece4d8;
+  background-size: 400px 100%;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 14px rgba(26, 22, 17, 0.07), 0 0 0 1px rgba(26, 22, 17, 0.04);
+  border: 1px solid #e0d5c5;
+  overflow: hidden;
+}
+
+.head {
+  padding: 17px 22px 13px;
+  border-bottom: 1px solid #ece4d8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-family: var(--font-playfair, 'Playfair Display', serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1611;
+  margin: 0;
+  letter-spacing: 0.1px;
+}
+
+.sub {
+  font-size: 11.5px;
+  color: #9a8e7e;
+  font-weight: 500;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  padding: 16px 22px;
+}
+
+@media (max-width: 540px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e0d5c5;
+  border-radius: 13px;
+  padding: 11px;
+  background: linear-gradient(135deg, #faf6f0, #f5ede0);
+  transition: all 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.item:hover {
+  border-color: #c9a240;
+  background: linear-gradient(135deg, #fdf9f0, #faf3e0);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 16px rgba(26, 22, 17, 0.1);
+}
+
+/*
+ * A11y fix: :focus-within on upsell card (WCAG 2.4.7).
+ * Mouse hover highlighted the entire card with a gold border + lift, but
+ * keyboard users tabbing to the Add button inside saw no card-level feedback.
+ * Fix: :focus-within applies the same visual treatment when any child
+ * (the Add button) has keyboard focus, so keyboard users clearly know
+ * which product they are about to add to the cart.
+ */
+.item:focus-within {
+  border-color: #c9a240;
+  background: linear-gradient(135deg, #fdf9f0, #faf3e0);
+  box-shadow: 0 5px 16px rgba(26, 22, 17, 0.1);
+}
+
+.item.added {
+  opacity: 0.65;
+}
+
+.imgWrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ede4d4;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(26, 22, 17, 0.1);
+}
+
+.imgEmoji {
+  font-size: 26px;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #9e7a15;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1611;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  margin-top: 1px;
+}
+
+.size {
+  font-size: 10.5px;
+  color: #9a8e7e;
+  margin-top: 1px;
+}
+
+.priceRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.mrp {
+  font-size: 10px;
+  color: #c0b8ae;
+  text-decoration: line-through;
+}
+
+.price {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1a3a1e;
+}
+
+.btn {
+  background: linear-gradient(135deg, #1a3a1e, #2d5233);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  font-family: inherit;
+  letter-spacing: 0.15px;
+  box-shadow: 0 2px 8px rgba(26, 58, 30, 0.2);
+}
+
+.btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22472a, #376340);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(26, 58, 30, 0.3);
+}
+
+/*
+ * A11y fix: :focus-visible on upsell Add button (WCAG 2.4.7).
+ * Keyboard users tabbing to Add buttons in the upsell grid got no visible
+ * focus indicator. Fix: white ring on dark green, matching the dark background.
+ */
+.btn:focus-visible:not(:disabled) {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+  background: linear-gradient(135deg, #22472a, #376340);
+  box-shadow: 0 4px 12px rgba(26, 58, 30, 0.3);
+}
+
+.btn.added {
+  background: linear-gradient(135deg, #276141, #2d6a4f);
+  cursor: default;
+  box-shadow: none;
+}
+
+.btn:disabled {
+  cursor: default;
+}
+
+.errorMsg,
+.emptyMsg {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  padding: 8px 0;
+  grid-column: 1 / -1;
+}
+
+/*
+ * PERF/UX FIX: Orphaned cell fix for 2-column grid.
+ * When the API returns an odd number of items (1 or 3), the last card sat alone
+ * in its row leaving a visually empty half-column beside it.
+ * `:nth-child(odd):last-child` targets exactly the lone last card in an odd-item
+ * list and spans it across both columns so the layout closes cleanly.
+ * Does nothing when items = 2 or 4 (even counts never produce an orphan).
+ */
+.item:nth-child(odd):last-child {
+  grid-column: 1 / -1;
+}
+
+.emptyMsg {
+  text-align: center;
+  padding: 20px 0;
+}
+
+/* Shimmer skeleton */
+.shimmer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e0d5c5;
+  border-radius: 13px;
+  padding: 11px;
+  background: linear-gradient(135deg, #faf6f0, #f5ede0);
+}
+
+.shImg {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.shBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.shLine {
+  height: 11px;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.shLine.short {
+  width: 38%;
+}
+
+.shLine.medium {
+  width: 56%;
+}
+
+.shBtn {
+  width: 54px;
+  height: 34px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}

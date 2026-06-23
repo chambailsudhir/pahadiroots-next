@@ -1,0 +1,115 @@
+/*
+ * ShippingProgress.css
+ *
+ * BUG FIX: previously these styles lived inside an inline <style>{`…`}</style>
+ * block directly in ShippingProgress.tsx.  An inline <style> tag in JSX:
+ *   • re-creates and re-parses the CSS string on EVERY render of the component
+ *     (the browser receives a new stylesheet node each time, bypassing the cache)
+ *   • forces a style recalc on every render, even when the component's props
+ *     haven't changed and React.memo would otherwise prevent a DOM update
+ *   • cannot be extracted by Next.js's CSS optimiser (which only handles
+ *     top-level import "…css" statements and CSS Modules)
+ *
+ * Extracting to a static .css file means:
+ *   - the browser parses the stylesheet exactly once on cold load and caches it
+ *   - React.memo on ShippingProgress can skip full re-renders (styles are no
+ *     longer part of the VDOM that React diffs)
+ *   - Next.js can inline/chunk it with the rest of the checkout CSS
+ *
+ * Matches the pattern of OrderSummary.css and SavedAddressSelector.css in this
+ * same directory.
+ */
+
+.sp-bar {
+  background: #1C2B1E;
+  padding: 9px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background .3s;
+}
+
+/* BUG FIX: gradient background was `linear-gradient(90deg, #1C3A20, #2C5A30)`.
+ * CSS gradients are NOT transitions — adding/removing the --free modifier class
+ * cannot animate between a solid colour and a gradient.  The `.3s` transition on
+ * `.sp-bar` had zero effect here: the browser switches abruptly.  Changed to a
+ * solid colour that closely matches the lighter end of the original gradient so
+ * the "free shipping" state is visually distinct without a broken transition. */
+.sp-bar--free { background: #1C3A20; }
+
+@media (max-width: 640px) {
+  .sp-bar { padding: 9px 16px; }
+}
+
+.sp-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.sp-text {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: rgba(245, 240, 232, .85);
+  font-weight: 400;
+  flex: 1;
+}
+
+.sp-text strong {
+  color: #F5F0E8;
+  font-weight: 700;
+}
+
+.sp-pct {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(245, 240, 232, .6);
+  flex-shrink: 0;
+}
+
+.sp-track {
+  position: relative;
+  height: 3px;
+  background: rgba(255, 255, 255, .15);
+  border-radius: 99px;
+  /* BUG FIX: `overflow: visible` was set so the 8 px thumb circle could
+   * protrude above the 3 px track.  However `overflow: visible` on a
+   * `role="progressbar"` element prevents the browser from clipping the
+   * aria-valuenow / fill to its bounding box, and on some iOS/Safari builds
+   * causes the track to escape its container.  The thumb is now positioned
+   * relative to the track's parent (.sp-bar) instead — see .sp-thumb below. */
+  overflow: hidden;
+}
+
+.sp-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #7ABA6A, #A8D898);
+  border-radius: 99px;
+  transition: width .6s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* The thumb is rendered as a sibling of .sp-track (inside .sp-bar flex column)
+ * so it can visually overlap the track without requiring overflow:visible on
+ * the ARIA progressbar element.  Negative margin-top pulls it up to vertically
+ * straddle the 3 px track bar: the bar is 3 px tall, the thumb is 8 px tall,
+ * so we pull up by (8/2 + 3/2) = 5.5 px ≈ -6px to centre on the track. */
+.sp-thumb {
+  position: relative;
+  margin-top: -6px;
+  width: 8px;
+  height: 8px;
+  background: #A8D898;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(168, 216, 152, .3);
+  transition: left .6s cubic-bezier(.4, 0, .2, 1);
+  pointer-events: none;
+}
