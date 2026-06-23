@@ -115,3 +115,4 @@ Changes take effect within 5 minutes (ISR revalidation).
 - [x] Phase 1 — Foundation (homepage, products, PDP, cart, checkout, APIs)
 - [x] Phase 2 — Discovery (collections, regions, search, account, track)
 - [ ] Phase 3 — Polish (blog, about, contact, policies, Sentry, load test)
+# force deploy Tue Jun 23 13:39:31 IST 2026
