@@ -20,16 +20,6 @@
       "maxDuration": 10
     }
   },
-  "crons": [
-    {
-      "path": "/api/v1/cron/retry-failed-emails",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/health",
-      "schedule": "*/5 * * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/api/v1/(.*)",
