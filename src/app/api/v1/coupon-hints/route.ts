@@ -78,8 +78,15 @@ export async function GET() {
           : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
       }))
 
+    // BUG FIX: the previous header was `s-maxage=120, stale-while-revalidate=240`.
+    // s-maxage is a CDN/edge directive — it tells Vercel's edge cache to hold the
+    // response for 120 s.  It has NO effect on the browser.  Every page mount
+    // therefore fired a fresh HTTP request to this route even though hints change
+    // at most once a day.  Adding `public, max-age=120` lets the browser also
+    // cache the response for 120 s, eliminating the redundant round-trips.
+    // Mirrors the same fix already applied to /api/v1/cart-settings.
     return NextResponse.json({ hints }, {
-      headers: { 'Cache-Control': 's-maxage=120, stale-while-revalidate=240' },
+      headers: { 'Cache-Control': 'public, max-age=120, s-maxage=120, stale-while-revalidate=240' },
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'

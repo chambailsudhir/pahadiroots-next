@@ -498,4 +498,113 @@ describe('useCartPage — coupon revalidation effect', () => {
     expect(useCartStore.getState().lastAppliedCouponCode).toBe('GHOST10')
   })
 
+  // ── 12. requestSubtotal mid-flight race ───────────────────────────────────
+  //
+  // BUG: applyCouponCode previously captured `lastValidatedSubtotalRef.current`
+  // AFTER the `await fetch(...)` resolved — i.e. whatever pricing.subtotal was
+  // at response-time, not the subtotal the server actually computed the discount
+  // against.
+  //
+  // Repro:
+  //   subtotal = ₹1 000 when "Apply" is tapped → fetch sent with subtotal=1000
+  //   → while the request is in-flight the user bumps qty → subtotal becomes ₹1 500
+  //   → server responds with discount=100 (10% of ₹1 000, the REQUEST subtotal)
+  //   → old code: lastValidatedSubtotalRef.current = 1500 (RESPONSE-time value)
+  //   → revalidation effect sees ref (1500) === pricing.subtotal (1500) → SKIPS
+  //   → stale ₹100 discount is kept for a ₹1 500 cart; should be ₹150
+  //
+  // Fix: ref is seeded with `requestSubtotal` (captured BEFORE await). After
+  // the mid-flight qty change, ref (1000) ≠ pricing.subtotal (1500), so the
+  // revalidation effect fires and recomputes the correct discount.
+  //
+  // How we test this with fake timers:
+  //   • Intercept `global.fetch` so the coupon request "hangs" until we release it.
+  //   • While it hangs, advance the store (add an item → subtotal rises).
+  //   • Release the fetch response (discount still reflects the old subtotal).
+  //   • After the debounce, assert the REVALIDATION fired with the NEW subtotal
+  //     — proving lastValidatedSubtotalRef was seeded from request-time, not response-time.
+
+  it('seeds lastValidatedSubtotalRef from the request-time subtotal so a mid-flight qty change triggers revalidation', async () => {
+    // Start: single item @ ₹100 each, qty=10 → subtotal = ₹1 000
+    seedStore([{ ...makeItem(), qty: 10 }], null)
+
+    // We need two distinct fetch behaviours:
+    //   1st call  → the manual applyCouponCode call (will be "held" via a promise)
+    //   2nd call  → the revalidation triggered after qty changes
+    // Track calls by URL so we can assert on each independently.
+    let releaseCouponFetch!: (value: Response) => void
+    const couponFetchHeld = new Promise<Response>(resolve => { releaseCouponFetch = resolve })
+
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = url instanceof URL ? url.toString() : typeof url === 'string' ? url : (url as Request).url
+      if (urlStr.includes('/api/v1/coupons')) {
+        // First coupon request: hold until we explicitly release it
+        if (fetchMock.mock.calls.filter(([u]: [RequestInfo | URL]) => {
+          const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url
+          return s.includes('/api/v1/coupons')
+        }).length === 1) {
+          return couponFetchHeld
+        }
+        // Second (revalidation) request: respond immediately with updated discount
+        const body = JSON.parse((init as RequestInit).body as string) as { subtotal: number }
+        const revalidationDiscount = Math.round(body.subtotal * 0.1)
+        return mockRes({ coupon: { code: 'MID10', discount: revalidationDiscount, type: 'percent', percent: 10 } })
+      }
+      // All other routes (cart-settings, cart-upsells, coupon-hints) → empty success
+      return mockRes({})
+    }) as unknown as typeof globalThis.fetch
+    global.fetch = fetchMock
+
+    const { result } = renderHook(() => useCartPage())
+
+    // Trigger the manual apply — this fires the FIRST coupon fetch (now held)
+    act(() => { result.current.setCouponCode('MID10') })
+    await act(async () => {
+      void result.current.handleCoupon()
+    })
+
+    // While the first fetch is still in-flight, add an item → subtotal: ₹1 000 → ₹1 100
+    act(() => {
+      useCartStore.getState().addItem({ ...makeItem({ variantId: 'v2' }), qty: 1 })
+    })
+
+    // Release the held coupon fetch with a discount computed at the OLD subtotal (₹1 000)
+    const firstDiscount = 100  // 10% of ₹1 000
+    act(() => {
+      releaseCouponFetch(
+        new Response(JSON.stringify({ coupon: { code: 'MID10', discount: firstDiscount, type: 'percent', percent: 10 } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    })
+    // Let applyCouponCode's post-await code run
+    await act(async () => { await vi.runAllMicrotasks() })
+
+    // Coupon should now be applied with the (stale) first discount
+    expect(useCartStore.getState().coupon?.code).toBe('MID10')
+    expect(useCartStore.getState().coupon?.discount).toBe(firstDiscount)
+
+    // The revalidation effect should detect that lastValidatedSubtotalRef (1000,
+    // request-time) ≠ pricing.subtotal (1100, current) and fire a revalidation.
+    // Advance past the 800 ms debounce to let it fire.
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    // Count coupon calls: should be ≥ 2 (manual apply + at least one revalidation)
+    const couponCalls = fetchMock.mock.calls.filter(([u]: [RequestInfo | URL]) => {
+      const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url
+      return s.includes('/api/v1/coupons')
+    })
+    expect(couponCalls.length).toBeGreaterThanOrEqual(2)
+
+    // The revalidation call must have used the NEW subtotal (₹1 100), NOT the old one (₹1 000)
+    const revalidationCall = couponCalls[couponCalls.length - 1]
+    const revalidationBody = JSON.parse((revalidationCall[1] as RequestInit).body as string) as { subtotal: number }
+    expect(revalidationBody.subtotal).toBe(1100)
+
+    // Coupon discount must now reflect the recomputed value (10% of ₹1 100 = ₹110)
+    expect(useCartStore.getState().coupon?.discount).toBe(110)
+    expect(result.current.couponError).toBe('')
+  })
+
 })
