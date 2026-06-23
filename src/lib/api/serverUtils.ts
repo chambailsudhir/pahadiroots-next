@@ -33,6 +33,8 @@ export function fail(status: number, msg: string, headers?: Record<string, strin
 const ALLOWED_ORIGINS = [
   'https://pahadiroots.com',
   'https://www.pahadiroots.com',
+  'https://pahadiroots-next.vercel.app',
+  'https://pahadiroots-next-git-main-sudhir-chambails-projects.vercel.app',
   ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : []),
 ]
 
