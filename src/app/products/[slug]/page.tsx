@@ -457,7 +457,7 @@ export default async function ProductPage({ params }: Props) {
         {/* ── Reviews ── */}
         {showReviews && (
           <div id="reviews" className="pdp-reviews-wrap">
-            <ReviewsSection productId={product.id} />
+            <ReviewsSection reviews={reviews} />
           </div>
         )}
 
