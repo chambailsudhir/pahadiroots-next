@@ -260,6 +260,14 @@ export async function createOrder(
   // available_stock = 1.  The loser gets rows_updated = 0 → we throw before order insert.
   //
   // Stock is restored (restoreStock) on cancellation or if any subsequent step fails.
+  //
+  // NOTE: reserveStockAtomicForOrder() now THROWS StockReservationError for
+  // genuine DB/infra failures (bad param types, RLS, connection errors) rather
+  // than returning { ok: false } for them. It only returns { ok: false } when
+  // the database explicitly evaluated available_stock < qty. This means the
+  // "Insufficient stock" message below is now ONLY ever shown for real stock
+  // shortfalls — infra failures surface as a 500 via StockReservationError
+  // instead of masquerading as a customer-actionable stock message.
   const stockReservation = await reserveStockAtomicForOrder(
     input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
   )

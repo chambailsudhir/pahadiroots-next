@@ -64,7 +64,7 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {},
 }))
 
-import { restoreStock } from '@/lib/services/inventoryService'
+import { restoreStock, reserveStockAtomicForOrder, StockReservationError } from '@/lib/services/inventoryService'
 
 beforeEach(() => {
   rpcCalls = []
@@ -187,5 +187,83 @@ describe('inventoryService.restoreStock — per-item error isolation (BUG FIX)',
     expect(rpcCalls[1].name).toBe('restore_product_stock')
     expect(rpcCalls[2].name).toBe('restore_stock')
     expect(rpcCalls[2].args.p_variant_id).toBe('v2')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reserveStockAtomicForOrder — infra failure vs. genuine stock shortfall
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRESSION TEST for the production incident where reserve_stock_at_order's
+// SQL parameter was declared UUID while product_variants.id is actually
+// BIGINT. Every call errored with Postgres code 22P02 (invalid_text_representation),
+// and the old code treated *any* RPC error identically to a real
+// "available_stock < qty" result — surfacing "Insufficient stock" to paying
+// customers even when stock was plentiful.
+//
+// These tests pin the fix: a DB/RPC *error* must throw StockReservationError
+// (→ 500, alerted, never shown to the customer as a stock message), while a
+// clean `{ data: false, error: null }` response — the RPC explicitly telling
+// us the WHERE guard didn't match — must still produce the ordinary
+// { ok: false } business-logic result.
+describe('reserveStockAtomicForOrder — infra error vs. real stock shortfall', () => {
+  function wireRpcMock(responses: Array<{ data?: unknown; error?: unknown }>) {
+    rpcCalls = []
+    let i = 0
+    mockGetServiceClient.mockReturnValue({
+      from: () => ({}),
+      rpc: (name: string, args: Record<string, unknown>) => {
+        rpcCalls.push({ name, args })
+        const resp = responses[Math.min(i, responses.length - 1)]
+        i++
+        return Promise.resolve({ data: resp.data ?? null, error: resp.error ?? null })
+      },
+    })
+  }
+
+  it('throws StockReservationError when the DB errors with a type-mismatch code (22P02) — NOT a stock message', async () => {
+    wireRpcMock([{ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid: "13"' } }])
+
+    await expect(
+      reserveStockAtomicForOrder([{ variantId: '13', qty: 1 }])
+    ).rejects.toBeInstanceOf(StockReservationError)
+  })
+
+  it('returns { ok: false } (real shortfall) when the RPC cleanly reports data: false with no error', async () => {
+    wireRpcMock([{ data: false, error: null }])
+
+    const result = await reserveStockAtomicForOrder([{ variantId: 'v1', qty: 99 }])
+
+    expect(result).toEqual({ ok: false, failedVariantId: 'v1' })
+  })
+
+  it('returns { ok: true } and reserves all items when every RPC call succeeds', async () => {
+    wireRpcMock([{ data: true, error: null }, { data: true, error: null }])
+
+    const result = await reserveStockAtomicForOrder([
+      { variantId: 'v1', qty: 1 },
+      { variantId: 'v2', qty: 2 },
+    ])
+
+    expect(result).toEqual({ ok: true })
+    expect(rpcCalls).toHaveLength(2)
+  })
+
+  it('rolls back already-reserved items before throwing on a later infra error', async () => {
+    wireRpcMock([
+      { data: true, error: null },                                 // v1 reserves fine
+      { data: null, error: { code: '22P02', message: 'bad uuid' } }, // v2 errors
+    ])
+
+    await expect(
+      reserveStockAtomicForOrder([
+        { variantId: 'v1', qty: 1 },
+        { variantId: 'v2', qty: 1 },
+      ])
+    ).rejects.toBeInstanceOf(StockReservationError)
+
+    // 2 forward calls (v1 reserve, v2 reserve-fails) + 1 rollback call for v1
+    expect(rpcCalls).toHaveLength(3)
+    expect(rpcCalls[2].name).toBe('restore_stock')
+    expect(rpcCalls[2].args.p_variant_id).toBe('v1')
   })
 })

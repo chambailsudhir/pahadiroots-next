@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS orders_archive (
 -- ─── 9. Atomic stock deduction RPC (Audit #A4) ───────────────
 -- Safe atomic stock deduction — prevents race conditions
 CREATE OR REPLACE FUNCTION deduct_stock_atomic(
-  p_variant_id UUID,
+  p_variant_id BIGINT,
   p_qty        INTEGER
 ) RETURNS BOOLEAN AS $$
 DECLARE
@@ -118,7 +118,7 @@ $$ LANGUAGE plpgsql;
 
 -- Restore stock on cancellation
 CREATE OR REPLACE FUNCTION restore_stock(
-  p_variant_id UUID,
+  p_variant_id BIGINT,
   p_qty        INTEGER
 ) RETURNS VOID AS $$
 BEGIN
@@ -262,7 +262,7 @@ ON CONFLICT (key) DO NOTHING;
 -- deduction — this function handles *reservation* at order placement time.
 -- If you switch to a reserve/release model, call restore_stock on cancellation.
 CREATE OR REPLACE FUNCTION reserve_stock_at_order(
-  p_variant_id UUID,
+  p_variant_id BIGINT,
   p_qty        INTEGER
 ) RETURNS BOOLEAN AS $$
 DECLARE
@@ -281,7 +281,7 @@ $$ LANGUAGE plpgsql;
 
 -- No-variant product variant: reserve from products table stock
 CREATE OR REPLACE FUNCTION reserve_product_stock_at_order(
-  p_product_id UUID,
+  p_product_id BIGINT,
   p_qty        INTEGER
 ) RETURNS BOOLEAN AS $$
 DECLARE
@@ -391,7 +391,7 @@ $$ LANGUAGE plpgsql;
 -- Mirror of restore_stock but targets products.available_stock.
 -- Called by restoreStock() in inventoryService when variantId === productId.
 CREATE OR REPLACE FUNCTION restore_product_stock(
-  p_product_id UUID,
+  p_product_id BIGINT,
   p_qty        INTEGER
 ) RETURNS VOID AS $$
 BEGIN

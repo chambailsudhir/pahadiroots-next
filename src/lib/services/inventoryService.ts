@@ -35,6 +35,29 @@ export interface StockCheckResult {
 // Fix: we now track each successfully reserved item and roll them back inside
 // this function before returning failure, so the caller never needs to clean
 // up a partial reservation.
+// ─────────────────────────────────────────────────────────────────────────────
+// StockReservationError
+// ─────────────────────────────────────────────────────────────────────────────
+// Thrown for genuine INFRASTRUCTURE failures (bad SQL types, connection drop,
+// permission error, etc). These are 5xx-class problems and must NEVER be
+// presented to the customer as "insufficient stock" — that message is reserved
+// exclusively for the case where the DB explicitly told us available_stock < qty.
+//
+// Postgres error code reference: https://www.postgresql.org/docs/current/errcodes-appendix.html
+//   22P02 = invalid_text_representation   (e.g. passing "13" where UUID expected)
+//   42883 = undefined_function            (RPC signature mismatch)
+//   42P01 = undefined_table
+//   28000 = invalid_authorization_specification
+//   53300 = too_many_connections
+const INFRA_ERROR_CODES = new Set(['22P02', '42883', '42P01', '28000', '53300'])
+
+export class StockReservationError extends Error {
+  constructor(public readonly cause: unknown, public readonly itemId: string) {
+    super(`Stock reservation infra failure for item ${itemId}`)
+    this.name = 'StockReservationError'
+  }
+}
+
 export async function reserveStockAtomicForOrder(
   items: StockCheckItem[]
 ): Promise<{ ok: boolean; failedVariantId?: string }> {
@@ -46,29 +69,34 @@ export async function reserveStockAtomicForOrder(
 
   for (const item of items) {
     const isNoVariant = item.productId && item.variantId === item.productId
+    const rpcName = isNoVariant ? 'reserve_product_stock_at_order' : 'reserve_stock_at_order'
+    const params = isNoVariant
+      ? { p_product_id: item.productId!, p_qty: item.qty }
+      : { p_variant_id: item.variantId, p_qty: item.qty }
 
-    if (isNoVariant) {
-      // No-variant product: atomically deduct from products.available_stock
-      const { data, error } = await db.rpc('reserve_product_stock_at_order', {
-        p_product_id: item.productId!,
-        p_qty:        item.qty,
+    const { data, error } = await db.rpc(rpcName, params)
+
+    if (error) {
+      // The database itself errored — this is NOT "out of stock", it's a bug
+      // (wrong param type, missing function, RLS/permission issue, etc).
+      // Roll back whatever we already reserved, alert loudly, and let the
+      // caller surface a 500 — never a stock message — for this case.
+      await _restoreReserved(reserved)
+      captureError(error, {
+        action:  'inventoryService.reserveStockAtomicForOrder',
+        rpc:     rpcName,
+        item_id: item.variantId,
+        pg_code: (error as { code?: string }).code,
+        alert:   true,
       })
-      if (error || !data) {
-        // Roll back all items that were already reserved before returning failure
-        await _restoreReserved(reserved)
-        return { ok: false, failedVariantId: item.variantId }
-      }
-    } else {
-      // Variant product: atomically deduct from product_variants.available_stock
-      const { data, error } = await db.rpc('reserve_stock_at_order', {
-        p_variant_id: item.variantId,
-        p_qty:        item.qty,
-      })
-      if (error || !data) {
-        // Roll back all items that were already reserved before returning failure
-        await _restoreReserved(reserved)
-        return { ok: false, failedVariantId: item.variantId }
-      }
+      throw new StockReservationError(error, item.variantId)
+    }
+
+    if (!data) {
+      // No error — the RPC's WHERE available_stock >= qty guard genuinely
+      // didn't match. This IS a real "insufficient stock" case.
+      await _restoreReserved(reserved)
+      return { ok: false, failedVariantId: item.variantId }
     }
 
     // Mark this item as successfully reserved — must happen AFTER the RPC

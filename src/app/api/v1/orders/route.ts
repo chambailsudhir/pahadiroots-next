@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrder } from '@/lib/services/orderService'
+import { StockReservationError } from '@/lib/services/inventoryService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { checkCsrf } from '@/lib/api/serverUtils'
@@ -279,12 +280,19 @@ export async function POST(req: NextRequest) {
     // check covering every user-actionable message createOrder() can throw, while
     // still hiding genuinely internal failures (DB/RPC errors, "could not create
     // customer record", etc.) behind the generic message.
+    // TYPE-SAFE CHECK FIRST: infra/DB failures (bad RPC types, connection drop,
+    // permission errors) must always be 500s — never shown to the customer as
+    // an actionable stock message, even though the word "stock" appears in
+    // both the error and the message-sniffing checks below.
+    const isInfraFailure = err instanceof StockReservationError
     const lowerMessage = internalMessage.toLowerCase()
-    const isUserFacing = lowerMessage.includes('stock')
+    const isUserFacing = !isInfraFailure && (
+      lowerMessage.includes('stock')
       || lowerMessage.includes('cod is not available')
       || lowerMessage.includes('coupon')
       || lowerMessage.includes('no longer available')
       || lowerMessage.includes('insufficient loyalty balance')
+    )
     const status  = isUserFacing ? 409 : 500
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
       ? internalMessage
