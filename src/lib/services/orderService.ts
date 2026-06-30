@@ -77,6 +77,26 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 800): P
   throw lastErr
 }
 
+// BUG FIX: the Supabase JS SDK's PostgrestBuilder (db.from(...), db.rpc(...))
+// does not support AbortSignal or any built-in timeout — confirmed by the
+// same issue already fixed in getSiteSettings.ts. Every raw `db.*` call in
+// this file previously had no timeout protection at all, unlike sbGet/
+// sbPost/sbGetOne (which all correctly use AbortSignal.timeout(8_000)).
+// A slow/unresponsive Supabase instance could hang any of these calls
+// indefinitely, consuming the entire Vercel function timeout with nothing
+// left for the rest of order creation — exactly the failure mode that
+// caused live 504s during checkout. This wraps any Supabase JS SDK call
+// in the same Promise.race timeout pattern, so it fails fast and
+// predictably instead of hanging.
+function withTimeout<T>(promise: PromiseLike<T>, ms = 8_000, label = 'db call'): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ])
+}
+
 export async function fetchOrders(params: FetchOrdersParams = {}): Promise<OrdersResponse> {
   const { page = 1, limit = 20, search = '', status = '', signal } = params
   const qs = new URLSearchParams({
@@ -225,11 +245,14 @@ export async function createOrder(
   const db = getServiceClient()
 
   // 1. Idempotency check — return existing order if same key
-  const { data: existing } = await db
-    .from('orders')
-    .select('id, order_number, total_amount, order_status')
-    .eq('idempotency_key', input.idempotencyKey)
-    .maybeSingle()
+  const { data: existing } = await withTimeout(
+    db.from('orders')
+      .select('id, order_number, total_amount, order_status')
+      .eq('idempotency_key', input.idempotencyKey)
+      .maybeSingle(),
+    8_000,
+    'orders idempotency check',
+  )
 
   if (existing) {
     return {
@@ -400,12 +423,15 @@ export async function createOrder(
   // Retain the raw DB row so we can atomically increment uses_count after order creation.
   let couponDbRow: { code: string; uses_count: number; max_uses: number | null } | null = null
   if (input.couponCode) {
-    const { data: coupon } = await db
-      .from('coupons')
-      .select('*')
-      .eq('code', input.couponCode.toUpperCase())
-      .eq('is_active', true)
-      .maybeSingle()
+    const { data: coupon } = await withTimeout(
+      db.from('coupons')
+        .select('*')
+        .eq('code', input.couponCode.toUpperCase())
+        .eq('is_active', true)
+        .maybeSingle(),
+      8_000,
+      'coupon fetch',
+    )
 
     if (coupon) {
       // ── Server-side coupon guards (mirrors validateCouponServer) ──────────
@@ -522,7 +548,7 @@ export async function createOrder(
     address_line1: addressLine || null,
     city:          input.city    || null,
     state:         input.state   || null,
-    postal_code:   input.pincode || null,
+    pincode:       input.pincode || null,
   }
 
   // Lookup: phone first, then email — avoids duplicate key on idx_customers_email
@@ -554,11 +580,14 @@ export async function createOrder(
   //     between that call and now. We re-fetch the live balance here so a race
   //     cannot result in a negative balance.
   if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
-    const { data: customerRow, error: balanceErr } = await db
-      .from('customers')
-      .select('loyalty_points')
-      .eq('id', custId)
-      .single()
+    const { data: customerRow, error: balanceErr } = await withTimeout(
+      db.from('customers')
+        .select('loyalty_points')
+        .eq('id', custId)
+        .single(),
+      8_000,
+      'loyalty balance check',
+    )
 
     if (balanceErr) throw new Error('Could not verify loyalty balance')
 
@@ -615,32 +644,42 @@ export async function createOrder(
     }
   })
 
-  const { data: rpcResult, error: rpcErr } = await db.rpc('create_order_with_items', {
-    p_order_number:             orderNumber,
-    p_customer_id:              custId,
-    p_total_amount:             pricing.total,
-    p_subtotal:                 pricing.subtotal,
-    p_coupon_discount:          pricing.discount,
-    p_tax:                      pricing.gstTotal,
-    p_shipping_charge:          pricing.shipping,
-    // BUG FIX: COD orders were created with order_status='pending', meaning the
-    // storefront sent a "Order Confirmed!" email but the DB row said 'pending'.
-    // This caused inconsistency in the admin panel (orders showed as unconfirmed)
-    // and broke any dashboard query filtering on order_status='confirmed'.
-    //
-    // COD requires no online payment verification: the customer pays on delivery,
-    // so the order is confirmed the moment it is placed.  Set status accordingly.
-    // Razorpay orders remain 'pending' until verify_payment or the webhook fires.
-    p_order_status:             input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
-    // payment_status: 'cod_pending' = payment expected on delivery (not yet paid,
-    // not failed).  Distinct from 'pending' (online payment in progress) so that
-    // admin queries can correctly separate the two payment flows.
-    p_payment_status:           input.paymentMethod === 'cod' ? 'cod_pending' : 'pending',
-    p_payment_method:           input.paymentMethod,
-    p_idempotency_key:          input.idempotencyKey,
-    p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
-    p_items:                    rpcItems,
-  })
+  const { data: rpcResult, error: rpcErr } = await withTimeout(
+    db.rpc('create_order_with_items', {
+      p_order_number:             orderNumber,
+      p_customer_id:              custId,
+      p_total_amount:             pricing.total,
+      p_subtotal:                 pricing.subtotal,
+      p_coupon_discount:          pricing.discount,
+      p_tax:                      pricing.gstTotal,
+      p_shipping_charge:          pricing.shipping,
+      // BUG FIX: COD orders were created with order_status='pending', meaning the
+      // storefront sent a "Order Confirmed!" email but the DB row said 'pending'.
+      // This caused inconsistency in the admin panel (orders showed as unconfirmed)
+      // and broke any dashboard query filtering on order_status='confirmed'.
+      //
+      // COD requires no online payment verification: the customer pays on delivery,
+      // so the order is confirmed the moment it is placed.  Set status accordingly.
+      // Razorpay orders remain 'pending' until verify_payment or the webhook fires.
+      p_order_status:             input.paymentMethod === 'cod' ? 'confirmed' : 'pending',
+      // payment_status: 'cod_pending' = payment expected on delivery (not yet paid,
+      // not failed).  Distinct from 'pending' (online payment in progress) so that
+      // admin queries can correctly separate the two payment flows.
+      p_payment_status:           input.paymentMethod === 'cod' ? 'cod_pending' : 'pending',
+      p_payment_method:           input.paymentMethod,
+      p_idempotency_key:          input.idempotencyKey,
+      p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
+      p_items:                    rpcItems,
+      p_shipping_address:         {
+        address_line1: addressLine || null,
+        city:          input.city    || null,
+        state:         input.state   || null,
+        pincode:       input.pincode || null,
+      },
+    }),
+    8_000,
+    'create_order_with_items RPC',
+  )
 
   if (rpcErr || !rpcResult) {
     throw new Error('Failed to create order: ' + (rpcErr?.message ?? 'no data returned'))
@@ -665,11 +704,14 @@ export async function createOrder(
   // silently matches 0 rows — the coupon has already been correctly counted.
   // Non-fatal: at worst one concurrent over-use is missed; the order is committed.
   if (couponDbRow) {
-    const { error: couponIncrErr } = await db
-      .from('coupons')
-      .update({ uses_count: couponDbRow.uses_count + 1 })
-      .eq('code', couponDbRow.code)
-      .eq('uses_count', couponDbRow.uses_count) // optimistic lock — prevents stale write
+    const { error: couponIncrErr } = await withTimeout(
+      db.from('coupons')
+        .update({ uses_count: couponDbRow.uses_count + 1 })
+        .eq('code', couponDbRow.code)
+        .eq('uses_count', couponDbRow.uses_count), // optimistic lock — prevents stale write
+      8_000,
+      'coupon uses_count increment',
+    )
     if (couponIncrErr) {
       // BUG FIX 20a: use structured logger (not raw console.error) so this is
       // parseable by log aggregators and shows up in dashboards.
@@ -736,10 +778,14 @@ export async function updateOrderStatus(
   extra:   Record<string, unknown> = {},
 ): Promise<void> {
   const db = getServiceClient()
-  await db.from('orders').update({
-    order_status: status,
-    ...extra,
-  }).eq('id', orderId)
+  await withTimeout(
+    db.from('orders').update({
+      order_status: status,
+      ...extra,
+    }).eq('id', orderId),
+    8_000,
+    'updateOrderStatus',
+  )
 }
 
 /**
@@ -777,13 +823,17 @@ export async function logOrderEvent(
 ): Promise<void> {
   try {
     const db = getServiceClient()
-    const { error } = await db.from('order_events').insert({
-      order_id:   orderId,
-      event,
-      actor,
-      metadata,
-      created_at: new Date().toISOString(),
-    })
+    const { error } = await withTimeout(
+      db.from('order_events').insert({
+        order_id:   orderId,
+        event,
+        actor,
+        metadata,
+        created_at: new Date().toISOString(),
+      }),
+      8_000,
+      'logOrderEvent insert',
+    )
     if (error) {
       // BUG FIX 21: use structured logger.error — raw console.error is unparseable
     // by log aggregators and won't appear in log-level filters.
