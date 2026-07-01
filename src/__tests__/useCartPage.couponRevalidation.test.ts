@@ -535,11 +535,29 @@ describe('useCartPage — coupon revalidation effect', () => {
     let releaseCouponFetch!: (value: Response) => void
     const couponFetchHeld = new Promise<Response>(resolve => { releaseCouponFetch = resolve })
 
-    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    // BUG FIX (TS2339): the previous version cast the vi.fn() straight to
+    // `typeof globalThis.fetch` and used that same `fetchMock` binding both to
+    // call `global.fetch = fetchMock` AND to read `fetchMock.mock.calls` inside
+    // its own implementation and later in the test. `typeof globalThis.fetch`
+    // has no `.mock` property, so TS correctly failed both `.mock` accesses
+    // (tsc: "Property 'mock' does not exist on type '{ (input...): ... }'"),
+    // even though the underlying object is a real vi.fn() at runtime.
+    // Fix: keep `fetchImpl` typed as the vi.fn() itself (so `.mock.calls` is
+    // fully typed) and only cast at the `global.fetch = ` assignment site,
+    // where the cast is actually needed to satisfy the DOM lib's fetch type.
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const urlStr = url instanceof URL ? url.toString() : typeof url === 'string' ? url : (url as Request).url
       if (urlStr.includes('/api/v1/coupons')) {
         // First coupon request: hold until we explicitly release it
-        if (fetchMock.mock.calls.filter(([u]: [RequestInfo | URL]) => {
+        // BUG FIX (TS2769): the filter callback's param was annotated as the
+        // fixed 1-tuple `[RequestInfo | URL]`, but now that `.mock.calls` is
+        // properly typed (see fix above), its real element type is
+        // `[url: RequestInfo | URL, init?: RequestInit]` — a 1-or-2-length
+        // tuple with an optional second slot. TS's structural check on
+        // Array.prototype.filter's predicate rejects the mismatched fixed
+        // 1-tuple annotation ("no overload matches this call"). Annotating
+        // with the real tuple shape (optional 2nd element) fixes it.
+        if (fetchImpl.mock.calls.filter(([u]: [RequestInfo | URL, RequestInit?]) => {
           const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url
           return s.includes('/api/v1/coupons')
         }).length === 1) {
@@ -552,8 +570,9 @@ describe('useCartPage — coupon revalidation effect', () => {
       }
       // All other routes (cart-settings, cart-upsells, coupon-hints) → empty success
       return mockRes({})
-    }) as unknown as typeof globalThis.fetch
-    global.fetch = fetchMock
+    })
+    const fetchMock = fetchImpl
+    global.fetch = fetchImpl as unknown as typeof globalThis.fetch
 
     const { result } = renderHook(() => useCartPage())
 
@@ -578,8 +597,19 @@ describe('useCartPage — coupon revalidation effect', () => {
         }),
       )
     })
-    // Let applyCouponCode's post-await code run
-    await act(async () => { await vi.runAllMicrotasks() })
+    // Let applyCouponCode's post-await code run.
+    // BUG FIX (vitest 4.x): `vi.runAllMicrotasks()` was removed from VitestUtils
+    // in vitest 4 (this suite runs on 4.1.9) — it doesn't exist on the installed
+    // version's type or at runtime, so this line threw `TypeError: vi.runAllMicrotasks
+    // is not a function` and failed the whole test (and, as a side effect, made
+    // `vitest run --coverage` skip emitting the coverage table entirely, since
+    // coverage reporting doesn't run when a test fails).
+    // Fix: `vi.advanceTimersByTimeAsync(0)` flushes the microtask queue exactly
+    // like the old API did, WITHOUT firing any pending fake timers — unlike
+    // `vi.runAllTimersAsync()` (used elsewhere in this file), which would also
+    // run the 800ms revalidation debounce this test intentionally holds off
+    // until the separate `runAllTimersAsync()` call two lines below.
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
     // Coupon should now be applied with the (stale) first discount
     expect(useCartStore.getState().coupon?.code).toBe('MID10')
@@ -591,7 +621,8 @@ describe('useCartPage — coupon revalidation effect', () => {
     await act(async () => { await vi.runAllTimersAsync() })
 
     // Count coupon calls: should be ≥ 2 (manual apply + at least one revalidation)
-    const couponCalls = fetchMock.mock.calls.filter(([u]: [RequestInfo | URL]) => {
+    // Same tuple-shape fix as above ([RequestInfo | URL, RequestInit?]).
+    const couponCalls = fetchMock.mock.calls.filter(([u]: [RequestInfo | URL, RequestInit?]) => {
       const s = u instanceof URL ? u.toString() : typeof u === 'string' ? u : (u as Request).url
       return s.includes('/api/v1/coupons')
     })
