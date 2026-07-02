@@ -3,7 +3,6 @@ import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
-import ClientOnly from '@/components/ClientOnly'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
 import BestSellers from '@/components/homepage/BestSellers'
@@ -40,7 +39,7 @@ export default async function HomePage() {
   const featuredSlug    = settings.featured_collection_slug?.trim()
 
   return (
-    <ClientOnly>
+    <>
       <HeroBanner images={heroImages} settings={settings} />
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
@@ -52,7 +51,7 @@ export default async function HomePage() {
       <WhySection />
       {showReviews && <ReviewsPreview />}
       {showNewsletter && <NewsletterBar />}
-    </ClientOnly>
+    </>
   )
 }
 

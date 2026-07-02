@@ -5,6 +5,7 @@ import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import { useRouter } from 'next/navigation'
+import { usePDPAnalytics } from '@/hooks/useCheckoutAnalytics'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 
 interface Props {
@@ -37,6 +38,14 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.price
   const maxStock = selectedVariant?.available_stock ?? product.available_stock ?? 0
   const inStock  = maxStock > 0
+
+  // BUG FIX (HIGH – audit finding #4): fires GA4/Meta view_item once per
+  // product page load; add_to_cart fires from handleAdd() below.
+  const { trackAddToCart } = usePDPAnalytics({
+    itemId:   String(product.id),
+    itemName: product.name,
+    price,
+  })
 
   function selectVariant(v: ProductVariant) {
     if (v.available_stock <= 0) return
@@ -94,6 +103,8 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       isHimalayan:  !!(product.state_id),
       isBestseller: product.badges_bestseller ?? false,
     })
+
+    trackAddToCart({ itemId: variantId, itemName: product.name, price }, qty)
 
     if (mode === 'buy') {
       setBuying(true)

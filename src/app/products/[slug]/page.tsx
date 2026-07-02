@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getStoreData } from '@/lib/storeData'
+import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeData'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { supabase as anonClient } from '@/lib/supabase'
 import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
@@ -64,15 +64,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, related, reviewStats, reviews, settings: storeSettings }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, related, reviewStats, reviews }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
 
   if (!product) notFound()
 
-  // Merge settings (storeData service-key settings override getSiteSettings anon key)
-  const settings: SiteSettings = { ...siteSettings, ...storeSettings } as SiteSettings
+  const settings: SiteSettings = siteSettings as SiteSettings
 
   const freeShipMin    = parseInt(settings.free_shipping_min || '0')
   const flatShipCharge = parseInt(settings.flat_shipping_charge || '0')
@@ -509,7 +508,7 @@ export default async function ProductPage({ params }: Props) {
             Now passes the pre-fetched array directly. */}
         {showRelated && related.length > 0 && (
           <div className="pdp-related-wrap">
-            <RelatedProducts products={related} />
+            <RelatedProducts products={related as unknown as Array<{ id: number | string; [key: string]: unknown }>} />
           </div>
         )}
 
@@ -665,17 +664,17 @@ function WhySection() {
   )
 }
 
-// ─── Data fetcher — uses SERVICE KEY via storeData (bypasses all RLS) ─────────
+// ─── Data fetcher — targeted queries via storeData helpers (SERVICE KEY, bypasses RLS) ──
+// BUG FIX (HIGH – catalog fetch doesn't scale, per audit finding #1): this used to call
+// getStoreData() and linear-scan the entire active catalog (up to 500 products, every
+// variant, every image, every coupon) just to find one product by slug — a full-table
+// fetch to render a single PDP on every cache miss, plus a silent 500-row cutoff that
+// could 404 real, active products. Now uses getProductBySlug() (direct indexed lookup)
+// and getRelatedProducts() (targeted category/state query) instead.
 async function fetchProductData(slug: string) {
   try {
-    const storeData = await getStoreData()
-
-    // Find product by slug or id
-    let rawProduct = storeData.products.find((p: any) =>
-      (p.slug || '').toLowerCase() === slug.toLowerCase()
-    )
-    if (!rawProduct) rawProduct = storeData.products.find((p: any) => String(p.id) === slug)
-    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [], settings: {} }
+    const { product: rawProduct, variants: rawVariants, images: rawImages } = await getProductBySlug(slug)
+    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [] }
 
     // Normalize badges
     const badges: string[] = Array.isArray(rawProduct.badges) ? rawProduct.badges : []
@@ -686,52 +685,13 @@ async function fetchProductData(slug: string) {
       badges_organic:    badges.includes('organic'),
     }
 
-    // Variants for this product
-    const variants = storeData.product_variants
-      .filter((v: any) => String(v.product_id) === String(product.id))
-      .map((v: any) => ({ ...v, size: v.variant_value ?? v.size ?? v.variant_label ?? '' }))
+    const variants = rawVariants.map((v: any) => ({ ...v, size: v.variant_value ?? v.size ?? v.variant_label ?? '' }))
 
-    // Product images sorted by sort_order
-    const images = storeData.product_images
-      .filter((i: any) => String(i.product_id) === String(product.id))
-      .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    // Product images already sorted by sort_order via getProductBySlug()
+    const images = rawImages
 
-    // State data
-    const stateData = product.state_id
-      ? storeData.states.find((s: any) => String(s.id) === String(product.state_id)) || null
-      : null
-
-    // Related: same state OR same category, exclude self, max 4
-    // BUG FIX (3.9): attach images and variants here so RelatedProducts
-    // doesn't need a second getStoreData() call
-    const relatedRaw = storeData.products
-      .filter((p: any) =>
-        p.id !== product.id &&
-        (p.state_id === product.state_id || p.category_id === product.category_id)
-      )
-      .slice(0, 4)
-
-    const related = relatedRaw.map((p: any) => {
-      const imgs = storeData.product_images
-        .filter((i: any) => String(i.product_id) === String(p.id))
-        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      const vars = storeData.product_variants
-        .filter((v: any) => String(v.product_id) === String(p.id) && v.is_active)
-        .sort((a: any, b: any) => a.price - b.price)
-      const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []
-      return {
-        ...p,
-        badges_bestseller: badgeArr.includes('bestseller'),
-        badges_new:        badgeArr.includes('new'),
-        badges_organic:    badgeArr.includes('organic'),
-        _firstImage:       imgs[0]?.image_url || p.image_url || '',
-        _variants:         vars,
-      }
-    })
-
-    // Settings object
-    const settings = storeData.settings
-
+    // State, related products, and reviews are all independent of each other —
+    // fetch them concurrently instead of one round-trip at a time.
     // BUG FIX (3.3): fetch real review aggregate from Supabase.
     // BUG FIX (MEDIUM – duplicate Supabase client): reuses shared anon client.
     // BUG FIX (MEDIUM – ReviewsSection client-side SWR): previously ReviewsSection
@@ -739,34 +699,56 @@ async function fetchProductData(slug: string) {
     // shift (skeleton → content). Now we fetch the full review rows here in the
     // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
     // becomes a pure display component that accepts pre-fetched rows as props.
-    // Wrapped in its own try/catch so a reviews DB error never 404s the PDP.
-    let reviewStats: { avg: number; count: number } | null = null
-    let reviews: import('@/types').Review[] = []
-    try {
-      const { data: reviewRows } = await anonClient
+    const [stateData, related, reviewResult] = await Promise.all([
+      // State data — direct lookup instead of scanning the full states list
+      product.state_id
+        ? anonClient.from('states').select('*').eq('id', product.state_id).maybeSingle()
+            .then(({ data }) => data || null)
+        : Promise.resolve(null),
+
+      // Related: same state OR same category, exclude self, max 4 — fetched via a
+      // targeted query (BUG FIX (3.9) preserved: images/variants attached here so
+      // RelatedProducts doesn't need its own follow-up fetch).
+      getRelatedProducts({
+        productId:  product.id,
+        categoryId: product.category_id ?? null,
+        stateId:    product.state_id ?? null,
+        limit:      4,
+      }),
+
+      // Wrapped so a reviews DB error never 404s the PDP.
+      anonClient
         .from('reviews')
         .select('id, customer_name, location, rating, review_text, created_at')
         .eq('product_id', product.id)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(10)
-      if (reviewRows && reviewRows.length > 0) {
-        reviews = reviewRows as import('@/types').Review[]
-        const sum = reviewRows.reduce((acc: number, r: any) => acc + (r.rating || 0), 0)
-        reviewStats = {
-          avg:   sum / reviewRows.length,
-          count: reviewRows.length,
-        }
-      }
-    } catch (reviewErr) {
+        .then(
+          ({ data }) => ({ data, error: null as unknown }),
+          (error) => ({ data: null, error }),
+        ),
+    ])
+
+    let reviewStats: { avg: number; count: number } | null = null
+    let reviews: import('@/types').Review[] = []
+    if (reviewResult.error) {
       // Non-fatal — PDP renders fine without reviews
-      console.warn('[fetchProductData] review fetch failed:', reviewErr)
+      console.warn('[fetchProductData] review fetch failed:', reviewResult.error)
+    } else if (reviewResult.data && reviewResult.data.length > 0) {
+      const reviewRows = reviewResult.data
+      reviews = reviewRows as import('@/types').Review[]
+      const sum = reviewRows.reduce((acc: number, r: any) => acc + (r.rating || 0), 0)
+      reviewStats = {
+        avg:   sum / reviewRows.length,
+        count: reviewRows.length,
+      }
     }
 
-    return { product, variants, images, stateData, related, reviewStats, reviews, settings }
+    return { product, variants, images, stateData, related, reviewStats, reviews }
   } catch (err) {
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [], settings: {} }
+    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [] }
   }
 }
 

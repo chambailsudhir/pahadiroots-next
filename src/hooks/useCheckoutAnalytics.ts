@@ -29,6 +29,12 @@
  *   upsell_added             — upsell product added to cart
  *   item_removed             — item removed from cart
  *   quantity_changed         — item qty changed
+ *
+ * PDP EVENTS (BUG FIX – HIGH, audit finding #4: no PDP conversion tracking
+ * existed anywhere in the codebase — no view_item/add_to_cart events fired,
+ * so there was no funnel data and no Meta/Google Ads remarketing audience):
+ *   view_item                — product page viewed
+ *   add_to_cart               — Add to Cart / Buy Now pressed on the PDP
  */
 
 import { useEffect, useRef, useCallback } from 'react'
@@ -48,9 +54,20 @@ type AnalyticsEvent =
   | 'upsell_added'
   | 'item_removed'
   | 'quantity_changed'
+  | 'view_item'
+  | 'add_to_cart'
+
+/** GA4 Enhanced-Ecommerce line item shape (view_item / add_to_cart). */
+interface GA4Item {
+  item_id:        string
+  item_name:      string
+  item_category?: string
+  price:          number
+  quantity:       number
+}
 
 interface EventPayload {
-  [key: string]: string | number | boolean | undefined
+  [key: string]: string | number | boolean | undefined | GA4Item[]
 }
 
 /** Typed extension of Window for analytics SDKs loaded via CDN snippets. */
@@ -229,4 +246,55 @@ export function useCartAnalytics({ itemCount, subtotal }: CartAnalyticsOptions) 
   }, [])
 
   return { trackUpsellAdded, trackItemRemoved, trackQuantityChanged, trackCouponApplied, trackCouponError }
+}
+
+// ─── PDP funnel hook (BUG FIX – HIGH, audit finding #4) ───────────────────────
+// There was a real, well-built analytics pipeline (this file) wired only into
+// checkout/cart — view_item and add_to_cart were never fired anywhere,
+// including on the actual Add to Cart button. Without these there's no PDP
+// funnel data, no Meta/Google Ads remarketing audiences, and no way to measure
+// add-to-cart rate per product.
+export interface PDPAnalyticsItem {
+  itemId:    string
+  itemName:  string
+  category?: string
+  price:     number
+}
+
+export function usePDPAnalytics(item: PDPAnalyticsItem | null) {
+  const viewedRef = useRef(false)
+
+  // Fire view_item once per product mount
+  useEffect(() => {
+    if (viewedRef.current || !item) return
+    viewedRef.current = true
+    dispatch('view_item', {
+      currency: 'INR',
+      value:    item.price,
+      items: [{
+        item_id:       item.itemId,
+        item_name:     item.itemName,
+        item_category: item.category,
+        price:         item.price,
+        quantity:      1,
+      }],
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.itemId])
+
+  const trackAddToCart = useCallback((it: PDPAnalyticsItem, quantity: number) => {
+    dispatch('add_to_cart', {
+      currency: 'INR',
+      value:    it.price * quantity,
+      items: [{
+        item_id:       it.itemId,
+        item_name:     it.itemName,
+        item_category: it.category,
+        price:         it.price,
+        quantity,
+      }],
+    })
+  }, [])
+
+  return { trackAddToCart }
 }

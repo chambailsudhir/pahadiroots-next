@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
-import ClientOnly from '@/components/ClientOnly'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import CartDrawer from '@/components/cart/CartDrawer'
@@ -121,21 +120,17 @@ export default async function RootLayout({
         {/* Skip-to-content: visible on focus for keyboard / screen-reader users */}
         <SkipLink />
         <Providers>
-          <ClientOnly>
-            <Header settings={settings} categories={categories} states={states} />
-          </ClientOnly>
+          <Header settings={settings} categories={categories} states={states} />
           <main id="main-content" className="min-h-screen">
             {children}
           </main>
-          <ClientOnly>
-            <Footer settings={settings} />
-            <CartDrawer settings={settings} />
-            <SearchOverlay />
-            <MobileMenu settings={settings} categories={categories} states={states} />
-            <AuthModal />
-            <GoogleAuthHandler />
-            <ProfilePrefetcher />
-          </ClientOnly>
+          <Footer settings={settings} />
+          <CartDrawer settings={settings} />
+          <SearchOverlay />
+          <MobileMenu settings={settings} categories={categories} states={states} />
+          <AuthModal />
+          <GoogleAuthHandler />
+          <ProfilePrefetcher />
         </Providers>
       </body>
     </html>
