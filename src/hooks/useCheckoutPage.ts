@@ -84,6 +84,43 @@ function parseSavedAddresses(raw: string | undefined | null): SavedAddress[] {
   try { return JSON.parse(raw) as SavedAddress[] } catch { return [] }
 }
 
+// BUG FIX [ERROR HANDLING — raw parser error leaking to the customer]:
+// handlePlace previously did `const data = await res.json()` unconditionally,
+// BEFORE checking `res.ok`. If the server (or, more likely, the platform in
+// front of it — e.g. a Vercel serverless function timeout or crash) ever
+// returns a non-JSON body — an HTML error page instead of the expected JSON —
+// `res.json()` throws a raw `SyntaxError` like:
+//   Unexpected token 'A', "An error o"... is not valid JSON
+// That exception propagated straight up to the outer catch and was shown to
+// the customer verbatim via setError(e.message), right at the "Place Order"
+// step. This helper reads the body as text first (never throws), then tries
+// to parse it as JSON; if parsing fails, it returns `{}` instead of letting a
+// raw parser error reach the UI. Callers still have `res.status` available to
+// build a useful message ("Order save failed (504)") even when the body
+// wasn't JSON at all.
+async function safeJsonParse<T extends object = Record<string, unknown>>(
+  res: Response
+): Promise<Partial<T> & { error?: string }> {
+  const text = await res.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text) as Partial<T> & { error?: string }
+  } catch {
+    return {}
+  }
+}
+
+// Shape of /api/v1/payments responses (both create_payment and verify_payment
+// actions share one endpoint/response envelope — only the populated fields differ).
+interface PaymentApiResponse {
+  already_confirmed?: boolean
+  order_number?:       string
+  order_id?:            string
+  amount?:              number
+  currency?:            string
+  razorpay_order_id?:  string
+}
+
 function applyProfileData(
   prof:       RawProfile,
   allAddrs:   SavedAddress[],
@@ -835,9 +872,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        const dbData = await dbRes.json()
+        const dbData = await safeJsonParse<{ order_number: string }>(dbRes)
         if (!dbRes.ok) {
-          throw new Error(dbData.error || `Order save failed (${dbRes.status})`)
+          // BUG FIX: dbData.error is now only populated when the body genuinely
+          // parsed as JSON with that field. When the server/platform returned
+          // something else entirely (HTML error page, empty body, etc.),
+          // dbData is `{}` and we fall through to a clean, actionable message
+          // instead of a raw parser error.
+          throw new Error(dbData.error || `Order save failed (${dbRes.status}). Please try again.`)
         }
         const orderNumber = dbData.order_number || ''
         trackOrderPlaced(orderNumber, pricingTotal, 'cod')
@@ -853,14 +895,24 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...payload, action: 'create_payment' }),
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Payment initiation failed')
+        const data = await safeJsonParse<PaymentApiResponse>(res)
+        if (!res.ok) throw new Error(data.error || `Payment initiation failed (${res.status}). Please try again.`)
 
         if (data.already_confirmed) {
           orderPlacedRef.current = true
           clearCart()
           router.replace(`/order-success?id=${data.order_number || ''}&method=razorpay&total=${pricingTotal}`)
           return
+        }
+
+        // BUG FIX: res.ok being true no longer guarantees `data` has the
+        // fields we need — if the body was a 200 response with a malformed
+        // (non-JSON) payload, safeJsonParse silently returns `{}`. Without
+        // this guard we'd have opened the Razorpay modal with amount=undefined
+        // / order_id=undefined, which either crashes the SDK or (worse)
+        // silently mis-charges. Fail loudly and cleanly instead.
+        if (!data.razorpay_order_id || typeof data.amount !== 'number') {
+          throw new Error('Payment could not be initiated — please try again or contact support.')
         }
 
         const rzp = new RZP({
@@ -872,7 +924,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           description: 'Natural Himalayan Products',
           image:       'https://pahadiroots.com/favicon.ico',
           prefill:     { name: addr.name, email: email || user?.email || '', contact: addr.phone },
-          notes:       { db_order_id: data.order_id },
+          notes:       { db_order_id: data.order_id || '' },
           theme:       { color: '#2C4A2E' },
           handler: async (response: RazorpayResponse) => {
             try {
@@ -887,8 +939,16 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
                   order_id:            data.order_id,
                 }),
               })
-              const verData = await verRes.json()
-              if (!verRes.ok) throw new Error(verData.error || 'Verification failed')
+              const verData = await safeJsonParse<PaymentApiResponse>(verRes)
+              if (!verRes.ok) throw new Error(verData.error || `Verification failed (${verRes.status}). Please contact support.`)
+              // BUG FIX: same class of guard as create_payment above — a 200
+              // response with a malformed/non-JSON body would otherwise slip
+              // through as "success" with an empty order_number, sending the
+              // customer to a confirmation link with a blank order ID even
+              // though their payment genuinely went through.
+              if (!verData.order_number) {
+                throw new Error('Payment verified but the order confirmation could not be loaded.')
+              }
 
               const itemLines  = items.map(i => `• ${i.name} ×${i.qty} = ₹${(i.price * i.qty).toFixed(0)}`).join('\n')
               const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
