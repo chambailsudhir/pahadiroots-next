@@ -65,7 +65,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     error,
     couponCode, setCouponCode, couponLoading, couponError, couponHints,
     loyaltyBalance, loyaltyRedemption, loyaltyLoading, loyaltyError,
-    addr, email, setEmail, savedAddrs, selectedSavedIdx,
+    addr, email, setEmail, savedAddrs, selectedSavedIdx, profilePrefillLoading,
     summaryOpen, setSummaryOpen, touched,
     codEnabled, razorpayEnabled, codMax, prepaidPct, freeShipMin, minOrderAmt, razorpayKeyId,
     pricing, codOk, belowMinOrder, bothPayOff,
@@ -192,6 +192,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
                   onEmailChange={setEmail}
                   onTouch={touchField}
                   selectedSavedIdx={selectedSavedIdx}
+                  prefillLoading={profilePrefillLoading}
                 />
               </div>
             </section>

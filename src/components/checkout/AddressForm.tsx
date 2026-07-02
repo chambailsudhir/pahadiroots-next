@@ -17,6 +17,13 @@ const LABEL_ICONS: Record<string, string> = {
 // Cache pincode results to avoid repeat API calls
 const pincodeCache = new Map<string, { city: string; state: string } | null>()
 
+// BUG FIX (autofill reliability): the lookup had no upper bound on how long it
+// could take, so a slow/hung third-party response left the "Looking up pincode"
+// spinner running indefinitely with no way for the user to know it had failed.
+// 5s is generous for a simple JSON lookup while still giving up in time for
+// the user to fall back to typing city/state manually.
+const PINCODE_LOOKUP_TIMEOUT_MS = 5_000
+
 async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city: string; state: string } | null> {
   if (!/^\d{6}$/.test(pin)) return null
   if (pincodeCache.has(pin)) return pincodeCache.get(pin)!
@@ -26,15 +33,42 @@ async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city:
     if (!data?.[0]?.PostOffice?.length) { pincodeCache.set(pin, null); return null }
     const po = data[0].PostOffice[0]
     const raw = po.State || ''
-    const matched = INDIA_STATES.find(s =>
-      s.toLowerCase() === raw.toLowerCase() ||
-      s.toLowerCase().startsWith(raw.toLowerCase()) ||
-      raw.toLowerCase().startsWith(s.toLowerCase().split(' ')[0])
-    ) || raw
+    // BUG FIX (wrong state autofilled): the previous single-pass `.find()`
+    // tested all three conditions (exact / prefix / reverse-prefix) against
+    // each candidate in array order and stopped at the FIRST one to satisfy
+    // ANY of them — it did not prefer the best match. Because 'Uttar Pradesh'
+    // sits earlier than 'Uttarakhand' in INDIA_STATES, and "uttarakhand"
+    // starts with "uttar" (the loose reverse-prefix condition), every
+    // Uttarakhand pincode — this business's own home region — was silently
+    // auto-filled as "Uttar Pradesh". Fixed by searching in two ordered
+    // passes: try an exact match across the WHOLE list first, and only fall
+    // back to fuzzy prefix matching if no exact match exists anywhere.
+    const rawLower = raw.toLowerCase()
+    const matched =
+      INDIA_STATES.find(s => s.toLowerCase() === rawLower) ||
+      INDIA_STATES.find(s => {
+        const sLower = s.toLowerCase()
+        return sLower.startsWith(rawLower) || rawLower.startsWith(sLower)
+      }) ||
+      raw
     const result = { city: po.District || po.Block || '', state: matched }
     pincodeCache.set(pin, result)
     return result
-  } catch { pincodeCache.set(pin, null); return null }
+  } catch (err: unknown) {
+    // BUG FIX (cache poisoning): a request that was ABORTED — because it timed
+    // out, because the user typed a newer pincode, or because they navigated
+    // away mid-request — is not the same thing as the API genuinely returning
+    // "no such pincode". The previous code cached both cases identically as
+    // `null`, which meant a single slow/interrupted lookup permanently marked
+    // that pincode as "not found" for the rest of the session: even retyping
+    // the exact same valid pincode later would silently short-circuit to the
+    // cached `null` and never hit the network again. Only cache genuine
+    // negative API responses (handled above) — aborts are left uncached so
+    // the next attempt gets a real retry.
+    if ((err as { name?: string } | null)?.name === 'AbortError') return null
+    pincodeCache.set(pin, null)
+    return null
+  }
 }
 
 interface Props {
@@ -45,6 +79,10 @@ interface Props {
   onEmailChange: (v: string) => void
   onTouch: (field: string) => void
   selectedSavedIdx: number | null
+  // True while the background saved-address/profile fetch is still in flight
+  // and no saved address has been selected yet — see useCheckoutPage.ts.
+  // Optional so existing callers/tests without the prop don't break.
+  prefillLoading?: boolean
 }
 
 // PERF FIX: extracted to module level — was a 6KB template literal inside the
@@ -261,14 +299,49 @@ const STYLES = `
     color: #D04030;
     font-weight: 500;
   }
+
+  /* Pincode lookup failure — a warning, not a form validation error (the
+     pincode itself is still valid; only the auto-detect step failed), so it
+     gets its own muted amber treatment rather than the red .af-err style. */
+  .af-pin-warn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #9A7A20;
+    font-weight: 500;
+  }
+
+  /* Background profile prefill status — shown only while the saved-address
+     fetch is in flight and nothing has filled in yet. */
+  .af-prefill-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 12px 28px 0;
+    padding: 8px 14px;
+    background: #F5F0E8;
+    border-radius: 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: #7A7060;
+  }
+  @media (max-width: 640px) { .af-prefill-status { margin: 10px 20px 0; } }
+  .af-prefill-spin {
+    display: inline-block;
+    animation: pin-spin .6s linear infinite;
+    font-style: normal;
+  }
 `
 
 // PERF FIX: memo — prevents re-renders when parent re-renders but props are unchanged.
 // Props are all primitives or stable refs (onChange/onEmailChange/onTouch are useCallback
 // in useCheckoutPage; addr/touched change only on user input).
-const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx }: Props) {
+const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx, prefillLoading }: Props) {
   const [pincodeLoading, setPincodeLoading] = useState(false)
   const [pincodeMsg,     setPincodeMsg]     = useState('')
+  // BUG FIX: lookup failures (timeout or genuine "not found") previously had
+  // NO user-facing message at all — the spinner just stopped and city/state
+  // silently stayed whatever they were, with no indication anything happened.
+  const [pincodeError,   setPincodeError]   = useState('')
   const pinAbortRef = useRef<AbortController | null>(null)
 
   // PERF FIX: pre-compute all field errors into an object with useMemo instead
@@ -298,6 +371,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
     const clean = val.replace(/\D/g, '').slice(0, 6)
     onChange('pincode', clean)
     setPincodeMsg('')
+    setPincodeError('')
     if (clean.length !== 6) { setPincodeLoading(false); return }
 
     // Cancel previous in-flight request
@@ -305,15 +379,33 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
     const ctrl = new AbortController()
     pinAbortRef.current = ctrl
 
+    // BUG FIX: hard timeout so a slow/hung response can't leave the spinner
+    // running forever. Aborting here routes through lookupPincode's AbortError
+    // branch, which — after the cache-poisoning fix above — does NOT poison
+    // the cache, so the user (or a later attempt) can retry cleanly.
+    const timeoutId = setTimeout(() => ctrl.abort(), PINCODE_LOOKUP_TIMEOUT_MS)
+
     setPincodeLoading(true)
-    const result = await lookupPincode(clean, ctrl.signal)
-    if (ctrl.signal.aborted) return
-    if (result) {
-      onChange('city', result.city)
-      onChange('state', result.state)
-      setPincodeMsg(`${result.city}, ${result.state}`)
+    try {
+      const result = await lookupPincode(clean, ctrl.signal)
+      // Superseded by a newer keystroke while this was in flight — the newer
+      // request owns the UI now, so this stale result must not overwrite it.
+      if (pinAbortRef.current !== ctrl) return
+      if (result) {
+        onChange('city', result.city)
+        onChange('state', result.state)
+        setPincodeMsg(`${result.city}, ${result.state}`)
+      } else {
+        // BUG FIX: previously silent — spinner just stopped with zero
+        // indication of success or failure. Now the user is told explicitly
+        // so they know to fill city/state themselves instead of wondering
+        // whether autofill is still "working on it".
+        setPincodeError('Could not auto-detect — please enter city & state below')
+      }
+    } finally {
+      clearTimeout(timeoutId)
+      if (pinAbortRef.current === ctrl) setPincodeLoading(false)
     }
-    setPincodeLoading(false)
   }, [onChange])
 
   return (
@@ -340,6 +432,18 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
           <span>{LABEL_ICONS[addr.label] || '📍'}</span>
           <span>Delivering to <strong>{addr.label}</strong></span>
           <span className="af-addr-hint">Select a different address above to change</span>
+        </div>
+      )}
+
+      {/* BUG FIX: the background saved-address fetch (useCheckoutPage.ts)
+          previously gave zero feedback while in flight — the form just sat
+          blank, indistinguishable from being broken, for however long the
+          fetch took. aria-live="polite" so screen readers hear it once,
+          not on every re-render. */}
+      {prefillLoading && (
+        <div className="af-prefill-status" role="status" aria-live="polite">
+          <span className="af-prefill-spin" aria-hidden="true">↻</span>
+          Loading your saved details…
         </div>
       )}
 
@@ -483,6 +587,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
               aria-describedby={[
                 errors.pincode                    ? 'af-pincode-err' : '',
                 pincodeMsg && !pincodeLoading     ? 'af-pin-status'  : '',
+                pincodeError && !pincodeLoading   ? 'af-pincode-lookup-err' : '',
               ].filter(Boolean).join(' ') || undefined}
               onChange={e => handlePincodeChange(e.target.value)}
               onBlur={() => onTouch('pincode')}
@@ -490,6 +595,14 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
             />
             {errors.pincode && (
               <span id="af-pincode-err" className="af-err" role="alert">{errors.pincode}</span>
+            )}
+            {/* BUG FIX: lookup failure (timeout or genuine no-match) previously
+                had no visible message at all — city/state just silently stayed
+                unfilled with no explanation. This doesn't block submission
+                (city/state are still editable below), it just tells the user
+                autofill didn't work so they know to fill them in themselves. */}
+            {!errors.pincode && pincodeError && !pincodeLoading && (
+              <span id="af-pincode-lookup-err" className="af-pin-warn" role="status">{pincodeError}</span>
             )}
           </div>
           <div className="af-group">

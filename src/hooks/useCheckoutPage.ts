@@ -149,6 +149,9 @@ export interface CheckoutPageState {
   setEmail:          (v: string) => void
   savedAddrs:        SavedAddress[]
   selectedSavedIdx:  number | null
+  // True only while the background saved-address fetch is in flight AND the
+  // cache was cold at mount — see the hadWarmCacheRef comment in the hook body.
+  profilePrefillLoading: boolean
   summaryOpen:       boolean
   setSummaryOpen:    (v: boolean | ((prev: boolean) => boolean)) => void
   touched:           Record<string, boolean>
@@ -313,6 +316,25 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // but keeping the ref pattern is defensive against any future closure captures).
   const applyProfileDataRef = useRef(applyProfileData)
 
+  // BUG FIX (autofill feedback): the background profile-prefill fetch below
+  // previously gave the user zero indication it was even running — the
+  // address fields just sat blank (or briefly showed the localStorage-only
+  // fallback) until the network call resolved, however long that took. This
+  // flag is surfaced to AddressForm so it can show a "Loading your saved
+  // details…" status instead of looking frozen/broken.
+  //
+  // Only meaningful when the cache was cold at mount — if `_readProfileCache()`
+  // already had data, the form was filled synchronously in the useState
+  // initializers above and this background fetch is just a silent refresh;
+  // showing a loading indicator in that case would be misleading (nothing is
+  // actually "loading" from the user's perspective).
+  const hadWarmCacheRef = useRef(
+    typeof window !== 'undefined' ? !!_readProfileCache() : false
+  )
+  const [profilePrefillLoading, setProfilePrefillLoading] = useState(
+    () => !hadWarmCacheRef.current
+  )
+
   // ── Revalidation tracking refs (DATA INTEGRITY FIX — see effects below) ────
   // The global CartDrawer (rendered in the root layout — see CartDrawer.tsx)
   // is reachable from every page, including /checkout. A user can open it and
@@ -409,6 +431,15 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // Background profile refresh
   useEffect(() => {
     const ctrl = new AbortController()
+    // BUG FIX (autofill reliability): this fetch previously had NO timeout —
+    // only cancelled on unmount. A slow endpoint (cold serverless start, slow
+    // connection) meant the address fields could sit unfilled for however
+    // long the network took, with no bound and no user-facing feedback.
+    // 6s: generous enough that a normal cold start still succeeds, tight
+    // enough that the user isn't left waiting indefinitely — after this the
+    // user can just type their address manually; the cache write below still
+    // benefits future page loads even after a timeout on this one.
+    const timeoutId = setTimeout(() => ctrl.abort(), 6_000)
     fetch('/api/profile', { signal: ctrl.signal })
       .then(async r => {
         if (!r.ok || ctrl.signal.aborted) return
@@ -442,7 +473,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if ((err as { name?: string }).name === 'AbortError') return
         console.error('[useCheckoutPage] profile prefill failed:', err)
       })
-    return () => ctrl.abort()
+      .finally(() => {
+        // BUG FIX (autofill feedback): clear the loading flag on every exit
+        // path — success, HTTP error, network error, AND timeout — so the
+        // "Loading your saved details…" indicator never gets stuck on.
+        clearTimeout(timeoutId)
+        if (mountedRef.current) setProfilePrefillLoading(false)
+      })
+    return () => { clearTimeout(timeoutId); ctrl.abort() }
   }, []) // mount-only: background profile prefill
 
   // Coupon hints
@@ -905,7 +943,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     error,
     couponCode, setCouponCode, couponLoading, couponError, couponHints,
     loyaltyBalance, loyaltyRedemption, loyaltyLoading, loyaltyError,
-    addr, email, setEmail, savedAddrs, selectedSavedIdx,
+    addr, email, setEmail, savedAddrs, selectedSavedIdx, profilePrefillLoading,
     summaryOpen, setSummaryOpen, touched,
     codEnabled, razorpayEnabled, codMax, prepaidPct, freeShipMin, minOrderAmt, razorpayKeyId,
     pricing, codOk, belowMinOrder, bothPayOff,
