@@ -55,7 +55,12 @@ const nextConfig = {
               "default-src 'self'",
               // 'unsafe-eval' is required by Razorpay checkout.js (uses Function/eval internally).
               // Cannot be removed without breaking payments. See next.config.js comment.
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+              // BUG FIX (found via browser console CSP errors): Razorpay's checkout SDK
+              // dynamically loads a risk-detection script from cdn.razorpay.com as part of
+              // its own fraud-prevention flow — a legitimate, first-party Razorpay domain,
+              // distinct from checkout.razorpay.com (the main SDK). It was being silently
+              // blocked, which could affect Razorpay's fraud scoring for COD/online orders.
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://cdn.razorpay.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://ulyrhnpoiypuvaurlqqi.supabase.co",
               "font-src 'self'",

@@ -89,8 +89,12 @@ export default async function RootLayout({
           href="https://ulyrhnpoiypuvaurlqqi.supabase.co"
           crossOrigin="anonymous"
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* BUG FIX: removed preconnect hints to fonts.googleapis.com /
+            fonts.gstatic.com — the site no longer makes any request to
+            either domain (next/font self-hosts Playfair Display + Lato at
+            build time; see globals.css for the matching fix). Preconnecting
+            to a domain the page never actually requests wastes a DNS/TLS
+            handshake for nothing. */}
         {/* Organization JSON-LD */}
         <script
           type="application/ld+json"

@@ -96,27 +96,16 @@ function SuccessContent() {
   }
 
   /* fetch order */
+  // See the BUG FIX note above loadOrder's definition below: /api/admin-api
+  // doesn't exist in this app, so this always failed. Rather than firing a
+  // request guaranteed to 404 (with its 5s abort timeout) on every single
+  // order-success page view, we go straight to the known-good fallback
+  // state. The hero section above already shows the real order number from
+  // the URL — that part has always worked correctly.
   const loadOrder = useCallback(async () => {
-    if (!orderId && !orderNum) return
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 5000)
-    try {
-      const res  = await fetch('/api/admin-api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'public_get_order', order_id: orderId, orderNumber: orderNum }),
-        signal: ctrl.signal,
-      })
-      clearTimeout(timer)
-      const data = await res.json()
-      if (!res.ok || !data.order) throw new Error('not found')
-      setOrder(data.order)
-    } catch {
-      clearTimeout(timer)
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
+    if (!orderId && !orderNum) { setLoading(false); return }
+    setLoading(false)
+    setError(true)
   }, [orderId, orderNum])
 
   // Standard effect-based data-fetching pattern: loadOrder is an async
@@ -162,7 +151,14 @@ function SuccessContent() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+        /* BUG FIX (found via browser console CSP errors): removed the
+           @import to Google's font CDN — CSP's style-src blocks it, so it
+           always failed. Playfair Display below now reuses the
+           --font-playfair CSS variable next/font already self-hosts and
+           exposes on the root <body> (this page is rendered inside it, so
+           the variable is inherited); DM Sans isn't used anywhere else in
+           the app, so rather than adding a second self-hosted Google Font
+           for one page, the base text below uses a system-font stack. */
 
         /* ── RESET / BASE ── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -179,7 +175,7 @@ function SuccessContent() {
           --tx2: #444;
           --tx3: #888;
         }
-        body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--tx); }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--tx); }
         a { text-decoration: none; color: inherit; }
         button { cursor: pointer; font-family: inherit; }
 
@@ -192,7 +188,7 @@ function SuccessContent() {
           justify-content: space-between;
         }
         .oc-nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-        .oc-logo-name { font-family: 'Playfair Display', serif; font-size: 20px; color: #fff; font-weight: 900; }
+        .oc-logo-name { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 20px; color: #fff; font-weight: 900; }
         .oc-logo-tl   { font-size: 10px; color: rgba(255,255,255,.55); letter-spacing: 1.5px; text-transform: uppercase; }
         .oc-nav-back  { color: rgba(255,255,255,.8); font-size: 13px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px; transition: color .2s; }
         .oc-nav-back:hover { color: #fff; }
@@ -222,7 +218,7 @@ function SuccessContent() {
         }
         @keyframes oc-popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
         .oc-title {
-          font-family: 'Playfair Display', serif;
+          font-family: var(--font-playfair), 'Playfair Display', serif;
           font-size: 32px; font-weight: 900;
           color: #fff; margin-bottom: 8px;
           animation: oc-fadeUp .5s .2s both;
@@ -321,7 +317,7 @@ function SuccessContent() {
 
         /* ── REVIEW ── */
         .oc-review { background: var(--bg2); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; text-align: center; }
-        .oc-review-title { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: var(--g); margin-bottom: 4px; }
+        .oc-review-title { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: var(--g); margin-bottom: 4px; }
         .oc-review-sub { font-size: 13px; color: var(--tx3); margin-bottom: 10px; }
         .oc-review-stars { display: flex; justify-content: center; gap: 8px; }
         .oc-review-star { font-size: 28px; cursor: pointer; transition: transform .15s; filter: grayscale(1); }
@@ -367,14 +363,14 @@ function SuccessContent() {
         /* ── ERROR ── */
         .oc-error { text-align: center; padding: 60px 20px; }
         .oc-error-icon { font-size: 48px; margin-bottom: 16px; }
-        .oc-error h2 { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--g); margin-bottom: 8px; }
+        .oc-error h2 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 24px; color: var(--g); margin-bottom: 8px; }
         .oc-error p  { color: var(--tx3); font-size: 14px; margin-bottom: 24px; }
 
         /* ── NEWSLETTER ── */
         .oc-newsletter { border-top: 2px solid #c8920a; border-bottom: 2px solid rgba(200,146,10,.2); box-shadow: 0 -6px 32px rgba(0,0,0,.18), inset 0 1px 0 rgba(200,146,10,.15); }
         .oc-nl-inner-wrap { background: linear-gradient(180deg,#0f2a14 0%,#1a3a1e 100%); padding: 32px 40px 36px; }
         .oc-nl-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-        .oc-nl-text h4 { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+        .oc-nl-text h4 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 4px; }
         .oc-nl-text p  { font-size: 13px; color: rgba(255,255,255,.55); }
         .oc-nl-form { display: flex; border-radius: 10px; overflow: hidden; border: 1.5px solid rgba(255,255,255,.18); min-width: 300px; }
         .oc-nl-inp { flex: 1; padding: 12px 16px; background: rgba(255,255,255,.07); border: none; color: #fff; font-size: 13px; outline: none; }
@@ -387,7 +383,7 @@ function SuccessContent() {
         .oc-f-frieze { background: #1a0d2e; border-top: 2px solid #c8920a; border-bottom: 2px solid #c8920a; line-height: 0; overflow: hidden; }
         .oc-f-brand-row { display: flex; align-items: center; gap: 32px; padding: 36px 60px 28px; }
         .oc-f-brand-col { flex: 1; min-width: 0; }
-        .oc-f-brand-name { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+        .oc-f-brand-name { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 26px; font-weight: 900; color: #fff; margin-bottom: 4px; }
         .oc-f-brand-sub  { font-size: 10.5px; color: #c8920a; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 12px; }
         .oc-f-brand-desc { font-size: 14px; color: rgba(255,255,255,.5); line-height: 1.85; max-width: 560px; }
         .oc-f-vine { flex-shrink: 0; align-self: stretch; display: flex; align-items: center; }
@@ -722,12 +718,16 @@ function SuccessContent() {
           <div>
             <div className="oc-fh">Company</div>
             <ul className="oc-ful">
-              <li><Link href="/our-story">Our Story</Link></li>
+              <li><Link href="/about">Our Story</Link></li>
               <li><Link href="/#states">By Region</Link></li>
-              <li><Link href="/terms#returns">Returns &amp; Refunds</Link></li>
-              <li><Link href="/terms#shipping">Shipping Policy</Link></li>
-              <li><Link href="/terms#privacy">Privacy Policy</Link></li>
-              <li><Link href="/terms">Terms &amp; Conditions</Link></li>
+              {/* BUG FIX (found via console 404s): these pointed to
+                  /terms#<section>, which doesn't exist — policy pages are
+                  separate routes under /policies/[type], not hash-anchored
+                  sections of a single /terms page. */}
+              <li><Link href="/policies/returns">Returns &amp; Refunds</Link></li>
+              <li><Link href="/policies/shipping">Shipping Policy</Link></li>
+              <li><Link href="/policies/privacy">Privacy Policy</Link></li>
+              <li><Link href="/policies/terms">Terms &amp; Conditions</Link></li>
             </ul>
           </div>
           <div>
