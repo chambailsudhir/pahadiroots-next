@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeData'
+import { buildOffersList, offersListToJsonLdValue } from '@/lib/jsonLdOffers'
+import { pdpFetchLimiter } from '@/lib/concurrencyLimit'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { supabase as anonClient } from '@/lib/supabase'
 import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
@@ -137,6 +139,17 @@ export default async function ProductPage({ params }: Props) {
   // BUG FIX (3.3): aggregateRating was hardcoded to 4.8 / 39 on every product.
   // Now wired to real review data from fetchProductData.
   // JSON-LD: only include aggregateRating when there are real reviews.
+  // BUG FIX (MEDIUM – audit finding #5, single-Offer JSON-LD): see
+  // lib/jsonLdOffers.ts for the full rationale (AggregateOffer is explicitly
+  // not the right schema.org tool for size/variant pricing per Google's docs;
+  // per-variant Offer array with sku is the documented approach).
+  const offersList = buildOffersList(
+    { name: product.name, slug: product.slug, sku: product.sku },
+    activeVariants.map((v: any) => ({ size: v.size, price: v.price, available_stock: v.available_stock, sku: v.sku })),
+    displayPrice,
+    inStock,
+  )
+
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org/',
     '@type':    'Product',
@@ -152,15 +165,9 @@ export default async function ProductPage({ params }: Props) {
         reviewCount:  String(reviewStats.count),
       },
     } : {}),
-    ...(displayPrice ? {
-      offers: {
-        '@type':        'Offer',
-        priceCurrency:  'INR',
-        price:          String(displayPrice),
-        availability:   inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        seller:         { '@type': 'Organization', name: '5 Pahadi Roots' },
-      },
-    } : {}),
+    ...(offersListToJsonLdValue(offersList) !== undefined
+      ? { offers: offersListToJsonLdValue(offersList) }
+      : {}),
   }
 
   const crumbs = [
@@ -672,6 +679,18 @@ function WhySection() {
 // could 404 real, active products. Now uses getProductBySlug() (direct indexed lookup)
 // and getRelatedProducts() (targeted category/state query) instead.
 async function fetchProductData(slug: string) {
+  // BUG FIX (CRITICAL — regression found post-deploy via Vercel logs): see
+  // lib/concurrencyLimit.ts for the full incident writeup. Every product page
+  // now does its own targeted (uncached) Supabase queries instead of sharing
+  // one cached full-catalog fetch, and Next.js builds all product pages in
+  // parallel — without a cap, that's N products × ~6 simultaneous requests
+  // hammering Supabase's connection pool at once, which cascaded into
+  // timeouts on unrelated routes across the whole app. This limiter caps how
+  // many products' data-fetch pipelines run at once; the rest queue.
+  return pdpFetchLimiter.run(() => fetchProductDataInner(slug))
+}
+
+async function fetchProductDataInner(slug: string) {
   try {
     const { product: rawProduct, variants: rawVariants, images: rawImages } = await getProductBySlug(slug)
     if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [] }

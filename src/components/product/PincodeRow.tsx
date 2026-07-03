@@ -7,31 +7,42 @@
 // in page.tsx with a "Check" button that had no onClick, no state, and did
 // nothing — `waNumber` was destructured but never used.
 //
-// Fix: Extract as a real client component. Validates the 6-digit PIN,
-// opens WhatsApp with a pre-filled delivery-check message to the support
-// number. This matches the WhatsApp-first support pattern already used in
-// the Returns accordion.
+// BUG FIX (MEDIUM – audit finding #6): the "Check" button used to always open
+// WhatsApp with a pre-filled message — a conversion-flow interruption with no
+// on-page response at all. Now it shows an inline, clearly-labelled delivery
+// ESTIMATE immediately (see lib/pincodeZones.ts for why this is an estimate,
+// not a real-time courier lookup) and keeps WhatsApp as a secondary action for
+// customers who want an exact date, instead of the only action.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef } from 'react'
+import { estimateDelivery, type DeliveryEstimate } from '@/lib/pincodeZones'
 
 interface Props { waNumber: string }
 
 export default function PincodeRow({ waNumber }: Props) {
-  const [pin, setPin]       = useState('')
-  const [error, setError]   = useState('')
-  const inputRef            = useRef<HTMLInputElement>(null)
+  const [pin, setPin]           = useState('')
+  const [error, setError]       = useState('')
+  const [estimate, setEstimate] = useState<DeliveryEstimate | null>(null)
+  const inputRef                = useRef<HTMLInputElement>(null)
 
   function handleCheck() {
     const clean = pin.replace(/\D/g, '')
-    if (clean.length !== 6) {
+    const result = estimateDelivery(clean)
+    if (!result) {
       setError('Please enter a valid 6-digit PIN code')
+      setEstimate(null)
       inputRef.current?.focus()
       return
     }
     setError('')
+    setEstimate(result)
+  }
+
+  function handleWhatsAppConfirm() {
+    const clean = pin.replace(/\D/g, '')
     const msg = encodeURIComponent(
-      `Hi! I'd like to check delivery availability for PIN code ${clean}. Please let me know if you deliver to my area.`
+      `Hi! I'd like to confirm the exact delivery date for PIN code ${clean}. Please let me know.`
     )
     window.open(`https://wa.me/${waNumber}?text=${msg}`, '_blank', 'noopener,noreferrer')
   }
@@ -55,10 +66,11 @@ export default function PincodeRow({ waNumber }: Props) {
         onChange={e => {
           setPin(e.target.value.replace(/\D/g, ''))
           if (error) setError('')
+          if (estimate) setEstimate(null)
         }}
         onKeyDown={handleKeyDown}
         aria-label="PIN code"
-        aria-describedby={error ? 'pincode-error' : undefined}
+        aria-describedby={error ? 'pincode-error' : estimate ? 'pincode-estimate' : undefined}
       />
       <button
         className="pdp-pincode-btn"
@@ -76,6 +88,24 @@ export default function PincodeRow({ waNumber }: Props) {
           style={{ fontSize: '11px', color: '#c0392b', marginLeft: '4px', flexBasis: '100%' }}
         >
           {error}
+        </span>
+      )}
+      {estimate && (
+        <span
+          id="pincode-estimate"
+          role="status"
+          style={{ fontSize: '12px', marginLeft: '4px', flexBasis: '100%' }}
+        >
+          Estimated delivery: <strong>{estimate.etaLabel}</strong>{' '}
+          <span style={{ color: '#666' }}>(approximate — based on region)</span>
+          {' · '}
+          <button
+            type="button"
+            onClick={handleWhatsAppConfirm}
+            style={{ background: 'none', border: 'none', padding: 0, color: '#075e54', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+          >
+            Confirm exact date on WhatsApp
+          </button>
         </span>
       )}
     </div>
