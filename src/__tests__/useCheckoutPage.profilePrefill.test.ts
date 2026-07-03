@@ -144,3 +144,102 @@ describe('useCheckoutPage — profile prefill loading & timeout', () => {
     expect(result.current.profilePrefillLoading).toBe(false)
   })
 })
+
+describe('useCheckoutPage — silent background refresh (stale-while-revalidate)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    primeStores()
+    vi.stubGlobal('fetch', vi.fn())
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('[BUG FIX] cached address (however old) fills instantly with zero loading indicator', () => {
+    // Simulates what readProfileCache now returns for an old-but-present
+    // entry — see profileCache.test.ts for the age-discarding fix itself.
+    mockReadProfileCache.mockReturnValue({
+      ts: Date.now() - 999_999_999, // ancient
+      profile: { first_name: 'Asha', last_name: 'Rana', phone: '9876543210' },
+      addresses: [{
+        id: 'default', is_default: true, label: 'Home',
+        name: 'Asha Rana', flat: 'Old Flat 4', area: '',
+        city: 'Dehradun', state: 'Uttarakhand', pincode: '248001', phone: '9876543210',
+      }],
+    })
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {})) // never resolves
+
+    const { result } = renderHook(() => useCheckoutPage(settings))
+
+    // Instantly filled — no waiting on the never-resolving fetch above.
+    expect(result.current.addr.city).toBe('Dehradun')
+    expect(result.current.addr.flat).toBe('Old Flat 4')
+    // And no loading indicator, since there was something to show immediately.
+    expect(result.current.profilePrefillLoading).toBe(false)
+  })
+
+  it('[BUG FIX] silently refreshes cache-sourced fields once the background fetch returns fresher data', async () => {
+    mockReadProfileCache.mockReturnValue({
+      ts: Date.now() - 999_999_999,
+      profile: { first_name: 'Asha', last_name: 'Rana', phone: '9876543210' },
+      addresses: [{
+        id: 'default', is_default: true, label: 'Home',
+        name: 'Asha Rana', flat: 'Old Flat 4', area: '',
+        city: 'Dehradun', state: 'Uttarakhand', pincode: '248001', phone: '9876543210',
+      }],
+    })
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        profile: {
+          first_name: 'Asha', last_name: 'Rana', phone: '9876543210',
+          address_line1: 'NEW Flat 9', city: 'Rishikesh', state: 'Uttarakhand', pincode: '249201',
+        },
+      }),
+    })
+
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    expect(result.current.addr.city).toBe('Dehradun') // instant, from stale cache
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    // Background refresh silently corrected it — customer never edited anything.
+    expect(result.current.addr.city).toBe('Rishikesh')
+    expect(result.current.addr.flat).toBe('NEW Flat 9')
+  })
+
+  it('[BUG FIX] never overwrites a field the customer has already typed into', async () => {
+    mockReadProfileCache.mockReturnValue({
+      ts: Date.now() - 999_999_999,
+      profile: { first_name: 'Asha', last_name: 'Rana', phone: '9876543210' },
+      addresses: [{
+        id: 'default', is_default: true, label: 'Home',
+        name: 'Asha Rana', flat: 'Old Flat 4', area: '',
+        city: 'Dehradun', state: 'Uttarakhand', pincode: '248001', phone: '9876543210',
+      }],
+    })
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        profile: {
+          first_name: 'Asha', last_name: 'Rana', phone: '9876543210',
+          address_line1: 'NEW Flat 9', city: 'Rishikesh', state: 'Uttarakhand', pincode: '249201',
+        },
+      }),
+    })
+
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    expect(result.current.addr.city).toBe('Dehradun')
+
+    // Customer edits the city field themselves BEFORE the background fetch resolves.
+    act(() => { result.current.setAddrField('city', 'Mussoorie') })
+    expect(result.current.addr.city).toBe('Mussoorie')
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    // The fetch resolved with 'Rishikesh', but the customer's own edit must win.
+    expect(result.current.addr.city).toBe('Mussoorie')
+  })
+})

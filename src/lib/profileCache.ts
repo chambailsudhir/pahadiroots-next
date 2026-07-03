@@ -72,7 +72,17 @@ export function buildCacheEntry(prof: RawProfile): CachedProfile {
 
 /**
  * Read the checkout profile cache.
- * Returns null if missing or older than PROFILE_CACHE_TTL.
+ *
+ * BUG FIX (Amazon/Myntra-style instant address fill): this used to discard
+ * ANYTHING older than PROFILE_CACHE_TTL (30 min), returning null and forcing
+ * checkout into a full live network wait before it could show ANY address —
+ * even though we already knew the customer's last saved address perfectly
+ * well. That's backwards: a returning customer's address doesn't become
+ * wrong after 30 minutes, so age is not a reason to hide it. Age is only a
+ * reason to *also* kick off a background refresh (see isProfileCacheStale
+ * below) — never a reason to block the instant fill on a network round-trip.
+ * Returns any structurally valid cached entry regardless of age; only
+ * missing/corrupt localStorage returns null.
  */
 export function readProfileCache(): CachedProfile | null {
   if (typeof window === 'undefined') return null
@@ -80,7 +90,7 @@ export function readProfileCache(): CachedProfile | null {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY)
     if (!raw) return null
     const parsed: CachedProfile = JSON.parse(raw)
-    if (!parsed?.ts || Date.now() - parsed.ts > PROFILE_CACHE_TTL) return null
+    if (!parsed?.ts || !parsed.profile) return null
     return parsed
   } catch { return null }
 }
@@ -97,9 +107,18 @@ export function clearProfileCache(): void {
   try { localStorage.removeItem(PROFILE_CACHE_KEY) } catch {}
 }
 
-/** True when cache is missing or stale — i.e. a fetch is needed. */
+/**
+ * True when the cache is missing OR older than PROFILE_CACHE_TTL.
+ *
+ * Used by ProfilePrefetcher to decide whether it's worth proactively
+ * refreshing in the background — this is a "should we refresh" signal, NOT
+ * a "can we use this for instant display" signal (that's readProfileCache()
+ * above, which is now age-agnostic on purpose).
+ */
 export function isProfileCacheStale(): boolean {
-  return readProfileCache() === null
+  const cache = readProfileCache()
+  if (!cache) return true
+  return Date.now() - cache.ts > PROFILE_CACHE_TTL
 }
 
 // ─── Prefetch ──────────────────────────────────────────────────────────────

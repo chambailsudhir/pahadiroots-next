@@ -64,6 +64,21 @@ interface RazorpayOptions {
 // (causing them to be recreated on every render). Moving them here gives them
 // stable identities and removes them from the component render cycle.
 
+// Builds the order-success redirect URL. Always includes the confirmation
+// token when available — see db_migration_v6_order_confirmation_token.sql —
+// so the confirmation page can look up real order data via the new
+// /api/v1/orders/lookup endpoint instead of the dead /api/admin-api call it
+// used to make. Falls back to a token-less URL if, for some rare reason
+// (see the non-fatal catch in orderService.ts), no token came back — the
+// confirmation page still degrades gracefully to its existing
+// "check your email/WhatsApp" fallback state in that case, exactly as it did
+// before this feature existed, so this is never a regression.
+function buildOrderSuccessUrl(orderNumber: string, token: string | undefined, method: 'cod' | 'razorpay', total: number): string {
+  const params = new URLSearchParams({ id: orderNumber, method, total: String(total) })
+  if (token) params.set('token', token)
+  return `/order-success?${params.toString()}`
+}
+
 function matchState(stored: string | undefined | null): string {
   if (!stored) return 'Uttarakhand'
   const s = stored.trim()
@@ -119,6 +134,9 @@ interface PaymentApiResponse {
   amount?:              number
   currency?:            string
   razorpay_order_id?:  string
+  // Guest-safe capability token for the order-success confirmation page —
+  // see db_migration_v6_order_confirmation_token.sql.
+  confirmation_token?: string
 }
 
 function applyProfileData(
@@ -127,12 +145,26 @@ function applyProfileData(
   setAddrFn:  React.Dispatch<React.SetStateAction<OrderAddress>>,
   setEmailFn: React.Dispatch<React.SetStateAction<string>>,
   setSavedFn: React.Dispatch<React.SetStateAction<SavedAddress[]>>,
+  // BUG FIX (Amazon/Myntra-style instant address fill): the address fields
+  // are now filled INSTANTLY at mount from localStorage cache, however old
+  // (see profileCache.ts) — no more waiting on a network round-trip just to
+  // see a previously-known address. The background /api/profile refresh
+  // below still runs afterward to keep that data correct, but the OLD guard
+  // here ("if prev.flat || prev.city || prev.pincode, do nothing") assumed
+  // non-empty fields only ever meant "the customer typed this — never touch
+  // it" — true when fields started empty, no longer true now that they
+  // start pre-filled from cache. Without this parameter, the background
+  // refresh could never update anything once the instant cache-fill had
+  // already populated the form, i.e. stale cached data would never
+  // self-correct. allowOverwrite lets the caller say "these fields are
+  // still cache-sourced, not customer-typed — safe to silently refresh."
+  allowOverwrite: boolean = false,
 ): void {
   if (!prof) return
   const fullName   = [prof.first_name, prof.last_name].filter(Boolean).join(' ')
   const cleanPhone = (prof.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10)
   setAddrFn(prev => {
-    if (prev.flat || prev.city || prev.pincode) return prev
+    if (!allowOverwrite && (prev.flat || prev.city || prev.pincode)) return prev
     if (allAddrs.length > 0) {
       const a = allAddrs[0]
       const validLabels = ['Home','Office','Parents','Friends','Others'] as const
@@ -145,7 +177,7 @@ function applyProfileData(
     }
     return { ...prev, name: prev.name||fullName, phone: prev.phone||cleanPhone }
   })
-  setEmailFn(prev => prev || prof.email || '')
+  setEmailFn(prev => allowOverwrite ? (prof.email || prev) : (prev || prof.email || ''))
   setSavedFn(allAddrs)
 }
 
@@ -371,6 +403,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const [profilePrefillLoading, setProfilePrefillLoading] = useState(
     () => !hadWarmCacheRef.current
   )
+  // Flips to true the moment the CUSTOMER actually edits an address field
+  // (via setAddrField/applySaved below) — as opposed to the instant cache
+  // fill at mount or the silent background refresh, neither of which go
+  // through those handlers. Read by the background profile effect to decide
+  // whether it's still safe to silently refresh cache-sourced fields, or
+  // whether the customer has taken over and their typing must never be
+  // touched again.
+  const userEditedAddrRef = useRef(false)
 
   // ── Revalidation tracking refs (DATA INTEGRITY FIX — see effects below) ────
   // The global CartDrawer (rendered in the root layout — see CartDrawer.tsx)
@@ -496,8 +536,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           .filter((a: SavedAddress) => validLabels.has(a.label ?? ''))
         const all = [...defaultAddr, ...saved]
         _writeProfileCache({ ts: Date.now(), profile: prof, addresses: all })
-        applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs)
-        if (all.length > 0) setSelectedSavedIdx(0)
+        // allowOverwrite: true unless the customer has already started typing
+        // — see the userEditedAddrRef comment above. This is what makes the
+        // stale-while-revalidate pattern actually work: the instant cache
+        // fill (possibly hours/days old) gets silently corrected here if
+        // anything changed, but ONLY while the customer hasn't taken over.
+        applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs, !userEditedAddrRef.current)
+        // Same guard: don't silently re-select "Home" out from under a
+        // customer who's already chosen a different saved address or typed
+        // their own — _writeProfileCache above still refreshes localStorage
+        // regardless, which is the part that actually needs to stay current.
+        if (all.length > 0 && !userEditedAddrRef.current) setSelectedSavedIdx(0)
       })
       .catch((err: unknown) => {
         // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
@@ -680,6 +729,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // it actually reads or calls.
 
   const setAddrField = useCallback((field: keyof OrderAddress, value: string) => {
+    userEditedAddrRef.current = true
     setAddr(prev => ({ ...prev, [field]: value }))
     if (field !== 'label') setSelectedSavedIdx(null)
   }, [])   // setAddr / setSelectedSavedIdx are stable setState dispatchers
@@ -689,6 +739,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   }, [])   // setTouched is stable
 
   const applySaved = useCallback((saved: SavedAddress, idx: number) => {
+    userEditedAddrRef.current = true
     const validLabels = ['Home','Office','Parents','Friends','Others'] as const
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
@@ -872,7 +923,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        const dbData = await safeJsonParse<{ order_number: string }>(dbRes)
+        const dbData = await safeJsonParse<{ order_number: string; confirmation_token?: string }>(dbRes)
         if (!dbRes.ok) {
           // BUG FIX: dbData.error is now only populated when the body genuinely
           // parsed as JSON with that field. When the server/platform returned
@@ -887,7 +938,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
         orderPlacedRef.current = true
         clearCart()
-        router.replace(`/order-success?id=${orderNumber}&method=cod&total=${pricingTotal}`)
+        router.replace(buildOrderSuccessUrl(orderNumber, dbData.confirmation_token, 'cod', pricingTotal))
       } else {
         const RZP = (window as Window & { Razorpay?: new (opts: RazorpayOptions) => { open(): void } }).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
@@ -901,7 +952,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if (data.already_confirmed) {
           orderPlacedRef.current = true
           clearCart()
-          router.replace(`/order-success?id=${data.order_number || ''}&method=razorpay&total=${pricingTotal}`)
+          router.replace(buildOrderSuccessUrl(data.order_number || '', data.confirmation_token, 'razorpay', pricingTotal))
           return
         }
 
@@ -966,7 +1017,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               trackPaymentVerified(verData.order_number, pricingTotal)
               orderPlacedRef.current = true
               clearCart()
-              router.replace(`/order-success?id=${verData.order_number || ''}&method=razorpay&total=${pricingTotal}`)
+              router.replace(buildOrderSuccessUrl(verData.order_number || '', verData.confirmation_token, 'razorpay', pricingTotal))
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
               setError(msg + ' Contact support with payment ID: ' + response.razorpay_payment_id)
