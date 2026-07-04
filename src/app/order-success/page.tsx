@@ -69,6 +69,9 @@ function SuccessContent() {
   const orderId     = params.get('id')    || ''
   const orderNum    = params.get('num')   || ''
   const totalParam  = params.get('total') || ''
+  // Guest-safe capability token — see db_migration_v6_order_confirmation_token.sql
+  // and /api/v1/orders/lookup/route.ts for the full auth model.
+  const token       = params.get('token') || ''
 
   const [order,   setOrder]   = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -96,17 +99,43 @@ function SuccessContent() {
   }
 
   /* fetch order */
-  // See the BUG FIX note above loadOrder's definition below: /api/admin-api
-  // doesn't exist in this app, so this always failed. Rather than firing a
-  // request guaranteed to 404 (with its 5s abort timeout) on every single
-  // order-success page view, we go straight to the known-good fallback
-  // state. The hero section above already shows the real order number from
-  // the URL — that part has always worked correctly.
+  // BUG FIX (found via production console 404s): this used to POST to
+  // /api/admin-api — the OLD vanilla-site's API path, never ported to this
+  // Next.js app. It always 404'd, on every single order, so the "rich"
+  // order status view (items, tracking, status stepper) never once
+  // rendered in production. Now calls the real, guest-safe
+  // /api/v1/orders/lookup endpoint (order_number + token, or the logged-in
+  // session as a fallback — see that route for the full auth model).
+  // `credentials: 'include'` lets a logged-in customer's order resolve even
+  // without a token (e.g. if they navigated here directly rather than via
+  // the checkout redirect).
   const loadOrder = useCallback(async () => {
-    if (!orderId && !orderNum) { setLoading(false); return }
-    setLoading(false)
-    setError(true)
-  }, [orderId, orderNum])
+    const orderNumber = orderId || orderNum
+    if (!orderNumber) { setLoading(false); return }
+
+    const ctrl  = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 8000)
+    try {
+      const qs  = new URLSearchParams({ order_number: orderNumber })
+      if (token) qs.set('token', token)
+      const res  = await fetch(`/api/v1/orders/lookup?${qs.toString()}`, {
+        credentials: 'include',
+        signal: ctrl.signal,
+      })
+      clearTimeout(timer)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.order) throw new Error('not found')
+      setOrder(data.order)
+    } catch {
+      clearTimeout(timer)
+      // Non-fatal — the hero section above already shows the real order
+      // number from the URL regardless, and this fallback message is
+      // honest ("check your email/WhatsApp") rather than broken.
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [orderId, orderNum, token])
 
   // Standard effect-based data-fetching pattern: loadOrder is an async
   // function with all its setState calls properly guarded by the

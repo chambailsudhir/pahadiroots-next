@@ -258,7 +258,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: true, order_number: order.order_number, order_id: order.id },
+      { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },
       { status: alreadyExists ? 200 : 201 }
     )
   } catch (err: unknown) {

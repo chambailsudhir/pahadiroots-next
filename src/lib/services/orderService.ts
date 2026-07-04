@@ -1,4 +1,5 @@
 import { captureError, logger } from '@/lib/logger'
+import crypto from 'crypto'
 // ─────────────────────────────────────────────────────────────
 // orderService — orders API calls
 //
@@ -236,6 +237,10 @@ export interface CreatedOrder {
   total:        number
   status:       string
   cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
+  // Guest-safe capability token for the order-success confirmation page —
+  // null when token generation failed (non-fatal) or for the idempotency
+  // "already exists" path (see db_migration_v6_order_confirmation_token.sql).
+  confirmationToken: string | null
 }
 
 export async function createOrder(
@@ -247,7 +252,7 @@ export async function createOrder(
   // 1. Idempotency check — return existing order if same key
   const { data: existing } = await withTimeout(
     db.from('orders')
-      .select('id, order_number, total_amount, order_status')
+      .select('id, order_number, total_amount, order_status, confirmation_token')
       .eq('idempotency_key', input.idempotencyKey)
       .maybeSingle(),
     8_000,
@@ -263,6 +268,7 @@ export async function createOrder(
         total:        existing.total_amount,
         status:       existing.order_status,
         cartItems:    [], // not needed — email is skipped when alreadyExists is true
+        confirmationToken: existing.confirmation_token ?? null,
       },
       alreadyExists: true,
       customerId:    null,
@@ -690,6 +696,47 @@ export async function createOrder(
   if (!row?.id) throw new Error('Order creation RPC returned no row')
   newOrder = row as { id: string; order_number: string; total_amount: number; order_status: string }
 
+  // 9b. Generate the guest-safe order-confirmation token (see
+  // db_migration_v6_order_confirmation_token.sql for the full rationale —
+  // this replaces the dead /api/admin-api call the order-success page used
+  // to make with a proper, IDOR-safe guest lookup mechanism).
+  //
+  // crypto.randomUUID() is cryptographically secure (Node's crypto module,
+  // backed by the OS CSPRNG) — 122 bits of randomness, unguessable. Stored
+  // as a normal REST update (not raw SQL) against the confirmation_token
+  // column added by the migration above.
+  //
+  // Deliberately non-fatal: order creation has already fully committed by
+  // this point (stock reserved, order row exists, coupon/loyalty applied).
+  // If this UPDATE fails for any reason, the order itself is still 100%
+  // valid — the customer just gets a token-less order-success URL, which
+  // degrades gracefully to the existing "check your email/WhatsApp"
+  // fallback (see buildOrderSuccessUrl in useCheckoutPage.ts). We must
+  // never let a non-critical UX enhancement fail an already-successful order.
+  let confirmationToken: string | null = null
+  try {
+    confirmationToken = crypto.randomUUID()
+    const { error: tokenErr } = await withTimeout(
+      db.from('orders')
+        .update({ confirmation_token: confirmationToken })
+        .eq('id', newOrder.id),
+      5_000,
+      'confirmation_token update',
+    )
+    if (tokenErr) {
+      logger.error('[createOrder] confirmation_token update failed', {
+        action: 'createOrder.confirmation_token', orderId: newOrder.id, error: tokenErr.message,
+      })
+      confirmationToken = null
+    }
+  } catch (e) {
+    logger.error('[createOrder] confirmation_token generation/update threw', {
+      action: 'createOrder.confirmation_token', orderId: newOrder.id,
+      error: e instanceof Error ? e.message : String(e),
+    })
+    confirmationToken = null
+  }
+
   // 10. Atomically increment coupon uses_count now that the order is committed.
   //
   // BUG FIX: the previous implementation used a stale client-read value:
@@ -745,6 +792,7 @@ export async function createOrder(
         qty:   i.qty,
         price: i.price,
       })),
+      confirmationToken,
     },
     alreadyExists: false,
     customerId:    custId,

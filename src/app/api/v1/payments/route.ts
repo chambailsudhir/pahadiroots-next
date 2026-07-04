@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       if (alreadyExists) {
         const { data: existingRow } = await db
           .from('orders')
-          .select('payment_id, payment_status, total_amount, order_number')
+          .select('payment_id, payment_status, total_amount, order_number, confirmation_token')
           .eq('id', order.id)
           .single()
 
@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
             order_id:          String(order.id),
             already_confirmed: true,
             order_number:      existingRow.order_number,
+            confirmation_token: existingRow.confirmation_token ?? order.confirmationToken,
           })
         }
 
@@ -236,7 +237,7 @@ export async function POST(req: NextRequest) {
       const db = getServiceClient()
       const { data: currentOrder, error: fetchErr } = await db
         .from('orders')
-        .select('id, payment_id, payment_status, order_number, total_amount, customer_id, loyalty_points_redeemed')
+        .select('id, payment_id, payment_status, order_number, total_amount, customer_id, loyalty_points_redeemed, confirmation_token')
         .eq('id', order_id)
         .single()
 
@@ -257,6 +258,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success:      true,
           order_number: currentOrder.order_number || order_id,
+          confirmation_token: currentOrder.confirmation_token ?? undefined,
         })
       }
 
@@ -318,6 +320,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success:      true,
           order_number: currentOrder.order_number || order_id,
+          confirmation_token: currentOrder.confirmation_token ?? undefined,
         })
       }
 
@@ -404,6 +407,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success:      true,
         order_number: currentOrder.order_number || order_id,
+        confirmation_token: currentOrder.confirmation_token ?? undefined,
       })
     }
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

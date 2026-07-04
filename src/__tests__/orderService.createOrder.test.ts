@@ -424,3 +424,74 @@ describe('createOrder — happy path return shape', () => {
     expect(result.order.cartItems[0]).toMatchObject({ name: 'Himalayan Honey', emoji: '🍯', qty: 2, price: 300 })
   })
 })
+
+describe('createOrder — confirmation_token generation (guest-safe order lookup)', () => {
+  it('generates a cryptographically random UUID token and persists it via a normal REST update (not raw SQL)', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess({ id: 'order-db-uuid-777' })
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    // Returned token is a real UUID (122 bits of randomness — unguessable).
+    expect(result.order.confirmationToken).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    )
+
+    // Persisted via db.from('orders').update({confirmation_token}).eq('id', <the new order's id>)
+    // — never a raw SQL string.
+    const tokenUpdate = mockDb.updateCalls.find(
+      c => c.table === 'orders' && typeof (c.payload as any)?.confirmation_token === 'string'
+    )
+    expect(tokenUpdate).toBeDefined()
+    expect(tokenUpdate!.payload).toEqual({ confirmation_token: result.order.confirmationToken })
+    expect(tokenUpdate!.eqCalls).toContainEqual(['id', 'order-db-uuid-777'])
+  })
+
+  it('two orders never get the same token (no collision from a fixed/weak seed)', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess({ id: 'order-a', order_number: 'PRAAAA' })
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const resultA = await createOrder({ ...BASE_INPUT, idempotencyKey: 'key-a' }, DEFAULT_SETTINGS)
+
+    resetFetchRoutes()
+    wireHappyPathFetch()
+    wireOrderRpcSuccess({ id: 'order-b', order_number: 'PRBBBB' })
+    const resultB = await createOrder({ ...BASE_INPUT, idempotencyKey: 'key-b' }, DEFAULT_SETTINGS)
+
+    expect(resultA.order.confirmationToken).not.toBe(resultB.order.confirmationToken)
+  })
+
+  it('order creation still succeeds (non-fatal) even if the confirmation_token update fails', async () => {
+    mockDb.responses['orders'] = new Error('connection reset') // update() → this error
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    // Order itself is still fully valid — stock reserved, RPC committed —
+    // only the token is missing. See db_migration_v6 comment: this must
+    // degrade gracefully, never fail an already-successful order.
+    expect(result.order.order_number).toBeTruthy()
+    expect(result.order.confirmationToken).toBeNull()
+  })
+
+  it('a retried request with the same idempotency_key gets back the SAME token as the original order, not null', async () => {
+    mockDb.responses['orders'] = {
+      id: 'order-existing-002', order_number: 'PREXIST02', total_amount: 500,
+      order_status: 'confirmed', confirmation_token: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    expect(result.alreadyExists).toBe(true)
+    expect(result.order.confirmationToken).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+  })
+})
