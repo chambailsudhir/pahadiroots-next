@@ -3,7 +3,7 @@ import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
-interface Cat { id: number; name: string; slug: string; emoji?: string }
+interface Cat { id: number; name: string; slug: string; emoji?: string | null }
 
 // PERF FIX: this section used to be a 'use client' component that fetched
 // /api/v1/store-data itself in a useEffect — see BestSellersClient.tsx for the

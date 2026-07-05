@@ -13,7 +13,7 @@ const SORTS = [
   { val: 'name',       label: 'Name A-Z'            },
 ]
 
-interface Cat { id: number; name: string; slug: string; emoji?: string }
+interface Cat { id: number; name: string; slug: string; emoji?: string | null }
 
 function shuffleProducts(products: Product[]): Product[] {
   const copy = [...products]
