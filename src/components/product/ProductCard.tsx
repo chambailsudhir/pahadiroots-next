@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
@@ -115,19 +116,20 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         {/* Emoji fallback (behind image) */}
         <span className="pemo">{product.emoji || '🌿'}</span>
 
-        {/* Real image */}
+        {/* Real image — next/image: Vercel/Supabase auto-resizes + compresses per
+            breakpoint via `sizes`, instead of every card downloading the full-res
+            original (that was the main cause of "images loading slow everywhere" —
+            a raw <img> has no responsive srcset and no optimization/caching). */}
         {product.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={product.image_url}
             alt={product.name}
+            fill
+            sizes="(max-width:480px) 50vw, (max-width:900px) 33vw, (max-width:1100px) 25vw, 25vw"
+            quality={75}
             loading={priority ? 'eager' : 'lazy'}
-            fetchPriority={priority ? 'high' : 'auto'}
-            decoding="async"
-            width={400}
-            height={500}
+            priority={priority}
             style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
               objectFit: 'cover', zIndex: 1, opacity: 0, transition: 'opacity .45s',
             }}
             onLoad={e => {

@@ -198,8 +198,8 @@ section.sec { padding: 52px 40px; }
 @media(max-width:640px) { .cgrid { grid-template-columns: repeat(2,1fr); gap: 12px; } section.sec { padding: 32px 16px; } }
 
 /* ── PRODUCT CARDS ── */
-.pgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 24px; max-width: 1400px; margin: 0 auto; }
-.pgrid-new-arrivals { grid-template-columns: repeat(4,1fr) !important; max-width: 100% !important; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 24px; max-width: 1400px; margin: 0 auto; }
+.pgrid-new-arrivals { grid-template-columns: repeat(auto-fit,minmax(300px,1fr)) !important; max-width: 100% !important; }
 /* ═══════════════════════════════════════════════════════
    PREMIUM PRODUCT CARD — copied from pahadiroots.com CSS
    ═══════════════════════════════════════════════════════ */
@@ -335,8 +335,7 @@ section.sec { padding: 52px 40px; }
 .pr-panel-anim { animation: pr-spIn .35s ease; }
 @keyframes pr-spIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 .pr-shdr { display: grid; grid-template-columns: 54% 46%; height: 450px; overflow: hidden; }
-.pr-spgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 24px; padding: 24px 40px; background: #0d1f0e; }
-@media(max-width:1100px) { .pr-spgrid { grid-template-columns: repeat(3,1fr) !important; } }
+.pr-spgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap: 24px; padding: 24px 40px; background: #0d1f0e; }
 @media(max-width:900px) { .pr-spgrid { grid-template-columns: repeat(2,1fr) !important; } }
 @media(max-width:640px) { .pr-shdr { grid-template-columns: 1fr !important; height: auto !important; } .pr-spgrid { grid-template-columns: 1fr 1fr !important; padding: 16px 20px !important; gap: 10px !important; } }
 
@@ -684,8 +683,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 /* ── Products grid: 3 columns ── */
 /* ── Products page grid (with sidebar) ── */
 /* sidebar=200px + gap=24px + padding=80px → remaining ≈ 1096px → 4 cols × ~260px each */
-.prod-page-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; }
-@media(max-width:1100px) { .prod-page-grid { grid-template-columns: repeat(3,1fr); } }
+.prod-page-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 20px; }
 @media(max-width:768px)  { .prod-page-grid { grid-template-columns: repeat(2,1fr); gap: 12px; } }
 @media(max-width:480px)  { .prod-page-grid { grid-template-columns: repeat(1,1fr); } }
 

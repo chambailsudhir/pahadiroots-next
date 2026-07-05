@@ -60,7 +60,7 @@ export default function WishlistPublicPage() {
       ) : isLoading ? (
         <ProductGridSkeleton count={4} />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] gap-4 sm:gap-6">
           {(products || []).map(p => <ProductCard key={p.id} product={p} showWishlist />)}
         </div>
       )}
