@@ -210,7 +210,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
           </div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: '16px' }}>
+            <div className="prod-page-grid">
               {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
             </div>
             {totalPages > 1 && (
