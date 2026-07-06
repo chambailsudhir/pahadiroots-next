@@ -55,7 +55,7 @@ function SearchContent() {
       {isLoading ? (
         <ProductGridSkeleton count={8} />
       ) : results && results.length > 0 ? (
-        <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
           {results.map((p, i) => (
             <ProductCard key={p.id} product={p} priority={i < 4} />
           ))}
