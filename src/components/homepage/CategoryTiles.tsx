@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import type { Category } from '@/types'
 
@@ -186,15 +187,23 @@ export default function CategoryTiles({ categories }: Props) {
                       transition: 'opacity .3s', pointerEvents: 'none',
                     }}>{emoji}</span>
 
+                    {/* PERF FIX: was a raw <img src={cat.image_url}> — same issue as the
+                        product cards had (see ProductCard.tsx) — every tile downloaded the
+                        full-resolution original from Supabase storage with no resizing or
+                        compression. next/image serves a properly sized, compressed version
+                        per breakpoint instead, matching the ~6/4/2 visible tiles at each
+                        screen width (see VISIBLE above). */}
                     {cat.image_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={cat.image_url}
                         alt={cat.name}
+                        fill
+                        sizes="(max-width:640px) 50vw, (max-width:960px) 25vw, 17vw"
+                        quality={75}
                         loading={idx < 6 ? 'eager' : 'lazy'}
+                        priority={idx < 6}
                         className="cc-img"
                         style={{
-                          position: 'absolute', inset: 0, width: '100%', height: '100%',
                           objectFit: 'cover', zIndex: 2, opacity: 0,
                           transition: 'opacity .35s, transform .35s',
                         }}
