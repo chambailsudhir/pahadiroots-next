@@ -219,7 +219,7 @@ export interface CheckoutPageState {
   savedAddrs:        SavedAddress[]
   selectedSavedIdx:  number | null
   // True only while the background saved-address fetch is in flight AND the
-  // cache was cold at mount — see the hadWarmCacheRef comment in the hook body.
+  // cache was cold at mount — see the hadWarmCache comment in the hook body.
   profilePrefillLoading: boolean
   summaryOpen:       boolean
   setSummaryOpen:    (v: boolean | ((prev: boolean) => boolean)) => void
@@ -397,12 +397,22 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // initializers above and this background fetch is just a silent refresh;
   // showing a loading indicator in that case would be misleading (nothing is
   // actually "loading" from the user's perspective).
-  const hadWarmCacheRef = useRef(
-    typeof window !== 'undefined' ? !!_readProfileCache() : false
-  )
-  const [profilePrefillLoading, setProfilePrefillLoading] = useState(
-    () => !hadWarmCacheRef.current
-  )
+  // BUG FIX (lint: react-hooks/refs — "reading ref.current during render"):
+  // the previous version stashed this in a ref and then read `ref.current`
+  // inside the useState lazy initializer. That happened to be safe (the ref
+  // was assigned earlier in the same render, before any effect could change
+  // it), but it's a fragile pattern — reading a ref during render is only
+  // safe by accident of ordering, and a future refactor could silently break
+  // it. Computing it once as a plain const and passing that same value to
+  // both useRef and useState's initializer removes the ref read entirely.
+  // BUG FIX (new — dead code found while fixing the ref-read-during-render
+  // lint issue above): `hadWarmCacheRef` was never actually read anywhere
+  // else in this hook after this point — the ref existed solely to be read
+  // once in the useState initializer below. Now that the initializer takes
+  // the plain `hadWarmCache` value directly, the ref serves no purpose and
+  // has been removed instead of carried forward as unused state.
+  const hadWarmCache = typeof window !== 'undefined' ? !!_readProfileCache() : false
+  const [profilePrefillLoading, setProfilePrefillLoading] = useState(() => !hadWarmCache)
   // Flips to true the moment the CUSTOMER actually edits an address field
   // (via setAddrField/applySaved below) — as opposed to the instant cache
   // fill at mount or the silent background refresh, neither of which go

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 
@@ -60,16 +60,36 @@ interface Props {
 // browser — the shuffle-on-visit, the category filter buttons, and the sort
 // dropdown — none of which require a network request.
 export default function BestSellersClient({ initialProducts, categories }: Props) {
-  const [allProducts, setAllProducts] = useState<Product[]>(initialProducts)
-  const [activeCat,   setActiveCat]   = useState<string>('all')
-  const [sort,        setSort]        = useState('default')
+  const [activeCat, setActiveCat] = useState<string>('all')
+  const [sort,      setSort]      = useState('default')
 
-  // Reshuffle once on the client after mount so "reshuffled every visit" still
-  // holds, without blocking first paint on Math.random() timing / hydration.
+  // BUG FIX (lint: react-hooks/set-state-in-effect): the previous version
+  // called `setAllProducts(prev => shuffleProducts(prev))` directly inside a
+  // mount effect, computing AND storing derived data as a side effect. That
+  // combination (compute + store in its own state slot) is what the rule is
+  // actually trying to catch, and it caused an extra render right after
+  // mount. It's fixed by separating the two: the effect below only flips a
+  // boolean, and the shuffle itself is computed via useMemo, keyed off that
+  // boolean, so it runs at most once instead of being recomputed or
+  // re-stored on every render.
+  //
+  // The boolean flip itself still trips the same lint rule — same genuinely
+  // necessary exception as ClientOnly.tsx: whether we're past hydration
+  // cannot be known during any render phase (only the effect phase), so
+  // there's no render-time equivalent. Reshuffling has to wait until after
+  // mount because the server always renders `initialProducts` in its
+  // original order — the client's first render must match that exactly, and
+  // Math.random() can only run safely once hydration has completed.
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
-    setAllProducts(prev => shuffleProducts(prev))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHydrated(true)
   }, [])
+
+  const allProducts = useMemo(
+    () => (hydrated ? shuffleProducts(initialProducts) : initialProducts),
+    [hydrated, initialProducts],
+  )
 
   let filtered = [...allProducts]
   if (activeCat !== 'all') {
