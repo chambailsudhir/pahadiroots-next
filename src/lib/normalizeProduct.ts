@@ -5,13 +5,22 @@ import type { Product } from '@/types'
  * NOTE: product_images is intentionally NOT joined here because the anon key
  * may be blocked by RLS on that table. Images are resolved via /api/v1/store-data
  * which uses the SERVICE KEY (same as old pahadiroots.com api/store-data.js).
+ *
+ * BUG FIX (found via the same production 500 that broke /api/v1/cart-upsells,
+ * confirmed via live schema inspection): product_variants has no `mrp` column
+ * at all — the real column is `original_price`. products.mrp (top-level,
+ * outside the nested embed) IS a real column and is unaffected. This exact
+ * constant is exported but was never actually being used by either of its
+ * two importers (wishlist/page.tsx, blog/[slug]/page.tsx) — they each
+ * hand-rolled their own duplicate select string with the same bug; both are
+ * fixed alongside this one.
  */
 export const PRODUCT_SELECT = `
   id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
-  product_variants(id, price, mrp, variant_value, available_stock, is_active)
+  product_variants(id, price, original_price, variant_value, available_stock, is_active)
 `
 
 /**
@@ -68,7 +77,7 @@ type RawProductRow = {
   badges_bestseller?: boolean
   badges_new?: boolean
   badges_organic?: boolean
-  product_variants?: Array<{ id: number; price: number; mrp: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
+  product_variants?: Array<{ id: number; price: number; original_price?: number; mrp?: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
   [key: string]: unknown
 }
 
@@ -89,6 +98,14 @@ export function normalizeProduct(p: NormalizableRow): Product {
     product_variants: ((p as RawProductRow).product_variants ?? []).map(v => ({
       ...v,
       size: v.variant_value ?? v.size ?? '',
+      // BUG FIX: v no longer carries a real `mrp` field (see PRODUCT_SELECT
+      // fix above — product_variants has no mrp column). Must explicitly map
+      // it from original_price here, same fallback chain as orderService.ts
+      // ("mrp from original_price column") and cart-upsells/route.ts —
+      // otherwise every consumer that reads variant.mrp (e.g. ProductCard's
+      // `baseVariant?.mrp`) would silently see undefined for every wishlist/
+      // blog-page product.
+      mrp: v.original_price ?? v.mrp ?? v.price,
     })),
   } as Product
 }

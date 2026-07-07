@@ -92,11 +92,17 @@ export async function GET(req: NextRequest) {
     // BUG FIX: the first sbGet call had no timeout — a slow Supabase response
     // would hang this serverless function until Vercel's hard 15-second limit.
     // Added 5 s timeout to match the parallel product+image fetches below.
+    // BUG FIX (found via production 500s, confirmed via live schema
+    // inspection): mrp/size/weight are NOT real columns on product_variants
+    // — every request to this endpoint was failing. Real columns are
+    // original_price (MRP — see orderService.ts's identical mapping, "mrp
+    // from original_price column") and variant_value (the size/weight
+    // label, e.g. "500ml", "1kg").
     const variants = await sbGet<RawVariant[]>(
       'product_variants',
       'is_active=eq.true&available_stock=gt.0'
       + '&order=available_stock.desc&limit=80'
-      + '&select=id,product_id,is_active,available_stock,price,mrp,size,weight',
+      + '&select=id,product_id,is_active,available_stock,price,original_price,variant_value',
       5000,
     )
 
@@ -129,8 +135,7 @@ export async function GET(req: NextRequest) {
       sbGet<RawProduct[]>(
         'products',
         `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false`
-        + '&select=id,name,slug,emoji,gst_rate,state_id'
-        + ',badges_organic,badges_bestseller,badges_new',
+        + '&select=id,name,slug,emoji,gst_rate,state_id,badges',
         5000,
       ),
       sbGet<RawImage[]>(
@@ -172,26 +177,33 @@ export async function GET(req: NextRequest) {
       .slice(0, 6)
       .map(v => {
         const p = prodMap[v.product_id]  // guaranteed to exist after the filter above
-        const badge = p.badges_bestseller ? 'Bestseller'
-          : p.badges_organic              ? 'Natural'
-          : p.badges_new                  ? 'New Arrival'
+        // BUG FIX (found via production 500s): badges_organic/badges_bestseller/
+        // badges_new aren't real columns — derive them from the real `badges`
+        // array column instead (same pattern as storeData.ts).
+        const badgeArr = Array.isArray(p.badges) ? p.badges : []
+        const isBestseller = badgeArr.includes('bestseller')
+        const isOrganic    = badgeArr.includes('organic')
+        const isNew        = badgeArr.includes('new')
+        const badge = isBestseller ? 'Bestseller'
+          : isOrganic              ? 'Natural'
+          : isNew                  ? 'New Arrival'
           : null
         return {
           id:          v.id,
           productId:   v.product_id,
           name:        p.name    ?? 'Product',
           slug:        p.slug    ?? '',
-          size:        v.size ?? v.weight ?? '',
+          size:        v.variant_value ?? '',
           price:       v.price,
-          mrp:         v.mrp ?? v.price,
+          mrp:         v.original_price ?? v.price,
           emoji:       p.emoji   ?? null,
           image:       imgMap[v.product_id] ?? null,
           gstRate:     p.gst_rate    ?? 5,
           maxQty:      v.available_stock ?? 10,
           badge,
-          isOrganic:    !!p.badges_organic,
+          isOrganic,
           isHimalayan:  !!p.state_id,
-          isBestseller: !!p.badges_bestseller,
+          isBestseller,
         }
       })
 

@@ -704,7 +704,19 @@ async function fetchProductDataInner(slug: string) {
       badges_organic:    badges.includes('organic'),
     }
 
-    const variants = rawVariants.map((v: any) => ({ ...v, size: v.variant_value ?? v.size ?? v.variant_label ?? '' }))
+    const variants = rawVariants.map((v: any) => ({
+      ...v,
+      size: v.variant_value ?? v.size ?? v.variant_label ?? '',
+      // BUG FIX (found via manual line-by-line audit, same root cause as the
+      // cart-upsells/wishlist/blog/search mrp bug): product_variants has no
+      // literal `mrp` column — the real column is `original_price`. Without
+      // this mapping, baseVariant?.mrp on line ~99 below was ALWAYS
+      // undefined, so displayMRP silently fell back to the PRODUCT-level
+      // mrp for every single product page view, regardless of which size
+      // variant was selected — meaning a product with different discount
+      // percentages per size would show the wrong strikethrough price.
+      mrp: v.original_price ?? v.mrp ?? v.price,
+    }))
 
     // Product images already sorted by sort_order via getProductBySlug()
     const images = rawImages

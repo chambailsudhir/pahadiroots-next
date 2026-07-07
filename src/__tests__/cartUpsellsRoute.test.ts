@@ -26,9 +26,24 @@
  *   6. Badge priority: bestseller > organic > new > null.
  *   7. Early return with empty upsells when there are zero non-excluded
  *      candidates (skips the products/images fetch entirely).
- *   8. Field fallbacks: size falls back to weight, mrp falls back to price,
- *      gstRate defaults to 5, maxQty defaults to 10.
+ *   8. Field fallbacks: mrp falls back to price, gstRate defaults to 5,
+ *      maxQty defaults to 10.
  *   9. Graceful 500 + { upsells: [] } on any fetch failure.
+ *
+ * SCHEMA CORRECTION (found via a real production 500 — every single request
+ * to this route was failing): this test file originally mocked variant/product
+ * rows using column names that don't exist on the real tables — mrp, size,
+ * weight, badges_organic, badges_bestseller, badges_new. Because the mock
+ * fetch here returns whatever the test hands it regardless of the route's
+ * actual `select=` query string, ALL of these tests kept passing in CI while
+ * the real endpoint 500'd on every request in production — a textbook case
+ * of tests validating a fictional schema instead of the real one. Confirmed
+ * via live schema inspection (SELECT column_name, data_type FROM
+ * information_schema.columns WHERE table_name='product_variants') and
+ * cross-referenced against orderService.ts's identical, heavily-tested
+ * mapping ("mrp from original_price column"). Real columns: original_price
+ * (not mrp), variant_value (not size/weight), and a `badges` text array on
+ * products (not three separate boolean columns).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -79,23 +94,22 @@ function mockFetchByTable(tables: RouteTable, opts: { failOn?: keyof RouteTable 
 
 function variant(overrides: Partial<{
   id: string; product_id: string; is_active: boolean; available_stock: number
-  price: number; mrp: number; size?: string; weight?: string
+  price: number; original_price: number; variant_value?: string
 }> = {}) {
   return {
     id: 'aaaa1111', product_id: 'bbbb1111', is_active: true, available_stock: 10,
-    price: 250, mrp: 300, size: '500g',
+    price: 250, original_price: 300, variant_value: '500g',
     ...overrides,
   }
 }
 
 function product(overrides: Partial<{
   id: string; name: string; slug: string; emoji: string | null; gst_rate: number
-  state_id: string | null; badges_organic: boolean; badges_bestseller: boolean; badges_new: boolean
+  state_id: string | null; badges: string[]
 }> = {}) {
   return {
     id: 'bbbb1111', name: 'Himalayan Honey', slug: 'himalayan-honey', emoji: '🍯',
-    gst_rate: 5, state_id: 'himachal', badges_organic: false,
-    badges_bestseller: false, badges_new: false,
+    gst_rate: 5, state_id: 'himachal', badges: [],
     ...overrides,
   }
 }
@@ -185,9 +199,9 @@ describe('GET /api/v1/cart-upsells — happy path', () => {
     expect(json.upsells).toHaveLength(6)
   })
 
-  it('falls back to weight when size is absent', async () => {
+  it('maps variant_value to the size field, defaulting to empty string when absent', async () => {
     mockFetchByTable({
-      variants: [variant({ size: undefined, weight: '1kg' })],
+      variants: [variant({ variant_value: undefined })],
       products: [product()],
     })
 
@@ -195,12 +209,12 @@ describe('GET /api/v1/cart-upsells — happy path', () => {
     const res  = await GET(makeReq(''))
     const json = await res.json()
 
-    expect(json.upsells[0].size).toBe('1kg')
+    expect(json.upsells[0].size).toBe('')
   })
 
-  it('falls back mrp to price when mrp is absent', async () => {
+  it('falls back mrp to price when original_price is absent', async () => {
     mockFetchByTable({
-      variants: [variant({ mrp: undefined as unknown as number, price: 199 })],
+      variants: [variant({ original_price: undefined as unknown as number, price: 199 })],
       products: [product()],
     })
 
@@ -335,7 +349,7 @@ describe('GET /api/v1/cart-upsells — badge priority', () => {
   it('prioritizes Bestseller over Natural and New Arrival', async () => {
     mockFetchByTable({
       variants: [variant()],
-      products: [product({ badges_bestseller: true, badges_organic: true, badges_new: true })],
+      products: [product({ badges: ['bestseller', 'organic', 'new'] })],
     })
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const json = await (await GET(makeReq(''))).json()
@@ -345,7 +359,7 @@ describe('GET /api/v1/cart-upsells — badge priority', () => {
   it('prioritizes Natural over New Arrival when not a bestseller', async () => {
     mockFetchByTable({
       variants: [variant()],
-      products: [product({ badges_bestseller: false, badges_organic: true, badges_new: true })],
+      products: [product({ badges: ['organic', 'new'] })],
     })
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const json = await (await GET(makeReq(''))).json()
@@ -355,7 +369,7 @@ describe('GET /api/v1/cart-upsells — badge priority', () => {
   it('falls back to New Arrival when neither bestseller nor organic', async () => {
     mockFetchByTable({
       variants: [variant()],
-      products: [product({ badges_bestseller: false, badges_organic: false, badges_new: true })],
+      products: [product({ badges: ['new'] })],
     })
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const json = await (await GET(makeReq(''))).json()
@@ -365,7 +379,7 @@ describe('GET /api/v1/cart-upsells — badge priority', () => {
   it('badge is null when no badge flags are set', async () => {
     mockFetchByTable({
       variants: [variant()],
-      products: [product({ badges_bestseller: false, badges_organic: false, badges_new: false })],
+      products: [product({ badges: [] })],
     })
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const json = await (await GET(makeReq(''))).json()

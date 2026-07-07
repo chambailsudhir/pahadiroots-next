@@ -24,7 +24,7 @@ function SearchContent() {
           image_url, unit_label, badges,
           category_id, is_deleted, status,
           categories:categories(id, name, slug),
-          product_variants(id, price, mrp, variant_value, available_stock, is_active)
+          product_variants(id, price, original_price, variant_value, available_stock, is_active)
         `)
         .eq('is_deleted', false)
     .eq('status', 'active')

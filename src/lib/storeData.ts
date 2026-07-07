@@ -120,16 +120,39 @@ async function _fetchStoreData(): Promise<StoreData> {
   }
 }
 
+// BUG FIX (found via production log storm — Vercel logs showed dozens of
+// concurrent "getSiteSettings timed out"/500 errors across /regions/* and
+// cart-settings/coupon-hints/cart-upsells firing within the same few
+// seconds): unstable_cache only avoids re-fetching AFTER its cache is
+// populated — it does NOT prevent multiple concurrent callers from all
+// missing a cold cache at the same instant and each independently calling
+// _fetchStoreData(). A burst of many pages rendering at once (mass ISR
+// regeneration after a deploy, or a crawler hitting many /regions/[slug]
+// pages within seconds) can trigger dozens of simultaneous, fully-redundant
+// 8-query fetches — compounding load on Supabase at exactly the moment
+// other routes sharing the same connection pool are also under pressure.
+// Fix: single-flight within this process — while a fetch is already in
+// progress, every other caller awaits that SAME promise instead of
+// starting a new one, regardless of which of the two unstable_cache
+// wrappers below they came in through.
+let _inFlightFetch: Promise<StoreData> | null = null
+
+async function _fetchStoreDataSingleFlight(): Promise<StoreData> {
+  if (_inFlightFetch) return _inFlightFetch
+  _inFlightFetch = _fetchStoreData().finally(() => { _inFlightFetch = null })
+  return _inFlightFetch
+}
+
 // Shared cross-Lambda cache via Next.js Data Cache (60 s TTL).
 const _getCachedStoreData = unstable_cache(
-  _fetchStoreData,
+  _fetchStoreDataSingleFlight,
   ['store-data'],
   { revalidate: 60, tags: ['store-data'] },
 )
 
 // Force-fetch bypasses the shared cache (used by admin/webhook invalidation).
 const _getFreshStoreData = unstable_cache(
-  _fetchStoreData,
+  _fetchStoreDataSingleFlight,
   ['store-data-fresh'],
   { revalidate: false },
 )
@@ -292,6 +315,15 @@ export async function getRelatedProducts(opts: {
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     const pVars = ((vars as ProductVariant[]) || [])
       .filter(v => v.product_id === p.id)
+      .map(v => ({
+        ...v,
+        // BUG FIX (found via manual line-by-line audit): product_variants has
+        // no literal mrp column — map it from original_price (the real
+        // column), same as every other fix in this pass. Without this,
+        // RelatedCard's `baseVariant?.mrp` was always undefined and silently
+        // fell back to the product-level mrp for every related-product card.
+        mrp: (v as any).original_price ?? v.mrp ?? v.price,
+      }))
       .sort((a, b) => a.price - b.price)
     const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []
     return {

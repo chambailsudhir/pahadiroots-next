@@ -152,16 +152,26 @@ function SuccessContent() {
   useEffect(() => { loadOrder() }, [loadOrder])
 
   /* rate order */
-  async function rateOrder(n: number) {
+  // BUG FIX (found via comprehensive final audit): this POSTed to
+  // /api/admin-api — the same dead OLD vanilla-site endpoint as loadOrder
+  // used to call (see the BUG FIX note above loadOrder). Unlike loadOrder,
+  // this was never reachable in production before now — the order-details
+  // block (including this rating widget) only renders when `order` is
+  // non-null, which required a working order-lookup endpoint that didn't
+  // exist until this session. Now that /api/v1/orders/lookup works, this
+  // widget DOES render for real customers, and was silently failing to
+  // persist every rating (customer sees "thanks!", nothing is ever saved).
+  //
+  // There is no order_ratings table or endpoint in this codebase yet, and
+  // building one properly needs a deliberate design decision (schema +
+  // an authorized endpoint, same as /api/v1/orders/lookup, so a rating
+  // can't be submitted against someone else's order) — not a silent
+  // add-on to this fix. For now: stop the guaranteed-to-fail network call
+  // and keep the optimistic "thanks" UI (harmless), but don't claim data
+  // was persisted anywhere. Flagged to the team as a follow-up decision.
+  function rateOrder(n: number) {
     if (rated) return
     setRating(n); setRated(true)
-    try {
-      await fetch('/api/admin-api', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_row', table: 'order_ratings', data: { order_id: orderId, rating: n, created_at: new Date().toISOString() } }),
-      })
-    } catch { /* non-critical */ }
   }
 
   /* ── status stepper ── */

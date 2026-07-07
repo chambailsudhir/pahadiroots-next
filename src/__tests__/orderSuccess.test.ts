@@ -1,7 +1,7 @@
 /**
  * orderSuccess.test.ts
  *
- * Covers two confirmed, real, pre-existing production bugs found via
+ * Covers three confirmed, real, pre-existing production bugs found via
  * browser console 404s on the live order-success page:
  *
  *   1. loadOrder() POSTed to /api/admin-api — the OLD vanilla-site's API
@@ -18,12 +18,23 @@
  *      the codebase has this bug — the shared Footer.tsx already used the
  *      correct /policies/[type] paths; this standalone page's own
  *      hand-rolled footer just never got the same fix).
+ *   3. rateOrder() (star-rating click handler) POSTed to the SAME dead
+ *      /api/admin-api endpoint as loadOrder — but was never caught by the
+ *      original loadOrder fix, because the rating widget only renders
+ *      inside the order-details block, which requires `order` to be
+ *      non-null. Before /api/v1/orders/lookup existed, `order` was ALWAYS
+ *      null, so this code was unreachable dead code. Once the real lookup
+ *      endpoint started working (this session), the widget became live —
+ *      customers could click a star, see "thanks!", and have the rating
+ *      silently discarded every time. Fixed by removing the dead fetch
+ *      (see the file's own comment for why a real fix needs a new,
+ *      properly-authorized endpoint, not a silent add-on here).
  */
 
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('next/navigation', () => ({
@@ -76,5 +87,43 @@ describe('order-success page', () => {
     const allHrefs = screen.getAllByRole('link').map(a => a.getAttribute('href'))
     expect(allHrefs.some(h => h === '/our-story')).toBe(false)
     expect(allHrefs.some(h => h?.startsWith('/terms'))).toBe(false)
+  })
+
+  it('clicking a rating star never calls the dead /api/admin-api endpoint, even when the order-details block is showing', async () => {
+    // Mock a SUCCESSFUL lookup so `order` becomes non-null and the
+    // order-details block (which contains the rating widget) actually
+    // renders — this is the exact condition that made rateOrder's dead
+    // call reachable in production once /api/v1/orders/lookup started
+    // working.
+    fetchSpy.mockImplementation((url: string) => {
+      if (String(url).includes('/api/v1/orders/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            order: {
+              order_number: 'PRMR4OEQ', order_status: 'confirmed', payment_status: 'cod_pending',
+              payment_method: 'cod', total_amount: 262, items: [],
+            },
+          }),
+        })
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`))
+    })
+
+    const { default: OrderSuccessPage } = await import('@/app/order-success/page')
+    render(React.createElement(OrderSuccessPage))
+
+    await waitFor(() => {
+      expect(screen.getByText(/PRMR4OEQ/)).toBeTruthy()
+    })
+
+    fetchSpy.mockClear() // only care about calls AFTER this point
+    const stars = document.querySelectorAll('.oc-review-star')
+    expect(stars.length).toBeGreaterThan(0) // sanity: widget actually rendered
+    fireEvent.click(stars[3])
+
+    const adminApiCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('/api/admin-api'))
+    expect(adminApiCalls).toHaveLength(0)
   })
 })

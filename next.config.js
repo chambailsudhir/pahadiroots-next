@@ -64,7 +64,10 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://ulyrhnpoiypuvaurlqqi.supabase.co",
               "font-src 'self'",
-              "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://api.postalpincode.in",
+              // BUG FIX (found via browser console CSP errors): Razorpay's checkout SDK
+              // also calls lumberjack.razorpay.com for its own internal analytics/fraud
+              // telemetry (separate from api.razorpay.com) — was being silently blocked.
+              "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://api.postalpincode.in",
               "frame-src https://api.razorpay.com",
               "object-src 'none'",
               "base-uri 'self'",

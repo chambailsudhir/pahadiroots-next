@@ -232,9 +232,9 @@ describe('getProductBySlug (BUG FIX: full-catalog scan replaced with indexed loo
 
   it('fetches variants and images scoped to the matched product only', async () => {
     setup(baseProducts, [
-      { id: 100, product_id: 1, price: 199, mrp: 249, is_active: true, sort_order: 1 },
-      { id: 101, product_id: 1, price: 349, mrp: 399, is_active: true, sort_order: 2 },
-      { id: 102, product_id: 2, price: 500, mrp: 500, is_active: true, sort_order: 1 }, // different product
+      { id: 100, product_id: 1, price: 199, original_price: 249, is_active: true, sort_order: 1 },
+      { id: 101, product_id: 1, price: 349, original_price: 399, is_active: true, sort_order: 2 },
+      { id: 102, product_id: 2, price: 500, original_price: 500, is_active: true, sort_order: 1 }, // different product
     ], [
       { product_id: 1, image_url: 'img1.jpg', sort_order: 1 },
       { product_id: 2, image_url: 'img2.jpg', sort_order: 1 }, // different product
@@ -283,17 +283,22 @@ describe('getRelatedProducts (BUG FIX: no longer filters the full in-memory cata
     expect(related).toEqual([])
   })
 
-  it('attaches sorted images and active variants per related product', async () => {
+  it('attaches sorted images and active variants per related product, mapping mrp from original_price', async () => {
     mockGetServiceClient.mockReturnValue(makeDb({
       products,
       product_images: [
         { product_id: 2, image_url: 'b.jpg', sort_order: 2 },
         { product_id: 2, image_url: 'a.jpg', sort_order: 1 },
       ],
+      // BUG FIX (found via manual line-by-line audit): product_variants has
+      // no literal `mrp` column — the real column is `original_price`. This
+      // mock previously used `mrp` directly, which is exactly why it never
+      // caught the bug where RelatedCard's `baseVariant?.mrp` was always
+      // undefined in production.
       product_variants: [
-        { id: 1, product_id: 2, price: 500, mrp: 600, is_active: true, sort_order: 1 },
-        { id: 2, product_id: 2, price: 300, mrp: 400, is_active: true, sort_order: 2 },
-        { id: 3, product_id: 2, price: 100, mrp: 100, is_active: false, sort_order: 3 }, // inactive — excluded
+        { id: 1, product_id: 2, price: 500, original_price: 600, is_active: true, sort_order: 1 },
+        { id: 2, product_id: 2, price: 300, original_price: 400, is_active: true, sort_order: 2 },
+        { id: 3, product_id: 2, price: 100, original_price: 100, is_active: false, sort_order: 3 }, // inactive — excluded
       ],
     }))
     const { getRelatedProducts } = await import('@/lib/storeData')
@@ -301,6 +306,7 @@ describe('getRelatedProducts (BUG FIX: no longer filters the full in-memory cata
     const p2 = related.find(p => p.id === 2)!
     expect(p2._firstImage).toBe('a.jpg') // lowest sort_order wins
     expect(p2._variants.map(v => v.price)).toEqual([300, 500]) // active only, price-ascending
+    expect(p2._variants.map(v => v.mrp)).toEqual([400, 600])   // mapped from original_price, not undefined
     expect(p2.badges_bestseller).toBe(true)
   })
 })
