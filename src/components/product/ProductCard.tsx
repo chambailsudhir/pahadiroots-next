@@ -91,12 +91,23 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
   }
 
+  const href = `/products/${product.slug}`
+
   return (
-    <Link
-      href={`/products/${product.slug}`}
-      className="pcard"
-      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', position: 'relative' }}
-    >
+    // BUG FIX (accessibility/HTML validity): this used to be a <Link> with
+    // <button> elements nested inside it — browsers/screen readers don't
+    // handle interactive elements nested inside an <a> correctly, and it's
+    // invalid HTML. Now a plain container; navigation is handled by the
+    // ".pcard-stretched-link" anchor below (a standard "clickable card"
+    // pattern), while the wishlist/Quick View/Add to Cart buttons are real
+    // siblings that sit above it in z-index and get their own clicks.
+    <article className="pcard" style={{ position: 'relative' }}>
+      <Link
+        href={href}
+        className="pcard-stretched-link"
+        aria-label={product.name}
+      />
+
       {/* ── Badge — top-left, dot + text ── */}
       {badgeLabel && (
         <div className="pbadge-wrap">
@@ -143,15 +154,16 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           />
         )}
 
-        {/* Hover overlay with Quick View */}
+        {/* Hover overlay with Quick View — BUG FIX: this used to be a <button>
+            whose onClick only called preventDefault/stopPropagation, i.e. a
+            fake control that did nothing when clicked. It's a real link to
+            the product page now (same destination as the rest of the card),
+            styled identically, so it's an honest affordance instead of a
+            decorative dead end. */}
         <div className="piw-hover-overlay">
-          <button
-            className="piw-qv-btn"
-            onClick={e => { e.preventDefault(); e.stopPropagation() }}
-            aria-label="Quick view"
-          >
+          <Link href={href} className="piw-qv-btn" aria-label={`View details for ${product.name}`}>
             👁 Quick View
-          </button>
+          </Link>
         </div>
 
         {/* Wishlist heart — bottom-right, shows on hover */}
@@ -187,22 +199,29 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         </div>
         <div className={`stock-label ${sClass}`}>{sLbl}</div>
 
-        {/* Price + ATC */}
+        {/* Price + ATC — BUG FIX: was raw `₹{price}` interpolation, skipping
+            the app's own formatPrice() helper (used everywhere else — cart,
+            checkout, PDP) that adds Indian thousands-grouping. Any product
+            ≥ ₹1,000 rendered as "₹12500" here instead of "₹12,500". */}
         <div className="pfoot" style={{ marginTop: 8 }}>
           <div className="prow" style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
-            <span className="pnow">₹{price}</span>
-            {mrp > price && <span className="pwas">₹{mrp}</span>}
+            <span className="pnow">{formatPrice(price)}</span>
+            {mrp > price && <span className="pwas">{formatPrice(mrp)}</span>}
             {unitLabel && <span className="punt">{unitLabel}</span>}
           </div>
 
-          {/* ATC / Notify */}
+          {/* ATC / Notify — buttons are now real siblings of the stretched
+              link (not nested inside it), so they sit above it in z-index
+              (see .pcard-stretched-link in globals.css) and correctly
+              intercept their own clicks without needing stopPropagation
+              tricks to fight anchor-nesting behaviour. */}
           <div className="pcard-actions">
             {inStock ? (
-              <button className="atc pcard-atc-full" onClick={handleAddToCart}>
+              <button className="atc pcard-atc-full" onClick={handleAddToCart} style={{ position: 'relative', zIndex: 3 }}>
                 🛒 Add to Cart
               </button>
             ) : (
-              <button className="atc pcard-atc-full" disabled style={{ opacity: .5, cursor: 'not-allowed' }}>
+              <button className="atc pcard-atc-full" disabled style={{ opacity: .5, cursor: 'not-allowed', position: 'relative', zIndex: 3 }}>
                 🔔 Notify Me
               </button>
             )}
@@ -210,6 +229,6 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           </div>
         </div>
       </div>
-    </Link>
+    </article>
   )
 }

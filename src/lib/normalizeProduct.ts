@@ -113,3 +113,18 @@ export function normalizeProduct(p: NormalizableRow): Product {
 export function normalizeProducts(data: NormalizableRow[]): Product[] {
   return (data ?? []).map(normalizeProduct)
 }
+
+/**
+ * getEffectivePrice — the same price ProductCard actually displays: the
+ * lowest active variant's price when variants exist, else the top-level
+ * product price. Listing pages must sort by this (not raw product.price),
+ * or "Price: Low → High" can visibly disagree with the prices shown on the
+ * cards it's sorting.
+ */
+export function getEffectivePrice(p: Product): number {
+  const variants = (p.product_variants ?? []).filter(v => v.is_active)
+  if (variants.length > 0) {
+    return variants.reduce((min, v) => v.price < min ? v.price : min, variants[0].price)
+  }
+  return p.price ?? 0
+}

@@ -1,16 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { getStoreData, buildCategories } from '@/lib/storeData'
-import { applyProductImages, normalizeProducts } from '@/lib/normalizeProduct'
+import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
+import { normalizeProducts } from '@/lib/normalizeProduct'
+import { filterProducts, sortProducts, paginateProducts } from '@/lib/filterAndSortProducts'
+import { buildProductsUrl } from '@/lib/buildProductsUrl'
 import ProductCard from '@/components/product/ProductCard'
+import MobileFilterBar from '@/components/product/MobileFilterBar'
 import type { Product } from '@/types'
 
 export const revalidate = 60
-
-export const metadata: Metadata = {
-  title: 'All Products — Natural Himalayan Foods | Pahadi Roots',
-  description: 'Browse our complete range of natural Himalayan products — honey, spices, grains, oils and more.',
-}
 
 const PAGE_SIZE = 24
 
@@ -23,14 +21,72 @@ const SORT_OPTIONS = [
 
 interface SP { sort?: string; category?: string; page?: string; instock?: string; state?: string }
 
-export default async function ProductsPage({ searchParams }: { searchParams: SP }) {
+// BUG FIX (Next.js 15+/16 migration — CRITICAL, newly found during this pass):
+// `searchParams` is a Promise in Next.js 15+/16 (every other dynamic page in
+// this codebase — /products/[slug], /collections/[slug] — already awaits it).
+// This page was still destructuring it as a plain synchronous object:
+//   const sort = searchParams.sort || 'newest'
+// Reading a property off a Promise returns undefined, so every one of these
+// silently fell back to its default on EVERY request, regardless of the
+// actual URL: category filter, state filter, sort order, in-stock toggle,
+// and pagination were all completely non-functional — clicking any sidebar
+// link changed the URL but never changed what rendered. No error was thrown
+// because Promise simply doesn't have a `.sort`/`.category`/etc property, so
+// this shipped silently. Fixed by awaiting searchParams like every other page.
+interface Props { searchParams: Promise<SP> }
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const sp = await searchParams
+  const storeData = await getStoreData()
+  const categories = buildCategories(storeData)
+  const activeCat = categories.find(c => c.slug === (sp.category || ''))
+  const activeState = sp.state
+    ? (storeData.states || []).find((s: any) => String(s.id) === String(sp.state))
+    : null
+  const page = Math.max(1, parseInt(sp.page || '1'))
+
+  // BUG FIX (SEO — newly found): metadata was a static export, so every
+  // category, state, sort, and page URL served an identical title/description.
+  // Now built per-filter-combination, with a canonical that reflects the
+  // actual filtered/paginated URL so duplicate-content variants don't compete
+  // with each other in search results.
+  const base = activeState ? `${activeState.name} Products`
+    : activeCat ? activeCat.name
+    : 'All Products'
+  const pageSuffix = page > 1 ? ` — Page ${page}` : ''
+  const title = `${base}${pageSuffix} — Natural Himalayan Foods | Pahadi Roots`
+  const description = activeCat
+    ? `Shop ${activeCat.name} — natural Himalayan ${activeCat.name.toLowerCase()} sourced directly from mountain families.`
+    : activeState
+    ? `Shop natural Himalayan products sourced from ${activeState.name}.`
+    : 'Browse our complete range of natural Himalayan products — honey, spices, grains, oils and more.'
+
+  const params = new URLSearchParams()
+  if (sp.category) params.set('category', sp.category)
+  if (sp.state)    params.set('state', sp.state)
+  if (sp.sort && sp.sort !== 'newest') params.set('sort', sp.sort)
+  if (page > 1)    params.set('page', String(page))
+  const qs = params.toString()
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/products${qs ? '?' + qs : ''}` },
+    // Filtered/paginated combinations are useful to users but shouldn't
+    // compete with the canonical category page in search results.
+    robots: (sp.instock === 'true' || page > 1) ? { index: false, follow: true } : undefined,
+  }
+}
+
+export default async function ProductsPage({ searchParams }: Props) {
+  const sp        = await searchParams
   const storeData = await getStoreData()
 
-  const sort      = searchParams.sort     || 'newest'
-  const catSlug   = searchParams.category || ''
-  const stateId   = searchParams.state    || ''
-  const page      = Math.max(1, parseInt(searchParams.page || '1'))
-  const instock   = searchParams.instock  === 'true'
+  const sort      = sp.sort     || 'newest'
+  const catSlug   = sp.category || ''
+  const stateId   = sp.state    || ''
+  const page      = Math.max(1, parseInt(sp.page || '1'))
+  const instock   = sp.instock  === 'true'
   const offset    = (page - 1) * PAGE_SIZE
 
   const categories  = buildCategories(storeData)
@@ -41,41 +97,30 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
     ? (storeData.states || []).find((s: any) => String(s.id) === String(stateId))
     : null
 
-  const withImages  = applyProductImages(storeData.products, storeData.product_images)
+  // BUG FIX (data/pricing integrity): was applyProductImages() called
+  // directly, which never attaches product_variants — see getStoreData.ts.
+  // getProductsWithImages() now also merges variants, so cards here show the
+  // same lowest-active-variant price the PDP shows, and price sort below
+  // sorts on that same effective price instead of possibly-stale top-level
+  // product.price.
+  const withImages  = getProductsWithImages(storeData)
   let   products    = normalizeProducts(withImages)
 
-  // Filter by category
-  if (activeCat)   products = products.filter((p: any) => String(p.category_id) === String(activeCat.id))
-  // Filter by state
-  if (stateId)     products = products.filter((p: any) => String(p.state_id) === String(stateId))
-  // Filter in-stock
-  if (instock)     products = products.filter((p: any) => (p.available_stock ?? 0) > 0)
+  // Filter + sort — extracted to lib/filterAndSortProducts.ts (see BUG FIX
+  // comment there: this logic used to live inline in this Server Component,
+  // which is why it had zero test coverage — it's unit tested directly now).
+  products = filterProducts(products, {
+    categoryId:  activeCat?.id,
+    stateId,
+    inStockOnly: instock,
+  })
+  products = sortProducts(products, sort)
 
-  // Sort
-  switch (sort) {
-    case 'price_asc':  products.sort((a, b) => (a.price ?? 0) - (b.price ?? 0)); break
-    case 'price_desc': products.sort((a, b) => (b.price ?? 0) - (a.price ?? 0)); break
-    case 'popular':    products.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0)); break
-    default:           products.sort((a: any, b: any) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime())
-  }
+  const { pageItems: paged, totalPages, totalCount: count } = paginateProducts(products, page, PAGE_SIZE)
 
-  const count      = products.length
-  const paged      = products.slice(offset, offset + PAGE_SIZE) as Product[]
-  const totalPages = Math.ceil(count / PAGE_SIZE)
-
-  function url(overrides: Record<string, string | undefined>) {
-    const p = new URLSearchParams()
-    const vals = {
-      sort,
-      category: catSlug   || undefined,
-      state:    stateId   || undefined,
-      instock:  instock ? 'true' : undefined,
-      page:     '1',
-      ...overrides
-    }
-    Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v) })
-    const q = p.toString()
-    return `/products${q ? '?' + q : ''}`
+  const urlState = { sort, category: catSlug, state: stateId, instock }
+  function url(overrides: Parameters<typeof buildProductsUrl>[1]) {
+    return buildProductsUrl(urlState, overrides)
   }
 
   const pageTitle = activeState ? `${activeState.name} Products`
@@ -92,7 +137,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
           backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)',
           backgroundSize: '30px 30px' }} />
         <div style={{ maxWidth: '1400px', margin: '0 auto', position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
+          <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
             color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
@@ -100,7 +145,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
               ? <><Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link><span>/</span><span style={{ color: '#fff' }}>{pageTitle}</span></>
               : <span style={{ color: '#fff' }}>All Products</span>
             }
-          </div>
+          </nav>
           <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
             fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
             {pageTitle}
@@ -115,8 +160,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 40px 60px',
         display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
-        {/* ── Sidebar ── */}
-        <aside style={{ width: '200px', flexShrink: 0, background: '#fff', borderRadius: '20px',
+        {/* ── Sidebar (desktop only — mobile uses MobileFilterBar below) ── */}
+        <aside className="products-sidebar" style={{ width: '200px', flexShrink: 0, background: '#fff', borderRadius: '20px',
           padding: '18px', position: 'sticky', top: '80px',
           boxShadow: '0 2px 16px rgba(0,0,0,.06)', border: '1px solid rgba(0,0,0,.06)' }}>
 
@@ -226,21 +271,37 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
                 {paged.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
               </div>
               {totalPages > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
+                <nav aria-label="Pagination" style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
                   {page > 1 && <Link href={url({ page: String(page - 1) })} style={pagStyle(false)}>← Prev</Link>}
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(pg => (
-                    <Link key={pg} href={url({ page: String(pg) })} style={pagStyle(pg === page)}>{pg}</Link>
+                    <Link key={pg} href={url({ page: String(pg) })} style={pagStyle(pg === page)} aria-current={pg === page ? 'page' : undefined}>{pg}</Link>
                   ))}
                   {page < totalPages && <Link href={url({ page: String(page + 1) })} style={pagStyle(false)}>Next →</Link>}
-                </div>
+                </nav>
               )}
             </>
           )}
         </div>
       </div>
 
+      {/* Mobile filter/sort drawer — BUG FIX: replaces the sidebar that used
+          to just vanish below 768px with no alternative at all. */}
+      <MobileFilterBar
+        categories={categories}
+        activeCatSlug={catSlug}
+        activeStateId={stateId}
+        activeStateName={activeState?.name ?? null}
+        sort={sort}
+        instock={instock}
+        count={count}
+        sortOptions={SORT_OPTIONS}
+      />
+
       <style>{`
-        @media(max-width:768px){ aside{display:none!important} }
+        @media(max-width:768px){
+          .products-sidebar { display: none !important; }
+          body { padding-bottom: 76px; }
+        }
       `}</style>
     </div>
   )

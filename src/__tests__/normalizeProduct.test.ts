@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { normalizeProduct, normalizeProducts, applyProductImages } from '@/lib/normalizeProduct'
+import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice } from '@/lib/normalizeProduct'
 
 describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
   it('maps variant.mrp from original_price (the real column), not a literal mrp field', () => {
@@ -102,5 +102,43 @@ describe('applyProductImages', () => {
     const products = [{ id: 1, name: 'X', slug: 'x', image_url: 'old.jpg' }] as any
     const result = applyProductImages(products, [{ product_id: 999, image_url: 'z.jpg', sort_order: 1 }])
     expect(result[0].image_url).toBe('old.jpg')
+  })
+})
+
+describe('getEffectivePrice — the products-listing-page pricing bug', () => {
+  /**
+   * BUG FIX: /products, /regions, /regions/[slug], /collections/[slug] and
+   * the homepage BestSellers/NewArrivals sections all rendered ProductCard
+   * with product_variants never attached (see storeData.ts attachVariants
+   * fix), so every card fell back to the top-level product.price even for
+   * multi-variant products, and "Price: Low -> High" sorted on that same
+   * possibly-wrong value. getEffectivePrice() is the single source of truth
+   * both the sort and the card must use so they can never disagree again.
+   */
+  it('returns the lowest active variant price when variants exist', () => {
+    const product = normalizeProduct({
+      id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999, mrp: 999,
+      product_variants: [
+        { id: 1, price: 450, original_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
+        { id: 2, price: 250, original_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
+      ],
+    } as any)
+    expect(getEffectivePrice(product)).toBe(250)
+  })
+
+  it('ignores inactive variants when picking the lowest price', () => {
+    const product = normalizeProduct({
+      id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999,
+      product_variants: [
+        { id: 1, price: 100, variant_value: '250g', available_stock: 0, is_active: false },
+        { id: 2, price: 250, variant_value: '500g', available_stock: 5, is_active: true },
+      ],
+    } as any)
+    expect(getEffectivePrice(product)).toBe(250)
+  })
+
+  it('falls back to the top-level product price when there are no variants', () => {
+    const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599 } as any)
+    expect(getEffectivePrice(product)).toBe(599)
   })
 })

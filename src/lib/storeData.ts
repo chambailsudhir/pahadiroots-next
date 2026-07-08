@@ -14,7 +14,6 @@ import type { Product, Category, State } from '@/types'
 export interface ProductImage   { product_id: number; image_url: string; sort_order: number }
 export interface ProductVariant { id: number; product_id: number; price: number; mrp: number | null; variant_value: string | null; size?: string | null; available_stock: number; is_active: boolean; sort_order?: number }
 export interface StateImage     { state_id: string; image_url: string; sort_order: number }
-export interface Coupon         { code: string; type: string; value: number; min_order: number | null; max_uses: number | null; uses_count: number; expires_at: string | null; first_order_only: boolean; max_discount: number | null }
 export interface SiteSettingRow { key: string; value: string }
 
 export interface StoreData {
@@ -25,7 +24,6 @@ export interface StoreData {
   settings:         Record<string, string>
   states:           State[]
   state_images:     StateImage[]
-  coupons:          Coupon[]
 }
 
 // BUG FIX (HIGH – per-Lambda in-memory cache): the old module-level `let _cache`
@@ -80,7 +78,6 @@ async function _fetchStoreData(): Promise<StoreData> {
     { data: siteSettings },
     { data: states },
     { data: stateImages },
-    { data: coupons },
   ] = await Promise.all([
     fetchAllActiveProducts(db),
     db.from('product_images')
@@ -99,9 +96,14 @@ async function _fetchStoreData(): Promise<StoreData> {
     db.from('state_images')
       .select('state_id, image_url, sort_order')
       .order('state_id').order('sort_order'),
-    db.from('coupons')
-      .select('code,type,value,min_order,max_uses,uses_count,expires_at,first_order_only,max_discount')
-      .eq('is_active', true),
+    // BUG FIX (low-severity — dead-weight query, verified during products-page
+    // audit): a `coupons` query used to run here on every single cache miss,
+    // but grepping the entire codebase confirms `storeData.coupons` has zero
+    // consumers anywhere — coupon validation happens via separate, direct
+    // queries in orderService.ts/pricingService.ts. Every page that calls
+    // getStoreData() (home, /products, /regions/*, /collections/*) was
+    // paying for this unused query. Removed entirely rather than left for
+    // just one page, since it's a single shared cache used by all of them.
   ])
 
   // Convert settings array → object (same as old site)
@@ -116,7 +118,6 @@ async function _fetchStoreData(): Promise<StoreData> {
     settings,
     states:           states           || [],
     state_images:     stateImages      || [],
-    coupons:          coupons          || [],
   }
 }
 
@@ -185,9 +186,51 @@ export function buildCategories(storeData: StoreData) {
     .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
 }
 
-// ── Products with images applied (same as old site main.js) ─────────────
+// ── Attach variants to products ──────────────────────────────────────────
+// BUG FIX (CRITICAL — data/pricing integrity): storeData.product_variants was
+// being fetched on every getStoreData() call but NEVER grouped and merged
+// back onto individual products. Every consumer of getProductsWithImages()
+// (home page BestSellers/NewArrivals, /products, /regions/[slug], and
+// /collections/[slug] which called applyProductImages directly) therefore
+// always saw `product.product_variants === undefined`, so ProductCard's
+// `baseVariant` was always null and every card silently fell back to the
+// top-level product.price/mrp — even for multi-variant products where the
+// PDP (which fetches variants directly via getProductBySlug) correctly shows
+// the lowest active variant's price. That meant the listing price and the
+// PDP price could disagree for the same product.
+// Fix: group product_variants by product_id (same `mrp` ← `original_price`
+// fallback used everywhere else in this file) and attach before normalizing.
+export function attachVariants(
+  products: Product[],
+  variants: ProductVariant[],
+): Product[] {
+  if (!variants?.length) return products
+
+  const byProd: Record<string, ProductVariant[]> = {}
+  variants.forEach(v => {
+    if (!v.product_id || !v.is_active) return
+    const pid = String(v.product_id)
+    if (!byProd[pid]) byProd[pid] = []
+    byProd[pid].push(v)
+  })
+
+  return products.map(p => {
+    const vs = byProd[String(p.id)]
+    if (!vs?.length) return p
+    const mapped = vs
+      .map(v => ({
+        ...v,
+        mrp: (v as any).original_price ?? v.mrp ?? v.price,
+      }))
+      .sort((a, b) => a.price - b.price)
+    return { ...p, product_variants: mapped } as Product
+  })
+}
+
+// ── Products with images + variants applied (same as old site main.js) ──
 export function getProductsWithImages(storeData: StoreData) {
-  return applyProductImages(storeData.products, storeData.product_images)
+  const withImages = applyProductImages(storeData.products, storeData.product_images)
+  return attachVariants(withImages, storeData.product_variants)
 }
 
 // ═══════════════════════════════════════════════════════════════
