@@ -97,11 +97,22 @@ export async function GET(req: NextRequest) {
     return res
 
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string }
+    const err = e as { status?: number; message?: string; name?: string }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
-    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    // BUG FIX (found via live report of console 500s on /api/profile): see
+    // the matching fix in /api/wishlist/route.ts — sbAuth's fetch can throw
+    // a timeout/network error with no `.status` when Supabase's auth
+    // endpoint is slow/under load, which previously surfaced as an
+    // indistinguishable generic 500.
+    const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
+      || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[profile GET]', e)
-    return fail(500, process.env.NODE_ENV === 'production' ? 'Profile fetch failed' : (err.message || 'Profile fetch failed'))
+    return fail(
+      isTransient ? 503 : 500,
+      process.env.NODE_ENV === 'production'
+        ? (isTransient ? 'Service temporarily unavailable — please retry' : 'Profile fetch failed')
+        : (err.message || 'Profile fetch failed'),
+    )
   }
 }
 
@@ -250,9 +261,15 @@ export async function POST(req: NextRequest) {
     return res
 
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string }
-    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    const err = e as { status?: number; message?: string; name?: string }
+    const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
+      || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[profile POST]', e)
-    return fail(err.status || 500, process.env.NODE_ENV === 'production' ? 'Profile update failed' : (err.message || 'Profile update failed'))
+    return fail(
+      err.status || (isTransient ? 503 : 500),
+      process.env.NODE_ENV === 'production'
+        ? (isTransient ? 'Service temporarily unavailable — please retry' : 'Profile update failed')
+        : (err.message || 'Profile update failed'),
+    )
   }
 }

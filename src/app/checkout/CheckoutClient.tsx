@@ -62,6 +62,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     items, coupon, removeCoupon,
     payMethod, setPayMethod,
     placing, razorpayLoaded, setRazorpayLoaded,
+    razorpayLoadFailed, setRazorpayLoadFailed,
     error,
     couponCode, setCouponCode, couponLoading, couponError, couponHints,
     loyaltyBalance, loyaltyRedemption, loyaltyLoading, loyaltyError,
@@ -88,7 +89,17 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
 
   // Mobile sticky CTA: opens summary, fires handlePlace, then scrolls to error
   // if one appears. setSummaryOpen is a stable useState dispatcher.
+  // BUG FIX (CRITICAL, companion to the razorpayLoadFailed fix above): when
+  // the payment gateway failed to load, tapping this button must not call
+  // handlePlace() (which would just fail against a gateway that isn't
+  // there) — it retries instead. A full reload is the simplest reliable
+  // retry: Next.js's <Script> won't re-fetch a static src just because we
+  // reset state, so there's no clean in-place retry without reloading.
   const handleMobCTA = useCallback(() => {
+    if (payMethod === 'razorpay' && razorpayLoadFailed) {
+      window.location.reload()
+      return
+    }
     setSummaryOpen(true)
     handlePlace().then(() => {
       setTimeout(() => {
@@ -96,7 +107,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         if (errEl) errEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 100)
     })
-  }, [setSummaryOpen, handlePlace])
+  }, [setSummaryOpen, handlePlace, payMethod, razorpayLoadFailed])
 
 
   if (!storeReady) return <CheckoutSkeleton />
@@ -107,29 +118,43 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   // doesn't continuously announce the button text on every render.
   const mobCtaStatus = placing
     ? 'Placing your order…'
-    : payMethod === 'razorpay' && !razorpayLoaded
-      ? 'Loading payment gateway…'
-      : error
-        ? error
-        : ''
+    : payMethod === 'razorpay' && razorpayLoadFailed
+      ? 'Payment gateway unavailable — tap to retry, or switch to Cash on Delivery'
+      : payMethod === 'razorpay' && !razorpayLoaded
+        ? 'Loading payment gateway…'
+        : error
+          ? error
+          : ''
 
   const mobCtaLabel = placing
     ? 'Placing…'
-    : payMethod === 'razorpay' && !razorpayLoaded
-      ? 'Loading…'
-      : payMethod === 'razorpay'
-        ? '⚡ Pay Now'
-        : 'Place Order →'
+    : payMethod === 'razorpay' && razorpayLoadFailed
+      ? '⚠ Retry payment gateway'
+      : payMethod === 'razorpay' && !razorpayLoaded
+        ? 'Loading…'
+        : payMethod === 'razorpay'
+          ? '⚡ Pay Now'
+          : 'Place Order →'
 
   return (
     <>
       {/* Razorpay checkout.js — loaded via Next.js Script so we get an onLoad
-          callback. razorpayLoaded gates the Pay Now button until ready. */}
+          callback. razorpayLoaded gates the Pay Now button until ready.
+          BUG FIX (CRITICAL — found via live report of a permanently-stuck
+          "Loading payment..." button): onError previously only logged to
+          the console. A failed script load left razorpayLoaded stuck false
+          forever with zero visible indication to the customer and no way to
+          recover except an accidental page refresh. Now sets
+          razorpayLoadFailed, which drives a real, visible retry affordance
+          (see the CTA button below and OrderSummary.tsx). */}
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="afterInteractive"
         onLoad={() => setRazorpayLoaded(true)}
-        onError={() => console.error('[checkout] Razorpay script failed to load')}
+        onError={() => {
+          console.error('[checkout] Razorpay script failed to load')
+          setRazorpayLoadFailed(true)
+        }}
       />
 
       <ShippingProgress
@@ -261,6 +286,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
               bothPaymentsOff={bothPayOff}
               belowMinOrder={belowMinOrder}
               razorpayLoaded={razorpayLoaded}
+              razorpayLoadFailed={razorpayLoadFailed}
               minOrderAmt={minOrderAmt}
               onPlaceOrder={handlePlace}
               payMethod={payMethod}
@@ -293,7 +319,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         <button
           type="button"
           className="ck-mob-cta"
-          disabled={placing || bothPayOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded)}
+          disabled={placing || bothPayOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded && !razorpayLoadFailed)}
           onClick={handleMobCTA}
         >
           {mobCtaLabel}

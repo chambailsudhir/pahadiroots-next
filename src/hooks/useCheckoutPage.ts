@@ -197,6 +197,8 @@ export interface CheckoutPageState {
   placing:         boolean
   razorpayLoaded:  boolean
   setRazorpayLoaded: (v: boolean) => void
+  razorpayLoadFailed: boolean
+  setRazorpayLoadFailed: (v: boolean) => void
   error:           string
 
   // coupon
@@ -301,6 +303,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const [payMethod,      setPayMethod]      = useState<'razorpay' | 'cod'>('cod')
   const [placing,        setPlacing]        = useState(false)
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
+  // BUG FIX (CRITICAL — found via live report: "Loading payment..." stuck
+  // forever): the Razorpay <Script>'s onError handler only logged to the
+  // console — it never set any state, so if the script failed to load for
+  // ANY reason (network hiccup, slow connection, ad-blocker, transient CDN
+  // issue), razorpayLoaded stayed false permanently. The Pay button is
+  // disabled whenever razorpayLoaded is false, so the customer was stuck
+  // on a perma-disabled "Loading payment…" button with NO error message and
+  // NO way to recover, for every single online-payment attempt hit by that
+  // failure. This flag drives a real, visible fallback (see OrderSummary.tsx)
+  // instead of a silent console.error nobody but a developer would ever see.
+  const [razorpayLoadFailed, setRazorpayLoadFailed] = useState(false)
   const [error,          setError]          = useState('')
 
   const [couponCode,     setCouponCode]     = useState('')
@@ -312,6 +325,24 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const [loyaltyRedemption, setLoyaltyRedemption] = useState<LoyaltyRedemption | null>(null)
   const [loyaltyLoading,    setLoyaltyLoading]    = useState(false)
   const [loyaltyError,      setLoyaltyError]      = useState('')
+
+  // BUG FIX (CRITICAL, companion to razorpayLoadFailed above): onError only
+  // fires for a clean network-level load failure. A script that hangs
+  // indefinitely (very slow connection, a CDN serving but never completing
+  // the response) fires neither onLoad nor onError — the customer would
+  // still be stuck forever without this timeout. 10s is generous for a
+  // ~60KB script even on a slow connection, while still failing well before
+  // a customer gives up and abandons the cart.
+  useEffect(() => {
+    if (razorpayLoaded) return
+    const timer = setTimeout(() => {
+      setRazorpayLoaded(loaded => {
+        if (!loaded) setRazorpayLoadFailed(true)
+        return loaded
+      })
+    }, 10_000)
+    return () => clearTimeout(timer)
+  }, [razorpayLoaded])
 
   const [savedAddrs, setSavedAddrs] = useState<SavedAddress[]>(() => {
     if (typeof window === 'undefined') return []
@@ -1061,6 +1092,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     payMethod, setPayMethod,
     placing,
     razorpayLoaded, setRazorpayLoaded,
+    razorpayLoadFailed, setRazorpayLoadFailed,
     error,
     couponCode, setCouponCode, couponLoading, couponError, couponHints,
     loyaltyBalance, loyaltyRedemption, loyaltyLoading, loyaltyError,

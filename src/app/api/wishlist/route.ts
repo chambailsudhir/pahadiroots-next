@@ -60,11 +60,26 @@ export async function GET(req: NextRequest) {
     return res
 
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string }
+    const err = e as { status?: number; message?: string; name?: string }
     if (err.status === 401) return fail(401, 'Session expired')
-    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message (Supabase internals) with no logging.
+    // BUG FIX (found via live report of console 500s on /api/wishlist):
+    // sbAuth's fetch() has an 8s AbortSignal.timeout — if Supabase's auth
+    // endpoint is slow/under load (the same root cause behind the
+    // getSiteSettings/getStoreData timeout storm fixed elsewhere in this
+    // pass), the fetch itself throws a timeout/network error with NO
+    // `.status` property at all, which fell through to a generic 500 here
+    // indistinguishable from a real bug. Surfacing 503 instead makes this
+    // classifiable in logs/monitoring as "transient upstream issue" rather
+    // than "broken code", and is the more correct HTTP semantic either way.
+    const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
+      || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[wishlist GET]', e)
-    return fail(500, process.env.NODE_ENV === 'production' ? 'Wishlist fetch failed' : (err.message || 'Wishlist fetch failed'))
+    return fail(
+      isTransient ? 503 : 500,
+      process.env.NODE_ENV === 'production'
+        ? (isTransient ? 'Service temporarily unavailable — please retry' : 'Wishlist fetch failed')
+        : (err.message || 'Wishlist fetch failed'),
+    )
   }
 }
 
@@ -121,10 +136,16 @@ export async function PUT(req: NextRequest) {
     return res
 
   } catch (e: unknown) {
-    const err = e as { status?: number; message?: string }
+    const err = e as { status?: number; message?: string; name?: string }
     if (err.status === 401) return fail(401, 'Session expired')
-    // BUG FIX [ERROR HANDLING]: previously exposed raw err.message with no logging.
+    const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
+      || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[wishlist PUT]', e)
-    return fail(500, process.env.NODE_ENV === 'production' ? 'Wishlist save failed' : (err.message || 'Wishlist save failed'))
+    return fail(
+      isTransient ? 503 : 500,
+      process.env.NODE_ENV === 'production'
+        ? (isTransient ? 'Service temporarily unavailable — please retry' : 'Wishlist save failed')
+        : (err.message || 'Wishlist save failed'),
+    )
   }
 }

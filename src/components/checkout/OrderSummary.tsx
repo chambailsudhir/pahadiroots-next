@@ -44,6 +44,7 @@ interface Props {
   bothPaymentsOff: boolean
   belowMinOrder: boolean
   razorpayLoaded: boolean
+  razorpayLoadFailed: boolean
   minOrderAmt: number
   onPlaceOrder: () => void
   payMethod: 'razorpay' | 'cod'
@@ -58,7 +59,7 @@ const OrderSummary = memo(function OrderSummary({
   onRemoveCoupon, onApplyHint,
   loyaltyBalance, loyaltyRedemption, onApplyLoyalty, onRemoveLoyalty,
   loyaltyLoading, loyaltyError,
-  error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded,
+  error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded, razorpayLoadFailed,
   minOrderAmt, onPlaceOrder, payMethod, summaryOpen, onToggleSummary,
 }: Props) {
   const [showHints,      setShowHints]      = useState(false)
@@ -404,17 +405,31 @@ const OrderSummary = memo(function OrderSummary({
       )}
       {error && <div className="os-error-box" role="alert">⚠ {error}</div>}
 
+      {/* BUG FIX (CRITICAL, companion to the mobile CTA fix): payMethod ===
+          'razorpay' && razorpayLoadFailed previously fell through to the
+          "!razorpayLoaded" branch below forever — a permanently disabled
+          "Loading payment…" button with no explanation. Same root cause as
+          the mobile sticky CTA fix; see CheckoutClient.tsx for the full
+          incident writeup. */}
+      {payMethod === 'razorpay' && razorpayLoadFailed && (
+        <div className="os-error-box" role="alert">
+          ⚠ Payment gateway couldn&apos;t load. Please check your connection and retry, or choose Cash on Delivery below.
+        </div>
+      )}
+
       {/* CTA */}
       <div className="os-cta-area">
         <button
           className={`os-cta${placing ? ' os-cta--loading' : ''}`}
-          onClick={onPlaceOrder}
-          disabled={placing || bothPaymentsOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded)}
+          onClick={payMethod === 'razorpay' && razorpayLoadFailed ? () => window.location.reload() : onPlaceOrder}
+          disabled={placing || bothPaymentsOff || belowMinOrder || (payMethod === 'razorpay' && !razorpayLoaded && !razorpayLoadFailed)}
           type="button"
           aria-busy={placing}
         >
           {placing ? (
             <><span className="os-spin os-spin--white" /> Placing Order…</>
+          ) : payMethod === 'razorpay' && razorpayLoadFailed ? (
+            <>⚠ Retry payment gateway</>
           ) : payMethod === 'razorpay' && !razorpayLoaded ? (
             <><span className="os-spin" /> Loading payment…</>
           ) : payMethod === 'razorpay' ? (
