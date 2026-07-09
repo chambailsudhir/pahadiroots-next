@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { filterProducts, sortProducts, filterAndSortProducts, paginateProducts } from '@/lib/filterAndSortProducts'
+import { filterProducts, sortProducts, filterAndSortProducts, paginateProducts, buildPaginationList } from '@/lib/filterAndSortProducts'
 import type { Product } from '@/types'
 
 function makeProduct(overrides: Partial<Product> & { id: number }): Product {
@@ -199,5 +199,97 @@ describe('paginateProducts', () => {
   it('returns an empty page for an out-of-range page number (matches pre-existing behavior)', () => {
     const { pageItems } = paginateProducts(items, 99, 24)
     expect(pageItems).toHaveLength(0)
+  })
+})
+
+describe('filterProducts — price range (premium UX feature)', () => {
+  const products = [
+    makeProduct({ id: 1, price: 100 }),
+    makeProduct({ id: 2, price: 300 }),
+    makeProduct({ id: 3, price: 500 }),
+  ]
+
+  it('filters out products below minPrice', () => {
+    const result = filterProducts(products, { minPrice: 300 })
+    expect(result.map(p => p.id)).toEqual([2, 3])
+  })
+
+  it('filters out products above maxPrice', () => {
+    const result = filterProducts(products, { maxPrice: 300 })
+    expect(result.map(p => p.id)).toEqual([1, 2])
+  })
+
+  it('applies both bounds together as an inclusive range', () => {
+    const result = filterProducts(products, { minPrice: 200, maxPrice: 400 })
+    expect(result.map(p => p.id)).toEqual([2])
+  })
+
+  it('uses the effective (variant-aware) price, not just the top-level price', () => {
+    const variantProduct = makeProduct({
+      id: 4, price: 999,
+      product_variants: [{ id: 1, product_id: 4, price: 150, mrp: 150, size: '250g', available_stock: 5, is_active: true }],
+    } as any)
+    // top-level price (999) is outside the range, but the effective (base variant) price (150) is inside it
+    const result = filterProducts([variantProduct], { minPrice: 100, maxPrice: 200 })
+    expect(result).toHaveLength(1)
+  })
+})
+
+describe('filterProducts — in-stock filter uses effective (variant-aware) stock', () => {
+  /**
+   * BUG FIX: previously checked raw `product.available_stock`, which could
+   * disagree with what ProductCard actually displays for a variant product.
+   */
+  it('excludes a product whose base variant is out of stock, even if the top-level field says otherwise', () => {
+    const product = makeProduct({
+      id: 1, available_stock: 50, // top-level says plenty in stock...
+      product_variants: [{ id: 1, product_id: 1, price: 100, mrp: 100, size: '1kg', available_stock: 0, is_active: true }],
+    } as any)
+    // ...but the (only, cheapest) active variant is out of stock, which is what the card shows
+    expect(filterProducts([product], { inStockOnly: true })).toHaveLength(0)
+  })
+
+  it('includes a product whose base variant has stock, even if the top-level field says zero', () => {
+    const product = makeProduct({
+      id: 1, available_stock: 0,
+      product_variants: [{ id: 1, product_id: 1, price: 100, mrp: 100, size: '1kg', available_stock: 4, is_active: true }],
+    } as any)
+    expect(filterProducts([product], { inStockOnly: true })).toHaveLength(1)
+  })
+})
+
+describe('buildPaginationList — ellipsis pagination', () => {
+  /**
+   * BUG FIX (premium UX — was on the "not yet built" list): the pagination
+   * bar used to render every single page number, e.g. 1 through 40 with no
+   * collapsing — unusable once the catalog grows past a page or two.
+   */
+  it('shows every page when the total is small enough to not need collapsing', () => {
+    expect(buildPaginationList(1, 5)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('collapses a large page count around the current page with ellipses', () => {
+    const result = buildPaginationList(6, 20)
+    expect(result[0]).toBe(1)
+    expect(result[result.length - 1]).toBe(20)
+    expect(result).toContain('ellipsis')
+    expect(result).toContain(6)
+  })
+
+  it('never emits two ellipses back to back', () => {
+    const result = buildPaginationList(10, 20)
+    for (let i = 1; i < result.length; i++) {
+      if (result[i] === 'ellipsis') expect(result[i - 1]).not.toBe('ellipsis')
+    }
+  })
+
+  it('does not show an ellipsis when the current page is near the start', () => {
+    const result = buildPaginationList(1, 20)
+    // window around page 1 reaches close to the left edge, only one ellipsis (near the end) expected
+    expect(result.filter(x => x === 'ellipsis')).toHaveLength(1)
+  })
+
+  it('returns an empty array for zero pages', () => {
+    expect(buildPaginationList(1, 0)).toEqual([])
   })
 })

@@ -48,4 +48,27 @@ describe('buildProductsUrl', () => {
     expect(buildProductsUrl(base, { instock: 'true' })).toContain('instock=true')
     expect(buildProductsUrl(base, {})).not.toContain('instock')
   })
+
+  it('includes minPrice/maxPrice when set as overrides', () => {
+    const url = buildProductsUrl(base, { minPrice: '200', maxPrice: '800' })
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('minPrice')).toBe('200')
+    expect(params.get('maxPrice')).toBe('800')
+  })
+
+  it('preserves an existing price range when only the category changes', () => {
+    const withPrice = { ...base, minPrice: '100', maxPrice: '500' }
+    const url = buildProductsUrl(withPrice, { category: 'honey' })
+    const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('minPrice')).toBe('100')
+    expect(params.get('maxPrice')).toBe('500')
+    expect(params.get('category')).toBe('honey')
+  })
+
+  it('explicitly clearing the price range removes both params', () => {
+    const withPrice = { ...base, minPrice: '100', maxPrice: '500' }
+    const url = buildProductsUrl(withPrice, { minPrice: undefined, maxPrice: undefined })
+    expect(url).not.toContain('minPrice')
+    expect(url).not.toContain('maxPrice')
+  })
 })

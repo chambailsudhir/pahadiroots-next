@@ -1,11 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice, savingsPercent } from '@/lib/utils'
+import { getBaseVariant } from '@/lib/normalizeProduct'
+import QuickViewModal from '@/components/product/QuickViewModal'
 import type { Product } from '@/types'
 
 interface Props {
@@ -15,6 +18,7 @@ interface Props {
 }
 
 export default function ProductCard({ product, showWishlist = true, priority = false }: Props) {
+  const [showQuickView, setShowQuickView] = useState(false)
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
   // ⚠ Do NOT use `useUserStore(s => s.isInWishlist)` — that selector subscribes
@@ -26,10 +30,12 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const addToWishlist      = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  const variants    = product.product_variants?.filter(v => v.is_active) || []
-  const baseVariant = variants.length > 0
-    ? variants.reduce((min, v) => v.price < min.price ? v : min, variants[0])
-    : null
+  // Uses the shared getBaseVariant() (also used by getEffectivePrice/
+  // getEffectiveStock in lib/normalizeProduct.ts) instead of recomputing the
+  // same "lowest active variant" reduction locally — one source of truth for
+  // which variant a card represents, shared with the /products sort/filter.
+  const baseVariant = getBaseVariant(product)
+  const variants     = product.product_variants?.filter(v => v.is_active) || []
 
   const price   = baseVariant?.price ?? product.price
   const mrp     = baseVariant?.mrp   ?? product.mrp ?? product.price
@@ -41,20 +47,23 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const sPct    = Math.min(100, Math.round(stock / 50 * 100))
   const sLbl    = !inStock ? 'Out of Stock' : stock > 20 ? 'In Stock' : `Only ${stock} left`
 
-  // Badge: use badges array — same priority as old site (badge_type: bs/og/pm/nw)
+  // BUG FIX (premium UX — "multi-badge support" from the audit): this used
+  // to be a single if/else-if chain, so a product that was BOTH a bestseller
+  // AND organic only ever showed "Bestseller" — the organic signal was
+  // silently dropped. Now builds a small ordered list and stacks up to 2
+  // pills (3+ starts to clutter a card this size), highest-priority first.
   const badges: string[] = Array.isArray(product.badges) ? product.badges : []
   const isBestseller = product.badges_bestseller || badges.includes('bestseller')
   const isOrganic    = product.badges_organic    || badges.includes('organic')
   const isNew        = product.badges_new        || badges.includes('new')
   const isPremium    = badges.includes('premium')
 
-  // Badge label & dot colour — same as old site pbd- classes
-  let badgeLabel = ''
-  let badgeDotClass = ''
-  if (isBestseller) { badgeLabel = 'Bestseller'; badgeDotClass = 'pbd-bs' }
-  else if (isOrganic)    { badgeLabel = 'Natural';     badgeDotClass = 'pbd-og' }
-  else if (isPremium)    { badgeLabel = 'Premium';     badgeDotClass = 'pbd-pm' }
-  else if (isNew)        { badgeLabel = 'New Arrival'; badgeDotClass = 'pbd-nw' }
+  const activeBadges: { label: string; dotClass: string }[] = []
+  if (isBestseller) activeBadges.push({ label: 'Bestseller',  dotClass: 'pbd-bs' })
+  if (isOrganic)    activeBadges.push({ label: 'Natural',     dotClass: 'pbd-og' })
+  if (isPremium)    activeBadges.push({ label: 'Premium',     dotClass: 'pbd-pm' })
+  if (isNew)        activeBadges.push({ label: 'New Arrival', dotClass: 'pbd-nw' })
+  const visibleBadges = activeBadges.slice(0, 2)
 
   // Region: old site shows p.region (state name). We use categories.name as fallback
   const region = product.region || product.categories?.name || ''
@@ -108,11 +117,15 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         aria-label={product.name}
       />
 
-      {/* ── Badge — top-left, dot + text ── */}
-      {badgeLabel && (
-        <div className="pbadge-wrap">
-          <span className={`pbadge-dot ${badgeDotClass}`} />
-          <span className="pbadge-text">{badgeLabel}</span>
+      {/* ── Badges — top-left, stacked pills (up to 2) ── */}
+      {visibleBadges.length > 0 && (
+        <div className="pbadge-stack">
+          {visibleBadges.map(b => (
+            <div className="pbadge-wrap" key={b.label}>
+              <span className={`pbadge-dot ${b.dotClass}`} />
+              <span className="pbadge-text">{b.label}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -154,16 +167,19 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           />
         )}
 
-        {/* Hover overlay with Quick View — BUG FIX: this used to be a <button>
-            whose onClick only called preventDefault/stopPropagation, i.e. a
-            fake control that did nothing when clicked. It's a real link to
-            the product page now (same destination as the rest of the card),
-            styled identically, so it's an honest affordance instead of a
-            decorative dead end. */}
+        {/* Hover overlay with Quick View — opens the real modal (image, size
+            selector, live price, working Add to Cart) instead of the earlier
+            stopgap that just linked to the PDP. */}
         <div className="piw-hover-overlay">
-          <Link href={href} className="piw-qv-btn" aria-label={`View details for ${product.name}`}>
+          <button
+            type="button"
+            className="piw-qv-btn"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); setShowQuickView(true) }}
+            aria-haspopup="dialog"
+            aria-label={`Quick view ${product.name}`}
+          >
             👁 Quick View
-          </Link>
+          </button>
         </div>
 
         {/* Wishlist heart — bottom-right, shows on hover */}
@@ -229,6 +245,14 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           </div>
         </div>
       </div>
+
+      {showQuickView && (
+        <QuickViewModal
+          product={product}
+          initialVariant={baseVariant}
+          onClose={() => setShowQuickView(false)}
+        />
+      )}
     </article>
   )
 }

@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { buildProductsUrl, type ProductsUrlState } from '@/lib/buildProductsUrl'
+import PriceRangeFilter from '@/components/product/PriceRangeFilter'
 
 interface CategoryLite { id: number | string; slug: string; name: string }
 
@@ -25,17 +26,23 @@ interface Props {
   instock:      boolean
   count:        number
   sortOptions:  { value: string; label: string; icon: string }[]
+  priceBounds:  { min: number; max: number }
+  priceCurrent: { min: number; max: number }
+  minPriceParam?: string
+  maxPriceParam?: string
 }
 
 export default function MobileFilterBar({
   categories, activeCatSlug, activeStateId, activeStateName, sort, instock, count, sortOptions,
+  priceBounds, priceCurrent, minPriceParam, maxPriceParam,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const urlState: ProductsUrlState = { sort, category: activeCatSlug, state: activeStateId, instock }
+  const urlState: ProductsUrlState = { sort, category: activeCatSlug, state: activeStateId, instock, minPrice: minPriceParam, maxPrice: maxPriceParam }
   const url = (overrides: Parameters<typeof buildProductsUrl>[1]) => buildProductsUrl(urlState, overrides)
 
   const activeCount =
     (activeCatSlug ? 1 : 0) + (activeStateId ? 1 : 0) + (instock ? 1 : 0) + (sort !== 'newest' ? 1 : 0)
+    + (minPriceParam || maxPriceParam ? 1 : 0)
 
   return (
     <div className="mfb-root">
@@ -100,6 +107,16 @@ export default function MobileFilterBar({
                   </Link>
                 ))}
               </div>
+
+              <div className="mfb-section-label">Price Range</div>
+              {priceBounds.max > priceBounds.min && (
+                <PriceRangeFilter
+                  key={`${priceCurrent.min}-${priceCurrent.max}`}
+                  bounds={priceBounds}
+                  current={priceCurrent}
+                  urlState={urlState}
+                />
+              )}
 
               <div className="mfb-section-label">Availability</div>
               <Link

@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
-import { filterProducts, sortProducts, paginateProducts } from '@/lib/filterAndSortProducts'
+import { normalizeProducts, getEffectivePrice } from '@/lib/normalizeProduct'
+import { filterProducts, sortProducts, paginateProducts, buildPaginationList } from '@/lib/filterAndSortProducts'
 import { buildProductsUrl } from '@/lib/buildProductsUrl'
 import ProductCard from '@/components/product/ProductCard'
 import MobileFilterBar from '@/components/product/MobileFilterBar'
+import PriceRangeFilter from '@/components/product/PriceRangeFilter'
+import { formatPrice } from '@/lib/utils'
 import type { Product } from '@/types'
 
 export const revalidate = 60
@@ -19,7 +21,7 @@ const SORT_OPTIONS = [
   { value: 'popular',    label: 'Best Sellers',        icon: '⭐' },
 ]
 
-interface SP { sort?: string; category?: string; page?: string; instock?: string; state?: string }
+interface SP { sort?: string; category?: string; page?: string; instock?: string; state?: string; minPrice?: string; maxPrice?: string }
 
 // BUG FIX (Next.js 15+/16 migration — CRITICAL, newly found during this pass):
 // `searchParams` is a Promise in Next.js 15+/16 (every other dynamic page in
@@ -66,6 +68,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   if (sp.state)    params.set('state', sp.state)
   if (sp.sort && sp.sort !== 'newest') params.set('sort', sp.sort)
   if (page > 1)    params.set('page', String(page))
+  if (sp.minPrice) params.set('minPrice', sp.minPrice)
+  if (sp.maxPrice) params.set('maxPrice', sp.maxPrice)
   const qs = params.toString()
 
   return {
@@ -74,7 +78,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     alternates: { canonical: `/products${qs ? '?' + qs : ''}` },
     // Filtered/paginated combinations are useful to users but shouldn't
     // compete with the canonical category page in search results.
-    robots: (sp.instock === 'true' || page > 1) ? { index: false, follow: true } : undefined,
+    robots: (sp.instock === 'true' || page > 1 || sp.minPrice || sp.maxPrice) ? { index: false, follow: true } : undefined,
   }
 }
 
@@ -87,6 +91,8 @@ export default async function ProductsPage({ searchParams }: Props) {
   const stateId   = sp.state    || ''
   const page      = Math.max(1, parseInt(sp.page || '1'))
   const instock   = sp.instock  === 'true'
+  const minPrice  = sp.minPrice ? Number(sp.minPrice) : undefined
+  const maxPrice  = sp.maxPrice ? Number(sp.maxPrice) : undefined
   const offset    = (page - 1) * PAGE_SIZE
 
   const categories  = buildCategories(storeData)
@@ -109,16 +115,25 @@ export default async function ProductsPage({ searchParams }: Props) {
   // Filter + sort — extracted to lib/filterAndSortProducts.ts (see BUG FIX
   // comment there: this logic used to live inline in this Server Component,
   // which is why it had zero test coverage — it's unit tested directly now).
-  products = filterProducts(products, {
-    categoryId:  activeCat?.id,
-    stateId,
-    inStockOnly: instock,
-  })
+  const baseFilters = { categoryId: activeCat?.id, stateId, inStockOnly: instock }
+  const preRangeProducts = filterProducts(products, baseFilters)
+
+  // Price-range slider bounds — computed from the category/state/in-stock
+  // filtered set (not the price filter itself), rounded to nearest ₹10 so
+  // the slider has clean endpoints. Falls back to a sane 0–1000 range on an
+  // empty result so the slider never divides by zero.
+  const rawPrices  = preRangeProducts.map(getEffectivePrice)
+  const priceBounds = rawPrices.length
+    ? { min: Math.floor(Math.min(...rawPrices) / 10) * 10, max: Math.max(Math.ceil(Math.max(...rawPrices) / 10) * 10, 10) }
+    : { min: 0, max: 1000 }
+
+  products = filterProducts(preRangeProducts, { minPrice, maxPrice })
   products = sortProducts(products, sort)
 
   const { pageItems: paged, totalPages, totalCount: count } = paginateProducts(products, page, PAGE_SIZE)
+  const paginationItems = buildPaginationList(page, totalPages)
 
-  const urlState = { sort, category: catSlug, state: stateId, instock }
+  const urlState = { sort, category: catSlug, state: stateId, instock, minPrice: sp.minPrice, maxPrice: sp.maxPrice }
   function url(overrides: Parameters<typeof buildProductsUrl>[1]) {
     return buildProductsUrl(urlState, overrides)
   }
@@ -202,6 +217,17 @@ export default async function ProductsPage({ searchParams }: Props) {
           </div>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
+            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Price Range</div>
+          <div style={{ marginBottom: '24px' }}>
+            <PriceRangeFilter
+              key={`${minPrice ?? priceBounds.min}-${maxPrice ?? priceBounds.max}`}
+              bounds={priceBounds}
+              current={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
+              urlState={urlState}
+            />
+          </div>
+
+          <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Availability</div>
           <Link href={url({ instock: instock ? 'false' : 'true' })} style={{
             display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px',
@@ -219,7 +245,7 @@ export default async function ProductsPage({ searchParams }: Props) {
         <div style={{ flex: 1, minWidth: 0 }}>
 
           {/* Active filters */}
-          {(catSlug || stateId || instock || sort !== 'newest') && (
+          {(catSlug || stateId || instock || sort !== 'newest' || minPrice != null || maxPrice != null) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#7a7a7a', fontWeight: 600 }}>Filters:</span>
               {activeCat && (
@@ -236,6 +262,13 @@ export default async function ProductsPage({ searchParams }: Props) {
                 <Link href={url({ instock: 'false' })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>In Stock ×</Link>
+              )}
+              {(minPrice != null || maxPrice != null) && (
+                <Link href={url({ minPrice: undefined, maxPrice: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
+                  fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>
+                  {formatPrice(minPrice ?? priceBounds.min)}–{formatPrice(maxPrice ?? priceBounds.max)} ×
+                </Link>
               )}
               {sort !== 'newest' && (
                 <Link href={url({ sort: 'newest' })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
@@ -273,9 +306,11 @@ export default async function ProductsPage({ searchParams }: Props) {
               {totalPages > 1 && (
                 <nav aria-label="Pagination" style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
                   {page > 1 && <Link href={url({ page: String(page - 1) })} style={pagStyle(false)}>← Prev</Link>}
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(pg => (
-                    <Link key={pg} href={url({ page: String(pg) })} style={pagStyle(pg === page)} aria-current={pg === page ? 'page' : undefined}>{pg}</Link>
-                  ))}
+                  {paginationItems.map((item, i) =>
+                    item === 'ellipsis'
+                      ? <span key={`e${i}`} style={{ ...pagStyle(false), border: 'none', background: 'transparent' }}>…</span>
+                      : <Link key={item} href={url({ page: String(item) })} style={pagStyle(item === page)} aria-current={item === page ? 'page' : undefined}>{item}</Link>
+                  )}
                   {page < totalPages && <Link href={url({ page: String(page + 1) })} style={pagStyle(false)}>Next →</Link>}
                 </nav>
               )}
@@ -295,6 +330,10 @@ export default async function ProductsPage({ searchParams }: Props) {
         instock={instock}
         count={count}
         sortOptions={SORT_OPTIONS}
+        priceBounds={priceBounds}
+        priceCurrent={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
+        minPriceParam={sp.minPrice}
+        maxPriceParam={sp.maxPrice}
       />
 
       <style>{`

@@ -9,11 +9,13 @@ export interface ProductsUrlState {
   category: string
   state:    string
   instock:  boolean
+  minPrice?: string
+  maxPrice?: string
 }
 
 export function buildProductsUrl(
   current: ProductsUrlState,
-  overrides: Partial<{ sort: string | undefined; category: string | undefined; state: string | undefined; instock: string | undefined; page: string | undefined }>,
+  overrides: Partial<{ sort: string | undefined; category: string | undefined; state: string | undefined; instock: string | undefined; page: string | undefined; minPrice: string | undefined; maxPrice: string | undefined }>,
 ): string {
   const p = new URLSearchParams()
   const merged: Record<string, string | undefined> = {
@@ -21,6 +23,8 @@ export function buildProductsUrl(
     category: current.category || undefined,
     state:    current.state    || undefined,
     instock:  current.instock ? 'true' : undefined,
+    minPrice: current.minPrice || undefined,
+    maxPrice: current.maxPrice || undefined,
     page:     '1',
     ...overrides,
   }

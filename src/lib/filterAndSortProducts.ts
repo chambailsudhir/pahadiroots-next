@@ -1,5 +1,5 @@
 import type { Product } from '@/types'
-import { getEffectivePrice } from '@/lib/normalizeProduct'
+import { getEffectivePrice, getEffectiveStock } from '@/lib/normalizeProduct'
 
 // BUG FIX (low-severity — zero test coverage, found during products-page
 // audit): the filter/sort logic for /products used to live inline inside an
@@ -14,6 +14,8 @@ export interface ProductFilters {
   categoryId?: number | string
   stateId?:    string
   inStockOnly?: boolean
+  minPrice?:   number
+  maxPrice?:   number
 }
 
 export function filterProducts(products: Product[], filters: ProductFilters): Product[] {
@@ -25,7 +27,19 @@ export function filterProducts(products: Product[], filters: ProductFilters): Pr
     result = result.filter(p => String(p.state_id) === String(filters.stateId))
   }
   if (filters.inStockOnly) {
-    result = result.filter(p => (p.available_stock ?? 0) > 0)
+    // BUG FIX: was `(p.available_stock ?? 0) > 0` — the raw top-level
+    // product field. ProductCard displays stock from the *base variant*
+    // when the product has variants (see getEffectiveStock), so a product
+    // could pass this filter while its own card still rendered "Out of
+    // Stock", or fail this filter while its card showed available stock.
+    // Now uses the exact same effective-stock resolution as the card.
+    result = result.filter(p => getEffectiveStock(p) > 0)
+  }
+  if (filters.minPrice != null) {
+    result = result.filter(p => getEffectivePrice(p) >= filters.minPrice!)
+  }
+  if (filters.maxPrice != null) {
+    result = result.filter(p => getEffectivePrice(p) <= filters.maxPrice!)
   }
   return result
 }
@@ -73,4 +87,33 @@ export function paginateProducts<T>(items: T[], page: number, pageSize: number):
   const totalPages = Math.ceil(totalCount / pageSize)
   const offset = (page - 1) * pageSize
   return { pageItems: items.slice(offset, offset + pageSize), totalPages, totalCount }
+}
+
+/**
+ * buildPaginationList — turns (currentPage, totalPages) into the compact
+ * "1 … 4 5 6 … 12" sequence a pagination bar should render, instead of every
+ * page number. Always keeps the first page, the last page, and a small
+ * window around the current page; collapses everything else into a single
+ * 'ellipsis' marker (never two ellipses back to back).
+ */
+export type PaginationItem = number | 'ellipsis'
+
+export function buildPaginationList(current: number, total: number, windowSize = 1): PaginationItem[] {
+  if (total <= 0) return []
+  if (total <= 5 + windowSize * 2) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+
+  const pages = new Set<number>([1, total])
+  for (let i = current - windowSize; i <= current + windowSize; i++) {
+    if (i >= 1 && i <= total) pages.add(i)
+  }
+
+  const sorted = Array.from(pages).sort((a, b) => a - b)
+  const result: PaginationItem[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('ellipsis')
+    result.push(sorted[i])
+  }
+  return result
 }

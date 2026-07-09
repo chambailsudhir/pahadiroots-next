@@ -115,6 +115,19 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
 }
 
 /**
+ * getBaseVariant — the single source of truth for "which variant does this
+ * card represent by default": the lowest-priced *active* variant, or null
+ * when the product has no variants. getEffectivePrice, getEffectiveStock,
+ * and ProductCard all derive from this one selection so they can never
+ * disagree with each other about which variant is "the" variant.
+ */
+export function getBaseVariant(p: Product) {
+  const variants = (p.product_variants ?? []).filter(v => v.is_active)
+  if (variants.length === 0) return null
+  return variants.reduce((min, v) => v.price < min.price ? v : min, variants[0])
+}
+
+/**
  * getEffectivePrice — the same price ProductCard actually displays: the
  * lowest active variant's price when variants exist, else the top-level
  * product price. Listing pages must sort by this (not raw product.price),
@@ -122,9 +135,17 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
  * cards it's sorting.
  */
 export function getEffectivePrice(p: Product): number {
-  const variants = (p.product_variants ?? []).filter(v => v.is_active)
-  if (variants.length > 0) {
-    return variants.reduce((min, v) => v.price < min ? v.price : min, variants[0].price)
-  }
-  return p.price ?? 0
+  return getBaseVariant(p)?.price ?? p.price ?? 0
+}
+
+/**
+ * getEffectiveStock — the same stock ProductCard bases its in-stock/out-of-
+ * stock display on: the base variant's stock when variants exist, else the
+ * top-level product stock. Filtering "In Stock Only" on the raw top-level
+ * `product.available_stock` (as the old inline filter did) could show a
+ * product as in-stock in the filter while its card renders "Out of Stock",
+ * or vice versa, whenever the base variant and the product row disagree.
+ */
+export function getEffectiveStock(p: Product): number {
+  return getBaseVariant(p)?.available_stock ?? p.available_stock ?? 0
 }

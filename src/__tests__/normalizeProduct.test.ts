@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice } from '@/lib/normalizeProduct'
+import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice, getEffectiveStock, getBaseVariant } from '@/lib/normalizeProduct'
 
 describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
   it('maps variant.mrp from original_price (the real column), not a literal mrp field', () => {
@@ -140,5 +140,54 @@ describe('getEffectivePrice — the products-listing-page pricing bug', () => {
   it('falls back to the top-level product price when there are no variants', () => {
     const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599 } as any)
     expect(getEffectivePrice(product)).toBe(599)
+  })
+})
+
+describe('getEffectiveStock — variant-aware stock, mirrors ProductCard exactly', () => {
+  /**
+   * BUG FIX: the "In Stock Only" filter used to check the raw top-level
+   * product.available_stock, while ProductCard displays stock from the base
+   * (cheapest active) variant. A product could pass the filter while its own
+   * card still showed "Out of Stock", or vice versa. getEffectiveStock is
+   * the single source of truth both now use.
+   */
+  it('returns the base (cheapest active) variant stock when variants exist', () => {
+    const product = normalizeProduct({
+      id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999, available_stock: 999,
+      product_variants: [
+        { id: 1, price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
+        { id: 2, price: 250, variant_value: '500g', available_stock: 7, is_active: true },
+      ],
+    } as any)
+    // base variant = cheapest = the 500g one (price 250) -> its stock, not the top-level 999
+    expect(getEffectiveStock(product)).toBe(7)
+  })
+
+  it('falls back to top-level available_stock when there are no active variants', () => {
+    const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599, available_stock: 12 } as any)
+    expect(getEffectiveStock(product)).toBe(12)
+  })
+
+  it('treats a missing available_stock as 0, not undefined/NaN', () => {
+    const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599 } as any)
+    expect(getEffectiveStock(product)).toBe(0)
+  })
+})
+
+describe('getBaseVariant — single source of truth shared by price/stock/ProductCard', () => {
+  it('returns null when the product has no variants', () => {
+    const product = normalizeProduct({ id: 1, name: 'X', slug: 'x', badges: [], price: 100 } as any)
+    expect(getBaseVariant(product)).toBeNull()
+  })
+
+  it('returns the cheapest active variant object (not just its price)', () => {
+    const product = normalizeProduct({
+      id: 1, name: 'X', slug: 'x', badges: [], price: 999,
+      product_variants: [
+        { id: 5, price: 300, variant_value: '1kg', available_stock: 2, is_active: true },
+        { id: 6, price: 150, variant_value: '500g', available_stock: 9, is_active: true },
+      ],
+    } as any)
+    expect(getBaseVariant(product)?.id).toBe(6)
   })
 })

@@ -242,7 +242,8 @@ section.sec { padding: 52px 40px; }
 .piw-wl-btn.active { opacity:1 !important; transform:scale(1) !important; }
 
 /* Premium badge — dot + text, top-left */
-.pbadge-wrap { position:absolute; top:12px; left:12px; z-index:6; display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.92); backdrop-filter:blur(4px); border-radius:20px; padding:4px 10px 4px 7px; box-shadow:0 1px 6px rgba(0,0,0,.12); }
+.pbadge-stack { position:absolute; top:12px; left:12px; z-index:6; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+.pbadge-wrap { display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.92); backdrop-filter:blur(4px); border-radius:20px; padding:4px 10px 4px 7px; box-shadow:0 1px 6px rgba(0,0,0,.12); }
 .pbadge-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .pbd-bs { background:#22c55e; }
 .pbd-og { background:#16a34a; }
