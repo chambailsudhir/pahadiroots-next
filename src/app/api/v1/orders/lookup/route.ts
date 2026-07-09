@@ -42,9 +42,12 @@ import {
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 
 // Same join shape as /api/orders/[id]/route.ts — proven, already in
-// production use for the logged-in "my orders" detail view.
+// production use for the logged-in "my orders" detail view. hsn_code and
+// gst_rate added for the GST invoice (see order-success/page.tsx's invoice
+// section) — both confirmed real columns on products via live schema
+// inspection, not guessed.
 const ORDER_SELECT =
-  '*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url))'
+  '*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url,hsn_code,gst_rate))'
 
 interface RawOrderItem {
   quantity:               number
@@ -52,7 +55,7 @@ interface RawOrderItem {
   product_name_snapshot:  string | null
   variant_value_snapshot: string | null
   product_id:             string | null
-  products?: { name?: string; emoji?: string; image_url?: string }
+  products?: { name?: string; emoji?: string; image_url?: string; hsn_code?: string | null; gst_rate?: number | null }
 }
 
 function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string; last_name?: string; phone?: string } | null) {
@@ -66,6 +69,8 @@ function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string;
     quantity:       i.quantity,
     price:          i.price_at_time,
     price_at_time:  i.price_at_time,
+    hsn_code:       i.products?.hsn_code ?? undefined,
+    gst_rate:       i.products?.gst_rate != null ? Number(i.products.gst_rate) : undefined,
   }))
 
   let shippingAddress: Record<string, string> | undefined

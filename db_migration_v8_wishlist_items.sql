@@ -1,0 +1,22 @@
+-- ============================================================
+-- PAHADI ROOTS — DB MIGRATION v8: WISHLIST PERSISTENCE COLUMN
+-- Run in Supabase SQL Editor AFTER v7 (order_events)
+--
+-- BUG FIX (found via live report of console 500s on /api/wishlist):
+-- src/app/api/wishlist/route.ts has ALWAYS documented this exact
+-- requirement in its own file header comment ("Schema migration required:
+-- ALTER TABLE customers ADD COLUMN IF NOT EXISTS wishlist_items TEXT
+-- DEFAULT NULL") — but no migration file in this repo ever actually ran it.
+--
+-- The route's read of this column IS already wrapped in a .catch(() => null)
+-- (so a missing column degrades to an empty wishlist rather than crashing
+-- that specific query), which means this migration is NOT the cause of the
+-- 500s seen in the browser console — those trace to a separate, transient
+-- auth-endpoint timeout issue (fixed alongside this migration in the same
+-- pass, see the updated error handling in wishlist/route.ts and
+-- profile/route.ts). But without this column, server-side wishlist
+-- persistence (syncing a signed-in customer's wishlist across devices)
+-- silently never works — it only ever returns/stores an empty list.
+-- ============================================================
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS wishlist_items TEXT DEFAULT NULL;

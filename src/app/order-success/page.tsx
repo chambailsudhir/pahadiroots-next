@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback } from 'react'
+import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals } from '@/lib/invoiceGst'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -14,6 +15,8 @@ interface OrderItem {
   variant_value?: string
   price?: number
   price_at_time?: number
+  hsn_code?: string
+  gst_rate?: number
 }
 
 interface Order {
@@ -469,6 +472,38 @@ function SuccessContent() {
           .oc-nl-inner-wrap { padding: 24px 20px; }
           .oc-f-bot { padding: 12px 20px; flex-direction: column; text-align: center; gap: 6px; }
         }
+
+        /* BUG FIX: "Print Invoice" previously called window.print() on this
+           whole confirmation page (header, nav, footer, star rating and
+           all) — not a real tax invoice. .invoice-print-only holds the
+           actual GST invoice (seller GSTIN, HSN codes, CGST/SGST/IGST
+           breakdown — see lib/invoiceGst.ts); it's hidden in the normal
+           view and is the ONLY thing shown when printing. */
+        .invoice-print-only { display: none; }
+        @media print {
+          body * { visibility: hidden; }
+          .invoice-print-only, .invoice-print-only * { visibility: visible; }
+          .invoice-print-only {
+            display: block; position: absolute; top: 0; left: 0; width: 100%;
+            padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #1a1a1a; font-size: 12px;
+          }
+          .inv-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a3d2e; padding-bottom: 12px; margin-bottom: 12px; }
+          .inv-biz-name { font-size: 18px; font-weight: 900; color: #1a3d2e; }
+          .inv-biz-addr, .inv-biz-gstin { font-size: 11px; color: #444; margin-top: 2px; }
+          .inv-title { font-size: 20px; font-weight: 900; letter-spacing: 1px; color: #1a3d2e; }
+          .inv-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; font-size: 11.5px; margin-bottom: 14px; }
+          .inv-buyer { margin-bottom: 14px; font-size: 11.5px; }
+          .inv-section-title { font-weight: 800; font-size: 12px; margin-bottom: 4px; color: #1a3d2e; }
+          .inv-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+          .inv-table th, .inv-table td { border: 1px solid #ccc; padding: 5px 6px; text-align: left; }
+          .inv-table th { background: #f0ede4; font-weight: 800; }
+          .inv-table td:nth-child(n+4), .inv-table th:nth-child(n+4) { text-align: right; }
+          .inv-totals { max-width: 320px; margin-left: auto; font-size: 12px; }
+          .inv-totals > div { display: flex; justify-content: space-between; padding: 3px 0; }
+          .inv-grand-total { border-top: 2px solid #1a3d2e; margin-top: 6px; padding-top: 6px !important; font-weight: 900; font-size: 14px; }
+          .inv-footer-note { margin-top: 24px; font-size: 10.5px; color: #666; text-align: center; }
+        }
       `}</style>
 
       {/* ── NAV ── */}
@@ -655,6 +690,116 @@ function SuccessContent() {
                 <Link href="/account" className="oc-btn-primary">📦 View All Orders</Link>
                 <button onClick={() => window.print()} className="oc-btn-print">🧾 Print Invoice</button>
                 <Link href="/" className="oc-btn-secondary">🌿 Continue Shopping</Link>
+              </div>
+
+              {/* BUG FIX: "Print Invoice" previously just printed this whole
+                  confirmation webpage — not a real tax invoice. This block
+                  is hidden in the normal view (.invoice-print-only, see
+                  <style> above) and is the ONLY thing shown when printing —
+                  a real GST invoice with the seller's GSTIN, per-item HSN
+                  codes, and a CGST+SGST (intra-state) or IGST (inter-state)
+                  split, computed in lib/invoiceGst.ts from confirmed real
+                  columns (products.hsn_code, products.gst_rate). */}
+              <div className="invoice-print-only">
+                {(() => {
+                  const supplyType = getSupplyType(order.state)
+                  const lines = items.map(it => computeInvoiceLine({
+                    name:         it.name || 'Product',
+                    variant:      it.variant_value,
+                    hsnCode:      it.hsn_code,
+                    gstRate:      it.gst_rate ?? 0,
+                    quantity:     it.qty ?? it.quantity ?? 1,
+                    priceInclGst: it.price ?? it.price_at_time ?? 0,
+                  }))
+                  const totals = computeInvoiceTotals(lines, supplyType, ship)
+
+                  return (
+                    <>
+                      <div className="inv-header">
+                        <div>
+                          <div className="inv-biz-name">{BUSINESS_INFO.name}</div>
+                          <div className="inv-biz-addr">{BUSINESS_INFO.address}</div>
+                          <div className="inv-biz-gstin">GSTIN: {BUSINESS_INFO.gstin}</div>
+                        </div>
+                        <div className="inv-title">TAX INVOICE</div>
+                      </div>
+
+                      <div className="inv-meta">
+                        <div><strong>Invoice No:</strong> INV-{order.order_number}</div>
+                        <div><strong>Invoice Date:</strong> {order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : ''}</div>
+                        <div><strong>Order No:</strong> {order.order_number}</div>
+                        <div><strong>Place of Supply:</strong> {order.state || '—'} ({supplyType === 'intra' ? 'Intra-state' : 'Inter-state'})</div>
+                      </div>
+
+                      <div className="inv-buyer">
+                        <div className="inv-section-title">Bill To / Ship To</div>
+                        <div>{order.customer_name || '—'}</div>
+                        <div>{addr || '—'}</div>
+                        {order.customer_phone && <div>Phone: {order.customer_phone}</div>}
+                      </div>
+
+                      <table className="inv-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Item</th>
+                            <th>HSN</th>
+                            <th>Qty</th>
+                            <th>Rate (incl. GST)</th>
+                            <th>Taxable Value</th>
+                            <th>GST %</th>
+                            {supplyType === 'intra' ? <><th>CGST</th><th>SGST</th></> : <th>IGST</th>}
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lines.map((l, i) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td>{l.name}{l.variant ? ` (${l.variant})` : ''}</td>
+                              <td>{l.hsnCode || '—'}</td>
+                              <td>{l.quantity}</td>
+                              <td>₹{l.priceInclGst.toFixed(2)}</td>
+                              <td>₹{l.lineTaxableTotal.toFixed(2)}</td>
+                              <td>{l.gstRate}%</td>
+                              {supplyType === 'intra' ? (
+                                <>
+                                  <td>₹{(l.lineTaxTotal / 2).toFixed(2)}</td>
+                                  <td>₹{(l.lineTaxTotal / 2).toFixed(2)}</td>
+                                </>
+                              ) : (
+                                <td>₹{l.lineTaxTotal.toFixed(2)}</td>
+                              )}
+                              <td>₹{l.lineTotal.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      <div className="inv-totals">
+                        <div><span>Taxable Value</span><span>₹{totals.taxableValue.toFixed(2)}</span></div>
+                        {supplyType === 'intra' ? (
+                          <>
+                            <div><span>CGST</span><span>₹{totals.cgst.toFixed(2)}</span></div>
+                            <div><span>SGST</span><span>₹{totals.sgst.toFixed(2)}</span></div>
+                          </>
+                        ) : (
+                          <div><span>IGST</span><span>₹{totals.igst.toFixed(2)}</span></div>
+                        )}
+                        {ship > 0 && <div><span>Shipping</span><span>₹{ship.toFixed(2)}</span></div>}
+                        {disc > 0 && <div><span>Discount</span><span>-₹{disc.toFixed(2)}</span></div>}
+                        {/* Grand total uses the order's actual total_amount (the authoritative,
+                            already-charged figure) rather than re-deriving it from items, to
+                            avoid any rounding drift between this invoice and what was really paid. */}
+                        <div className="inv-grand-total"><span>Grand Total</span><span>₹{total.toFixed(2)}</span></div>
+                      </div>
+
+                      <div className="inv-footer-note">
+                        This is a computer-generated invoice and does not require a signature.
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             </>
           )

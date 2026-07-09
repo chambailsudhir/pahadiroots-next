@@ -115,7 +115,11 @@ describe('order-success page', () => {
     render(React.createElement(OrderSuccessPage))
 
     await waitFor(() => {
-      expect(screen.getByText(/PRMR4OEQ/)).toBeTruthy()
+      // getAllByText, not getByText: the hidden (CSS display:none) invoice
+      // block also renders the order number for printing — jsdom doesn't
+      // evaluate CSS visibility, so both the visible hero and the
+      // print-only invoice match this text query.
+      expect(screen.getAllByText(/PRMR4OEQ/).length).toBeGreaterThan(0)
     })
 
     fetchSpy.mockClear() // only care about calls AFTER this point
@@ -125,5 +129,45 @@ describe('order-success page', () => {
 
     const adminApiCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('/api/admin-api'))
     expect(adminApiCalls).toHaveLength(0)
+  })
+
+  it('renders a real GST invoice (GSTIN, HSN, tax split) instead of just printing the confirmation page', async () => {
+    fetchSpy.mockImplementation((url: string) => {
+      if (String(url).includes('/api/v1/orders/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            success: true,
+            order: {
+              order_number: 'PRMR4OEQ', order_status: 'confirmed', payment_status: 'cod_pending',
+              payment_method: 'cod', total_amount: 262, subtotal: 235, tax: 27,
+              created_at: '2026-07-01T10:00:00Z',
+              customer_name: 'Sudhir Chambail', state: 'Delhi', city: 'New Delhi',
+              delivery_address: 'C4/33 Acharya Niketan', pincode: '110091',
+              items: [
+                { name: 'Himalayan Wild Honey', hsn_code: '0409', gst_rate: 5, qty: 1, price: 210 },
+              ],
+            },
+          }),
+        })
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`))
+    })
+
+    const { default: OrderSuccessPage } = await import('@/app/order-success/page')
+    render(React.createElement(OrderSuccessPage))
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/PRMR4OEQ/).length).toBeGreaterThan(0)
+    })
+
+    // Seller GSTIN present.
+    expect(screen.getByText(/02AAWFC5939L1ZV/)).toBeTruthy()
+    // HSN code for the actual item present.
+    expect(screen.getByText('0409')).toBeTruthy()
+    // Delhi ≠ Himachal Pradesh → inter-state → IGST label shown (table header
+    // + totals row), not CGST/SGST.
+    expect(screen.getAllByText('IGST').length).toBeGreaterThan(0)
+    expect(screen.queryByText('CGST')).toBeNull()
   })
 })
