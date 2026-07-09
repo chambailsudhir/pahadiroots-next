@@ -73,27 +73,6 @@ export default function MobileFilterBar({
             </div>
 
             <div className="mfb-sheet-body">
-              <div className="mfb-section-label">Collections</div>
-              <div className="mfb-link-list">
-                <Link
-                  href={url({ category: undefined, state: undefined })}
-                  className={`mfb-link${!activeCatSlug && !activeStateId ? ' active' : ''}`}
-                  onClick={() => setOpen(false)}
-                >
-                  🌿 All Products
-                </Link>
-                {categories.map(cat => (
-                  <Link
-                    key={cat.id}
-                    href={url({ category: cat.slug, state: undefined })}
-                    className={`mfb-link${activeCatSlug === cat.slug ? ' active' : ''}`}
-                    onClick={() => setOpen(false)}
-                  >
-                    {cat.name}
-                  </Link>
-                ))}
-              </div>
-
               <div className="mfb-section-label">Sort By</div>
               <div className="mfb-link-list">
                 {sortOptions.map(opt => (
@@ -117,6 +96,27 @@ export default function MobileFilterBar({
                   urlState={urlState}
                 />
               )}
+
+              <div className="mfb-section-label">Collections</div>
+              <div className="mfb-link-list">
+                <Link
+                  href={url({ category: undefined, state: undefined })}
+                  className={`mfb-link${!activeCatSlug && !activeStateId ? ' active' : ''}`}
+                  onClick={() => setOpen(false)}
+                >
+                  🌿 All Products
+                </Link>
+                {categories.map(cat => (
+                  <Link
+                    key={cat.id}
+                    href={url({ category: cat.slug, state: undefined })}
+                    className={`mfb-link${activeCatSlug === cat.slug ? ' active' : ''}`}
+                    onClick={() => setOpen(false)}
+                  >
+                    {cat.name}
+                  </Link>
+                ))}
+              </div>
 
               <div className="mfb-section-label">Availability</div>
               <Link

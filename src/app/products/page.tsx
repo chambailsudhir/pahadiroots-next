@@ -181,27 +181,6 @@ export default async function ProductsPage({ searchParams }: Props) {
           boxShadow: '0 2px 16px rgba(0,0,0,.06)', border: '1px solid rgba(0,0,0,.06)' }}>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
-            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Collections</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
-            <Link href={url({ category: undefined, state: undefined })} style={{
-              display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
-              textDecoration: 'none', fontWeight: (!catSlug && !stateId) ? 700 : 500,
-              background: (!catSlug && !stateId) ? '#1a3a1e' : 'transparent',
-              color: (!catSlug && !stateId) ? '#fff' : '#444' }}>
-              🌿 All Products
-            </Link>
-            {categories.map(cat => (
-              <Link key={cat.id} href={url({ category: cat.slug, state: undefined })} style={{
-                display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
-                textDecoration: 'none', fontWeight: catSlug === cat.slug ? 700 : 500,
-                background: catSlug === cat.slug ? '#1a3a1e' : 'transparent',
-                color: catSlug === cat.slug ? '#fff' : '#444' }}>
-                {cat.name}
-              </Link>
-            ))}
-          </div>
-
-          <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Sort By</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
             {SORT_OPTIONS.map(opt => (
@@ -225,6 +204,27 @@ export default async function ProductsPage({ searchParams }: Props) {
               current={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
               urlState={urlState}
             />
+          </div>
+
+          <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
+            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Collections</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
+            <Link href={url({ category: undefined, state: undefined })} style={{
+              display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
+              textDecoration: 'none', fontWeight: (!catSlug && !stateId) ? 700 : 500,
+              background: (!catSlug && !stateId) ? '#1a3a1e' : 'transparent',
+              color: (!catSlug && !stateId) ? '#fff' : '#444' }}>
+              🌿 All Products
+            </Link>
+            {categories.map(cat => (
+              <Link key={cat.id} href={url({ category: cat.slug, state: undefined })} style={{
+                display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
+                textDecoration: 'none', fontWeight: catSlug === cat.slug ? 700 : 500,
+                background: catSlug === cat.slug ? '#1a3a1e' : 'transparent',
+                color: catSlug === cat.slug ? '#fff' : '#444' }}>
+                {cat.name}
+              </Link>
+            ))}
           </div>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
