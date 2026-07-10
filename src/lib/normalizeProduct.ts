@@ -110,8 +110,46 @@ export function normalizeProduct(p: NormalizableRow): Product {
   } as Product
 }
 
+/**
+ * normalizeProducts — maps normalizeProduct over an array. This existed
+ * before and is used across the whole app (products/page.tsx, home page,
+ * regions, collections, wishlist, search, blog) — restored here after an
+ * editing slip briefly dropped it while adding toCardProductData below.
+ */
 export function normalizeProducts(data: NormalizableRow[]): Product[] {
   return (data ?? []).map(normalizeProduct)
+}
+
+/**
+ * toCardProductData — BUG FIX (performance, found while investigating "the
+ * whole /products page feels slow to load, even images"): ProductCard is a
+ * Client Component, so every field on the `Product` object passed to it gets
+ * serialized into the page's RSC payload — even fields the card never reads.
+ * The full Product shape carries `long_description`, `short_description`,
+ * `tags`, and five separate AI-generated content fields (`ai_description`,
+ * `ai_health_benefits`, `ai_how_to_use`, `ai_storage_tips`,
+ * `ai_who_should_buy`) — multi-paragraph text blobs meant for the PDP, not
+ * the card. None of them are read anywhere in ProductCard.tsx or
+ * QuickViewModal.tsx (verified by grepping every `product.<field>` access in
+ * both files). Across a full page of cards, that's a lot of dead text the
+ * browser has to download and parse before it can hydrate — which delays
+ * everything downstream, including when lazy-loaded images start requesting.
+ * This returns the same `Product` shape (so no type changes needed at call
+ * sites) with just the unused heavy fields nulled out.
+ */
+export function toCardProductData(p: Product): Product {
+  return {
+    ...p,
+    short_description: null,
+    long_description: null,
+    tags: null,
+    ai_description: null,
+    ai_health_benefits: null,
+    ai_how_to_use: null,
+    ai_storage_tips: null,
+    ai_who_should_buy: null,
+    ai_generated_at: null,
+  }
 }
 
 /**

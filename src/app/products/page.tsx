@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, getEffectivePrice } from '@/lib/normalizeProduct'
+import { normalizeProducts, getEffectivePrice, toCardProductData } from '@/lib/normalizeProduct'
 import { filterProducts, sortProducts, paginateProducts, buildPaginationList } from '@/lib/filterAndSortProducts'
 import { buildProductsUrl } from '@/lib/buildProductsUrl'
 import ProductCard from '@/components/product/ProductCard'
@@ -301,7 +301,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           ) : (
             <>
               <div className="prod-page-grid">
-                {paged.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
+                {paged.map((p, i) => <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />)}
               </div>
               {totalPages > 1 && (
                 <nav aria-label="Pagination" style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>

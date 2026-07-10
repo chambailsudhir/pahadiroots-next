@@ -46,13 +46,35 @@ export interface StoreData {
 // callers (listing pages, generateStaticParams) always get every active row.
 const PRODUCTS_PAGE_SIZE = 1000
 
+// BUG FIX (performance — found while investigating "the whole /products
+// page feels slow to load, even images"): this used to be `.select('*')`,
+// pulling every column — including long_description, short_description,
+// tags, and five separate AI-generated content fields (ai_description,
+// ai_health_benefits, ai_how_to_use, ai_storage_tips, ai_who_should_buy) —
+// for every active product, on every cache-miss, for every page that shares
+// this cached fetch (home, /products, /regions/*, /collections/*). None of
+// those columns are read by any listing-surface consumer (verified: none of
+// products/page.tsx, the homepage sections, RelatedProducts.tsx, or the
+// regions/collections pages touch them; only the PDP needs AI content, and
+// it fetches its own single row directly via getProductBySlug, not this
+// function). Listing columns explicitly means Supabase never sends that
+// text across the wire in the first place — faster than trimming it
+// client-side after the fact (see toCardProductData in normalizeProduct.ts,
+// which handles the separate RSC-serialization-size half of this same bug).
+const PRODUCT_LIST_COLUMNS = `
+  id, name, slug, emoji, sku, category_id, state_id, is_active, status,
+  unit_label, gst_rate, price, selling, mrp, cost_price, available_stock,
+  initial_stock, image_url, badges, badges_bestseller, badges_organic,
+  badges_new, is_deleted, created_at, region, unit, card_bg, review_count
+`.replace(/\s+/g, ' ').trim()
+
 async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
   const rows: Product[] = []
   let from = 0
   for (;;) {
     const { data, error } = await db
       .from('products')
-      .select('*')
+      .select(PRODUCT_LIST_COLUMNS)
       .eq('status', 'active')
       .eq('is_deleted', false)
       .order('name')
@@ -60,7 +82,7 @@ async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
       .range(from, from + PRODUCTS_PAGE_SIZE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
-    rows.push(...(data as Product[]))
+    rows.push(...(data as unknown as Product[]))
     if (data.length < PRODUCTS_PAGE_SIZE) break
     from += PRODUCTS_PAGE_SIZE
   }
