@@ -46,35 +46,29 @@ export interface StoreData {
 // callers (listing pages, generateStaticParams) always get every active row.
 const PRODUCTS_PAGE_SIZE = 1000
 
-// BUG FIX (performance — found while investigating "the whole /products
-// page feels slow to load, even images"): this used to be `.select('*')`,
-// pulling every column — including long_description, short_description,
-// tags, and five separate AI-generated content fields (ai_description,
-// ai_health_benefits, ai_how_to_use, ai_storage_tips, ai_who_should_buy) —
-// for every active product, on every cache-miss, for every page that shares
-// this cached fetch (home, /products, /regions/*, /collections/*). None of
-// those columns are read by any listing-surface consumer (verified: none of
-// products/page.tsx, the homepage sections, RelatedProducts.tsx, or the
-// regions/collections pages touch them; only the PDP needs AI content, and
-// it fetches its own single row directly via getProductBySlug, not this
-// function). Listing columns explicitly means Supabase never sends that
-// text across the wire in the first place — faster than trimming it
-// client-side after the fact (see toCardProductData in normalizeProduct.ts,
-// which handles the separate RSC-serialization-size half of this same bug).
-const PRODUCT_LIST_COLUMNS = `
-  id, name, slug, emoji, sku, category_id, state_id, is_active, status,
-  unit_label, gst_rate, price, selling, mrp, cost_price, available_stock,
-  initial_stock, image_url, badges, badges_bestseller, badges_organic,
-  badges_new, is_deleted, created_at, region, unit, card_bg, review_count
-`.replace(/\s+/g, ' ').trim()
-
+// BUG FIX ATTEMPT REVERTED (2026-07 — production build failure): this was
+// briefly changed to an explicit column list to reduce payload size (see
+// toCardProductData in normalizeProduct.ts for the half of that fix that's
+// still in place), but the guessed column list included `sku`, which does
+// not exist on the real `products` table in production — Vercel build
+// failed with `column products.sku does not exist`. This repo has no
+// CREATE/ALTER TABLE statements or generated Supabase types checked in
+// anywhere, so there is no reliable way to verify a hand-written column list
+// against the actual live schema from a read of the codebase alone. Rather
+// than guess again, this reverts to `.select('*')` — correct and safe by
+// construction, at the cost of also fetching long_description/tags/AI
+// content columns that no listing page reads. If this needs to be narrowed
+// again in the future, do it by running the exact query against a real
+// staging/prod database first (e.g. via the Supabase SQL editor or `supabase
+// gen types`) rather than inferring column names from the Product TS type,
+// which — as this incident shows — does not necessarily match the live table.
 async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
   const rows: Product[] = []
   let from = 0
   for (;;) {
     const { data, error } = await db
       .from('products')
-      .select(PRODUCT_LIST_COLUMNS)
+      .select('*')
       .eq('status', 'active')
       .eq('is_deleted', false)
       .order('name')
@@ -82,7 +76,7 @@ async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
       .range(from, from + PRODUCTS_PAGE_SIZE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
-    rows.push(...(data as unknown as Product[]))
+    rows.push(...(data as Product[]))
     if (data.length < PRODUCTS_PAGE_SIZE) break
     from += PRODUCTS_PAGE_SIZE
   }
