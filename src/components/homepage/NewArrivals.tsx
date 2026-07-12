@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { normalizeProducts } from '@/lib/normalizeProduct'
+import { filterNewArrivals } from '@/lib/newArrivals'
 import type { Product } from '@/types'
 
 export default async function NewArrivals() {
@@ -10,15 +11,18 @@ export default async function NewArrivals() {
     const storeData = await getStoreData()
     const withImgs  = getProductsWithImages(storeData)
     const all       = normalizeProducts(withImgs)
-    products = all
+    // BUG FIX: this used to just take the 4 most-recently-created products
+    // regardless of age (so it never went empty, but also never actually
+    // meant "new"), and "See All" pointed at /products?sort=newest — a
+    // generic, unfiltered listing with no indication anything here was
+    // actually recent. Now shares the same isNewArrival() definition (and
+    // /new-arrivals destination) as the dedicated collection page, so the
+    // homepage strip and "See All" always agree on what "new" means.
+    const newArrivals = filterNewArrivals(all)
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-      .slice(0, 4)
-      // BUG FIX (performance, same as /products and BestSellers): trims the
-      // unused AI/description fields before these cross into the client
-      // ProductCard component. Only 4 products here so the impact is small,
-      // but the fix is one line and keeps every card-rendering surface
-      // consistent.
-      .map(toCardProductData)
+    products = (newArrivals.length ? newArrivals : all.sort(
+      (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    )).slice(0, 4)
   } catch { return null }
 
   if (!products.length) return null
@@ -32,7 +36,7 @@ export default async function NewArrivals() {
           <p className="ssub">The latest additions from our Himalayan producers.</p>
         </div>
         <Link
-          href="/products?sort=newest"
+          href="/new-arrivals"
           className="show-all-btn"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,

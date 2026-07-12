@@ -9,7 +9,7 @@ interface Props { categories: Category[]; states: State[] }
 
 const CURATED = [
   { label: 'Best Sellers',    href: '/collections/best-sellers' },
-  { label: 'New Arrivals',    href: '/collections/new-arrivals' },
+  { label: 'New Arrivals',    href: '/new-arrivals' },
   { label: 'Gift Sets',       href: '/collections/gift-sets' },
   { label: 'Pahadi Wellness', href: '/collections/wellness' },
   { label: 'Natural Honey',   href: '/collections/honey' },

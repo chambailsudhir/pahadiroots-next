@@ -14,6 +14,7 @@ interface Props {
   bounds:    { min: number; max: number }
   current:   { min: number; max: number }
   urlState:  ProductsUrlState
+  basePath?: string
 }
 
 // NOTE: callers must pass `key={`${current.min}-${current.max}`}` (or similar)
@@ -23,7 +24,7 @@ interface Props {
 // synchronizing effect to push new props into local state — calling
 // setState directly inside an effect causes an extra cascading render on
 // every prop change, which the key-remount approach avoids entirely.
-export default function PriceRangeFilter({ bounds, current, urlState }: Props) {
+export default function PriceRangeFilter({ bounds, current, urlState, basePath = '/products' }: Props) {
   const router = useRouter()
   const [minVal, setMinVal] = useState(current.min)
   const [maxVal, setMaxVal] = useState(current.max)
@@ -36,7 +37,7 @@ export default function PriceRangeFilter({ bounds, current, urlState }: Props) {
     const url = buildProductsUrl(urlState, {
       minPrice: nextMin > bounds.min ? String(nextMin) : undefined,
       maxPrice: nextMax < bounds.max ? String(nextMax) : undefined,
-    })
+    }, basePath)
     router.push(url, { scroll: false })
   }
 

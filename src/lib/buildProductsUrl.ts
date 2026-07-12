@@ -16,6 +16,14 @@ export interface ProductsUrlState {
 export function buildProductsUrl(
   current: ProductsUrlState,
   overrides: Partial<{ sort: string | undefined; category: string | undefined; state: string | undefined; instock: string | undefined; page: string | undefined; minPrice: string | undefined; maxPrice: string | undefined }>,
+  // BUG FIX (reuse for /new-arrivals): this builder was hardcoded to always
+  // emit `/products?...`, which meant the shared filter UI (sidebar,
+  // MobileFilterBar, PriceRangeFilter) could only ever link back to
+  // /products — impossible to reuse on any other listing page (e.g. a
+  // dedicated /new-arrivals collection) without forking all three files.
+  // basePath defaults to '/products' so every existing call site keeps
+  // working unchanged.
+  basePath: string = '/products',
 ): string {
   const p = new URLSearchParams()
   const merged: Record<string, string | undefined> = {
@@ -39,5 +47,5 @@ export function buildProductsUrl(
 
   Object.entries(merged).forEach(([k, v]) => { if (v) p.set(k, v) })
   const q = p.toString()
-  return `/products${q ? '?' + q : ''}`
+  return `${basePath}${q ? '?' + q : ''}`
 }

@@ -30,15 +30,22 @@ interface Props {
   priceCurrent: { min: number; max: number }
   minPriceParam?: string
   maxPriceParam?: string
+  /** Base route for generated links — defaults to /products. Pass e.g.
+   *  '/new-arrivals' to reuse this exact drawer on other listing pages. */
+  basePath?: string
+  /** Label for the "Collections" section's catch-all link + heading override. */
+  allLabel?: string
+  clearAllHref?: string
 }
 
 export default function MobileFilterBar({
   categories, activeCatSlug, activeStateId, activeStateName, sort, instock, count, sortOptions,
-  priceBounds, priceCurrent, minPriceParam, maxPriceParam,
+  priceBounds, priceCurrent, minPriceParam, maxPriceParam, basePath = '/products',
+  allLabel = '🌿 All Products', clearAllHref,
 }: Props) {
   const [open, setOpen] = useState(false)
   const urlState: ProductsUrlState = { sort, category: activeCatSlug, state: activeStateId, instock, minPrice: minPriceParam, maxPrice: maxPriceParam }
-  const url = (overrides: Parameters<typeof buildProductsUrl>[1]) => buildProductsUrl(urlState, overrides)
+  const url = (overrides: Parameters<typeof buildProductsUrl>[1]) => buildProductsUrl(urlState, overrides, basePath)
 
   const activeCount =
     (activeCatSlug ? 1 : 0) + (activeStateId ? 1 : 0) + (instock ? 1 : 0) + (sort !== 'newest' ? 1 : 0)
@@ -94,6 +101,7 @@ export default function MobileFilterBar({
                   bounds={priceBounds}
                   current={priceCurrent}
                   urlState={urlState}
+                  basePath={basePath}
                 />
               )}
 
@@ -104,7 +112,7 @@ export default function MobileFilterBar({
                   className={`mfb-link${!activeCatSlug && !activeStateId ? ' active' : ''}`}
                   onClick={() => setOpen(false)}
                 >
-                  🌿 All Products
+                  {allLabel}
                 </Link>
                 {categories.map(cat => (
                   <Link
@@ -131,7 +139,7 @@ export default function MobileFilterBar({
               <div className="mfb-sheet-footer">
                 <span>{count} products</span>
                 {activeCount > 0 && (
-                  <Link href="/products" onClick={() => setOpen(false)}>Clear all</Link>
+                  <Link href={clearAllHref ?? basePath} onClick={() => setOpen(false)}>Clear all</Link>
                 )}
               </div>
             </div>
