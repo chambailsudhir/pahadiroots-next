@@ -8,8 +8,19 @@ import type { Category, State } from '@/types'
 interface Props { categories: Category[]; states: State[] }
 
 const CURATED = [
-  { label: 'Best Sellers',    href: '/collections/best-sellers' },
+  // BUG FIX: '/collections/best-sellers' 404s — /collections/[slug] only
+  // matches real category slugs from storeData.categories (see notFound()
+  // there), and "best-sellers" isn't a category, it's a badge/sort concept.
+  // /products already has a working 'popular' sort (bestseller-first, see
+  // filterAndSortProducts.ts), so link there instead of a dead route.
+  { label: 'Best Sellers',    href: '/products?sort=popular' },
   { label: 'New Arrivals',    href: '/new-arrivals' },
+  // NOTE (unverified — flagged, not changed): the four links below point at
+  // /collections/<slug> for slugs that may not exist as real categories
+  // ('gift-sets', 'wellness') or that we couldn't confirm against live data
+  // ('honey', 'spices'). Each will silently 404 if the slug doesn't match a
+  // row in storeData.categories. Worth a quick check against the admin
+  // category list — happy to wire up real destinations once confirmed.
   { label: 'Gift Sets',       href: '/collections/gift-sets' },
   { label: 'Pahadi Wellness', href: '/collections/wellness' },
   { label: 'Natural Honey',   href: '/collections/honey' },

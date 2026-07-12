@@ -34,7 +34,12 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
 
   const navLinks = [
     { href: '/',                         label: 'Home',        icon: '🏡' },
-    { href: '/collections/best-sellers', label: 'Best Sellers',icon: '⭐' },
+    // BUG FIX: '/collections/best-sellers' 404s (not a real category slug) —
+    // same fix as MegaMenu.tsx, points at the working 'popular' sort instead.
+    { href: '/products?sort=popular',    label: 'Best Sellers',icon: '⭐' },
+    // BUG FIX: mobile menu had no New Arrivals entry at all, unlike the
+    // desktop MegaMenu's CURATED list — added for parity.
+    { href: '/new-arrivals',             label: 'New Arrivals', icon: '🆕' },
     { href: '/products',                 label: 'All Products', icon: '🌿' },
     { href: '/about',                    label: 'Our Story',    icon: '📖' },
     ...(showBlog     ? [{ href: '/blog',     label: 'Blog',        icon: '✍️' }] : []),
