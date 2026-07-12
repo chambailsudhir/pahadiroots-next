@@ -108,7 +108,15 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
       {/* Image */}
       <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden', background: '#f8f5f0' }}>
         {img
-          ? <Image src={img} alt={p.name} fill sizes="(max-width:880px) 50vw, 25vw"
+          // BUG FIX (same oversized-image issue as ProductCard.tsx): this
+          // card renders inside `.rgrid` (globals.css), which is
+          // `grid-template-columns: repeat(3,1fr)` inside a `max-width:1120px`
+          // container — so each card caps at ~360px wide on any screen
+          // beyond ~1120px, it does not keep growing with the viewport.
+          // The old "25vw" told the optimizer ~480px on a 1920px screen —
+          // ~1.8x the real width per side, ~3x the file size. Fixed to the
+          // real capped width.
+          ? <Image src={img} alt={p.name} fill sizes="(max-width:880px) 50vw, 360px"
               style={{ objectFit: 'cover', transition: 'transform .4s' }}
               className="pdp-rel-img" />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '50px' }}>

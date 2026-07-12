@@ -301,7 +301,20 @@ export default async function ProductsPage({ searchParams }: Props) {
           ) : (
             <>
               <div className="prod-page-grid">
-                {paged.map((p, i) => <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />)}
+                {/* BUG FIX (images loading slow — audit follow-up, confirmed
+                    by screen recording): only `i < 4` got `priority`/eager
+                    loading, i.e. one row on the auto-fit grid this page uses
+                    (.prod-page-grid, ~3-4 columns depending on screen width).
+                    Every other card in the initial viewport — which on a
+                    normal laptop/desktop screen is a second full row, so up
+                    to 8 cards total before any scrolling — was left on
+                    `loading="lazy"` with default (low) fetch priority. Lazy
+                    images don't get deprioritized until they're near/below
+                    the fold; ones sitting in the viewport on first paint
+                    should load with the same urgency as the first row.
+                    Raised to `i < 8` to cover two full rows on the widest
+                    common layout instead of just one. */}
+                {paged.map((p, i) => <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 8} />)}
               </div>
               {totalPages > 1 && (
                 <nav aria-label="Pagination" style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>

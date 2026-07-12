@@ -8,6 +8,22 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
     ],
+    // BUG FIX (images loading slow — audit follow-up): this key was never
+    // set, so it defaulted to Next's 60s `minimumCacheTTL`. Product photos
+    // in Supabase Storage are edited/replaced rarely, but every optimized
+    // variant (each unique width x quality x format the app requests) was
+    // being evicted from Vercel's image cache after just 60 seconds and
+    // re-fetched + re-transformed from the Supabase origin on the next
+    // request — full re-optimization work repeating constantly instead of
+    // being served from cache. Raised to 7 days; anyone who replaces a
+    // product photo via the admin panel and needs it to show immediately
+    // can still force a fresh copy by uploading under a new filename (the
+    // storefront already reads whatever URL is in `product_images`).
+    minimumCacheTTL: 60 * 60 * 24 * 7,
+    // Serve AVIF first (smaller than WebP at the same quality) with WebP as
+    // the fallback for browsers that don't support it — was left at the
+    // Next.js default of WebP-only.
+    formats: ['image/avif', 'image/webp'],
   },
   experimental: {
     // Enable server actions
