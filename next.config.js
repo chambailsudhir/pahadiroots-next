@@ -20,10 +20,20 @@ const nextConfig = {
     // can still force a fresh copy by uploading under a new filename (the
     // storefront already reads whatever URL is in `product_images`).
     minimumCacheTTL: 60 * 60 * 24 * 7,
-    // Serve AVIF first (smaller than WebP at the same quality) with WebP as
-    // the fallback for browsers that don't support it — was left at the
-    // Next.js default of WebP-only.
-    formats: ['image/avif', 'image/webp'],
+    // BUG FIX (images loading slow — audit follow-up round 3): confirmed via
+    // Network panel that the remaining slow request (2.84s) is a genuine
+    // Vercel Image Optimization cache MISS — a first-ever request for that
+    // exact url+width+format combination, which has to be fetched from
+    // Supabase and transformed before it's cached. Vercel's own docs
+    // (vercel.com/docs/image-optimization/managing-image-optimization-costs)
+    // list configuring multiple `formats` as a direct cause of *more*
+    // cold-miss transforms to reduce, since avif and webp are each their own
+    // separate cache entry — every distinct format has to be cold-transformed
+    // once independently. Dropping back to AVIF only (kept over WebP since
+    // it compresses smaller and has ~95%+ browser support); Next.js
+    // automatically falls back to serving the original format for the
+    // remaining few browsers that accept neither.
+    formats: ['image/avif'],
   },
   experimental: {
     // Enable server actions
