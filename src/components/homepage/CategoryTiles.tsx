@@ -7,6 +7,14 @@ import type { Category } from '@/types'
 
 interface Props { categories: Category[] }
 
+// See the matching BUG FIX comment at the <Image> below / in ProductCard.tsx
+// for why both the ref callback and onLoad are needed together.
+function revealTileImage(img: HTMLImageElement) {
+  img.style.opacity = '1'
+  const emo = img.previousElementSibling as HTMLElement | null
+  if (emo?.classList.contains('cc-emo')) emo.style.opacity = '0'
+}
+
 function emojiFor(cat: Category): string {
   const slug = (cat.slug || '').toLowerCase()
   const name = (cat.name || '').toLowerCase()
@@ -203,7 +211,12 @@ export default function CategoryTiles({ categories }: Props) {
                         full-resolution original from Supabase storage with no resizing or
                         compression. next/image serves a properly sized, compressed version
                         per breakpoint instead, matching the ~6/4/2 visible tiles at each
-                        screen width (see VISIBLE above). */}
+                        screen width (see VISIBLE above).
+                        BUG FIX: same issue found in ProductCard.tsx — the fade-in reveal
+                        relied only on onLoad, which is silently missed if the browser
+                        already finished loading the image (cache, or just fast) before
+                        React attached the listener. The ref callback below catches that
+                        already-loaded case via the synchronous `.complete` DOM property. */}
                     {cat.image_url && (
                       <Image
                         src={cat.image_url}
@@ -218,12 +231,8 @@ export default function CategoryTiles({ categories }: Props) {
                           objectFit: 'cover', zIndex: 2, opacity: 0,
                           transition: 'opacity .35s, transform .35s',
                         }}
-                        onLoad={e => {
-                          const img = e.currentTarget
-                          img.style.opacity = '1'
-                          const emo = img.previousElementSibling as HTMLElement | null
-                          if (emo?.classList.contains('cc-emo')) emo.style.opacity = '0'
-                        }}
+                        ref={img => { if (img?.complete) revealTileImage(img) }}
+                        onLoad={e => revealTileImage(e.currentTarget)}
                         onError={e => { e.currentTarget.remove() }}
                       />
                     )}

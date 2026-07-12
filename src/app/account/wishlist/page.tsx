@@ -10,6 +10,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useUserStore }  from '@/store/userStore'
+import { supabase } from '@/lib/supabase'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard       from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product }  from '@/types'
@@ -43,6 +45,21 @@ export default function WishlistPage() {
     if (wishlist.length === 0) setProducts([])
   }
 
+  // BUG FIX (CRITICAL — found while investigating image-loading complaints,
+  // approved to fix without further check-in): this used to call
+  // `fetch('/api/wishlist?ids=' + wishlistKey)` and read `data.products` from
+  // the response. But /api/wishlist's GET handler completely ignores the
+  // `ids` query param and its documented, actual contract is
+  // `{ wishlist: string[] }` (just the saved product IDs, re-read from the
+  // customer's own row) — never `{ products: [...] }`. That meant
+  // `data.products` was always `undefined`, `setProducts(undefined ?? [])`
+  // always set an empty array, and this page rendered nothing for every
+  // single user, every time, regardless of how many items were actually
+  // wishlisted. Fixed by querying Supabase directly for the product rows by
+  // ID — the same working pattern already used by the sibling /wishlist
+  // page (src/app/wishlist/page.tsx) — instead of a server route whose
+  // actual job (per its own header comment) is wishlist-ID persistence, not
+  // product-data lookup.
   useEffect(() => {
     if (wishlist.length === 0) return
     const ctrl = new AbortController()
@@ -52,14 +69,32 @@ export default function WishlistPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError('')
-    fetch(`/api/wishlist?ids=${wishlistKey}`, { signal: ctrl.signal })
-      .then(async r => {
-        if (!r.ok) throw new Error('Failed to load wishlist')
-        const data = await r.json()
-        if (!ctrl.signal.aborted) setProducts(data.products ?? [])
-      })
-      .catch(e => { if (!ctrl.signal.aborted) setError(e?.message || 'Failed to load') })
-      .finally(()=> { if (!ctrl.signal.aborted) setLoading(false) })
+    async function load() {
+      try {
+        const { data, error: dbError } = await supabase
+          .from('products')
+          .select(`
+            id, name, slug, emoji, price, mrp, available_stock, gst_rate,
+            image_url, unit_label, badges, category_id,
+            is_deleted, status,
+            categories:categories(id, name, slug),
+            product_variants(id, price, original_price, variant_value, available_stock, is_active)
+          `)
+          .in('id', wishlistKey.split(','))
+          .eq('is_deleted', false)
+          .eq('status', 'active')
+        if (ctrl.signal.aborted) return
+        if (dbError) throw dbError
+        setProducts(normalizeProducts(data ?? []))
+      } catch (e: unknown) {
+        if (!ctrl.signal.aborted) {
+          setError(e instanceof Error ? e.message : 'Failed to load')
+        }
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false)
+      }
+    }
+    load()
     return () => ctrl.abort()
   }, [wishlistKey, wishlist.length])
 
@@ -98,7 +133,7 @@ export default function WishlistPage() {
       ) : products.length > 0 ? (
         <div className={styles.wlGrid}>
           {products.map(p => (
-            <ProductCard key={p.id} product={p} showWishlist />
+            <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />
           ))}
         </div>
       ) : null}

@@ -11,6 +11,16 @@ import { getBaseVariant } from '@/lib/normalizeProduct'
 import QuickViewModal from '@/components/product/QuickViewModal'
 import type { Product } from '@/types'
 
+// Shared by both the callback ref (catches "already loaded before hydration
+// attached") and the onLoad handler (catches the normal async-load case) —
+// see the BUG FIX comment at the <Image> below for why both are needed.
+function revealCardImage(img: HTMLImageElement) {
+  img.style.opacity = '1'
+  const emo = img.previousElementSibling as HTMLElement | null
+  if (emo?.classList.contains('pemo')) emo.style.opacity = '0'
+  img.closest('.piw')?.classList.add('img-ready')
+}
+
 interface Props {
   product:       Product
   showWishlist?: boolean
@@ -143,7 +153,24 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         {/* Real image — next/image: Vercel/Supabase auto-resizes + compresses per
             breakpoint via `sizes`, instead of every card downloading the full-res
             original (that was the main cause of "images loading slow everywhere" —
-            a raw <img> has no responsive srcset and no optimization/caching). */}
+            a raw <img> has no responsive srcset and no optimization/caching).
+            BUG FIX (found via screen recording — every card showed only the
+            emoji fallback, never the real photo): the fade-in reveal relied
+            solely on the `onLoad` callback below. If the browser finishes
+            loading the image (from HTTP cache, or just fast) before React
+            finishes hydrating this page and attaches that listener — which
+            is common on a server-rendered page where the <img> tag's `src`
+            is already in the initial HTML — the native `load` event fires
+            and is simply missed. The image is fully downloaded and sitting
+            in the DOM the whole time, just permanently stuck at opacity: 0,
+            letting the emoji underneath show through forever. The callback
+            ref below runs synchronously the instant the DOM node exists
+            (whether from hydration of server-rendered markup or a fresh
+            mount) and checks `.complete` — a native, synchronous DOM
+            property that's true the moment the browser has finished
+            loading+decoding the image, regardless of when that happened —
+            so the already-loaded case is caught immediately instead of
+            waiting on an event that may never come. */}
         {product.image_url && (
           <Image
             src={product.image_url}
@@ -156,13 +183,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             style={{
               objectFit: 'cover', zIndex: 1, opacity: 0, transition: 'opacity .45s',
             }}
-            onLoad={e => {
-              const img = e.currentTarget
-              img.style.opacity = '1'
-              const emo = img.previousElementSibling as HTMLElement | null
-              if (emo?.classList.contains('pemo')) emo.style.opacity = '0'
-              img.closest('.piw')?.classList.add('img-ready')
-            }}
+            ref={img => { if (img?.complete) revealCardImage(img) }}
+            onLoad={e => revealCardImage(e.currentTarget)}
             onError={e => { e.currentTarget.style.display = 'none' }}
           />
         )}
