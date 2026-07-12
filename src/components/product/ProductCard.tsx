@@ -121,8 +121,20 @@ export default function ProductCard({ product, showWishlist = true, priority = f
     // pattern), while the wishlist/Quick View/Add to Cart buttons are real
     // siblings that sit above it in z-index and get their own clicks.
     <article className="pcard" style={{ position: 'relative' }}>
+      {/* BUG FIX (images loading slow — audit follow-up, confirmed by Network
+          panel: 215 requests, mostly tiny `?_rsc=` prefetch fetches, Finish
+          11.35s): next/link prefetches the linked route's RSC payload the
+          instant it scrolls into view, by default. A grid of up to 24 of
+          these cards means up to 24 full PDP payloads (product row, variants,
+          images, plus a related-products query — see getProductBySlug /
+          getRelatedProducts in storeData.ts) were being silently fetched in
+          the background the moment the grid rendered, all competing with the
+          actual product images in those same cards for the browser's limited
+          per-host connections. Disabled — clicking through to a PDP still
+          navigates normally, it just isn't pre-warmed. */}
       <Link
         href={href}
+        prefetch={false}
         className="pcard-stretched-link"
         aria-label={product.name}
       />

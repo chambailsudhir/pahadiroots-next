@@ -99,6 +99,7 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
   return (
     <Link
       href={`/products/${slug}`}
+      prefetch={false}
       style={{
         border: '1.5px solid #e8e0d0', borderRadius: '16px', overflow: 'hidden',
         cursor: 'pointer', transition: 'all .25s', background: '#fff',

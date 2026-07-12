@@ -184,7 +184,7 @@ export default async function ProductsPage({ searchParams }: Props) {
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Sort By</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
             {SORT_OPTIONS.map(opt => (
-              <Link key={opt.value} href={url({ sort: opt.value })} style={{
+              <Link key={opt.value} href={url({ sort: opt.value })} prefetch={false} style={{
                 display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px',
                 padding: '7px 10px', borderRadius: '10px', textDecoration: 'none',
                 fontWeight: sort === opt.value ? 700 : 500,
@@ -209,7 +209,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Collections</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
-            <Link href={url({ category: undefined, state: undefined })} style={{
+            <Link href={url({ category: undefined, state: undefined })} prefetch={false} style={{
               display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
               textDecoration: 'none', fontWeight: (!catSlug && !stateId) ? 700 : 500,
               background: (!catSlug && !stateId) ? '#1a3a1e' : 'transparent',
@@ -217,7 +217,7 @@ export default async function ProductsPage({ searchParams }: Props) {
               🌿 All Products
             </Link>
             {categories.map(cat => (
-              <Link key={cat.id} href={url({ category: cat.slug, state: undefined })} style={{
+              <Link key={cat.id} href={url({ category: cat.slug, state: undefined })} prefetch={false} style={{
                 display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
                 textDecoration: 'none', fontWeight: catSlug === cat.slug ? 700 : 500,
                 background: catSlug === cat.slug ? '#1a3a1e' : 'transparent',
@@ -229,7 +229,7 @@ export default async function ProductsPage({ searchParams }: Props) {
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
             letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Availability</div>
-          <Link href={url({ instock: instock ? 'false' : 'true' })} style={{
+          <Link href={url({ instock: instock ? 'false' : 'true' })} prefetch={false} style={{
             display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px',
             padding: '7px 10px', borderRadius: '10px', textDecoration: 'none',
             background: instock ? '#1a3a1e' : 'transparent', color: instock ? '#fff' : '#444' }}>
@@ -249,35 +249,35 @@ export default async function ProductsPage({ searchParams }: Props) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: '#7a7a7a', fontWeight: 600 }}>Filters:</span>
               {activeCat && (
-                <Link href={url({ category: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                <Link href={url({ category: undefined })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>{activeCat.name} ×</Link>
               )}
               {activeState && (
-                <Link href={url({ state: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                <Link href={url({ state: undefined })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>📍 {activeState.name} ×</Link>
               )}
               {instock && (
-                <Link href={url({ instock: 'false' })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                <Link href={url({ instock: 'false' })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>In Stock ×</Link>
               )}
               {(minPrice != null || maxPrice != null) && (
-                <Link href={url({ minPrice: undefined, maxPrice: undefined })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                <Link href={url({ minPrice: undefined, maxPrice: undefined })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>
                   {formatPrice(minPrice ?? priceBounds.min)}–{formatPrice(maxPrice ?? priceBounds.max)} ×
                 </Link>
               )}
               {sort !== 'newest' && (
-                <Link href={url({ sort: 'newest' })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
+                <Link href={url({ sort: 'newest' })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#c8920a', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>
                   {SORT_OPTIONS.find(o => o.value === sort)?.label} ×
                 </Link>
               )}
-              <Link href="/products" style={{ fontSize: '12px', color: '#c8920a', fontWeight: 700, textDecoration: 'underline' }}>
+              <Link href="/products" prefetch={false} style={{ fontSize: '12px', color: '#c8920a', fontWeight: 700, textDecoration: 'underline' }}>
                 Clear all
               </Link>
             </div>
@@ -318,13 +318,13 @@ export default async function ProductsPage({ searchParams }: Props) {
               </div>
               {totalPages > 1 && (
                 <nav aria-label="Pagination" style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
-                  {page > 1 && <Link href={url({ page: String(page - 1) })} style={pagStyle(false)}>← Prev</Link>}
+                  {page > 1 && <Link href={url({ page: String(page - 1) })} prefetch={false} style={pagStyle(false)}>← Prev</Link>}
                   {paginationItems.map((item, i) =>
                     item === 'ellipsis'
                       ? <span key={`e${i}`} style={{ ...pagStyle(false), border: 'none', background: 'transparent' }}>…</span>
-                      : <Link key={item} href={url({ page: String(item) })} style={pagStyle(item === page)} aria-current={item === page ? 'page' : undefined}>{item}</Link>
+                      : <Link key={item} href={url({ page: String(item) })} prefetch={false} style={pagStyle(item === page)} aria-current={item === page ? 'page' : undefined}>{item}</Link>
                   )}
-                  {page < totalPages && <Link href={url({ page: String(page + 1) })} style={pagStyle(false)}>Next →</Link>}
+                  {page < totalPages && <Link href={url({ page: String(page + 1) })} prefetch={false} style={pagStyle(false)}>Next →</Link>}
                 </nav>
               )}
             </>
