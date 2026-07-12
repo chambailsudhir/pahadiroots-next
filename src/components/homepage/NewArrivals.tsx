@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
 export default async function NewArrivals() {
@@ -13,6 +13,12 @@ export default async function NewArrivals() {
     products = all
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
       .slice(0, 4)
+      // BUG FIX (performance, same as /products and BestSellers): trims the
+      // unused AI/description fields before these cross into the client
+      // ProductCard component. Only 4 products here so the impact is small,
+      // but the fix is one line and keeps every card-rendering surface
+      // consistent.
+      .map(toCardProductData)
   } catch { return null }
 
   if (!products.length) return null

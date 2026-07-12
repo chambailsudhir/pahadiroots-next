@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product } from '@/types'
@@ -57,7 +57,7 @@ function SearchContent() {
       ) : results && results.length > 0 ? (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
           {results.map((p, i) => (
-            <ProductCard key={p.id} product={p} priority={i < 4} />
+            <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />
           ))}
         </div>
       ) : (

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { supabase } from '@/lib/supabase'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { PRODUCT_SELECT, normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import type { Product } from '@/types'
@@ -61,7 +61,7 @@ export default function WishlistPublicPage() {
         <ProductGridSkeleton count={4} />
       ) : (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
-          {(products || []).map(p => <ProductCard key={p.id} product={p} showWishlist />)}
+          {(products || []).map(p => <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />)}
         </div>
       )}
     </div>

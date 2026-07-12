@@ -1,6 +1,6 @@
 import BestSellersClient from './BestSellersClient'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import type { Product } from '@/types'
 
 interface Cat { id: number; name: string; slug: string; emoji?: string | null }
@@ -19,7 +19,18 @@ export default async function BestSellers() {
   try {
     const storeData = await getStoreData()
     const withImgs  = getProductsWithImages(storeData)
-    products   = normalizeProducts(withImgs)
+    // BUG FIX (performance, found while chasing "/products images load
+    // slowly"): BestSellersClient needs the *entire* active catalog (not
+    // just the 8 it displays) because its category filter buttons run
+    // client-side and re-filter from what's already in the browser rather
+    // than making a new request — so we can't just slice this to 8 here.
+    // But every one of those products was being passed to a Client
+    // Component with its full field set intact, including long_description,
+    // short_description, tags, and five AI-generated content fields meant
+    // for the PDP. That's the same bug fixed on /products via
+    // toCardProductData — except worse here, since it was the WHOLE catalog
+    // rather than one paginated page of 24.
+    products   = normalizeProducts(withImgs).map(toCardProductData)
     categories = (storeData.categories ?? []).filter((c: any) => c.is_active !== false)
   } catch {
     return null

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData, buildCategories, imgFor } from '@/lib/storeData'
-import { applyProductImages, normalizeProducts } from '@/lib/normalizeProduct'
+import { applyProductImages, normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -211,7 +211,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
         ) : (
           <>
             <div className="prod-page-grid">
-              {products.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
+              {products.map((p, i) => <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />)}
             </div>
             {totalPages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>

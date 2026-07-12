@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 
@@ -128,7 +128,7 @@ export default async function RegionPage({ params }: Props) {
           ) : (
             <div className="pgrid">
               {stateProducts.map((p, i) => (
-                <ProductCard key={p.id} product={p} priority={i < 4} />
+                <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />
               ))}
             </div>
           )}
