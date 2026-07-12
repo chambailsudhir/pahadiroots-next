@@ -176,7 +176,25 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             src={product.image_url}
             alt={product.name}
             fill
-            sizes="(max-width:480px) 50vw, (max-width:900px) 33vw, (max-width:1100px) 25vw, 25vw"
+            // BUG FIX (images loading slow on /products and every other grid
+            // that reuses this card): the grids this card renders in
+            // (.prod-page-grid, .pgrid, .pr-spgrid — see globals.css) all use
+            // `grid-template-columns: repeat(auto-fit, minmax(260px, 340px))`.
+            // That caps each card at a fixed ~260-340px pixel width no matter
+            // how wide the browser window is — it does NOT keep scaling as a
+            // percentage of viewport width past the point auto-fit stops
+            // adding columns. The old `sizes` used vw-based breakpoints
+            // (e.g. "25vw"), which on a normal 1600-1920px desktop screen
+            // told the browser/Vercel image optimizer the image would render
+            // at ~400-480px (and up to ~2x that for retina), so every card
+            // downloaded an image 1.5-3x larger in each dimension — 2-9x the
+            // file size — than the ~320-340px it's ever actually shown at.
+            // Fixed to describe the real rendered width at each breakpoint
+            // instead of a viewport fraction: full-width on phones (1
+            // column), ~half-width on small tablets (2 columns), and the
+            // fixed 340px card cap everywhere wider (3+ columns, where width
+            // stops growing with the viewport).
+            sizes="(max-width:480px) 100vw, (max-width:768px) 50vw, 340px"
             quality={75}
             loading={priority ? 'eager' : 'lazy'}
             priority={priority}
