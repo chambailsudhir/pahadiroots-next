@@ -233,7 +233,7 @@ export default function AuthModal() {
               : <form onSubmit={handleFP}>
                   <div className="am-field">
                     <label className="am-lbl">Email Address</label>
-                    <input className="am-inp" type="email" value={fpEmail} onChange={e => setFPEmail(e.target.value)} placeholder="you@example.com" />
+                    <input className="am-inp" type="email" value={fpEmail} onChange={e => setFPEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
                   </div>
                   {error && <div className="am-err">{error}</div>}
                   <button className="am-submit" disabled={loading}>{loading ? 'Sending…' : 'Send Reset Link'}</button>
@@ -299,12 +299,12 @@ export default function AuthModal() {
                       <label className="am-lbl">Phone (Optional)</label>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ padding: '10px 12px', background: '#f5f5f5', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#555', flexShrink: 0 }}>+91</span>
-                        <input className="am-inp" style={{ flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,''))} placeholder="10-digit mobile" maxLength={10} />
+                        <input className="am-inp" style={{ flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,''))} placeholder="10-digit mobile" maxLength={10} autoComplete="tel" />
                       </div>
                     </div>
                     <div className="am-field">
                       <label className="am-lbl">Password *</label>
-                      <input className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Minimum 6 characters" />
+                      <input className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Minimum 6 characters" autoComplete="new-password" />
                     </div>
                     {error   && <div className="am-err">{error}</div>}
                     {success && <div className="am-success">{success}</div>}

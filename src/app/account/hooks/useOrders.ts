@@ -156,13 +156,16 @@ export function useOrders(markExpired?: () => void) {
       }
     }
 
-    // Slow path — no RPC stats (pre-migration).
+    // Slow path — fallback for when the get_customer_order_stats RPC call
+    // fails or times out (see getStatsFromRpc in /api/orders/route.ts).
     // ⚠️  These counts are intentionally page-scoped: they reflect only the
     //     orders already loaded in `data.orders` (first page, max PAGE_SIZE=20)
     //     plus any extra pages fetched via loadMore. For customers with >20
-    //     orders the sidebar counts will be partial until the DB migration
-    //     adds the get_order_stats RPC (see db_migration.sql).
-    //     TODO: remove this slow path once migration is confirmed on production.
+    //     orders the sidebar counts will be partial whenever this fallback
+    //     is hit. The RPC itself already exists in production (this is NOT
+    //     a "pre-migration" placeholder) — see db_migration_v4_loyalty.sql
+    //     for its original definition and db_migration_v9_fix_order_stats_active_filter.sql
+    //     for a fix to its active-status filter (was missing 'processing').
     const all = [...(data?.orders ?? []), ...extraOrders]
     const counts = all.reduce(
       (acc, o) => {

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+import { sanitizeHtml } from '@/lib/server/sanitize'
 import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
@@ -72,6 +73,12 @@ export default async function RootLayout({
     supabase.from('categories').select('id,name,slug,is_active,image_url,description').eq('is_active', true).order('sort_order'),
     supabase.from('states').select('id,name,is_active').eq('is_active', true).order('name'),
   ])
+  // BUG FIX (found via manual audit): AnnouncementBar renders ann_text via
+  // dangerouslySetInnerHTML with zero sanitization. ann_text is admin-only
+  // editable (lower risk than customer/public-facing content) but this
+  // closes the gap for defense-in-depth, matching every other DB-sourced
+  // HTML render in the codebase (blog content, PDP AI fields).
+  if (settings.ann_text) settings.ann_text = sanitizeHtml(settings.ann_text)
   const categories = (catsResult.data || []) as any[]
   const states     = (statesResult.data || []).map((s: any) => ({
     ...s,

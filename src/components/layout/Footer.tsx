@@ -61,7 +61,7 @@ export default function Footer({ settings }: Props) {
             <form onSubmit={handleSub} style={{ display: 'flex', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,.18)', minWidth: '300px' }}>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="Enter your email address" required
+                placeholder="Enter your email address" required autoComplete="email"
                 style={{ flex: 1, padding: '12px 16px', background: 'rgba(255,255,255,.07)', border: 'none', color: '#fff', fontSize: '13px', outline: 'none' }}
               />
               <button type="submit" aria-label="Subscribe to newsletter" disabled={subLoading} style={{

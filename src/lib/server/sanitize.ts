@@ -28,6 +28,13 @@ const ALLOWED_TAGS = new Set([
   'div','span','section','article',
   'table','thead','tbody','tr','th','td',
   'hr',
+  // BUG FIX: 'a' and 'img' were missing here even though ALLOWED_ATTRS
+  // below already defines their allowed attributes — meaning every link
+  // and image in sanitized content was silently stripped to plain text
+  // (links) or vanished entirely (images, which have no inner text to
+  // preserve). Dangerous protocols (javascript:, data:) on these tags are
+  // still neutralized separately below.
+  'a','img',
 ])
 
 // Attributes allowed per-tag (global: class, id, style stripped intentionally —

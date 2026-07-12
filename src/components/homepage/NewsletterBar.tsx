@@ -39,6 +39,7 @@ export default function NewsletterBar() {
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="Your email address"
+            autoComplete="email"
             required
             className="nli"
           />

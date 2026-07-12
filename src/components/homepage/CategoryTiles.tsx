@@ -91,15 +91,26 @@ export default function CategoryTiles({ categories }: Props) {
     if (rb) rb.onclick = () => { pausedRef.current = true; goNext(); setTimeout(() => { pausedRef.current = false }, 1000) }
 
     const timer = setInterval(() => { if (!pausedRef.current) goNext() }, 2500)
-    wrap.addEventListener('mouseenter', () => { pausedRef.current = true })
-    wrap.addEventListener('mouseleave', () => { pausedRef.current = false })
-    wrap.addEventListener('touchstart', () => { pausedRef.current = true }, { passive: true })
-    wrap.addEventListener('touchend', () => { setTimeout(() => { pausedRef.current = false }, 1800) }, { passive: true })
+    const onEnter = () => { pausedRef.current = true }
+    const onLeave = () => { pausedRef.current = false }
+    const onTouchStart = () => { pausedRef.current = true }
+    const onTouchEnd = () => { setTimeout(() => { pausedRef.current = false }, 1800) }
+    wrap.addEventListener('mouseenter', onEnter)
+    wrap.addEventListener('mouseleave', onLeave)
+    wrap.addEventListener('touchstart', onTouchStart, { passive: true })
+    wrap.addEventListener('touchend', onTouchEnd, { passive: true })
 
     const onResize = () => { setWidths(); cgrid.scrollLeft = 0 }
     window.addEventListener('resize', onResize)
 
-    return () => { clearInterval(timer); window.removeEventListener('resize', onResize) }
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('resize', onResize)
+      wrap.removeEventListener('mouseenter', onEnter)
+      wrap.removeEventListener('mouseleave', onLeave)
+      wrap.removeEventListener('touchstart', onTouchStart)
+      wrap.removeEventListener('touchend', onTouchEnd)
+    }
   }, [active.length])
 
   if (!active.length) return null

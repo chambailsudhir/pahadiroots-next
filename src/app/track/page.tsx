@@ -95,6 +95,7 @@ export default function TrackPage() {
           <label className="block text-xs font-semibold text-stone-600 mb-1">Mobile Number (used at checkout)</label>
           <input
             type="tel"
+            autoComplete="tel"
             value={phone}
             onChange={e => setPhone(e.target.value)}
             placeholder="98765 43210"

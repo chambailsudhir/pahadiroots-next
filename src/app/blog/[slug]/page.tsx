@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { sanitizeHtml } from '@/lib/server/sanitize'
 import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { formatDate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
@@ -16,7 +17,7 @@ interface Props { params: Promise<{ slug: string }> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   let post = null
-  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', slug).single(); post = data } catch {}
+  try { const { data } = await supabase.from('blog_posts').select('title, excerpt').eq('slug', slug).single(); post = data } catch (e) { console.error('[blog generateMetadata] fetch failed:', e) }
   if (!post) return { title: 'Article Not Found' }
   return { title: post.title, description: post.excerpt || '' }
 }
@@ -81,10 +82,15 @@ export default async function BlogArticlePage({ params }: Props) {
       )}
 
       {/* Content */}
+      {/* BUG FIX (found via manual audit): post.content was rendered raw via
+          dangerouslySetInnerHTML with zero sanitization — a real stored-XSS
+          risk if blog content is ever compromised or a rich-text editor
+          allows raw HTML through. Sanitized with the same server-safe
+          utility already used for the PDP's AI-generated HTML fields. */}
       {post.content && (
         <div
           className="prose prose-stone prose-sm max-w-none text-stone-700 leading-relaxed mb-10"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
         />
       )}
 
@@ -110,6 +116,6 @@ export default async function BlogArticlePage({ params }: Props) {
 
 export async function generateStaticParams() {
   let data = null
-  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch {}
+  try { const r = await supabase.from('blog_posts').select('slug').eq('is_published', true); data = r.data } catch (e) { console.error('[blog generateStaticParams] fetch failed:', e) }
   return (data || []).map(p => ({ slug: p.slug }))
 }
