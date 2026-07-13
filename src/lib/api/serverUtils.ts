@@ -225,6 +225,42 @@ export async function syncCustomerProfile(user: {
   return created?.[0] ?? null
 }
 
+// ── toPublicProfile ─────────────────────────────────────────────
+// SECURITY FIX: syncCustomerProfile() fetches the customer row with
+// `select=*` (needed server-side for a full match/upsert). Multiple routes
+// were spreading that ENTIRE raw row directly into the client-facing JSON
+// response (/api/profile GET, several branches of /api/auth). That was
+// low-risk while `customers` only held customer-authored fields — but the
+// admin panel's CRM migration (supabase-migration-customer-crm-fields.sql)
+// added `notes` (free-text internal commentary written BY STAFF ABOUT this
+// customer), `is_blocked` (blocklist flag), `gstin`, `is_business`, and
+// `tags`. Without this allowlist, a blocked customer's own account page
+// would show them `is_blocked: true` in the network tab, and any internal
+// note a staff member wrote about them would ship straight to their browser.
+//
+// This is the single choke point every route must pass `profile` through
+// before it reaches `NextResponse.json(...)`. Add new customer-facing
+// fields here explicitly — do NOT spread the raw row from
+// syncCustomerProfile directly into a response again.
+const PUBLIC_PROFILE_FIELDS = [
+  'id', 'auth_user_id', 'first_name', 'last_name', 'email', 'phone',
+  'address_line1', 'address_line2', 'city', 'state', 'pincode',
+  'created_at', 'updated_at',
+  'notif_email_marketing', 'notif_email_orders', 'notif_sms_orders', 'notif_whatsapp_orders',
+  'loyalty_points', 'wishlist_items',
+] as const
+
+export function toPublicProfile<T extends Record<string, unknown> | null | undefined>(
+  profile: T,
+): Partial<Record<(typeof PUBLIC_PROFILE_FIELDS)[number], unknown>> | null {
+  if (!profile) return null
+  const out: Record<string, unknown> = {}
+  for (const key of PUBLIC_PROFILE_FIELDS) {
+    if (key in profile) out[key] = (profile as Record<string, unknown>)[key]
+  }
+  return out
+}
+
 // ── Rate limiter ──────────────────────────────────────────────
 // In-process limiter — suitable ONLY for low-risk account endpoints
 // (profile reads/writes) where cross-replica consistency is not required.

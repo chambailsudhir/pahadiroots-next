@@ -29,6 +29,7 @@ import {
   type MockInstance,
 } from 'vitest'
 import crypto from 'crypto'
+import { getSiteSettings } from '@/lib/getSiteSettings'
 
 // ─── Shared test fixtures ─────────────────────────────────────────────────────
 
@@ -364,6 +365,25 @@ describe('POST /api/v1/payments — create_payment', () => {
 
     vi.unstubAllEnvs()
   })
+
+  it('BUG FIX: rejects a new payment/order with 503 when store_open is "false" — this route is a SEPARATE order-creation entry point from /api/v1/orders and had the same gap independently', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'false', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '', store_open: 'false',
+    } as any)
+
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
+    expect(res.status).toBe(503)
+    expect(json.error).toMatch(/not accepting orders/i)
+    expect(mockCreateOrder).not.toHaveBeenCalled()
+    // Razorpay must never be reached for a blocked order.
+    const rzpCalls = fetchMock.mock.calls.filter((c: unknown[]) => String(c[0]).includes('razorpay.com'))
+    expect(rzpCalls).toHaveLength(0)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -426,6 +446,20 @@ describe('POST /api/v1/payments — verify_payment', () => {
     expect(json.success).toBe(true)
     // order_number comes from DB or falls back to order_id
     expect(json.order_number).toBeTruthy()
+  })
+
+  it('BUG FIX (design confirmation): verify_payment is NOT blocked by store_open=false — unlike create_payment, this completes a transaction already in flight, not a new one. Blocking it would take a customer\'s money without confirming their order.', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'false', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '', store_open: 'false',
+    } as any)
+
+    const res  = await callVerify()
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
   })
 
   it('idempotency — already-confirmed order returns success without re-awarding loyalty', async () => {
@@ -557,6 +591,21 @@ describe('POST /api/v1/orders — COD', () => {
 
     expect(res.status).toBe(409)
     expect(json.error).toMatch(/stock/i)
+  })
+
+  it('BUG FIX: rejects a new order with 503 when store_open is "false" (Close Store toggle)', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'false', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '', store_open: 'false',
+    } as any)
+
+    const res  = await callOrders(COD_ORDER_BODY)
+    const json = await res.json()
+
+    expect(res.status).toBe(503)
+    expect(json.error).toMatch(/not accepting orders/i)
+    expect(mockCreateOrder).not.toHaveBeenCalled()
   })
 
   it('COD disabled → 500/409 with COD message', async () => {

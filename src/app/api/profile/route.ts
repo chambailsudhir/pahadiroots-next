@@ -16,6 +16,7 @@ import {
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
+  toPublicProfile,
   checkRateLimit,
   checkCsrf,
 } from '@/lib/api/serverUtils'
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
     }
 
     const profileWithAddresses = profile
-      ? { ...profile, saved_addresses: JSON.stringify(savedAddresses) }
+      ? { ...toPublicProfile(profile), saved_addresses: JSON.stringify(savedAddresses) }
       : null
 
     const res = ok({

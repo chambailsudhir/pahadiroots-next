@@ -87,6 +87,21 @@ export async function POST(req: NextRequest) {
 
     const settings = await getSiteSettings()
 
+    // BUG FIX: the storefront's maintenance gate (src/proxy.ts) redirects GET
+    // page requests to /maintenance when store_open === 'false', but that
+    // only stops NEW page loads. A tab already open before "Close Store" was
+    // toggled — or a direct POST here (curl, a bot, a stale cached page) —
+    // hit this route with zero enforcement of the same flag, letting a real
+    // order (and payment) go through while the storefront visibly shows as
+    // closed. `settings` was already being fetched on this line for other
+    // fields; store_open just wasn't one of the things checked.
+    if (settings.store_open === 'false') {
+      return NextResponse.json(
+        { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
+        { status: 503 },
+      )
+    }
+
     const { order, alreadyExists, customerId } = await createOrder({
       customerName:   name,
       customerPhone:  a.phone,

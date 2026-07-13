@@ -94,6 +94,23 @@ export async function POST(req: NextRequest) {
       const settings = await getSiteSettings()
       const pd       = parsed.data
 
+      // BUG FIX: same gap as /api/v1/orders/route.ts — this is a SEPARATE
+      // order-creation entry point (the online-payment checkout flow calls
+      // here; COD calls the other route) and had its own independent
+      // instance of the same missing check. `settings` was already being
+      // fetched on the line above for other purposes; store_open wasn't one
+      // of them. Only gates NEW order creation — the verify_payment action
+      // further down (confirming a payment already in flight) is
+      // deliberately left ungated, since blocking that would leave a
+      // customer's payment taken but their order unconfirmed, which is worse
+      // than letting an already-initiated transaction finish.
+      if (settings.store_open === 'false') {
+        return NextResponse.json(
+          { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
+          { status: 503 },
+        )
+      }
+
       const { order, alreadyExists, customerId } = await createOrder({
         customerName:   sanitize(pd.address.name),
         customerPhone:  sanitize(pd.address.phone),

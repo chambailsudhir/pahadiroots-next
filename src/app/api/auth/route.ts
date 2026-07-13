@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
-import { syncCustomerProfile, checkCsrf } from '@/lib/api/serverUtils'
+import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
       // ✅ Set httpOnly cookies so tokens never touch localStorage
       const res = ok({
         success: true,
-        user: { id: user.id, phone: user.phone || normalised, email: user.email || null }, profile,
+        user: { id: user.id, phone: user.phone || normalised, email: user.email || null }, profile: toPublicProfile(profile),
       })
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch (e: unknown) {
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
       const profile = await syncCustomerProfile(user)
       const res = ok({
         success: true,
-        user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile,
+        user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile: toPublicProfile(profile),
       })
       if (data.access_token) return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
       return res
@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
       const profile = await syncCustomerProfile(user)
       const res = ok({
         success: true,
-        user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile,
+        user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile: toPublicProfile(profile),
       })
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch (e: unknown) {
@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
     try {
       const user    = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
-      return ok({ success: true, user: { id: user.id, email: user.email, phone: user.phone }, profile })
+      return ok({ success: true, user: { id: user.id, email: user.email, phone: user.phone }, profile: toPublicProfile(profile) })
     } catch {
       return err(401, 'Session expired — please login again')
     }
@@ -404,7 +404,7 @@ export async function POST(req: NextRequest) {
       const profile = await syncCustomerProfile(user)
       const res = ok({
         success: true,
-        user: { id: user.id, email: user.email, phone: user.phone || null }, profile,
+        user: { id: user.id, email: user.email, phone: user.phone || null }, profile: toPublicProfile(profile),
       })
       return withAuthCookies(res as NextResponse, access_token as string, refresh_token)
     } catch (e: unknown) {
@@ -475,7 +475,7 @@ export async function POST(req: NextRequest) {
       if (phoneUpdate     !== undefined) updates.phone           = phoneUpdate
       if (saved_addresses !== undefined) updates.saved_addresses = typeof saved_addresses === 'string' ? saved_addresses : JSON.stringify(saved_addresses)
       await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, updates)
-      return ok({ success: true, profile: { ...profile, ...updates } })
+      return ok({ success: true, profile: toPublicProfile({ ...profile, ...updates }) })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       // BUG FIX [ERROR HANDLING]: e2.message here comes from sbAdmin() which throws
