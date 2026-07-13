@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { sanitizeHtml } from '@/lib/server/sanitize'
-import { PRODUCT_SELECT, normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { formatDate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -99,7 +99,7 @@ export default async function BlogArticlePage({ params }: Props) {
         <div className="border-t border-stone-100 pt-8">
           <h2 className="text-base font-bold text-stone-900 mb-4">Featured Product</h2>
           <div className="max-w-xs">
-            <ProductCard product={toCardProductData(relatedProduct)} />
+            <ProductCard product={relatedProduct} />
           </div>
         </div>
       )}

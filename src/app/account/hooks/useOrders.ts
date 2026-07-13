@@ -164,8 +164,17 @@ export function useOrders(markExpired?: () => void) {
     //     orders the sidebar counts will be partial whenever this fallback
     //     is hit. The RPC itself already exists in production (this is NOT
     //     a "pre-migration" placeholder) — see db_migration_v4_loyalty.sql
-    //     for its original definition and db_migration_v9_fix_order_stats_active_filter.sql
-    //     for a fix to its active-status filter (was missing 'processing').
+    //     for its definition.
+    //     NOTE: ACTIVE_STATUSES (src/lib/account/constants.ts) includes
+    //     'processing' — this was NOT a valid order_status_enum value as of
+    //     this audit (confirmed via live schema inspection: the enum only
+    //     had pending/confirmed/packed/shipped/delivered/cancelled/returned)
+    //     but IS the intended design (see the order-success status stepper,
+    //     which has a dedicated "Processing" step). See
+    //     db_migration_v9_order_status_enum_values.sql, which adds
+    //     'processing' plus the full return/refund workflow's statuses to
+    //     the enum — once that migration runs, this reference is fully
+    //     correct and no longer a mismatch.
     const all = [...(data?.orders ?? []), ...extraOrders]
     const counts = all.reduce(
       (acc, o) => {
