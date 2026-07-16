@@ -12,6 +12,9 @@ import type { Product } from '@/types'
 // can be null) against a hardcoded dark-green hero regardless of which
 // state you were viewing. Now shares the same single source of truth.
 import { getRegionMeta } from '@/lib/regionMeta'
+import { truncate } from '@/lib/utils'
+
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
 export const revalidate = 300 // 5 min
 
@@ -22,10 +25,50 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const storeData = await getStoreData()
   const state = (storeData.states || []).find((s: any) => String(s.id) === slug)
-  if (!state) return { title: 'Region Not Found' }
+  // BUG FIX (#15): the not-found case only set a title, relying solely on
+  // the notFound()-triggered 404 HTTP status to keep it out of search
+  // results. Explicit robots:noindex is a belt-and-braces signal search
+  // engines respect even if the status code is misread by a crawler/proxy.
+  if (!state) return { title: 'Region Not Found', robots: { index: false, follow: false } }
+
+  const meta = getRegionMeta(state.id)
+  // BUG FIX: previously only read the raw (possibly null) state.description
+  // here — but the page body itself now prefers the curated
+  // meta.description (see the /regions/[slug] content fix). Using the same
+  // source for both keeps the SEO description and the actual on-page copy
+  // in sync instead of silently disagreeing.
+  const rawDesc = meta?.description || state.description || `Explore pure natural products from ${state.name}, sourced directly from mountain farming communities.`
+  const desc = truncate(rawDesc, 155)
+  const canonicalUrl = `${BASE}/regions/${state.id}`
+
+  // Same image resolution used by the page body (state_images sort_order,
+  // falling back to state.image_path).
+  const stateImages = (storeData.state_images || [])
+    .filter((i: any) => String(i.state_id) === String(state.id))
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
+
   return {
     title:       `${state.name} Products — Shop Authentic Himalayan Products | Pahadi Roots`,
-    description: state.description?.slice(0, 155) || `Explore pure natural products from ${state.name}, sourced directly from mountain farming communities.`,
+    description: desc,
+    // BUG FIX (#13): no canonical previously — added so the /regions/{id}
+    // URL is always declared authoritative.
+    alternates: { canonical: canonicalUrl },
+    // BUG FIX (#14): no openGraph block previously — sharing a region page
+    // link got a blank/default preview card instead of the state's own
+    // photo, name, and description.
+    openGraph: {
+      title: `${state.name} Products | 5 Pahadi Roots`,
+      description: desc,
+      url: canonicalUrl,
+      type: 'website',
+      images: stateImageUrl ? [{ url: stateImageUrl, width: 1200, height: 630, alt: state.name }] : [{ url: '/og-default.jpg', width: 1200, height: 630, alt: state.name }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title:       `${state.name} Products | 5 Pahadi Roots`,
+      description: desc,
+    },
   }
 }
 

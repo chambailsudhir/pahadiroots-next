@@ -7,11 +7,35 @@ import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 // Now both — plus the region detail page — import the single shared copy.
 import { getRegionMeta } from '@/lib/regionMeta'
 
+// BUG FIX: uses NEXT_PUBLIC_SITE_URL like sitemap.ts, rather than hardcoding
+// "https://pahadiroots.com" (as /products/[slug] currently does) — a
+// hardcoded domain would make canonical/og:url point at production even
+// when rendered on a Vercel preview deploy.
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+
 export const revalidate = 300
 
+// BUG FIX (SEO): this page previously had only a title/description, with no
+// canonical or openGraph block — unlike /products/[slug], which explicitly
+// has both. Sharing a /regions link on WhatsApp/social got a blank/default
+// preview card, and without a canonical tag the page had no authoritative
+// URL declared.
 export const metadata: Metadata = {
   title: 'Explore Himalayan Regions — Pahadi Roots',
   description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
+  alternates: { canonical: `${BASE}/regions` },
+  openGraph: {
+    title: 'Explore Himalayan Regions — Pahadi Roots',
+    description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
+    url: `${BASE}/regions`,
+    type: 'website',
+    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Explore Himalayan Regions — Pahadi Roots' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Explore Himalayan Regions — Pahadi Roots',
+    description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude.',
+  },
 }
 
 export default async function RegionsPage() {
@@ -141,7 +165,7 @@ export default async function RegionsPage() {
                   )}
                   {/* State name on image */}
                   <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16 }}>
-                    <div style={{ fontFamily: serif, fontSize: 20, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{state.name}</div>
+                    <h3 style={{ fontFamily: serif, fontSize: 20, fontWeight: 700, color: '#fff', lineHeight: 1.2, margin: 0 }}>{state.name}</h3>
                     {meta?.tagline && <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontFamily: sans, marginTop: 2 }}>{meta.tagline}</div>}
                   </div>
                 </div>
