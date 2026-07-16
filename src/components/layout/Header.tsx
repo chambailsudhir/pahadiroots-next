@@ -8,6 +8,7 @@ import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import type { SiteSettings, Category, State } from '@/types'
 import { isEnabled } from '@/lib/getSiteSettings'
+import { performHeaderLogout } from '@/lib/clientLogout'
 import MegaMenu from './MegaMenu'
 import AnnouncementBar from './AnnouncementBar'
 import TickerBar from './TickerBar'
@@ -32,6 +33,10 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const [mounted,  setMounted]  = useState(false)
   // Track dark mode for aria-pressed on the toggle button (WCAG 4.1.2)
   const [isDark, setIsDark] = useState(false)
+  // BUG FIX (P1): guards against double-firing the real logout below while
+  // the network calls are in flight (was previously just a <Link>, so this
+  // guard didn't exist because there was nothing to guard).
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     // Genuinely necessary exception: this is client-mount detection to
@@ -152,7 +157,30 @@ export default function Header({ settings, categories = [], states = [] }: Props
                 </Link>
                 <div className="old-dd-foot">
                   {mounted && user
-                    ? <Link href="/account" className="old-dd-btn" role="menuitem" style={{ background: '#fdecea', color: '#c0392b' }} onClick={() => setAcctOpen(false)}>Logout</Link>
+                    // BUG FIX (P1 — security): this was previously
+                    // `<Link href="/account">` — it navigated to the
+                    // account page but never actually ended the session,
+                    // so "Logout" silently did nothing. Now calls the real
+                    // shared logout helper (clears the httpOnly session
+                    // cookie + the client user store) before reloading.
+                    ? <button
+                        type="button"
+                        className="old-dd-btn"
+                        role="menuitem"
+                        style={{ background: '#fdecea', color: '#c0392b' }}
+                        disabled={loggingOut}
+                        onClick={async () => {
+                          setAcctOpen(false)
+                          setLoggingOut(true)
+                          await performHeaderLogout()
+                          // performHeaderLogout() reloads the page on success;
+                          // setLoggingOut(false) only matters if that somehow
+                          // doesn't happen (e.g. reload blocked in a test env).
+                          setLoggingOut(false)
+                        }}
+                      >
+                        {loggingOut ? 'Logging out…' : 'Logout'}
+                      </button>
                     : <button type="button" className="old-dd-btn" role="menuitem" onClick={() => { setAcctOpen(false); openAuth() }}>Login / Sign Up</button>}
                 </div>
               </div>
@@ -285,6 +313,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           cursor:pointer;font-family:inherit;text-align:center;
           text-decoration:none;display:block;
         }
+        .old-dd-btn:disabled{opacity:.6;cursor:not-allowed}
         .old-mob-btn{display:none!important}
         @media(max-width:900px){
           .old-nav-links{display:none!important}

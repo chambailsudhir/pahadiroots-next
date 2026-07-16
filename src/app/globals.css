@@ -228,17 +228,39 @@ section.sec { padding: 52px 40px; }
 
 /* Hover overlay — pointer-events:none so it never intercepts clicks */
 .piw-hover-overlay { position:absolute; inset:0; background:rgba(15,40,18,0); transition:background .3s ease; pointer-events:none; z-index:4; display:flex; align-items:flex-end; justify-content:center; padding-bottom:14px; }
-.pcard:hover .piw-hover-overlay { background:rgba(15,40,18,.45); }
 
 /* QV button inside overlay */
-.piw-qv-btn { pointer-events:all; background:rgba(255,255,255,.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.35); color:#fff; font-size:12px; font-weight:700; letter-spacing:.3px; padding:7px 18px; border-radius:22px; cursor:pointer; font-family: var(--font-lato), 'Lato', sans-serif; opacity:0; transform:translateY(10px); transition:opacity .25s ease,transform .25s ease,background .2s; }
-.pcard:hover .piw-qv-btn { opacity:1; transform:translateY(0); }
+.piw-qv-btn { pointer-events:all; background:rgba(255,255,255,.18); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.35); color:#fff; font-size:12px; font-weight:700; letter-spacing:.3px; padding:7px 18px; border-radius:22px; cursor:pointer; font-family: var(--font-lato), 'Lato', sans-serif; transition:opacity .25s ease,transform .25s ease,background .2s; }
 .piw-qv-btn:hover { background:rgba(255,255,255,.28); }
+.piw-qv-btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
 
-/* Wishlist heart — bottom-right, shows on hover */
-.piw-wl-btn { position:absolute; bottom:10px; right:10px; z-index:5; pointer-events:all; background:rgba(255,255,255,.9); backdrop-filter:blur(4px); border:none; border-radius:50%; width:32px; height:32px; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15); opacity:0; transform:scale(.8); transition:opacity .22s ease,transform .22s ease; }
-.pcard:hover .piw-wl-btn { opacity:1; transform:scale(1); }
+/* Wishlist heart — bottom-right */
+.piw-wl-btn { position:absolute; bottom:10px; right:10px; z-index:5; pointer-events:all; background:rgba(255,255,255,.9); backdrop-filter:blur(4px); border:none; border-radius:50%; width:32px; height:32px; font-size:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15); transition:opacity .22s ease,transform .22s ease; }
 .piw-wl-btn:hover { background:#fff; transform:scale(1.12) !important; }
+.piw-wl-btn:focus-visible { outline:2px solid #1a3a1e; outline-offset:2px; }
+
+/* BUG FIX (P1 — mobile/keyboard access): the overlay backdrop, Quick View
+   button, and wishlist heart were all opacity:0 / transparent by default,
+   revealed only via `.pcard:hover`. Touch devices (phones, tablets — most
+   storefront traffic) have no real, reliable `:hover` state, so all three
+   were effectively invisible and unusable there; keyboard users tabbing
+   through cards also landed on controls they couldn't see, since
+   visibility was never tied to focus either.
+   Fix: default to visible everywhere. Devices that genuinely support a
+   precise pointer + real hover (`hover:hover` and `pointer:fine` — an
+   actual mouse, not touch or a stylus-as-touch) get the original
+   hover-reveal restored below, preserving the intended desktop
+   interaction. `:focus-within` reveals them on keyboard navigation
+   regardless of device, matching what `.pcard:hover` already did for
+   mouse users. */
+.piw-qv-btn, .piw-wl-btn { opacity:1; transform:none; }
+@media (hover: hover) and (pointer: fine) {
+  .pcard:hover .piw-hover-overlay { background:rgba(15,40,18,.45); }
+  .piw-qv-btn { opacity:0; transform:translateY(10px); }
+  .pcard:hover .piw-qv-btn, .pcard:focus-within .piw-qv-btn { opacity:1; transform:translateY(0); }
+  .piw-wl-btn { opacity:0; transform:scale(.8); }
+  .pcard:hover .piw-wl-btn, .pcard:focus-within .piw-wl-btn { opacity:1; transform:scale(1); }
+}
 .piw-wl-btn.active { opacity:1 !important; transform:scale(1) !important; }
 
 /* Premium badge — dot + text, top-left */
@@ -411,9 +433,16 @@ footer.site-footer {
 .mob-nav a:hover { background: rgba(26,58,30,.07); color: var(--g); }
 
 /* ── DARK MODE ── */
-body.dark { background: #0d1a0f; color: #f0f0f0; }
-body.dark nav.main-nav { background: rgba(13,26,15,.97); }
-body.dark .pcard { background: #1a2b1c; border-color: rgba(255,255,255,.06); }
+/* BUG FIX (P1): dark mode was completely non-functional for the page
+   background, nav bar, and product cards. The toggle in Header.tsx adds
+   the `dark` class to <html> (document.documentElement), but these 3
+   rules required it on <body> specifically — `body.dark` never matched,
+   so only the mega-menu below (which already used the correct bare
+   `.dark` descendant selector) actually changed on toggle. Fixed to match
+   the same working convention. */
+.dark body, body.dark { background: #0d1a0f; color: #f0f0f0; }
+.dark nav.main-nav { background: rgba(13,26,15,.97); }
+.dark .pcard { background: #1a2b1c; border-color: rgba(255,255,255,.06); }
 
 /* ── SOC PROOF ── */
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
@@ -426,7 +455,6 @@ body.dark .pcard { background: #1a2b1c; border-color: rgba(255,255,255,.06); }
 /* ── pname/prating/stock/price/atc ── */
 .pname { font-family: var(--font-playfair), 'Playfair Display', serif; font-size:15.5px; font-weight:700; color:var(--g); line-height:1.28; margin-bottom:5px; }
 .prating { display:flex; align-items:center; gap:4px; margin-bottom:6px; }
-.pstars { font-size:11px; color:#f59e0b; letter-spacing:-.5px; }
 .prc { font-size:10.5px; color:var(--tx3); }
 .stock-bar { height:2px; background:rgba(0,0,0,.07); border-radius:2px; margin-bottom:3px; overflow:hidden; }
 .stock-fill { height:100%; border-radius:2px; transition:width .4s; }

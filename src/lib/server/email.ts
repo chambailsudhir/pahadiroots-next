@@ -41,6 +41,11 @@ export type TransactionalEmailType =
   | 'admin_order_notify'
   | 'payment_confirmation'
   | 'contact_form'
+  // BUG FIX (P1 — trust): added for the newsletter signup discount-code
+  // email (api/v1/actions/route.ts `subscribe`). The homepage previously
+  // promised "5% off, check your inbox" without ever generating a code or
+  // sending anything — this type is what actually fulfills that promise.
+  | 'newsletter_welcome'
 
 export interface SendTransactionalEmailParams {
   type:      TransactionalEmailType

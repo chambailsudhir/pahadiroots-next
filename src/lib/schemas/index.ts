@@ -104,6 +104,16 @@ export const subscribeSchema = z.object({
   name:  z.string().trim().max(100).optional(),
 })
 
+// ─── Stock Notification Schema ──────────────────────────────────────────────
+// BUG FIX (P1, homepage audit): backs the "Notify Me" button on out-of-stock
+// products (ProductCard.tsx), which previously had no capture mechanism at
+// all — see db_migration_v10_stock_notifications.sql for the table this
+// validates input for.
+export const notifyStockSchema = z.object({
+  email:      z.string().email().toLowerCase().trim(),
+  product_id: z.number().int().positive(),
+})
+
 // ─── Search Schema ─────────────────────────────────────────────────────────────
 export const searchSchema = z.object({
   q:      z.string().trim().min(1).max(100),

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
@@ -312,20 +313,29 @@ export default function AuthModal() {
                     <p className="am-switch">Already have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('email'); setError('') }}>Login</button></p>
                   </form>}
 
-              {/* Quick links */}
+              {/* Quick links.
+                  BUG FIX (P1): every one of these rows was a plain <div>
+                  with no onClick/href at all — styled exactly like a
+                  clickable nav item (cursor:pointer, hover background, a
+                  '›' chevron) but completely inert. Fixed to real <Link>
+                  navigation, closing the modal on click so the
+                  destination page is what the user actually sees next.
+                  "Coupons" was dropped rather than wired to a fake
+                  destination: no coupons page exists anywhere in this app
+                  today (only internal API routes) — linking it to /account
+                  would just trade one broken promise for a different one. */}
               <div className="am-ql-wrap">
                 {[
-                  { icon: '📦', label: 'My Orders',       sub: 'Track & manage orders' },
-                  { icon: '🤍', label: 'Wishlist',         sub: 'Saved products' },
-                  { icon: '🎟️', label: 'Coupons',          sub: 'Your discount codes' },
-                  { icon: '📍', label: 'Saved Addresses',  sub: 'Delivery locations' },
-                  { icon: '💬', label: 'Contact Us',       sub: "We're here to help" },
+                  { icon: '📦', href: '/account/orders',   label: 'My Orders',      sub: 'Track & manage orders' },
+                  { icon: '🤍', href: '/wishlist',          label: 'Wishlist',        sub: 'Saved products' },
+                  { icon: '📍', href: '/account/addresses', label: 'Saved Addresses', sub: 'Delivery locations' },
+                  { icon: '💬', href: '/contact',           label: 'Contact Us',      sub: "We're here to help" },
                 ].map(q => (
-                  <div key={q.label} className="am-ql-item">
+                  <Link key={q.label} href={q.href} className="am-ql-item" onClick={closeAuth}>
                     <span className="am-ql-icon">{q.icon}</span>
                     <div><div className="am-ql-lbl">{q.label}</div><div className="am-ql-sub">{q.sub}</div></div>
                     <span className="am-ql-arr">›</span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -370,7 +380,7 @@ export default function AuthModal() {
           .am-switch{font-size:12px;color:#888;text-align:center;margin-bottom:16px}
           .am-switch-btn{background:none;border:none;color:#1a3a1e;font-weight:800;cursor:pointer;font-family:inherit;font-size:12px}
           .am-ql-wrap{border-top:1px solid #f0f0f0;padding-top:16px;margin-top:8px;display:flex;flex-direction:column;gap:2px}
-          .am-ql-item{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;cursor:pointer;transition:background .15s}
+          .am-ql-item{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
           .am-ql-item:hover{background:#f9fdf9}
           .am-ql-icon{font-size:20px;width:32px;text-align:center;flex-shrink:0}
           .am-ql-lbl{font-size:13px;font-weight:700;color:#1a1a1a}

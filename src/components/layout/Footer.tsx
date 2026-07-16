@@ -103,7 +103,7 @@ export default function Footer({ settings }: Props) {
       </div>
 
       {/* ── Brand row ─────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '32px', padding: '36px 60px 28px', width: '100%', boxSizing: 'border-box', background: '#0f2a14' }}>
+      <div className="ft-brand-row" style={{ display: 'flex', alignItems: 'center', gap: '32px', padding: '36px 60px 28px', width: '100%', boxSizing: 'border-box', background: '#0f2a14' }}>
         {/* Left vine panel */}
         <div style={{ flexShrink: 0, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
           <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg" style={{ transform: 'scaleX(-1)', display: 'block' }}>
@@ -178,7 +178,7 @@ export default function Footer({ settings }: Props) {
       </div>
 
       {/* ── 3-column links grid ───────────────────────────── */}
-      <div style={{
+      <div className="ft-cols-grid" style={{
         width: '100%', boxSizing: 'border-box', padding: '32px 60px 28px',
         display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: '60px',
         background: '#0f2a14',
@@ -260,7 +260,7 @@ export default function Footer({ settings }: Props) {
       </div>
 
       {/* ── Social + FSSAI bar ────────────────────────────── */}
-      <div style={{ width: '100%', boxSizing: 'border-box', padding: '24px 60px 28px', background: '#0f2a14' }}>
+      <div className="ft-legal-row" style={{ width: '100%', boxSizing: 'border-box', padding: '24px 60px 28px', background: '#0f2a14' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: '32px' }}>
           {/* Socials */}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -286,19 +286,30 @@ export default function Footer({ settings }: Props) {
             </a>
           </div>
 
-          {/* FSSAI badge */}
-          <div style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(200,146,10,.22)', borderRadius: '10px', padding: '9px 14px', display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ background: '#fff', borderRadius: '5px', padding: '3px 7px', fontSize: '11px', fontWeight: 900, color: '#1a6b1a', letterSpacing: '.5px' }}>FSSAI</div>
-            <div>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,.6)', fontWeight: 700 }}>Licensed</div>
-              <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,.4)', marginTop: '2px' }}>Lic. No. — update karein</div>
+          {/* FSSAI badge.
+              BUG FIX (P1 — legal/compliance): this used to always render,
+              with the license number hardcoded to the literal placeholder
+              text "Lic. No. — update karein" — a real regulatory
+              disclosure requirement for a food business in India, sitting
+              in production as a note-to-self that was never filled in.
+              Now: sourced from settings.fssai_license, and the whole
+              badge (not just the number) is hidden until that's actually
+              set — showing "Licensed" without a real number behind it
+              would still be a false claim, just a differently-shaped one. */}
+          {settings.fssai_license && (
+            <div style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(200,146,10,.22)', borderRadius: '10px', padding: '9px 14px', display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ background: '#fff', borderRadius: '5px', padding: '3px 7px', fontSize: '11px', fontWeight: 900, color: '#1a6b1a', letterSpacing: '.5px' }}>FSSAI</div>
+              <div>
+                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,.6)', fontWeight: 700 }}>Licensed</div>
+                <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,.4)', marginTop: '2px' }}>Lic. No. {settings.fssai_license}</div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* ── Copyright bar + diamond vine ─────────────────── */}
-      <div style={{ maxWidth: '100%', padding: '14px 60px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'relative', zIndex: 2, background: '#0f2a14' }}>
+      <div className="ft-bottom-row" style={{ maxWidth: '100%', padding: '14px 60px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'relative', zIndex: 2, background: '#0f2a14' }}>
         <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'Lato,sans-serif' }}>
           © {new Date().getFullYear()} <strong style={{ color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India
         </div>
@@ -315,17 +326,28 @@ export default function Footer({ settings }: Props) {
       </div>
 
       <style>{`
+        /* BUG FIX (P1 — mobile layout): these selectors previously
+           targeted inline styles directly, e.g.
+           div[style*="padding: 36px 60px 28px"]. That can never match:
+           React serializes inline styles with NO space after the
+           property colon and kebab-case property names (so
+           gridTemplateColumns: '1fr 1fr 1.4fr' in JS renders as
+           "grid-template-columns:1fr 1fr 1.4fr" in the real DOM, not
+           "grid-template-columns: 1fr 1fr 1.4fr" with a space) — every
+           one of these rules was silently dead, and the footer's mobile
+           breakpoint adjustments never applied. Fixed by giving each
+           target div a real className above and selecting on that. */
         @media(max-width:960px) {
-          footer div[style*="grid-template-columns: 1fr 1fr 1.4fr"] { grid-template-columns: 1fr 1fr !important; gap: 28px !important; padding: 28px 28px 20px !important; }
-          footer div[style*="padding: 36px 60px 28px"] { flex-wrap: wrap !important; gap: 16px !important; padding: 28px 28px 22px !important; }
-          footer > div[style*="padding: 24px 60px"] { padding: 20px 28px 24px !important; }
-          footer > div[style*="padding: 14px 60px"] { padding: 12px 28px 18px !important; }
+          footer .ft-cols-grid { grid-template-columns: 1fr 1fr !important; gap: 28px !important; padding: 28px 28px 20px !important; }
+          footer .ft-brand-row { flex-wrap: wrap !important; gap: 16px !important; padding: 28px 28px 22px !important; }
+          footer .ft-legal-row { padding: 20px 28px 24px !important; }
+          footer .ft-bottom-row { padding: 12px 28px 18px !important; }
         }
         @media(max-width:640px) {
-          footer div[style*="grid-template-columns: 1fr 1fr 1.4fr"] { grid-template-columns: 1fr !important; padding: 20px !important; }
-          footer div[style*="padding: 36px 60px 28px"] { padding: 20px !important; flex-direction: column !important; align-items: flex-start !important; }
+          footer .ft-cols-grid { grid-template-columns: 1fr !important; padding: 20px !important; }
+          footer .ft-brand-row { padding: 20px !important; flex-direction: column !important; align-items: flex-start !important; }
           footer svg[width="52"] { display: none !important; }
-          footer > div[style*="padding: 14px 60px"] { padding: 12px 20px !important; flex-direction: column !important; text-align: center !important; }
+          footer .ft-bottom-row { padding: 12px 20px !important; flex-direction: column !important; text-align: center !important; }
         }
       `}</style>
     </footer>

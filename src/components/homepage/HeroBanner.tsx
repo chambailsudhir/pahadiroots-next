@@ -25,12 +25,26 @@ export default function HeroBanner({ images, settings }: Props) {
       {/* ── Slider track ── */}
       <div style={{ position: 'relative', width: '100%', height: '75vh', minHeight: 500, maxHeight: '75vh', overflow: 'hidden' }}>
 
-        {slides ? slides.map((img, i) => (
-          <div key={i} style={{
+        {slides ? slides.map((img, i) => {
+          // BUG FIX (P1 — SEO/accessibility): every slide used to render
+          // its own <h1>, and since all slides stay mounted simultaneously
+          // (only opacity toggles), that meant N slides = N <h1> elements
+          // coexisting in the DOM at once — bad for SEO (search engines
+          // expect one clear top-level heading) and for screen readers,
+          // which read every hidden slide's text in full since none of
+          // them were aria-hidden. Fix: only the currently-visible slide
+          // is a real <h1>; the rest render the identical visual style on
+          // a non-heading element, and the whole hidden slide is
+          // aria-hidden so assistive tech skips it entirely.
+          const isVisible = i === current
+          const HeadingTag = isVisible ? 'h1' : 'p'
+          const headingStyle = { fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900 as const, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }
+          return (
+          <div key={i} aria-hidden={!isVisible} style={{
             position: 'absolute', inset: 0,
-            opacity: i === current ? 1 : 0,
+            opacity: isVisible ? 1 : 0,
             transition: 'opacity 0.9s cubic-bezier(0.4,0,0.2,1)',
-            pointerEvents: i === current ? 'auto' : 'none',
+            pointerEvents: isVisible ? 'auto' : 'none',
           }}>
             <Image src={img.url} alt={img.alt_text || 'Pahadi Roots'} fill sizes="100vw"
               style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
@@ -38,13 +52,13 @@ export default function HeroBanner({ images, settings }: Props) {
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
             {/* Content */}
             <div style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
-              <div style={{ maxWidth:600, padding:'0 0 0 72px', display:'flex', flexDirection:'column', gap:0 }}>
+              <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
                 <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color:'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
                   🌿 Pure · Himalayan · Natural
                 </div>
-                <h1 style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }}>
+                <HeadingTag style={headingStyle}>
                   {img.title ? img.title : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
-                </h1>
+                </HeadingTag>
                 <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color:'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 28px', maxWidth:440 }}>
                   {img.subtitle || 'Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature\'s finest.'}
                 </p>
@@ -59,10 +73,11 @@ export default function HeroBanner({ images, settings }: Props) {
               </div>
             </div>
           </div>
-        )) : (
+          )
+        }) : (
           /* Fallback slide — no images configured */
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)', display:'flex', alignItems:'center' }}>
-            <div style={{ maxWidth:600, padding:'0 0 0 72px', display:'flex', flexDirection:'column', gap:0 }}>
+            <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
               <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color:'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
                 🌿 Pure · Himalayan · Natural
               </div>
@@ -126,6 +141,7 @@ export default function HeroBanner({ images, settings }: Props) {
       </div>
 
       <style>{`
+        .hslide-content-inner { padding: 0 0 0 72px; }
         @media(max-width:860px){
           .hslide-content-inner { padding: 0 20px !important; }
         }

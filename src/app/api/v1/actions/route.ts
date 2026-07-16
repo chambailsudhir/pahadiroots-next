@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { subscribeSchema, reviewSchema } from '@/lib/schemas'
+import { subscribeSchema, reviewSchema, notifyStockSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
+import { generateWelcomeCouponCode } from '@/lib/welcomeCoupon'
 import { logger } from '@/lib/logger'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
@@ -83,10 +84,124 @@ export async function POST(req: NextRequest) {
       const safeName = name ? stripTags(name) : null
 
       // Upsert to subscribers table
-      await db.from('subscribers').upsert(
-        { email, name: safeName, subscribed_at: new Date().toISOString() },
+      const { error: subscribeError } = await db.from('subscribers').upsert(
+        // BUG FIX (found while schema-verifying the P1 batch — pre-existing,
+        // not introduced by this fix): the real `subscribers` table has no
+        // `subscribed_at` column at all (confirmed via
+        // information_schema.columns). This upsert has been sending a
+        // column that doesn't exist — Supabase/PostgREST rejects unknown
+        // columns on insert/upsert, so every newsletter signup may have
+        // been erroring silently (the result was never checked for
+        // `error` here). Removed the bogus field; `created_at` is NOT
+        // NULL with no default confirmed either way, so left unset — if
+        // it turns out to have no DB-side default, the error logging
+        // added below will now surface that loudly instead of silently.
+        // is_active is nullable but obviously means "this is a live
+        // subscriber" — explicitly set true for a fresh signup rather
+        // than leaving it NULL.
+        { email, name: safeName, is_active: true },
         { onConflict: 'email' }
       )
+      if (subscribeError) {
+        logger.error('actions: subscribers upsert failed', { action: 'actions.subscribe', error: subscribeError.message })
+        return NextResponse.json({ error: 'Could not subscribe right now — please try again' }, { status: 500 })
+      }
+
+      // ── BUG FIX (P1 — trust): NewsletterBar.tsx promises "Get 5% Off Your
+      // First Order" and, on success, "Check your inbox for your discount
+      // code." Previously nothing after this point existed — no code was
+      // ever generated, no email was ever sent. Every subscriber got a
+      // false promise. This block actually fulfills it:
+      //
+      //   1. Derive a deterministic code from the email (sha256, first 6
+      //      hex chars) so the SAME email always maps to the SAME code —
+      //      re-submitting the form (e.g. double-click, or resubscribing
+      //      months later) can't mint unlimited fresh 5%-off coupons for
+      //      one person.
+      //   2. Upsert into `coupons` with `ignoreDuplicates: true` — if this
+      //      email already has a welcome coupon, this is a no-op (doesn't
+      //      reset uses_count on a coupon that's already been redeemed).
+      //   3. Email the code via the existing sendTransactionalEmail
+      //      pipeline, which already retries + dead-letters on failure
+      //      (src/lib/server/email.ts) — same guarantee the contact-form
+      //      email below already relies on.
+      //
+      // Deliberately best-effort and non-blocking: a coupon/email hiccup
+      // must never fail the newsletter signup itself (matches the
+      // contact-form pattern immediately below).
+      try {
+        const code = generateWelcomeCouponCode(email)
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+        await db.from('coupons').upsert(
+          {
+            code,
+            type:              'percent',
+            value:             5,
+            max_uses:          1,
+            uses_count:        0,
+            is_active:         true,
+            expires_at:        expiresAt,
+            // CORRECTED after schema verification: coupons has both of
+            // these real columns (my first draft didn't know they
+            // existed and omitted them). description is admin-facing
+            // only. first_order_only is set to accurately describe
+            // intent, but — checked directly against
+            // pricingService.ts/orderService.ts before writing this
+            // comment — it is NOT currently read or enforced by any
+            // validation code; only min_order, max_uses, and expires_at
+            // are actually checked. The real single-use guarantee here
+            // is max_uses:1 combined with the code being deterministic
+            // per-email. Don't rely on first_order_only alone to mean
+            // "only works on someone's first order" until that
+            // enforcement is actually added.
+            first_order_only:  true,
+            description:       'Newsletter welcome discount (5% off, first order)',
+          },
+          { onConflict: 'code', ignoreDuplicates: true },
+        )
+
+        const safeEmailForHtml = esc(email)
+        await sendTransactionalEmail({
+          type:    'newsletter_welcome',
+          to:      email,
+          from:    'Pahadi Roots <noreply@pahadiroots.com>',
+          subject: 'Welcome to Pahadi Roots — here\u2019s 5% off your first order',
+          html:    `<p>Hi${safeName ? ' ' + esc(safeName) : ''},</p>
+<p>Thanks for joining the Pahadi Roots community! Use the code below at checkout for 5% off your first order:</p>
+<p style="font-size:20px;font-weight:800;letter-spacing:1px;">${esc(code)}</p>
+<p>Valid for 30 days, one-time use.</p>`,
+          context: { subscribed_email: safeEmailForHtml, coupon_code: code },
+        })
+      } catch (e) {
+        // Non-fatal — the subscription itself already succeeded above.
+        logger.error('actions: newsletter welcome coupon/email failed', { action: 'actions.subscribe.welcomeEmail', error: e instanceof Error ? e.message : String(e) })
+      }
+
+      return NextResponse.json({ success: true })
+    }
+
+    // ── BUG FIX (P1, homepage audit): ProductCard.tsx's "Notify Me" button
+    // on out-of-stock products was rendered disabled with no onClick, no
+    // email capture, and no backend at all. This action is the real
+    // capture behind it — see db_migration_v10_stock_notifications.sql
+    // for the table, and the NOTE in that file about the separate,
+    // schedulable restock-email job this does NOT include.
+    if (action === 'notify_stock') {
+      const parsed = notifyStockSchema.safeParse(body)
+      if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+
+      const { email, product_id } = parsed.data
+
+      const { error } = await db.from('stock_notifications').upsert(
+        { product_id, email },
+        { onConflict: 'product_id,email', ignoreDuplicates: true },
+      )
+      if (error) {
+        logger.error('actions: notify_stock insert failed', { action: 'actions.notify_stock', error: error.message })
+        return NextResponse.json({ error: 'Could not save your request — please try again' }, { status: 500 })
+      }
+
       return NextResponse.json({ success: true })
     }
 

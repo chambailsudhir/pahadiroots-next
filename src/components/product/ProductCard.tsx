@@ -29,8 +29,13 @@ interface Props {
 
 export default function ProductCard({ product, showWishlist = true, priority = false }: Props) {
   const [showQuickView, setShowQuickView] = useState(false)
+  // BUG FIX (P1): state for the real "Notify Me" flow — previously this
+  // button was just disabled with no handler at all.
+  const [notifyState, setNotifyState] = useState<'idle' | 'asking' | 'sending' | 'done' | 'error'>('idle')
+  const [notifyEmail, setNotifyEmail] = useState('')
   const addItem            = useCartStore(s => s.addItem)
   const openCart           = useUIStore(s => s.openCart)
+  const userEmail          = useUserStore(s => s.user?.email)
   // ⚠ Do NOT use `useUserStore(s => s.isInWishlist)` — that selector subscribes
   // to the function reference (which is stable) not to wishlist contents, so the
   // component never re-renders when items are added/removed.
@@ -81,6 +86,37 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   // Use the real DB review_count if available; fall back to null (no fake numbers).
   // Deterministic fake counts were removed — they're a trust-signal fabrication.
   const reviewCount = product.review_count ?? null
+
+  // BUG FIX (P1): the actual back-in-stock capture. Logged-in users submit
+  // with one click using their account email; guests get a small inline
+  // email field (see the JSX below) instead of a disabled button that did
+  // nothing. Hits the new `notify_stock` action — see
+  // api/v1/actions/route.ts and db_migration_v10_stock_notifications.sql.
+  async function submitNotifyMe(email: string) {
+    setNotifyState('sending')
+    try {
+      const res = await fetch('/api/v1/actions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'notify_stock', email, product_id: product.id }),
+      })
+      if (!res.ok) throw new Error('request failed')
+      setNotifyState('done')
+    } catch {
+      setNotifyState('error')
+    }
+  }
+
+  function handleNotifyClick(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (notifyState === 'done' || notifyState === 'sending') return
+    if (userEmail) {
+      submitNotifyMe(userEmail)
+    } else {
+      setNotifyState('asking')
+    }
+  }
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
@@ -255,11 +291,24 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         {/* Name */}
         <div className="pname">{product.name}</div>
 
-        {/* Rating — always 5 stars; review count shown only when real DB data exists */}
-        <div className="prating">
-          <span className="pstars">★★★★★</span>
-          {reviewCount !== null && <span className="prc">({reviewCount})</span>}
-        </div>
+        {/* BUG FIX (P1 — trust/legal): this used to hardcode "★★★★★" for
+            every single product, always, regardless of any real data.
+            CORRECTION while implementing this fix: `Product` (types/
+            index.ts) has no aggregate rating field at all — only the
+            per-review `Review.rating` exists. There is no per-product
+            average rating anywhere in the current data model to render
+            honestly here without either a new DB aggregate column or a
+            join computed at query time — and I'm not going to invent a
+            number. So: stars are removed entirely, and only the real,
+            already-honest review_count is shown ("(150 reviews)"),
+            same as before. If you want real stars back, the DB needs an
+            avg_rating (or similar) column/view on products — happy to
+            wire that up once it exists. */}
+        {reviewCount !== null && reviewCount > 0 && (
+          <div className="prating">
+            <span className="prc">{reviewCount} review{reviewCount === 1 ? '' : 's'}</span>
+          </div>
+        )}
 
         {/* Stock bar + label */}
         <div className="stock-bar">
@@ -288,9 +337,42 @@ export default function ProductCard({ product, showWishlist = true, priority = f
               <button className="atc pcard-atc-full" onClick={handleAddToCart} style={{ position: 'relative', zIndex: 3 }}>
                 🛒 Add to Cart
               </button>
+            ) : notifyState === 'asking' ? (
+              // BUG FIX (P1): guest email capture for Notify Me — this
+              // whole branch (and the working button below) replaces what
+              // used to be a permanently-disabled button with no handler.
+              <form
+                className="pcard-notify-form"
+                style={{ position: 'relative', zIndex: 3, display: 'flex', gap: 6 }}
+                onClick={e => e.preventDefault()}
+                onSubmit={e => { e.preventDefault(); e.stopPropagation(); if (notifyEmail.trim()) submitNotifyMe(notifyEmail.trim()) }}
+              >
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={notifyEmail}
+                  onChange={e => setNotifyEmail(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  placeholder="you@example.com"
+                  className="pcard-notify-input"
+                  style={{ flex: 1, minWidth: 0, fontSize: 12, padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd' }}
+                />
+                <button type="submit" className="atc" style={{ flexShrink: 0 }}>
+                  Notify Me
+                </button>
+              </form>
+            ) : notifyState === 'done' ? (
+              <button className="atc pcard-atc-full" disabled style={{ position: 'relative', zIndex: 3, cursor: 'default' }}>
+                ✓ We&apos;ll email you
+              </button>
             ) : (
-              <button className="atc pcard-atc-full" disabled style={{ opacity: .5, cursor: 'not-allowed', position: 'relative', zIndex: 3 }}>
-                🔔 Notify Me
+              <button
+                className="atc pcard-atc-full"
+                onClick={handleNotifyClick}
+                style={{ position: 'relative', zIndex: 3 }}
+              >
+                {notifyState === 'sending' ? 'Sending…' : notifyState === 'error' ? '⚠ Try again' : '🔔 Notify Me'}
               </button>
             )}
             <span className="atc-hint">View Details →</span>

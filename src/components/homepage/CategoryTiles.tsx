@@ -163,6 +163,7 @@ export default function CategoryTiles({ categories }: Props) {
         {/* Track */}
         <div
           ref={gridRef}
+          className="cgrid-track"
           style={{
             display: 'flex', overflowX: 'scroll', overflowY: 'hidden',
             scrollbarWidth: 'none', width: '100%', position: 'relative',
@@ -257,7 +258,15 @@ export default function CategoryTiles({ categories }: Props) {
       </div>
 
       <style>{`
-        div[style*="overflowX: scroll"]::-webkit-scrollbar { display: none; }
+        /* BUG FIX (P1): this selector previously read
+           div[style*="overflowX: scroll"] — which can never match, since
+           React serializes inline styles as kebab-case with no space
+           after the colon (overflow-x:scroll), not camelCase with a
+           space. The WebKit scrollbar was never actually hidden on
+           Chrome/Edge/Safari, despite scrollbarWidth:'none' (a real
+           inline style, so it worked) already hiding it correctly on
+           Firefox. Fixed to target the real className instead. */
+        .cgrid-track::-webkit-scrollbar { display: none; }
         .cc-cell:hover { transform: translateY(-4px) !important; }
         .cc-cell:hover .cc-box { border-color: #a07830 !important; box-shadow: 0 6px 24px rgba(201,168,76,.32) !important; }
         .cc-cell:hover .cc-img { transform: scale(1.06) !important; }
