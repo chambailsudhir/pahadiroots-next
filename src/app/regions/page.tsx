@@ -3,29 +3,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts } from '@/lib/normalizeProduct'
+// BUG FIX: this file used to define its own local copy of REGION_META,
+// duplicated (and already drifted) from the copy in ExploreByRegion.tsx.
+// Now both — plus the region detail page — import the single shared copy.
+import { getRegionMeta } from '@/lib/regionMeta'
 
 export const revalidate = 300
 
 export const metadata: Metadata = {
   title: 'Explore Himalayan Regions — Pahadi Roots',
   description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
-}
-
-const REGION_META: Record<string, {
-  emoji: string; tagline: string; panelBg: string; pills: string[]; snippet: string
-}> = {
-  hp: { emoji: '🏔️', tagline: 'Dev Bhoomi', panelBg: 'linear-gradient(135deg,#1a3a1e,#2d5233)', pills: ['🍎 Apple & ACV','🍯 Pine Honey','🍵 Kangra Tea','🥛 Bilona Ghee','🌰 Chilgoza Nuts'], snippet: 'Dev Bhoomi — Deodar forests, cliff-hive honey & Kangra tea that perfumes the alpine air.' },
-  uk: { emoji: '🏔️', tagline: 'Dev Bhoomi', panelBg: 'linear-gradient(135deg,#1a3a1e,#2d5233)', pills: ['🍯 Wild Honey','🌾 Pahadi Rajma','🌸 Buransh Juice','🥛 Badri Ghee','🌿 Jakhiya'], snippet: 'Sacred rivers, ancient temples & meadows above 3,000m yielding wild honey and Badri ghee.' },
-  jk: { emoji: '🌷', tagline: 'Paradise on Earth', panelBg: 'linear-gradient(135deg,#1e3a8a,#2d4fa3)', pills: ['🌸 Kashmiri Kesar','🌰 Kagzi Walnuts','🍵 Kahwa Tea','🌶️ Kashmiri Mirchi','🥜 Almonds'], snippet: "Saffron fields turn violet each October. The world's finest spice, harvested before sunrise." },
-  la: { emoji: '❄️', tagline: 'Land of High Passes', panelBg: 'linear-gradient(135deg,#4a2c10,#6b3a18)', pills: ['🫐 Seabuckthorn','🪨 Shilajit','🍑 Wild Apricots','⚡ Black Buckwheat','🧂 Rock Salt'], snippet: 'Roof of the world. Shilajit oozes from granite at 3,500m. Seabuckthorn lines the Indus.' },
-  sk: { emoji: '🌺', tagline: "India's First Organic State", panelBg: 'linear-gradient(135deg,#1a3a1e,#2a5230)', pills: ['🫚 Large Cardamom','🌿 Organic Turmeric','🍵 Temi Tea','🌱 Organic Ginger','🥬 Gundruk'], snippet: "India's only fully organic state. Cardamom groves under forest shade, Temi tea above clouds." },
-  as: { emoji: '🌊', tagline: 'Land of the Red River', panelBg: 'linear-gradient(135deg,#1a2a3a,#2d4053)', pills: ['🍵 Assam CTC Tea','🍯 Wild Forest Honey','🌶️ Bhut Jolokia','🫚 Mustard Oil','🌿 Black Pepper'], snippet: "The world's largest river island. Assam tea — 70% of India's total production." },
-  ml: { emoji: '🌧️', tagline: 'Abode of Clouds', panelBg: 'linear-gradient(135deg,#1e3a8a,#2d4fa3)', pills: ['🌿 Lakadong Turmeric','🌑 Wild Black Pepper','🍯 Wild Honey','🍃 Bay Leaf','🫚 Hill Ginger'], snippet: 'Wettest land on earth. Lakadong turmeric with 7.5% curcumin — highest on the planet.' },
-  nl: { emoji: '🌶️', tagline: 'Land of Festivals & Fire', panelBg: 'linear-gradient(135deg,#3a0a0a,#5c1a1a)', pills: ['🌶️ Bhut Jolokia','🍯 Wild Hill Honey','🫙 Axone','🌿 Wild Herbs','🧂 Tribal Salt'], snippet: 'Ghost Pepper country. Hornbill Festival, 16 tribes, and fermented Axone — fierce & proud.' },
-  mn: { emoji: '💃', tagline: 'Land of Dance & Heritage', panelBg: 'linear-gradient(135deg,#1a1e3a,#2d3353)', pills: ['🌾 Black Rice','🎋 Bamboo Shoots','🌿 Wild Herbs','🍯 Wild Honey','🧵 Handloom'], snippet: 'Purple Chakhao rice, Loktak Lake, and a matrilineal society where women rule the market.' },
-  tr: { emoji: '🏛️', tagline: 'Land of Fourteen Tribes', panelBg: 'linear-gradient(135deg,#0d3320,#1a5c3a)', pills: ['🍍 Queen Pineapple','🍯 Wild Forest Honey','🎋 Bamboo Shoots','🌿 Matai Peas','🫙 Berma'], snippet: 'Queen pineapple so sweet it needs no sugar. Wild honey from ancient Chakma bark hives.' },
-  ar: { emoji: '🌿', tagline: 'Land of the Dawn-Lit Mountains', panelBg: 'linear-gradient(135deg,#1a3a1e,#2d5233)', pills: ['🍊 Kiwi & Citrus','🍯 Wild Honey','🌿 Adi Herbs','🫚 Mustard Oil','🌾 Rice Wine'], snippet: 'Sunrise state. Wild honey from the oldest forest. Tribal herbs unchanged for millennia.' },
-  mz: { emoji: '🌸', tagline: 'The Blue Mountain State', panelBg: 'linear-gradient(135deg,#1a1e3a,#2d3a6b)', pills: ['🌶️ Bird Eye Chilli','🍯 Wild Honey','🫙 Dawl Ku','🌿 Wild Herbs','🎋 Bamboo'], snippet: 'Land of the Lushai Hills. Bird eye chilli so fierce it lights you up from the inside.' },
 }
 
 export default async function RegionsPage() {
@@ -38,10 +25,21 @@ export default async function RegionsPage() {
   const productCountByState: Record<string, number> = {}
   allProducts.forEach((p: any) => {
     if (p.state_id) {
-      const sid = String(p.state_id)
+      // BUG FIX: previously compared String(p.state_id) directly against
+      // state ids with no case-normalization. If a product's state_id was
+      // ever stored with different casing than states.id (e.g. "HP" vs
+      // "hp"), this count would silently miss it and disagree with the
+      // count shown on /regions/[slug]. Both sides are now lowercased.
+      const sid = String(p.state_id).toLowerCase()
       productCountByState[sid] = (productCountByState[sid] || 0) + 1
     }
   })
+  // BUG FIX: the hero "Products" stat previously used allProducts.length —
+  // the ENTIRE catalog, including any product with no state_id at all
+  // (e.g. gift sets/combos not tied to a region). It now sums only the
+  // region-tagged products actually reflected in the cards below, so the
+  // stat can never overcount vs. what's actually being showcased here.
+  const totalRegionProducts = Object.values(productCountByState).reduce((a, b) => a + b, 0)
 
   // Get state images
   const stateImageMap: Record<string, string> = {}
@@ -86,7 +84,7 @@ export default async function RegionsPage() {
           <div style={{ display: 'flex', gap: 36, flexWrap: 'wrap' }}>
             {[
               { val: `${states.length}`, lbl: 'Himalayan States' },
-              { val: `${allProducts.length}`, lbl: 'Products' },
+              { val: `${totalRegionProducts}`, lbl: 'Products' },
               { val: '200+', lbl: 'Farming Families' },
             ].map(s => (
               <div key={s.lbl}>
@@ -108,9 +106,12 @@ export default async function RegionsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 28 }}>
           {states.map((state: any) => {
             const sid = String(state.id)
-            const meta = REGION_META[sid]
+            const meta = getRegionMeta(sid)
             const imgUrl = stateImageMap[sid] || null
-            const count = productCountByState[sid] || 0
+            // BUG FIX: lookup key must match the lowercased keys used to
+            // build productCountByState above, or counts can silently
+            // read as 0 whenever casing differs.
+            const count = productCountByState[sid.toLowerCase()] || 0
 
             return (
               <Link

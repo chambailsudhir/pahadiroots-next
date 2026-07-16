@@ -6,6 +6,12 @@ import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
+// BUG FIX: this page previously never referenced the curated region copy
+// (tagline, pills, per-region hero color) used on /regions and the
+// homepage widget — it only showed the raw DB `state.description` (which
+// can be null) against a hardcoded dark-green hero regardless of which
+// state you were viewing. Now shares the same single source of truth.
+import { getRegionMeta } from '@/lib/regionMeta'
 
 export const revalidate = 300 // 5 min
 
@@ -41,18 +47,25 @@ export default async function RegionPage({ params }: Props) {
   const withImages = getProductsWithImages(storeData)
   const allProducts = normalizeProducts(withImages)
 
-  // Filter by state_id — try both string match and numeric match
+  // BUG FIX: the old comparison only lowercased state.id, never `pid`
+  // itself — so `pid === String(state.id).toLowerCase()` could never
+  // match a pid that had different casing (e.g. state_id stored as "HP").
+  // Both sides are now lowercased, matching the fix applied on
+  // /regions/page.tsx and the homepage's buildStates().
   const stateProducts = allProducts.filter((p: any) => {
-    const pid = String(p.state_id ?? '')
-    return pid === String(state.id) || pid === String(state.id).toLowerCase()
+    const pid = String(p.state_id ?? '').toLowerCase()
+    return pid === String(state.id).toLowerCase()
   }) as Product[]
+
+  const meta = getRegionMeta(state.id)
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
 
       {/* Hero */}
       <div style={{
-        position: 'relative', height: '280px', background: 'linear-gradient(135deg,#1a3a1e,#2d5a35)',
+        position: 'relative', height: '280px',
+        background: meta?.panelBg ?? 'linear-gradient(135deg,#1a3a1e,#2d5a35)',
         overflow: 'hidden'
       }}>
         {stateImageUrl && (
@@ -77,20 +90,36 @@ export default async function RegionPage({ params }: Props) {
             <span style={{ color: '#fff' }}>{state.name}</span>
           </div>
           <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>
-            {state.name}
+            {meta?.emoji ? `${meta.emoji} ` : ''}{state.name}
           </h1>
+          {meta?.tagline && (
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.7)', marginTop: '6px', fontFamily: 'Lato,sans-serif' }}>
+              {meta.tagline}
+            </p>
+          )}
         </div>
       </div>
 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px 40px 60px' }}>
 
         {/* State description */}
-        {state.description && (
+        {(meta?.description || state.description) && (
           <div style={{ maxWidth: '700px', marginBottom: '36px' }}>
             <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '20px', fontWeight: 700, color: '#1a3a1e', marginBottom: '10px' }}>
               About {state.name}
             </h2>
-            <p style={{ color: '#555', lineHeight: 1.8, fontSize: '14px' }}>{state.description}</p>
+            <p style={{ color: '#555', lineHeight: 1.8, fontSize: '14px' }}>
+              {meta?.description || state.description}
+            </p>
+            {meta?.pills && meta.pills.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
+                {meta.pills.map(pill => (
+                  <span key={pill} style={{ background: '#f0f7f1', border: '1px solid #d4e8d8', color: '#2d5a35', fontSize: 11, fontWeight: 700, padding: '4px 11px', borderRadius: 20, fontFamily: 'Lato,sans-serif' }}>
+                    {pill}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

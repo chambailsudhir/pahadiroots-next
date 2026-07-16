@@ -7,9 +7,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
   // Static pages
+  // BUG FIX: /regions (the hub/listing page) was never included here — only
+  // the individual /regions/{id} detail pages were submitted below, so the
+  // index page itself was never in the sitemap Google receives.
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE,             lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
     { url: `${BASE}/products`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/regions`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/about`,  lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/contact`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ]
@@ -37,8 +41,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   // Regions
+  // BUG FIX: this query had no is_active filter, while getStoreData() (which
+  // drives /regions/[slug]'s generateStaticParams) filters is_active=true.
+  // Any inactive state was getting a sitemap entry that would 404 when
+  // Google crawled it. Now matches the same filter.
   let states = null
-  try { const { data } = await supabase.from('states').select('id'); states = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
+  try { const { data } = await supabase.from('states').select('id').eq('is_active', true); states = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const regionPages: MetadataRoute.Sitemap = (states || []).map(s => ({
     url:             `${BASE}/regions/${s.id}`,

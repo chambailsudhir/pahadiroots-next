@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -89,7 +89,20 @@ function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): RichS
       description: s.description ?? null,
       image_url:   imgs[0]?.image_url ?? s.image_path ?? null,
       region:      null,
-      products:    normalized.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
+      // BUG FIX: state_id comparison previously had no case-normalization
+      // (same pattern found in /regions/page.tsx and /regions/[slug]/page.tsx)
+      // — could silently disagree with the counts shown on those pages if
+      // casing ever differs between products.state_id and states.id.
+      // BUG FIX: previously passed raw normalized() products straight into
+      // ProductCard (a Client Component), shipping every AI-generated
+      // content field (long/short description, AI health-benefits text,
+      // tags, etc.) into the RSC payload for products that never render
+      // them. toCardProductData() strips those before the client boundary,
+      // matching the fix already applied on /regions/[slug].
+      products:    normalized
+        .filter(p => String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
+        .slice(0, 4)
+        .map(toCardProductData),
     }
   }) as unknown as RichState[]
 }
