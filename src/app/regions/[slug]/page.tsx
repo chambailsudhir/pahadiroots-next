@@ -129,9 +129,7 @@ export default async function RegionPage({ params }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '10px' }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
-            <Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link>
-            <span>/</span>
-            <span style={{ color: '#fff' }}>Regions</span>
+            <Link href="/regions" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Regions</Link>
             <span>/</span>
             <span style={{ color: '#fff' }}>{state.name}</span>
           </div>
@@ -189,7 +187,7 @@ export default async function RegionPage({ params }: Props) {
           {stateProducts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 20px' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏔️</div>
-              <p style={{ color: '#999', fontSize: '15px', marginBottom: '16px' }}>
+              <p style={{ color: '#666', fontSize: '15px', marginBottom: '16px' }}>
                 Products from {state.name} coming soon.
               </p>
               <Link href="/products" style={{

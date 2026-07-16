@@ -52,12 +52,20 @@ export default function ExploreByRegion({ states }: Props) {
       </div>
 
       {/* ── State Cards Grid — wraps into 2 rows automatically ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px', padding: '0 40px 18px', marginBottom: '8px' }}>
+      <div role="tablist" aria-label="Explore by region" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px', padding: '0 40px 18px', marginBottom: '8px' }}>
         {states.map(s => {
           const m = getRegionMeta(s.id)
           const isActive = s.id === activeId
           return (
-            <button key={s.id} onClick={() => setActiveId(s.id)} style={{ borderRadius: '14px', overflow: 'hidden', position: 'relative', cursor: 'pointer', border: 'none', padding: 0, background: 'none', boxShadow: isActive ? '0 12px 32px rgba(0,0,0,.22)' : '0 3px 14px rgba(0,0,0,.1)', transform: isActive ? 'translateY(-5px)' : 'translateY(0)', transition: 'transform .3s, box-shadow .3s' }}>
+            <button
+              key={s.id}
+              id={`region-tab-${s.id}`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="region-panel"
+              onClick={() => setActiveId(s.id)}
+              style={{ borderRadius: '14px', overflow: 'hidden', position: 'relative', cursor: 'pointer', border: 'none', padding: 0, background: 'none', boxShadow: isActive ? '0 12px 32px rgba(0,0,0,.22)' : '0 3px 14px rgba(0,0,0,.1)', transform: isActive ? 'translateY(-5px)' : 'translateY(0)', transition: 'transform .3s, box-shadow .3s' }}
+            >
               {/* Image */}
               <div style={{ width: '100%', height: '120px', overflow: 'hidden', background: m?.panelBg ?? '#1a3a1e', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>
                 {s.image_url
@@ -82,7 +90,13 @@ export default function ExploreByRegion({ states }: Props) {
       </div>
 
       {/* ── Active Panel ── */}
-      <div key={activeId} className="pr-panel-anim">
+      <div
+        key={activeId}
+        id="region-panel"
+        role="tabpanel"
+        aria-labelledby={`region-tab-${activeId}`}
+        className="pr-panel-anim"
+      >
 
         {/* Split header — .pr-shdr in globals.css */}
         <div className="pr-shdr">
@@ -130,7 +144,7 @@ export default function ExploreByRegion({ states }: Props) {
                 <ProductCard key={p.id} product={p} priority={i < 2} />
               ))
             : (
-              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(255,255,255,.35)', fontFamily: serif, fontStyle: 'italic', fontSize: '15px' }}>
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 20px', color: 'rgba(255,255,255,.6)', fontFamily: serif, fontStyle: 'italic', fontSize: '15px' }}>
                 🏔️ Products coming soon from {activeState.name}…
               </div>
             )

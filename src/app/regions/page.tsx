@@ -143,6 +143,7 @@ export default async function RegionsPage() {
               <Link
                 key={sid}
                 href={`/regions/${sid}`}
+                aria-label={`Explore ${state.name} products${count > 0 ? ` (${count} product${count !== 1 ? 's' : ''})` : ''}`}
                 style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', borderRadius: 20, overflow: 'hidden', background: '#fff', boxShadow: '0 2px 16px rgba(0,0,0,.08)', border: '1px solid rgba(0,0,0,.06)', transition: 'transform .25s, box-shadow .25s' }}
                 className="region-card"
               >
