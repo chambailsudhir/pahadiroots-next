@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
+import { toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 // BUG FIX: this page previously never referenced the curated region copy
@@ -43,9 +43,12 @@ export default async function RegionPage({ params }: Props) {
     .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
 
-  // Get products for this state using service key data (bypasses RLS)
-  const withImages = getProductsWithImages(storeData)
-  const allProducts = normalizeProducts(withImages)
+  // Get products for this state
+  // BUG FIX (perf): this ran a full-catalog normalize independently on
+  // every one of the 12 statically-generated /regions/[slug] pages during
+  // ISR — 12x redundant O(n) work over the same data. Now shares one
+  // cached pass across all region pages (see getNormalizedProducts()).
+  const allProducts = await getNormalizedProducts()
 
   // BUG FIX: the old comparison only lowercased state.id, never `pid`
   // itself — so `pid === String(state.id).toLowerCase()` could never

@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 // BUG FIX: this file used to define its own local copy of REGION_META,
 // duplicated (and already drifted) from the copy in ExploreByRegion.tsx.
 // Now both — plus the region detail page — import the single shared copy.
@@ -20,8 +19,11 @@ export default async function RegionsPage() {
   const states = storeData.states || []
 
   // Count products per state
-  const withImages = getProductsWithImages(storeData)
-  const allProducts = normalizeProducts(withImages)
+  // BUG FIX (perf): previously called getProductsWithImages()+normalizeProducts()
+  // locally — a full-catalog O(n) pass this page paid for on every render,
+  // duplicated independently by every other region consumer too. Now shares
+  // one cached result across all of them (see storeData.ts).
+  const allProducts = await getNormalizedProducts()
   const productCountByState: Record<string, number> = {}
   allProducts.forEach((p: any) => {
     if (p.state_id) {

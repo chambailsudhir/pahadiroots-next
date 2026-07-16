@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
+import { toCardProductData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -30,7 +30,7 @@ export default async function HomePage() {
 
   const categories = buildCategories(storeData)
   const heroImages = buildHeroImages(settings)
-  const states     = buildStates(storeData)
+  const states     = await buildStates(storeData)
 
   const showTrustBar    = isEnabled(settings.show_trust_bar)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
@@ -71,12 +71,15 @@ function buildHeroImages(settings: any) {
   return slides
 }
 
-function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): RichState[] {
+async function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): Promise<RichState[]> {
   const { states, state_images } = storeData
   if (!states?.length) return []
 
-  const productsWithImages = getProductsWithImages(storeData)
-  const normalized = normalizeProducts(productsWithImages) as (Product & { state_id: string })[]
+  // BUG FIX (perf): previously ran its own full-catalog
+  // getProductsWithImages()+normalizeProducts() pass. Now shares the same
+  // cached result used by /regions and /regions/[slug] (see
+  // getNormalizedProducts() in storeData.ts) instead of recomputing it.
+  const normalized = await getNormalizedProducts() as (Product & { state_id: string })[]
 
   return states.map((s: any) => {
     const imgs = (state_images as any[])

@@ -7,7 +7,7 @@
 
 import { unstable_cache } from 'next/cache'
 import { getServiceClient } from './supabase'
-import { applyProductImages } from './normalizeProduct'
+import { applyProductImages, normalizeProducts } from './normalizeProduct'
 import type { Product, Category, State } from '@/types'
 
 // Minimal shapes for related tables (not full DB types)
@@ -247,6 +247,37 @@ export function attachVariants(
 export function getProductsWithImages(storeData: StoreData) {
   const withImages = applyProductImages(storeData.products, storeData.product_images)
   return attachVariants(withImages, storeData.product_variants)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUG FIX (perf — redundant full-catalog normalize, found while auditing
+// /regions): every consumer of the region data (`/regions` listing,
+// `/regions/[slug]` × 12 statically-generated pages, and the homepage
+// ExploreByRegion widget) was independently calling
+// `normalizeProducts(getProductsWithImages(storeData))` — a full O(n) pass
+// over the ENTIRE product catalog — even though storeData itself is
+// already cached for 60s. During ISR generation/revalidation of the 12
+// region pages alone, that's up to 12x redundant normalization of the
+// exact same data in the same 60s window, on top of whatever
+// /regions and the homepage also trigger.
+// Fix: cache the *normalized* result itself, tagged alongside 'store-data'
+// so it invalidates together with the raw data. All region consumers now
+// call this instead of re-running the pipeline themselves.
+// ═══════════════════════════════════════════════════════════════
+async function _computeNormalizedProducts(): Promise<Product[]> {
+  const storeData = await getStoreData()
+  const withImages = getProductsWithImages(storeData)
+  return normalizeProducts(withImages) as Product[]
+}
+
+const _getCachedNormalizedProducts = unstable_cache(
+  _computeNormalizedProducts,
+  ['normalized-products'],
+  { revalidate: 60, tags: ['store-data'] },
+)
+
+export async function getNormalizedProducts(): Promise<Product[]> {
+  return _getCachedNormalizedProducts()
 }
 
 // ═══════════════════════════════════════════════════════════════
