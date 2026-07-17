@@ -71,7 +71,10 @@ function buildHeroImages(settings: any) {
   return slides
 }
 
-async function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): Promise<RichState[]> {
+// Exported (not just used internally) so it can be unit-tested directly —
+// see src/__tests__/homepageBuildStates.test.ts — without needing to render
+// the entire HomePage tree (hero images, trust bar, reviews section, etc.).
+export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): Promise<RichState[]> {
   const { states, state_images } = storeData
   if (!states?.length) return []
 
