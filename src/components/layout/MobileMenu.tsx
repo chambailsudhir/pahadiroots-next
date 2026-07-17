@@ -88,6 +88,11 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
                 🏔️ {s.name}
               </Link>
             ))}
+            {states.length > 8 && (
+              <Link href="/regions" onClick={closeMobileMenu} style={{ fontWeight: 800, color: 'var(--gd)' }}>
+                View All Regions →
+              </Link>
+            )}
           </>
         )}
 

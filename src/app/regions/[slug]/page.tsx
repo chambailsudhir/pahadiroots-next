@@ -125,7 +125,7 @@ export default async function RegionPage({ params }: Props) {
           />
         )}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 60%)' }} />
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 32px' }}>
+        <div className="region-hero-content" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '10px' }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
@@ -144,7 +144,7 @@ export default async function RegionPage({ params }: Props) {
         </div>
       </div>
 
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px 40px 60px' }}>
+      <div className="region-shell" style={{ maxWidth: '1400px', margin: '0 auto', padding: '36px 40px 60px' }}>
 
         {/* State description */}
         {(meta?.description || state.description) && (
@@ -172,7 +172,7 @@ export default async function RegionPage({ params }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
             <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
               Products from {state.name}
-              <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#999', fontStyle: 'normal' }}>
+              <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#666', fontStyle: 'normal' }}>
                 ({stateProducts.length})
               </span>
             </h2>
@@ -207,6 +207,13 @@ export default async function RegionPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      <style>{`
+        @media(max-width:640px) {
+          .region-hero-content { padding-left: 20px !important; padding-right: 20px !important; }
+          .region-shell { padding-left: 20px !important; padding-right: 20px !important; }
+        }
+      `}</style>
     </div>
   )
 }

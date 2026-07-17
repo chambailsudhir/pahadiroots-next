@@ -84,7 +84,7 @@ export default async function RegionsPage() {
     <div style={{ background: '#f4eed6', minHeight: '100vh' }}>
 
       {/* ── Hero ── */}
-      <div style={{
+      <div className="regions-hero" style={{
         background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',
         padding: '52px 48px 44px', position: 'relative', overflow: 'hidden',
       }}>
@@ -123,12 +123,12 @@ export default async function RegionsPage() {
       </div>
 
       {/* ── States count ── */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '28px 48px 8px', fontFamily: sans }}>
-        <p style={{ fontSize: 13, color: '#7a7a7a' }}>{states.length} states found</p>
+      <div className="regions-shell" style={{ maxWidth: '1400px', margin: '0 auto', padding: '28px 48px 8px', fontFamily: sans }}>
+        <p style={{ fontSize: 13, color: '#666' }}>{states.length} states found</p>
       </div>
 
       {/* ── Cards Grid ── */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '8px 48px 60px' }}>
+      <div className="regions-shell" style={{ maxWidth: '1400px', margin: '0 auto', padding: '8px 48px 60px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 28 }}>
           {states.map((state: any) => {
             const sid = String(state.id)
@@ -211,6 +211,10 @@ export default async function RegionsPage() {
       <style>{`
         .region-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(26,58,30,.16) !important; }
         @media(max-width:768px) { .region-card { min-width: 0; } }
+        @media(max-width:640px) {
+          .regions-hero { padding-left: 20px !important; padding-right: 20px !important; }
+          .regions-shell { padding-left: 20px !important; padding-right: 20px !important; }
+        }
       `}</style>
     </div>
   )
