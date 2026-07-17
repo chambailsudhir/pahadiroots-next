@@ -4,30 +4,10 @@ import { useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Category } from '@/types'
+import { emojiForCategory } from '@/lib/categoryEmoji'
 
 interface Props { categories: Category[] }
 
-function emojiFor(cat: Category): string {
-  const slug = (cat.slug || '').toLowerCase()
-  const name = (cat.name || '').toLowerCase()
-  const bySlug: Record<string, string> = {
-    honey: '🍯', jams: '🍓', juice: '🧃', oil: '🫚',
-    pulses: '🫘', rice: '🌾', shilajit: '🪨', spices: '🌿', tea: '🍵',
-  }
-  if (bySlug[slug]) return bySlug[slug]
-  if (name.includes('honey'))  return '🍯'
-  if (name.includes('ghee'))   return '🥛'
-  if (name.includes('herb') || name.includes('spice')) return '🌿'
-  if (name.includes('tea'))    return '🍵'
-  if (name.includes('rice') || name.includes('grain') || name.includes('millet')) return '🌾'
-  if (name.includes('oil'))    return '🫙'
-  if (name.includes('juice'))  return '🧃'
-  if (name.includes('shilajit') || name.includes('resin')) return '🪨'
-  if (name.includes('jam') || name.includes('preserve')) return '🍓'
-  if (name.includes('pulse') || name.includes('dal')) return '🫘'
-  if (name.includes('coffee')) return '☕'
-  return '🏔️'
-}
 
 export default function CategoryTiles({ categories }: Props) {
   const active = categories.filter(c => c.is_active)
@@ -39,13 +19,23 @@ export default function CategoryTiles({ categories }: Props) {
     if (!gridRef.current || active.length < 2) return
     const cgrid: HTMLDivElement = gridRef.current
 
-    const VISIBLE = window.innerWidth < 640 ? 2 : window.innerWidth < 960 ? 4 : 6
+    // BUG FIX (P2): VISIBLE used to be a `const` computed once when this
+    // effect ran (i.e. at mount), then captured in the cellW()/setWidths()
+    // closures below. onResize() called setWidths() again on every resize,
+    // but setWidths() was still reading that same stale, mount-time
+    // VISIBLE value — so resizing the window across the 640px/960px
+    // breakpoints (e.g. rotating a tablet, or resizing a desktop window)
+    // left the tile-width math computed for the WRONG number of visible
+    // tiles, drifting the carousel's loop/scroll math out of sync with
+    // what's actually on screen. Fixed by making this a function computed
+    // fresh on every call instead of a value frozen at mount time.
+    function getVisible() { return window.innerWidth < 640 ? 2 : window.innerWidth < 960 ? 4 : 6 }
 
-    function cellW() { return cgrid.getBoundingClientRect().width / VISIBLE }
+    function cellW() { return cgrid.getBoundingClientRect().width / getVisible() }
 
     const allCells = Array.from(cgrid.querySelectorAll<HTMLElement>('.cc-cell'))
     function setWidths() {
-      const w = cgrid.getBoundingClientRect().width / VISIBLE
+      const w = cgrid.getBoundingClientRect().width / getVisible()
       allCells.forEach(c => { c.style.width = w + 'px'; c.style.minWidth = w + 'px'; c.style.flex = 'none' })
     }
     setWidths()
@@ -90,7 +80,15 @@ export default function CategoryTiles({ categories }: Props) {
     if (lb) lb.onclick = () => { pausedRef.current = true; goPrev(); setTimeout(() => { pausedRef.current = false }, 1000) }
     if (rb) rb.onclick = () => { pausedRef.current = true; goNext(); setTimeout(() => { pausedRef.current = false }, 1000) }
 
-    const timer = setInterval(() => { if (!pausedRef.current) goNext() }, 2500)
+    // BUG FIX (P2): this interval used to run forever with no
+    // prefers-reduced-motion check and no pause when the tab was
+    // backgrounded. Reusing the existing pausedRef (already used for
+    // hover/touch pause) to also cover tab-visibility, and skipping
+    // autoplay entirely for users who've set prefers-reduced-motion.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const onVisibilityChange = () => { pausedRef.current = document.visibilityState !== 'visible' }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    const timer = reducedMotion ? null : setInterval(() => { if (!pausedRef.current) goNext() }, 2500)
     const onEnter = () => { pausedRef.current = true }
     const onLeave = () => { pausedRef.current = false }
     const onTouchStart = () => { pausedRef.current = true }
@@ -104,7 +102,8 @@ export default function CategoryTiles({ categories }: Props) {
     window.addEventListener('resize', onResize)
 
     return () => {
-      clearInterval(timer)
+      if (timer) clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('resize', onResize)
       wrap.removeEventListener('mouseenter', onEnter)
       wrap.removeEventListener('mouseleave', onLeave)
@@ -171,7 +170,7 @@ export default function CategoryTiles({ categories }: Props) {
           }}
         >
           {doubled.map((cat, idx) => {
-            const emoji = emojiFor(cat)
+            const emoji = emojiForCategory(cat)
             const isClone = idx >= active.length
             return (
               <div

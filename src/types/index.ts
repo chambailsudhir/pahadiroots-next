@@ -250,11 +250,18 @@ export interface SiteSettings {
   contact_email: string
   contact_phone: string
   contact_address: string
+  // BUG FIX (P1 — legal/compliance, homepage audit): Footer.tsx previously
+  // hardcoded the literal placeholder text "Lic. No. — update karein"
+  // instead of a real FSSAI license number. Sourced from settings now, so
+  // the footer never claims a license number that was never actually
+  // entered — see the conditional render in Footer.tsx.
+  fssai_license: string
 
   // Social
   instagram_url: string
   facebook_url: string
   youtube_url: string
+  linkedin_url: string
 
   // Email
   order_email_enabled: string

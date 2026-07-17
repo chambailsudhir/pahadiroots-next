@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { SiteSettings } from '@/types'
+import { useAutoplayInterval } from '@/hooks/useAutoplayInterval'
 
 interface HeroImage { url: string; alt_text?: string | null; title?: string; subtitle?: string }
 interface Props { images: HeroImage[]; settings: SiteSettings }
@@ -14,11 +15,10 @@ export default function HeroBanner({ images, settings }: Props) {
   const total  = slides ? slides.length : 1
 
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
-  useEffect(() => {
-    if (total <= 1) return
-    const iv = setInterval(next, 4500)
-    return () => clearInterval(iv)
-  }, [next, total])
+  // BUG FIX (P2): previously a raw setInterval with no
+  // prefers-reduced-motion check and no pause when the tab is
+  // backgrounded — see hooks/useAutoplayInterval.ts.
+  useAutoplayInterval(next, 4500, total > 1)
 
   return (
     <>

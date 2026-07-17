@@ -237,7 +237,11 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-logo-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
         .old-logo-words{}
         .old-logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#1a3a1e;line-height:1.1}
-        .old-logo-tl{font-size:9px;color:#c8920a;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+        /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
+           fails WCAG AA's 4.5:1 requirement for text this small (9px).
+           Verified by computing actual relative luminance (not eyeballed).
+           #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
+        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase}
         .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
         .old-nav-links li{height:64px;display:flex;align-items:center;}
         .old-nav-links li a,.old-nav-links li button{

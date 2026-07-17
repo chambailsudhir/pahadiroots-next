@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useState, useEffect, useMemo } from 'react'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
+import { emojiForCategory } from '@/lib/categoryEmoji'
+import { getEffectivePrice, getEffectiveMrp } from '@/lib/normalizeProduct'
 
 const SORTS = [
   { val: 'default',    label: 'Sort: Featured'     },
@@ -24,21 +26,6 @@ function shuffleProducts(products: Product[]): Product[] {
   return copy
 }
 
-function catEmoji(name: string): string {
-  const n = name.toLowerCase()
-  if (n.includes('honey')) return 'Honey'
-  if (n.includes('ghee')) return 'Ghee'
-  if (n.includes('herb') || n.includes('spice')) return 'Spice'
-  if (n.includes('tea')) return 'Tea'
-  if (n.includes('rice') || n.includes('grain')) return 'Grain'
-  if (n.includes('oil')) return 'Oil'
-  if (n.includes('juice')) return 'Juice'
-  if (n.includes('shilajit')) return 'Shilajit'
-  if (n.includes('jam') || n.includes('preserve')) return 'Jam'
-  if (n.includes('pulse') || n.includes('dal')) return 'Dal'
-  if (n.includes('saffron')) return 'Saffron'
-  return 'Pure'
-}
 
 interface Props {
   initialProducts: Product[]
@@ -98,11 +85,19 @@ export default function BestSellersClient({ initialProducts, categories }: Props
   }
 
   switch (sort) {
-    case 'price_asc':  filtered.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));  break
-    case 'price_desc': filtered.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));  break
+    // BUG FIX (P2): these used to compare a.price/b.price/a.mrp/b.mrp
+    // directly — the raw top-level product row. ProductCard (and
+    // getEffectivePrice/getEffectiveMrp's own doc-comments) render the
+    // lowest active *variant's* price/mrp when variants exist, which can
+    // differ from the top-level fields. For any product with variants,
+    // "Price: Low to High" and "Best Discount" could sort into an order
+    // that visibly disagreed with the prices/discounts shown on the very
+    // cards being sorted.
+    case 'price_asc':  filtered.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b)); break
+    case 'price_desc': filtered.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a)); break
     case 'discount':   filtered.sort((a, b) => {
-      const am = a.mrp ?? 0; const ap = a.price ?? 0
-      const bm = b.mrp ?? 0; const bp = b.price ?? 0
+      const am = getEffectiveMrp(a); const ap = getEffectivePrice(a)
+      const bm = getEffectiveMrp(b); const bp = getEffectivePrice(b)
       const da = am > ap ? ((am - ap) / am) : 0
       const db_ = bm > bp ? ((bm - bp) / bm) : 0
       return db_ - da
@@ -149,7 +144,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
             className={`filter-btn${activeCat === cat.slug ? ' active' : ''}`}
             onClick={() => setActiveCat(cat.slug)}
           >
-            {cat.emoji || catEmoji(cat.name)} {cat.name}
+            {cat.emoji || emojiForCategory(cat)} {cat.name}
           </button>
         ))}
 

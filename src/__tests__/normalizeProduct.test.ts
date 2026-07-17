@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice, getEffectiveStock, getBaseVariant } from '@/lib/normalizeProduct'
+import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice, getEffectiveMrp, getEffectiveStock, getBaseVariant } from '@/lib/normalizeProduct'
 
 describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
   it('maps variant.mrp from original_price (the real column), not a literal mrp field', () => {
@@ -140,6 +140,34 @@ describe('getEffectivePrice — the products-listing-page pricing bug', () => {
   it('falls back to the top-level product price when there are no variants', () => {
     const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599 } as any)
     expect(getEffectivePrice(product)).toBe(599)
+  })
+})
+
+describe('getEffectiveMrp — fixes BestSellersClient.tsx "Best Discount" sort', () => {
+  /**
+   * BUG FIX (P2, homepage audit): BestSellersClient.tsx's "Best Discount"
+   * sort compared raw top-level product.mrp/product.price instead of the
+   * variant-derived values ProductCard actually renders — for products
+   * with variants, the sort order could visibly disagree with the
+   * discount % shown on the cards being sorted. getEffectiveMrp is the
+   * MRP counterpart to getEffectivePrice, used together to fix that sort.
+   */
+  it('returns the mrp of the same base variant getEffectivePrice picks', () => {
+    const product = normalizeProduct({
+      id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999, mrp: 999,
+      product_variants: [
+        { id: 1, price: 450, original_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
+        { id: 2, price: 250, original_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
+      ],
+    } as any)
+    // Base variant is the 250-price one (lowest), whose mrp is 300 —
+    // NOT the top-level product.mrp of 999.
+    expect(getEffectiveMrp(product)).toBe(300)
+  })
+
+  it('falls back to the top-level product mrp when there are no variants', () => {
+    const product = normalizeProduct({ id: 1, name: 'Honey', slug: 'honey', badges: [], price: 599, mrp: 799 } as any)
+    expect(getEffectiveMrp(product)).toBe(799)
   })
 })
 

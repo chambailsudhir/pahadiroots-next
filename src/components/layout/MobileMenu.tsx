@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
@@ -16,11 +16,51 @@ interface Props {
 export default function MobileMenu({ settings, categories = [], states = [] }: Props) {
   const isMobileMenuOpen = useUIStore(s => s.isMobileMenuOpen)
   const closeMobileMenu  = useUIStore(s => s.closeMobileMenu)
+  const panelRef  = useRef<HTMLDivElement>(null)
+  const closeRef  = useRef<HTMLButtonElement>(null)
+  // WCAG 2.1 §3.2 — focus must return to whatever opened the dialog once
+  // it closes.
+  const openerRef = useRef<HTMLElement | null>(null)
 
+  // BUG FIX (P2): this declared role="dialog" aria-modal="true" but
+  // implemented none of the behavior that contract promises — no initial
+  // focus, no Tab focus-trap, no focus-restore on close. CartDrawer.tsx
+  // already has the correct version of this exact pattern (same
+  // aria-modal contract) — ported directly from there instead of
+  // reinventing it, so both dialogs behave consistently.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeMobileMenu()
-    if (isMobileMenuOpen) document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    let focusTimer: ReturnType<typeof setTimeout> | null = null
+    const FOCUSABLE = 'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])'
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeMobileMenu(); return }
+      if (e.key === 'Tab' && panelRef.current) {
+        const els = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
+        if (!els.length) return
+        const first = els[0], last = els[els.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus() }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus() }
+        }
+      }
+    }
+
+    if (isMobileMenuOpen) {
+      openerRef.current = document.activeElement as HTMLElement
+      document.addEventListener('keydown', onKey)
+      focusTimer = setTimeout(() => closeRef.current?.focus(), 50)
+    } else {
+      if (openerRef.current && typeof openerRef.current.focus === 'function') {
+        openerRef.current.focus()
+        openerRef.current = null
+      }
+    }
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      if (focusTimer !== null) clearTimeout(focusTimer)
+    }
   }, [isMobileMenuOpen, closeMobileMenu])
 
   useEffect(() => {
@@ -52,8 +92,8 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   return (
     <div className={`mob-nav${isMobileMenuOpen ? ' open' : ''}`} role="dialog" aria-modal="true">
       <div className="mob-nav-bg" onClick={closeMobileMenu} aria-hidden="true" />
-      <div className="mob-nav-panel">
-        <button className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>
+      <div className="mob-nav-panel" ref={panelRef}>
+        <button ref={closeRef} className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>
         <div className="mob-nav-logo">🌿 {settings.site_name || '5 Pahadi Roots'}</div>
 
         {/* Primary links */}
@@ -88,18 +128,13 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
                 🏔️ {s.name}
               </Link>
             ))}
-            {states.length > 8 && (
-              <Link href="/regions" onClick={closeMobileMenu} style={{ fontWeight: 800, color: 'var(--gd)' }}>
-                View All Regions →
-              </Link>
-            )}
           </>
         )}
 
         {/* WhatsApp CTA */}
         {settings.whatsapp_number && (
           <a
-            href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=Hi, I need help`}
+            href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I need help')}`}
             target="_blank" rel="noopener noreferrer"
             style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '20px 0 0', background: '#25D366', color: '#fff', fontWeight: 800, fontSize: 13, padding: '10px 14px', borderRadius: 10 }}
           >

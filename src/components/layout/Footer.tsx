@@ -29,9 +29,16 @@ export default function Footer({ settings }: Props) {
     setSubLoading(false)
   }
 
-  const instagramUrl = settings.instagram_url || 'https://www.instagram.com/pahadiroots'
+  // BUG FIX: instagramUrl's fallback was 'instagram.com/pahadiroots' — wrong
+  // handle. The brand is "5 Pahadi Roots" everywhere else in this codebase
+  // (layout.tsx metadata, site_name default, etc.); the real account is
+  // @5pahadiroots. LinkedIn was fully hardcoded with a generic guessed URL
+  // and wasn't configurable via settings at all, unlike the other three —
+  // now matches the same pattern, with the real company page as fallback.
+  const instagramUrl = settings.instagram_url || 'https://www.instagram.com/5pahadiroots/?hl=en'
   const facebookUrl  = settings.facebook_url  || 'https://www.facebook.com/pahadiroots'
   const youtubeUrl   = settings.youtube_url   || 'https://www.youtube.com/@pahadiroots'
+  const linkedinUrl  = settings.linkedin_url  || 'https://www.linkedin.com/company/pahadiroots/about/?viewAsMember=true'
   const phone        = settings.contact_phone  || '+919899984895'
   const email2       = settings.contact_email  || 'hello@pahadiroots.com'
   const address      = settings.contact_address || 'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082'
@@ -52,11 +59,17 @@ export default function Footer({ settings }: Props) {
               🌿 Join the Pahadi Family
             </h4>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.55)', margin: 0 }}>
-              Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox
+              {/* BUG FIX (P2): this copy made no mention of the signup
+                  discount that the homepage's dedicated NewsletterBar
+                  promises for the exact same action — same subscribe
+                  action, two different customer-facing promises. Now
+                  consistent (and, since the newsletter backend fix, both
+                  genuinely deliver the same 5% code by email). */}
+              Get 5% off your first order — plus new arrivals &amp; Himalayan stories, straight to your inbox
             </p>
           </div>
           {subDone ? (
-            <div style={{ color: '#c8920a', fontWeight: 700, fontSize: '14px' }}>🎉 Thank you for subscribing!</div>
+            <div style={{ color: '#c8920a', fontWeight: 700, fontSize: '14px' }}>🎉 Check your inbox for your 5% off code!</div>
           ) : (
             <form onSubmit={handleSub} style={{ display: 'flex', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,.18)', minWidth: '300px' }}>
               <input
@@ -281,7 +294,7 @@ export default function Footer({ settings }: Props) {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
             </a>
             {/* LinkedIn */}
-            <a href="https://www.linkedin.com/company/pahadiroots" target="_blank" rel="noopener" title="LinkedIn" style={socStyle}>
+            <a href={linkedinUrl} target="_blank" rel="noopener" title="LinkedIn" style={socStyle}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
             </a>
           </div>
@@ -297,11 +310,26 @@ export default function Footer({ settings }: Props) {
               set — showing "Licensed" without a real number behind it
               would still be a false claim, just a differently-shaped one. */}
           {settings.fssai_license && (
-            <div style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(200,146,10,.22)', borderRadius: '10px', padding: '9px 14px', display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ background: '#fff', borderRadius: '5px', padding: '3px 7px', fontSize: '11px', fontWeight: 900, color: '#1a6b1a', letterSpacing: '.5px' }}>FSSAI</div>
+            <div style={{ background: '#fff', border: '1px solid rgba(0,0,0,.06)', borderRadius: '10px', padding: '8px 16px', display: 'inline-flex', alignItems: 'center', gap: '12px', boxShadow: '0 2px 10px rgba(0,0,0,.15)' }}>
+              {/* Stylized FSSAI wordmark, matching the real mark's colors
+                  (blue/orange lettering, green leaf accent) rather than a
+                  generic text box — recreated in CSS rather than an image
+                  asset, since there's no legitimate way to source and host
+                  the actual certificate artwork here. */}
+              <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '20px', fontWeight: 700, fontStyle: 'italic', letterSpacing: '.5px', display: 'flex', alignItems: 'baseline', lineHeight: 1 }} aria-hidden="true">
+                <span style={{ color: '#2b4c9b' }}>f</span>
+                <span style={{ color: '#e57a2e' }}>s</span>
+                <span style={{ color: '#2b4c9b' }}>s</span>
+                <span style={{ color: '#e57a2e' }}>a</span>
+                <span style={{ position: 'relative', color: '#2b4c9b' }}>
+                  i
+                  <span style={{ position: 'absolute', top: '-9px', left: '1px', fontSize: '9px' }}>🌿</span>
+                </span>
+              </div>
+              <div style={{ width: '1px', height: '26px', background: 'rgba(0,0,0,.1)' }} />
               <div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,.6)', fontWeight: 700 }}>Licensed</div>
-                <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,.4)', marginTop: '2px' }}>Lic. No. {settings.fssai_license}</div>
+                <div style={{ fontSize: '11px', color: '#1a3a1e', fontWeight: 800 }}>FSSAI Licensed</div>
+                <div style={{ fontSize: '10.5px', color: '#5a6b5c', marginTop: '2px' }}>Lic. No. {settings.fssai_license}</div>
               </div>
             </div>
           )}

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { catSlug } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
@@ -27,13 +28,21 @@ export default async function FeaturedBanner({ slug }: Props) {
             height: 220, display: 'flex', alignItems: 'center',
             boxShadow: '0 12px 40px rgba(0,0,0,.2)',
           }}>
+            {/* BUG FIX (P2): this rendered the category image via a raw
+                CSS backgroundImage — the full-resolution original loads
+                with no resizing/compression, the exact problem already
+                fixed for CategoryTiles.tsx's thumbnails (see the comment
+                there). This banner is large and always above the fold, so
+                the unoptimized-image cost here is bigger, not smaller. */}
             {cat.image_url && (
-              <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: `url(${cat.image_url})`,
-                backgroundSize: 'cover', backgroundPosition: 'center',
-                opacity: .3, transition: 'opacity .3s',
-              }} />
+              <Image
+                src={cat.image_url}
+                alt=""
+                fill
+                sizes="(max-width:960px) 100vw, 1300px"
+                quality={70}
+                style={{ objectFit: 'cover', objectPosition: 'center', opacity: .3 }}
+              />
             )}
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(7,26,9,.85) 40%,transparent 100%)' }} />
             <div style={{ position: 'relative', padding: '0 48px' }}>

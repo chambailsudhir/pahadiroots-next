@@ -41,13 +41,29 @@ export default function GoogleAuthHandler() {
     const code     = params.get('code')
     const verifier = localStorage.getItem('pr_pkce_verifier') || ''
 
+    // BUG FIX (P2): this used to treat ANY `?code=` query param on ANY
+    // page as a Google PKCE auth code, and stripped it from the URL via
+    // replaceState() unconditionally — regardless of whether a real OAuth
+    // flow was ever started. `?code=` is a very common convention for
+    // promo/referral links (e.g. pahadiroots.com/?code=SAVE20); this
+    // component is mounted globally (layout.tsx), so a marketing link
+    // using that param on any page — including the homepage — would have
+    // silently had it eaten with no visible symptom beyond a console
+    // error. No feature actually collides with this today (checked), but
+    // it's exactly the kind of landmine that turns into a real incident
+    // the first time someone adds one. Fix: only treat `code` as a real
+    // Google auth code if a matching PKCE verifier is actually present —
+    // that only happens if this browser genuinely started an OAuth flow.
+    // Otherwise, leave the param and the URL completely alone.
+    const isRealGoogleAuthCode = !!code && !!verifier
+
     // ── Case 2: #access_token= implicit / hash flow ──────────
     const hash        = window.location.hash
     const hashParams  = new URLSearchParams(hash.replace(/^#/, ''))
     const hashToken   = hashParams.get('access_token')
     const hashRefresh = hashParams.get('refresh_token') || ''
 
-    if (!code && !hashToken) return
+    if (!isRealGoogleAuthCode && !hashToken) return
 
     // Clean URL immediately to prevent re-runs on refresh
     window.history.replaceState({}, '', window.location.pathname)
@@ -88,7 +104,7 @@ export default function GoogleAuthHandler() {
           return
         }
 
-        if (code) {
+        if (isRealGoogleAuthCode) {
           // ── Code path: PKCE exchange ──────────────────────────
           const tokenRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
             method:  'POST',

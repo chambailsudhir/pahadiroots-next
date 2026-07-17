@@ -177,6 +177,18 @@ export function getEffectivePrice(p: Product): number {
 }
 
 /**
+ * getEffectiveMrp — the MRP counterpart to getEffectivePrice, added for the
+ * P2 audit fix to BestSellersClient.tsx's "Best Discount" sort, which
+ * compared raw top-level product.mrp/product.price instead of the
+ * variant-derived values ProductCard actually renders — for any product
+ * with variants, the sort order could visibly disagree with the discount
+ * % shown on the cards being sorted. Same reasoning as getEffectivePrice.
+ */
+export function getEffectiveMrp(p: Product): number {
+  return getBaseVariant(p)?.mrp ?? p.mrp ?? 0
+}
+
+/**
  * getEffectiveStock — the same stock ProductCard bases its in-stock/out-of-
  * stock display on: the base variant's stock when variants exist, else the
  * top-level product stock. Filtering "In Stock Only" on the raw top-level
