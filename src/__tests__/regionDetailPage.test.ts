@@ -29,7 +29,7 @@ vi.mock('next/image', () => ({
     React.createElement('img', { alt: props.alt, src: props.src }),
 }))
 vi.mock('next/link', () => ({
-  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) =>
+  default: ({ children, href, prefetch, ...rest }: { children: React.ReactNode; href: string; prefetch?: boolean }) =>
     React.createElement('a', { href, ...rest }, children),
 }))
 vi.mock('next/navigation', () => ({
@@ -51,7 +51,7 @@ describe('generateMetadata', () => {
     }))
 
     const { generateMetadata } = await import('@/app/regions/[slug]/page')
-    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'hp' }) })
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
 
     expect(meta.alternates?.canonical).toContain('/regions/hp')
     expect(meta.openGraph).toBeDefined()
@@ -66,7 +66,7 @@ describe('generateMetadata', () => {
     }))
 
     const { generateMetadata } = await import('@/app/regions/[slug]/page')
-    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'nonexistent' }) })
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'nonexistent' }), searchParams: Promise.resolve({}) })
 
     expect(meta.robots).toEqual({ index: false, follow: false })
   })
@@ -79,7 +79,7 @@ describe('generateMetadata', () => {
     }))
 
     const { generateMetadata } = await import('@/app/regions/[slug]/page')
-    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'hp' }) })
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
 
     // The curated copy for 'hp' starts with "Himachal Pradesh — Dev Bhoomi" —
     // if this were still reading raw state.description it would instead be
@@ -106,7 +106,7 @@ describe('RegionPage (default export)', () => {
     }))
 
     const { default: RegionPage } = await import('@/app/regions/[slug]/page')
-    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }) })
+    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
     render(element as React.ReactElement)
 
     expect(screen.getByText('Wild Honey')).toBeTruthy()
@@ -122,7 +122,7 @@ describe('RegionPage (default export)', () => {
     vi.doMock('@/components/product/ProductCard', () => ({ default: () => null }))
 
     const { default: RegionPage } = await import('@/app/regions/[slug]/page')
-    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }) })
+    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
     const { container } = render(element as React.ReactElement)
 
     // Curated copy, not the raw "Raw DB description." fallback.
@@ -147,7 +147,7 @@ describe('RegionPage (default export)', () => {
     vi.doMock('@/components/product/ProductCard', () => ({ default: () => null }))
 
     const { default: RegionPage } = await import('@/app/regions/[slug]/page')
-    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }) })
+    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
     render(element as React.ReactElement)
 
     expect(screen.queryByText('Products', { selector: 'a' })).toBeNull()
@@ -164,7 +164,7 @@ describe('RegionPage (default export)', () => {
     vi.doMock('@/components/product/ProductCard', () => ({ default: () => null }))
 
     const { default: RegionPage } = await import('@/app/regions/[slug]/page')
-    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }) })
+    const element = await RegionPage({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
     const { container } = render(element as React.ReactElement)
 
     const html = container.innerHTML
@@ -182,8 +182,33 @@ describe('RegionPage (default export)', () => {
     }))
 
     const { default: RegionPage } = await import('@/app/regions/[slug]/page')
-    await expect(RegionPage({ params: Promise.resolve({ slug: 'nonexistent' }) }))
+    await expect(RegionPage({ params: Promise.resolve({ slug: 'nonexistent' }), searchParams: Promise.resolve({}) }))
       .rejects.toThrow('NEXT_NOT_FOUND')
+  })
+
+  it('feature gap fix — respects ?sort=price_asc from searchParams (sort/filter parity with /products)', async () => {
+    vi.doMock('@/lib/storeData', () => ({
+      getStoreData: vi.fn(async () => ({ states: [HP_STATE], state_images: [] })),
+      getNormalizedProducts: vi.fn(async () => ([
+        { id: 1, name: 'Expensive Honey', slug: 'expensive-honey', state_id: 'hp', price: 900 },
+        { id: 2, name: 'Cheap Honey',     slug: 'cheap-honey',     state_id: 'hp', price: 200 },
+      ])),
+    }))
+    vi.doMock('@/lib/normalizeProduct', () => ({ toCardProductData: (p: any) => p, getEffectivePrice: (p: any) => p.price, getEffectiveStock: () => 10 }))
+    vi.doMock('@/components/product/ProductCard', () => ({
+      default: ({ product }: { product: { name: string } }) =>
+        React.createElement('div', { 'data-testid': 'product-card' }, product.name),
+    }))
+
+    const { default: RegionPage } = await import('@/app/regions/[slug]/page')
+    const element = await RegionPage({
+      params: Promise.resolve({ slug: 'hp' }),
+      searchParams: Promise.resolve({ sort: 'price_asc' }),
+    })
+    const { container } = render(element as React.ReactElement)
+
+    const cards = Array.from(container.querySelectorAll('[data-testid="product-card"]'))
+    expect(cards.map(c => c.textContent)).toEqual(['Cheap Honey', 'Expensive Honey'])
   })
 })
 

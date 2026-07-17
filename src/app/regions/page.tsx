@@ -13,7 +13,12 @@ import { getRegionMeta } from '@/lib/regionMeta'
 // when rendered on a Vercel preview deploy.
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
-export const revalidate = 300
+// BUG FIX (#27): previously 300s — looser than the 60s unstable_cache TTL on
+// the underlying data (getStoreData/getNormalizedProducts in storeData.ts),
+// so a product-count change could be live in the data cache for up to 4
+// minutes before this page's own ISR caught up. Aligned to 60s so this page
+// can never be staler than the data it reads.
+export const revalidate = 60
 
 // BUG FIX (SEO): this page previously had only a title/description, with no
 // canonical or openGraph block — unlike /products/[slug], which explicitly
@@ -83,6 +88,26 @@ export default async function RegionsPage() {
   return (
     <div style={{ background: '#f4eed6', minHeight: '100vh' }}>
 
+      {/* BUG FIX (missing BreadcrumbList JSON-LD, same gap already fixed on
+          /products/[slug]): gives Google structured data for sitelinks in
+          SERPs — separate from the visual breadcrumb, doesn't merge with it. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: `${BASE}/` },
+              { '@type': 'ListItem', position: 2, name: 'All Regions' /* current page — no item URL per spec */ },
+            ],
+          })
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026'),
+        }}
+      />
+
       {/* ── Hero ── */}
       <div className="regions-hero" style={{
         background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',
@@ -130,11 +155,11 @@ export default async function RegionsPage() {
       {/* ── Cards Grid ── */}
       <div className="regions-shell" style={{ maxWidth: '1400px', margin: '0 auto', padding: '8px 48px 60px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 28 }}>
-          {states.map((state: any) => {
+          {states.map((state: any, idx: number) => {
             const sid = String(state.id)
             const meta = getRegionMeta(sid)
             const imgUrl = stateImageMap[sid] || null
-            // BUG FIX: lookup key must match the lowercased keys used to
+            // BUG FIX (perf/LCP): lookup key must match the lowercased keys used to
             // build productCountByState above, or counts can silently
             // read as 0 whenever casing differs.
             const count = productCountByState[sid.toLowerCase()] || 0
@@ -150,7 +175,12 @@ export default async function RegionsPage() {
                 {/* Image */}
                 <div style={{ position: 'relative', height: 180, background: meta?.panelBg ?? '#1a3a1e', overflow: 'hidden', flexShrink: 0 }}>
                   {imgUrl ? (
-                    <Image src={imgUrl} alt={state.name} fill sizes="400px" style={{ objectFit: 'cover', objectPosition: 'center top' }} />
+                    <Image
+                      src={imgUrl} alt={state.name} fill
+                      priority={idx < 4}
+                      sizes="(max-width: 640px) 100vw, (max-width: 900px) 50vw, (max-width: 1400px) 33vw, 350px"
+                      style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                    />
                   ) : (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: .5 }}>
                       {meta?.emoji ?? '🏔️'}

@@ -13,13 +13,26 @@ import type { Product } from '@/types'
 // state you were viewing. Now shares the same single source of truth.
 import { getRegionMeta } from '@/lib/regionMeta'
 import { truncate } from '@/lib/utils'
+// BUG FIX (feature gap — no sort/filter parity with /products): reuses the
+// same extracted, unit-tested sortProducts() /products already uses, rather
+// than inventing a second sort implementation for this page.
+import { sortProducts, type ProductSort } from '@/lib/filterAndSortProducts'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
-export const revalidate = 300 // 5 min
+const REGION_SORT_OPTIONS = [
+  { value: 'newest',     label: 'Newest',      icon: '🆕' },
+  { value: 'price_asc',  label: 'Price: Low → High', icon: '↑' },
+  { value: 'price_desc', label: 'Price: High → Low', icon: '↓' },
+  { value: 'popular',    label: 'Best Sellers', icon: '⭐' },
+] as const
+
+// BUG FIX (#27): same alignment as /regions — 300s was looser than the
+// underlying 60s data cache TTL.
+export const revalidate = 60 // was 300 (5 min) — now matches data cache TTL
 
 // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
-interface Props { params: Promise<{ slug: string }> }
+interface Props { params: Promise<{ slug: string }>; searchParams: Promise<{ sort?: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -72,8 +85,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function RegionPage({ params }: Props) {
+export default async function RegionPage({ params, searchParams }: Props) {
   const { slug } = await params
+  const sp = await searchParams
+  const sort = (sp.sort || 'newest') as ProductSort
   const storeData = await getStoreData()
 
   // Find state by id (e.g. "hp", "uk")
@@ -98,15 +113,41 @@ export default async function RegionPage({ params }: Props) {
   // match a pid that had different casing (e.g. state_id stored as "HP").
   // Both sides are now lowercased, matching the fix applied on
   // /regions/page.tsx and the homepage's buildStates().
-  const stateProducts = allProducts.filter((p: any) => {
+  let stateProducts = allProducts.filter((p: any) => {
     const pid = String(p.state_id ?? '').toLowerCase()
     return pid === String(state.id).toLowerCase()
   }) as Product[]
+
+  // BUG FIX (feature gap): no sort control previously existed here — a
+  // state with 15-20 products had no way to sort by price/bestseller,
+  // unlike /products. Reuses the same sortProducts() utility.
+  stateProducts = sortProducts(stateProducts, sort)
 
   const meta = getRegionMeta(state.id)
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
+
+      {/* BUG FIX (missing BreadcrumbList JSON-LD, same gap already fixed on
+          /products/[slug]). Matches the corrected visual breadcrumb (bug
+          #20) — Home / Regions / {State}, not Home / Products / Regions. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: `${BASE}/` },
+              { '@type': 'ListItem', position: 2, name: 'Regions', item: `${BASE}/regions` },
+              { '@type': 'ListItem', position: 3, name: state.name /* current page — no item URL per spec */ },
+            ],
+          })
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026'),
+        }}
+      />
 
       {/* Hero */}
       <div style={{
@@ -169,7 +210,7 @@ export default async function RegionPage({ params }: Props) {
 
         {/* Products section */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
             <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
               Products from {state.name}
               <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#666', fontStyle: 'normal' }}>
@@ -183,6 +224,32 @@ export default async function RegionPage({ params }: Props) {
               All Products →
             </Link>
           </div>
+
+          {/* BUG FIX (feature gap): no sort control previously existed on this
+              page — a state with many products had no way to sort by price
+              or popularity, unlike /products. Same Link-based pattern
+              /products uses (works without client JS, since this stays a
+              Server Component). */}
+          {stateProducts.length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
+              {REGION_SORT_OPTIONS.map(opt => (
+                <Link
+                  key={opt.value}
+                  href={`/regions/${state.id}${opt.value === 'newest' ? '' : `?sort=${opt.value}`}`}
+                  prefetch={false}
+                  style={{
+                    fontSize: '12px', fontWeight: sort === opt.value ? 700 : 500,
+                    color: sort === opt.value ? '#1a3a1e' : '#666',
+                    background: sort === opt.value ? '#f0f7f1' : 'transparent',
+                    border: sort === opt.value ? '1px solid #d4e8d8' : '1px solid transparent',
+                    borderRadius: '16px', padding: '5px 12px', textDecoration: 'none', fontFamily: 'Lato,sans-serif',
+                  }}
+                >
+                  {opt.icon} {opt.label}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {stateProducts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '80px 20px' }}>

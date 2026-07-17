@@ -23,8 +23,8 @@ import { render, screen } from '@testing-library/react'
 // next/image / next/link — same pattern used across the existing suite
 // (CartDrawer.itemMemo.test.ts, CartDrawer.test.ts, etc.)
 vi.mock('next/image', () => ({
-  default: (props: { alt: string; src: string }) =>
-    React.createElement('img', { alt: props.alt, src: props.src }),
+  default: (props: { alt: string; src: string; priority?: boolean }) =>
+    React.createElement('img', { alt: props.alt, src: props.src, loading: props.priority ? 'eager' : 'lazy' }),
 }))
 vi.mock('next/link', () => ({
   default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) =>
@@ -122,5 +122,30 @@ describe('/regions listing page', () => {
 
     const link = screen.getByRole('link', { name: /explore sikkim products/i })
     expect(link).toBeTruthy()
+  })
+
+  it('bug #26 — the first 4 cards (above-the-fold row) get priority for LCP, later ones don\'t', async () => {
+    vi.doMock('@/lib/storeData', () => ({
+      getStoreData: vi.fn(async () => ({
+        states: Array.from({ length: 6 }, (_, i) => ({ id: `s${i}`, name: `State ${i}` })),
+        state_images: [
+          { state_id: 's0', image_url: '/s0.jpg', sort_order: 0 },
+          { state_id: 's5', image_url: '/s5.jpg', sort_order: 0 },
+        ],
+      })),
+      getNormalizedProducts: vi.fn(async () => ([])),
+    }))
+
+    const { default: RegionsPage } = await import('@/app/regions/page')
+    const element = await RegionsPage()
+    const { container } = render(element as React.ReactElement)
+
+    // State 0 (index 0, has an image) should be eager/priority.
+    const firstImg = container.querySelector('img[alt="State 0"]')
+    expect(firstImg?.getAttribute('loading')).toBe('eager')
+
+    // State 5 (index 5, has an image) is past the priority cutoff — should lazy-load.
+    const lastImg = container.querySelector('img[alt="State 5"]')
+    expect(lastImg?.getAttribute('loading')).toBe('lazy')
   })
 })
