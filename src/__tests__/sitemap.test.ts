@@ -87,4 +87,25 @@ describe('sitemap()', () => {
     expect(entries.some(e => e.url.includes('/regions/inactive-state'))).toBe(false)
     expect(entries.some(e => e.url.includes('/regions/hp'))).toBe(true)
   })
+
+  it('bug #7 — uses the state\'s real updated_at for lastModified, not always "now"', async () => {
+    const knownDate = '2024-03-15T10:00:00.000Z'
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: {
+        from: (table: string) => ({
+          select: () => makeChain(
+            table === 'states' ? [{ id: 'hp', updated_at: knownDate }] : [],
+            []
+          ),
+        }),
+      },
+    }))
+
+    const { default: sitemap } = await import('@/app/sitemap')
+    const entries = await sitemap()
+
+    const hpEntry = entries.find(e => e.url.endsWith('/regions/hp'))
+    expect(hpEntry).toBeDefined()
+    expect(new Date(hpEntry!.lastModified as string | Date).toISOString()).toBe(knownDate)
+  })
 })

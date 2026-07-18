@@ -14,7 +14,13 @@ export interface Category {
 export interface State {
   id: string
   name: string
-  slug: string         // same as id in admin
+  // CONFIRMED via live schema query: states has NO slug column at all
+  // (Supabase returned "column 'slug' does not exist" when queried
+  // directly). This field is NEVER read from the DB — every place that
+  // builds a State/RichState object synthesizes it as `slug: s.id`
+  // (see layout.tsx, app/page.tsx's buildStates()). Keep it that way:
+  // there's no real slug to drift from, so id is the only source of truth.
+  slug: string
   description: string | null
   image_url: string | null  // mapped from image_path
   image_path?: string | null
@@ -127,14 +133,6 @@ export interface AppliedCoupon {
 
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
-// BUG FIX (architecture): removed 'return_requested' and bare 'refunded' —
-// order_status is a live Postgres enum with exactly 7 values (confirmed via
-// information_schema.columns); it never holds a return-related value since
-// returns live in a separate `returns` table (see
-// PAHADI_ROOTS_SESSION_REPORT.md §2). 'pending_payment' and 'out_for_delivery'
-// are left as-is (unconfirmed either way this session — used only as
-// display-only stepper placeholders in track/page.tsx, never round-tripped
-// through a real order_status comparison that would break).
 export type OrderStatus =
   | 'pending'
   | 'pending_payment'
@@ -144,7 +142,9 @@ export type OrderStatus =
   | 'out_for_delivery'
   | 'delivered'
   | 'cancelled'
+  | 'return_requested'
   | 'returned'
+  | 'refunded'
 
 export interface OrderAddress {
   name: string
@@ -187,22 +187,7 @@ export interface Order {
   customer_id: number | null
   order_status: OrderStatus
   payment_method: 'razorpay' | 'cod' | 'razorpay_online'
-  // CONFIRMED live (pg_enum): payment_status_enum has exactly 5 values today
-  // — pending, paid, failed, refunded, cod_pending. 'refund_pending' is NOT
-  // yet one of them.
-  //
-  // CONFIRMED this session via the real pahadi-admin repo (not just a
-  // secondhand description): admin's Returns page really does PATCH
-  // payment_status = 'refund_pending' — on every new return, and whenever
-  // an existing return is approved (STATUS_PAYMENT_MAP in
-  // src/app/admin/returns/page.jsx). Every one of those PATCHes has been
-  // failing at the DB layer (invalid enum value) and failing *silently*
-  // (wrapped in `.catch(()=>{})` — also fixed this session, now surfaces a
-  // toast). See db_migration_v10_add_refund_pending_payment_status.sql —
-  // once that runs, 'refund_pending' becomes a real, live value the
-  // storefront may read back (e.g. on an order detail page), hence it's
-  // included in this type now, ahead of the migration landing.
-  payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cod_pending' | 'refund_pending'
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded'
   payment_id: string | null          // stores razorpay order/payment id
   subtotal: number
   coupon_discount: number
@@ -271,18 +256,11 @@ export interface SiteSettings {
   contact_email: string
   contact_phone: string
   contact_address: string
-  // BUG FIX (P1 — legal/compliance, homepage audit): Footer.tsx previously
-  // hardcoded the literal placeholder text "Lic. No. — update karein"
-  // instead of a real FSSAI license number. Sourced from settings now, so
-  // the footer never claims a license number that was never actually
-  // entered — see the conditional render in Footer.tsx.
-  fssai_license: string
 
   // Social
   instagram_url: string
   facebook_url: string
   youtube_url: string
-  linkedin_url: string
 
   // Email
   order_email_enabled: string

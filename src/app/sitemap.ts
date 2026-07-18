@@ -45,12 +45,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // drives /regions/[slug]'s generateStaticParams) filters is_active=true.
   // Any inactive state was getting a sitemap entry that would 404 when
   // Google crawled it. Now matches the same filter.
+  //
+  // BUG FIX (#7): previously selected only `id`, so lastModified was always
+  // stamped `now` on every build regardless of whether the state actually
+  // changed — meaningless for crawlers. Confirmed via live schema query
+  // that states.updated_at exists, so it's now selected and used, matching
+  // how products already do it below.
   let states = null
-  try { const { data } = await supabase.from('states').select('id').eq('is_active', true); states = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
+  try {
+    const { data } = await supabase.from('states').select('id, updated_at').eq('is_active', true)
+    states = data
+  } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const regionPages: MetadataRoute.Sitemap = (states || []).map(s => ({
     url:             `${BASE}/regions/${s.id}`,
-    lastModified:    now,
+    lastModified:    s.updated_at ? new Date(s.updated_at) : now,
     changeFrequency: 'weekly' as const,
     priority:        0.65,
   }))
