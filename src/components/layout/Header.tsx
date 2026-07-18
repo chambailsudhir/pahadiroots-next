@@ -77,15 +77,12 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
         {/* Logo */}
         <Link href="/" className="old-logo">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
             {logoUrl
               ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-header.png" alt="HimVeda" width={170} height={47} style={{ height: '30px', width: 'auto', objectFit: 'contain' }} priority />}
-            {/* "by Pahadi Roots" is real text now, not baked into the PNG — the
-                raster version had cramped, colliding letterforms that couldn't
-                be fixed without a proper source vector file. */}
-            {!logoUrl && <div className="old-logo-by">by Pahadi Roots</div>}
-            <div className="old-logo-tl">Himalayan Natural Store</div>
+              : <Image src="/logo-header.png" alt={siteName} width={160} height={48} style={{ height: '40px', width: 'auto', objectFit: 'contain' }} priority />}
+            <span className="old-logo-divider" />
+            <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
         </Link>
 
@@ -239,8 +236,8 @@ export default function Header({ settings, categories = [], states = [] }: Props
            fails WCAG AA's 4.5:1 requirement for text this small (9px).
            Verified by computing actual relative luminance (not eyeballed).
            #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
-        .old-logo-by{font-family:'Playfair Display',serif;font-style:italic;font-weight:600;font-size:12px;color:#8a6508;letter-spacing:.2px;line-height:1;margin-left:2px}
-        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+        .old-logo-divider{width:1px;height:26px;background:#c9a44c;opacity:.5}
+        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:1.4;text-align:left}
         .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
         .old-nav-links li{height:64px;display:flex;align-items:center;}
         .old-nav-links li a,.old-nav-links li button{
