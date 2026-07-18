@@ -8,9 +8,11 @@ import { type Order } from '@/lib/services/orderService'
 import styles from '../styles/account.module.css'
 
 // CSS Module class map — converts old kebab-case strings to module classes
+// Reconciled to the real 5-value returns.status lifecycle (requested/
+// approved/received/refunded/rejected) — see constants.ts BADGE_CLASS.
+// There is no 'processing', 'refund_initiated', or 'refund_completed'.
 const BADGE: Record<string, string> = {
   'badge-confirmed':        styles.badgeConfirmed,
-  'badge-processing':       styles.badgeConfirmed,
   'badge-packed':           styles.badgePacked,
   'badge-shipped':          styles.badgeShipped,
   'badge-delivered':        styles.badgeDelivered,
@@ -20,9 +22,7 @@ const BADGE: Record<string, string> = {
   'badge-return_requested': styles.badgeReturn,
   'badge-return_approved':  styles.badgeReturn,
   'badge-return_received':  styles.badgeReturn,
-  'badge-refunded':         styles.badgeReturn,
-  'badge-refund_initiated': styles.badgeReturn,
-  'badge-refund_completed': styles.badgeReturn,
+  'badge-return_refunded':  styles.badgeReturn,
   'badge-return_rejected':  styles.badgeReturn,
 }
 
@@ -33,14 +33,11 @@ const STRIPE: Record<string, string> = {
   'oc-stripe-delivered':       styles.ocStripeDelivered,
   'oc-stripe-pending':         styles.ocStripePending,
   'oc-stripe-cancelled':       styles.ocStripeCancelled,
-  'oc-stripe-processing':      styles.ocStripeProcessing,
   'oc-stripe-returned':        styles.ocStripeReturn,
   'oc-stripe-return_requested':styles.ocStripeReturn,
   'oc-stripe-return_approved': styles.ocStripeReturn,
   'oc-stripe-return_received': styles.ocStripeReturn,
-  'oc-stripe-refunded':        styles.ocStripeReturn,
-  'oc-stripe-refund_initiated':styles.ocStripeReturn,
-  'oc-stripe-refund_completed':styles.ocStripeReturn,
+  'oc-stripe-return_refunded': styles.ocStripeReturn,
   'oc-stripe-return_rejected': styles.ocStripeReturn,
 }
 

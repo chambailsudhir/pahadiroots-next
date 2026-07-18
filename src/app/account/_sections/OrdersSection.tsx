@@ -91,7 +91,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
   async function submitReturn() {
     if (!returnModal || !returnReason) return
     // If "Other" is selected, require the free-text explanation
-    if (returnReason === 'Other' && !returnOtherText.trim()) return
+    if (returnReason === 'other' && !returnOtherText.trim()) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/orders/${returnModal.orderId}/return`, {
@@ -99,7 +99,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           reason:       returnReason,
-          other_detail: returnReason === 'Other' ? returnOtherText.trim() : undefined,
+          other_detail: returnReason === 'other' ? returnOtherText.trim() : undefined,
         }),
       })
       const data = await res.json()
@@ -263,23 +263,23 @@ export default function OrdersSection({ orders, showToast }: Props) {
 
             <div className={styles.modalReasons}>
               {RETURN_REASONS.map((reason, index) => (
-                <label key={reason} className={styles.modalReason}>
+                <label key={reason.code} className={styles.modalReason}>
                   <input
                     ref={index === 0 ? firstRadioRef : undefined}
                     type="radio"
                     name="return-reason"
-                    value={reason}
-                    checked={returnReason === reason}
-                    onChange={() => setReturnReason(reason)}
+                    value={reason.code}
+                    checked={returnReason === reason.code}
+                    onChange={() => setReturnReason(reason.code)}
                     className={styles.modalReasonRadio}
                   />
-                  {reason}
+                  {reason.label}
                 </label>
               ))}
             </div>
 
             {/* Free-text explanation — required when "Other" is selected */}
-            {returnReason === 'Other' && (
+            {returnReason === 'other' && (
               <div className={styles.returnOtherWrap}>
                 <label htmlFor="return-other-text" className={styles.fLbl}>
                   Please describe your reason *
@@ -312,7 +312,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 onClick={submitReturn}
                 disabled={
                   !returnReason ||
-                  (returnReason === 'Other' && !returnOtherText.trim()) ||
+                  (returnReason === 'other' && !returnOtherText.trim()) ||
                   submitting
                 }
                 className={styles.btnPrimary}

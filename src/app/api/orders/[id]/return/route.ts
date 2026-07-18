@@ -8,6 +8,34 @@
 //  ✅ Idempotent: 409 if a return is already in progress
 //  ✅ Body: { reason: string }
 //  ✅ Shared helpers from serverUtils (no duplication)
+//
+//  ARCHITECTURE FIX (see PAHADI_ROOTS_SESSION_REPORT.md §2): this route
+//  used to PATCH orders.order_status to values like 'return_requested'
+//  and write orders.return_reason / orders.return_requested_at. None of
+//  that exists in the real schema:
+//    - order_status is a Postgres enum with only 7 values (pending,
+//      confirmed, packed, shipped, delivered, cancelled, returned) —
+//      it never changes for a return. Setting it to 'return_requested'
+//      crashed with `invalid input value for enum order_status_enum`.
+//    - orders.return_reason / orders.return_requested_at do not exist
+//      (confirmed via live schema inspection — zero rows returned).
+//  The admin panel (pahadi-admin) already has a complete, working,
+//  separate system: a dedicated `returns` table with its own 5-value
+//  `status` lifecycle (requested → approved → received → refunded, or
+//  rejected). orders.order_status is never touched by any of it — the
+//  order just stays 'delivered'. This route now matches that system:
+//  it INSERTs into `returns` instead of mutating `orders` at all.
+//
+//  CROSS-REPO FIX (this session — pahadi-admin's actual source reviewed,
+//  not just described secondhand): `reason` now uses admin's exact
+//  lowercase codes (see constants.ts RETURN_REASONS) instead of English
+//  sentences, so admin's auto-restock rules and reason filters recognise
+//  returns created from the storefront. Also confirmed: orders.payment_status
+//  is never touched by this route, and deliberately so — admin's own
+//  STATUS_PAYMENT_MAP sets it to 'refund_pending' on approval, which turned
+//  out to not be a real payment_status_enum value (see
+//  db_migration_v10_add_refund_pending_payment_status.sql and the session
+//  report) — a DB-level fix, not something this route needed to change.
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +46,7 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
-import { RETURN_REASONS } from '@/lib/account/constants'
+import { RETURN_REASON_CODES } from '@/lib/account/constants'
 
 const RETURNABLE_WINDOW_DAYS = 7
 
@@ -54,11 +82,15 @@ export async function POST(
     return fail(400, 'Invalid request body')
   }
   if (!reason) return fail(400, 'A return reason is required')
-  if (!RETURN_REASONS.includes(reason as typeof RETURN_REASONS[number])) {
-    return fail(400, `Invalid reason. Must be one of: ${RETURN_REASONS.join(', ')}`)
+  // CROSS-REPO FIX: validated against admin's real reason codes (confirmed
+  // via pahadi-admin/src/app/admin/returns/page.jsx RETURN_REASONS) — not
+  // free-text sentences, so every return's `reason` value is something
+  // admin's own UI, auto-restock rules, and filters actually recognise.
+  if (!RETURN_REASON_CODES.includes(reason as typeof RETURN_REASON_CODES[number])) {
+    return fail(400, `Invalid reason. Must be one of: ${RETURN_REASON_CODES.join(', ')}`)
   }
-  // "Other" requires a free-text explanation so admin staff have context
-  if (reason === 'Other' && !otherDetail) {
+  // "other" requires a free-text explanation so admin staff have context
+  if (reason === 'other' && !otherDetail) {
     return fail(400, 'Please provide a description when selecting "Other"')
   }
 
@@ -91,17 +123,16 @@ export async function POST(
       order_number: string
     }
 
-    // BUG FIX: RETURN_IN_PROGRESS was checked AFTER the `order_status !== 'delivered'`
-    // guard. Since 'return_requested', 'return_approved' etc. are all non-delivered
-    // statuses, they triggered "Only delivered orders can be returned" (422) before
-    // the idempotency check could fire — the guard was permanently dead code.
-    // A user submitting a second return request got a misleading error.
-    // Fix: check in-progress states first and return the correct 409 message.
-    const RETURN_IN_PROGRESS = [
-      'return_requested', 'return_approved', 'return_received',
-      'refunded', 'refund_initiated', 'refund_completed',
-    ]
-    if (RETURN_IN_PROGRESS.includes(order.order_status)) {
+    // Idempotency check — confirmed real schema: a return "in progress" means
+    // any row in `returns` for this order whose status isn't 'rejected' (the
+    // admin's 5-value lifecycle: requested → approved → received → refunded,
+    // or rejected). A rejected return doesn't block a fresh request.
+    const existingReturns = await sbAdmin(
+      'GET',
+      `/rest/v1/returns?order_id=eq.${id}&select=id,status&order=created_at.desc&limit=1`,
+    ).catch(() => null)
+    const existing = Array.isArray(existingReturns) ? existingReturns[0] : null
+    if (existing && existing.status !== 'rejected') {
       return fail(409, 'A return request is already in progress for this order')
     }
 
@@ -119,21 +150,37 @@ export async function POST(
       }
     }
 
-    // Store enriched reason: "Other: <user explanation>" so admin staff
-    // see the actual context, not just the string "Other".
-    const storedReason = reason === 'Other' && otherDetail
-      ? `Other: ${otherDetail}`
-      : reason
+    // customer_name — matches the field admin's own return-creation flow
+    // populates (pahadi-admin/src/app/admin/returns/page.jsx).
+    const customerName = [
+      (profile as { first_name?: string }).first_name,
+      (profile as { last_name?: string }).last_name,
+    ].filter(Boolean).join(' ').trim() || null
 
-    // Update order status
+    // INSERT into the dedicated `returns` table — matching the exact live
+    // schema (confirmed via information_schema.columns). `reason` and
+    // `description` are separate real columns, so the free-text "Other"
+    // explanation goes in `description` rather than being concatenated
+    // into `reason`. Item-level fields (variant_id, product_id, quantity,
+    // unit_refund_amount, refund_gst_amount) and `refund_amount` are left
+    // unset here — this is a whole-order return request; only admin staff
+    // (after inspecting the return) assign a refund amount / line items.
+    // `status` defaults to 'requested' in the DB but is set explicitly for
+    // clarity. orders.payment_status is deliberately NOT touched here —
+    // per admin's STATUS_PAYMENT_MAP, 'requested' has no payment-status
+    // side effect; only a later admin-driven transition does.
     await sbAdmin(
-      'PATCH',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}`,
+      'POST',
+      '/rest/v1/returns',
       {
-        order_status:        'return_requested',
-        return_reason:       storedReason,
-        return_requested_at: new Date().toISOString(),
+        order_id:      order.id,
+        order_number:  order.order_number,
+        customer_name: customerName,
+        reason,
+        description:   otherDetail || null,
+        status:        'requested',
       },
+      'return=minimal',
     )
 
     const res = ok({

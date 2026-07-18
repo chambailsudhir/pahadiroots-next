@@ -127,6 +127,14 @@ export interface AppliedCoupon {
 
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
+// BUG FIX (architecture): removed 'return_requested' and bare 'refunded' —
+// order_status is a live Postgres enum with exactly 7 values (confirmed via
+// information_schema.columns); it never holds a return-related value since
+// returns live in a separate `returns` table (see
+// PAHADI_ROOTS_SESSION_REPORT.md §2). 'pending_payment' and 'out_for_delivery'
+// are left as-is (unconfirmed either way this session — used only as
+// display-only stepper placeholders in track/page.tsx, never round-tripped
+// through a real order_status comparison that would break).
 export type OrderStatus =
   | 'pending'
   | 'pending_payment'
@@ -136,9 +144,7 @@ export type OrderStatus =
   | 'out_for_delivery'
   | 'delivered'
   | 'cancelled'
-  | 'return_requested'
   | 'returned'
-  | 'refunded'
 
 export interface OrderAddress {
   name: string
@@ -181,7 +187,22 @@ export interface Order {
   customer_id: number | null
   order_status: OrderStatus
   payment_method: 'razorpay' | 'cod' | 'razorpay_online'
-  payment_status: 'pending' | 'paid' | 'failed' | 'refunded'
+  // CONFIRMED live (pg_enum): payment_status_enum has exactly 5 values today
+  // — pending, paid, failed, refunded, cod_pending. 'refund_pending' is NOT
+  // yet one of them.
+  //
+  // CONFIRMED this session via the real pahadi-admin repo (not just a
+  // secondhand description): admin's Returns page really does PATCH
+  // payment_status = 'refund_pending' — on every new return, and whenever
+  // an existing return is approved (STATUS_PAYMENT_MAP in
+  // src/app/admin/returns/page.jsx). Every one of those PATCHes has been
+  // failing at the DB layer (invalid enum value) and failing *silently*
+  // (wrapped in `.catch(()=>{})` — also fixed this session, now surfaces a
+  // toast). See db_migration_v10_add_refund_pending_payment_status.sql —
+  // once that runs, 'refund_pending' becomes a real, live value the
+  // storefront may read back (e.g. on an order detail page), hence it's
+  // included in this type now, ahead of the migration landing.
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cod_pending' | 'refund_pending'
   payment_id: string | null          // stores razorpay order/payment id
   subtotal: number
   coupon_discount: number

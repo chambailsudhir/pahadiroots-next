@@ -13,11 +13,12 @@ import { formatCurrency, formatDate } from '@/lib/account/utils'
 import { STATUS_LABEL } from '@/lib/account/constants'
 import styles from '../styles/account.module.css'
 
-// Map order status → CSS Module class for the badge
+// Map display status → CSS Module class for the badge.
+// Reconciled to the real 5-value returns.status lifecycle — see
+// lib/account/constants.ts BADGE_CLASS for the full explanation.
 const BADGE_MODULE_CLASS: Record<string, string> = {
   pending:           styles.badgePending,
   confirmed:         styles.badgeConfirmed,
-  processing:        styles.badgeConfirmed,
   packed:            styles.badgePacked,
   shipped:           styles.badgeShipped,
   delivered:         styles.badgeDelivered,
@@ -26,9 +27,7 @@ const BADGE_MODULE_CLASS: Record<string, string> = {
   return_requested:  styles.badgeReturn,
   return_approved:   styles.badgeReturn,
   return_received:   styles.badgeReturn,
-  refunded:          styles.badgeReturn,
-  refund_initiated:  styles.badgeReturn,
-  refund_completed:  styles.badgeReturn,
+  return_refunded:   styles.badgeReturn,
   return_rejected:   styles.badgeCancelled,
 }
 

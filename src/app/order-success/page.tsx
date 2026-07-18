@@ -178,10 +178,16 @@ function SuccessContent() {
   }
 
   /* ── status stepper ── */
-  const STATUS_ORDER = ['pending','confirmed','processing','shipped','delivered']
+  // BUG FIX (architecture): 'processing' is not a real order_status value —
+  // confirmed live, the enum only has pending/confirmed/packed/shipped/
+  // delivered/cancelled/returned, and admin's own workflow doesn't set
+  // 'processing' either (see PAHADI_ROOTS_SESSION_REPORT.md §2/§3). The old
+  // list also omitted 'packed' entirely, so an order sitting at that real
+  // status showed no progress at all. Fixed to the real sequence.
+  const STATUS_ORDER = ['pending','confirmed','packed','shipped','delivered']
   const STEPS = [
     { key: 'confirmed',  icon: '✅', label: 'Confirmed' },
-    { key: 'processing', icon: '📦', label: 'Processing' },
+    { key: 'packed',     icon: '📦', label: 'Packed' },
     { key: 'shipped',    icon: '🚚', label: 'Shipped' },
     { key: 'delivered',  icon: '🎉', label: 'Delivered' },
   ]

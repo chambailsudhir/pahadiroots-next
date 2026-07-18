@@ -129,11 +129,12 @@ export function getOrderStatusMessage(o: OrderStatusFields): string {
     return `🚚 Shipped · Est. delivery by ${est.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
   }
   if (ds === 'packed')              return '📦 Order packed, ready for dispatch'
-  if (ds === 'processing')          return '⚙️ Processing your order'
   if (ds === 'confirmed')           return '✅ Order confirmed'
   if (ds === 'return_requested')    return '⏳ Return request under review · 24–48 hrs'
   if (ds === 'return_approved')     return '✅ Return approved — pickup being arranged'
-  if (ds === 'refund_completed')    return '💚 Refund credited to your account!'
+  if (ds === 'return_received')     return '📦 Item received — refund in progress'
+  if (ds === 'return_refunded')     return '💚 Refund credited to your account!'
+  if (ds === 'return_rejected')     return '❌ Return request declined'
   if (ds === 'cancelled')           return '❌ Order cancelled'
   return ''
 }

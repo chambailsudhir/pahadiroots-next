@@ -8,7 +8,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetchOrders, type Order, type OrdersResponse } from '@/lib/services/orderService'
 import { ServiceError } from '@/lib/services/profileService'
-import { ACTIVE_STATUSES, RETURN_STATUSES } from '@/lib/account/constants'
+import { ACTIVE_STATUSES, RETURNS_FILTER_SENTINEL } from '@/lib/account/constants'
 import { captureError } from '@/lib/logger'
 
 export type OrderFilter = 'all' | 'active' | 'delivered' | 'returns' | 'cancelled'
@@ -19,7 +19,12 @@ const PAGE_SIZE = 20
 function toServerStatus(filter: OrderFilter): string {
   if (filter === 'active')    return ACTIVE_STATUSES.join(',')
   if (filter === 'delivered') return 'delivered'
-  if (filter === 'returns')   return RETURN_STATUSES.join(',')
+  // BUG FIX (architecture): 'returns' used to join a list of order_status
+  // values (return_requested, return_approved, ...) that never actually
+  // exist on orders.order_status — the Returns tab always came back empty.
+  // Returns live in a separate `returns` table; /api/orders/route.ts
+  // recognises this sentinel and does an inner join instead.
+  if (filter === 'returns')   return RETURNS_FILTER_SENTINEL
   if (filter === 'cancelled') return 'cancelled'
   return ''
 }
@@ -131,6 +136,13 @@ export function useOrders(markExpired?: () => void) {
   }
 
   function canReturn(o: Order): boolean {
+    // A non-rejected return already exists for this order — matches the
+    // idempotency check in /api/orders/[id]/return/route.ts. Once
+    // _displayStatus reflects a return in progress it won't equal
+    // 'delivered' either, but check _return directly too since this must
+    // stay correct even if _displayStatus computation ever changes.
+    const ret = (o as { _return?: { status?: string } | null })._return
+    if (ret && ret.status !== 'rejected') return false
     if ((o._displayStatus || o.order_status) !== 'delivered') return false
     const deliveredDate = o.delivered_at || o.updated_at
     if (!deliveredDate) return true
@@ -165,16 +177,12 @@ export function useOrders(markExpired?: () => void) {
     //     is hit. The RPC itself already exists in production (this is NOT
     //     a "pre-migration" placeholder) — see db_migration_v4_loyalty.sql
     //     for its definition.
-    //     NOTE: ACTIVE_STATUSES (src/lib/account/constants.ts) includes
-    //     'processing' — this was NOT a valid order_status_enum value as of
-    //     this audit (confirmed via live schema inspection: the enum only
-    //     had pending/confirmed/packed/shipped/delivered/cancelled/returned)
-    //     but IS the intended design (see the order-success status stepper,
-    //     which has a dedicated "Processing" step). See
-    //     db_migration_v9_order_status_enum_values.sql, which adds
-    //     'processing' plus the full return/refund workflow's statuses to
-    //     the enum — once that migration runs, this reference is fully
-    //     correct and no longer a mismatch.
+    //     NOTE: ACTIVE_STATUSES (src/lib/account/constants.ts) no longer
+    //     includes 'processing' — confirmed live that order_status_enum only
+    //     has pending/confirmed/packed/shipped/delivered/cancelled/returned,
+    //     and admin's own order workflow doesn't use 'processing' either.
+    //     It was a dead reference, not a missing migration — no enum change
+    //     needed or planned (see PAHADI_ROOTS_SESSION_REPORT.md §3).
     const all = [...(data?.orders ?? []), ...extraOrders]
     const counts = all.reduce(
       (acc, o) => {

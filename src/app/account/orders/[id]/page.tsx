@@ -12,7 +12,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
-import { SUPPORT_WHATSAPP_NUMBER } from '@/lib/account/constants'
+import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL } from '@/lib/account/constants'
 import styles from '../../styles/account.module.css'
 
 const STATUS_STEPS = [
@@ -25,12 +25,27 @@ const STATUS_STEPS = [
 const STATUS_INDEX: Record<string, number> = {
   confirmed: 0, packed: 1, shipped: 2, out_for_delivery: 3, delivered: 4,
 }
-const CANCELLED_STATUSES = ['cancelled','returned','refunded','return_requested','return_approved','return_received','refund_initiated','refund_completed','return_rejected']
+// BUG FIX (architecture): order_status never actually becomes any of the
+// return_* / refund_* values that used to be listed here — confirmed live,
+// order_status_enum has only 7 values and returns live in a separate table
+// (see PAHADI_ROOTS_SESSION_REPORT.md §2). Real "special state" order
+// statuses are just 'cancelled' and 'returned'; a return in progress is
+// now shown via the dedicated Return Status card below instead.
+const CANCELLED_STATUSES = ['cancelled', 'returned']
 
 type OrderDetail = Record<string, unknown> & {
   id:               string
   order_number:     string
   order_status:     string
+  _displayStatus?:  string
+  _return?: {
+    status:         string
+    reason:         string | null
+    description:    string | null
+    refund_amount:  number | null
+    created_at:     string
+    updated_at:     string | null
+  } | null
   payment_method:   string | null
   total_amount:     number
   subtotal?:        number
@@ -175,6 +190,27 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── Return status (only when a return exists for this order) ── */}
+      {order._return && (
+        <div className={styles.odCard}>
+          <div className={styles.odCardTitle}>Return Status</div>
+          <div className={styles.odCancelledState}>
+            <div className={styles.odCancelledIcon}>
+              {order._return.status === 'refunded' ? '💚' : order._return.status === 'rejected' ? '❌' : '↩️'}
+            </div>
+            <div className={styles.odCancelledLabel}>
+              {STATUS_LABEL[`return_${order._return.status}`] || order._return.status}
+            </div>
+          </div>
+          {order._return.reason && (
+            <div className={styles.odAddrLines} style={{ marginTop: '8px' }}>
+              <div>Reason: {order._return.reason}</div>
+              {order._return.description && <div>{order._return.description}</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Items ordered ───────────────────────────────────── */}
       {order.items?.length > 0 && (

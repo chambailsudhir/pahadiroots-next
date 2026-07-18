@@ -15,54 +15,99 @@ export const INDIA_STATES = [
 
 export const ADDRESS_LABELS = ['Home','Office','Parents','Friends','Partner','Warehouse','Other']
 
+// ── Return/refund vocabulary ──────────────────────────────────────────────────
+// Reconciled against the real, live schema (see PAHADI_ROOTS_SESSION_REPORT.md
+// §2/§3): returns are NOT order_status enum values — order_status stays
+// 'delivered' for the life of a return. The real lifecycle lives entirely in
+// the dedicated `returns` table's `status` column, which has exactly 5 values
+// (confirmed via admin's pahadi-admin/src/app/admin/returns/page.jsx):
+//   requested → approved → received → refunded, or rejected
+// The keys below are prefixed `return_` (mapped from that column by
+// /api/orders/route.ts's _displayStatus computation) so they never collide
+// with unrelated concepts that happen to share a word — e.g. orders.order_status
+// can independently be 'returned', and orders.payment_status can independently
+// be 'refunded'. There is no 'processing', 'refund_initiated', or
+// 'refund_completed' — those were invented statuses that don't exist in
+// either the DB enum or admin's actual workflow; removed rather than "fixed".
 export const BADGE_CLASS: Record<string,string> = {
-  pending:'badge-pending',confirmed:'badge-confirmed',processing:'badge-confirmed',
+  pending:'badge-pending',confirmed:'badge-confirmed',
   packed:'badge-packed',shipped:'badge-shipped',delivered:'badge-delivered',
   cancelled:'badge-cancelled',returned:'badge-returned',
   return_requested:'badge-return_requested',return_approved:'badge-return_approved',
-  return_received:'badge-return_received',refunded:'badge-refunded',
-  refund_initiated:'badge-refund_initiated',refund_completed:'badge-refund_completed',
+  return_received:'badge-return_received',return_refunded:'badge-return_refunded',
   return_rejected:'badge-return_rejected',
 }
 
 export const STATUS_LABEL: Record<string,string> = {
-  pending:'Pending',confirmed:'Confirmed',processing:'Processing',
+  pending:'Pending',confirmed:'Confirmed',
   packed:'Packed',shipped:'Shipped',delivered:'Delivered',
   cancelled:'Cancelled',returned:'Returned',
   return_requested:'Return Requested',return_approved:'Return Approved',
-  return_received:'Item Received',refunded:'Refund Issued',
-  refund_initiated:'Refund Initiated',refund_completed:'Refund Credited',
+  return_received:'Item Received',return_refunded:'Refund Issued',
   return_rejected:'Return Rejected',
 }
 
 export const STRIPE_CLASS: Record<string,string> = {
   confirmed:'oc-stripe-confirmed',packed:'oc-stripe-packed',shipped:'oc-stripe-shipped',
   delivered:'oc-stripe-delivered',pending:'oc-stripe-pending',cancelled:'oc-stripe-cancelled',
-  processing:'oc-stripe-processing',returned:'oc-stripe-returned',
+  returned:'oc-stripe-returned',
   return_requested:'oc-stripe-return_requested',return_approved:'oc-stripe-return_approved',
-  return_received:'oc-stripe-return_received',refunded:'oc-stripe-refunded',
-  refund_initiated:'oc-stripe-refund_initiated',refund_completed:'oc-stripe-refund_completed',
+  return_received:'oc-stripe-return_received',return_refunded:'oc-stripe-return_refunded',
   return_rejected:'oc-stripe-return_rejected',
 }
 
-export const ACTIVE_STATUSES   = ['pending','confirmed','processing','packed','shipped']
-export const RETURN_STATUSES   = ['return_requested','return_approved','return_received',
-  'refunded','refund_initiated','refund_completed','return_rejected','returned']
+// BUG FIX: 'processing' removed. It is not a value order_status can ever
+// actually hold — confirmed against both the live order_status_enum (7 values,
+// no 'processing') and admin's own STATUSES list. It was a dead reference in
+// this constant, not a missing migration (see session report §3, mistake #2).
+export const ACTIVE_STATUSES   = ['pending','confirmed','packed','shipped']
+// Sentinel passed as the `status` query param to /api/orders — the API route
+// recognises this and does an inner join against `returns` (i.e. "orders that
+// have a linked return row") instead of filtering by order_status, since no
+// order_status value ever represents a return.
+export const RETURNS_FILTER_SENTINEL = '__has_return__'
+
+// Maps a `returns.status` value (the real 5-value lifecycle: requested,
+// approved, received, refunded, rejected) to the display-status vocabulary
+// above. Single source of truth — used by both /api/orders/route.ts and
+// /api/orders/[id]/route.ts so the list and detail pages never disagree.
+export const RETURN_STATUS_TO_DISPLAY: Record<string, string> = {
+  requested: 'return_requested',
+  approved:  'return_approved',
+  received:  'return_received',
+  refunded:  'return_refunded',
+  rejected:  'return_rejected',
+}
 
 // ── Return reasons ───────────────────────────────────────────────────────────
-// Single source of truth used by both the UI dropdown (OrdersSection.tsx) and
-// the API validation (/api/orders/[id]/return/route.ts).  Keeping them in sync
-// here prevents silent drift where a reason added to the UI passes the frontend
-// but is rejected by the backend (or vice versa).
+// CROSS-REPO FIX: previously these were free-text sentences ("Damaged or
+// defective product") stored directly in returns.reason. Now that the real
+// pahadi-admin repo has been reviewed (not just described secondhand), its
+// Returns page (src/app/admin/returns/page.jsx) uses a fixed, lowercase
+// snake_case vocabulary for `reason` — RETURN_REASONS = ['damaged',
+// 'wrong_item', 'not_as_described', 'changed_mind', 'missing_parts', 'other']
+// — and drives real behaviour off it: REASON_RESTOCK auto-locks the restock
+// toggle per code, and the reason <select> only recognises these exact
+// values. A storefront-created return writing a full English sentence into
+// the same column would show up in admin as an unrecognised reason — the
+// dropdown wouldn't match any option, auto-restock would silently fall back
+// to "manual" for every customer-initiated return, and saving the return in
+// admin without deliberately touching the reason field would silently
+// overwrite the customer's actual reason with whatever the <select>
+// defaults to. Fixed by adopting admin's exact codes as the source of
+// truth — the storefront UI still shows a friendly label, but only the code
+// is ever sent to the API or stored in the DB.
 export const RETURN_REASONS = [
-  'Damaged or defective product',
-  'Wrong item received',
-  'Item not as described',
-  'Changed my mind',
-  'Other',
+  { code: 'damaged',          label: 'Damaged or defective product' },
+  { code: 'wrong_item',       label: 'Wrong item received' },
+  { code: 'not_as_described', label: 'Item not as described' },
+  { code: 'missing_parts',    label: 'Missing parts or accessories' },
+  { code: 'changed_mind',     label: 'Changed my mind' },
+  { code: 'other',            label: 'Other' },
 ] as const
 
-export type ReturnReason = typeof RETURN_REASONS[number]
+export const RETURN_REASON_CODES = RETURN_REASONS.map(r => r.code)
+export type ReturnReasonCode = typeof RETURN_REASONS[number]['code']
 
 // ── localStorage keys ────────────────────────────────────────────────────────
 // Centralised so every consumer refers to the same string literal and a typo

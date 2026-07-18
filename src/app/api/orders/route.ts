@@ -14,33 +14,17 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
+import { RETURNS_FILTER_SENTINEL, RETURN_STATUS_TO_DISPLAY } from '@/lib/account/constants'
 
-// All statuses that exist in the orders.order_status column.
-// Must stay in sync with the DB enum / check constraint.
-// Bug fix: return_* statuses were missing — the "Returns" filter tab returned
-// empty results because every status was stripped by the .filter() below.
+// All statuses that actually exist in the orders.order_status column.
+// ARCHITECTURE FIX (see PAHADI_ROOTS_SESSION_REPORT.md §2): confirmed live,
+// order_status_enum has exactly 7 values. There is no return_* or refund_*
+// value here — returns live entirely in the separate `returns` table, joined
+// in below. The "Returns" tab is now handled via RETURNS_FILTER_SENTINEL
+// (an inner join on `returns`), not by filtering order_status.
 const VALID_DB_STATUSES = new Set([
-  'pending', 'confirmed', 'processing', 'packed', 'shipped',
-  'delivered', 'cancelled',
-  'returned', 'return_requested', 'return_approved', 'return_received',
-  'refund_initiated', 'refund_completed', 'return_rejected', 'refunded',
+  'pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned',
 ])
-
-const STATUS_MAP: Record<string, string> = {
-  pending:          'pending',
-  confirmed:        'confirmed',
-  packed:           'packed',
-  shipped:          'shipped',
-  delivered:        'delivered',
-  cancelled:        'cancelled',
-  returned:         'returned',
-  return_requested: 'return_requested',
-  return_approved:  'return_approved',
-  return_received:  'return_received',
-  refund_initiated: 'refund_initiated',
-  refund_completed: 'refund_completed',
-  return_rejected:  'return_rejected',
-}
 
 async function getCustomerOrders(
   customerId: string | number,
@@ -48,8 +32,17 @@ async function getCustomerOrders(
 ) {
   const offset = (page - 1) * limit
 
+  // "Returns" tab: no order_status value ever represents a return (see
+  // architecture note above), so this is an inner join against `returns`
+  // instead of an order_status filter — `returns!inner` restricts results
+  // to orders that actually have at least one linked return row.
+  const isReturnsTab = status === RETURNS_FILTER_SENTINEL
+  const returnsEmbed = isReturnsTab
+    ? 'returns!inner(id,status,reason,description,refund_amount,created_at,updated_at)'
+    : 'returns(id,status,reason,description,refund_amount,created_at,updated_at)'
+
   let statusFilter = ''
-  if (status) {
+  if (status && !isReturnsTab) {
     const validStatuses = status
       .split(',')
       .map(s => s.trim())
@@ -66,11 +59,18 @@ async function getCustomerOrders(
 
   const baseFilter = `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}`
 
-  const total = await sbAdminCount(baseFilter)
+  // BUG FIX: sbAdminCount does a plain HEAD count against `baseFilter` with no
+  // embed — fine for order_status-based tabs, but for the Returns tab the
+  // count must reflect the inner-join restriction too, or the pager will
+  // think there are more pages than actually exist. Count via the embedded
+  // query's Content-Range instead of a separate bare HEAD when on that tab.
+  const total = isReturnsTab
+    ? await sbAdminCount(`${baseFilter}&select=id,${returnsEmbed}`)
+    : await sbAdminCount(baseFilter)
 
   const rows = await sbAdmin(
     'GET',
-    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),returns(id,status,reason,created_at)&order=created_at.desc&limit=${limit}&offset=${offset}`,
+    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
   ).catch(() => [])
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
@@ -87,11 +87,22 @@ async function getCustomerOrders(
       emoji:     i.products?.emoji     || '🌿',
       image_url: i.products?.image_url || null,
     }))
-    const ret   = Array.isArray(o.returns) && o.returns.length > 0 ? o.returns[0] : null
+    // Most recent return row for this order, if any (returns!inner still
+    // comes back as an array embed under the `returns` key either way).
+    const returnsArr = Array.isArray(o.returns) ? o.returns : []
+    const ret = returnsArr.length > 0
+      ? [...returnsArr].sort((a: { created_at?: string }, b: { created_at?: string }) =>
+          new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0]
+      : null
     const rawSt = String(o.order_status || '')
+    // A return in progress takes priority over the underlying order_status
+    // for display purposes — the order itself stays 'delivered' throughout,
+    // but the customer needs to see where their *return* actually is.
+    const displayStatus = (ret && RETURN_STATUS_TO_DISPLAY[(ret as { status: string }).status])
+      || rawSt
     return {
       id: o.id, order_number: o.order_number, order_status: rawSt,
-      _displayStatus: STATUS_MAP[rawSt] || rawSt,
+      _displayStatus: displayStatus,
       payment_method: o.payment_method || null, payment_status: o.payment_status || null,
       total_amount: Number(o.total_amount) || 0, created_at: o.created_at,
       tracking_number: o.tracking_number || null, courier: o.courier || null,

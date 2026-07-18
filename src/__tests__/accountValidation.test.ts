@@ -378,8 +378,16 @@ describe('getOrderStatusMessage', () => {
     expect(getOrderStatusMessage({ order_status: 'packed' })).toContain('packed')
   })
 
-  it('returns processing message', () => {
-    expect(getOrderStatusMessage({ order_status: 'processing' })).toContain('Processing')
+  // BUG FIX (architecture): 'processing' was never a real order_status value
+  // (confirmed live — the enum only has pending/confirmed/packed/shipped/
+  // delivered/cancelled/returned; see PAHADI_ROOTS_SESSION_REPORT.md §2/§3).
+  // Replaced with coverage for the real return-status branches instead.
+  it('returns return_requested message', () => {
+    expect(getOrderStatusMessage({ order_status: 'delivered', _displayStatus: 'return_requested' })).toContain('Return request')
+  })
+
+  it('returns return_refunded message', () => {
+    expect(getOrderStatusMessage({ order_status: 'delivered', _displayStatus: 'return_refunded' })).toContain('Refund credited')
   })
 
   it('returns confirmed message', () => {
@@ -391,7 +399,7 @@ describe('getOrderStatusMessage', () => {
   })
 
   it('prefers _displayStatus over order_status', () => {
-    const msg = getOrderStatusMessage({ _displayStatus: 'delivered', order_status: 'processing' })
+    const msg = getOrderStatusMessage({ _displayStatus: 'delivered', order_status: 'packed' })
     expect(msg).toContain('Delivered')
   })
 

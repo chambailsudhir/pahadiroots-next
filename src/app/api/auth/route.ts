@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
+import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -179,16 +180,16 @@ async function getCustomerOrders(customerId: string) {
     const returnMap: Record<string, ReturnRow> = {}
     ;(returns || []).forEach(r => { returnMap[String(r.order_id)] = r })
 
-    const STATUS_MAP: Record<string, string> = {
-      requested: 'return_requested', approved: 'return_approved',
-      received: 'return_received', refunded: 'refunded',
-      refund_initiated: 'refund_initiated', refund_completed: 'refund_completed',
-      rejected: 'return_rejected',
-    }
-
+    // BUG FIX (architecture): was a locally-duplicated, inconsistent copy —
+    // mapped 'refunded' with no prefix (colliding with orders.payment_status'
+    // own 'refunded' value) and included 'refund_initiated'/'refund_completed',
+    // which don't exist in admin's real 5-value returns.status lifecycle. Now
+    // reuses the single shared map (see constants.ts RETURN_STATUS_TO_DISPLAY).
     return orders.map(o => {
       const ret = returnMap[String(o.id)]
-      const displayStatus = ret ? (STATUS_MAP[ret.status] || 'return_requested') : String(o.order_status)
+      const displayStatus = ret
+        ? (RETURN_STATUS_TO_DISPLAY[ret.status] || String(o.order_status))
+        : String(o.order_status)
       return {
         ...o,
         _return: ret || null,
@@ -622,6 +623,19 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Create Return ──
+  // CROSS-REPO CONSISTENCY FIX: this is a second, independent return-creation
+  // entry point (grep confirms no current UI calls action=create_return —
+  // it's unreferenced dead code as of this session) but it's still a live,
+  // reachable API route writing into the same shared `returns` table as
+  // /api/orders/[id]/return/route.ts. It had its own THIRD reason vocabulary
+  // ('Wrong item received', 'Damaged product', ...) — different from both the
+  // old storefront sentences AND admin's real codes. Aligned to
+  // RETURN_REASON_CODES (admin's actual vocabulary — confirmed this session
+  // via the real pahadi-admin repo) so if this path is ever wired up, it
+  // can't silently diverge a third way. Also brought its idempotency check
+  // and delivered/window rules in line with the primary route, since leaving
+  // two return-creation paths with different business rules is exactly the
+  // kind of partial fix this pass is meant to close out.
   if (action === 'create_return') {
     const token = req.cookies.get(COOKIE_TOKEN)?.value
                || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
@@ -635,18 +649,8 @@ export async function POST(req: NextRequest) {
     }
     if (!order_id || !reason) return err(400, 'order_id and reason required')
 
-    // BUG FIX: reason was accepted as any string with no allowlist validation.
-    // /api/orders/[id]/return validates against RETURN_REASONS — this path must
-    // apply the same check so the two return-creation routes are consistent.
-    // Arbitrary reason strings end up stored in the returns table and shown in
-    // the admin panel; without validation an attacker could store arbitrary text
-    // (or HTML if the admin UI doesn't escape) in the reason column.
-    const VALID_REASONS = [
-      'Wrong item received', 'Damaged product', 'Product not as described',
-      'Changed my mind', 'Quality not satisfactory', 'Other',
-    ] as const
-    if (!VALID_REASONS.includes(reason as typeof VALID_REASONS[number])) {
-      return err(400, `Invalid reason. Must be one of: ${VALID_REASONS.join(', ')}`)
+    if (!RETURN_REASON_CODES.includes(reason as typeof RETURN_REASON_CODES[number])) {
+      return err(400, `Invalid reason. Must be one of: ${RETURN_REASON_CODES.join(', ')}`)
     }
 
     // BUG FIX: description had no length cap and no HTML stripping — a multi-MB
@@ -660,14 +664,32 @@ export async function POST(req: NextRequest) {
       const user = await sbAuth('/user', null, token)
       const profile = await syncCustomerProfile(user)
       if (!profile) return err(401, 'Profile not found')
-      const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${order_id}&customer_id=eq.${profile.id}&select=id,order_status,order_number,total_amount`)
+      const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${order_id}&customer_id=eq.${profile.id}&select=id,order_status,order_number,total_amount,delivered_at,updated_at`)
       if (!orders || !orders.length) return err(403, 'Order not found or does not belong to you')
       const order = orders[0]
-      if (!['delivered', 'returned'].includes(order.order_status)) {
+      // Only delivered orders can be returned — matches the primary return
+      // route. ('returned' dropped from the accepted set: order_status never
+      // actually becomes 'returned' as part of the normal return flow — see
+      // PAHADI_ROOTS_SESSION_REPORT.md §2 — so accepting it here just let a
+      // stale/manually-set order back into the return flow inconsistently.)
+      if (order.order_status !== 'delivered') {
         return err(400, `Returns are only accepted for delivered orders. Current status: ${order.order_status}`)
       }
-      const existing = await sbAdmin('GET', `/rest/v1/returns?order_id=eq.${order_id}&select=id,status`).catch(() => [])
-      if (existing && existing.length > 0) {
+      const deliveredDate = order.delivered_at || order.updated_at
+      if (deliveredDate) {
+        const daysSince = (Date.now() - new Date(deliveredDate).getTime()) / 86_400_000
+        if (daysSince > 7) {
+          return err(400, 'Return window has closed (7 days from delivery)')
+        }
+      }
+      // Idempotency: only a non-rejected existing return blocks a new request
+      // — matches the primary route (a rejected return shouldn't lock a
+      // customer out of ever requesting again).
+      const existing = await sbAdmin(
+        'GET',
+        `/rest/v1/returns?order_id=eq.${order_id}&select=id,status&order=created_at.desc&limit=1`,
+      ).catch(() => [])
+      if (existing && existing.length > 0 && existing[0].status !== 'rejected') {
         return err(400, `A return request already exists for this order (status: ${existing[0].status}).`)
       }
       const returnRecord = await sbAdmin('POST', '/rest/v1/returns', {

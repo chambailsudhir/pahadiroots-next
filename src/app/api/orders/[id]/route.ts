@@ -15,6 +15,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
+import { RETURN_STATUS_TO_DISPLAY } from '@/lib/account/constants'
 
 export async function GET(
   req: NextRequest,
@@ -47,9 +48,13 @@ export async function GET(
     // customer_id=eq.${profile.id} is the IDOR guard.
     // select=* captures all columns so newly added schema columns
     // (subtotal, shipping_charge, tax) work without route changes.
+    // ARCHITECTURE FIX (see PAHADI_ROOTS_SESSION_REPORT.md §2): returns live
+    // in a separate `returns` table, not on orders.order_status — joined
+    // here so the detail page can show real return status/reason instead of
+    // reading order_status values that never actually occur for a return.
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url))&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url)),returns(id,status,reason,description,refund_amount,created_at,updated_at)&limit=1`,
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -85,10 +90,26 @@ export async function GET(
       try { shippingAddress = JSON.parse(rawAddr) } catch { /* leave undefined */ }
     }
 
+    // Most recent return row for this order, if any.
+    const returnsArr = Array.isArray(raw.returns) ? raw.returns as Array<{
+      id: unknown; status: string; reason: string | null; description: string | null
+      refund_amount: number | null; created_at: string; updated_at: string | null
+    }> : []
+    const ret = returnsArr.length > 0
+      ? [...returnsArr].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0]
+      : null
+    const rawStatus = String(raw.order_status || '')
+    // A return in progress takes priority for display purposes — the order
+    // itself stays 'delivered' throughout its return lifecycle (see
+    // PAHADI_ROOTS_SESSION_REPORT.md §2).
+    const displayStatus = (ret && RETURN_STATUS_TO_DISPLAY[ret.status]) || rawStatus
+
     const order = {
       id:               raw.id,
       order_number:     raw.order_number,
-      order_status:     String(raw.order_status || ''),
+      order_status:     rawStatus,
+      _displayStatus:   displayStatus,
+      _return:          ret,
       payment_method:   raw.payment_method  ?? null,
       payment_status:   raw.payment_status  ?? null,
       total_amount:     Number(raw.total_amount) || 0,
