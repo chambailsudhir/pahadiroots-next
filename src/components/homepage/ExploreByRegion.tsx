@@ -39,16 +39,28 @@ export default function ExploreByRegion({ states }: Props) {
     <section style={{ background: '#f4eed6', padding: '40px 0 0', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div id="regions" style={{ marginBottom: '20px', padding: '0 40px' }}>
-        <div style={{ display: 'inline-block', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#c8920a', background: 'rgba(200,146,10,.1)', border: '1px solid rgba(200,146,10,.25)', padding: '4px 14px', borderRadius: '20px', marginBottom: '10px', fontFamily: sans }}>
-          Explore by Region
+      <div id="regions" style={{ marginBottom: '20px', padding: '0 40px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ maxWidth: '600px' }}>
+          <div style={{ display: 'inline-block', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px', color: '#c8920a', background: 'rgba(200,146,10,.1)', border: '1px solid rgba(200,146,10,.25)', padding: '4px 14px', borderRadius: '20px', marginBottom: '10px', fontFamily: sans }}>
+            Explore by Region
+          </div>
+          <h2 style={{ fontFamily: serif, fontSize: 'clamp(28px,4vw,52px)', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px', lineHeight: 1.2 }}>
+            Discover the Himalayas
+          </h2>
+          <p style={{ fontSize: '14px', color: '#4a4a4a', marginBottom: '24px', lineHeight: 1.7, fontFamily: sans }}>
+            Each state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Click to explore.
+          </p>
         </div>
-        <h2 style={{ fontFamily: serif, fontSize: 'clamp(28px,4vw,52px)', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px', lineHeight: 1.2 }}>
-          Discover the Himalayas
-        </h2>
-        <p style={{ fontSize: '14px', color: '#4a4a4a', marginBottom: '24px', maxWidth: '600px', lineHeight: 1.7, fontFamily: sans }}>
-          Each state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Click to explore.
-        </p>
+        <Link
+          href="/regions"
+          style={{
+            flexShrink: 0, marginBottom: '24px', fontSize: '13px', fontWeight: 700, color: '#1a3a1e',
+            textDecoration: 'none', border: '1.5px solid #1a3a1e', borderRadius: '20px',
+            padding: '9px 20px', whiteSpace: 'nowrap', fontFamily: sans,
+          }}
+        >
+          View All Regions →
+        </Link>
       </div>
 
       {/* ── State Cards Grid — wraps into 2 rows automatically ── */}

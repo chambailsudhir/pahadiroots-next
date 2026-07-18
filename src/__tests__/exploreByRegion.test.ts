@@ -80,4 +80,12 @@ describe('ExploreByRegion — region selector', () => {
     expect(container.innerHTML).not.toContain('rgba(255, 255, 255, 0.35)')
     expect(container.innerHTML).toContain('rgba(255, 255, 255, 0.6)')
   })
+
+  it('wires the "Explore by Region / Discover the Himalayas" heading to /regions', async () => {
+    const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
+    render(React.createElement(ExploreByRegion, { states: STATES as any }))
+
+    const viewAllLink = screen.getByRole('link', { name: /view all regions/i })
+    expect(viewAllLink.getAttribute('href')).toBe('/regions')
+  })
 })
