@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
-import { toCardProductData } from '@/lib/normalizeProduct'
+import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
+import { normalizeProducts } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -30,7 +30,7 @@ export default async function HomePage() {
 
   const categories = buildCategories(storeData)
   const heroImages = buildHeroImages(settings)
-  const states     = await buildStates(storeData)
+  const states     = buildStates(storeData)
 
   const showTrustBar    = isEnabled(settings.show_trust_bar)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
@@ -48,7 +48,7 @@ export default async function HomePage() {
       {states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
-      <WhySection />
+      <WhySection settings={settings} />
       {showReviews && <ReviewsPreview />}
       {showNewsletter && <NewsletterBar />}
     </>
@@ -71,18 +71,12 @@ function buildHeroImages(settings: any) {
   return slides
 }
 
-// Exported (not just used internally) so it can be unit-tested directly —
-// see src/__tests__/homepageBuildStates.test.ts — without needing to render
-// the entire HomePage tree (hero images, trust bar, reviews section, etc.).
-export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): Promise<RichState[]> {
+function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): RichState[] {
   const { states, state_images } = storeData
   if (!states?.length) return []
 
-  // BUG FIX (perf): previously ran its own full-catalog
-  // getProductsWithImages()+normalizeProducts() pass. Now shares the same
-  // cached result used by /regions and /regions/[slug] (see
-  // getNormalizedProducts() in storeData.ts) instead of recomputing it.
-  const normalized = await getNormalizedProducts() as (Product & { state_id: string })[]
+  const productsWithImages = getProductsWithImages(storeData)
+  const normalized = normalizeProducts(productsWithImages) as (Product & { state_id: string })[]
 
   return states.map((s: any) => {
     const imgs = (state_images as any[])
@@ -95,20 +89,7 @@ export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreD
       description: s.description ?? null,
       image_url:   imgs[0]?.image_url ?? s.image_path ?? null,
       region:      null,
-      // BUG FIX: state_id comparison previously had no case-normalization
-      // (same pattern found in /regions/page.tsx and /regions/[slug]/page.tsx)
-      // — could silently disagree with the counts shown on those pages if
-      // casing ever differs between products.state_id and states.id.
-      // BUG FIX: previously passed raw normalized() products straight into
-      // ProductCard (a Client Component), shipping every AI-generated
-      // content field (long/short description, AI health-benefits text,
-      // tags, etc.) into the RSC payload for products that never render
-      // them. toCardProductData() strips those before the client boundary,
-      // matching the fix already applied on /regions/[slug].
-      products:    normalized
-        .filter(p => String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
-        .slice(0, 4)
-        .map(toCardProductData),
+      products:    normalized.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
     }
   }) as unknown as RichState[]
 }

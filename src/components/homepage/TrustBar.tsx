@@ -14,7 +14,10 @@ export default function TrustBar({ settings }: Props) {
     { icon: '🌿', title: '100% Natural',      sub: 'No chemicals, no preservatives' },
     { icon: '🏔️', title: 'Himalayan Sourced', sub: 'Directly from mountain farms'  },
     { icon: '🤝', title: 'Fair Trade',         sub: 'Supporting local farmers'       },
-    { icon: '🚚', title: 'Free Shipping',      sub: `On orders above ₹${settings.free_shipping_min || '799'}` },
+    // BUG FIX (P3): fallback corrected from '799' to '0' — confirmed via
+    // direct DB query that free_shipping_min is genuinely '0' live
+    // (free shipping on every order). Same reasoning as AnnouncementBar.tsx.
+    { icon: '🚚', title: 'Free Shipping',      sub: `On orders above ₹${settings.free_shipping_min || '0'}` },
   ]
 
   const display = items.length > 0 ? items : fallback

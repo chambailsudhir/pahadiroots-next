@@ -19,7 +19,13 @@ export default function AnnouncementBar({ settings }: Props) {
         <span dangerouslySetInnerHTML={{ __html: text }} />
       ) : (
         <span>
-          🌿 Free Shipping above ₹{settings.free_shipping_min || '799'} &nbsp;|&nbsp;{' '}
+          {/* BUG FIX (P3): this fallback said '799', but the live DB
+              value (confirmed via direct query) is genuinely '0' — free
+              shipping on every order is the actual current policy. The
+              old '799' fallback never fired in practice (the DB row
+              exists), but would have silently reverted to a stale,
+              wrong threshold the moment that row was ever missing. */}
+          🌿 Free Shipping above ₹{settings.free_shipping_min || '0'} &nbsp;|&nbsp;{' '}
           <a href="/checkout">UPI · Cards · COD</a> &nbsp;|&nbsp;{' '}
           {settings.states_covered || '10'} Himalayan States Covered
         </span>

@@ -30,9 +30,9 @@ describe('TrustBar', () => {
     expect(screen.getByText('On orders above ₹499')).toBeTruthy()
   })
 
-  it('defaults free shipping text to ₹799 when unset', () => {
+  it('defaults free shipping text to ₹0 when unset (confirmed live DB value)', () => {
     render(<TrustBar settings={settings()} />)
-    expect(screen.getByText('On orders above ₹799')).toBeTruthy()
+    expect(screen.getByText('On orders above ₹0')).toBeTruthy()
   })
 
   it('renders configured trust items instead of the fallback when any are set', () => {

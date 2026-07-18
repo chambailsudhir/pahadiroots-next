@@ -59,7 +59,13 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const stock   = baseVariant?.available_stock ?? product.available_stock ?? 0
   const inStock = stock > 0
   const sClass  = stock > 20 ? 'high' : stock > 5 ? 'mid' : 'low'
-  const sPct    = Math.min(100, Math.round(stock / 50 * 100))
+  // BUG FIX (P3): this used to be Math.min(100, stock/50*100) — for
+  // "mid" tier stock (6-20 units), that formula produces only a
+  // 12%-40%-full bar, which visually reads as critically low despite
+  // being labeled "mid" and colored amber, not red. Pegging the fill to
+  // each tier's own meaningful range instead, so the bar's width never
+  // contradicts its own color/label.
+  const sPct    = sClass === 'high' ? 100 : sClass === 'mid' ? Math.round(60 + (Math.min(stock, 20) - 6) / 14 * 30) : Math.round(15 + Math.min(stock, 5) / 5 * 15)
   const sLbl    = !inStock ? 'Out of Stock' : stock > 20 ? 'In Stock' : `Only ${stock} left`
 
   // BUG FIX (premium UX — "multi-badge support" from the audit): this used

@@ -70,3 +70,30 @@ describe('AuthModal — Quick Links (P1 fix)', () => {
     expect(useUIStore.getState().isAuthOpen).toBe(false)
   })
 })
+
+describe('AuthModal — dynamic aria-label (P3 fix)', () => {
+  beforeEach(() => {
+    useUIStore.setState({ isAuthOpen: true })
+  })
+
+  it('labels itself "Sign in" on the default email tab', () => {
+    render(<AuthModal />)
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign in to 5 Pahadi Roots')
+  })
+
+  it('labels itself "Sign up" after switching to the Sign Up tab', () => {
+    render(<AuthModal />)
+    // This is the actual bug: the label used to stay "Sign in to..."
+    // even after switching tabs.
+    // "Sign Up" appears both as the top tab and the bottom switch-link —
+    // the tab is the first match in DOM order.
+    fireEvent.click(screen.getAllByText('Sign Up')[0])
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign up for 5 Pahadi Roots')
+  })
+
+  it('labels itself "Reset your password" on the forgot-password view', () => {
+    render(<AuthModal />)
+    fireEvent.click(screen.getByText(/forgot password/i))
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Reset your password')
+  })
+})
