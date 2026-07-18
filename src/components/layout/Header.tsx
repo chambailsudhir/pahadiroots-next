@@ -82,7 +82,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
               {logoUrl
                 ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
                 : <Image src="/logo-header.png" alt={siteName} width={123} height={34} style={{ height: '34px', width: 'auto', objectFit: 'contain' }} priority />}
-              {!logoUrl && <Image src="/by-pahadi-roots.png" alt="by Pahadi Roots" width={133} height={22} style={{ height: '22px', width: 'auto', objectFit: 'contain', marginTop: '1px' }} />}
+              {!logoUrl && <Image src="/by-pahadi-roots.png" alt="by Pahadi Roots" width={157} height={26} style={{ height: '26px', width: 'auto', objectFit: 'contain', marginTop: '1px' }} />}
             </div>
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
