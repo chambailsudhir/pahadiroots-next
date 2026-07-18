@@ -80,7 +80,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
             {logoUrl
               ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-header.png" alt={siteName} width={134} height={50} className="old-logo-img" style={{ height: '50px', width: 'auto', objectFit: 'contain' }} priority />}
+              : <Image src="/logo-header.png" alt={siteName} width={134} height={50} className="old-logo-img" style={{ height: '50px', width: 'auto', objectFit: 'contain', filter: 'contrast(1.6) saturate(1.4) brightness(0.9)' }} priority />}
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
