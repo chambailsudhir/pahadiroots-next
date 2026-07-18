@@ -77,13 +77,10 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
         {/* Logo */}
         <Link href="/" className="old-logo">
-          <div className="old-logo-icon">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {logoUrl
-              ? <Image src={logoUrl} alt={siteName} width={40} height={40} style={{ objectFit: 'contain' }} />
-              : <Image src="/logo.png" alt={siteName} width={40} height={40} style={{ objectFit: 'contain' }} />}
-          </div>
-          <div className="old-logo-words">
-            <div className="old-logo-name">{siteName}</div>
+              ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+              : <Image src="/logo-header.png" alt={siteName} width={160} height={48} style={{ height: '40px', width: 'auto', objectFit: 'contain' }} priority />}
             <div className="old-logo-tl">Himalayan Natural Store</div>
           </div>
         </Link>
@@ -233,10 +230,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           height:64px;position:relative;transition:box-shadow .2s;
         }
         .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
-        .old-logo{display:flex;align-items:center;gap:10px;text-decoration:none;flex-shrink:0}
-        .old-logo-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        .old-logo-words{}
-        .old-logo-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:900;color:#1a3a1e;line-height:1.1}
+        .old-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
         /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
            fails WCAG AA's 4.5:1 requirement for text this small (9px).
            Verified by computing actual relative luminance (not eyeballed).
