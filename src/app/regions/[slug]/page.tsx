@@ -62,7 +62,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
 
   return {
-    title:       `${state.name} Products — Shop Authentic Himalayan Products | Pahadi Roots`,
+    title:       `${state.name} Products — Shop Authentic Himalayan Products | HimVeda by Pahadi Roots`,
     description: desc,
     // BUG FIX (#13): no canonical previously — added so the /regions/{id}
     // URL is always declared authoritative.
@@ -71,7 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // link got a blank/default preview card instead of the state's own
     // photo, name, and description.
     openGraph: {
-      title: `${state.name} Products | 5 Pahadi Roots`,
+      title: `${state.name} Products | HimVeda by Pahadi Roots`,
       description: desc,
       url: canonicalUrl,
       type: 'website',
@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card:        'summary_large_image',
-      title:       `${state.name} Products | 5 Pahadi Roots`,
+      title:       `${state.name} Products | HimVeda by Pahadi Roots`,
       description: desc,
     },
   }

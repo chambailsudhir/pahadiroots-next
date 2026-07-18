@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const rawDesc = product.ai_description || product.short_description || `Buy ${product.name} online — pure Himalayan.`
   // BUG FIX (3.1 + 5.3): use product.name only so the layout template
-  // appends " | 5 Pahadi Roots" exactly once.
+  // appends " | HimVeda by Pahadi Roots" exactly once.
   // BUG FIX (5.3): use the existing truncate() utility (word-boundary aware,
   // adds ellipsis) instead of the raw .slice(0,155) that cut mid-word.
   const desc = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
@@ -39,14 +39,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     : []
 
   return {
-    // BUG FIX (3.1): was `${product.name} — 5 Pahadi Roots` which rendered
-    // "Lakadong Turmeric — 5 Pahadi Roots | 5 Pahadi Roots" (brand name twice)
+    // BUG FIX (3.1): was `${product.name} — HimVeda by Pahadi Roots` which rendered
+    // "Lakadong Turmeric — HimVeda by Pahadi Roots | HimVeda by Pahadi Roots" (brand name twice)
     title: product.name,
     description: desc,
     // BUG FIX (5.1): add canonical so the slug URL is always authoritative
     alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: `${product.name} | 5 Pahadi Roots`,
+      title: `${product.name} | HimVeda by Pahadi Roots`,
       description: desc,
       // BUG FIX (3.2): og:url was missing — Meta uses it as the share-cache
       // de-dup key, so every product shared the homepage card
@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // inherited the layout's generic hardcoded Twitter card
     twitter: {
       card:        'summary_large_image',
-      title:       `${product.name} | 5 Pahadi Roots`,
+      title:       `${product.name} | HimVeda by Pahadi Roots`,
       description: desc,
       images:      ogImage.map(i => i.url),
     },
@@ -157,7 +157,7 @@ export default async function ProductPage({ params }: Props) {
     description: (product.short_description || ''),
     image:       allImages.map((i: any) => i.url),
     url:         `https://pahadiroots.com/products/${product.slug}`,
-    brand:       { '@type': 'Brand', name: '5 Pahadi Roots' },
+    brand:       { '@type': 'Brand', name: 'HimVeda by Pahadi Roots' },
     ...(reviewStats && reviewStats.count > 0 ? {
       aggregateRating: {
         '@type':      'AggregateRating',
@@ -519,7 +519,7 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* ── Why 5 Pahadi Roots ── */}
+        {/* ── Why HimVeda by Pahadi Roots ── */}
         <WhySection />
 
       </div>
@@ -562,7 +562,7 @@ function ShareRow({ productName, productSlug, productImage, productPrice }: {
   productName: string; productSlug: string; productImage: string | null; productPrice: number
 }) {
   const url = `https://pahadiroots.com/products/${productSlug}`
-  const waText = encodeURIComponent(`🌿 Check out *${productName}* at ₹${productPrice} on 5 Pahadi Roots!\n🏔️ Pure Himalayan, directly from mountain farmers.\n👉 ${url}`)
+  const waText = encodeURIComponent(`🌿 Check out *${productName}* at ₹${productPrice} on HimVeda by Pahadi Roots!\n🏔️ Pure Himalayan, directly from mountain farmers.\n👉 ${url}`)
   return (
     <div className="pdp-share-row">
       <span className="pdp-share-label">Share on</span>
@@ -573,13 +573,13 @@ function ShareRow({ productName, productSlug, productImage, productPrice }: {
         <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-fb" title="Facebook">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#1877f2"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.883v2.271h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
         </a>
-        <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(productName + ' — 5 Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-tw" title="X / Twitter">
+        <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(productName + ' — HimVeda by Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-tw" title="X / Twitter">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#000"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.74l7.73-8.835L1.254 2.25H8.08l4.261 5.633 5.903-5.633zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
         </a>
         <a href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(productName)}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-tg" title="Telegram">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#229ed9"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
         </a>
-        <a href={`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(productImage || '')}&description=${encodeURIComponent(productName + ' — 5 Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-pin" title="Pinterest">
+        <a href={`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(productImage || '')}&description=${encodeURIComponent(productName + ' — HimVeda by Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-pin" title="Pinterest">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#e60023"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 01.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
         </a>
       </div>
@@ -592,7 +592,7 @@ function WhySection() {
     <section className="pdp-why-bg">
       <div className="pdp-why-inner">
         <div className="pdp-why-chip">Our Promise</div>
-        <h2 className="pdp-why-title">Why 5 Pahadi Roots</h2>
+        <h2 className="pdp-why-title">Why HimVeda by Pahadi Roots</h2>
         <p className="pdp-why-sub">Four pillars that define everything we do — mountain to doorstep.</p>
       </div>
       <div className="pdp-why-grid">

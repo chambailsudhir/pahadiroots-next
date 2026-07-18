@@ -94,7 +94,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
       <div className="mob-nav-bg" onClick={closeMobileMenu} aria-hidden="true" />
       <div className="mob-nav-panel" ref={panelRef}>
         <button ref={closeRef} className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>
-        <div className="mob-nav-logo">🌿 {settings.site_name || '5 Pahadi Roots'}</div>
+        <div className="mob-nav-logo">🌿 {settings.site_name || 'HimVeda by Pahadi Roots'}</div>
 
         {/* Primary links */}
         {navLinks.map(item => (
@@ -128,6 +128,11 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
                 🏔️ {s.name}
               </Link>
             ))}
+            {states.length > 8 && (
+              <Link href="/regions" onClick={closeMobileMenu} style={{ fontWeight: 800, color: 'var(--gd)' }}>
+                View All Regions →
+              </Link>
+            )}
           </>
         )}
 
@@ -143,7 +148,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
           </a>
         )}
 
-        <p style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 16 }}>© {new Date().getFullYear()} Pahadi Roots</p>
+        <p style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 16 }}>© {new Date().getFullYear()} HimVeda by Pahadi Roots</p>
       </div>
     </div>
   )

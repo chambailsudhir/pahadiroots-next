@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
 <div style="max-width:580px;margin:0 auto;padding:24px 16px">
   <div style="background:linear-gradient(135deg,#1a3a1e,#2d5233);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center">
     <div style="font-size:32px;margin-bottom:6px">🌿</div>
-    <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px">5 Pahadi Roots</div>
+    <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px">HimVeda by Pahadi Roots</div>
     <div style="font-size:11px;color:rgba(255,255,255,.6);letter-spacing:2px;text-transform:uppercase">Himalayan Natural Store</div>
   </div>
   <div style="background:#fff;padding:28px 32px;text-align:center;border-left:1px solid #eee;border-right:1px solid #eee">
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
   </div>
   <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
     <div style="color:rgba(255,255,255,.5);font-size:12px;line-height:1.8">
-      🌿 5 Pahadi Roots — Pure Himalayan Goodness<br>
+      🌿 HimVeda by Pahadi Roots — Pure Himalayan Goodness<br>
       <a href="https://pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
       &nbsp;·&nbsp;
       <a href="https://wa.me/919899984895" style="color:#e8b84b;text-decoration:none">WhatsApp Us</a>

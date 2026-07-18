@@ -20,10 +20,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BUSINESS_INFO = {
-  name:    '5 Pahadi Roots',
-  gstin:   '02AAWFC5939L1ZV',
-  address: 'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
-  state:   'Himachal Pradesh',
+  // Legal name registered against the GSTIN below — this is what must
+  // appear on a GST-compliant tax invoice as the seller's legal name.
+  name:      'Chambail International',
+  // Brand/trade name — shown alongside the legal name, not in place of it.
+  brandName: 'HimVeda by Pahadi Roots',
+  gstin:     '02AAWFC5939L1ZV',
+  address:   'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
+  state:     'Himachal Pradesh',
   stateCode: '02',
 } as const
 

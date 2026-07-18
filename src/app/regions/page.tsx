@@ -26,19 +26,19 @@ export const revalidate = 60
 // preview card, and without a canonical tag the page had no authoritative
 // URL declared.
 export const metadata: Metadata = {
-  title: 'Explore Himalayan Regions — Pahadi Roots',
+  title: 'Explore Himalayan Regions — HimVeda by Pahadi Roots',
   description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
   alternates: { canonical: `${BASE}/regions` },
   openGraph: {
-    title: 'Explore Himalayan Regions — Pahadi Roots',
+    title: 'Explore Himalayan Regions — HimVeda by Pahadi Roots',
     description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
     url: `${BASE}/regions`,
     type: 'website',
-    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Explore Himalayan Regions — Pahadi Roots' }],
+    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Explore Himalayan Regions — HimVeda by Pahadi Roots' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Explore Himalayan Regions — Pahadi Roots',
+    title: 'Explore Himalayan Regions — HimVeda by Pahadi Roots',
     description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude.',
   },
 }

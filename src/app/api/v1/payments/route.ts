@@ -389,11 +389,11 @@ export async function POST(req: NextRequest) {
           await sendTransactionalEmail({
             type:    'payment_confirmation',
             to:      customer.email,
-            subject: `Payment Confirmed #${currentOrder.order_number} — Pahadi Roots 🌿`,
+            subject: `Payment Confirmed #${currentOrder.order_number} — HimVeda by Pahadi Roots 🌿`,
             html: `
               <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
                 <div style="background:#2C4A2E;padding:24px;text-align:center">
-                  <h1 style="color:#fff;margin:0;font-size:22px">🌿 Pahadi Roots</h1>
+                  <h1 style="color:#fff;margin:0;font-size:22px">🌿 HimVeda by Pahadi Roots</h1>
                   <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
                 </div>
                 <div style="padding:24px">
@@ -408,7 +408,7 @@ export async function POST(req: NextRequest) {
                   <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
                 </div>
                 <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
-                  Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
+                  HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
                 </div>
               </div>`,
             context: { order_id: currentOrder.id, order_number: currentOrder.order_number },

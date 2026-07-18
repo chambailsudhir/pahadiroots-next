@@ -52,7 +52,7 @@ export interface SendTransactionalEmailParams {
   to:        string
   subject:   string
   html:      string
-  /** Defaults to 'Pahadi Roots <noreply@pahadiroots.com>' — override only if a call site genuinely needs a distinct sender display name (e.g. contact-form notifications). */
+  /** Defaults to 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>' — override only if a call site genuinely needs a distinct sender display name (e.g. contact-form notifications). */
   from?:     string
   /** Free-form ops/replay reference (e.g. { order_id, order_number }). Never put secrets here. */
   context?:  Record<string, unknown>
@@ -105,7 +105,7 @@ export async function sendTransactionalEmail(
   params: SendTransactionalEmailParams,
 ): Promise<SendTransactionalEmailResult> {
   const { type, to, subject, html, context, timeoutMs = 5000 } = params
-  const from = params.from ?? 'Pahadi Roots <noreply@pahadiroots.com>'
+  const from = params.from ?? 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>'
   const resend = new Resend(process.env.RESEND_API_KEY)
 
   let lastError = 'Unknown error'

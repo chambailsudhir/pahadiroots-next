@@ -517,10 +517,10 @@ function SuccessContent() {
         <Link href="/" className="oc-nav-logo">
           <div style={{width:38,height:38,borderRadius:9,overflow:'hidden',background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="https://ulyrhnpoiypuvaurlqqi.supabase.co/storage/v1/object/public/pahadi-images/5%20pahadi%20roots.png" alt="5 Pahadi Roots" style={{width:38,height:38,objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+            <img src="/logo.png" alt="HimVeda by Pahadi Roots" style={{width:38,height:38,objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
           </div>
           <div>
-            <div className="oc-logo-name">5 Pahadi Roots</div>
+            <div className="oc-logo-name">HimVeda by Pahadi Roots</div>
             <div className="oc-logo-tl">Himalayan Natural Store</div>
           </div>
         </Link>
@@ -724,6 +724,9 @@ function SuccessContent() {
                       <div className="inv-header">
                         <div>
                           <div className="inv-biz-name">{BUSINESS_INFO.name}</div>
+                          <div className="inv-biz-brand" style={{ fontSize: '12px', color: '#666', fontWeight: 600, marginTop: '-2px', marginBottom: '4px' }}>
+                            trading as {BUSINESS_INFO.brandName}
+                          </div>
                           <div className="inv-biz-addr">{BUSINESS_INFO.address}</div>
                           <div className="inv-biz-gstin">GSTIN: {BUSINESS_INFO.gstin}</div>
                         </div>
@@ -881,7 +884,7 @@ function SuccessContent() {
             </svg>
           </div>
           <div className="oc-f-brand-col">
-            <div className="oc-f-brand-name">5 Pahadi Roots</div>
+            <div className="oc-f-brand-name">HimVeda by Pahadi Roots</div>
             <div className="oc-f-brand-sub">Himalayan Natural Store</div>
             <p className="oc-f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
           </div>
@@ -974,7 +977,7 @@ function SuccessContent() {
 
         {/* Copyright */}
         <div className="oc-f-bot">
-          <div className="oc-f-bot-left">© 2026 <strong>5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
+          <div className="oc-f-bot-left">© 2026 <strong>HimVeda by Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
           <div className="oc-f-bot-tag">Making India eat clean</div>
         </div>
       </footer>

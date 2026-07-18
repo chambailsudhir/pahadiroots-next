@@ -20,7 +20,7 @@ function settings(overrides: Record<string, string> = {}): SiteSettings {
 describe('WhySection', () => {
   it('renders the section heading', () => {
     render(<WhySection settings={settings()} />)
-    expect(screen.getByText('Why 5 Pahadi Roots')).toBeTruthy()
+    expect(screen.getByText('Why HimVeda by Pahadi Roots')).toBeTruthy()
   })
 
   it('renders all 4 pillars with their numbers', () => {

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
+import { toCardProductData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -16,7 +16,7 @@ import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 
 export const metadata: Metadata = {
-  title: '5 Pahadi Roots — Pure Himalayan Natural Products',
+  title: 'HimVeda by Pahadi Roots — Pure Himalayan Natural Products',
   description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
 }
 
@@ -30,7 +30,7 @@ export default async function HomePage() {
 
   const categories = buildCategories(storeData)
   const heroImages = buildHeroImages(settings)
-  const states     = buildStates(storeData)
+  const states     = await buildStates(storeData)
 
   const showTrustBar    = isEnabled(settings.show_trust_bar)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
@@ -61,22 +61,28 @@ function buildHeroImages(settings: any) {
     const img = settings[`hero_slide_${i}_img`]
     if (img) slides.push({
       url:      img,
-      alt_text: settings[`hero_slide_${i}_title`] || 'Pahadi Roots',
+      alt_text: settings[`hero_slide_${i}_title`] || 'HimVeda by Pahadi Roots',
       title:    settings[`hero_slide_${i}_title`] || '',
       subtitle: settings[`hero_slide_${i}_sub`]   || '',
     })
   }
   if (!slides.length && settings.hero_bg_image)
-    slides.push({ url: settings.hero_bg_image, alt_text: 'Pahadi Roots', title: '', subtitle: '' })
+    slides.push({ url: settings.hero_bg_image, alt_text: 'HimVeda by Pahadi Roots', title: '', subtitle: '' })
   return slides
 }
 
-function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): RichState[] {
+// Exported (not just used internally) so it can be unit-tested directly —
+// see src/__tests__/homepageBuildStates.test.ts — without needing to render
+// the entire HomePage tree (hero images, trust bar, reviews section, etc.).
+export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): Promise<RichState[]> {
   const { states, state_images } = storeData
   if (!states?.length) return []
 
-  const productsWithImages = getProductsWithImages(storeData)
-  const normalized = normalizeProducts(productsWithImages) as (Product & { state_id: string })[]
+  // BUG FIX (perf): previously ran its own full-catalog
+  // getProductsWithImages()+normalizeProducts() pass. Now shares the same
+  // cached result used by /regions and /regions/[slug] (see
+  // getNormalizedProducts() in storeData.ts) instead of recomputing it.
+  const normalized = await getNormalizedProducts() as (Product & { state_id: string })[]
 
   return states.map((s: any) => {
     const imgs = (state_images as any[])
@@ -89,7 +95,20 @@ function buildStates(storeData: Awaited<ReturnType<typeof getStoreData>>): RichS
       description: s.description ?? null,
       image_url:   imgs[0]?.image_url ?? s.image_path ?? null,
       region:      null,
-      products:    normalized.filter(p => String(p.state_id) === String(s.id)).slice(0, 4),
+      // BUG FIX: state_id comparison previously had no case-normalization
+      // (same pattern found in /regions/page.tsx and /regions/[slug]/page.tsx)
+      // — could silently disagree with the counts shown on those pages if
+      // casing ever differs between products.state_id and states.id.
+      // BUG FIX: previously passed raw normalized() products straight into
+      // ProductCard (a Client Component), shipping every AI-generated
+      // content field (long/short description, AI health-benefits text,
+      // tags, etc.) into the RSC payload for products that never render
+      // them. toCardProductData() strips those before the client boundary,
+      // matching the fix already applied on /regions/[slug].
+      products:    normalized
+        .filter(p => String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
+        .slice(0, 4)
+        .map(toCardProductData),
     }
   }) as unknown as RichState[]
 }

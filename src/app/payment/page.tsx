@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Payment Methods | Pahadi Roots',
+  title: 'Payment Methods | HimVeda by Pahadi Roots',
   description: 'Secure payment options — UPI, Cards, Net Banking and Cash on Delivery',
 }
 

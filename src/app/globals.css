@@ -320,7 +320,7 @@ section.sec { padding: 52px 40px; }
 @keyframes pr-spIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 .pr-shdr { display: grid; grid-template-columns: 54% 46%; height: 450px; overflow: hidden; }
 .pr-spgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,340px)); justify-content: center; gap: 24px; padding: 24px 40px; background: #0d1f0e; }
-@media(max-width:900px) { .pr-spgrid { grid-template-columns: repeat(2,1fr) !important; } }
+@media(max-width:900px) { .pr-spgrid { grid-template-columns: repeat(2,1fr) !important; } .pr-shdr { height: 380px !important; } }
 @media(max-width:640px) { .pr-shdr { grid-template-columns: 1fr !important; height: auto !important; } .pr-spgrid { grid-template-columns: 1fr 1fr !important; padding: 16px 20px !important; gap: 10px !important; } }
 
 /* ── CATEGORY TILES ── */

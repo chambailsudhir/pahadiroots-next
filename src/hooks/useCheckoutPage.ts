@@ -953,7 +953,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
         const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
         const shipLine   = pricingShipping > 0 ? `\n🚚 Shipping: ₹${pricingShipping}` : '\n🚚 Shipping: FREE'
-        const waMsg = `*New Order — 5 Pahadi Roots* 🌿\n\n` +
+        const waMsg = `*New Order — HimVeda by Pahadi Roots* 🌿\n\n` +
           `👤 *${addr.name}*\n📱 ${addr.phone}\n` +
           (email ? `📧 ${email}\n` : '') +
           `\n📍 *Delivery Address*\n${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
@@ -1012,7 +1012,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           amount:      data.amount,
           currency:    data.currency || 'INR',
           order_id:    data.razorpay_order_id,
-          name:        'Pahadi Roots',
+          name:        'HimVeda by Pahadi Roots',
           description: 'Natural Himalayan Products',
           image:       'https://pahadiroots.com/favicon.ico',
           prefill:     { name: addr.name, email: email || user?.email || '', contact: addr.phone },
@@ -1046,7 +1046,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               const couponLine = coupon ? `\n🎟️ Coupon ${coupon.code}: -₹${coupon.discount}` : ''
               const coinsLine  = loyaltyRedemption ? `\n🪙 Coins redeemed: -₹${loyaltyRedemption.discount_inr}` : ''
               const shipLine   = pricingShipping > 0 ? `\n🚚 Shipping: ₹${pricingShipping}` : '\n🚚 Shipping: FREE'
-              const waMsg = `✅ *Payment Confirmed — 5 Pahadi Roots* 🌿\n\n` +
+              const waMsg = `✅ *Payment Confirmed — HimVeda by Pahadi Roots* 🌿\n\n` +
                 `✅ *Payment ID:* ${response.razorpay_payment_id}\n` +
                 `👤 *${addr.name}*\n📱 ${addr.phone}\n` +
                 (email ? `📧 ${email}\n` : '') +

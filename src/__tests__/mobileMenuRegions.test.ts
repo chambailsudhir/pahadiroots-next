@@ -29,7 +29,7 @@ function makeStates(n: number) {
   })) as any
 }
 
-const SETTINGS = { site_name: 'Pahadi Roots' } as any
+const SETTINGS = { site_name: 'HimVeda by Pahadi Roots' } as any
 
 describe('MobileMenu — By Region section', () => {
   it('bug #21 — shows a "View All Regions" link when there are more than 8 states', () => {

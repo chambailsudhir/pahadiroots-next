@@ -30,7 +30,7 @@ export default function Footer({ settings }: Props) {
   }
 
   // BUG FIX: instagramUrl's fallback was 'instagram.com/pahadiroots' — wrong
-  // handle. The brand is "5 Pahadi Roots" everywhere else in this codebase
+  // handle. The brand is "HimVeda by Pahadi Roots" everywhere else in this codebase
   // (layout.tsx metadata, site_name default, etc.); the real account is
   // @5pahadiroots. LinkedIn was fully hardcoded with a generic guessed URL
   // and wasn't configurable via settings at all, unlike the other three —
@@ -166,7 +166,7 @@ export default function Footer({ settings }: Props) {
         {/* Brand text */}
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: '"Playfair Display",serif', fontSize: '26px', fontWeight: 900, color: '#fff', lineHeight: 1.1, marginBottom: '4px' }}>
-            5 Pahadi Roots
+            HimVeda by Pahadi Roots
           </div>
           <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: '#c8920a', textTransform: 'uppercase', marginBottom: '12px' }}>
             Himalayan Natural Store
@@ -339,7 +339,7 @@ export default function Footer({ settings }: Props) {
       {/* ── Copyright bar + diamond vine ─────────────────── */}
       <div className="ft-bottom-row" style={{ maxWidth: '100%', padding: '14px 60px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'relative', zIndex: 2, background: '#0f2a14' }}>
         <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'Lato,sans-serif' }}>
-          © {new Date().getFullYear()} <strong style={{ color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>5 Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India
+          © {new Date().getFullYear()} <strong style={{ color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>HimVeda by Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India
         </div>
 
         {/* Diamond vine divider */}

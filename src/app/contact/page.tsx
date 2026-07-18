@@ -77,7 +77,7 @@ export default function ContactPage() {
         <div className="space-y-4">
           {/* WhatsApp — primary */}
           <a
-            href={`https://wa.me/${waNumber.replace(/\D/g, '')}?text=Hi Pahadi Roots, I need help`}
+            href={`https://wa.me/${waNumber.replace(/\D/g, '')}?text=Hi HimVeda by Pahadi Roots, I need help`}
             target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-4 p-5 bg-green-50 border border-green-100 rounded-2xl hover:bg-green-100 transition-colors group"
           >

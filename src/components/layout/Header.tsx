@@ -58,7 +58,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
 
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)
-  const siteName     = settings.site_name || '5 Pahadi Roots'
+  const siteName     = settings.site_name || 'HimVeda by Pahadi Roots'
   const logoUrl      = settings.logo_url || ''
   const freeShipMin  = settings.free_shipping_min || '0'
 
@@ -80,7 +80,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           <div className="old-logo-icon">
             {logoUrl
               ? <Image src={logoUrl} alt={siteName} width={40} height={40} style={{ objectFit: 'contain' }} />
-              : <span style={{ fontSize: '28px' }}>🌿</span>}
+              : <Image src="/logo.png" alt={siteName} width={40} height={40} style={{ objectFit: 'contain' }} />}
           </div>
           <div className="old-logo-words">
             <div className="old-logo-name">{siteName}</div>

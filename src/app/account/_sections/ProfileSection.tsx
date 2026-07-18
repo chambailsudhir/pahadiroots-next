@@ -141,7 +141,7 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
               <div id="pf-email-hint" className={styles.fHint}>
                 Email cannot be changed here.{' '}
                 <a
-                  href={`https://wa.me/919899984895?text=${encodeURIComponent('Hi, I need help changing the email on my Pahadi Roots account.')}`}
+                  href={`https://wa.me/919899984895?text=${encodeURIComponent('Hi, I need help changing the email on my HimVeda by Pahadi Roots account.')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.fHintLink}

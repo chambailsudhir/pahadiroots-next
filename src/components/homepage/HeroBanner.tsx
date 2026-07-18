@@ -46,7 +46,7 @@ export default function HeroBanner({ images, settings }: Props) {
             transition: 'opacity 0.9s cubic-bezier(0.4,0,0.2,1)',
             pointerEvents: isVisible ? 'auto' : 'none',
           }}>
-            <Image src={img.url} alt={img.alt_text || 'Pahadi Roots'} fill sizes="100vw"
+            <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
               style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
             {/* Dark-left gradient overlay */}
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />

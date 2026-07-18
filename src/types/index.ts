@@ -14,7 +14,13 @@ export interface Category {
 export interface State {
   id: string
   name: string
-  slug: string         // same as id in admin
+  // CONFIRMED via live schema query: states has NO slug column at all
+  // (Supabase returned "column 'slug' does not exist" when queried
+  // directly). This field is NEVER read from the DB — every place that
+  // builds a State/RichState object synthesizes it as `slug: s.id`
+  // (see layout.tsx, app/page.tsx's buildStates()). Keep it that way:
+  // there's no real slug to drift from, so id is the only source of truth.
+  slug: string
   description: string | null
   image_url: string | null  // mapped from image_path
   image_path?: string | null

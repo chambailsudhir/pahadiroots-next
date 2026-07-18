@@ -123,7 +123,7 @@ function row(overrides: Partial<CandidateRow> = {}): CandidateRow {
     id: 'fe-1',
     type: 'order_confirmation',
     to_email: 'customer@example.com',
-    from_address: 'Pahadi Roots <noreply@pahadiroots.com>',
+    from_address: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
     subject: 'Order Confirmed',
     html: '<p>Thanks!</p>',
     attempts: 0,
@@ -207,14 +207,14 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
   })
 
   it('uses the row\'s own from_address rather than a hardcoded sender', async () => {
-    mockDb.candidates = [row({ id: 'fe-1', from_address: 'Pahadi Roots Contact <noreply@pahadiroots.com>' })]
+    mockDb.candidates = [row({ id: 'fe-1', from_address: 'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>' })]
     mockSend.mockResolvedValue({ data: { id: 'email_ok' }, error: null })
     const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
 
     await GET(makeReq('Bearer test-cron-secret'))
 
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'Pahadi Roots Contact <noreply@pahadiroots.com>' }),
+      expect.objectContaining({ from: 'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>' }),
     )
   })
 

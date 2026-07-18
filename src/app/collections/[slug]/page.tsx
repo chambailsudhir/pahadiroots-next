@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const cat = storeData.categories.find(c => c.slug === slug)
   if (!cat) return { title: 'Collection Not Found' }
   return {
-    title:       `${cat.name} — Himalayan ${cat.name} | Pahadi Roots`,
+    title:       `${cat.name} — Himalayan ${cat.name} | HimVeda by Pahadi Roots`,
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
     openGraph:   { images: cat.image_url ? [{ url: cat.image_url }] : [] },
   }

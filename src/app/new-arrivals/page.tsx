@@ -36,7 +36,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const activeCat = categories.find(c => c.slug === (sp.category || ''))
   const page = Math.max(1, parseInt(sp.page || '1'))
 
-  const title = `New Arrivals${activeCat ? ` — ${activeCat.name}` : ''}${page > 1 ? ` — Page ${page}` : ''} | Pahadi Roots`
+  const title = `New Arrivals${activeCat ? ` — ${activeCat.name}` : ''}${page > 1 ? ` — Page ${page}` : ''} | HimVeda by Pahadi Roots`
   const description = `${newCount} new Himalayan products just added — fresh honey, oils, spices and grains sourced directly from mountain families.`
 
   const params = new URLSearchParams()

@@ -32,7 +32,7 @@ interface OfferProduct {
   sku?: string | null
 }
 
-const SELLER = { '@type': 'Organization', name: '5 Pahadi Roots' } as const
+const SELLER = { '@type': 'Organization', name: 'HimVeda by Pahadi Roots' } as const
 
 function availability(stock: number | null | undefined): string {
   return Number(stock ?? 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'

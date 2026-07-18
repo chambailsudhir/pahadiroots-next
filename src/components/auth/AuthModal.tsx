@@ -218,18 +218,18 @@ export default function AuthModal() {
     <div className="am-ov" onClick={e => e.target === e.currentTarget && closeAuth()} role="presentation">
       <div className="am-box" ref={modalRef} role="dialog" aria-modal="true" aria-label={
         // BUG FIX (P3): this used to be the fixed string "Sign in to 5
-        // Pahadi Roots" regardless of whether the modal was showing
+        // HimVeda by Pahadi Roots" regardless of whether the modal was showing
         // Login, Sign Up, or Reset Password — mislabeled for screen
         // reader users on 2 of the 3 possible views.
         showFP ? 'Reset your password'
-        : tab === 'signup' ? 'Sign up for 5 Pahadi Roots'
-        : 'Sign in to 5 Pahadi Roots'
+        : tab === 'signup' ? 'Sign up for HimVeda by Pahadi Roots'
+        : 'Sign in to HimVeda by Pahadi Roots'
       }>
         <button className="am-close" onClick={closeAuth}>✕</button>
 
         {/* Header */}
         <div className="am-head">
-          <div className="am-logo">🌿 5 Pahadi Roots</div>
+          <div className="am-logo">🌿 HimVeda by Pahadi Roots</div>
           <div className="am-logo-sub">Himalayan Natural Store</div>
         </div>
 

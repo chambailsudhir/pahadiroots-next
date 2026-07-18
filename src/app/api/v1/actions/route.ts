@@ -165,10 +165,10 @@ export async function POST(req: NextRequest) {
         await sendTransactionalEmail({
           type:    'newsletter_welcome',
           to:      email,
-          from:    'Pahadi Roots <noreply@pahadiroots.com>',
-          subject: 'Welcome to Pahadi Roots — here\u2019s 5% off your first order',
+          from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
+          subject: 'Welcome to HimVeda by Pahadi Roots — here\u2019s 5% off your first order',
           html:    `<p>Hi${safeName ? ' ' + esc(safeName) : ''},</p>
-<p>Thanks for joining the Pahadi Roots community! Use the code below at checkout for 5% off your first order:</p>
+<p>Thanks for joining the HimVeda by Pahadi Roots community! Use the code below at checkout for 5% off your first order:</p>
 <p style="font-size:20px;font-weight:800;letter-spacing:1px;">${esc(code)}</p>
 <p>Valid for 30 days, one-time use.</p>`,
           context: { subscribed_email: safeEmailForHtml, coupon_code: code },
@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
         await sendTransactionalEmail({
           type:    'contact_form',
           to:      process.env.ADMIN_EMAIL || 'hello@pahadiroots.com',
-          from:    'Pahadi Roots Contact <noreply@pahadiroots.com>',
+          from:    'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>',
           subject: `Contact form: ${safeName}`,
           html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
           context: { submitted_email: rawEmail },

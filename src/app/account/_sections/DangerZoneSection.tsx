@@ -263,7 +263,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
             {step === 1 && (
               <>
                 <p className={styles.modalDesc}>
-                  This will <strong>permanently delete</strong> your Pahadi Roots account and
+                  This will <strong>permanently delete</strong> your HimVeda by Pahadi Roots account and
                   anonymise all personal data stored by us, in line with India&apos;s DPDP Act 2023.
                 </p>
                 <ul className={styles.dangerModalList}>

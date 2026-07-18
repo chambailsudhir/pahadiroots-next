@@ -78,7 +78,7 @@ describe('AuthModal — dynamic aria-label (P3 fix)', () => {
 
   it('labels itself "Sign in" on the default email tab', () => {
     render(<AuthModal />)
-    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign in to 5 Pahadi Roots')
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign in to HimVeda by Pahadi Roots')
   })
 
   it('labels itself "Sign up" after switching to the Sign Up tab', () => {
@@ -88,7 +88,7 @@ describe('AuthModal — dynamic aria-label (P3 fix)', () => {
     // "Sign Up" appears both as the top tab and the bottom switch-link —
     // the tab is the first match in DOM order.
     fireEvent.click(screen.getAllByText('Sign Up')[0])
-    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign up for 5 Pahadi Roots')
+    expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe('Sign up for HimVeda by Pahadi Roots')
   })
 
   it('labels itself "Reset your password" on the forgot-password view', () => {

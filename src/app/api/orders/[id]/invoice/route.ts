@@ -148,7 +148,7 @@ export async function GET(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invoice · ${orderNum} · 5 Pahadi Roots</title>
+  <title>Invoice · ${orderNum} · HimVeda by Pahadi Roots</title>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body   { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; padding: 32px; max-width: 780px; margin: 0 auto; }
     .hdr   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #1a3a1e; }
@@ -199,8 +199,8 @@ export async function GET(
   <div class="brand">
     <div class="logo">🌿</div>
     <div>
-      <div class="bname">5 Pahadi Roots</div>
-      <div class="btag">Natural Himalayan Products</div>
+      <div class="bname">Chambail International</div>
+      <div class="btag">trading as HimVeda by Pahadi Roots</div>
     </div>
   </div>
   <div class="inv">
@@ -255,7 +255,7 @@ export async function GET(
 
 <div class="footer">
   <div class="footer-note">
-    5 Pahadi Roots · pahadiroots.com<br/>
+    HimVeda by Pahadi Roots · pahadiroots.com<br/>
     Questions? WhatsApp us at +91 98999 84895<br/>
     Thank you for supporting Himalayan farming communities 🙏
   </div>

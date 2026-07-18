@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// 5 Pahadi Roots — Customer Auth API (Next.js App Router)
+// HimVeda by Pahadi Roots — Customer Auth API (Next.js App Router)
 //
 // CHANGES (security audit):
 //  ✅ In-process rate limiter — protects OTP, login, change_password
@@ -542,9 +542,9 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
         signal: AbortSignal.timeout(8_000),
         body: JSON.stringify({
-          from: '5 Pahadi Roots <noreply@pahadiroots.com>', to: [email],
-          subject: '🔑 Reset Your Password — 5 Pahadi Roots',
-          html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">5 Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 8px">Reset Your Password</h2><p style="color:#666;font-size:15px">Click the button below to set a new password.</p><div style="text-align:center;margin:32px 0"><a href="${finalResetUrl}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:18px 48px;border-radius:12px;text-decoration:none;font-weight:800;font-size:17px">🔑 Reset Password</a></div><p style="color:#aaa;font-size:12px;text-align:center">Need help? <a href="https://wa.me/919899984895" style="color:#2d6a4f">WhatsApp us</a></p></div></div></body></html>`,
+          from: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>', to: [email],
+          subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
+          html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 8px">Reset Your Password</h2><p style="color:#666;font-size:15px">Click the button below to set a new password.</p><div style="text-align:center;margin:32px 0"><a href="${finalResetUrl}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:18px 48px;border-radius:12px;text-decoration:none;font-weight:800;font-size:17px">🔑 Reset Password</a></div><p style="color:#aaa;font-size:12px;text-align:center">Need help? <a href="https://wa.me/919899984895" style="color:#2d6a4f">WhatsApp us</a></p></div></div></body></html>`,
         }),
       })
       if (!resendRes.ok) { const t = await resendRes.text(); console.error('[forgot_password] Resend failed:', resendRes.status, t); return err(500, 'Could not send email — please try again') }

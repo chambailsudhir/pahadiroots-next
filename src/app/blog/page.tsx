@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 
 export const metadata: Metadata = {
-  title:       'Blog — Pahadi Roots',
+  title:       'Blog — HimVeda by Pahadi Roots',
   description: 'Stories from the mountains — recipes, health tips, and tales from Himalayan farming communities.',
 }
 

@@ -30,8 +30,8 @@ const lato = Lato({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
   title: {
-    default: '5 Pahadi Roots — Natural Himalayan Products',
-    template: '%s | 5 Pahadi Roots',
+    default: 'HimVeda by Pahadi Roots — Natural Himalayan Products',
+    template: '%s | HimVeda by Pahadi Roots',
   },
   description:
     'Pure, natural products sourced directly from Himalayan mountain farming communities. Honey, spices, grains, and more — delivered across India.',
@@ -40,17 +40,17 @@ export const metadata: Metadata = {
     type:        'website',
     locale:      'en_IN',
     url:         'https://pahadiroots.com',
-    siteName:    '5 Pahadi Roots',
+    siteName:    'HimVeda by Pahadi Roots',
     images: [{
       url:    '/og-default.jpg',
       width:  1200,
       height: 630,
-      alt:    '5 Pahadi Roots — Natural Himalayan Products',
+      alt:    'HimVeda by Pahadi Roots — Natural Himalayan Products',
     }],
   },
   twitter: {
     card:        'summary_large_image',
-    title:       '5 Pahadi Roots — Natural Himalayan Products',
+    title:       'HimVeda by Pahadi Roots — Natural Himalayan Products',
     description: 'Pure products from mountain farming communities.',
   },
   robots: {
@@ -109,7 +109,7 @@ export default async function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type':    'Organization',
-              name:       '5 Pahadi Roots',
+              name:       'HimVeda by Pahadi Roots',
               url:        'https://pahadiroots.com',
               logo:       'https://pahadiroots.com/logo.png',
               contactPoint: {

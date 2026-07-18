@@ -175,7 +175,7 @@ describe('sendTransactionalEmail', () => {
     const payload = insertCalls[0].payload as Record<string, unknown>
     expect(payload.type).toBe('order_confirmation')
     expect(payload.to_email).toBe('customer@example.com')
-    expect(payload.from_address).toBe('Pahadi Roots <noreply@pahadiroots.com>')
+    expect(payload.from_address).toBe('HimVeda by Pahadi Roots <noreply@pahadiroots.com>')
     expect(payload.subject).toBe('Order Confirmed - PR-1042')
     expect(payload.html).toBe('<p>Thanks!</p>')
     expect(payload.context).toEqual({ order_id: 'order-uuid-1', order_number: 'PR-1042' })
@@ -190,16 +190,16 @@ describe('sendTransactionalEmail', () => {
     await sendTransactionalEmail({
       type: 'contact_form',
       to: 'hello@pahadiroots.com',
-      from: 'Pahadi Roots Contact <noreply@pahadiroots.com>',
+      from: 'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>',
       subject: 'Contact form: Test',
       html: '<p>Hi</p>',
     })
 
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'Pahadi Roots Contact <noreply@pahadiroots.com>' }),
+      expect.objectContaining({ from: 'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>' }),
     )
     const payload = insertCalls[0].payload as Record<string, unknown>
-    expect(payload.from_address).toBe('Pahadi Roots Contact <noreply@pahadiroots.com>')
+    expect(payload.from_address).toBe('HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>')
   })
 
   it('never throws even when the DLQ insert itself fails — the email is reported as unsent, not crashed', async () => {

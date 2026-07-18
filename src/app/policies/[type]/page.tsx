@@ -65,7 +65,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Privacy Policy',
     content: (
       <div className="prose prose-stone max-w-none text-sm leading-relaxed space-y-5">
-        <p className="text-stone-600">This policy describes how Pahadi Roots collects and uses your personal information.</p>
+        <p className="text-stone-600">This policy describes how HimVeda by Pahadi Roots collects and uses your personal information.</p>
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Information We Collect</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
@@ -114,7 +114,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         </section>
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Intellectual Property</h2>
-          <p className="text-stone-600">All content on this website — including images, text, and design — is the property of Pahadi Roots and may not be reproduced without written permission.</p>
+          <p className="text-stone-600">All content on this website — including images, text, and design — is the property of HimVeda by Pahadi Roots and may not be reproduced without written permission.</p>
         </section>
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Governing Law</h2>
@@ -129,7 +129,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { type } = await params
   const policy = POLICIES[type]
   if (!policy) return { title: 'Policy Not Found' }
-  return { title: `${policy.title} — Pahadi Roots` }
+  return { title: `${policy.title} — HimVeda by Pahadi Roots` }
 }
 
 export default async function PolicyPage({ params }: Props) {

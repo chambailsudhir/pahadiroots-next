@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
 export const metadata: Metadata = {
-  title:       'Our Story — Pahadi Roots',
-  description: 'How Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
+  title:       'Our Story — HimVeda by Pahadi Roots',
+  description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
 }
 
 export const revalidate = 3600
@@ -47,7 +47,7 @@ export default async function AboutPage() {
             <span className="text-earth-300">The Mountains</span>
           </h1>
           <p className="text-forest-200 text-lg max-w-xl mx-auto leading-relaxed">
-            We started Pahadi Roots because we believed people deserved to know where their food comes from — and the farmers deserved more than what middlemen paid them.
+            We started HimVeda by Pahadi Roots because we believed people deserved to know where their food comes from — and the farmers deserved more than what middlemen paid them.
           </p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default async function AboutPage() {
         <div className="prose prose-stone max-w-none">
           <h2 className="text-2xl font-bold text-stone-900 mb-5">How It Started</h2>
           <p className="text-stone-600 leading-relaxed mb-4">
-            Pahadi Roots was born from a simple realisation — the mountain farmers of Uttarakhand, Himachal Pradesh, and other Himalayan states were producing some of the purest, most extraordinary food in the world. Wild honey harvested from cliff-hanging hives. Cold-pressed mustard oil from centuries-old stone ghannies. Joha rice with an aroma that fills the entire kitchen.
+            HimVeda by Pahadi Roots was born from a simple realisation — the mountain farmers of Uttarakhand, Himachal Pradesh, and other Himalayan states were producing some of the purest, most extraordinary food in the world. Wild honey harvested from cliff-hanging hives. Cold-pressed mustard oil from centuries-old stone ghannies. Joha rice with an aroma that fills the entire kitchen.
           </p>
           <p className="text-stone-600 leading-relaxed mb-4">
             Yet most of this never reached anyone outside the villages. What little did reach cities passed through so many hands that the farmer earned almost nothing — and the food lost its story along the way.
@@ -101,7 +101,7 @@ export default async function AboutPage() {
                 <div key={i} className="relative aspect-square rounded-2xl overflow-hidden group">
                   <Image
                     src={img.url}
-                    alt={img.caption || 'Pahadi Roots'}
+                    alt={img.caption || 'HimVeda by Pahadi Roots'}
                     fill
                     sizes="(max-width: 640px) 50vw, 25vw"
                     className="object-cover group-hover:scale-105 transition-transform duration-300"

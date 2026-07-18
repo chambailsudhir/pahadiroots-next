@@ -11,7 +11,7 @@
 //
 // What we *can* do honestly: India Post's postal circles are public,
 // well-documented, and deterministic from the first digit of any 6-digit PIN
-// (https://www.indiapost.gov.in — PIN code structure). 5 Pahadi Roots ships
+// (https://www.indiapost.gov.in — PIN code structure). HimVeda by Pahadi Roots ships
 // from Himachal Pradesh (postal zone 1 — Delhi/Haryana/Punjab/HP/J&K/Ladakh/
 // Chandigarh), so we can give a clearly-labelled ESTIMATE tier based on zone
 // distance from origin, and keep WhatsApp as a secondary "confirm exact date"
@@ -34,7 +34,7 @@ const ZONE_NAMES: Record<string, string> = {
   '9': 'Army Postal Service',
 }
 
-// Warehouse dispatch zone — 5 Pahadi Roots ships from Himachal Pradesh (zone 1).
+// Warehouse dispatch zone — HimVeda by Pahadi Roots ships from Himachal Pradesh (zone 1).
 // If the warehouse ever moves, update this one constant.
 const ORIGIN_ZONE = '1'
 

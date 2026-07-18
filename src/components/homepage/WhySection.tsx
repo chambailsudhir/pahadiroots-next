@@ -1,4 +1,4 @@
-// "Why 5 Pahadi Roots" — exact SVG match to old site
+// "Why HimVeda by Pahadi Roots" — exact SVG match to old site
 import type { SiteSettings } from '@/types'
 
 interface Props { settings: SiteSettings }
@@ -9,7 +9,7 @@ export default function WhySection({ settings }: Props) {
     <section className="why-bg">
       <div className="ct">
         <div className="chip">Our Promise</div>
-        <h2 className="sh2">Why 5 Pahadi Roots</h2>
+        <h2 className="sh2">Why HimVeda by Pahadi Roots</h2>
         <p className="ssub">Four pillars that define everything we do — mountain to doorstep.</p>
       </div>
       <div className="pgr">
