@@ -77,10 +77,13 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
         {/* Logo */}
         <Link href="/" className="old-logo">
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-            {logoUrl
-              ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-header.png" alt={siteName} width={134} height={50} className="old-logo-img" style={{ height: '50px', width: 'auto', objectFit: 'contain', filter: 'contrast(1.6) saturate(1.4) brightness(0.9)' }} priority />}
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+              {logoUrl
+                ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+                : <Image src="/logo-header.png" alt={siteName} width={123} height={34} style={{ height: '34px', width: 'auto', objectFit: 'contain' }} priority />}
+              {!logoUrl && <div className="old-logo-by">by Pahadi Roots</div>}
+            </div>
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
@@ -236,6 +239,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
            fails WCAG AA's 4.5:1 requirement for text this small (9px).
            Verified by computing actual relative luminance (not eyeballed).
            #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
+        .old-logo-by{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;font-size:13px;color:#8a6508;letter-spacing:.2px;line-height:1;margin-left:2px}
         .old-logo-divider{width:1px;height:26px;background:#c9a44c;opacity:.5}
         .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:1.4;text-align:left}
         .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
@@ -322,7 +326,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
         @media(max-width:520px){
           .old-nav{padding:0 12px}
           .old-cart-btn span:first-child{display:none}
-          .old-logo-img{height:54px!important}
           .old-logo-tl{font-size:8px}
         }
         .old-skip-link{
