@@ -77,10 +77,10 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
         {/* Logo */}
         <Link href="/" className="old-logo">
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
             {logoUrl
               ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-header.png" alt={siteName} width={160} height={48} style={{ height: '40px', width: 'auto', objectFit: 'contain' }} priority />}
+              : <Image src="/logo-header.png" alt={siteName} width={134} height={50} className="old-logo-img" style={{ height: '50px', width: 'auto', objectFit: 'contain' }} priority />}
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
@@ -322,6 +322,8 @@ export default function Header({ settings, categories = [], states = [] }: Props
         @media(max-width:520px){
           .old-nav{padding:0 12px}
           .old-cart-btn span:first-child{display:none}
+          .old-logo-img{height:54px!important}
+          .old-logo-tl{font-size:8px}
         }
         .old-skip-link{
           position:absolute;left:-9999px;top:4px;z-index:9999;
