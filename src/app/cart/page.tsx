@@ -70,7 +70,7 @@ const TRUST_ITEMS = [
 
 const DELIVERY_ITEMS = [
   ['🚚', 'Delivery in 3–5 Days', 'Pan India'],
-  ['🔄', 'Easy Returns',         '7-day policy'],
+  ['🔄', 'Easy Returns',         '48-hour policy'],
   ['🔒', 'Secure Payment',       'SSL encrypted'],
   ['📞', 'WhatsApp Support',     'Mon–Sat 9am–6pm'],
 ] as const

@@ -53,7 +53,7 @@ const PROFILE = { id: 'cust-1', first_name: 'Ramesh', last_name: 'Kumar' }
 const DELIVERED_ORDER = {
   id:           501,
   order_status: 'delivered',
-  delivered_at: new Date().toISOString(), // just delivered — inside 7-day window
+  delivered_at: new Date().toISOString(), // just delivered — inside 48-hour window
   updated_at:   new Date().toISOString(),
   order_number: 'PR-2026-0501',
 }
@@ -176,10 +176,29 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     expect(res.status).toBe(422)
   })
 
-  it('422s once the 7-day return window has closed', async () => {
+  it('422s once the 48-hour return window has closed', async () => {
     const oldDelivered = { ...DELIVERED_ORDER, delivered_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }
     mocks.sbAdmin.mockImplementation(async (method: string, path: string) => {
       if (method === 'GET' && path.includes('/rest/v1/orders?')) return [oldDelivered]
+      if (method === 'GET' && path.includes('/rest/v1/returns?')) return []
+      throw new Error(`Unexpected sbAdmin call: ${method} ${path}`)
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/return/route')
+    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const res = await POST(req, { params })
+    expect(res.status).toBe(422)
+  })
+
+  it('422s a 3-day-old delivery — would have passed under the old 7-day rule, must fail under the corrected 48-hour policy', async () => {
+    // BUG FIX (policy accuracy — flagged by founder): the route used to
+    // allow a full 7 days, which doesn't match the site's actual Return &
+    // Refund Policy (48 hours — see /policies/returns) and is too generous
+    // for an FMCG/food business. This pins the boundary so it can't silently
+    // regress back to 7 days.
+    const threeDaysAgo = { ...DELIVERED_ORDER, delivered_at: new Date(Date.now() - 3 * 86_400_000).toISOString() }
+    mocks.sbAdmin.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path.includes('/rest/v1/orders?')) return [threeDaysAgo]
       if (method === 'GET' && path.includes('/rest/v1/returns?')) return []
       throw new Error(`Unexpected sbAdmin call: ${method} ${path}`)
     })

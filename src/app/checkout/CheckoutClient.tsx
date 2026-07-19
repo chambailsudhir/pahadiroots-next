@@ -51,7 +51,7 @@ import OrderSummary         from '@/components/checkout/OrderSummary'
 // created a new array on every render. Hoisting it prevents the allocation.
 const CHECKOUT_TRUST_ITEMS = [
   { icon: '🚚', t: '3–5 Day Delivery', d: 'Pan-India Himalayan dispatch' },
-  { icon: '🔄', t: '7-Day Returns',    d: 'Hassle-free, no questions'   },
+  { icon: '🔄', t: '48-Hour Returns',  d: 'Damaged or defective items'  },
   { icon: '🌿', t: '100% Authentic',   d: 'Straight from the mountains' },
   { icon: '💬', t: 'WhatsApp Support', d: 'Real humans, always here'    },
 ] as const

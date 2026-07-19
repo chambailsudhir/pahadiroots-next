@@ -675,11 +675,13 @@ export async function POST(req: NextRequest) {
       if (order.order_status !== 'delivered') {
         return err(400, `Returns are only accepted for delivered orders. Current status: ${order.order_status}`)
       }
+      // BUG FIX (policy accuracy — flagged by founder): matches the primary
+      // return route now — 48 hours, not 7 days (see /policies/returns).
       const deliveredDate = order.delivered_at || order.updated_at
       if (deliveredDate) {
-        const daysSince = (Date.now() - new Date(deliveredDate).getTime()) / 86_400_000
-        if (daysSince > 7) {
-          return err(400, 'Return window has closed (7 days from delivery)')
+        const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
+        if (hoursSince > 48) {
+          return err(400, 'Return window has closed (48 hours from delivery)')
         }
       }
       // Idempotency: only a non-rejected existing return blocks a new request

@@ -48,7 +48,12 @@ import {
 } from '@/lib/api/serverUtils'
 import { RETURN_REASON_CODES } from '@/lib/account/constants'
 
-const RETURNABLE_WINDOW_DAYS = 7
+// BUG FIX (policy accuracy — flagged by founder): this was enforcing a
+// 7-day return window, which doesn't match the site's actual Return &
+// Refund Policy (48 hours from delivery, with photo/video proof — see
+// /policies/returns). A 7-day window is also wrong for an FMCG/food
+// business where most items are perishable and can't take that risk.
+const RETURNABLE_WINDOW_HOURS = 48
 
 export async function POST(
   req: NextRequest,
@@ -141,12 +146,12 @@ export async function POST(
       return fail(422, 'Only delivered orders can be returned')
     }
 
-    // Enforce 7-day return window
+    // Enforce 48-hour return window
     const deliveredDate = order.delivered_at || order.updated_at
     if (deliveredDate) {
-      const daysSince = (Date.now() - new Date(deliveredDate).getTime()) / 86_400_000
-      if (daysSince > RETURNABLE_WINDOW_DAYS) {
-        return fail(422, `Return window has closed (${RETURNABLE_WINDOW_DAYS} days from delivery)`)
+      const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
+      if (hoursSince > RETURNABLE_WINDOW_HOURS) {
+        return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from delivery)`)
       }
     }
 
