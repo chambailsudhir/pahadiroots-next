@@ -10,6 +10,14 @@ interface Props { params: Promise<{ type: string }> }
 const WHATSAPP = 'https://wa.me/919899984895'
 const SUPPORT_EMAIL = 'hello@pahadiroots.com'
 const SUPPORT_PHONE = '+91 98999 84895'
+const BRAND = 'HimVeda by Pahadi Roots'
+const LEGAL_ENTITY = 'Chambail International'
+const OPERATOR_LINE = `${LEGAL_ENTITY} (trading as ${BRAND})`
+// NOTE: no personal/founder name is used anywhere in these policies per
+// the founder's instruction. Address is stated at state level only
+// (Himachal Pradesh, India) — flagged to the founder to confirm the
+// exact registered city for the jurisdiction clause below.
+const ADDRESS = 'Himachal Pradesh, India'
 
 // ── Small styled helpers, reused across all four policies ───────────────
 function Callout({ tone, children }: { tone: 'green' | 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
@@ -96,7 +104,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     content: (
       <div className="text-sm leading-relaxed space-y-6">
         <p className="text-stone-600">
-          This policy applies to all purchases made on <strong>pahadiroots.com</strong>, operated by <strong>HimVeda by Pahadi Roots</strong> (founded by Sudhir Chambail, New Delhi).
+          This policy applies to all purchases made on <strong>pahadiroots.com</strong>, operated by <strong>{OPERATOR_LINE}</strong>.
           Framed in compliance with the <strong>Consumer Protection Act, 2019</strong> and <strong>Consumer Protection (E-Commerce) Rules, 2020</strong>.
         </p>
 
@@ -166,7 +174,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Orders may be cancelled <strong>before dispatch</strong> only — contact us immediately on WhatsApp. Requests between confirmation and dispatch are accepted at our discretion</li>
             <li>Once dispatched, cancellation requests <strong>cannot be accepted</strong></li>
             <li>Food/edible orders <strong>cannot be cancelled once dispatched</strong></li>
-            <li>If <em>we</em> cancel your order (stock issue / pricing error), a <strong>full refund</strong> is issued within 3–5 business days</li>
+            <li>If <em>we</em> cancel your order (stock issue / pricing error), a <strong>full refund</strong> is issued within 7–10 business days</li>
           </ul>
         </section>
 
@@ -215,7 +223,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <Steps items={[
             'Once shipped, receive your <strong>tracking number via WhatsApp</strong>',
             `Track in real-time at <a class="text-forest-700 underline" href="/account">My Account → Orders</a>`,
-            'Courier partners: <strong>Delhivery, BlueDart, DTDC, Xpressbees, Ekart</strong>',
+            'Courier partners: <strong>Delhivery, BlueDart, DTDC, Xpressbees, Ekart, India Post</strong>',
           ]} />
           <p className="text-stone-500 text-xs mt-2">Allow up to 48 hours for tracking to activate after dispatch notification.</p>
         </section>
@@ -247,7 +255,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <p className="text-stone-600">Raise the complaint <strong>within 48 hours</strong> of the status update. Complaints raised after 48 hours may be difficult to resolve due to courier partner limitations.</p>
         </section>
 
-        <Callout tone="blue">ℹ️ HimVeda by Pahadi Roots is not responsible for delays caused by courier partners, natural disasters, strikes, government restrictions, or other events beyond our reasonable control.</Callout>
+        <Callout tone="blue">ℹ️ {OPERATOR_LINE} is not responsible for delays caused by courier partners, natural disasters, strikes, government restrictions, or other events beyond our reasonable control.</Callout>
 
         <ContactCard title="Shipping Query?" note="We respond within 24 hours on all working days" />
       </div>
@@ -259,7 +267,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Privacy Policy',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <p className="text-stone-500 text-xs">Last updated: March 2026 · HimVeda by Pahadi Roots, New Delhi, India</p>
+        <p className="text-stone-500 text-xs">Last updated: March 2026 · {OPERATOR_LINE}, {ADDRESS}</p>
         <p className="text-stone-600">We are committed to safeguarding the privacy of our website visitors and customers. This policy explains what personal data we collect, how we use it, and your rights. By using pahadiroots.com and agreeing to this policy, you consent to our data practices as described below.</p>
 
         <section>
@@ -298,7 +306,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li><strong>Courier partners:</strong> Name, address, phone — shared for delivery only</li>
             <li><strong>Razorpay:</strong> Payment data — we <strong>never store card details</strong></li>
             <li><strong>Legal compliance:</strong> Data may be disclosed if required by law or court order</li>
-            <li><strong>Business transfer:</strong> If HimVeda by Pahadi Roots is sold or merged, you will be notified and given the option to request deletion of your data before any such transfer</li>
+            <li><strong>Business transfer:</strong> If {LEGAL_ENTITY} is sold or merged, you will be notified and given the option to request deletion of your data before any such transfer</li>
             <li>We do <strong>not</strong> sell, rent, or trade personal data to any third party for marketing</li>
           </ul>
         </section>
@@ -337,7 +345,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">10. Contact for Privacy Concerns</h2>
-          <p className="text-stone-600"><strong>HimVeda by Pahadi Roots</strong> · New Delhi, India<br />
+          <p className="text-stone-600"><strong>{OPERATOR_LINE}</strong> · {ADDRESS}<br />
             📧 <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a><br />
             💬 WhatsApp: <a href={WHATSAPP} className="text-forest-700 hover:underline">{SUPPORT_PHONE}</a>
           </p>
@@ -357,7 +365,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">1. Overview &amp; Acceptance</h2>
-          <p className="text-stone-600 mb-2">This website is operated by <strong>HimVeda by Pahadi Roots</strong> (founded by Sudhir Chambail, New Delhi, India — "we", "us", "our"). By visiting pahadiroots.com or placing an order, you agree to be bound by these Terms of Service and all referenced policies, including our Return, Shipping, and Privacy policies.</p>
+          <p className="text-stone-600 mb-2">This website is operated by <strong>{OPERATOR_LINE}</strong> ("we", "us", "our"). By visiting pahadiroots.com or placing an order, you agree to be bound by these Terms of Service and all referenced policies, including our Return, Shipping, and Privacy policies.</p>
           <p className="text-stone-600 mb-2">If you do not agree to all terms, please do not use this website or our services. These terms apply to all users — browsers, customers, and visitors.</p>
           <Callout tone="amber">⚠️ You must be 18 years or older, or have parental/guardian consent, to create an account and place orders on this website. By placing an order, you confirm you meet this requirement or have such consent.</Callout>
         </section>
@@ -389,7 +397,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <h2 className="text-base font-bold text-stone-900 mb-2">4. Accounts &amp; User Responsibilities</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
             <li>You are solely responsible for maintaining the confidentiality of your login credentials</li>
-            <li>HimVeda by Pahadi Roots is not liable for losses arising from unauthorized account access</li>
+            <li>We are not liable for losses arising from unauthorized account access</li>
             <li>Provide accurate personal information when registering or ordering</li>
             <li>You may not use this platform for illegal, fraudulent, or unauthorized purposes</li>
             <li>You may not transmit viruses, malware, or destructive code</li>
@@ -408,7 +416,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">6. Intellectual Property</h2>
-          <p className="text-stone-600">All content on pahadiroots.com — text, images, logo, brand name, product descriptions, and design — is the intellectual property of <strong>HimVeda by Pahadi Roots</strong>. Unauthorised reproduction, duplication, or commercial use without written permission is strictly prohibited.</p>
+          <p className="text-stone-600">All content on pahadiroots.com — text, images, logo, brand name, product descriptions, and design — is the intellectual property of <strong>{LEGAL_ENTITY}</strong>. Unauthorised reproduction, duplication, or commercial use without written permission is strictly prohibited.</p>
         </section>
 
         <section>
@@ -445,12 +453,12 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Products where tampering, opening, or alteration is evident</li>
           </ul>
           <Callout tone="amber">⚠️ Natural products may show batch-to-batch variation in colour, viscosity, crystallisation, and aroma. This is a sign of authenticity, not a defect — raw honey crystallises naturally, A2 ghee may be grainy in winter, saffron shade varies by harvest. These do not constitute grounds for return.</Callout>
-          <p className="text-stone-600 mt-3">To the maximum extent permitted by Indian law including the Consumer Protection Act 2019, HimVeda by Pahadi Roots shall not be liable for indirect, incidental, or consequential damages arising from use of our website or digital services. Liability for physical products is governed by applicable consumer law.</p>
+          <p className="text-stone-600 mt-3">To the maximum extent permitted by Indian law including the Consumer Protection Act 2019, {LEGAL_ENTITY} shall not be liable for indirect, incidental, or consequential damages arising from use of our website or digital services. Liability for physical products is governed by applicable consumer law.</p>
         </section>
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">9. Indemnification</h2>
-          <p className="text-stone-600">You agree to indemnify and hold harmless HimVeda by Pahadi Roots and its founder, employees, and agents from any claims, damages, or expenses (including reasonable legal fees) arising from your breach of these Terms, violation of any law, or infringement of any third-party rights.</p>
+          <p className="text-stone-600">You agree to indemnify and hold harmless {LEGAL_ENTITY} and its officers, employees, and agents from any claims, damages, or expenses (including reasonable legal fees) arising from your breach of these Terms, violation of any law, or infringement of any third-party rights.</p>
         </section>
 
         <section>
@@ -460,7 +468,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">11. User Submissions &amp; Feedback</h2>
-          <p className="text-stone-600">If you send us reviews, suggestions, contest entries, or other creative material, you grant HimVeda by Pahadi Roots the right to use, publish, translate, or distribute such content without compensation or obligation of confidentiality. You agree submissions will not violate third-party rights or contain unlawful content.</p>
+          <p className="text-stone-600">If you send us reviews, suggestions, contest entries, or other creative material, you grant {LEGAL_ENTITY} the right to use, publish, translate, or distribute such content without compensation or obligation of confidentiality. You agree submissions will not violate third-party rights or contain unlawful content.</p>
         </section>
 
         <section>
@@ -480,7 +488,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">15. Entire Agreement</h2>
-          <p className="text-stone-600">These Terms, together with our Returns, Shipping, and Privacy policies, constitute the entire agreement between you and HimVeda by Pahadi Roots regarding your use of this website and supersede all prior communications or agreements.</p>
+          <p className="text-stone-600">These Terms, together with our Returns, Shipping, and Privacy policies, constitute the entire agreement between you and {LEGAL_ENTITY} regarding your use of this website and supersede all prior communications or agreements.</p>
         </section>
 
         <section>
@@ -490,7 +498,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">17. Governing Law &amp; Jurisdiction</h2>
-          <p className="text-stone-600">These Terms are governed by the <strong>laws of India</strong>. All disputes are subject to the exclusive jurisdiction of the competent courts in <strong>New Delhi, India</strong>.</p>
+          <p className="text-stone-600">These Terms are governed by the <strong>laws of India</strong>. All disputes are subject to the exclusive jurisdiction of the competent courts in <strong>{ADDRESS}</strong>.</p>
         </section>
 
         <section>
@@ -508,7 +516,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { type } = await params
   const policy = POLICIES[type]
   if (!policy) return { title: 'Policy Not Found' }
-  return { title: `${policy.title} — HimVeda by Pahadi Roots` }
+  return { title: `${policy.title} — ${BRAND}` }
 }
 
 export default async function PolicyPage({ params }: Props) {

@@ -977,7 +977,7 @@ function SuccessContent() {
 
         {/* Copyright */}
         <div className="oc-f-bot">
-          <div className="oc-f-bot-left">© 2026 <strong>HimVeda by Pahadi Roots</strong> · Founded by Sudhir Chambail · New Delhi, India</div>
+          <div className="oc-f-bot-left">© 2026 <strong>HimVeda by Pahadi Roots</strong> · Himachal Pradesh, India</div>
           <div className="oc-f-bot-tag">Making India eat clean</div>
         </div>
       </footer>
