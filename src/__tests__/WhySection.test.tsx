@@ -35,13 +35,26 @@ describe('WhySection', () => {
     expect(screen.getByText('04')).toBeTruthy()
   })
 
-  it('uses the shared states_covered setting instead of a hardcoded number (P3 fix)', () => {
-    render(<WhySection settings={settings({ states_covered: '15' })} />)
+  it('uses the shared stat_himalayan_states setting instead of a hardcoded number', () => {
+    render(<WhySection settings={settings({ stat_himalayan_states: '15' })} />)
     expect(screen.getByText(/15 Himalayan states/)).toBeTruthy()
   })
 
   it('defaults to 10 states when unset, matching HeroBanner/AnnouncementBar', () => {
     render(<WhySection settings={settings()} />)
     expect(screen.getByText(/10 Himalayan states/)).toBeTruthy()
+  })
+
+  it('uses the real stat_farmer_families setting instead of the old hardcoded "200+"', () => {
+    // This is the actual bug: WhySection hardcoded "200+ farming
+    // families" while HeroBanner said "500+" — both wrong. A live
+    // screenshot of the admin panel confirmed the real value is 100.
+    render(<WhySection settings={settings({ stat_farmer_families: '750' })} />)
+    expect(screen.getByText(/750\+ farming families/)).toBeTruthy()
+  })
+
+  it('defaults the farmer count to 100, matching the confirmed live admin value', () => {
+    render(<WhySection settings={settings()} />)
+    expect(screen.getByText(/100\+ farming families/)).toBeTruthy()
   })
 })

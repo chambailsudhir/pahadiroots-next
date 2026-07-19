@@ -1,10 +1,15 @@
 // "Why HimVeda by Pahadi Roots" — exact SVG match to old site
 import type { SiteSettings } from '@/types'
+import { getStatesCovered } from '@/lib/heroStats'
 
 interface Props { settings: SiteSettings }
 
 export default function WhySection({ settings }: Props) {
-  const statesCovered = settings.states_covered || '10'
+  // BUG FIX: was settings.states_covered — a key that doesn't exist on
+  // the admin side at all. The real admin-managed key is
+  // stat_himalayan_states (confirmed directly against the pahadi-admin
+  // repo) — same shared helper HeroBanner.tsx and AnnouncementBar.tsx use.
+  const statesCovered = getStatesCovered(settings)
   return (
     <section className="why-bg">
       <div className="ct">
@@ -74,12 +79,19 @@ export default function WhySection({ settings }: Props) {
             <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
           </svg>
           <div className="pt">Direct from Farmers</div>
-          {/* BUG FIX (P3): this hardcoded "12 Himalayan states," while
-              HeroBanner.tsx and AnnouncementBar.tsx both correctly read
-              the same claim from settings.states_covered (defaulting to
-              '10') — same page, two different numbers for the same
-              fact. Now reads from the same shared setting. */}
-          <p className="pd">Zero middlemen. 200+ farming families across {statesCovered} Himalayan states — fair wages, always.</p>
+          {/* BUG FIX: this hardcoded "200+ farming families across 12
+              Himalayan states" as plain text. Two separate problems,
+              both now fixed:
+                1. States count: HeroBanner.tsx/AnnouncementBar.tsx read
+                   the real admin-managed stat_himalayan_states setting;
+                   this hardcoded a different, conflicting number (12).
+                2. Farmer count: previously flagged as "needs a real
+                   number, can't guess between HeroBanner's 500+ and this
+                   200+" — resolved by checking the admin panel directly:
+                   stat_farmer_families defaults to '500', confirming
+                   HeroBanner was right and this hardcoded 200 was the
+                   stale one. Now reads the same real setting. */}
+          <p className="pd">Zero middlemen. {settings.stat_farmer_families || '100'}+ farming families across {statesCovered} Himalayan states — fair wages, always.</p>
         </div>
 
         {/* PILLAR 3 — Eco Packaging */}

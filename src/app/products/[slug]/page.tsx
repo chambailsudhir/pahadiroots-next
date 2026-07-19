@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import './pdp.css'
 import { notFound } from 'next/navigation'
 import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeData'
 import { buildOffersList, offersListToJsonLdValue } from '@/lib/jsonLdOffers'

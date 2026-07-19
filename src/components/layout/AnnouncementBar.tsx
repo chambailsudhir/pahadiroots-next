@@ -1,4 +1,5 @@
 import type { SiteSettings } from '@/types'
+import { getStatesCovered } from '@/lib/heroStats'
 
 interface Props { settings: SiteSettings }
 
@@ -27,7 +28,10 @@ export default function AnnouncementBar({ settings }: Props) {
               wrong threshold the moment that row was ever missing. */}
           🌿 Free Shipping above ₹{settings.free_shipping_min || '0'} &nbsp;|&nbsp;{' '}
           <a href="/checkout">UPI · Cards · COD</a> &nbsp;|&nbsp;{' '}
-          {settings.states_covered || '10'} Himalayan States Covered
+          {/* BUG FIX: was settings.states_covered, a key the admin panel
+              never actually writes to. The real key it manages is
+              stat_himalayan_states (see lib/heroStats.ts). */}
+          {getStatesCovered(settings)} Himalayan States Covered
         </span>
       )}
     </div>

@@ -35,6 +35,7 @@
 import 'server-only'
 import { Resend } from 'resend'
 import { getServiceClient } from '@/lib/supabase'
+import { getSiteSettings } from '@/lib/getSiteSettings'
 
 export type TransactionalEmailType =
   | 'order_confirmation'
@@ -104,9 +105,29 @@ function sleep(ms: number): Promise<void> {
 export async function sendTransactionalEmail(
   params: SendTransactionalEmailParams,
 ): Promise<SendTransactionalEmailResult> {
-  const { type, to, subject, html, context, timeoutMs = 5000 } = params
+  const { type, to, subject, context, timeoutMs = 5000 } = params
   const from = params.from ?? 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>'
   const resend = new Resend(process.env.RESEND_API_KEY)
+
+  // BUG FIX (confirmed against a live admin-panel screenshot): the Email
+  // tab's own UI claims "Email Footer Text: Appears at bottom of every
+  // outgoing email ✅" — nothing anywhere in this codebase ever read
+  // email_footer_text. Injected here, centrally, in the one function
+  // every transactional email actually passes through — rather than
+  // editing every call site (orders, payments, contact form,
+  // newsletter) individually — so it genuinely applies to "every
+  // outgoing email" as claimed, not just the ones someone remembers to
+  // update later.
+  let html = params.html
+  try {
+    const settings = await getSiteSettings()
+    if (settings.email_footer_text?.trim()) {
+      html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888;">${settings.email_footer_text}</div>`
+    }
+  } catch {
+    // Non-fatal — an email without the footer is far better than no
+    // email at all if settings happen to be unreachable.
+  }
 
   let lastError = 'Unknown error'
 

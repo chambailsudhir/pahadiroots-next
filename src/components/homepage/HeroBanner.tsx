@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { SiteSettings } from '@/types'
 import { useAutoplayInterval } from '@/hooks/useAutoplayInterval'
+import { getHeroStats } from '@/lib/heroStats'
 
 interface HeroImage { url: string; alt_text?: string | null; title?: string; subtitle?: string }
 interface Props { images: HeroImage[]; settings: SiteSettings }
@@ -13,6 +14,7 @@ export default function HeroBanner({ images, settings }: Props) {
   const [current, setCurrent] = useState(0)
   const slides = images.length > 0 ? images : null
   const total  = slides ? slides.length : 1
+  const heroStats = getHeroStats(settings)
 
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
   // BUG FIX (P2): previously a raw setInterval with no
@@ -122,20 +124,22 @@ export default function HeroBanner({ images, settings }: Props) {
         )}
       </div>
 
-      {/* ── Stats bar — sits directly below slider, no gap ── */}
+      {/* ── Stats bar — sits directly below slider, no gap ──
+          BUG FIX: this used to be a hardcoded array with 3 of its 4
+          stats not reading from settings at all, and the 4th reading a
+          key (states_covered) the admin panel never actually writes to
+          (its real key is stat_himalayan_states). See lib/heroStats.ts
+          for the full explanation — this now reads the same admin
+          fields the "Hero Stats Bar" panel actually manages, including
+          respecting each stat's show/hide toggle for the first time. */}
       <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
-        {[
-          { num: '500+',  lbl: 'Farmer Families'   },
-          { num: `${settings.states_covered || '10'}+`, lbl: 'Himalayan States' },
-          { num: '10K+',  lbl: 'Happy Customers'   },
-          { num: '48hr',  lbl: 'Avg Dispatch'       },
-        ].map((s, i) => (
-          <div key={i} style={{ display:'flex', alignItems:'center', gap:0 }}>
+        {heroStats.map((s, i) => (
+          <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
             <div style={{ textAlign:'center', padding:'0 32px' }}>
               <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
               <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
             </div>
-            {i < 3 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
+            {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
           </div>
         ))}
       </div>

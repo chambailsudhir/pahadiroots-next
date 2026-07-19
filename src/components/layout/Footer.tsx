@@ -29,15 +29,25 @@ export default function Footer({ settings }: Props) {
     setSubLoading(false)
   }
 
-  // BUG FIX: instagramUrl's fallback was 'instagram.com/pahadiroots' — wrong
-  // handle. The brand is "HimVeda by Pahadi Roots" everywhere else in this codebase
-  // (layout.tsx metadata, site_name default, etc.); the real account is
-  // @5pahadiroots. LinkedIn was fully hardcoded with a generic guessed URL
-  // and wasn't configurable via settings at all, unlike the other three —
-  // now matches the same pattern, with the real company page as fallback.
-  const instagramUrl = settings.instagram_url || 'https://www.instagram.com/5pahadiroots/?hl=en'
-  const facebookUrl  = settings.facebook_url  || 'https://www.facebook.com/pahadiroots'
-  const youtubeUrl   = settings.youtube_url   || 'https://www.youtube.com/@pahadiroots'
+  // BUG FIX (confirmed against the pahadi-admin repo directly): this was
+  // reading instagram_url/facebook_url/youtube_url — but the admin panel's
+  // Social settings section (src/app/admin/settings/page.jsx) actually
+  // writes to social_instagram/social_facebook/social_youtube/
+  // social_twitter/social_pinterest. Completely disjoint key names — every
+  // social link an admin ever entered in that panel had zero effect on the
+  // live site. X/Twitter was also fully hardcoded here (not settings-driven
+  // at all), and Pinterest wasn't rendered anywhere despite the admin
+  // panel already having a field for it.
+  const instagramUrl = settings.social_instagram || 'https://www.instagram.com/5pahadiroots/?hl=en'
+  const facebookUrl  = settings.social_facebook  || 'https://www.facebook.com/pahadiroots'
+  const youtubeUrl   = settings.social_youtube   || 'https://www.youtube.com/@pahadiroots'
+  const twitterUrl   = settings.social_twitter   || 'https://twitter.com/pahadiroots'
+  // No fabricated fallback for Pinterest — the admin panel has no default
+  // for it either, so the icon only renders once a real URL is actually set.
+  const pinterestUrl = settings.social_pinterest || ''
+  // LinkedIn has no admin-panel counterpart at all (not managed there under
+  // any key name) — kept as a plain settings-overridable constant since
+  // there's nothing on the admin side to wire this to yet.
   const linkedinUrl  = settings.linkedin_url  || 'https://www.linkedin.com/company/pahadiroots/about/?viewAsMember=true'
   const phone        = settings.contact_phone  || '+919899984895'
   const email2       = settings.contact_email  || 'hello@pahadiroots.com'
@@ -286,13 +296,23 @@ export default function Footer({ settings }: Props) {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             </a>
             {/* X/Twitter */}
-            <a href="https://twitter.com/pahadiroots" target="_blank" rel="noopener" title="X" style={socStyle}>
+            <a href={twitterUrl} target="_blank" rel="noopener" title="X" style={socStyle}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             </a>
             {/* YouTube */}
             <a href={youtubeUrl} target="_blank" rel="noopener" title="YouTube" style={socStyle}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
             </a>
+            {/* Pinterest — BUG FIX: the admin panel already has a
+                social_pinterest field (src/app/admin/settings/page.jsx),
+                but this icon didn't exist anywhere on the live site at
+                all, so there was nowhere for that setting to ever show
+                up. No fallback URL — only renders once a real one is set. */}
+            {pinterestUrl && (
+              <a href={pinterestUrl} target="_blank" rel="noopener" title="Pinterest" style={socStyle}>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.163-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.777 2.165 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146 1.124.347 2.317.535 3.554.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.367 18.592 0 11.985 0h.032z"/></svg>
+              </a>
+            )}
             {/* LinkedIn */}
             <a href={linkedinUrl} target="_blank" rel="noopener" title="LinkedIn" style={socStyle}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>

@@ -51,6 +51,61 @@ const DEFAULTS: Partial<SiteSettings> = {
   // Real keys for reviews/new arrivals toggles
   reviews_enabled:         'true',
   new_arrivals_enabled:    'true',
+
+  // Hero Stats Bar — BUG FIX: these keys didn't exist anywhere on the main
+  // site before (confirmed via grep). The admin panel's "Hero Stats Bar"
+  // section (pahadi-admin src/app/admin/settings/page.jsx) has managed
+  // these all along, under these exact key names, with these exact
+  // defaults — but HeroBanner.tsx had its own, completely disconnected
+  // hardcoded stats array, so nothing an admin ever set here reached the
+  // live site. Defaults below intentionally match the admin panel's
+  // defaults exactly.
+  // CORRECTED: confirmed via a live screenshot of the admin panel that
+  // the real current value is '100', not '500' as I'd assumed from the
+  // admin code's own fallback default. The DB row exists, so this
+  // constant only matters if that row is ever deleted — but keeping it
+  // accurate avoids confusing whoever reads this next.
+  stat_farmer_families:            '100',
+  stat_himalayan_states:           '10',
+  stat_happy_customers:            '10000',
+  stat_avg_dispatch:               '48',
+  stat_farmer_label:               'Farmer Families',
+  stat_states_label:               'Himalayan States',
+  stat_customers_label:            'Happy Customers',
+  stat_dispatch_label:             'Avg Dispatch',
+  stat_hide_stat_farmer_families:  'false',
+  stat_hide_stat_himalayan_states: 'false',
+  stat_hide_stat_happy_customers:  'false',
+  stat_hide_stat_avg_dispatch:     'false',
+
+  // Social links — BUG FIX: main site previously read instagram_url/
+  // facebook_url/youtube_url (no admin-panel equivalent exists under
+  // those names). The admin panel's real keys are social_instagram/
+  // social_facebook/social_youtube/social_twitter/social_pinterest.
+  social_instagram:        '',
+  social_facebook:         '',
+  social_youtube:          '',
+  social_twitter:          '',
+  social_pinterest:        '',
+
+  // SEO — BUG FIX: layout.tsx's metadata export was static, so none of
+  // these ever reached the page regardless of what an admin configured
+  // (confirmed via a live admin-panel screenshot showing real,
+  // already-written SEO copy that had never taken effect).
+  meta_title:              '',
+  meta_description:        '',
+  meta_keywords:           '',
+  og_image:                '',
+
+  // Analytics — BUG FIX: admin panel's SEO tab claims "Google Tag ID:
+  // GA4 loads automatically" — it didn't; no script ever read this
+  // setting anywhere on the main site.
+  google_tag_id:           '',
+
+  // Email — BUG FIX: admin panel's Email tab claims "Email Footer Text:
+  // Appears at bottom of every outgoing email" — confirmed via grep
+  // that lib/server/email.ts never referenced this setting at all.
+  email_footer_text:       '',
 }
 
 // In-memory cache for server-side (Next.js ISR revalidation handles the rest)

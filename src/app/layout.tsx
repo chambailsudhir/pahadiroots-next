@@ -27,37 +27,59 @@ const lato = Lato({
   weight: ['300', '400', '700', '900'],
 })
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
-  title: {
-    default: 'HimVeda by Pahadi Roots — Natural Himalayan Products',
-    template: '%s | HimVeda by Pahadi Roots',
-  },
-  description:
-    'Pure, natural products sourced directly from Himalayan mountain farming communities. Honey, spices, grains, and more — delivered across India.',
-  keywords: ['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'India'],
-  openGraph: {
-    type:        'website',
-    locale:      'en_IN',
-    url:         'https://pahadiroots.com',
-    siteName:    'HimVeda by Pahadi Roots',
-    images: [{
-      url:    '/og-default.jpg',
-      width:  1200,
-      height: 630,
-      alt:    'HimVeda by Pahadi Roots — Natural Himalayan Products',
-    }],
-  },
-  twitter: {
-    card:        'summary_large_image',
-    title:       'HimVeda by Pahadi Roots — Natural Himalayan Products',
-    description: 'Pure products from mountain farming communities.',
-  },
-  robots: {
-    index:             true,
-    follow:            true,
-    googleBot: { index: true, follow: true },
-  },
+// BUG FIX (confirmed against a live admin-panel screenshot): this was a
+// static `export const metadata` object — meaning the entire admin
+// "SEO" tab (meta_title, meta_description, meta_keywords, og_image) had
+// ZERO effect on the live site, no matter what an admin typed there.
+// The admin panel's own SEO tab even displays "Google crawler: Also
+// update index.html for permanent ranking ✅" as if this were already
+// wired — it wasn't. Converting to generateMetadata() so these fields
+// actually reach the page. Fallbacks below match the previous hardcoded
+// values exactly, so nothing changes for a site with these fields left
+// blank; a site that already has them configured (this one does) will
+// now finally show that real, already-written SEO copy.
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettings()
+  const siteName = settings.site_name || 'HimVeda by Pahadi Roots'
+  const title = settings.meta_title || `${siteName} — Natural Himalayan Products`
+  const description = settings.meta_description ||
+    'Pure, natural products sourced directly from Himalayan mountain farming communities. Honey, spices, grains, and more — delivered across India.'
+  const keywords = settings.meta_keywords
+    ? settings.meta_keywords.split(',').map(k => k.trim()).filter(Boolean)
+    : ['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'India']
+  const ogImage = settings.og_image || '/og-default.jpg'
+
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
+    title: {
+      default: title,
+      template: `%s | ${siteName}`,
+    },
+    description,
+    keywords,
+    openGraph: {
+      type:        'website',
+      locale:      'en_IN',
+      url:         'https://pahadiroots.com',
+      siteName,
+      images: [{
+        url:    ogImage,
+        width:  1200,
+        height: 630,
+        alt:    title,
+      }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title,
+      description,
+    },
+    robots: {
+      index:             true,
+      follow:            true,
+      googleBot: { index: true, follow: true },
+    },
+  }
 }
 
 // Revalidate layout data every 5 minutes (picks up setting changes)
@@ -119,15 +141,62 @@ export default async function RootLayout({
                 availableLanguage:   ['English', 'Hindi'],
               },
               sameAs: [
-                settings.instagram_url,
-                settings.facebook_url,
-                settings.youtube_url,
+                // BUG FIX: same class of bug as Footer.tsx — this read
+                // instagram_url/facebook_url/youtube_url, keys with no
+                // admin-panel equivalent. Real keys are social_instagram
+                // etc. This structured data feeds Google's Knowledge
+                // Graph social-profile associations, so it silently never
+                // worked either.
+                settings.social_instagram,
+                settings.social_facebook,
+                settings.social_youtube,
+                settings.social_twitter,
+                settings.social_pinterest,
               ].filter(Boolean),
             }),
           }}
         />
+        {/* BUG FIX (confirmed against a live admin-panel screenshot):
+            the SEO tab's own UI claims "Google Tag ID: GA4 loads
+            automatically ✅" — nothing anywhere in this codebase ever
+            read google_tag_id or loaded any analytics script. Supports
+            either a GA4 measurement ID (G-XXXXXXXXXX) or a GTM container
+            ID (GTM-XXXXXX), matching the admin field's own placeholder
+            text ("G-XXXXXX or GTM-XXXXXX"). Renders nothing at all when
+            unset, so this is a no-op until an admin actually sets it.
+            Note: ESLint suggests @next/third-parties/google's
+            GoogleTagManager component instead of raw scripts here — not
+            adopted since it's a new dependency for a non-blocking lint
+            suggestion; this is GTM's own documented integration method. */}
+        {settings.google_tag_id?.startsWith('GTM-') && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${settings.google_tag_id}');`,
+            }}
+          />
+        )}
+        {settings.google_tag_id && !settings.google_tag_id.startsWith('GTM-') && (
+          <>
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${settings.google_tag_id}`} />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_tag_id}');`,
+              }}
+            />
+          </>
+        )}
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
+        {/* GTM requires a <noscript> iframe fallback immediately inside <body> */}
+        {settings.google_tag_id?.startsWith('GTM-') && (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${settings.google_tag_id}`}
+              height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        )}
         {/* Skip-to-content: visible on focus for keyboard / screen-reader users */}
         <SkipLink />
         <Providers>

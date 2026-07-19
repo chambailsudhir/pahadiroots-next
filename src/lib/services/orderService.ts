@@ -538,7 +538,14 @@ export async function createOrder(
   //    Date.now() gives the millisecond epoch; appending 4 random base-36 chars
   //    makes same-millisecond collisions astronomically unlikely without any DB
   //    lookup. The idempotency_key remains the true uniqueness guard in the DB.
-  const orderNumber = `PR${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
+  //    BUG FIX: prefix was hardcoded 'PR', completely ignoring the admin
+  //    panel's configurable order_prefix setting (confirmed against
+  //    pahadi-admin directly) — a store owner changing this had zero
+  //    effect on actual order numbers. Admin's own default is also 'PR',
+  //    so this is a zero-risk change: behavior is identical unless an
+  //    owner has actually customized it.
+  const orderPrefix = (settings.order_prefix || 'PR').trim().toUpperCase()
+  const orderNumber = `${orderPrefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
 
   // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
   // Matches old site pattern: lookup by phone → upsert → get custId
