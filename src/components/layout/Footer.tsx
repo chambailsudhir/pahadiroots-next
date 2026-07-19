@@ -69,12 +69,15 @@ export default function Footer({ settings }: Props) {
               🌿 Join the Pahadi Family
             </h4>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.55)', margin: 0 }}>
-              {/* BUG FIX (P2): this copy made no mention of the signup
-                  discount that the homepage's dedicated NewsletterBar
-                  promises for the exact same action — same subscribe
-                  action, two different customer-facing promises. Now
-                  consistent (and, since the newsletter backend fix, both
-                  genuinely deliver the same 5% code by email). */}
+              {/* BUG FIX (P2, since resolved further): this copy once
+                  made no mention of the signup discount that
+                  NewsletterBar.tsx (a separate, duplicate homepage
+                  section) promised for the exact same action — same
+                  subscribe action, two different customer-facing
+                  promises. That duplicate section has since been
+                  deleted entirely; this is now the only newsletter
+                  signup on the homepage, and it genuinely delivers the
+                  5% code by email (see api/v1/actions/route.ts). */}
               Get 5% off your first order — plus new arrivals &amp; Himalayan stories, straight to your inbox
             </p>
           </div>

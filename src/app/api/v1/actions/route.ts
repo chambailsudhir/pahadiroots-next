@@ -107,11 +107,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Could not subscribe right now — please try again' }, { status: 500 })
       }
 
-      // ── BUG FIX (P1 — trust): NewsletterBar.tsx promises "Get 5% Off Your
-      // First Order" and, on success, "Check your inbox for your discount
-      // code." Previously nothing after this point existed — no code was
-      // ever generated, no email was ever sent. Every subscriber got a
-      // false promise. This block actually fulfills it:
+      // ── BUG FIX (P1 — trust): the homepage newsletter form promised
+      // "Get 5% Off Your First Order" and, on success, "Check your inbox
+      // for your discount code" (originally NewsletterBar.tsx, since
+      // deleted as a confirmed duplicate of Footer.tsx's own newsletter
+      // form — both hit this same action). Previously nothing after this
+      // point existed — no code was ever generated, no email was ever
+      // sent. Every subscriber got a false promise. This block actually
+      // fulfills it:
       //
       //   1. Derive a deterministic code from the email (sha256, first 6
       //      hex chars) so the SAME email always maps to the SAME code —

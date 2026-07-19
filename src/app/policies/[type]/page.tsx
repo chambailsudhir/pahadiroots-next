@@ -286,7 +286,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">2. Cookies</h2>
           <p className="text-stone-600 mb-2">We use <strong>session cookies</strong> (cleared when the browser closes) and <strong>persistent cookies</strong> (stored until expiry) to keep you logged in, remember your cart across visits, and recognise you on return visits.</p>
-          <p className="text-stone-600">You may reject cookies via browser settings, though this may affect site functionality. Our payment provider Razorpay may also set cookies — see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay's Privacy Policy</a>.</p>
+          <p className="text-stone-600">You may reject cookies via browser settings, though this may affect site functionality. Our payment provider Razorpay may also set cookies — see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a>.</p>
         </section>
 
         <section>
@@ -315,7 +315,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">5. Data Security</h2>
-          <p className="text-stone-600 mb-2">Your data is stored on <strong>Supabase</strong> (SOC 2 Type II compliant), behind firewall-protected, password-secured servers. All payment transactions are encrypted via Razorpay's <strong>PCI-DSS compliant</strong> gateway using SSL technology.</p>
+          <p className="text-stone-600 mb-2">Your data is stored on <strong>Supabase</strong> (SOC 2 Type II compliant), behind firewall-protected, password-secured servers. All payment transactions are encrypted via Razorpay&apos;s <strong>PCI-DSS compliant</strong> gateway using SSL technology.</p>
           <Callout tone="amber">⚠️ Internet data transmission is inherently not 100% secure. While we take all reasonable precautions, we cannot guarantee absolute security. Keep your password confidential — we will never ask for it.</Callout>
         </section>
 
@@ -367,7 +367,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">1. Overview &amp; Acceptance</h2>
-          <p className="text-stone-600 mb-2">This website is operated by <strong>{OPERATOR_LINE}</strong> ("we", "us", "our"). By visiting pahadiroots.com or placing an order, you agree to be bound by these Terms of Service and all referenced policies, including our Return, Shipping, and Privacy policies.</p>
+          <p className="text-stone-600 mb-2">This website is operated by <strong>{OPERATOR_LINE}</strong> (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;). By visiting pahadiroots.com or placing an order, you agree to be bound by these Terms of Service and all referenced policies, including our Return, Shipping, and Privacy policies.</p>
           <p className="text-stone-600 mb-2">If you do not agree to all terms, please do not use this website or our services. These terms apply to all users — browsers, customers, and visitors.</p>
           <Callout tone="amber">⚠️ You must be 18 years or older, or have parental/guardian consent, to create an account and place orders on this website. By placing an order, you confirm you meet this requirement or have such consent.</Callout>
         </section>
@@ -379,7 +379,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Product images are representative — natural products may vary in colour, texture, and appearance</li>
             <li>Prices are in <strong>Indian Rupees (₹)</strong> and inclusive of applicable taxes</li>
             <li>We reserve the right to modify descriptions, pricing, or discontinue any product at any time</li>
-            <li>We cannot guarantee that product quality will meet every individual's subjective expectations</li>
+            <li>We cannot guarantee that product quality will meet every individual&apos;s subjective expectations</li>
           </ul>
         </section>
 
@@ -410,7 +410,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">5. Third-Party Services</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
-            <li><strong>Razorpay</strong> handles all payment processing — we never store card details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay's Privacy Policy</a></li>
+            <li><strong>Razorpay</strong> handles all payment processing — we never store card details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a></li>
             <li>Our website is hosted on <strong>Vercel</strong> with data stored on <strong>Supabase</strong> (SOC 2 compliant)</li>
             <li>Third-party links on our site are not our responsibility — review their policies before transacting</li>
           </ul>
@@ -438,7 +438,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">8. Product Quality Warranty &amp; Disclaimer</h2>
-          <p className="text-stone-600 mb-2"><strong>Website / Digital Service:</strong> Provided <strong>"as is"</strong> and <strong>"as available"</strong> without warranty of uninterrupted or error-free access.</p>
+          <p className="text-stone-600 mb-2"><strong>Website / Digital Service:</strong> Provided <strong>&quot;as is&quot;</strong> and <strong>&quot;as available&quot;</strong> without warranty of uninterrupted or error-free access.</p>
           <p className="text-stone-600 mb-2"><strong>Physical Products — Limited Quality Warranty.</strong> We warrant that products dispatched from our facility are:</p>
           <ul className="list-disc list-inside text-stone-600 space-y-1 mb-3">
             <li>Genuine, unadulterated, and fit for consumption as described</li>
@@ -475,7 +475,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">12. Optional Third-Party Tools</h2>
-          <p className="text-stone-600">We may provide access to third-party tools (analytics, payment gateways, logistics APIs) on an "as is" and "as available" basis without warranty. Use of such tools is at your own risk — review their terms before use.</p>
+          <p className="text-stone-600">We may provide access to third-party tools (analytics, payment gateways, logistics APIs) on an &quot;as is&quot; and &quot;as available&quot; basis without warranty. Use of such tools is at your own risk — review their terms before use.</p>
         </section>
 
         <section>

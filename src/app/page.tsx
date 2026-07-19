@@ -11,13 +11,26 @@ import type { RichState } from '@/components/homepage/ExploreByRegion'
 import type { Product } from '@/types'
 import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
-import NewsletterBar from '@/components/homepage/NewsletterBar'
 import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 
-export const metadata: Metadata = {
-  title: 'HimVeda by Pahadi Roots — Pure Himalayan Natural Products',
-  description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹500.',
+// BUG FIX (found while removing the duplicate NewsletterBar section):
+// this was a static `export const metadata` object. Next.js merges page
+// metadata OVER layout metadata for matching fields — so this static
+// object was silently overriding the generateMetadata() fix just added
+// to layout.tsx, specifically on the homepage, which is the single most
+// SEO-important page on the site. Every other route without its own
+// static metadata export was already correctly picking up the admin's
+// real meta_title/meta_description; the homepage alone was still stuck
+// on hardcoded text no matter what an admin configured.
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettings()
+  const siteName = settings.site_name || 'HimVeda by Pahadi Roots'
+  return {
+    title: settings.meta_title || `${siteName} — Pure Himalayan Natural Products`,
+    description: settings.meta_description ||
+      'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers.',
+  }
 }
 
 export const revalidate = 60
@@ -35,7 +48,6 @@ export default async function HomePage() {
   const showTrustBar    = isEnabled(settings.show_trust_bar)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
   const showReviews     = isEnabled(settings.show_reviews_section)
-  const showNewsletter  = isEnabled(settings.show_newsletter_bar)
   const featuredSlug    = settings.featured_collection_slug?.trim()
 
   return (
@@ -50,7 +62,6 @@ export default async function HomePage() {
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />
       {showReviews && <ReviewsPreview />}
-      {showNewsletter && <NewsletterBar />}
     </>
   )
 }

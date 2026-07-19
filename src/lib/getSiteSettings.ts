@@ -35,6 +35,10 @@ const DEFAULTS: Partial<SiteSettings> = {
   show_new_arrivals:       'true',
   show_state_stories:      'true',
   show_reviews_section:    'true',
+  // Now unused on the main site — NewsletterBar.tsx (the only reader)
+  // was deleted as a confirmed duplicate of Footer.tsx's own newsletter
+  // form. Left here rather than removed since the admin panel may still
+  // have a toggle referencing this key.
   show_newsletter_bar:     'true',
   show_blog_section:       'false',
   show_wishlist:           'true',

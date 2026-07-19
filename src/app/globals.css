@@ -290,13 +290,10 @@ section.sec { padding: 52px 40px; }
 @media(max-width:768px) { .rgrid { grid-template-columns: 1fr; } }
 
 /* ── NEWSLETTER ── */
-.nl-sec { background: linear-gradient(135deg,#071a09,#1a3a1e); padding: 44px 40px; text-align: center; }
-.nl-sec .sh2 { color: #fff; margin-bottom: 6px; }
-.nl-sec .ssub { color: rgba(255,255,255,.65); margin-bottom: 22px; }
-.nlf { display: flex; gap: 10px; max-width: 420px; margin: 0 auto; }
-.nli { flex: 1; padding: 13px 18px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff; font-size: 14px; font-family: var(--font-lato), 'Lato', sans-serif; outline: none; }
-.nli::placeholder { color: rgba(255,255,255,.4); }
-.nli:focus { border-color: rgba(255,255,255,.4); }
+/* BUG FIX: .nl-sec/.nlf/.nli removed — belonged to NewsletterBar.tsx,
+   which was deleted (confirmed duplicate of Footer.tsx's own newsletter
+   form; same subscribe action, redundant "Get 5% off" CTA appearing
+   twice on the homepage). */
 
 /* ── PAYMENT SECTION ── */
 .pay-sec { background: #fff; padding: 20px 40px 40px; }
