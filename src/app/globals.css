@@ -486,34 +486,35 @@ footer.site-footer {
 }
 
 /* Columns */
-.mega-col { min-width: 0 !important; padding: 14px 20px 10px !important; display: flex !important; flex-direction: column !important; margin: 0 !important; }
+.mega-col { min-width: 0 !important; padding: 24px 24px 20px !important; display: flex !important; flex-direction: column !important; margin: 0 !important; }
 #megaColCollections { flex: 1 !important; background: #fff !important; }
 #megaColStates      { flex: 1.5 !important; background: #fff !important; border-left: 1px solid #f0ede6 !important; border-right: 1px solid #f0ede6 !important; }
 #megaColCurated     { flex: 1 !important; background: #f7f4ee !important; }
 
 /* Heading */
-.mega-heading { font-size: 9px !important; font-weight: 800 !important; letter-spacing: 2.4px !important; text-transform: uppercase !important; color: #a89f92 !important; margin: 0 0 6px 0 !important; padding: 0 !important; flex-shrink: 0 !important; line-height: 1 !important; display: block !important; }
+.mega-heading { font-size: 9px !important; font-weight: 800 !important; letter-spacing: 2.4px !important; text-transform: uppercase !important; color: #a89f92 !important; margin: 0 0 16px 0 !important; padding: 0 !important; flex-shrink: 0 !important; line-height: 1 !important; display: block !important; }
 
-/* ── ul reset ── */
+/* ── ul reset — flex column + explicit gap (matches proven old-site layout) ── */
 ul.mega-list {
   list-style: none !important; padding: 0 !important; margin: 0 !important;
-  display: block !important;  /* block not flex — no gap inheritance */
+  display: flex !important; flex-direction: column !important; gap: 1px !important;
 }
 ul.mega-list > li {
   display: block !important; margin: 0 !important; padding: 0 !important;
   list-style: none !important; line-height: normal !important;
-  border: none !important; background: none !important;
+  border: none !important; background: none !important; height: auto !important; min-height: 0 !important;
 }
 ul.mega-list.mega-list-2col {
-  display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0 !important;
+  display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0 4px !important;
 }
 
-/* ── Each link: compact row ≈ 18px total ── */
+/* ── Each link: compact row (matches proven old-site sizing) ── */
 .mega-list-link {
-  display: block !important;
-  padding: 1px 8px !important;       /* 1+1 = 2px vertical + 13px font ≈ 18px row */
-  border-radius: 6px !important;
-  font-size: 13px !important;
+  display: flex !important; align-items: center !important;
+  width: 100% !important; height: auto !important; min-height: 0 !important;
+  padding: 7px 10px !important;
+  border-radius: 8px !important;
+  font-size: 13.5px !important;
   font-weight: 500 !important;
   color: #2c2c2c !important;
   text-decoration: none !important;
@@ -523,7 +524,7 @@ ul.mega-list.mega-list-2col {
   white-space: nowrap !important;
   letter-spacing: .1px !important;
   font-family: inherit !important;
-  line-height: 1.25 !important;      /* 13 * 1.25 = ~16px + 2px padding = ~18px */
+  line-height: normal !important;
   margin: 0 !important;
   box-sizing: border-box !important;
 }
@@ -534,12 +535,13 @@ ul.mega-list.mega-list-2col {
 /* View All */
 .mega-view-all {
   display: inline-flex !important; align-items: center !important; gap: 5px !important;
-  margin-top: 8px !important; padding-top: 7px !important; padding-bottom: 0 !important;
+  margin-top: 16px !important; padding-top: 12px !important; padding-bottom: 0 !important;
   font-size: 13px !important; font-weight: 600 !important; color: #1a3a1e !important;
   text-decoration: none !important; transition: gap .15s !important;
   border-top: 1px solid #edeae2 !important; letter-spacing: .1px !important; line-height: 1 !important;
 }
 .mega-view-all:hover { gap: 9px !important; }
+
 
 /* Dark mode */
 .dark .mega-menu          { background: #0f1f11 !important; }
