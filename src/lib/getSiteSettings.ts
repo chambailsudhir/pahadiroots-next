@@ -13,7 +13,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   // Ticker — real keys confirmed
   ticker_hide:             'false',
   ticker_1_text:           '🎁 Use code WELCOME50 · ₹50 off your first order',
-  ticker_2_text:           '🚚 Free shipping · On orders above ₹799 — Pan India',
+  ticker_2_text:           '🚚 Free shipping · On orders above ₹500 — Pan India',
   ticker_3_text:           '🌿 100% Natural · No preservatives, no additives',
   ticker_4_text:           '🏔️ Direct from mountain farmers',
   ticker_5_text:           '⭐ Rated 4.9/5 · Happy customers across India',

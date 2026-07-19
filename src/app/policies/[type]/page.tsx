@@ -198,7 +198,8 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Shipping Policy',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <Callout tone="green">🎉 <strong>Free shipping</strong> on all orders above ₹799 · Flat ₹99 on orders below ₹799 · Pan-India delivery</Callout>
+        <Callout tone="green">🎉 <strong>Free shipping</strong> on all orders above ₹500 · Flat ₹99 on orders below ₹500 · Pan-India delivery</Callout>
+        <p className="text-stone-500 text-xs">Shipping charges and free-shipping thresholds may change temporarily during festive or promotional periods — the amount shown at checkout always applies.</p>
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Delivery Timeline</h2>
@@ -246,7 +247,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Refused Delivery (Prepaid Orders)</h2>
-          <p className="text-stone-600">If you refuse a prepaid order, we arrange one re-attempt. If not possible, the order is cancelled and refunded <strong>after deducting RTO (return-to-origin) charges</strong> within 24–48 hours of the package reaching our facility.</p>
+          <p className="text-stone-600">If you refuse a prepaid order, we arrange one re-attempt. If not possible, the order is cancelled and refunded <strong>after deducting RTO (return-to-origin) charges</strong> within 5–10 business days of the package reaching our facility.</p>
         </section>
 
         <Callout tone="amber">⚠️ If packaging appears tampered or damaged, <strong>refuse the delivery</strong> and WhatsApp us immediately with your order number. We will arrange a replacement or refund.</Callout>

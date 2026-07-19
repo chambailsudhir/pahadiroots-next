@@ -17,7 +17,7 @@ import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 
 export const metadata: Metadata = {
   title: 'HimVeda by Pahadi Roots — Pure Himalayan Natural Products',
-  description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹799.',
+  description: 'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers. Free shipping above ₹500.',
 }
 
 export const revalidate = 60
