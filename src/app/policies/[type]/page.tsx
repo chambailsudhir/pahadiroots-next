@@ -13,11 +13,12 @@ const SUPPORT_PHONE = '+91 98999 84895'
 const BRAND = 'HimVeda by Pahadi Roots'
 const LEGAL_ENTITY = 'Chambail International'
 const OPERATOR_LINE = `${LEGAL_ENTITY} (trading as ${BRAND})`
-// NOTE: no personal/founder name is used anywhere in these policies per
-// the founder's instruction. Address is stated at state level only
-// (Himachal Pradesh, India) — flagged to the founder to confirm the
-// exact registered city for the jurisdiction clause below.
-const ADDRESS = 'Himachal Pradesh, India'
+// NOTE: no personal/founder name used anywhere in these policies, per the
+// founder's instruction. Registered address and jurisdiction city confirmed
+// by the founder — matches the address already used in Footer.tsx.
+const ADDRESS = 'Village Sakoh, PO Sakoh, Distt. Kangra, Himachal Pradesh 176082'
+const JURISDICTION = 'Palampur, Himachal Pradesh'
+const SHORT_LOCATION = 'Himachal Pradesh, India'
 
 // ── Small styled helpers, reused across all four policies ───────────────
 function Callout({ tone, children }: { tone: 'green' | 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
@@ -267,7 +268,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Privacy Policy',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <p className="text-stone-500 text-xs">Last updated: March 2026 · {OPERATOR_LINE}, {ADDRESS}</p>
+        <p className="text-stone-500 text-xs">Last updated: March 2026 · {OPERATOR_LINE}, {SHORT_LOCATION}</p>
         <p className="text-stone-600">We are committed to safeguarding the privacy of our website visitors and customers. This policy explains what personal data we collect, how we use it, and your rights. By using pahadiroots.com and agreeing to this policy, you consent to our data practices as described below.</p>
 
         <section>
@@ -498,7 +499,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">17. Governing Law &amp; Jurisdiction</h2>
-          <p className="text-stone-600">These Terms are governed by the <strong>laws of India</strong>. All disputes are subject to the exclusive jurisdiction of the competent courts in <strong>{ADDRESS}</strong>.</p>
+          <p className="text-stone-600">These Terms are governed by the <strong>laws of India</strong>. All disputes are subject to the exclusive jurisdiction of the competent courts in <strong>{JURISDICTION}</strong>.</p>
         </section>
 
         <section>
