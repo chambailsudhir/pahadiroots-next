@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import type { SiteSettings } from '@/types'
 
@@ -334,21 +335,11 @@ export default function Footer({ settings }: Props) {
               would still be a false claim, just a differently-shaped one. */}
           {settings.fssai_license && (
             <div style={{ background: '#fff', border: '1px solid rgba(0,0,0,.06)', borderRadius: '10px', padding: '8px 16px', display: 'inline-flex', alignItems: 'center', gap: '12px', boxShadow: '0 2px 10px rgba(0,0,0,.15)' }}>
-              {/* Stylized FSSAI wordmark, matching the real mark's colors
-                  (blue/orange lettering, green leaf accent) rather than a
-                  generic text box — recreated in CSS rather than an image
-                  asset, since there's no legitimate way to source and host
-                  the actual certificate artwork here. */}
-              <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '20px', fontWeight: 700, fontStyle: 'italic', letterSpacing: '.5px', display: 'flex', alignItems: 'baseline', lineHeight: 1 }} aria-hidden="true">
-                <span style={{ color: '#2b4c9b' }}>f</span>
-                <span style={{ color: '#e57a2e' }}>s</span>
-                <span style={{ color: '#2b4c9b' }}>s</span>
-                <span style={{ color: '#e57a2e' }}>a</span>
-                <span style={{ position: 'relative', color: '#2b4c9b' }}>
-                  i
-                  <span style={{ position: 'absolute', top: '-9px', left: '1px', fontSize: '9px' }}>🌿</span>
-                </span>
-              </div>
+              {/* Real FSSAI logo — the user provided the actual official
+                  asset directly (public/fssai-logo.png), replacing the
+                  earlier CSS-drawn approximation now that a real,
+                  properly-licensed copy is available to use. */}
+              <Image src="/fssai-logo.png" alt="FSSAI" width={56} height={43} style={{ objectFit: 'contain' }} />
               <div style={{ width: '1px', height: '26px', background: 'rgba(0,0,0,.1)' }} />
               <div>
                 <div style={{ fontSize: '11px', color: '#1a3a1e', fontWeight: 800 }}>FSSAI Licensed</div>
