@@ -47,7 +47,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const keywords = settings.meta_keywords
     ? settings.meta_keywords.split(',').map(k => k.trim()).filter(Boolean)
     : ['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'India']
-  const ogImage = settings.og_image || '/og-default.jpg'
+  // BUG FIX: fell back to '/og-default.jpg', which does not exist
+  // anywhere in public/ (confirmed) — every social share preview
+  // (WhatsApp, Facebook, etc.) has been showing a broken image this
+  // whole time whenever og_image isn't set, which per the admin
+  // screenshot, it currently isn't. logo.png is a real, existing asset
+  // used as a stopgap — it's nearly square rather than the ideal
+  // 1200x630 banner ratio, so a purpose-built OG image (or setting the
+  // admin's OG Share Image field) would still look better.
+  const ogImage = settings.og_image || '/logo.png'
 
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
