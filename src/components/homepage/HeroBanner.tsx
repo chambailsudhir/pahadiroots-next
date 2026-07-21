@@ -16,16 +16,29 @@ export default function HeroBanner({ images, settings }: Props) {
   const total  = slides ? slides.length : 1
   const heroStats = getHeroStats(settings)
 
+  // BUG FIX (found in a fresh re-audit): unlike CategoryTiles.tsx (which
+  // correctly pauses its own autoplay on hover/touch), this had NO
+  // pause-on-interaction at all — the slideshow kept auto-advancing even
+  // while someone was actively reading the hero text or about to click
+  // an arrow/dot. Matching the same hover/touch-pause pattern here.
+  const [isHovering, setIsHovering] = useState(false)
+
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
   // BUG FIX (P2): previously a raw setInterval with no
   // prefers-reduced-motion check and no pause when the tab is
   // backgrounded — see hooks/useAutoplayInterval.ts.
-  useAutoplayInterval(next, 4500, total > 1)
+  useAutoplayInterval(next, 4500, total > 1 && !isHovering)
 
   return (
     <>
       {/* ── Slider track ── */}
-      <div style={{ position: 'relative', width: '100%', height: '75vh', minHeight: 500, maxHeight: '75vh', overflow: 'hidden' }}>
+      <div
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
+        onTouchStart={() => setIsHovering(true)}
+        onTouchEnd={() => setTimeout(() => setIsHovering(false), 1800)}
+        style={{ position: 'relative', width: '100%', height: '75vh', minHeight: 500, maxHeight: '75vh', overflow: 'hidden' }}
+      >
 
         {slides ? slides.map((img, i) => {
           // BUG FIX (P1 — SEO/accessibility): every slide used to render

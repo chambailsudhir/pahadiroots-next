@@ -26,12 +26,13 @@ export function calcPriceSummary(
   paymentMethod: 'razorpay' | 'cod' = 'cod',
   loyaltyDiscount = 0,           // ₹ coins redemption — passed from checkout state
 ): PriceSummary {
-  // BUG FIX (P3): fallback corrected from 799 to 0 — confirmed via direct
-  // DB query that free_shipping_min is genuinely '0' live. No behavioral
-  // change today (asNumber('0', 799) already returns 0 since '0' parses
-  // fine), but this fallback would have silently reverted to a stale 799
-  // threshold if the setting were ever missing.
-  const freeShippingMin  = asNumber(settings.free_shipping_min, 0)
+  // NOTE: freeShippingMin fallback — an earlier direct DB query showed
+  // '0'; a later admin-panel screenshot showed the real current value is
+  // '500'. Both numbers only matter if this setting is ever missing
+  // entirely (the live DB row already exists), but kept accurate to
+  // avoid the same drift happening a third time. flat_shipping_charge's
+  // 99 fallback already matches the confirmed real admin value.
+  const freeShippingMin  = asNumber(settings.free_shipping_min, 500)
   const flatShipping     = asNumber(settings.flat_shipping_charge, 99)
   const prepaidPct       = asNumber(settings.prepaid_discount_pct, 5)
 

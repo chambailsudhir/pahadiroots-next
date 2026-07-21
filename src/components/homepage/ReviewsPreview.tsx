@@ -18,6 +18,20 @@ import { starsFor } from '@/lib/rating'
 //
 // Also fixes the star rating: the old version hardcoded ★★★★★ regardless
 // of content: now renders the review's own real `rating` (1-5).
+//
+// FOUND IN A LATER RE-AUDIT: even after switching to real reviews, this
+// still labeled every single one "Verified Buyer" — but nothing in the
+// submission pipeline actually verifies a purchase. reviewSchema (lib/
+// schemas/index.ts) accepts an optional order_id, but the submit_review
+// handler in api/v1/actions/route.ts never reads or stores it, and the
+// `reviews` table itself has no purchase-verification column at all. Any
+// logged-in user can review any product regardless of whether they
+// bought it. Removed the claim rather than keep asserting something the
+// system can't actually back up — same category of issue as the
+// original fake-testimonials bug, just one layer deeper. Building real
+// purchase verification (storing order_id, checking it against a
+// completed order containing that product) would be a good follow-up if
+// wanted, but is a schema change + feature build, not a one-line fix.
 
 interface HomepageReview {
   id:            string
@@ -74,7 +88,7 @@ export default async function ReviewsPreview() {
                 <div className="rav">{initialOf(r.customer_name)}</div>
                 <div>
                   <div className="ran">{r.customer_name}</div>
-                  <div className="rloc">{r.location ? `${r.location} · Verified Buyer` : 'Verified Buyer'}</div>
+                  <div className="rloc">{r.location || 'Customer'}</div>
                 </div>
               </div>
             </div>

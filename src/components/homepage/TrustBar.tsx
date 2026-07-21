@@ -14,10 +14,18 @@ export default function TrustBar({ settings }: Props) {
     { icon: '🌿', title: '100% Natural',      sub: 'No chemicals, no preservatives' },
     { icon: '🏔️', title: 'Himalayan Sourced', sub: 'Directly from mountain farms'  },
     { icon: '🤝', title: 'Fair Trade',         sub: 'Supporting local farmers'       },
-    // BUG FIX (P3): fallback corrected from '799' to '0' — confirmed via
-    // direct DB query that free_shipping_min is genuinely '0' live
-    // (free shipping on every order). Same reasoning as AnnouncementBar.tsx.
-    { icon: '🚚', title: 'Free Shipping',      sub: `On orders above ₹${settings.free_shipping_min || '0'}` },
+    // NOTE: this fallback array is only used if all 4 admin trust items
+    // are ever cleared — per your admin screenshots, they're currently
+    // all configured, so this isn't live today. Value corrected from an
+    // earlier '0' (confirmed via a direct DB query at the time) to '500'
+    // — a later admin-panel screenshot showed the real current shipping
+    // threshold is ₹500. If this number changes again, it'll drift from
+    // reality here too, same as it did before — the real fix would be
+    // computing this from settings.free_shipping_min directly instead of
+    // a hardcoded fallback string, but that's a design call (whether the
+    // fallback should ever differ from the live setting) rather than a
+    // clear-cut bug fix, so left as a plain value update for now.
+    { icon: '🚚', title: 'Free Shipping',      sub: `On orders above ₹${settings.free_shipping_min || '500'}` },
   ]
 
   const display = items.length > 0 ? items : fallback
