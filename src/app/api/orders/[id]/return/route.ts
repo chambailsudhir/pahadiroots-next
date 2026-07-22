@@ -46,14 +46,11 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
-import { RETURN_REASON_CODES } from '@/lib/account/constants'
+import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS } from '@/lib/account/constants'
 
-// BUG FIX (policy accuracy — flagged by founder): this was enforcing a
-// 7-day return window, which doesn't match the site's actual Return &
-// Refund Policy (48 hours from delivery, with photo/video proof — see
-// /policies/returns). A 7-day window is also wrong for an FMCG/food
-// business where most items are perishable and can't take that risk.
-const RETURNABLE_WINDOW_HOURS = 48
+// Return window: 48 hours from delivery (see RETURNABLE_WINDOW_HOURS in
+// constants.ts for the single source of truth shared with the client-side
+// eligibility check in useOrders.ts's canReturn()).
 
 export async function POST(
   req: NextRequest,

@@ -8,7 +8,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetchOrders, type Order, type OrdersResponse } from '@/lib/services/orderService'
 import { ServiceError } from '@/lib/services/profileService'
-import { ACTIVE_STATUSES, RETURNS_FILTER_SENTINEL } from '@/lib/account/constants'
+import { ACTIVE_STATUSES, RETURNS_FILTER_SENTINEL, RETURNABLE_WINDOW_HOURS } from '@/lib/account/constants'
 import { captureError } from '@/lib/logger'
 
 export type OrderFilter = 'all' | 'active' | 'delivered' | 'returns' | 'cancelled'
@@ -146,7 +146,13 @@ export function useOrders(markExpired?: () => void) {
     if ((o._displayStatus || o.order_status) !== 'delivered') return false
     const deliveredDate = o.delivered_at || o.updated_at
     if (!deliveredDate) return true
-    return (Date.now() - new Date(deliveredDate).getTime()) / 86_400_000 <= 7
+    // BUG FIX (July 2026): was `<= 7` days — didn't match the API route's
+    // actual 48-hour policy (RETURNABLE_WINDOW_HOURS, imported from the
+    // same constants.ts as the route uses). The button used to stay visible
+    // for 5 extra days after the real window closed, and clicking it always
+    // failed server-side. See the constant's own comment for the full trace.
+    const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
+    return hoursSince <= RETURNABLE_WINDOW_HOURS
   }
 
   const currentPageOrders = data?.orders ?? []

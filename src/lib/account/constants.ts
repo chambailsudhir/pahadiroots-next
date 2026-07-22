@@ -109,6 +109,17 @@ export const RETURN_REASONS = [
 export const RETURN_REASON_CODES = RETURN_REASONS.map(r => r.code)
 export type ReturnReasonCode = typeof RETURN_REASONS[number]['code']
 
+// BUG FIX (July 2026): the return-request API route
+// (/api/orders/[id]/return/route.ts) enforces a 48-hour window per the
+// site's actual Return & Refund Policy (founder-confirmed). The client-side
+// eligibility check that decides whether to SHOW the "Return" button
+// (useOrders.ts's canReturn()) had its own hardcoded "7 days" that was never
+// updated when the policy/route changed to 48 hours — so the button kept
+// appearing for orders delivered 2–7 days ago, and clicking it always failed
+// with the route's 422 "Return window has closed" error. Single constant now
+// imported by both, so they can't drift apart again.
+export const RETURNABLE_WINDOW_HOURS = 48
+
 // ── localStorage keys ────────────────────────────────────────────────────────
 // Centralised so every consumer refers to the same string literal and a typo
 // in one place cannot silently leave stale cache keys behind.
