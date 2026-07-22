@@ -80,6 +80,36 @@ export default function CategoryTiles({ categories }: Props) {
     if (lb) lb.onclick = () => { pausedRef.current = true; goPrev(); setTimeout(() => { pausedRef.current = false }, 1000) }
     if (rb) rb.onclick = () => { pausedRef.current = true; goNext(); setTimeout(() => { pausedRef.current = false }, 1000) }
 
+    // BUG FIX (found in a fresh re-audit): the "seamless infinite loop"
+    // boundary reset above only ran inside goNext()'s animation-completion
+    // callback — meaning it only fired when a user clicked the arrow
+    // buttons. Since this track is a plain native-scrollable div
+    // (overflowX: scroll), a user can also just swipe/drag it directly —
+    // very likely on mobile — and scrolling that way past the boundary
+    // never triggered any reset at all: they'd scroll into the cloned
+    // duplicate set and hit a hard stop at its end instead of looping.
+    // This listener catches that case too. Debounced (settles 120ms after
+    // scrolling stops) so it doesn't try to snap mid-drag, which would
+    // fight the user's own touch/momentum scrolling. Ignores scroll
+    // events fired by our own goNext()/goPrev() animation (animRef.current)
+    // so the two mechanisms don't conflict.
+    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null
+    function onScroll() {
+      if (animRef.current) return
+      if (scrollEndTimer) clearTimeout(scrollEndTimer)
+      scrollEndTimer = setTimeout(() => {
+        const w = cellW()
+        if (w <= 0) return
+        const setWidth = origCount * w
+        // Subtract exactly one full set's width rather than snapping
+        // straight to 0 — preserves how far into the set the user had
+        // actually scrolled, instead of jumping back to the very start
+        // regardless of drag distance.
+        if (cgrid.scrollLeft >= setWidth) cgrid.scrollLeft -= setWidth
+      }, 120)
+    }
+    cgrid.addEventListener('scroll', onScroll, { passive: true })
+
     // BUG FIX (P2): this interval used to run forever with no
     // prefers-reduced-motion check and no pause when the tab was
     // backgrounded. Reusing the existing pausedRef (already used for
@@ -103,6 +133,8 @@ export default function CategoryTiles({ categories }: Props) {
 
     return () => {
       if (timer) clearInterval(timer)
+      if (scrollEndTimer) clearTimeout(scrollEndTimer)
+      cgrid.removeEventListener('scroll', onScroll)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('resize', onResize)
       wrap.removeEventListener('mouseenter', onEnter)

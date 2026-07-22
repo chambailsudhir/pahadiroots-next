@@ -825,6 +825,19 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       // Seed revalidation tracking with the subtotal this discount was
       // computed against — see the revalidation effect below.
       lastValidatedCouponSubtotalRef.current = pricing.subtotal
+    } catch (e: unknown) {
+      // BUG FIX (found in a fresh re-audit): this function had no catch
+      // block at all — only try/finally. A genuine network failure (not
+      // just a non-OK response, but fetch() itself throwing — offline,
+      // DNS failure, etc.) would silently reset the loading spinner via
+      // finally but never call setCouponError, leaving the user with no
+      // explanation of what went wrong. handleApplyCouponHint, its
+      // near-identical sibling just below, already handled this
+      // correctly — this brings handleCoupon in line with it.
+      if (!mountedRef.current) return
+      const reason = e instanceof Error ? e.message : 'network_error'
+      setCouponError('Failed to apply coupon')
+      trackCouponError(couponCode, reason)
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
