@@ -82,3 +82,48 @@ describe('HeroBanner — single <h1> across multiple slides (P1 fix)', () => {
     expect(container.querySelectorAll('h1').length).toBe(1)
   })
 })
+
+describe('HeroBanner — admin-schema fields (eyebrow, colours, coupon, CTAs, video, headline highlight)', () => {
+  it('renders a custom eyebrow instead of the hardcoded default', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', eyebrow: 'Summer Collection' }]} settings={settings} />)
+    expect(container.textContent).toContain('Summer Collection')
+    expect(container.textContent).not.toContain('Pure · Himalayan · Natural')
+  })
+
+  it('parses *word* in the headline into a highlighted <em>, not literal asterisks', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', title: 'Born in the *Himalayas*' }]} settings={settings} />)
+    const h1 = container.querySelector('h1')
+    expect(h1?.textContent).toBe('Born in the Himalayas')
+    expect(h1?.querySelector('em')?.textContent).toBe('Himalayas')
+  })
+
+  it('renders the coupon badge when coupon fields are set', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', coupon_offer: 'FLAT 10% OFF', coupon_code: 'SUMMER10' }]} settings={settings} />)
+    expect(container.textContent).toContain('FLAT 10% OFF')
+    expect(container.textContent).toContain('SUMMER10')
+  })
+
+  it('omits the coupon badge when no coupon fields are set', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg' }]} settings={settings} />)
+    expect(container.textContent).not.toContain('OFF')
+  })
+
+  it('uses per-slide CTA text and link instead of the hardcoded /products and /about', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', cta_text: 'Shop Honey', cta_link: '/collections/honey', cta2_text: 'Learn More', cta2_link: '/faq' }]} settings={settings} />)
+    const links = Array.from(container.querySelectorAll('a'))
+    expect(links.some(a => a.getAttribute('href') === '/collections/honey' && a.textContent === 'Shop Honey')).toBe(true)
+    expect(links.some(a => a.getAttribute('href') === '/faq' && a.textContent?.includes('Learn More'))).toBe(true)
+  })
+
+  it('renders a <video> background when a slide has a video set', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', video: '/hero1.mp4' }]} settings={settings} />)
+    const video = container.querySelector('video')
+    expect(video?.getAttribute('src')).toBe('/hero1.mp4')
+    expect(video?.getAttribute('poster')).toBe('/hero1.jpg')
+  })
+
+  it('does not crash on a video-only slide with no still image', () => {
+    const { container } = render(<HeroBanner images={[{ url: '', video: '/hero1.mp4' }]} settings={settings} />)
+    expect(container.querySelector('video')?.getAttribute('src')).toBe('/hero1.mp4')
+  })
+})

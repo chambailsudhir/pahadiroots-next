@@ -69,12 +69,34 @@ export default async function HomePage() {
 function buildHeroImages(settings: any) {
   const slides: any[] = []
   for (let i = 1; i <= 5; i++) {
-    const img = settings[`hero_slide_${i}_img`]
-    if (img) slides.push({
-      url:      img,
-      alt_text: settings[`hero_slide_${i}_title`] || 'HimVeda by Pahadi Roots',
-      title:    settings[`hero_slide_${i}_title`] || '',
-      subtitle: settings[`hero_slide_${i}_sub`]   || '',
+    const img   = settings[`hero_slide_${i}_img`]
+    const video = settings[`hero_slide_${i}_video`]
+    // BUG FIX: this only ever read _img/_title/_sub, so every other field
+    // the admin's Hero Banners page (SlideEditor) actually saves —
+    // eyebrow(+colour), title_colour, sub_colour, video, coupon
+    // label/offer/code, and the two CTA button text/link pairs — was
+    // silently dropped before it ever reached HeroBanner.tsx. It also
+    // only activated a slide when an image was set, so a slide using
+    // just a background video (which the admin explicitly supports —
+    // its own "active" indicator checks `img || video`) would never
+    // show up on the storefront at all.
+    if (img || video) slides.push({
+      url:            img   || '',
+      video:          video || '',
+      alt_text:       settings[`hero_slide_${i}_title`] || 'HimVeda by Pahadi Roots',
+      title:          settings[`hero_slide_${i}_title`]          || '',
+      title_colour:   settings[`hero_slide_${i}_title_colour`]   || '',
+      subtitle:       settings[`hero_slide_${i}_sub`]             || '',
+      sub_colour:     settings[`hero_slide_${i}_sub_colour`]      || '',
+      eyebrow:        settings[`hero_slide_${i}_eyebrow`]         || '',
+      eyebrow_colour: settings[`hero_slide_${i}_eyebrow_colour`]  || '',
+      coupon_label:   settings[`hero_slide_${i}_coupon_label`]    || '',
+      coupon_offer:   settings[`hero_slide_${i}_coupon_offer`]    || '',
+      coupon_code:    settings[`hero_slide_${i}_coupon_code`]     || '',
+      cta_text:       settings[`hero_slide_${i}_cta_text`]        || '',
+      cta_link:       settings[`hero_slide_${i}_cta_link`]        || '',
+      cta2_text:      settings[`hero_slide_${i}_cta2_text`]       || '',
+      cta2_link:      settings[`hero_slide_${i}_cta2_link`]       || '',
     })
   }
   if (!slides.length && settings.hero_bg_image)

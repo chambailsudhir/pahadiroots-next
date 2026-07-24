@@ -7,8 +7,40 @@ import type { SiteSettings } from '@/types'
 import { useAutoplayInterval } from '@/hooks/useAutoplayInterval'
 import { getHeroStats } from '@/lib/heroStats'
 
-interface HeroImage { url: string; alt_text?: string | null; title?: string; subtitle?: string }
+interface HeroImage {
+  url: string
+  video?: string
+  alt_text?: string | null
+  title?: string
+  title_colour?: string
+  subtitle?: string
+  sub_colour?: string
+  eyebrow?: string
+  eyebrow_colour?: string
+  coupon_label?: string
+  coupon_offer?: string
+  coupon_code?: string
+  cta_text?: string
+  cta_link?: string
+  cta2_text?: string
+  cta2_link?: string
+}
 interface Props { images: HeroImage[]; settings: SiteSettings }
+
+// BUG FIX: the admin's "Headline" field explicitly documents `*word*` as
+// the syntax for the italic/gold highlight ("Use *word* for italic gold
+// highlight" — see admin/media/hero), but this component used to just
+// print img.title as a flat string, so that markup showed up as literal
+// asterisks on the live site instead of being rendered as a highlight.
+// Only the hardcoded fallback copy ever got the gold-italic treatment.
+function renderHeadline(text: string) {
+  const parts = text.split(/(\*[^*]+\*)/g).filter(Boolean)
+  return parts.map((part, idx) =>
+    part.startsWith('*') && part.endsWith('*') && part.length > 2
+      ? <em key={idx} style={{ fontStyle: 'italic', color: 'var(--gd)' }}>{part.slice(1, -1)}</em>
+      : <span key={idx}>{part}</span>
+  )
+}
 
 export default function HeroBanner({ images, settings }: Props) {
   const [current, setCurrent] = useState(0)
@@ -61,28 +93,65 @@ export default function HeroBanner({ images, settings }: Props) {
             transition: 'opacity 0.9s cubic-bezier(0.4,0,0.2,1)',
             pointerEvents: isVisible ? 'auto' : 'none',
           }}>
-            <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-              style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
+            {/* BUG FIX: the admin panel lets each slide carry its own
+                Background Video (autoplaying, muted, with the image as a
+                poster fallback), and a slide can be video-only with no
+                still image at all — the admin's own "active" check is
+                `img || video`. This previously only ever rendered
+                <Image src={img.url}>, so a) any video the admin uploaded
+                never appeared on the live site, and b) a video-only slide
+                (empty img.url) would crash next/image with an empty src. */}
+            {img.video ? (
+              <video
+                src={img.video}
+                poster={img.url || undefined}
+                autoPlay={isVisible}
+                muted
+                loop
+                playsInline
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+              />
+            ) : img.url ? (
+              <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
+            ) : (
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
+            )}
             {/* Dark-left gradient overlay */}
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
             {/* Content */}
             <div style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
               <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
-                <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color:'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
-                  🌿 Pure · Himalayan · Natural
+                {/* BUG FIX: the eyebrow tag, headline colour, subtext
+                    colour, coupon badge, and per-slide button text/links
+                    are all fields the admin panel (Hero Banners page)
+                    lets an editor set per-slide, but this component never
+                    read any of them — the eyebrow was hardcoded, colours
+                    were ignored, the coupon badge never rendered, and both
+                    buttons always pointed at /products and /about no
+                    matter what a slide's own CTA fields said. */}
+                <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
+                  {img.eyebrow || '🌿 Pure · Himalayan · Natural'}
                 </div>
-                <HeadingTag style={headingStyle}>
-                  {img.title ? img.title : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
+                <HeadingTag style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
+                  {img.title ? renderHeadline(img.title) : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
                 </HeadingTag>
-                <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color:'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 28px', maxWidth:440 }}>
+                <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color: img.sub_colour || 'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 20px', maxWidth:440 }}>
                   {img.subtitle || 'Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature\'s finest.'}
                 </p>
+                {(img.coupon_offer || img.coupon_code) && (
+                  <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.95)', borderRadius:8, padding:'6px 14px', width:'fit-content', marginBottom:20 }}>
+                    {img.coupon_label && <span style={{ fontSize:10, fontWeight:700, color:'#1b4332', textTransform:'uppercase', letterSpacing:'.5px' }}>{img.coupon_label}</span>}
+                    {img.coupon_offer && <strong style={{ fontSize:13, fontWeight:900, color:'#1b4332' }}>{img.coupon_offer}</strong>}
+                    {img.coupon_code && <span style={{ fontSize:11, fontWeight:700, color:'#bc4749' }}>· {img.coupon_code}</span>}
+                  </div>
+                )}
                 <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-                  <Link href="/products" style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
-                    Explore Our Store
+                  <Link href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
+                    {img.cta_text || 'Explore Our Store'}
                   </Link>
-                  <Link href="/about" style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
-                    Our Story →
+                  <Link href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
+                    {img.cta2_text || 'Our Story'} →
                   </Link>
                 </div>
               </div>
