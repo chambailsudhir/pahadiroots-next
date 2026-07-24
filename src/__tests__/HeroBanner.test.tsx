@@ -126,4 +126,18 @@ describe('HeroBanner — admin-schema fields (eyebrow, colours, coupon, CTAs, vi
     const { container } = render(<HeroBanner images={[{ url: '', video: '/hero1.mp4' }]} settings={settings} />)
     expect(container.querySelector('video')?.getAttribute('src')).toBe('/hero1.mp4')
   })
+
+  it('renders a self-contained banner image (no text fields set) without the default overlay text or CTA buttons', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', alt_text: 'Sea Buckthorn banner' }]} settings={settings} />)
+    expect(container.textContent).not.toContain('Explore Our Store')
+    expect(container.textContent).not.toContain('Born in the')
+    expect(container.querySelectorAll('h1').length).toBe(1)
+    expect(container.querySelector('h1')?.textContent).toBe('Sea Buckthorn banner')
+  })
+
+  it('still shows the default overlay text/CTA when a slide has a plain photo plus at least one admin-set text field', () => {
+    const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', subtitle: 'Handcrafted in small batches' }]} settings={settings} />)
+    expect(container.textContent).toContain('Explore Our Store')
+    expect(container.textContent).toContain('Handcrafted in small batches')
+  })
 })

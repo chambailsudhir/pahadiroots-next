@@ -86,6 +86,26 @@ export default function HeroBanner({ images, settings }: Props) {
           const isVisible = i === current
           const HeadingTag = isVisible ? 'h1' : 'p'
           const headingStyle = { fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900 as const, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }
+          // BUG FIX: a slide's Background Image can itself be a fully
+          // designed banner graphic — its own headline, subtitle, and CTA
+          // baked directly into the photo (this is exactly what happens
+          // when an admin uploads a ready-made marketing banner and
+          // deliberately leaves the Eyebrow/Headline/Subtext/Buttons
+          // fields blank, since the image already says everything). This
+          // component used to always draw the dark gradient plus the
+          // hardcoded default headline/CTA on top regardless, so a
+          // self-contained banner ended up with its own baked-in title
+          // fighting for space with an unrelated overlaid title, plus a
+          // second "Explore Our Store" button nobody asked for. Now: only
+          // draw the overlay (gradient, eyebrow, headline, subtext,
+          // coupon, buttons) when the admin actually set at least one of
+          // those fields for this slide; otherwise show the image clean,
+          // edge to edge, with just an offscreen heading kept for SEO.
+          const hasOverlayContent = Boolean(
+            img.eyebrow || img.title || img.subtitle ||
+            img.coupon_offer || img.coupon_code || img.cta_text || img.cta2_text
+          )
+          const srOnlyStyle = { position: 'absolute' as const, width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden' as const, clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' as const, border: 0 }
           return (
           <div key={i} aria-hidden={!isVisible} style={{
             position: 'absolute', inset: 0,
@@ -109,53 +129,59 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted
                 loop
                 playsInline
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: hasOverlayContent ? 'cover' : 'contain', objectPosition: 'center', background: hasOverlayContent ? undefined : '#0d2410' }}
               />
             ) : img.url ? (
               <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-                style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
+                style={{ objectFit: hasOverlayContent ? 'cover' : 'contain', objectPosition: 'center', background: hasOverlayContent ? undefined : '#0d2410' }} priority={i === 0} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
-            {/* Dark-left gradient overlay */}
-            <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
-            {/* Content */}
-            <div style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
-              <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
-                {/* BUG FIX: the eyebrow tag, headline colour, subtext
-                    colour, coupon badge, and per-slide button text/links
-                    are all fields the admin panel (Hero Banners page)
-                    lets an editor set per-slide, but this component never
-                    read any of them — the eyebrow was hardcoded, colours
-                    were ignored, the coupon badge never rendered, and both
-                    buttons always pointed at /products and /about no
-                    matter what a slide's own CTA fields said. */}
-                <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
-                  {img.eyebrow || '🌿 Pure · Himalayan · Natural'}
-                </div>
-                <HeadingTag style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
-                  {img.title ? renderHeadline(img.title) : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
-                </HeadingTag>
-                <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color: img.sub_colour || 'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 20px', maxWidth:440 }}>
-                  {img.subtitle || 'Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature\'s finest.'}
-                </p>
-                {(img.coupon_offer || img.coupon_code) && (
-                  <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.95)', borderRadius:8, padding:'6px 14px', width:'fit-content', marginBottom:20 }}>
-                    {img.coupon_label && <span style={{ fontSize:10, fontWeight:700, color:'#1b4332', textTransform:'uppercase', letterSpacing:'.5px' }}>{img.coupon_label}</span>}
-                    {img.coupon_offer && <strong style={{ fontSize:13, fontWeight:900, color:'#1b4332' }}>{img.coupon_offer}</strong>}
-                    {img.coupon_code && <span style={{ fontSize:11, fontWeight:700, color:'#bc4749' }}>· {img.coupon_code}</span>}
+            {hasOverlayContent ? (
+              <>
+                {/* Dark-left gradient overlay */}
+                <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
+                {/* Content */}
+                <div style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
+                  <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
+                    {/* BUG FIX: the eyebrow tag, headline colour, subtext
+                        colour, coupon badge, and per-slide button text/links
+                        are all fields the admin panel (Hero Banners page)
+                        lets an editor set per-slide, but this component never
+                        read any of them — the eyebrow was hardcoded, colours
+                        were ignored, the coupon badge never rendered, and both
+                        buttons always pointed at /products and /about no
+                        matter what a slide's own CTA fields said. */}
+                    <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
+                      {img.eyebrow || '🌿 Pure · Himalayan · Natural'}
+                    </div>
+                    <HeadingTag style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
+                      {img.title ? renderHeadline(img.title) : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
+                    </HeadingTag>
+                    <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color: img.sub_colour || 'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 20px', maxWidth:440 }}>
+                      {img.subtitle || 'Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature\'s finest.'}
+                    </p>
+                    {(img.coupon_offer || img.coupon_code) && (
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(255,255,255,.95)', borderRadius:8, padding:'6px 14px', width:'fit-content', marginBottom:20 }}>
+                        {img.coupon_label && <span style={{ fontSize:10, fontWeight:700, color:'#1b4332', textTransform:'uppercase', letterSpacing:'.5px' }}>{img.coupon_label}</span>}
+                        {img.coupon_offer && <strong style={{ fontSize:13, fontWeight:900, color:'#1b4332' }}>{img.coupon_offer}</strong>}
+                        {img.coupon_code && <span style={{ fontSize:11, fontWeight:700, color:'#bc4749' }}>· {img.coupon_code}</span>}
+                      </div>
+                    )}
+                    <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+                      <Link href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
+                        {img.cta_text || 'Explore Our Store'}
+                      </Link>
+                      <Link href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
+                        {img.cta2_text || 'Our Story'} →
+                      </Link>
+                    </div>
                   </div>
-                )}
-                <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-                  <Link href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
-                    {img.cta_text || 'Explore Our Store'}
-                  </Link>
-                  <Link href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
-                    {img.cta2_text || 'Our Story'} →
-                  </Link>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : (
+              <HeadingTag style={srOnlyStyle}>{img.alt_text || 'HimVeda by Pahadi Roots'}</HeadingTag>
+            )}
           </div>
           )
         }) : (
