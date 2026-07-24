@@ -120,7 +120,16 @@ export default function HeroBanner({ images, settings }: Props) {
                 `img || video`. This previously only ever rendered
                 <Image src={img.url}>, so a) any video the admin uploaded
                 never appeared on the live site, and b) a video-only slide
-                (empty img.url) would crash next/image with an empty src. */}
+                (empty img.url) would crash next/image with an empty src.
+
+                BUG FIX: a self-contained banner graphic was briefly given
+                object-fit:contain so its own baked-in text/CTA would
+                never get cropped — but on a wide desktop viewport the
+                hero container is much wider/shorter than the banner's own
+                aspect ratio, so "contain" just letterboxed it with solid
+                blank bars down both sides. Cover (cropping a little off
+                the top/bottom only, never the sides) is what actually
+                fills the section without wasted space. */}
             {img.video ? (
               <video
                 src={img.video}
@@ -129,11 +138,11 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted
                 loop
                 playsInline
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: hasOverlayContent ? 'cover' : 'contain', objectPosition: 'center', background: hasOverlayContent ? undefined : '#0d2410' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
               />
             ) : img.url ? (
               <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-                style={{ objectFit: hasOverlayContent ? 'cover' : 'contain', objectPosition: 'center', background: hasOverlayContent ? undefined : '#0d2410' }} priority={i === 0} />
+                style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
