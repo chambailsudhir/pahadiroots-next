@@ -23,7 +23,12 @@
 //       Authorization: `Bearer ${process.env.REVALIDATE_SECRET}`,
 //     },
 //     body: JSON.stringify({ slug: 'himalayan-wild-honey' }),
-//     // or: body: JSON.stringify({ all: true })  // revalidate the whole catalog
+//     // or: body: JSON.stringify({ all: true })      // revalidate the whole catalog
+//     // or: body: JSON.stringify({ settings: true })  // Ann Bar/Ticker/Trust Bar/
+//     //     Hero Stats/Store Status — called from pahadi-admin's settings page
+//     //     (src/app/admin/settings/page.jsx) right after saveMany() succeeds,
+//     //     via the admin repo's src/app/api/admin/route.js
+//     //     'revalidate_storefront' action, which forwards here server-side.
 //   })
 //
 // Required env var (add to Vercel project settings — pahadiroots-next):
@@ -34,6 +39,7 @@ import { timingSafeEqual } from 'crypto'
 import { logger, captureError } from '@/lib/logger'
 import { revalidatePath } from 'next/cache'
 import { getStoreData } from '@/lib/storeData'
+import { clearSiteSettingsCache } from '@/lib/getSiteSettings'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,39 +70,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: { slug?: string; all?: boolean }
+  let body: { slug?: string; all?: boolean; settings?: boolean }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { slug, all } = body
+  const { slug, all, settings } = body
 
-  if (!slug && !all) {
+  if (!slug && !all && !settings) {
     return NextResponse.json(
-      { error: 'Provide either { slug } for a single product or { all: true } for the full catalog' },
+      { error: 'Provide { slug }, { all: true }, or { settings: true }' },
       { status: 400 }
     )
   }
 
   try {
-    // 1. Force the in-process storeData cache to refetch from Supabase
-    //    on the very next call (clears the 60s CACHE_TTL window).
-    await getStoreData(true)
-
-    // 2. Invalidate Next's ISR cache so the next request rebuilds the page
-    //    instead of serving the stale cached HTML.
     const revalidated: string[] = []
 
-    if (all) {
-      revalidatePath('/products', 'page')
-      revalidatePath('/products/[slug]', 'page')
-      revalidated.push('/products', '/products/[slug] (all)')
-    } else if (slug) {
-      revalidatePath(`/products/${slug}`)
-      revalidatePath('/products', 'page') // listing card (price/stock) also changed
-      revalidated.push(`/products/${slug}`, '/products')
+    if (slug || all) {
+      // 1. Force the in-process storeData cache to refetch from Supabase
+      //    on the very next call (clears the 60s CACHE_TTL window).
+      await getStoreData(true)
+
+      // 2. Invalidate Next's ISR cache so the next request rebuilds the page
+      //    instead of serving the stale cached HTML.
+      if (all) {
+        revalidatePath('/products', 'page')
+        revalidatePath('/products/[slug]', 'page')
+        revalidated.push('/products', '/products/[slug] (all)')
+      } else if (slug) {
+        revalidatePath(`/products/${slug}`)
+        revalidatePath('/products', 'page') // listing card (price/stock) also changed
+        revalidated.push(`/products/${slug}`, '/products')
+      }
+    }
+
+    // BUG FIX: site_settings (Ann Bar, Ticker, Trust Bar, Hero Stats Bar,
+    // Store Status) had no on-demand invalidation at all — admin saves in
+    // pahadi-admin's settings page never called this endpoint, so changes
+    // only ever appeared once BOTH getSiteSettings()'s 5-min in-process
+    // cache AND layout.tsx's 300s / page.tsx's 60s ISR windows happened to
+    // expire (up to ~10 min worst case), directly contradicting the admin
+    // panel's own "Changes go live instantly" copy. Clearing the in-process
+    // cache + revalidating the root layout (Ann Bar / Ticker Bar live in
+    // Header.tsx, rendered by layout.tsx) and the homepage (Hero Stats Bar /
+    // Trust Bar live in page.tsx) + /maintenance (reads maintenance_message)
+    // makes a settings save actually go live within seconds, matching what
+    // the admin UI already promises.
+    if (settings) {
+      clearSiteSettingsCache()
+      revalidatePath('/', 'layout')
+      revalidatePath('/', 'page')
+      revalidatePath('/maintenance', 'page')
+      revalidated.push('/ (layout)', '/ (page)', '/maintenance')
     }
 
     return NextResponse.json({ success: true, revalidated })

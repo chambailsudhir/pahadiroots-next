@@ -188,6 +188,19 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   return _inFlight
 }
 
+// BUG FIX: site_settings (Ann Bar, Ticker, Trust Bar, Hero Stats, Store
+// Status) had no way to be invalidated on demand. getSiteSettings() held its
+// own 5-minute in-process cache on top of layout.tsx's 300s ISR revalidate
+// and page.tsx's 60s ISR revalidate — stacked, that's up to ~10 minutes of
+// staleness in the worst case, even though the admin panel's Settings page
+// tells the store owner "Changes go live instantly." Exported so
+// /api/v1/revalidate can clear this the moment an admin saves a setting,
+// the same way getStoreData(true) already does for product data.
+export function clearSiteSettingsCache(): void {
+  _cache = null
+  _inFlight = null
+}
+
 // Helper: parse a boolean setting (handles 'true', 'false', missing)
 export function isEnabled(value: string | undefined, defaultValue = true): boolean {
   if (value === undefined) return defaultValue
