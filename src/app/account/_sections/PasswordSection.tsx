@@ -19,7 +19,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
             <div className={styles.formFull}>
               <label htmlFor="pw-cur" className={styles.fLbl}>Current Password *</label>
               <div className={styles.pwWrap}>
-                <input id="pw-cur" className={`${styles.fInp}${profile.pfErr.curp ? ' ' + styles.fErr : ''}`} type={profile.pw.showCur ? 'text' : 'password'} value={profile.pw.curp} onChange={e => { profile.setPw(p => ({ ...p, curp: e.target.value })); profile.setPfErr(er => ({ ...er, curp: '' })) }} placeholder="Your current password" />
+                <input id="pw-cur" className={`${styles.fInp}${profile.pfErr.curp ? ' ' + styles.fErr : ''}`} type={profile.pw.showCur ? 'text' : 'password'} autoComplete="current-password" value={profile.pw.curp} onChange={e => { profile.setPw(p => ({ ...p, curp: e.target.value })); profile.setPfErr(er => ({ ...er, curp: '' })) }} placeholder="Your current password" />
                 <button type="button" className={styles.pwEye} aria-label={profile.pw.showCur ? 'Hide current password' : 'Show current password'} onClick={() => profile.setPw(p => ({ ...p, showCur: !p.showCur }))}>{profile.pw.showCur ? '🙈' : '👁'}</button>
               </div>
               {profile.pfErr.curp && <div className={styles.errTxt}>{profile.pfErr.curp}</div>}
@@ -46,7 +46,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
             <div className={styles.formFull}>
               <label htmlFor="pw-new" className={styles.fLbl}>New Password *</label>
               <div className={styles.pwWrap}>
-                <input id="pw-new" className={`${styles.fInp}${profile.pfErr.newp ? ' ' + styles.fErr : ''}`} type={profile.pw.showNew ? 'text' : 'password'} value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Min 8 chars, uppercase, number, symbol" />
+                <input id="pw-new" className={`${styles.fInp}${profile.pfErr.newp ? ' ' + styles.fErr : ''}`} type={profile.pw.showNew ? 'text' : 'password'} autoComplete="new-password" value={profile.pw.newp} onChange={e => { profile.setPw(p => ({ ...p, newp: e.target.value })); profile.setPfErr(er => ({ ...er, newp: '' })) }} placeholder="Min 8 chars, uppercase, number, symbol" />
                 <button type="button" className={styles.pwEye} aria-label={profile.pw.showNew ? 'Hide new password' : 'Show new password'} onClick={() => profile.setPw(p => ({ ...p, showNew: !p.showNew }))}>{profile.pw.showNew ? '🙈' : '👁'}</button>
               </div>
               {profile.pfErr.newp && <div className={styles.errTxt}>{profile.pfErr.newp}</div>}
@@ -77,7 +77,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
             <div className={styles.formFull}>
               <label htmlFor="pw-conf" className={styles.fLbl}>Confirm Password *</label>
               <div className={styles.pwWrap}>
-                <input id="pw-conf" className={`${styles.fInp}${profile.pfErr.conf ? ' ' + styles.fErr : ''}`} type={profile.pw.showConf ? 'text' : 'password'} value={profile.pw.conf} onChange={e => { profile.setPw(p => ({ ...p, conf: e.target.value })); profile.setPfErr(er => ({ ...er, conf: '' })) }} placeholder="Repeat new password" />
+                <input id="pw-conf" className={`${styles.fInp}${profile.pfErr.conf ? ' ' + styles.fErr : ''}`} type={profile.pw.showConf ? 'text' : 'password'} autoComplete="new-password" value={profile.pw.conf} onChange={e => { profile.setPw(p => ({ ...p, conf: e.target.value })); profile.setPfErr(er => ({ ...er, conf: '' })) }} placeholder="Repeat new password" />
                 <button type="button" className={styles.pwEye} aria-label={profile.pw.showConf ? 'Hide confirm password' : 'Show confirm password'} onClick={() => profile.setPw(p => ({ ...p, showConf: !p.showConf }))}>{profile.pw.showConf ? '🙈' : '👁'}</button>
               </div>
               {profile.pfErr.conf && <div className={styles.errTxt}>{profile.pfErr.conf}</div>}

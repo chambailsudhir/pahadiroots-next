@@ -361,7 +361,15 @@ export function useCartPage() {
   } = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })
 
   const freeShipMin = useMemo(
-    () => parseFloat(settings.free_shipping_min ?? '0') || 0,
+    // NOTE: fallback corrected 0 → 500 for consistency with the same fix
+    // already applied to TrustBar.tsx, AnnouncementBar.tsx, and
+    // pricingService.ts — an earlier direct DB query showed '0'; a later
+    // admin-panel screenshot showed the real current value is '500'. Only
+    // matters if this setting is ever missing entirely (the live row
+    // exists today), but a mismatched fallback here would otherwise make
+    // the cart's free-shipping progress bar disagree with checkout's
+    // actual pricing calculation in that scenario.
+    () => parseFloat(settings.free_shipping_min ?? '500') || 500,
     [settings.free_shipping_min],
   )
 

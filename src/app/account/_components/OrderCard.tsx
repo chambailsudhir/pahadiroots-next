@@ -44,7 +44,15 @@ const STRIPE: Record<string, string> = {
 interface Props {
   order:         Order
   canReturn:     (o: Order) => boolean
-  onReturnClick: (orderNum: string) => void
+  // BUG FIX: this type only declared (orderNum: string) => void, and the
+  // real call site below never passed a second argument — so
+  // OrdersSection.tsx's openReturnModal(orderNum, triggerBtn) always
+  // received triggerBtn as undefined, meaning the "restore focus to the
+  // button that opened the modal" feature it was built for never
+  // actually worked. TypeScript didn't catch this because the target
+  // function's second param is optional (a function with fewer declared
+  // params structurally satisfies a type expecting more).
+  onReturnClick: (orderNum: string, triggerBtn?: HTMLButtonElement | null) => void
 }
 
 function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
@@ -153,7 +161,7 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
               Invoice
             </Link>
             {canReturn(o) && (
-              <button className={`${styles.actionBtn} ${styles.actionReturn}`} onClick={() => onReturnClick(o.order_number || String(o.id))}>
+              <button className={`${styles.actionBtn} ${styles.actionReturn}`} onClick={e => onReturnClick(o.order_number || String(o.id), e.currentTarget)}>
                 Return
               </button>
             )}

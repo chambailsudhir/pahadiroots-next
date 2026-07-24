@@ -114,9 +114,17 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     setTyped('')
     setDeleting(false)
     setOpen(true)
-    // Two rAF frames guarantee focus fires after the modal is fully painted,
-    // without relying on an arbitrary setTimeout delay.
-    requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()))
+    // BUG FIX: this only ever focused inputRef, but that input doesn't
+    // exist until step 2 (it's conditionally rendered) — so at step 1,
+    // nothing inside the modal received focus at all. Since the Tab-trap
+    // in handleModalKeyDown only fires for keydown events bubbling from
+    // inside the modal, a keyboard user whose focus never moved into it
+    // could Tab straight into background content instead of being
+    // trapped — the modal would visually cover the page but not actually
+    // contain keyboard focus. Focusing the modal box itself (tabIndex=-1
+    // added below) guarantees something inside the modal is focused
+    // immediately, regardless of which step is currently showing.
+    requestAnimationFrame(() => requestAnimationFrame(() => modalBoxRef.current?.focus()))
   }
 
   async function handleDelete() {
@@ -245,7 +253,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
           onClick={e => { if (e.target === e.currentTarget) closeModal() }}
           onKeyDown={handleModalKeyDown}
         >
-          <div ref={modalBoxRef} className={styles.modalBox}>
+          <div ref={modalBoxRef} className={styles.modalBox} tabIndex={-1}>
             <div className={styles.modalHeader}>
               <h2 id="del-modal-title" className={styles.modalTitle}>
                 {step === 1 ? '⚠️ Delete your account?' : '🗑️ Confirm permanent deletion'}
@@ -273,7 +281,20 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
                   <li>You can create a new account at any time</li>
                 </ul>
                 <div className={styles.modalFooter}>
-                  <button className={styles.btnDangerOutline} onClick={() => setStep(2)}>
+                  <button
+                    className={styles.btnDangerOutline}
+                    onClick={() => {
+                      setStep(2)
+                      // BUG FIX: this button itself gets unmounted the
+                      // moment step becomes 2 (step 1's whole block is
+                      // replaced by step 2's) — in some browsers, focus
+                      // on an element that's removed from the DOM falls
+                      // back to <body>, which would throw focus out of
+                      // the modal. Explicitly move it to the new text
+                      // input once it mounts.
+                      requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()))
+                    }}
+                  >
                     Continue →
                   </button>
                   <button className={styles.btnSecondary} onClick={closeModal}>
