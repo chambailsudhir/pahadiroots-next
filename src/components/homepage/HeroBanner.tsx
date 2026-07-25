@@ -130,7 +130,26 @@ export default function HeroBanner({ images, settings }: Props) {
                 aspect ratio, so "contain" just letterboxed it with solid
                 blank bars down both sides. Cover (cropping a little off
                 the top/bottom only, never the sides) is what actually
-                fills the section without wasted space. */}
+                fills the section without wasted space.
+
+                BUG FIX (requested): with objectPosition:'center', that
+                top/bottom crop was split evenly — on a typical desktop
+                viewport the hero container is roughly 2.9:1 while these
+                banners are shot around 1.9:1, so ~35% of the image's
+                total height was being cropped away, roughly half off
+                the top. That silently deleted whatever sat near the top
+                of the frame (e.g. a prayer-flag strand in one banner) on
+                every single slide, with no way to know it was happening
+                short of comparing side-by-side against the original
+                file. Biasing the crop to keep the top ~22% of the frame
+                (rather than 0%, i.e. dead centre) keeps most banners'
+                top flourishes intact while still leaving enough of the
+                lower two-thirds — where the product bottle and headline
+                actually sit — in frame. It's a single global default,
+                not a per-slide setting, so it's a real trade-off: a
+                slide whose important content sits right at the very
+                bottom edge would now lose slightly more of that than
+                before. */}
             {img.video ? (
               <video
                 src={img.video}
@@ -139,11 +158,11 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted
                 loop
                 playsInline
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 22%' }}
               />
             ) : img.url ? (
               <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-                style={{ objectFit: 'cover', objectPosition: 'center' }} priority={i === 0} />
+                style={{ objectFit: 'cover', objectPosition: 'center 22%' }} priority={i === 0} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
@@ -249,18 +268,29 @@ export default function HeroBanner({ images, settings }: Props) {
           (its real key is stat_himalayan_states). See lib/heroStats.ts
           for the full explanation — this now reads the same admin
           fields the "Hero Stats Bar" panel actually manages, including
-          respecting each stat's show/hide toggle for the first time. */}
-      <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
-        {heroStats.map((s, i) => (
-          <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
-            <div style={{ textAlign:'center', padding:'0 32px' }}>
-              <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
-              <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
+          respecting each stat's show/hide toggle for the first time.
+
+          BUG FIX: this container used to render unconditionally even
+          when every one of the 4 stats was hidden via its admin
+          toggle — heroStats.map then produced nothing, but the
+          near-black background (rgba(5,20,8,.97)) still rendered as a
+          bare, empty strip wedged between the hero photo and the trust
+          bar below it (the "black gap" being reported). Skipping the
+          whole bar when there's nothing to show it removes that
+          strip entirely instead of leaving an empty dark band. */}
+      {heroStats.length > 0 && (
+        <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
+          {heroStats.map((s, i) => (
+            <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
+              <div style={{ textAlign:'center', padding:'0 32px' }}>
+                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
+                <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
+              </div>
+              {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
             </div>
-            {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <style>{`
         .hslide-content-inner { padding: 0 0 0 72px; }

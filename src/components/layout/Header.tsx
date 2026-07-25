@@ -192,7 +192,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
             {logoUrl
               ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-full.png" alt={siteName} width={123} height={46} style={{ height: '46px', width: 'auto', objectFit: 'contain' }} priority />}
+              : <Image src="/logo-full.png" alt={siteName} width={124} height={46} style={{ height: '46px', width: 'auto', objectFit: 'contain' }} priority />}
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
@@ -387,11 +387,23 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-nav.overlay-nav-transparent .mega-parent.open .mega-trigger{
           color:#fff !important; background:rgba(255,255,255,.18) !important;
         }
-        /* No separate reversed/white logo asset exists — reduce the
-           logo image to a white silhouette (plus a drop-shadow for edge
-           definition) rather than showing its normal brand colours,
-           which read poorly against a busy photo. */
-        .old-nav.overlay-nav-transparent .old-logo img{ filter:brightness(0) invert(1) drop-shadow(0 1px 4px rgba(0,0,0,.5)); }
+        /* BUG FIX (requested): this used to force the logo to a flat
+           white silhouette (brightness(0) invert(1)) over the hero —
+           the client's actual brand mark is two-tone (dark green +
+           gold, see public/logo-full.png), and that color is what
+           should show, not a monochrome substitute. Real colour reads
+           fine against the hero's brighter/lighter slides, but a dark
+           green wordmark can wash out against a dark green forest
+           slide — a soft white glow (multiple diffuse drop-shadows,
+           not a hard box) gives it edge definition against any photo
+           without altering its actual colours the way the old invert
+           filter did. */
+        .old-nav.overlay-nav-transparent .old-logo img{
+          filter:
+            drop-shadow(0 0 6px rgba(255,255,255,.85))
+            drop-shadow(0 0 3px rgba(255,255,255,.85))
+            drop-shadow(0 1px 3px rgba(0,0,0,.35));
+        }
         .old-nav.overlay-nav-transparent .old-cart-btn{
           background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.5); backdrop-filter:blur(6px);
         }
