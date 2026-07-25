@@ -72,7 +72,7 @@ describe('Header — homepage-only transparent overlay nav', () => {
     heroEl.id = 'home-hero-banner'
     document.body.appendChild(heroEl)
     // Hero still mostly on screen: its bottom edge is well below the nav.
-    heroEl.getBoundingClientRect = () => ({ bottom: 500 } as DOMRect)
+    heroEl.getBoundingClientRect = () => ({ bottom: 500, height: 600 } as DOMRect)
     Object.defineProperty(window, 'scrollY', { value: 400, writable: true, configurable: true })
 
     const { container } = render(<Header settings={settings} />)
@@ -85,7 +85,7 @@ describe('Header — homepage-only transparent overlay nav', () => {
 
     // Hero has scrolled fully out of view (its bottom edge is now above
     // the nav) — now it should go solid.
-    heroEl.getBoundingClientRect = () => ({ bottom: -10 } as DOMRect)
+    heroEl.getBoundingClientRect = () => ({ bottom: -10, height: 600 } as DOMRect)
     act(() => { window.dispatchEvent(new Event('scroll')) })
     expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(false)
     expect(nav()?.classList.contains('scrolled')).toBe(true)
@@ -99,7 +99,7 @@ describe('Header — homepage-only transparent overlay nav', () => {
     const heroEl = document.createElement('div')
     heroEl.id = 'home-hero-banner'
     document.body.appendChild(heroEl)
-    heroEl.getBoundingClientRect = () => ({ bottom: 500 } as DOMRect)
+    heroEl.getBoundingClientRect = () => ({ bottom: 500, height: 600 } as DOMRect)
 
     const addSpy = vi.spyOn(window, 'addEventListener')
     render(<Header settings={settings} />)
@@ -119,6 +119,25 @@ describe('Header — homepage-only transparent overlay nav', () => {
     expect(scrollListenerCallsAfterResizes).toBe(scrollListenerCallsAfterMount)
 
     addSpy.mockRestore()
+    document.body.removeChild(heroEl)
+  })
+
+  it('BUG FIX: ignores a hero measurement taken before layout has settled (height still 0), instead of trusting it and incorrectly snapping to solid on the very first paint of a hard refresh', () => {
+    mockPathname = '/'
+    const heroEl = document.createElement('div')
+    heroEl.id = 'home-hero-banner'
+    document.body.appendChild(heroEl)
+    // Simulates the exact failure: right at mount, before web fonts/
+    // images have settled, the hero transiently reads as zero-height
+    // with a bottom at/under the nav — which used to be trusted at
+    // face value and incorrectly flipped heroPast to true.
+    heroEl.getBoundingClientRect = () => ({ bottom: 0, height: 0 } as DOMRect)
+
+    const { container } = render(<Header settings={settings} />)
+    const nav = container.querySelector('nav.old-nav')
+    // Must stay transparent — the bad reading should have been ignored.
+    expect(nav?.classList.contains('overlay-nav-transparent')).toBe(true)
+
     document.body.removeChild(heroEl)
   })
 })

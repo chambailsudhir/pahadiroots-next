@@ -162,9 +162,28 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // `overlayNav`, which is stable for the life of the page), and it
     // always reads the *current* topBarHeightRef value rather than
     // needing to be rebuilt whenever that number changes.
+    // BUG FIX 2 (the flicker fix above stopped the *recreation* churn,
+    // but hard refreshes could still occasionally show the nav solid on
+    // the very first paint): the initial update() call ran synchronously
+    // inside this effect, immediately on mount — before the browser had
+    // necessarily finished a real layout pass for a freshly-hydrated,
+    // still-loading page (web fonts swapping in, images not decoded
+    // yet, etc. can all shift layout right after hydration). If that
+    // first getBoundingClientRect() read landed during such a moment,
+    // the hero's box could transiently measure as far shorter than its
+    // real 82vh — occasionally short enough for `bottom` to already be
+    // at/under topBarHeightRef, incorrectly setting heroPast=true right
+    // out of the gate. Nothing then corrected it: with no scroll or
+    // resize event, the effect never re-ran to re-measure. Two changes
+    // fix this: (1) treat a measurement where the hero still reads as
+    // ~0 height as not-yet-ready and skip it rather than trusting it,
+    // and (2) re-check again after the page's `load` event, once fonts
+    // and images have actually settled, as a safety net independent of
+    // scroll/resize ever firing.
     let ticking = false
     const update = () => {
-      setHeroPast(el.getBoundingClientRect().bottom <= topBarHeightRef.current)
+      const rect = el.getBoundingClientRect()
+      if (rect.height > 0) setHeroPast(rect.bottom <= topBarHeightRef.current)
       ticking = false
     }
     const onScrollOrResize = () => {
@@ -175,9 +194,11 @@ export default function Header({ settings, categories = [], states = [] }: Props
     update()
     window.addEventListener('scroll', onScrollOrResize, { passive: true })
     window.addEventListener('resize', onScrollOrResize)
+    window.addEventListener('load', update)
     return () => {
       window.removeEventListener('scroll', onScrollOrResize)
       window.removeEventListener('resize', onScrollOrResize)
+      window.removeEventListener('load', update)
     }
   }, [overlayNav])
 
