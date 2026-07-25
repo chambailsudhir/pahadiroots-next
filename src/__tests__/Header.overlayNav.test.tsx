@@ -13,7 +13,7 @@
 
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, act } from '@testing-library/react'
 
 let mockPathname = '/'
 vi.mock('next/navigation', () => ({
@@ -65,19 +65,39 @@ describe('Header — homepage-only transparent overlay nav', () => {
     expect((nav as HTMLElement).style.position).not.toBe('fixed')
   })
 
-  it('BUG FIX: detects an already-scrolled position on mount (e.g. browser scroll-restoration on refresh/back-navigation) instead of waiting for the next scroll event', async () => {
+  it('BUG FIX: stays transparent while the hero is still on screen, even once scrollY is well past a flat 60px — only the hero itself leaving the viewport should trigger the solid look', async () => {
     mockPathname = '/'
-    Object.defineProperty(window, 'scrollY', { value: 120, writable: true, configurable: true })
-    const { container, findByText } = render(<Header settings={settings} />)
-    // flush the mount effect
-    await findByText(/himveda/i, {}, { timeout: 1000 }).catch(() => null)
-    const nav = container.querySelector('nav.old-nav')
-    // Previously this stayed `overlay-nav-transparent` (white text, see-
-    // through background) even though the page was already scrolled past
-    // the hero — producing white-on-white text over whatever plain page
-    // background happened to be behind the fixed nav at that scroll
-    // offset. It must reflect the real scroll position immediately.
-    expect(nav?.classList.contains('overlay-nav-transparent')).toBe(false)
-    expect(nav?.classList.contains('scrolled')).toBe(true)
+    // Real IntersectionObserver doesn't exist in jsdom; capture the
+    // callback so the test can drive it directly, simulating "hero still
+    // intersecting" (large scrollY, but the 75vh-tall hero is still
+    // mostly on screen) vs "hero has scrolled fully out of view".
+    let ioCallback: (entries: Array<{ isIntersecting: boolean }>) => void = () => {}
+    class MockIntersectionObserver {
+      constructor(cb: typeof ioCallback) { ioCallback = cb }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+    Object.defineProperty(window, 'scrollY', { value: 400, writable: true, configurable: true })
+
+    const heroEl = document.createElement('div')
+    heroEl.id = 'home-hero-banner'
+    document.body.appendChild(heroEl)
+
+    const { container } = render(<Header settings={settings} />)
+    const nav = () => container.querySelector('nav.old-nav')
+
+    // Hero still intersecting (on screen) — must stay transparent despite
+    // a large scrollY, unlike the old flat-60px behaviour.
+    act(() => { ioCallback([{ isIntersecting: true }]) })
+    expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(true)
+
+    // Hero has scrolled fully out of view — now it should go solid.
+    act(() => { ioCallback([{ isIntersecting: false }]) })
+    expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(false)
+    expect(nav()?.classList.contains('scrolled')).toBe(true)
+
+    document.body.removeChild(heroEl)
+    vi.unstubAllGlobals()
   })
 })

@@ -65,6 +65,7 @@ export default function HeroBanner({ images, settings }: Props) {
     <>
       {/* ── Slider track ── */}
       <div
+        id="home-hero-banner"
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={() => setIsHovering(true)}

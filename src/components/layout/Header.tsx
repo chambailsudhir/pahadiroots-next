@@ -28,6 +28,18 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
 
   const [scrolled, setScrolled] = useState(false)
+  // BUG FIX (requested): the transparent-over-hero nav used to switch to
+  // its solid/frosted look as soon as the page scrolled past a flat 60px
+  // — but the hero itself is 75vh tall, so for most of the scroll through
+  // the hero the nav was already showing its frosted-white backing on top
+  // of a photo that was still fully in view, washing it out (this is the
+  // "turns white on scroll" complaint — the reference site keeps its nav
+  // fully see-through for as long as the hero itself is on screen, only
+  // switching once the hero has scrolled away entirely). heroPast tracks
+  // that directly via IntersectionObserver on the hero element itself
+  // (id="home-hero-banner", see HeroBanner.tsx) rather than a guessed
+  // pixel threshold, so it stays correct regardless of hero height.
+  const [heroPast, setHeroPast] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
   // ── Mount guard: Zustand persist reads localStorage which doesn't exist on server.
   // Rendering persisted values before mount causes React hydration errors #418/#423/#425.
@@ -113,6 +125,29 @@ export default function Header({ settings, categories = [], states = [] }: Props
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    // Only the homepage has a hero to watch; every other page keeps the
+    // plain solid nav and never reads heroPast at all.
+    if (!overlayNav) return
+    const el = document.getElementById('home-hero-banner')
+    if (!el) return
+    if (typeof IntersectionObserver === 'undefined') {
+      // Extremely old browsers: fail safe to "past" so the nav at least
+      // becomes readable rather than staying transparent forever.
+      setHeroPast(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => setHeroPast(!entry.isIntersecting),
+      // rootMargin's top offset accounts for the fixed nav itself sitting
+      // on top of the hero — without it the hero is considered "gone"
+      // slightly too early, right as its bottom edge passes under the nav.
+      { threshold: 0, rootMargin: `-${topBarHeight}px 0px 0px 0px` }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [overlayNav, topBarHeight])
+
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)
   const siteName     = settings.site_name || 'HimVeda by Pahadi Roots'
@@ -133,8 +168,15 @@ export default function Header({ settings, categories = [], states = [] }: Props
         <TickerBar settings={settings} />
       </div>
 
+      {/* On the homepage, whether the nav is "solid" is governed by
+          heroPast (has the hero scrolled fully out of view), not the
+          generic 60px `scrolled` flag — the hero is 75vh tall, and
+          switching to a solid/frosted background at just 60px meant the
+          nav was already showing its solid backing while the hero photo
+          itself was still mostly on screen behind it. Every other page
+          keeps using the plain `scrolled` flag exactly as before. */}
       <nav
-        className={`old-nav${scrolled ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !scrolled ? ' overlay-nav-transparent' : ''}`}
+        className={`old-nav${(overlayNav ? heroPast : scrolled) ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !heroPast ? ' overlay-nav-transparent' : ''}`}
         style={overlayNav ? { position: 'fixed', top: topBarHeight, left: 0, right: 0, zIndex: 30 } : undefined}
       >
         {/* Logo — single combined "HimVeda by Pahadi Roots" mark (transparent
