@@ -32,14 +32,22 @@ export default function TrustBar({ settings }: Props) {
 
   if (display.length === 0) return null
 
+  // Admin's Trust Bar section lets the store owner pick a background/title
+  // color (trust_bg_color / trust_text_color); falls back to the original
+  // dark-green/white if unset so existing stores don't change appearance.
+  // Subtitle is rendered at reduced opacity of the same color, matching how
+  // .trust-sub previously dimmed a fixed white — see globals.css.
+  const bg   = settings.trust_bg_color   || 'var(--g)'
+  const txt  = settings.trust_text_color || '#ffffff'
+
   return (
-    <div className="trust-bar">
+    <div className="trust-bar" style={{ background: bg }}>
       {display.map((item, i) => (
         <div key={i} className="trust-cell">
           <span className="trust-icon">{item.icon}</span>
           <div>
-            <div className="trust-title">{item.title}</div>
-            <div className="trust-sub">{item.sub}</div>
+            <div className="trust-title" style={{ color: txt }}>{item.title}</div>
+            <div className="trust-sub" style={{ color: txt, opacity: 0.6 }}>{item.sub}</div>
           </div>
         </div>
       ))}

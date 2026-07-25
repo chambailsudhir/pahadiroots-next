@@ -10,6 +10,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   // Announcement bar
   ann_hide:                'false',
   ann_text:                '',
+  ann_bg_color:            '#1a3a1e',
+  ann_text_color:          '#d4af37',
   // Ticker — real keys confirmed
   ticker_hide:             'false',
   ticker_1_text:           '🎁 Use code WELCOME50 · ₹50 off your first order',
@@ -33,6 +35,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   contact_address:         'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
   // New section toggle keys (added by migration)
   show_trust_bar:          'true',
+  trust_bg_color:          '#1a3a1e',
+  trust_text_color:        '#ffffff',
   show_best_sellers:       'true',
   show_new_arrivals:       'true',
   show_state_stories:      'true',

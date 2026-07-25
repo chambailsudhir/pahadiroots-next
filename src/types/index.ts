@@ -256,6 +256,8 @@ export interface SiteSettings {
   // Header bars
   ann_hide: string                      // 'true' | 'false'
   ann_text: string
+  ann_bg_color: string                  // hex e.g. '#1a3a1e' — falls back to dark green if unset
+  ann_text_color: string                // hex e.g. '#d4af37' — falls back to gold if unset
   ticker_hide: string
   ticker_1_text: string
   ticker_2_text: string
@@ -298,6 +300,8 @@ export interface SiteSettings {
 
   // Section visibility toggles
   show_trust_bar: string
+  trust_bg_color: string                 // hex e.g. '#1a3a1e' — falls back to dark green if unset
+  trust_text_color: string               // hex e.g. '#ffffff' — falls back to white if unset
   show_best_sellers: string
   show_new_arrivals: string
   show_state_stories: string
