@@ -87,6 +87,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   stat_hide_stat_himalayan_states: 'false',
   stat_hide_stat_happy_customers:  'false',
   stat_hide_stat_avg_dispatch:     'false',
+  stat_bg_color:                   'rgba(5,20,8,.97)',
+  stat_number_color:               '#e8b84b',
 
   // Social links — BUG FIX: main site previously read instagram_url/
   // facebook_url/youtube_url (no admin-panel equivalent exists under

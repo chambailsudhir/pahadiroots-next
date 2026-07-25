@@ -297,19 +297,29 @@ export default function HeroBanner({ images, settings }: Props) {
           bar below it (the "black gap" being reported). Skipping the
           whole bar when there's nothing to show it removes that
           strip entirely instead of leaving an empty dark band. */}
-      {heroStats.length > 0 && (
-        <div style={{ background:'rgba(5,20,8,.97)', display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
+      {heroStats.length > 0 && (() => {
+        // Admin's Hero Stats Bar section lets the store owner pick a
+        // background/number color (stat_bg_color / stat_number_color);
+        // falls back to the original near-black/gold if unset so existing
+        // stores don't change appearance. Label text dims to 50% opacity of
+        // the same color, matching how the fixed white label was rendered
+        // before.
+        const statsBg   = settings.stat_bg_color     || 'rgba(5,20,8,.97)'
+        const statsNum  = settings.stat_number_color || 'var(--gd2)'
+        return (
+        <div style={{ background:statsBg, display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
           {heroStats.map((s, i) => (
             <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
               <div style={{ textAlign:'center', padding:'0 32px' }}>
-                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:'var(--gd2)', lineHeight:1.1 }}>{s.num}</div>
-                <div style={{ fontSize:10.5, color:'rgba(255,255,255,.5)', letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
+                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:statsNum, lineHeight:1.1 }}>{s.num}</div>
+                <div style={{ fontSize:10.5, color:statsNum, opacity:0.5, letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
               </div>
               {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
             </div>
           ))}
         </div>
-      )}
+        )
+      })()}
 
       <style>{`
         .hslide-content-inner { padding: 0 0 0 72px; }
