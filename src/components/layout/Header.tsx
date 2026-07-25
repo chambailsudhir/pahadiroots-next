@@ -123,15 +123,20 @@ export default function Header({ settings, categories = [], states = [] }: Props
         className={`old-nav${scrolled ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !scrolled ? ' overlay-nav-transparent' : ''}`}
         style={overlayNav ? { position: 'fixed', top: topBarHeight, left: 0, right: 0, zIndex: 30 } : undefined}
       >
-        {/* Logo */}
+        {/* Logo — single combined "HimVeda by Pahadi Roots" mark (transparent
+            PNG). Previously this stacked two separate opaque-background
+            images, which is what caused the white-box artifact in the
+            transparent overlay-nav state: the invert filter had no alpha
+            channel to respect, so each image's whole rectangle went white.
+            One properly-trimmed transparent asset avoids that class of bug
+            entirely and is also just simpler to lay out. If an admin sets a
+            custom logo via Settings → logo_url, that (single) image is used
+            instead — same as before. */}
         <Link href="/" className="old-logo">
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-              {logoUrl
-                ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-                : <Image src="/logo-header.png" alt={siteName} width={123} height={34} style={{ height: '34px', width: 'auto', objectFit: 'contain' }} priority />}
-              {!logoUrl && <Image src="/by-pahadi-roots.png" alt="by Pahadi Roots" width={157} height={26} style={{ height: '26px', width: 'auto', objectFit: 'contain', marginTop: '1px' }} />}
-            </div>
+            {logoUrl
+              ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+              : <Image src="/logo-full.png" alt={siteName} width={123} height={46} style={{ height: '46px', width: 'auto', objectFit: 'contain' }} priority />}
             <span className="old-logo-divider" />
             <div className="old-logo-tl">Himalayan<br />Natural Store</div>
           </div>
@@ -286,9 +291,24 @@ export default function Header({ settings, categories = [], states = [] }: Props
            Only background/text-colour transition — position never
            changes — so scrolling past the hero never causes a layout
            jump, just a smooth colour fade from transparent to solid. */
-        .old-nav.overlay-nav{ transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease; }
+        .old-nav.overlay-nav{ transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease, backdrop-filter .3s ease; }
         .old-nav.overlay-nav-transparent{
           background:transparent; border-bottom-color:transparent; box-shadow:none;
+        }
+        /* BUG FIX (requested): once scrolled, this used to jump straight to
+           flat solid #fff (inherited from the base .old-nav rule) — a hard,
+           jarring "white slab" snap. Reference sites (e.g. mypahadidukan.com)
+           never show that abrupt flat-white transition; their nav stays
+           visually consistent throughout. Frosted glass (translucent white +
+           blur) reads the same as solid white to users at a glance — text
+           stays legible — but never presents as a harsh flat rectangle
+           appearing out of nowhere, and it still transitions smoothly from
+           the fully-transparent state instead of snapping. */
+        .old-nav.overlay-nav.scrolled{
+          background:rgba(255,255,255,.72);
+          backdrop-filter:blur(14px) saturate(160%);
+          -webkit-backdrop-filter:blur(14px) saturate(160%);
+          border-bottom-color:rgba(26,58,30,.1);
         }
         .old-nav.overlay-nav-transparent .old-logo-tl,
         .old-nav.overlay-nav-transparent .old-nav-links li a,
