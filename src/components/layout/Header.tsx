@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useCartStore, selectCartCount } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
@@ -38,6 +39,48 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // guard didn't exist because there was nothing to guard).
   const [loggingOut, setLoggingOut] = useState(false)
 
+  // FEATURE (requested): on the homepage, the hero banner was always
+  // squeezed into whatever height was left below this header — the
+  // announcement bar + ticker + 64px nav row all reserved flow space
+  // above it, forcing the hero's background image to be cropped more
+  // than necessary to fit the leftover box. Overlaying a transparent
+  // nav directly on top of the hero (below the still-solid announcement
+  // bar/ticker) gives the hero its full height back. Only the homepage
+  // gets this treatment — every other page keeps the normal solid,
+  // in-flow nav exactly as before, so nothing else on the site changes.
+  const pathname = usePathname()
+  const isHome = pathname === '/'
+  // The nav is always position:fixed on the homepage (never toggled
+  // between fixed/static) — only its background/text colour switches
+  // between transparent (over the hero, unscrolled) and solid (once
+  // scrolled past the hero) via the existing `scrolled` state. Toggling
+  // position itself would reserve/free flow space right at the scroll
+  // threshold and cause a visible content jump; toggling only colour
+  // does not.
+  const overlayNav = isHome
+
+  // Announcement bar + ticker stay in normal document flow (unchanged),
+  // so the overlay nav needs to sit just below them, not at the very
+  // top of the viewport. Their combined height is measured rather than
+  // hardcoded, since either can be hidden via settings (ann_hide /
+  // ticker settings) or wrap onto a second line on narrow screens.
+  const topBarRef = useRef<HTMLDivElement>(null)
+  const [topBarHeight, setTopBarHeight] = useState(0)
+
+  useEffect(() => {
+    const el = topBarRef.current
+    if (!el) return
+    const measure = () => setTopBarHeight(el.offsetHeight)
+    measure()
+    window.addEventListener('resize', measure)
+    if (typeof ResizeObserver === 'undefined') {
+      return () => window.removeEventListener('resize', measure)
+    }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure) }
+  }, [])
+
   useEffect(() => {
     // Genuinely necessary exception: this is client-mount detection to
     // avoid hydration mismatches (React errors #418/#423/#425) when
@@ -71,10 +114,15 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <a href="#main-content" className="old-skip-link">Skip to main content</a>
 
       <div className="sticky top-0 z-30">
-      <AnnouncementBar settings={settings} />
-      <TickerBar settings={settings} />
+      <div ref={topBarRef}>
+        <AnnouncementBar settings={settings} />
+        <TickerBar settings={settings} />
+      </div>
 
-      <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
+      <nav
+        className={`old-nav${scrolled ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !scrolled ? ' overlay-nav-transparent' : ''}`}
+        style={overlayNav ? { position: 'fixed', top: topBarHeight, left: 0, right: 0, zIndex: 30 } : undefined}
+      >
         {/* Logo */}
         <Link href="/" className="old-logo">
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
@@ -234,6 +282,44 @@ export default function Header({ settings, categories = [], states = [] }: Props
           height:64px;position:relative;transition:box-shadow .2s;
         }
         .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
+        /* Homepage-only fixed overlay nav (see overlayNav in Header.tsx).
+           Only background/text-colour transition — position never
+           changes — so scrolling past the hero never causes a layout
+           jump, just a smooth colour fade from transparent to solid. */
+        .old-nav.overlay-nav{ transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease; }
+        .old-nav.overlay-nav-transparent{
+          background:transparent; border-bottom-color:transparent; box-shadow:none;
+        }
+        .old-nav.overlay-nav-transparent .old-logo-tl,
+        .old-nav.overlay-nav-transparent .old-nav-links li a,
+        .old-nav.overlay-nav-transparent .old-nav-links li button,
+        .old-nav.overlay-nav-transparent .old-nib,
+        .old-nav.overlay-nav-transparent .old-dark-btn{
+          color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.55);
+        }
+        .old-nav.overlay-nav-transparent .old-nav-links li a:hover,
+        .old-nav.overlay-nav-transparent .old-nav-links li button:hover,
+        .old-nav.overlay-nav-transparent .old-nib:hover,
+        .old-nav.overlay-nav-transparent .old-dark-btn:hover{
+          color:#fff; background:rgba(255,255,255,.18);
+        }
+        /* MegaMenu's own trigger styling lives in globals.css with
+           !important rules — matching specificity + !important here so
+           this override actually wins instead of losing silently. */
+        .old-nav.overlay-nav-transparent .mega-trigger{ color:#fff !important; text-shadow:0 1px 3px rgba(0,0,0,.55) !important; }
+        .old-nav.overlay-nav-transparent .mega-trigger:hover,
+        .old-nav.overlay-nav-transparent .mega-parent.open .mega-trigger{
+          color:#fff !important; background:rgba(255,255,255,.18) !important;
+        }
+        /* No separate reversed/white logo asset exists — reduce the
+           logo image to a white silhouette (plus a drop-shadow for edge
+           definition) rather than showing its normal brand colours,
+           which read poorly against a busy photo. */
+        .old-nav.overlay-nav-transparent .old-logo img{ filter:brightness(0) invert(1) drop-shadow(0 1px 4px rgba(0,0,0,.5)); }
+        .old-nav.overlay-nav-transparent .old-cart-btn{
+          background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.5); backdrop-filter:blur(6px);
+        }
+        .old-nav.overlay-nav-transparent .old-cart-btn:hover{ background:rgba(255,255,255,.3); color:#fff; }
         .old-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
         /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
            fails WCAG AA's 4.5:1 requirement for text this small (9px).
