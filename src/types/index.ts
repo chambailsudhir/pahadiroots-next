@@ -267,6 +267,8 @@ export interface SiteSettings {
   ticker_3_hide: string
   ticker_4_hide: string
   ticker_5_hide: string
+  ticker_bg_color: string                // hex e.g. '#c8920a' — falls back to gold if unset
+  ticker_text_color: string              // hex e.g. '#1a1a1a' — falls back to dark text if unset
 
   // Shipping
   free_shipping_min: string             // number as string e.g. '799'

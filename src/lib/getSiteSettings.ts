@@ -22,6 +22,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   ticker_3_hide:           'false',
   ticker_4_hide:           'false',
   ticker_5_hide:           'false',
+  ticker_bg_color:         '#c8920a',
+  ticker_text_color:       '#1a1a1a',
   // Shipping — real keys confirmed (currently 0 in your DB)
   free_shipping_min:       '0',
   flat_shipping_charge:    '0',
