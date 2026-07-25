@@ -391,18 +391,27 @@ export default function Header({ settings, categories = [], states = [] }: Props
            white silhouette (brightness(0) invert(1)) over the hero —
            the client's actual brand mark is two-tone (dark green +
            gold, see public/logo-full.png), and that color is what
-           should show, not a monochrome substitute. Real colour reads
-           fine against the hero's brighter/lighter slides, but a dark
-           green wordmark can wash out against a dark green forest
-           slide — a soft white glow (multiple diffuse drop-shadows,
-           not a hard box) gives it edge definition against any photo
-           without altering its actual colours the way the old invert
-           filter did. */
+           should show, not a monochrome substitute.
+
+           BUG FIX (requested, round 2): the first attempt at fixing
+           that used a strong white glow (0.85 alpha, 6px+3px blur) to
+           help the colour version stand out against photos. That was
+           too strong in the other direction — against the hero's
+           brighter/lighter slides (snow, sky) it washed the whole logo
+           out to a pale, low-contrast blur, and at the small size the
+           fine cursive "by Pahadi Roots" script renders at, a 6px blur
+           radius is wider than the strokes themselves, so it smeared
+           the script into the glow instead of just outlining it —
+           reported as "by Pahadi Roots is not visible". A dark shadow
+           instead of a light glow reads correctly against both bright
+           and dark photo backgrounds (dark backgrounds already have
+           contrast; the shadow mainly helps on bright ones), and a
+           much smaller, tighter blur radius stays inside the letter
+           strokes instead of bleeding across them. */
         .old-nav.overlay-nav-transparent .old-logo img{
           filter:
-            drop-shadow(0 0 6px rgba(255,255,255,.85))
-            drop-shadow(0 0 3px rgba(255,255,255,.85))
-            drop-shadow(0 1px 3px rgba(0,0,0,.35));
+            drop-shadow(0 1px 2px rgba(0,0,0,.45))
+            drop-shadow(0 0 5px rgba(0,0,0,.25));
         }
         .old-nav.overlay-nav-transparent .old-cart-btn{
           background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.5); backdrop-filter:blur(6px);

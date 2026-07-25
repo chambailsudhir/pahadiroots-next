@@ -64,13 +64,32 @@ export default function HeroBanner({ images, settings }: Props) {
   return (
     <>
       {/* ── Slider track ── */}
+      {/* BUG FIX (requested): even after biasing the crop toward the
+          top (see objectPosition below), a meaningful chunk was still
+          being cut from the bottom of every slide. The real cause
+          wasn't the bias — it's that this container's shape (roughly
+          2.4:1 wide at typical desktop sizes, from 75vh tall against
+          a full-width viewport) is quite a bit more panoramic than
+          these banners are actually shot (~1.87:1), so object-fit:
+          cover has to crop away a large chunk of height no matter
+          where the bias points; shifting the bias only moves *where*
+          that crop lands, not how much of it there is. Increasing the
+          container's height (75vh → 82vh) brings its shape closer to
+          the banners' native proportions, roughly halving the total
+          crop (from ~35% of the image's height down to ~12-14% at a
+          typical desktop size) so both the top and bottom survive
+          with much less lost. It doesn't reach zero — matching that
+          exactly would mean an almost full-screen-height hero, which
+          is a bigger visual change than a crop fix — but it's a large,
+          safe reduction. For a zero-crop hero, banners would need to
+          be exported nearer a 2.2–2.4:1 aspect ratio to begin with. */}
       <div
         id="home-hero-banner"
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={() => setIsHovering(true)}
         onTouchEnd={() => setTimeout(() => setIsHovering(false), 1800)}
-        style={{ position: 'relative', width: '100%', height: '75vh', minHeight: 500, maxHeight: '75vh', overflow: 'hidden' }}
+        style={{ position: 'relative', width: '100%', height: '82vh', minHeight: 540, maxHeight: '82vh', overflow: 'hidden' }}
       >
 
         {slides ? slides.map((img, i) => {
@@ -141,7 +160,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 of the frame (e.g. a prayer-flag strand in one banner) on
                 every single slide, with no way to know it was happening
                 short of comparing side-by-side against the original
-                file. Biasing the crop to keep the top ~22% of the frame
+                file. Biasing the crop to keep the top ~30% of the frame
                 (rather than 0%, i.e. dead centre) keeps most banners'
                 top flourishes intact while still leaving enough of the
                 lower two-thirds — where the product bottle and headline
@@ -158,11 +177,11 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted
                 loop
                 playsInline
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 22%' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
               />
             ) : img.url ? (
               <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-                style={{ objectFit: 'cover', objectPosition: 'center 22%' }} priority={i === 0} />
+                style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
