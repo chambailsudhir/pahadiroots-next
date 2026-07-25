@@ -94,7 +94,21 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     setIsDark(document.documentElement.classList.contains('dark'))
+    // BUG FIX (root cause of the "white gap" over the hero): this only
+    // ever set `scrolled` in response to a *scroll event* — it never
+    // checked the actual current window.scrollY on mount. Browsers
+    // commonly restore the previous scroll position on refresh/back-
+    // navigation, so the page can load already scrolled well past the
+    // hero while React still thinks scrolled=false. That mismatch made
+    // the nav keep its transparent-over-hero styling (white text,
+    // see-through background) while it was actually sitting over a
+    // plain white/cream page section further down — white text on a
+    // white background, which is exactly the blank-looking band being
+    // reported. Checking the real scroll position immediately (not
+    // just listening for the next scroll event) keeps the two in sync
+    // from the very first paint.
     const onScroll = () => setScrolled(window.scrollY > 60)
+    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])

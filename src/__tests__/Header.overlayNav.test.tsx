@@ -64,4 +64,20 @@ describe('Header — homepage-only transparent overlay nav', () => {
     expect(nav?.classList.contains('overlay-nav-transparent')).toBe(false)
     expect((nav as HTMLElement).style.position).not.toBe('fixed')
   })
+
+  it('BUG FIX: detects an already-scrolled position on mount (e.g. browser scroll-restoration on refresh/back-navigation) instead of waiting for the next scroll event', async () => {
+    mockPathname = '/'
+    Object.defineProperty(window, 'scrollY', { value: 120, writable: true, configurable: true })
+    const { container, findByText } = render(<Header settings={settings} />)
+    // flush the mount effect
+    await findByText(/himveda/i, {}, { timeout: 1000 }).catch(() => null)
+    const nav = container.querySelector('nav.old-nav')
+    // Previously this stayed `overlay-nav-transparent` (white text, see-
+    // through background) even though the page was already scrolled past
+    // the hero — producing white-on-white text over whatever plain page
+    // background happened to be behind the fixed nav at that scroll
+    // offset. It must reflect the real scroll position immediately.
+    expect(nav?.classList.contains('overlay-nav-transparent')).toBe(false)
+    expect(nav?.classList.contains('scrolled')).toBe(true)
+  })
 })
