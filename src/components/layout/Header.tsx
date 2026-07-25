@@ -36,9 +36,9 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // "turns white on scroll" complaint — the reference site keeps its nav
   // fully see-through for as long as the hero itself is on screen, only
   // switching once the hero has scrolled away entirely). heroPast tracks
-  // that directly via IntersectionObserver on the hero element itself
-  // (id="home-hero-banner", see HeroBanner.tsx) rather than a guessed
-  // pixel threshold, so it stays correct regardless of hero height.
+  // that by measuring the hero element's own position on scroll (see the
+  // effect below) rather than a guessed pixel threshold, so it stays
+  // correct regardless of hero height.
   const [heroPast, setHeroPast] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
   // ── Mount guard: Zustand persist reads localStorage which doesn't exist on server.
@@ -78,11 +78,17 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // ticker settings) or wrap onto a second line on narrow screens.
   const topBarRef = useRef<HTMLDivElement>(null)
   const [topBarHeight, setTopBarHeight] = useState(0)
+  // Mirrors topBarHeight without needing the heroPast effect below to
+  // depend on it (see that effect for why that dependency was the bug).
+  const topBarHeightRef = useRef(0)
 
   useEffect(() => {
     const el = topBarRef.current
     if (!el) return
-    const measure = () => setTopBarHeight(el.offsetHeight)
+    const measure = () => {
+      topBarHeightRef.current = el.offsetHeight
+      setTopBarHeight(el.offsetHeight)
+    }
     measure()
     window.addEventListener('resize', measure)
     if (typeof ResizeObserver === 'undefined') {
@@ -131,22 +137,49 @@ export default function Header({ settings, categories = [], states = [] }: Props
     if (!overlayNav) return
     const el = document.getElementById('home-hero-banner')
     if (!el) return
-    if (typeof IntersectionObserver === 'undefined') {
-      // Extremely old browsers: fail safe to "past" so the nav at least
-      // becomes readable rather than staying transparent forever.
-      setHeroPast(true)
-      return
+
+    // BUG FIX (the random transparent/solid "flicker" reported on the
+    // live site, happening even with no scrolling at all): this used to
+    // be an IntersectionObserver whose rootMargin was built from
+    // `topBarHeight`, with the *effect itself* depending on
+    // `[overlayNav, topBarHeight]` — so every time topBarHeight state
+    // updated (its ResizeObserver can fire from sub-pixel layout
+    // recalculations that don't reflect any real visible change), the
+    // whole observer was disconnected and a brand-new one created. A
+    // freshly created IntersectionObserver's first callback can report
+    // a transient/stale isIntersecting reading before settling on the
+    // correct one (browsers queue that first callback for the next
+    // frame, right when a resize-triggered recalculation was already in
+    // flight) — so every one of those silent recreations was a chance
+    // to misfire heroPast to `true` for a frame, snapping the nav to
+    // solid, before the next correct callback flipped it back. On a
+    // page where topBarHeight was churning even slightly, that added up
+    // to exactly the random flicker being reported.
+    //
+    // A plain scroll handler that reads the hero's own
+    // getBoundingClientRect() sidesteps all of this: it never gets
+    // torn down and recreated (this effect now only depends on
+    // `overlayNav`, which is stable for the life of the page), and it
+    // always reads the *current* topBarHeightRef value rather than
+    // needing to be rebuilt whenever that number changes.
+    let ticking = false
+    const update = () => {
+      setHeroPast(el.getBoundingClientRect().bottom <= topBarHeightRef.current)
+      ticking = false
     }
-    const io = new IntersectionObserver(
-      ([entry]) => setHeroPast(!entry.isIntersecting),
-      // rootMargin's top offset accounts for the fixed nav itself sitting
-      // on top of the hero — without it the hero is considered "gone"
-      // slightly too early, right as its bottom edge passes under the nav.
-      { threshold: 0, rootMargin: `-${topBarHeight}px 0px 0px 0px` }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [overlayNav, topBarHeight])
+    const onScrollOrResize = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScrollOrResize, { passive: true })
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [overlayNav])
 
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)

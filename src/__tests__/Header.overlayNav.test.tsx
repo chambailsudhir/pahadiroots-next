@@ -67,37 +67,58 @@ describe('Header — homepage-only transparent overlay nav', () => {
 
   it('BUG FIX: stays transparent while the hero is still on screen, even once scrollY is well past a flat 60px — only the hero itself leaving the viewport should trigger the solid look', async () => {
     mockPathname = '/'
-    // Real IntersectionObserver doesn't exist in jsdom; capture the
-    // callback so the test can drive it directly, simulating "hero still
-    // intersecting" (large scrollY, but the 75vh-tall hero is still
-    // mostly on screen) vs "hero has scrolled fully out of view".
-    let ioCallback: (entries: Array<{ isIntersecting: boolean }>) => void = () => {}
-    class MockIntersectionObserver {
-      constructor(cb: typeof ioCallback) { ioCallback = cb }
-      observe() {}
-      disconnect() {}
-    }
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
-    Object.defineProperty(window, 'scrollY', { value: 400, writable: true, configurable: true })
-
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 0 })
     const heroEl = document.createElement('div')
     heroEl.id = 'home-hero-banner'
     document.body.appendChild(heroEl)
+    // Hero still mostly on screen: its bottom edge is well below the nav.
+    heroEl.getBoundingClientRect = () => ({ bottom: 500 } as DOMRect)
+    Object.defineProperty(window, 'scrollY', { value: 400, writable: true, configurable: true })
 
     const { container } = render(<Header settings={settings} />)
     const nav = () => container.querySelector('nav.old-nav')
 
-    // Hero still intersecting (on screen) — must stay transparent despite
-    // a large scrollY, unlike the old flat-60px behaviour.
-    act(() => { ioCallback([{ isIntersecting: true }]) })
+    // Hero still on screen — must stay transparent despite a large
+    // scrollY, unlike the old flat-60px behaviour.
+    act(() => { window.dispatchEvent(new Event('scroll')) })
     expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(true)
 
-    // Hero has scrolled fully out of view — now it should go solid.
-    act(() => { ioCallback([{ isIntersecting: false }]) })
+    // Hero has scrolled fully out of view (its bottom edge is now above
+    // the nav) — now it should go solid.
+    heroEl.getBoundingClientRect = () => ({ bottom: -10 } as DOMRect)
+    act(() => { window.dispatchEvent(new Event('scroll')) })
     expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(false)
     expect(nav()?.classList.contains('scrolled')).toBe(true)
 
     document.body.removeChild(heroEl)
     vi.unstubAllGlobals()
+  })
+
+  it('BUG FIX: does not flicker when topBarHeight changes — the heroPast scroll listener must not be torn down and recreated on every topBarHeight update (this was the cause of the reported random transparent/solid flicker)', async () => {
+    mockPathname = '/'
+    const heroEl = document.createElement('div')
+    heroEl.id = 'home-hero-banner'
+    document.body.appendChild(heroEl)
+    heroEl.getBoundingClientRect = () => ({ bottom: 500 } as DOMRect)
+
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    render(<Header settings={settings} />)
+    const scrollListenerCallsAfterMount = addSpy.mock.calls.filter(c => c[0] === 'scroll').length
+
+    // Simulate the topBar's ResizeObserver firing several times in a row
+    // (e.g. sub-pixel layout recalculation) — this used to be exactly
+    // what tore the old IntersectionObserver-based effect down and
+    // rebuilt it repeatedly.
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+      window.dispatchEvent(new Event('resize'))
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    const scrollListenerCallsAfterResizes = addSpy.mock.calls.filter(c => c[0] === 'scroll').length
+    expect(scrollListenerCallsAfterResizes).toBe(scrollListenerCallsAfterMount)
+
+    addSpy.mockRestore()
+    document.body.removeChild(heroEl)
   })
 })
