@@ -198,14 +198,17 @@ export default function Header({ settings, categories = [], states = [] }: Props
       const willSkip = rect.height <= 200
       const result = rect.bottom <= topBarHeightRef.current
       // TEMP DIAGNOSTIC (remove once the hard-refresh white-nav report is
-      // confirmed fixed): logs every measurement so we can see the real
-      // numbers from a browser that actually reproduces the bug, instead
-      // of continuing to guess blindly from screenshots/video alone.
+      // confirmed fixed): a plain string, not an object — DevTools'
+      // "Save as..." text export only captures a collapsed "Object"
+      // placeholder for logged objects, not their actual field values
+      // (those only show if each one is expanded by hand in the live
+      // console first). A flat string is captured as-is either way.
       // eslint-disable-next-line no-console
-      console.log('[heroPast]', source, {
-        bottom: rect.bottom, height: rect.height, topBarHeight: topBarHeightRef.current,
-        willSkip, wouldSetHeroPast: willSkip ? '(skipped)' : result, scrollY: window.scrollY,
-      })
+      console.log(
+        `[heroPast] ${source} | bottom=${rect.bottom.toFixed(1)} height=${rect.height.toFixed(1)} `
+        + `topBarHeight=${topBarHeightRef.current} scrollY=${window.scrollY} `
+        + `=> ${willSkip ? 'SKIPPED (height<=200)' : `heroPast=${result}`}`
+      )
       if (!willSkip) setHeroPast(result)
       ticking = false
     }
