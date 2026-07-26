@@ -193,27 +193,34 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // element itself re-verifies any time its own box genuinely changes
     // size thereafter.
     let ticking = false
-    const update = () => {
+    const update = (source: string) => {
       const rect = el.getBoundingClientRect()
-      // Guard against any reading well below the hero's real minimum
-      // height (540px, see HeroBanner.tsx) rather than only an exact
-      // zero — a transient layout-not-settled reading during load could
-      // land on some small-but-nonzero value too, not just exactly 0.
-      if (rect.height > 200) setHeroPast(rect.bottom <= topBarHeightRef.current)
+      const willSkip = rect.height <= 200
+      const result = rect.bottom <= topBarHeightRef.current
+      // TEMP DIAGNOSTIC (remove once the hard-refresh white-nav report is
+      // confirmed fixed): logs every measurement so we can see the real
+      // numbers from a browser that actually reproduces the bug, instead
+      // of continuing to guess blindly from screenshots/video alone.
+      // eslint-disable-next-line no-console
+      console.log('[heroPast]', source, {
+        bottom: rect.bottom, height: rect.height, topBarHeight: topBarHeightRef.current,
+        willSkip, wouldSetHeroPast: willSkip ? '(skipped)' : result, scrollY: window.scrollY,
+      })
+      if (!willSkip) setHeroPast(result)
       ticking = false
     }
     const onScrollOrResize = () => {
       if (ticking) return
       ticking = true
-      requestAnimationFrame(update)
+      requestAnimationFrame(() => update('scroll/resize'))
     }
-    update()
-    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(update, ms))
+    update('initial')
+    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(() => update(`retry-${ms}ms`), ms))
     window.addEventListener('scroll', onScrollOrResize, { passive: true })
     window.addEventListener('resize', onScrollOrResize)
     let ro: ResizeObserver | undefined
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(update)
+      ro = new ResizeObserver(() => update('hero-resize-observer'))
       ro.observe(el)
     }
     return () => {
