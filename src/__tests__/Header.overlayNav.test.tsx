@@ -140,4 +140,50 @@ describe('Header — homepage-only transparent overlay nav', () => {
 
     document.body.removeChild(heroEl)
   })
+
+  it('BUG FIX: also ignores a small-but-nonzero reading, not only an exact zero (a transient not-yet-settled layout can land on either)', () => {
+    mockPathname = '/'
+    const heroEl = document.createElement('div')
+    heroEl.id = 'home-hero-banner'
+    document.body.appendChild(heroEl)
+    // 40px is nowhere near the hero's real ~540-800px range, but is not
+    // literally zero — this would have slipped past a height > 0 check.
+    heroEl.getBoundingClientRect = () => ({ bottom: 30, height: 40 } as DOMRect)
+
+    const { container } = render(<Header settings={settings} />)
+    const nav = container.querySelector('nav.old-nav')
+    expect(nav?.classList.contains('overlay-nav-transparent')).toBe(true)
+
+    document.body.removeChild(heroEl)
+  })
+
+  it('BUG FIX: a bad first reading (nav incorrectly stuck solid even though the hero is genuinely fully in view) gets corrected by one of the delayed retries, without needing a scroll or the (unreliable, fires-once) window load event', () => {
+    vi.useFakeTimers()
+    mockPathname = '/'
+    const heroEl = document.createElement('div')
+    heroEl.id = 'home-hero-banner'
+    document.body.appendChild(heroEl)
+    // Mirrors the reported bug exactly: on first mount the hero
+    // transiently reads as having (almost) scrolled away — a large
+    // enough height to pass the layout-settled guard, but a bottom
+    // that's wrongly small — snapping the nav solid even though
+    // scrollY is 0 and the hero is fully visible on screen.
+    heroEl.getBoundingClientRect = () => ({ bottom: -5, height: 700 } as DOMRect)
+
+    const { container } = render(<Header settings={settings} />)
+    const nav = () => container.querySelector('nav.old-nav')
+    expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(false)
+    expect(nav()?.classList.contains('scrolled')).toBe(true)
+
+    // ...then a moment later a fresh measurement reflects the hero's
+    // real, fully-in-view position — with no scroll, resize, or load
+    // event ever firing, only time passing (one of the retry timers).
+    heroEl.getBoundingClientRect = () => ({ bottom: 700, height: 700 } as DOMRect)
+    act(() => { vi.advanceTimersByTime(2000) })
+
+    expect(nav()?.classList.contains('overlay-nav-transparent')).toBe(true)
+
+    document.body.removeChild(heroEl)
+    vi.useRealTimers()
+  })
 })

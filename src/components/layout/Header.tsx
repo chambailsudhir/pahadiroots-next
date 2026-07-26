@@ -168,22 +168,38 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // inside this effect, immediately on mount — before the browser had
     // necessarily finished a real layout pass for a freshly-hydrated,
     // still-loading page (web fonts swapping in, images not decoded
-    // yet, etc. can all shift layout right after hydration). If that
-    // first getBoundingClientRect() read landed during such a moment,
-    // the hero's box could transiently measure as far shorter than its
-    // real 82vh — occasionally short enough for `bottom` to already be
-    // at/under topBarHeightRef, incorrectly setting heroPast=true right
-    // out of the gate. Nothing then corrected it: with no scroll or
-    // resize event, the effect never re-ran to re-measure. Two changes
-    // fix this: (1) treat a measurement where the hero still reads as
-    // ~0 height as not-yet-ready and skip it rather than trusting it,
-    // and (2) re-check again after the page's `load` event, once fonts
-    // and images have actually settled, as a safety net independent of
-    // scroll/resize ever firing.
+    // yet, viewport metrics not fully settled right after navigation,
+    // etc. can all shift layout right after hydration). If that first
+    // getBoundingClientRect() read landed during such a moment, the
+    // hero's box could transiently measure shorter than its real 82vh —
+    // occasionally short enough for `bottom` to already read at/under
+    // topBarHeightRef, incorrectly setting heroPast=true right out of
+    // the gate, with scrollY still genuinely at 0 and the full hero
+    // visible on screen. Nothing then corrected it: with no scroll or
+    // resize event, the effect never re-ran to re-measure.
+    //
+    // BUG FIX 3 (this stayed stuck white even after fix 2, confirmed on
+    // video where the hero photo had clearly finished loading below an
+    // still-solid nav): the previous attempt added a `window.load`
+    // listener as a safety net, but `load` fires exactly once — if it
+    // had already fired before this effect got a chance to attach its
+    // listener (very plausible; hydration can lag behind resource
+    // loading on a fast connection), that listener would simply never
+    // fire again for the rest of the page's life, so the bad initial
+    // reading was never corrected. Replacing it with a handful of
+    // delayed re-checks (not tied to any one-shot browser event) keeps
+    // re-verifying for about a second after mount regardless of exactly
+    // when layout actually settles, and a ResizeObserver on the hero
+    // element itself re-verifies any time its own box genuinely changes
+    // size thereafter.
     let ticking = false
     const update = () => {
       const rect = el.getBoundingClientRect()
-      if (rect.height > 0) setHeroPast(rect.bottom <= topBarHeightRef.current)
+      // Guard against any reading well below the hero's real minimum
+      // height (540px, see HeroBanner.tsx) rather than only an exact
+      // zero — a transient layout-not-settled reading during load could
+      // land on some small-but-nonzero value too, not just exactly 0.
+      if (rect.height > 200) setHeroPast(rect.bottom <= topBarHeightRef.current)
       ticking = false
     }
     const onScrollOrResize = () => {
@@ -192,13 +208,19 @@ export default function Header({ settings, categories = [], states = [] }: Props
       requestAnimationFrame(update)
     }
     update()
+    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(update, ms))
     window.addEventListener('scroll', onScrollOrResize, { passive: true })
     window.addEventListener('resize', onScrollOrResize)
-    window.addEventListener('load', update)
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(update)
+      ro.observe(el)
+    }
     return () => {
+      retryTimers.forEach(clearTimeout)
       window.removeEventListener('scroll', onScrollOrResize)
       window.removeEventListener('resize', onScrollOrResize)
-      window.removeEventListener('load', update)
+      ro?.disconnect()
     }
   }, [overlayNav])
 
