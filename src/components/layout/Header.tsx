@@ -192,38 +192,46 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // when layout actually settles, and a ResizeObserver on the hero
     // element itself re-verifies any time its own box genuinely changes
     // size thereafter.
+    //
+    // BUG FIX 4 (the actual root cause of the recurring "white nav on
+    // hard refresh" reports): diagnostic logging eventually proved
+    // heroPast was being computed correctly (false) every single time
+    // this white-nav symptom was captured — the bug was never in this
+    // effect's JS logic at all. It was that all of Header's CSS used to
+    // live in a plain `<style>` tag rendered inline in the JSX (further
+    // down this file, after the <nav> in DOM order), not a real
+    // stylesheet loaded via <head> — so there was a genuine race on a
+    // fresh hard refresh between the browser painting <nav> and it
+    // finishing parsing that trailing <style> block. If paint won even
+    // once, <nav> rendered with none of these classes' rules applied
+    // yet, including the .overlay-nav-transparent background override,
+    // which is how a nav React had already correctly marked
+    // "transparent" could still render solid white for a frame. That
+    // CSS now lives in globals.css, loaded normally via <head>, which
+    // the browser guarantees is ready before painting anything that
+    // depends on it — no such race is possible anymore.
     let ticking = false
-    const update = (source: string) => {
+    const update = () => {
       const rect = el.getBoundingClientRect()
-      const willSkip = rect.height <= 200
-      const result = rect.bottom <= topBarHeightRef.current
-      // TEMP DIAGNOSTIC (remove once the hard-refresh white-nav report is
-      // confirmed fixed): a plain string, not an object — DevTools'
-      // "Save as..." text export only captures a collapsed "Object"
-      // placeholder for logged objects, not their actual field values
-      // (those only show if each one is expanded by hand in the live
-      // console first). A flat string is captured as-is either way.
-      // eslint-disable-next-line no-console
-      console.log(
-        `[heroPast] ${source} | bottom=${rect.bottom.toFixed(1)} height=${rect.height.toFixed(1)} `
-        + `topBarHeight=${topBarHeightRef.current} scrollY=${window.scrollY} `
-        + `=> ${willSkip ? 'SKIPPED (height<=200)' : `heroPast=${result}`}`
-      )
-      if (!willSkip) setHeroPast(result)
+      // Guard against any reading well below the hero's real minimum
+      // height (540px, see HeroBanner.tsx) rather than only an exact
+      // zero — a transient layout-not-settled reading during load could
+      // land on some small-but-nonzero value too, not just exactly 0.
+      if (rect.height > 200) setHeroPast(rect.bottom <= topBarHeightRef.current)
       ticking = false
     }
     const onScrollOrResize = () => {
       if (ticking) return
       ticking = true
-      requestAnimationFrame(() => update('scroll/resize'))
+      requestAnimationFrame(update)
     }
-    update('initial')
-    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(() => update(`retry-${ms}ms`), ms))
+    update()
+    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(update, ms))
     window.addEventListener('scroll', onScrollOrResize, { passive: true })
     window.addEventListener('resize', onScrollOrResize)
     let ro: ResizeObserver | undefined
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => update('hero-resize-observer'))
+      ro = new ResizeObserver(update)
       ro.observe(el)
     }
     return () => {
@@ -420,190 +428,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
           </button>
         </div>
       </nav>
-
-      <style>{`
-        /* ── Old-site nav styles ── */
-        .old-nav{
-          background:#fff;padding:0 32px;border-bottom:1px solid rgba(26,58,30,.12);
-          display:flex;align-items:center;justify-content:space-between;
-          height:64px;position:relative;transition:box-shadow .2s;
-        }
-        .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
-        /* Homepage-only fixed overlay nav (see overlayNav in Header.tsx).
-           Only background/text-colour transition — position never
-           changes — so scrolling past the hero never causes a layout
-           jump, just a smooth colour fade from transparent to solid. */
-        .old-nav.overlay-nav{ transition: background-color .3s ease, border-color .3s ease, box-shadow .3s ease, backdrop-filter .3s ease; }
-        .old-nav.overlay-nav-transparent{
-          background:transparent; border-bottom-color:transparent; box-shadow:none;
-        }
-        /* BUG FIX (requested): once scrolled, this used to jump straight to
-           flat solid #fff (inherited from the base .old-nav rule) — a hard,
-           jarring "white slab" snap. Reference sites (e.g. mypahadidukan.com)
-           never show that abrupt flat-white transition; their nav stays
-           visually consistent throughout. Frosted glass (translucent white +
-           blur) reads the same as solid white to users at a glance — text
-           stays legible — but never presents as a harsh flat rectangle
-           appearing out of nowhere, and it still transitions smoothly from
-           the fully-transparent state instead of snapping. */
-        .old-nav.overlay-nav.scrolled{
-          background:rgba(255,255,255,.72);
-          backdrop-filter:blur(14px) saturate(160%);
-          -webkit-backdrop-filter:blur(14px) saturate(160%);
-          border-bottom-color:rgba(26,58,30,.1);
-        }
-        .old-nav.overlay-nav-transparent .old-logo-tl,
-        .old-nav.overlay-nav-transparent .old-nav-links li a,
-        .old-nav.overlay-nav-transparent .old-nav-links li button,
-        .old-nav.overlay-nav-transparent .old-nib,
-        .old-nav.overlay-nav-transparent .old-dark-btn{
-          color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.55);
-        }
-        .old-nav.overlay-nav-transparent .old-nav-links li a:hover,
-        .old-nav.overlay-nav-transparent .old-nav-links li button:hover,
-        .old-nav.overlay-nav-transparent .old-nib:hover,
-        .old-nav.overlay-nav-transparent .old-dark-btn:hover{
-          color:#fff; background:rgba(255,255,255,.18);
-        }
-        /* MegaMenu's own trigger styling lives in globals.css with
-           !important rules — matching specificity + !important here so
-           this override actually wins instead of losing silently. */
-        .old-nav.overlay-nav-transparent .mega-trigger{ color:#fff !important; text-shadow:0 1px 3px rgba(0,0,0,.55) !important; }
-        .old-nav.overlay-nav-transparent .mega-trigger:hover,
-        .old-nav.overlay-nav-transparent .mega-parent.open .mega-trigger{
-          color:#fff !important; background:rgba(255,255,255,.18) !important;
-        }
-        /* BUG FIX (requested): this used to force the logo to a flat
-           white silhouette (brightness(0) invert(1)) over the hero —
-           the client's actual brand mark is two-tone (dark green +
-           gold, see public/logo-full.png), and that color is what
-           should show, not a monochrome substitute.
-
-           BUG FIX (requested, round 2): the first attempt at fixing
-           that used a strong white glow (0.85 alpha, 6px+3px blur) to
-           help the colour version stand out against photos. That was
-           too strong in the other direction — against the hero's
-           brighter/lighter slides (snow, sky) it washed the whole logo
-           out to a pale, low-contrast blur, and at the small size the
-           fine cursive "by Pahadi Roots" script renders at, a 6px blur
-           radius is wider than the strokes themselves, so it smeared
-           the script into the glow instead of just outlining it —
-           reported as "by Pahadi Roots is not visible". A dark shadow
-           instead of a light glow reads correctly against both bright
-           and dark photo backgrounds (dark backgrounds already have
-           contrast; the shadow mainly helps on bright ones), and a
-           much smaller, tighter blur radius stays inside the letter
-           strokes instead of bleeding across them. */
-        .old-nav.overlay-nav-transparent .old-logo img{
-          filter:
-            drop-shadow(0 1px 2px rgba(0,0,0,.45))
-            drop-shadow(0 0 5px rgba(0,0,0,.25));
-        }
-        .old-nav.overlay-nav-transparent .old-cart-btn{
-          background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.5); backdrop-filter:blur(6px);
-        }
-        .old-nav.overlay-nav-transparent .old-cart-btn:hover{ background:rgba(255,255,255,.3); color:#fff; }
-        .old-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
-        /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
-           fails WCAG AA's 4.5:1 requirement for text this small (9px).
-           Verified by computing actual relative luminance (not eyeballed).
-           #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
-        .old-logo-divider{width:1px;height:26px;background:#c9a44c;opacity:.5}
-        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:1.4;text-align:left}
-        .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
-        .old-nav-links li{height:64px;display:flex;align-items:center;}
-        .old-nav-links li a,.old-nav-links li button{
-          color:#2a2a2a;text-decoration:none;font-size:13.5px;
-          font-weight:600;padding:0 14px;height:64px;display:flex;align-items:center;
-          transition:color .2s,background .2s;border:none;background:none;cursor:pointer;
-          font-family:inherit;white-space:nowrap;
-        }
-        .old-nav-links li a:hover,.old-nav-links li button:hover{color:#1a3a1e;background:rgba(26,58,30,.04)}
-        .old-nav-links li a.active-nav{color:#1a3a1e}
-        .old-nav-right{display:flex;align-items:center;gap:2px;flex-shrink:0}
-        .old-nib{
-          width:38px;height:38px;border-radius:50%;border:none;
-          background:transparent;color:#555;font-size:18px;
-          cursor:pointer;display:flex;align-items:center;justify-content:center;
-          transition:background .2s,color .2s;text-decoration:none;position:relative;
-        }
-        .old-nib:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
-        .old-acct-av{
-          width:28px;height:28px;border-radius:50%;
-          background:#c8920a;color:#fff;font-size:12px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;
-        }
-        .old-acct-dot{
-          position:absolute;top:5px;right:4px;
-          width:7px;height:7px;background:#4caf50;border-radius:50%;border:1.5px solid #fff;
-        }
-        .old-wl-badge{
-          position:absolute;top:2px;right:2px;
-          background:#c0392b;color:#fff;border-radius:50%;
-          width:16px;height:16px;font-size:9px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;
-        }
-        .old-dark-btn{
-          background:transparent;border:none;color:#888;
-          font-size:17px;cursor:pointer;padding:8px;border-radius:8px;
-          transition:all .2s;
-        }
-        .old-dark-btn:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
-        .old-cart-btn{
-          display:flex;align-items:center;gap:7px;
-          background:#c8920a;color:#fff;border:none;border-radius:24px;
-          padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer;
-          font-family:inherit;transition:background .2s;white-space:nowrap;
-          margin-left:4px;
-        }
-        .old-cart-btn:hover{background:#e8b050;color:#1a1a1a}
-        .old-cbadge{
-          background:#fff;color:#1a3a1e;border-radius:50%;
-          width:18px;height:18px;font-size:10px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;
-        }
-        /* Account dropdown */
-        .old-acct-dd{
-          position:absolute;top:100%;right:0;width:220px;
-          background:#fff;border-radius:14px;
-          box-shadow:0 8px 32px rgba(0,0,0,.18);
-          border:1px solid #f0f0f0;z-index:9999;overflow:hidden;padding:8px 0;
-        }
-        .old-dd-head{padding:12px 16px;border-bottom:1px solid #f5f5f5}
-        .old-dd-name{font-size:13px;font-weight:800;color:#1a3a1e}
-        .old-dd-sub{font-size:11px;color:#888;margin-top:2px}
-        .old-dd-item{
-          padding:11px 16px;font-size:13px;color:#333;cursor:pointer;
-          display:flex;align-items:center;gap:10px;text-decoration:none;
-          transition:background .15s;
-        }
-        .old-dd-item:hover{background:#f9f9f9}
-        .old-dd-foot{padding:8px 16px;border-top:1px solid #f5f5f5}
-        .old-dd-btn{
-          width:100%;padding:9px;background:#1a3a1e;color:#fff;
-          border:none;border-radius:8px;font-size:13px;font-weight:700;
-          cursor:pointer;font-family:inherit;text-align:center;
-          text-decoration:none;display:block;
-        }
-        .old-dd-btn:disabled{opacity:.6;cursor:not-allowed}
-        .old-mob-btn{display:none!important}
-        @media(max-width:900px){
-          .old-nav-links{display:none!important}
-          .old-mob-btn{display:flex!important}
-        }
-        @media(max-width:520px){
-          .old-nav{padding:0 12px}
-          .old-cart-btn span:first-child{display:none}
-          .old-logo-tl{font-size:8px}
-        }
-        .old-skip-link{
-          position:absolute;left:-9999px;top:4px;z-index:9999;
-          background:#1a3a1e;color:#fff;padding:8px 16px;
-          font-size:13px;font-weight:700;border-radius:0 0 6px 0;
-          text-decoration:none;
-        }
-        .old-skip-link:focus{left:4px}
-      `}</style>
     </div>
     </>
   )
