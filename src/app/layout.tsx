@@ -9,6 +9,7 @@ import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
+import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
 import CartDrawer from '@/components/cart/CartDrawer'
 import SearchOverlay from '@/components/search/SearchOverlay'
 import AuthModal from '@/components/auth/AuthModal'
@@ -207,6 +208,7 @@ export default async function RootLayout({
         )}
         {/* Skip-to-content: visible on focus for keyboard / screen-reader users */}
         <SkipLink />
+        <ScrollRestorationFix />
         <Providers>
           <Header settings={settings} categories={categories} states={states} />
           <main id="main-content" className="min-h-screen">
