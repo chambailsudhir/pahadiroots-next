@@ -596,7 +596,7 @@ ul.mega-list.mega-list-2col {
         /* ── Old-site nav styles ── */
         .old-nav{
           background:#fff;padding:0 32px;border-bottom:1px solid rgba(26,58,30,.12);
-          display:flex;align-items:center;justify-content:space-between;
+          display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:24px;
           height:64px;position:relative;transition:box-shadow .2s;
         }
         .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
@@ -623,6 +623,7 @@ ul.mega-list.mega-list-2col {
           -webkit-backdrop-filter:blur(14px) saturate(160%);
           border-bottom-color:rgba(26,58,30,.1);
         }
+        .old-nav.overlay-nav-transparent .old-logo-title,
         .old-nav.overlay-nav-transparent .old-logo-tl,
         .old-nav.overlay-nav-transparent .old-nav-links li a,
         .old-nav.overlay-nav-transparent .old-nav-links li button,
@@ -674,14 +675,20 @@ ul.mega-list.mega-list-2col {
           background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.5); backdrop-filter:blur(6px);
         }
         .old-nav.overlay-nav-transparent .old-cart-btn:hover{ background:rgba(255,255,255,.3); color:#fff; }
-        .old-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+        .old-logo{display:flex;align-items:center;gap:10px;text-decoration:none;flex-shrink:0}
+        .old-logo-icon{height:44px;width:auto;object-fit:contain;flex-shrink:0}
+        .old-logo-text{display:flex;flex-direction:column;line-height:1.15}
+        .old-logo-title{
+          font-family:'Playfair Display',serif;font-weight:800;font-size:19px;
+          color:#1a3a1e;letter-spacing:.2px;white-space:nowrap;
+        }
         /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
            fails WCAG AA's 4.5:1 requirement for text this small (9px).
            Verified by computing actual relative luminance (not eyeballed).
            #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
         .old-logo-divider{width:1px;height:26px;background:#c9a44c;opacity:.5}
-        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:1.4;text-align:left}
-        .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
+        .old-logo-tl{font-size:10.5px;color:#8a6508;font-weight:700;letter-spacing:.2px;line-height:1.3;text-align:left;white-space:nowrap}
+        .old-nav-links{display:flex;gap:0;list-style:none;margin:0 auto;padding:0;align-items:center;height:64px;justify-self:center;}
         .old-nav-links li{height:64px;display:flex;align-items:center;}
         .old-nav-links li a,.old-nav-links li button{
           color:#2a2a2a;text-decoration:none;font-size:13.5px;

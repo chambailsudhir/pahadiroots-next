@@ -306,23 +306,24 @@ export default function Header({ settings, categories = [], states = [] }: Props
         className={`old-nav${(overlayNav ? heroPast : scrolled) ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !heroPast ? ' overlay-nav-transparent' : ''}`}
         style={overlayNav ? { position: 'fixed', top: topBarHeight, left: 0, right: 0, zIndex: 30 } : undefined}
       >
-        {/* Logo — single combined "HimVeda by Pahadi Roots" mark (transparent
-            PNG). Previously this stacked two separate opaque-background
-            images, which is what caused the white-box artifact in the
-            transparent overlay-nav state: the invert filter had no alpha
-            channel to respect, so each image's whole rectangle went white.
-            One properly-trimmed transparent asset avoids that class of bug
-            entirely and is also just simpler to lay out. If an admin sets a
-            custom logo via Settings → logo_url, that (single) image is used
-            instead — same as before. */}
+        {/* Logo — icon mark + stacked "Pahadi Roots" wordmark / tagline,
+            matching the reference nav layout (icon left, two-line text
+            block right of it: bold brand name over a small gold tagline).
+            If an admin sets a custom logo via Settings → logo_url, that
+            single image replaces the whole lockup (icon + text) — same
+            override behaviour as before. */}
         <Link href="/" className="old-logo">
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
-            {logoUrl
-              ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-              : <Image src="/logo-full.png" alt={siteName} width={124} height={46} style={{ height: '46px', width: 'auto', objectFit: 'contain' }} priority />}
-            <span className="old-logo-divider" />
-            <div className="old-logo-tl">Himalayan<br />Natural Store</div>
-          </div>
+          {logoUrl ? (
+            <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+          ) : (
+            <>
+              <Image src="/logo-header.png" alt="" width={44} height={44} className="old-logo-icon" priority />
+              <div className="old-logo-text">
+                <span className="old-logo-title">Pahadi Roots</span>
+                <span className="old-logo-tl">Himalayan Natural Store</span>
+              </div>
+            </>
+          )}
         </Link>
 
         {/* Desktop nav links */}
