@@ -71,6 +71,13 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // does not.
   const overlayNav = isHome
 
+  // TEMP DIAGNOSTIC (round 2 — remove once confirmed fixed): rules out a
+  // pathname/overlayNav hydration mismatch as a contributing factor.
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log(`[Header] pathname=${pathname} isHome=${isHome} overlayNav=${overlayNav}`)
+  }, [pathname, isHome, overlayNav])
+
   // Announcement bar + ticker stay in normal document flow (unchanged),
   // so the overlay nav needs to sit just below them, not at the very
   // top of the viewport. Their combined height is measured rather than
@@ -211,33 +218,59 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // the browser guarantees is ready before painting anything that
     // depends on it — no such race is possible anymore.
     let ticking = false
-    const update = () => {
+    const update = (source: string) => {
       const rect = el.getBoundingClientRect()
+      const willSkip = rect.height <= 200
+      const result = rect.bottom <= topBarHeightRef.current
+      // TEMP DIAGNOSTIC (round 2 — remove once confirmed fixed): same
+      // plain-string format as before so DevTools' "Save as..." text
+      // export captures the real numbers directly.
+      // eslint-disable-next-line no-console
+      console.log(
+        `[heroPast] ${source} | bottom=${rect.bottom.toFixed(1)} height=${rect.height.toFixed(1)} `
+        + `topBarHeight=${topBarHeightRef.current} scrollY=${window.scrollY} `
+        + `=> ${willSkip ? 'SKIPPED (height<=200)' : `heroPast=${result}`}`
+      )
       // Guard against any reading well below the hero's real minimum
       // height (540px, see HeroBanner.tsx) rather than only an exact
       // zero — a transient layout-not-settled reading during load could
       // land on some small-but-nonzero value too, not just exactly 0.
-      if (rect.height > 200) setHeroPast(rect.bottom <= topBarHeightRef.current)
+      if (!willSkip) setHeroPast(result)
       ticking = false
     }
     const onScrollOrResize = () => {
       if (ticking) return
       ticking = true
-      requestAnimationFrame(update)
+      requestAnimationFrame(() => update('scroll/resize'))
     }
-    update()
-    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(update, ms))
+    update('initial')
+    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(() => update(`retry-${ms}ms`), ms))
     window.addEventListener('scroll', onScrollOrResize, { passive: true })
     window.addEventListener('resize', onScrollOrResize)
+    // BUG FIX 5: the browser's back-forward cache (bfcache) can restore an
+    // entire previous page — including whatever heroPast/scrolled state
+    // React was holding at the moment the person navigated away — as a
+    // frozen snapshot, without re-running any of this effect's setup
+    // logic from scratch. If that snapshot happened to be mid-scroll
+    // (heroPast=true, nav solid) and the actual restored scroll position
+    // doesn't trigger a fresh scroll/resize event on its own, the nav can
+    // stay stuck showing that stale state indefinitely. `pageshow` fires
+    // on both a normal load AND a bfcache restore, and its `persisted`
+    // flag distinguishes the two — re-running update() specifically for
+    // the bfcache case re-syncs the nav with whatever the real, current
+    // scroll position actually is.
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) update('bfcache-pageshow') }
+    window.addEventListener('pageshow', onPageShow)
     let ro: ResizeObserver | undefined
     if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(update)
+      ro = new ResizeObserver(() => update('hero-resize-observer'))
       ro.observe(el)
     }
     return () => {
       retryTimers.forEach(clearTimeout)
       window.removeEventListener('scroll', onScrollOrResize)
       window.removeEventListener('resize', onScrollOrResize)
+      window.removeEventListener('pageshow', onPageShow)
       ro?.disconnect()
     }
   }, [overlayNav])
