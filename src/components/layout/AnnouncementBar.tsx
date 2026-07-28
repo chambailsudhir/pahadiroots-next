@@ -13,13 +13,8 @@ export default function AnnouncementBar({ settings }: Props) {
   // browser). Sanitizing once at the layout level, before any client
   // component sees the value, is both safe and correct.
   const text = settings.ann_text?.trim()
-  // Admin's Announcement Bar section lets the store owner pick a
-  // background/text color (ann_bg_color / ann_text_color); falls back to
-  // the original dark-green/gold if unset so existing stores don't change.
-  const bg   = settings.ann_bg_color   || 'var(--g)'
-  const txt  = settings.ann_text_color || '#d4af37'
   return (
-    <div className="ann-bar" style={{ background: bg, color: txt }}>
+    <div className="ann-bar">
       {text ? (
         <span dangerouslySetInnerHTML={{ __html: text }} />
       ) : (
@@ -30,7 +25,7 @@ export default function AnnouncementBar({ settings }: Props) {
               the shipping setting are read live, so this only matters
               if the setting is ever missing entirely. */}
           🌿 Free Shipping above ₹{settings.free_shipping_min || '500'} &nbsp;|&nbsp;{' '}
-          <a href="/checkout" style={{ color: txt }}>UPI · Cards · COD</a> &nbsp;|&nbsp;{' '}
+          <a href="/checkout">UPI · Cards · COD</a> &nbsp;|&nbsp;{' '}
           {/* BUG FIX: was settings.states_covered, a key the admin panel
               never actually writes to. The real key it manages is
               stat_himalayan_states (see lib/heroStats.ts). */}

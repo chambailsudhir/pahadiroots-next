@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useEffect, useRef, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useCartStore, selectCartCount } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
@@ -28,18 +27,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
 
   const [scrolled, setScrolled] = useState(false)
-  // BUG FIX (requested): the transparent-over-hero nav used to switch to
-  // its solid/frosted look as soon as the page scrolled past a flat 60px
-  // — but the hero itself is 75vh tall, so for most of the scroll through
-  // the hero the nav was already showing its frosted-white backing on top
-  // of a photo that was still fully in view, washing it out (this is the
-  // "turns white on scroll" complaint — the reference site keeps its nav
-  // fully see-through for as long as the hero itself is on screen, only
-  // switching once the hero has scrolled away entirely). heroPast tracks
-  // that by measuring the hero element's own position on scroll (see the
-  // effect below) rather than a guessed pixel threshold, so it stays
-  // correct regardless of hero height.
-  const [heroPast, setHeroPast] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
   // ── Mount guard: Zustand persist reads localStorage which doesn't exist on server.
   // Rendering persisted values before mount causes React hydration errors #418/#423/#425.
@@ -50,61 +37,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
   // the network calls are in flight (was previously just a <Link>, so this
   // guard didn't exist because there was nothing to guard).
   const [loggingOut, setLoggingOut] = useState(false)
-
-  // FEATURE (requested): on the homepage, the hero banner was always
-  // squeezed into whatever height was left below this header — the
-  // announcement bar + ticker + 64px nav row all reserved flow space
-  // above it, forcing the hero's background image to be cropped more
-  // than necessary to fit the leftover box. Overlaying a transparent
-  // nav directly on top of the hero (below the still-solid announcement
-  // bar/ticker) gives the hero its full height back. Only the homepage
-  // gets this treatment — every other page keeps the normal solid,
-  // in-flow nav exactly as before, so nothing else on the site changes.
-  const pathname = usePathname()
-  const isHome = pathname === '/'
-  // The nav is always position:fixed on the homepage (never toggled
-  // between fixed/static) — only its background/text colour switches
-  // between transparent (over the hero, unscrolled) and solid (once
-  // scrolled past the hero) via the existing `scrolled` state. Toggling
-  // position itself would reserve/free flow space right at the scroll
-  // threshold and cause a visible content jump; toggling only colour
-  // does not.
-  const overlayNav = isHome
-
-  // TEMP DIAGNOSTIC (round 2 — remove once confirmed fixed): rules out a
-  // pathname/overlayNav hydration mismatch as a contributing factor.
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log(`[Header] pathname=${pathname} isHome=${isHome} overlayNav=${overlayNav}`)
-  }, [pathname, isHome, overlayNav])
-
-  // Announcement bar + ticker stay in normal document flow (unchanged),
-  // so the overlay nav needs to sit just below them, not at the very
-  // top of the viewport. Their combined height is measured rather than
-  // hardcoded, since either can be hidden via settings (ann_hide /
-  // ticker settings) or wrap onto a second line on narrow screens.
-  const topBarRef = useRef<HTMLDivElement>(null)
-  const [topBarHeight, setTopBarHeight] = useState(0)
-  // Mirrors topBarHeight without needing the heroPast effect below to
-  // depend on it (see that effect for why that dependency was the bug).
-  const topBarHeightRef = useRef(0)
-
-  useEffect(() => {
-    const el = topBarRef.current
-    if (!el) return
-    const measure = () => {
-      topBarHeightRef.current = el.offsetHeight
-      setTopBarHeight(el.offsetHeight)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    if (typeof ResizeObserver === 'undefined') {
-      return () => window.removeEventListener('resize', measure)
-    }
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure) }
-  }, [])
 
   useEffect(() => {
     // Genuinely necessary exception: this is client-mount detection to
@@ -119,161 +51,10 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     setIsDark(document.documentElement.classList.contains('dark'))
-    // BUG FIX (root cause of the "white gap" over the hero): this only
-    // ever set `scrolled` in response to a *scroll event* — it never
-    // checked the actual current window.scrollY on mount. Browsers
-    // commonly restore the previous scroll position on refresh/back-
-    // navigation, so the page can load already scrolled well past the
-    // hero while React still thinks scrolled=false. That mismatch made
-    // the nav keep its transparent-over-hero styling (white text,
-    // see-through background) while it was actually sitting over a
-    // plain white/cream page section further down — white text on a
-    // white background, which is exactly the blank-looking band being
-    // reported. Checking the real scroll position immediately (not
-    // just listening for the next scroll event) keeps the two in sync
-    // from the very first paint.
     const onScroll = () => setScrolled(window.scrollY > 60)
-    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-
-  useEffect(() => {
-    // Only the homepage has a hero to watch; every other page keeps the
-    // plain solid nav and never reads heroPast at all.
-    if (!overlayNav) return
-    const el = document.getElementById('home-hero-banner')
-    if (!el) return
-
-    // BUG FIX (the random transparent/solid "flicker" reported on the
-    // live site, happening even with no scrolling at all): this used to
-    // be an IntersectionObserver whose rootMargin was built from
-    // `topBarHeight`, with the *effect itself* depending on
-    // `[overlayNav, topBarHeight]` — so every time topBarHeight state
-    // updated (its ResizeObserver can fire from sub-pixel layout
-    // recalculations that don't reflect any real visible change), the
-    // whole observer was disconnected and a brand-new one created. A
-    // freshly created IntersectionObserver's first callback can report
-    // a transient/stale isIntersecting reading before settling on the
-    // correct one (browsers queue that first callback for the next
-    // frame, right when a resize-triggered recalculation was already in
-    // flight) — so every one of those silent recreations was a chance
-    // to misfire heroPast to `true` for a frame, snapping the nav to
-    // solid, before the next correct callback flipped it back. On a
-    // page where topBarHeight was churning even slightly, that added up
-    // to exactly the random flicker being reported.
-    //
-    // A plain scroll handler that reads the hero's own
-    // getBoundingClientRect() sidesteps all of this: it never gets
-    // torn down and recreated (this effect now only depends on
-    // `overlayNav`, which is stable for the life of the page), and it
-    // always reads the *current* topBarHeightRef value rather than
-    // needing to be rebuilt whenever that number changes.
-    // BUG FIX 2 (the flicker fix above stopped the *recreation* churn,
-    // but hard refreshes could still occasionally show the nav solid on
-    // the very first paint): the initial update() call ran synchronously
-    // inside this effect, immediately on mount — before the browser had
-    // necessarily finished a real layout pass for a freshly-hydrated,
-    // still-loading page (web fonts swapping in, images not decoded
-    // yet, viewport metrics not fully settled right after navigation,
-    // etc. can all shift layout right after hydration). If that first
-    // getBoundingClientRect() read landed during such a moment, the
-    // hero's box could transiently measure shorter than its real 82vh —
-    // occasionally short enough for `bottom` to already read at/under
-    // topBarHeightRef, incorrectly setting heroPast=true right out of
-    // the gate, with scrollY still genuinely at 0 and the full hero
-    // visible on screen. Nothing then corrected it: with no scroll or
-    // resize event, the effect never re-ran to re-measure.
-    //
-    // BUG FIX 3 (this stayed stuck white even after fix 2, confirmed on
-    // video where the hero photo had clearly finished loading below an
-    // still-solid nav): the previous attempt added a `window.load`
-    // listener as a safety net, but `load` fires exactly once — if it
-    // had already fired before this effect got a chance to attach its
-    // listener (very plausible; hydration can lag behind resource
-    // loading on a fast connection), that listener would simply never
-    // fire again for the rest of the page's life, so the bad initial
-    // reading was never corrected. Replacing it with a handful of
-    // delayed re-checks (not tied to any one-shot browser event) keeps
-    // re-verifying for about a second after mount regardless of exactly
-    // when layout actually settles, and a ResizeObserver on the hero
-    // element itself re-verifies any time its own box genuinely changes
-    // size thereafter.
-    //
-    // BUG FIX 4 (the actual root cause of the recurring "white nav on
-    // hard refresh" reports): diagnostic logging eventually proved
-    // heroPast was being computed correctly (false) every single time
-    // this white-nav symptom was captured — the bug was never in this
-    // effect's JS logic at all. It was that all of Header's CSS used to
-    // live in a plain `<style>` tag rendered inline in the JSX (further
-    // down this file, after the <nav> in DOM order), not a real
-    // stylesheet loaded via <head> — so there was a genuine race on a
-    // fresh hard refresh between the browser painting <nav> and it
-    // finishing parsing that trailing <style> block. If paint won even
-    // once, <nav> rendered with none of these classes' rules applied
-    // yet, including the .overlay-nav-transparent background override,
-    // which is how a nav React had already correctly marked
-    // "transparent" could still render solid white for a frame. That
-    // CSS now lives in globals.css, loaded normally via <head>, which
-    // the browser guarantees is ready before painting anything that
-    // depends on it — no such race is possible anymore.
-    let ticking = false
-    const update = (source: string) => {
-      const rect = el.getBoundingClientRect()
-      const willSkip = rect.height <= 200
-      const result = rect.bottom <= topBarHeightRef.current
-      // TEMP DIAGNOSTIC (round 2 — remove once confirmed fixed): same
-      // plain-string format as before so DevTools' "Save as..." text
-      // export captures the real numbers directly.
-      // eslint-disable-next-line no-console
-      console.log(
-        `[heroPast] ${source} | bottom=${rect.bottom.toFixed(1)} height=${rect.height.toFixed(1)} `
-        + `topBarHeight=${topBarHeightRef.current} scrollY=${window.scrollY} `
-        + `=> ${willSkip ? 'SKIPPED (height<=200)' : `heroPast=${result}`}`
-      )
-      // Guard against any reading well below the hero's real minimum
-      // height (540px, see HeroBanner.tsx) rather than only an exact
-      // zero — a transient layout-not-settled reading during load could
-      // land on some small-but-nonzero value too, not just exactly 0.
-      if (!willSkip) setHeroPast(result)
-      ticking = false
-    }
-    const onScrollOrResize = () => {
-      if (ticking) return
-      ticking = true
-      requestAnimationFrame(() => update('scroll/resize'))
-    }
-    update('initial')
-    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(() => update(`retry-${ms}ms`), ms))
-    window.addEventListener('scroll', onScrollOrResize, { passive: true })
-    window.addEventListener('resize', onScrollOrResize)
-    // BUG FIX 5: the browser's back-forward cache (bfcache) can restore an
-    // entire previous page — including whatever heroPast/scrolled state
-    // React was holding at the moment the person navigated away — as a
-    // frozen snapshot, without re-running any of this effect's setup
-    // logic from scratch. If that snapshot happened to be mid-scroll
-    // (heroPast=true, nav solid) and the actual restored scroll position
-    // doesn't trigger a fresh scroll/resize event on its own, the nav can
-    // stay stuck showing that stale state indefinitely. `pageshow` fires
-    // on both a normal load AND a bfcache restore, and its `persisted`
-    // flag distinguishes the two — re-running update() specifically for
-    // the bfcache case re-syncs the nav with whatever the real, current
-    // scroll position actually is.
-    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) update('bfcache-pageshow') }
-    window.addEventListener('pageshow', onPageShow)
-    let ro: ResizeObserver | undefined
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => update('hero-resize-observer'))
-      ro.observe(el)
-    }
-    return () => {
-      retryTimers.forEach(clearTimeout)
-      window.removeEventListener('scroll', onScrollOrResize)
-      window.removeEventListener('resize', onScrollOrResize)
-      window.removeEventListener('pageshow', onPageShow)
-      ro?.disconnect()
-    }
-  }, [overlayNav])
 
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)
@@ -290,40 +71,22 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <a href="#main-content" className="old-skip-link">Skip to main content</a>
 
       <div className="sticky top-0 z-30">
-      <div ref={topBarRef}>
-        <AnnouncementBar settings={settings} />
-        <TickerBar settings={settings} />
-      </div>
+      <AnnouncementBar settings={settings} />
+      <TickerBar settings={settings} />
 
-      {/* On the homepage, whether the nav is "solid" is governed by
-          heroPast (has the hero scrolled fully out of view), not the
-          generic 60px `scrolled` flag — the hero is 75vh tall, and
-          switching to a solid/frosted background at just 60px meant the
-          nav was already showing its solid backing while the hero photo
-          itself was still mostly on screen behind it. Every other page
-          keeps using the plain `scrolled` flag exactly as before. */}
-      <nav
-        className={`old-nav${(overlayNav ? heroPast : scrolled) ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !heroPast ? ' overlay-nav-transparent' : ''}`}
-        style={overlayNav ? { position: 'fixed', top: topBarHeight, left: 0, right: 0, zIndex: 30 } : undefined}
-      >
-        {/* Logo — icon mark + stacked "Pahadi Roots" wordmark / tagline,
-            matching the reference nav layout (icon left, two-line text
-            block right of it: bold brand name over a small gold tagline).
-            If an admin sets a custom logo via Settings → logo_url, that
-            single image replaces the whole lockup (icon + text) — same
-            override behaviour as before. */}
+      <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
+        {/* Logo */}
         <Link href="/" className="old-logo">
-          {logoUrl ? (
-            <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
-          ) : (
-            <>
-              <Image src="/logo-header.png" alt="" width={44} height={44} className="old-logo-icon" priority />
-              <div className="old-logo-text">
-                <span className="old-logo-title">Pahadi Roots</span>
-                <span className="old-logo-tl">Himalayan Natural Store</span>
-              </div>
-            </>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+              {logoUrl
+                ? <Image src={logoUrl} alt={siteName} width={160} height={48} style={{ height: '48px', width: 'auto', objectFit: 'contain' }} />
+                : <Image src="/logo-header.png" alt={siteName} width={123} height={34} style={{ height: '34px', width: 'auto', objectFit: 'contain' }} priority />}
+              {!logoUrl && <Image src="/by-pahadi-roots.png" alt="by Pahadi Roots" width={157} height={26} style={{ height: '26px', width: 'auto', objectFit: 'contain', marginTop: '1px' }} />}
+            </div>
+            <span className="old-logo-divider" />
+            <div className="old-logo-tl">Himalayan<br />Natural Store</div>
+          </div>
         </Link>
 
         {/* Desktop nav links */}
@@ -462,6 +225,116 @@ export default function Header({ settings, categories = [], states = [] }: Props
           </button>
         </div>
       </nav>
+
+      <style>{`
+        /* ── Old-site nav styles ── */
+        .old-nav{
+          background:#fff;padding:0 32px;border-bottom:1px solid rgba(26,58,30,.12);
+          display:flex;align-items:center;justify-content:space-between;
+          height:64px;position:relative;transition:box-shadow .2s;
+        }
+        .old-nav.scrolled{box-shadow:0 4px 20px rgba(0,0,0,.08)}
+        .old-logo{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+        /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
+           fails WCAG AA's 4.5:1 requirement for text this small (9px).
+           Verified by computing actual relative luminance (not eyeballed).
+           #8a6508 is the same gold hue, darkened, at a verified 5.32:1. */
+        .old-logo-divider{width:1px;height:26px;background:#c9a44c;opacity:.5}
+        .old-logo-tl{font-size:9px;color:#8a6508;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:1.4;text-align:left}
+        .old-nav-links{display:flex;gap:0;list-style:none;margin:0;padding:0;align-items:center;height:64px;}
+        .old-nav-links li{height:64px;display:flex;align-items:center;}
+        .old-nav-links li a,.old-nav-links li button{
+          color:#2a2a2a;text-decoration:none;font-size:13.5px;
+          font-weight:600;padding:0 14px;height:64px;display:flex;align-items:center;
+          transition:color .2s,background .2s;border:none;background:none;cursor:pointer;
+          font-family:inherit;white-space:nowrap;
+        }
+        .old-nav-links li a:hover,.old-nav-links li button:hover{color:#1a3a1e;background:rgba(26,58,30,.04)}
+        .old-nav-links li a.active-nav{color:#1a3a1e}
+        .old-nav-right{display:flex;align-items:center;gap:2px;flex-shrink:0}
+        .old-nib{
+          width:38px;height:38px;border-radius:50%;border:none;
+          background:transparent;color:#555;font-size:18px;
+          cursor:pointer;display:flex;align-items:center;justify-content:center;
+          transition:background .2s,color .2s;text-decoration:none;position:relative;
+        }
+        .old-nib:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
+        .old-acct-av{
+          width:28px;height:28px;border-radius:50%;
+          background:#c8920a;color:#fff;font-size:12px;font-weight:900;
+          display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;
+        }
+        .old-acct-dot{
+          position:absolute;top:5px;right:4px;
+          width:7px;height:7px;background:#4caf50;border-radius:50%;border:1.5px solid #fff;
+        }
+        .old-wl-badge{
+          position:absolute;top:2px;right:2px;
+          background:#c0392b;color:#fff;border-radius:50%;
+          width:16px;height:16px;font-size:9px;font-weight:900;
+          display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;
+        }
+        .old-dark-btn{
+          background:transparent;border:none;color:#888;
+          font-size:17px;cursor:pointer;padding:8px;border-radius:8px;
+          transition:all .2s;
+        }
+        .old-dark-btn:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
+        .old-cart-btn{
+          display:flex;align-items:center;gap:7px;
+          background:#c8920a;color:#fff;border:none;border-radius:24px;
+          padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer;
+          font-family:inherit;transition:background .2s;white-space:nowrap;
+          margin-left:4px;
+        }
+        .old-cart-btn:hover{background:#e8b050;color:#1a1a1a}
+        .old-cbadge{
+          background:#fff;color:#1a3a1e;border-radius:50%;
+          width:18px;height:18px;font-size:10px;font-weight:900;
+          display:flex;align-items:center;justify-content:center;
+        }
+        /* Account dropdown */
+        .old-acct-dd{
+          position:absolute;top:100%;right:0;width:220px;
+          background:#fff;border-radius:14px;
+          box-shadow:0 8px 32px rgba(0,0,0,.18);
+          border:1px solid #f0f0f0;z-index:9999;overflow:hidden;padding:8px 0;
+        }
+        .old-dd-head{padding:12px 16px;border-bottom:1px solid #f5f5f5}
+        .old-dd-name{font-size:13px;font-weight:800;color:#1a3a1e}
+        .old-dd-sub{font-size:11px;color:#888;margin-top:2px}
+        .old-dd-item{
+          padding:11px 16px;font-size:13px;color:#333;cursor:pointer;
+          display:flex;align-items:center;gap:10px;text-decoration:none;
+          transition:background .15s;
+        }
+        .old-dd-item:hover{background:#f9f9f9}
+        .old-dd-foot{padding:8px 16px;border-top:1px solid #f5f5f5}
+        .old-dd-btn{
+          width:100%;padding:9px;background:#1a3a1e;color:#fff;
+          border:none;border-radius:8px;font-size:13px;font-weight:700;
+          cursor:pointer;font-family:inherit;text-align:center;
+          text-decoration:none;display:block;
+        }
+        .old-dd-btn:disabled{opacity:.6;cursor:not-allowed}
+        .old-mob-btn{display:none!important}
+        @media(max-width:900px){
+          .old-nav-links{display:none!important}
+          .old-mob-btn{display:flex!important}
+        }
+        @media(max-width:520px){
+          .old-nav{padding:0 12px}
+          .old-cart-btn span:first-child{display:none}
+          .old-logo-tl{font-size:8px}
+        }
+        .old-skip-link{
+          position:absolute;left:-9999px;top:4px;z-index:9999;
+          background:#1a3a1e;color:#fff;padding:8px 16px;
+          font-size:13px;font-weight:700;border-radius:0 0 6px 0;
+          text-decoration:none;
+        }
+        .old-skip-link:focus{left:4px}
+      `}</style>
     </div>
     </>
   )
