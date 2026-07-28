@@ -14,11 +14,17 @@ export default function TickerBar({ settings }: Props) {
 
   const doubled = [...items, ...items]
 
+  // Admin's Ticker Bar section lets the store owner pick a background/text
+  // color (ticker_bg_color / ticker_text_color); falls back to the original
+  // gold/dark if unset so existing stores don't change appearance.
+  const bg  = settings.ticker_bg_color   || 'var(--gd)'
+  const txt = settings.ticker_text_color || '#1a1a1a'
+
   return (
-    <div className="ticker-wrap">
+    <div className="ticker-wrap" style={{ background: bg }}>
       <div className="ticker-track">
         {doubled.map((item, idx) => (
-          <span key={idx} className="ticker-item">{item}</span>
+          <span key={idx} className="ticker-item" style={{ color: txt }}>{item}</span>
         ))}
       </div>
     </div>

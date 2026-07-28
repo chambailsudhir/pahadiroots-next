@@ -13,8 +13,14 @@ export default function AnnouncementBar({ settings }: Props) {
   // browser). Sanitizing once at the layout level, before any client
   // component sees the value, is both safe and correct.
   const text = settings.ann_text?.trim()
+  // Admin's Announcement Bar section lets the store owner pick a
+  // background/text color (ann_bg_color / ann_text_color); falls back to
+  // the original dark-green/gold if unset so existing stores don't change
+  // appearance.
+  const bg  = settings.ann_bg_color   || '#1a3a1e'
+  const txt = settings.ann_text_color || '#d4af37'
   return (
-    <div className="ann-bar">
+    <div className="ann-bar" style={{ background: bg, color: txt }}>
       {text ? (
         <span dangerouslySetInnerHTML={{ __html: text }} />
       ) : (
