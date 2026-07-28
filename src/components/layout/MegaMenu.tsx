@@ -41,13 +41,38 @@ export default function MegaMenu({ categories, states }: Props) {
       if (nav) setMegaTop(nav.getBoundingClientRect().bottom)
     }
     updateTop()
+    // BUG FIX (dropdown overlapping the nav bar instead of appearing
+    // below it, e.g. "View All Products" rendering on top of "Track
+    // Order"): this only ever measured nav's position on mount, scroll,
+    // and resize — never again after that. If that one mount-time
+    // measurement landed before the nav's own layout had fully settled
+    // (the exact same class of timing issue fixed in Header.tsx's
+    // heroPast — web fonts still swapping in, images not yet decoded,
+    // etc. right after hydration), megaTop got stuck wrong indefinitely:
+    // opening the dropdown doesn't scroll or resize the window, so
+    // nothing ever re-triggered a fresh measurement afterwards. A few
+    // delayed re-checks catch a bad initial reading the same way the
+    // retry timers do in Header.tsx.
+    const retryTimers = [50, 150, 400, 800, 1500].map(ms => window.setTimeout(updateTop, ms))
     window.addEventListener('scroll', updateTop, { passive: true })
     window.addEventListener('resize', updateTop, { passive: true })
     return () => {
+      retryTimers.forEach(clearTimeout)
       window.removeEventListener('scroll', updateTop)
       window.removeEventListener('resize', updateTop)
     }
   }, [])
+
+  useEffect(() => {
+    // BUG FIX: also re-measure at the exact moment the dropdown opens —
+    // the one moment correctness matters most, and previously the only
+    // moment with no guaranteed fresh measurement backing it (opening a
+    // dropdown doesn't scroll or resize the window, so the listeners
+    // above never fire from it).
+    if (!open) return
+    const nav = document.querySelector('nav.old-nav') as HTMLElement | null
+    if (nav) setMegaTop(nav.getBoundingClientRect().bottom)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
