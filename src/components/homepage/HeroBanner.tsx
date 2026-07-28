@@ -307,12 +307,12 @@ export default function HeroBanner({ images, settings }: Props) {
         const statsBg   = settings.stat_bg_color     || 'rgba(5,20,8,.97)'
         const statsNum  = settings.stat_number_color || 'var(--gd2)'
         return (
-        <div style={{ background:statsBg, display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'16px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
+        <div style={{ background:statsBg, display:'flex', alignItems:'center', justifyContent:'center', gap:0, padding:'8px 40px', flexWrap:'wrap', marginTop:'-2px', position:'relative', zIndex:10 }}>
           {heroStats.map((s, i) => (
             <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
               <div style={{ textAlign:'center', padding:'0 32px' }}>
-                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(22px,2.5vw,32px)', fontWeight:900, color:statsNum, lineHeight:1.1 }}>{s.num}</div>
-                <div style={{ fontSize:10.5, color:statsNum, opacity:0.5, letterSpacing:1, marginTop:3, textTransform:'uppercase' }}>{s.lbl}</div>
+                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(20px,2.2vw,28px)', fontWeight:900, color:statsNum, lineHeight:1.1 }}>{s.num}</div>
+                <div style={{ fontSize:10.5, color:statsNum, opacity:0.5, letterSpacing:1, marginTop:2, textTransform:'uppercase' }}>{s.lbl}</div>
               </div>
               {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}
             </div>
