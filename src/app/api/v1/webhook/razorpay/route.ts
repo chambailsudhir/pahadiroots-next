@@ -174,6 +174,36 @@ export async function POST(req: Request) {
             razorpay_payment_id: paymentId,
             amount: payment.amount / 100,
           })
+
+          // FEATURE: record the actual captured amount in `payments` — this is
+          // the independent source validate_waterfall() (admin) reconciles
+          // against. Previously nothing ever wrote to this table at all, so
+          // that reconciliation had zero real data to check against. Runs only
+          // in this race-winner branch (at most once per real capture), plus
+          // ON CONFLICT as a DB-level backstop against a redelivered webhook.
+          const { error: paymentInsertErr } = await db
+            .from('payments')
+            .insert({
+              order_id:          order.id,
+              payment_provider:  'razorpay',
+              payment_reference: paymentId,
+              amount:            payment.amount / 100,
+              status:            'captured',
+              paid_at:           new Date().toISOString(),
+            })
+            .select('id')
+          if (paymentInsertErr && !String(paymentInsertErr.message).includes('duplicate')) {
+            // Non-fatal: the order is already confirmed at this point, and
+            // failing the whole webhook over an audit-trail insert would risk
+            // Razorpay retrying and re-triggering the (already-guarded) capture
+            // logic unnecessarily. Surface it so ops can backfill manually.
+            captureError(new Error('payments insert failed: ' + paymentInsertErr.message), {
+              action:     'webhook.razorpay.payments_insert',
+              payment_id: paymentId,
+              order_id:   order.id,
+              alert:      true,
+            })
+          }
         } else {
           // Lost the race or replayed event — another process already confirmed this order
           logger.info('webhook: payment.captured order already confirmed by concurrent process', {
@@ -245,6 +275,26 @@ export async function POST(req: Request) {
         await logOrderEvent(order.id, 'payment_failed_webhook', 'razorpay', {
           reason: payment.error_reason,
         })
+
+        const { error: failedPaymentInsertErr } = await db
+          .from('payments')
+          .insert({
+            order_id:          order.id,
+            payment_provider:  'razorpay',
+            payment_reference: payment.id,
+            amount:            payment.amount / 100,
+            status:            'failed',
+            paid_at:           null,
+          })
+          .select('id')
+        if (failedPaymentInsertErr && !String(failedPaymentInsertErr.message).includes('duplicate')) {
+          captureError(new Error('payments insert (failed) failed: ' + failedPaymentInsertErr.message), {
+            action:     'webhook.razorpay.payments_insert_failed',
+            payment_id: payment.id,
+            order_id:   order.id,
+            alert:      false,
+          })
+        }
       }
     }
 
