@@ -535,17 +535,25 @@ export async function createOrder(
   }
 
   // 7. Generate order number — shown to customers and support.
-  //    Date.now() gives the millisecond epoch; appending 4 random base-36 chars
-  //    makes same-millisecond collisions astronomically unlikely without any DB
-  //    lookup. The idempotency_key remains the true uniqueness guard in the DB.
-  //    BUG FIX: prefix was hardcoded 'PR', completely ignoring the admin
-  //    panel's configurable order_prefix setting (confirmed against
-  //    pahadi-admin directly) — a store owner changing this had zero
-  //    effect on actual order numbers. Admin's own default is also 'PR',
-  //    so this is a zero-risk change: behavior is identical unless an
-  //    owner has actually customized it.
+  //    FIX (restoring the original readable format): order numbers used to
+  //    look like ORD-2026-00076 (see order id 82, the last one in this
+  //    format, created 2026-05-17) via order_number_seq, a real Postgres
+  //    sequence that's still live in the DB. A later change replaced this
+  //    with a Date.now()-base36 + random-suffix string generated here in
+  //    application code, to avoid a race condition from a non-atomic
+  //    "SELECT MAX+1" approach -- but nextval() on a real sequence is
+  //    already atomic and safe under concurrency, so that trade-off was
+  //    never actually necessary. This restores the readable format via the
+  //    same sequence, atomically, with zero collision risk -- best of both.
   const orderPrefix = (settings.order_prefix || 'PR').trim().toUpperCase()
-  const orderNumber = `${orderPrefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
+  const { data: orderNumberResult, error: orderNumberErr } = await db.rpc('generate_order_number', { p_prefix: orderPrefix })
+  if (orderNumberErr || !orderNumberResult) {
+    // Should be exceedingly rare (the function itself can't really fail),
+    // but never let order creation itself hang or fail over a numbering
+    // problem — fall back to the previous scheme rather than block checkout.
+    logger.error('orderService: generate_order_number failed, falling back', { action: 'orderService.orderNumber', error: orderNumberErr?.message })
+  }
+  const orderNumber = orderNumberResult || `${orderPrefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase()
 
   // 7b. Upsert customer — actual schema stores customer_id FK, not inline fields
   // Matches old site pattern: lookup by phone → upsert → get custId
