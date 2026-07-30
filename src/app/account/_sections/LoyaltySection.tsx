@@ -8,6 +8,14 @@ import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
+// BUG FIX (found in a fresh audit): the referral link below used to
+// hardcode 'https://pahadiroots.com' in two places, independent of the
+// NEXT_PUBLIC_SITE_URL env var that layout.tsx's metadataBase already
+// reads for this exact purpose. Same shared value now used here too,
+// so the two can't drift apart if the real domain is ever configured
+// differently via that env var.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+
 interface Transaction {
   id:           string
   type:         'earn' | 'redeem' | 'expire' | 'referral' | 'bonus' | 'adjustment'
@@ -130,7 +138,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
 
   function copyReferral() {
     if (!data?.referral_code) return
-    const url = `https://pahadiroots.com?ref=${data.referral_code}`
+    const url = `${SITE_URL}?ref=${data.referral_code}`
 
     // navigator.clipboard is only available in secure contexts (HTTPS) and
     // may throw on older Android WebViews. Fall back to a visible read-only
@@ -233,7 +241,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
                 ref={fallbackInputRef}
                 type="text"
                 readOnly
-                value={`https://pahadiroots.com?ref=${data.referral_code}`}
+                value={`${SITE_URL}?ref=${data.referral_code}`}
                 style={{ flex: 1, fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d0d0d0', background: '#f9f9f9' }}
                 onFocus={e => e.target.select()}
                 aria-label="Referral link — select and copy manually"

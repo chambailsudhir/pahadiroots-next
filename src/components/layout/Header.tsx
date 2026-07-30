@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useCartStore, selectCartCount } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
@@ -25,6 +26,20 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const wishlist   = useUserStore(s => s.wishlist)
   const user       = useUserStore(s => s.user)
   const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
+  const pathname   = usePathname()
+
+  // FEATURE: on the homepage, the hero banner was always squeezed into
+  // whatever height was left below the header — the announcement bar +
+  // ticker + nav row all reserved flow space above it, forcing the
+  // hero's background image to crop more than necessary. This makes the
+  // nav a fixed, transparent-until-scrolled overlay on the homepage
+  // only, so the hero gets its full height back. Every other page keeps
+  // the original solid, in-flow nav untouched.
+  const overlayNav = pathname === '/'
+  // heroPast: has the hero (#home-hero-banner, see HeroBanner.tsx)
+  // scrolled fully out from behind the nav yet? Only meaningful when
+  // overlayNav is true.
+  const [heroPast, setHeroPast] = useState(false)
 
   const [scrolled, setScrolled] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
@@ -56,11 +71,44 @@ export default function Header({ settings, categories = [], states = [] }: Props
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    if (!overlayNav) return
+
+    function measure() {
+      const heroEl = document.getElementById('home-hero-banner')
+      if (!heroEl) return
+      const rect = heroEl.getBoundingClientRect()
+      // Guard against a transient, not-yet-settled layout read (fonts/
+      // images not finished loading, or measured before the browser has
+      // laid out the hero at all) reporting an unrealistically small
+      // height — the real hero is roughly 540-800px tall depending on
+      // viewport. Skip (don't update state from) any reading below that.
+      if (rect.height < 200) return
+      setHeroPast(rect.bottom <= 0)
+    }
+
+    measure()
+    // A single measurement at mount can still occasionally land on a bad
+    // frame even past the height guard above (e.g. web fonts swapping in
+    // and shifting layout a moment later). A few delayed retries catch
+    // and correct that without needing a full ResizeObserver.
+    const retryTimers = [300, 800, 2000].map(delay => setTimeout(measure, delay))
+    window.addEventListener('scroll', measure, { passive: true })
+
+    return () => {
+      retryTimers.forEach(clearTimeout)
+      window.removeEventListener('scroll', measure)
+    }
+    // Deliberately depends on overlayNav only — NOT on any measured
+    // layout value (e.g. a topBarHeight-style state) — so this effect
+    // doesn't tear down and re-subscribe its scroll listener every time
+    // an unrelated layout measurement changes (e.g. on window resize).
+  }, [overlayNav])
+
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)
   const siteName     = settings.site_name || 'HimVeda by Pahadi Roots'
   const logoUrl      = settings.logo_url || ''
-  const freeShipMin  = settings.free_shipping_min || '0'
 
   const firstName = user?.name?.split(' ')[0] || ''
   const initials  = firstName ? firstName[0].toUpperCase() : ''
@@ -74,7 +122,10 @@ export default function Header({ settings, categories = [], states = [] }: Props
       <AnnouncementBar settings={settings} />
       <TickerBar settings={settings} />
 
-      <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
+      <nav
+        className={`old-nav${(overlayNav ? heroPast : scrolled) ? ' scrolled' : ''}${overlayNav ? ' overlay-nav' : ''}${overlayNav && !heroPast ? ' overlay-nav-transparent' : ''}`}
+        style={overlayNav ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 30 } : undefined}
+      >
         {/* Logo */}
         <Link href="/" className="old-logo">
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
