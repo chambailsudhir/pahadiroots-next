@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
@@ -362,64 +362,73 @@ export async function POST(req: NextRequest) {
         razorpay_payment_id, razorpay_order_id,
       }).catch(() => null)
 
-      // 7. Confirmation email
-      try {
-        const { data: customer } = await db
-          .from('customers').select('first_name, email').eq('id', currentOrder.customer_id).single()
+      // BUG FIX (same class as the orders-route 504 fix): this email send was
+      // awaited directly in the response path, with its own internal
+      // timeout+retry (up to ~10.4s worst case, see lib/server/email.ts) that
+      // could push this whole request past Vercel's default function timeout
+      // even though payment verification and order confirmation were already
+      // fully committed by this point. Deferred to after() so the response
+      // below returns immediately; delivery guarantee (incl. failed_emails
+      // dead-letter) is unchanged.
+      after(async () => {
+        try {
+          const { data: customer } = await db
+            .from('customers').select('first_name, email').eq('id', currentOrder.customer_id).single()
 
-        if (customer?.email && currentOrder) {
-          const coinsEarned = Math.floor(currentOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
-          const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
-            ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
-                 <span style="font-size:18px">🪙</span>
-                 <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins!</strong>
-                 <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them on your next order.</p>
-               </div>`
-            : ''
+          if (customer?.email && currentOrder) {
+            const coinsEarned = Math.floor(currentOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+            const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
+              ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
+                   <span style="font-size:18px">🪙</span>
+                   <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins!</strong>
+                   <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them on your next order.</p>
+                 </div>`
+              : ''
 
-          // AUDIT FIX [ERROR HANDLING]: previously imported Resend directly
-          // and called resend.emails.send() here. The Resend SDK resolves
-          // (never rejects) on API-level failures — neither this nor the
-          // surrounding try/catch ever caught a real send failure (bad API
-          // key, unverified domain, bounce, quota/rate-limit). See
-          // lib/server/email.ts for the full explanation. sendTransactionalEmail()
-          // checks the resolved `error` explicitly and dead-letters into
-          // `failed_emails` for retry via the cron sweep instead of the
-          // payment-confirmation email simply vanishing.
-          await sendTransactionalEmail({
-            type:    'payment_confirmation',
-            to:      customer.email,
-            subject: `Payment Confirmed #${currentOrder.order_number} — HimVeda by Pahadi Roots 🌿`,
-            html: `
-              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
-                <div style="background:#2C4A2E;padding:24px;text-align:center">
-                  <h1 style="color:#fff;margin:0;font-size:22px">🌿 HimVeda by Pahadi Roots</h1>
-                  <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
-                </div>
-                <div style="padding:24px">
-                  <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
-                  <p>Hi <strong>${esc(customer.first_name)}</strong>, your payment was successful.</p>
-                  <p><strong>Order #:</strong> ${esc(currentOrder.order_number)}<br>
-                     <strong>Payment ID:</strong> ${esc(razorpay_payment_id)}<br>
-                     <strong>Amount Paid:</strong> ₹${currentOrder.total_amount}<br>
-                     <strong>Delivery:</strong> 3–5 business days</p>
-                  ${coinsHtml}
-                  <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
-                  <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
-                </div>
-                <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
-                  HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
-                </div>
-              </div>`,
-            context: { order_id: currentOrder.id, order_number: currentOrder.order_number },
-          })
+            // AUDIT FIX [ERROR HANDLING]: previously imported Resend directly
+            // and called resend.emails.send() here. The Resend SDK resolves
+            // (never rejects) on API-level failures — neither this nor the
+            // surrounding try/catch ever caught a real send failure (bad API
+            // key, unverified domain, bounce, quota/rate-limit). See
+            // lib/server/email.ts for the full explanation. sendTransactionalEmail()
+            // checks the resolved `error` explicitly and dead-letters into
+            // `failed_emails` for retry via the cron sweep instead of the
+            // payment-confirmation email simply vanishing.
+            await sendTransactionalEmail({
+              type:    'payment_confirmation',
+              to:      customer.email,
+              subject: `Payment Confirmed #${currentOrder.order_number} — HimVeda by Pahadi Roots 🌿`,
+              html: `
+                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
+                  <div style="background:#2C4A2E;padding:24px;text-align:center">
+                    <h1 style="color:#fff;margin:0;font-size:22px">🌿 HimVeda by Pahadi Roots</h1>
+                    <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
+                  </div>
+                  <div style="padding:24px">
+                    <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
+                    <p>Hi <strong>${esc(customer.first_name)}</strong>, your payment was successful.</p>
+                    <p><strong>Order #:</strong> ${esc(currentOrder.order_number)}<br>
+                       <strong>Payment ID:</strong> ${esc(razorpay_payment_id)}<br>
+                       <strong>Amount Paid:</strong> ₹${currentOrder.total_amount}<br>
+                       <strong>Delivery:</strong> 3–5 business days</p>
+                    ${coinsHtml}
+                    <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
+                    <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
+                  </div>
+                  <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
+                    HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
+                  </div>
+                </div>`,
+              context: { order_id: currentOrder.id, order_number: currentOrder.order_number },
+            })
+          }
+        } catch (e) {
+          // Catches errors from BUILDING the email (the customer lookup
+          // query, template interpolation) — sendTransactionalEmail() itself
+          // never throws.
+          logger.error('payments: email failed after payment confirmation', { action: 'payments.email', error: e instanceof Error ? e.message : String(e) })
         }
-      } catch (e) {
-        // Catches errors from BUILDING the email (the customer lookup
-        // query, template interpolation) — sendTransactionalEmail() itself
-        // never throws.
-        logger.error('payments: email failed after payment confirmation', { action: 'payments.email', error: e instanceof Error ? e.message : String(e) })
-      }
+      })
 
       return NextResponse.json({
         success:      true,

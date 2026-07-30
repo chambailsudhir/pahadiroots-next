@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createOrder } from '@/lib/services/orderService'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
@@ -139,45 +139,59 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Confirmation email ─────────────────────────────────────────────────
-    const customerEmail = d.customer_email?.trim()
-    if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
-      try {
-        const emailItems = order.cartItems ?? []
-        const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
-        const estDate    = getDeliveryEstimate()
-        const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+    // BUG FIX (live 504 on checkout): both email sends below used to be awaited
+    // directly in the request path. Each has its own internal timeout+retry
+    // (up to ~10.4s worst case per email, see lib/server/email.ts), and there
+    // are two of them sequentially here (customer confirmation + admin notify)
+    // -- worst case ~20s, well past Vercel's default function timeout (this
+    // route has no maxDuration override). The order (and loyalty points) are
+    // already fully committed by this point; the client was seeing "Order
+    // save failed (504)" for orders that had, in fact, saved successfully.
+    // Fixed with after() (stable in Next.js 15+, this app is on 16.2.9): the
+    // response below returns to the client immediately, and Vercel keeps the
+    // function alive in the background just long enough to finish the emails
+    // -- same delivery guarantee as before (including the failed_emails
+    // dead-letter path), just no longer blocking the user-visible response.
+    after(async () => {
+      // ── Confirmation email ─────────────────────────────────────────────
+      const customerEmail = d.customer_email?.trim()
+      if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
+        try {
+          const emailItems = order.cartItems ?? []
+          const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
+          const estDate    = getDeliveryEstimate()
+          const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
 
-        // ── All user-supplied strings are HTML-escaped before interpolation ──
-        const safeName    = esc(name)
-        const safeFlat    = esc(flat)
-        const safeArea    = esc(area)
-        const safeCity    = esc(city)
-        const safeState   = esc(state)
-        const safePincode = esc(a.pincode)
+          // ── All user-supplied strings are HTML-escaped before interpolation ──
+          const safeName    = esc(name)
+          const safeFlat    = esc(flat)
+          const safeArea    = esc(area)
+          const safeCity    = esc(city)
+          const safeState   = esc(state)
+          const safePincode = esc(a.pincode)
 
-        const itemsHtml = emailItems.map(i =>
-          `<tr>
-            <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
-              <span style="font-size:16px">${esc(i.emoji) || '🌿'}</span>
-              <strong style="color:#1a1a1a;margin-left:8px">${esc(i.name)}</strong>
-              <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
-            </td>
-            <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
-              ₹${(i.price * i.qty).toLocaleString('en-IN')}
-            </td>
-          </tr>`
-        ).join('')
+          const itemsHtml = emailItems.map(i =>
+            `<tr>
+              <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
+                <span style="font-size:16px">${esc(i.emoji) || '🌿'}</span>
+                <strong style="color:#1a1a1a;margin-left:8px">${esc(i.name)}</strong>
+                <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
+              </td>
+              <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
+                ₹${(i.price * i.qty).toLocaleString('en-IN')}
+              </td>
+            </tr>`
+          ).join('')
 
-        const coinsHtml = settings.loyalty_enabled !== 'false' && coinsEarned > 0
-          ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
-               <span style="font-size:18px">🪙</span>
-               <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins on this order!</strong>
-               <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them for discounts on your next order.</p>
-             </div>`
-          : ''
+          const coinsHtml = settings.loyalty_enabled !== 'false' && coinsEarned > 0
+            ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
+                 <span style="font-size:18px">🪙</span>
+                 <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins on this order!</strong>
+                 <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them for discounts on your next order.</p>
+               </div>`
+            : ''
 
-        const emailHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+          const emailHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
 <div style="max-width:580px;margin:0 auto;padding:24px 16px">
   <div style="background:linear-gradient(135deg,#1a3a1e,#2d5233);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center">
@@ -225,52 +239,53 @@ export async function POST(req: NextRequest) {
 </div>
 </body></html>`
 
-        // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
-        // directly inside this try/catch. The Resend SDK resolves (never
-        // rejects) on API-level failures, so this catch never fired for the
-        // most common failure mode — see lib/server/email.ts for the full
-        // explanation. sendTransactionalEmail() checks the resolved `error`
-        // field explicitly and dead-letters into `failed_emails` for retry
-        // via the cron sweep instead of the email simply vanishing.
-        await sendTransactionalEmail({
-          type:    'order_confirmation',
-          to:      customerEmail,
-          subject: `Order Confirmed - ${order.order_number}`,
-          html:    emailHtml,
-          context: { order_id: order.id, order_number: order.order_number },
-        })
-      } catch (e) {
-        // Catches errors from BUILDING the email (template interpolation,
-        // etc.) — sendTransactionalEmail() itself never throws.
-        logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+          // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
+          // directly inside this try/catch. The Resend SDK resolves (never
+          // rejects) on API-level failures, so this catch never fired for the
+          // most common failure mode — see lib/server/email.ts for the full
+          // explanation. sendTransactionalEmail() checks the resolved `error`
+          // field explicitly and dead-letters into `failed_emails` for retry
+          // via the cron sweep instead of the email simply vanishing.
+          await sendTransactionalEmail({
+            type:    'order_confirmation',
+            to:      customerEmail,
+            subject: `Order Confirmed - ${order.order_number}`,
+            html:    emailHtml,
+            context: { order_id: order.id, order_number: order.order_number },
+          })
+        } catch (e) {
+          // Catches errors from BUILDING the email (template interpolation,
+          // etc.) — sendTransactionalEmail() itself never throws.
+          logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+        }
       }
-    }
 
-    // Notify admin
-    if (settings.admin_notify_email && !alreadyExists) {
-      try {
-        const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
-          ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
-        await sendTransactionalEmail({
-          type:    'admin_order_notify',
-          to:      settings.admin_notify_email,
-          subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
-          // Admin email — all user-supplied fields go through sanitize() above
-          // (name, flat, area, city, state) then esc() for HTML encoding.
-          html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
-          context: { order_id: order.id, order_number: order.order_number },
-        })
-      } catch (e) {
-        // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
-        // with zero logging — if the admin notification email failed (bad
-        // RESEND_API_KEY, rate limit, admin_notify_email misconfigured), there
-        // was NO trace anywhere that admin was never notified of a new order.
-        // The customer-email catch two blocks above already logs correctly;
-        // this one silently ate the same class of failure. Now logged for
-        // ops visibility, matching the customer-email path.
-        logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+      // Notify admin
+      if (settings.admin_notify_email && !alreadyExists) {
+        try {
+          const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
+            ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
+          await sendTransactionalEmail({
+            type:    'admin_order_notify',
+            to:      settings.admin_notify_email,
+            subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
+            // Admin email — all user-supplied fields go through sanitize() above
+            // (name, flat, area, city, state) then esc() for HTML encoding.
+            html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
+            context: { order_id: order.id, order_number: order.order_number },
+          })
+        } catch (e) {
+          // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
+          // with zero logging — if the admin notification email failed (bad
+          // RESEND_API_KEY, rate limit, admin_notify_email misconfigured), there
+          // was NO trace anywhere that admin was never notified of a new order.
+          // The customer-email catch two blocks above already logs correctly;
+          // this one silently ate the same class of failure. Now logged for
+          // ops visibility, matching the customer-email path.
+          logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+        }
       }
-    }
+    })
 
     return NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },

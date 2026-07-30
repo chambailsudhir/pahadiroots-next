@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { subscribeSchema, reviewSchema, notifyStockSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
@@ -132,54 +132,47 @@ export async function POST(req: NextRequest) {
       // Deliberately best-effort and non-blocking: a coupon/email hiccup
       // must never fail the newsletter signup itself (matches the
       // contact-form pattern immediately below).
-      try {
-        const code = generateWelcomeCouponCode(email)
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      // BUG FIX (same class as the checkout 504 fix): deferred to after() so
+      // a slow/retrying email send can't delay or fail the newsletter
+      // signup response. Coupon creation + email happen in the background;
+      // delivery guarantee (incl. failed_emails dead-letter) is unchanged.
+      after(async () => {
+        try {
+          const code = generateWelcomeCouponCode(email)
+          const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
-        await db.from('coupons').upsert(
-          {
-            code,
-            type:              'percent',
-            value:             5,
-            max_uses:          1,
-            uses_count:        0,
-            is_active:         true,
-            expires_at:        expiresAt,
-            // CORRECTED after schema verification: coupons has both of
-            // these real columns (my first draft didn't know they
-            // existed and omitted them). description is admin-facing
-            // only. first_order_only is set to accurately describe
-            // intent, but — checked directly against
-            // pricingService.ts/orderService.ts before writing this
-            // comment — it is NOT currently read or enforced by any
-            // validation code; only min_order, max_uses, and expires_at
-            // are actually checked. The real single-use guarantee here
-            // is max_uses:1 combined with the code being deterministic
-            // per-email. Don't rely on first_order_only alone to mean
-            // "only works on someone's first order" until that
-            // enforcement is actually added.
-            first_order_only:  true,
-            description:       'Newsletter welcome discount (5% off, first order)',
-          },
-          { onConflict: 'code', ignoreDuplicates: true },
-        )
+          await db.from('coupons').upsert(
+            {
+              code,
+              type:              'percent',
+              value:             5,
+              max_uses:          1,
+              uses_count:        0,
+              is_active:         true,
+              expires_at:        expiresAt,
+              first_order_only:  true,
+              description:       'Newsletter welcome discount (5% off, first order)',
+            },
+            { onConflict: 'code', ignoreDuplicates: true },
+          )
 
-        const safeEmailForHtml = esc(email)
-        await sendTransactionalEmail({
-          type:    'newsletter_welcome',
-          to:      email,
-          from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
-          subject: 'Welcome to HimVeda by Pahadi Roots — here\u2019s 5% off your first order',
-          html:    `<p>Hi${safeName ? ' ' + esc(safeName) : ''},</p>
+          const safeEmailForHtml = esc(email)
+          await sendTransactionalEmail({
+            type:    'newsletter_welcome',
+            to:      email,
+            from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
+            subject: 'Welcome to HimVeda by Pahadi Roots — here\u2019s 5% off your first order',
+            html:    `<p>Hi${safeName ? ' ' + esc(safeName) : ''},</p>
 <p>Thanks for joining the HimVeda by Pahadi Roots community! Use the code below at checkout for 5% off your first order:</p>
 <p style="font-size:20px;font-weight:800;letter-spacing:1px;">${esc(code)}</p>
 <p>Valid for 30 days, one-time use.</p>`,
-          context: { subscribed_email: safeEmailForHtml, coupon_code: code },
-        })
-      } catch (e) {
-        // Non-fatal — the subscription itself already succeeded above.
-        logger.error('actions: newsletter welcome coupon/email failed', { action: 'actions.subscribe.welcomeEmail', error: e instanceof Error ? e.message : String(e) })
-      }
+            context: { subscribed_email: safeEmailForHtml, coupon_code: code },
+          })
+        } catch (e) {
+          // Non-fatal — the subscription itself already succeeded above.
+          logger.error('actions: newsletter welcome coupon/email failed', { action: 'actions.subscribe.welcomeEmail', error: e instanceof Error ? e.message : String(e) })
+        }
+      })
 
       return NextResponse.json({ success: true })
     }
@@ -243,47 +236,54 @@ export async function POST(req: NextRequest) {
 
     if (action === 'contact') {
       // Log contact form to admin_logs or send email
-      try {
-        // BUG FIX: no length validation on name/email/message — an attacker
-        // could submit megabyte-sized fields which would be relayed in the
-        // email body and logged. Truncate before escape+send.
-        const rawName    = String(body.name    ?? '').slice(0, 200)
-        const rawEmail   = String(body.email   ?? '').slice(0, 200)
-        const rawMessage = String(body.message ?? '').slice(0, 5000)
+      // BUG FIX: no length validation on name/email/message — an attacker
+      // could submit megabyte-sized fields which would be relayed in the
+      // email body and logged. Truncate before escape+send.
+      const rawName    = String(body.name    ?? '').slice(0, 200)
+      const rawEmail   = String(body.email   ?? '').slice(0, 200)
+      const rawMessage = String(body.message ?? '').slice(0, 5000)
 
-        // BUG FIX: email field was not validated as a real email address —
-        // any string (including garbage like "><script>") could be relayed in
-        // the admin email subject and body. Validate with a simple RFC-5321
-        // compatible check before using it.
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
-        if (!emailValid) {
-          return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
-        }
-
-        // HTML-escape before interpolating into email HTML to prevent injection
-        const safeName    = esc(rawName)
-        const safeEmail   = esc(rawEmail)
-        const safeMessage = esc(rawMessage)
-        // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
-        // directly. The Resend SDK resolves (never rejects) on API-level
-        // failures, so the catch below never actually fired for the most
-        // common failure mode — see lib/server/email.ts for the full
-        // explanation. sendTransactionalEmail() checks the resolved `error`
-        // field and dead-letters into `failed_emails` for retry instead of
-        // the contact-form notification simply vanishing.
-        await sendTransactionalEmail({
-          type:    'contact_form',
-          to:      process.env.ADMIN_EMAIL || 'hello@pahadiroots.com',
-          from:    'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>',
-          subject: `Contact form: ${safeName}`,
-          html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
-          context: { submitted_email: rawEmail },
-        })
-      } catch (e) {
-        // Catches errors from validating/building the email above —
-        // sendTransactionalEmail() itself never throws.
-        logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })
+      // BUG FIX: email field was not validated as a real email address —
+      // any string (including garbage like "><script>") could be relayed in
+      // the admin email subject and body. Validate with a simple RFC-5321
+      // compatible check before using it.
+      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
+      if (!emailValid) {
+        return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
       }
+
+      // BUG FIX (same class as the checkout 504 fix): the admin-notification
+      // email is deferred to after() — validation above still runs
+      // synchronously (so a bad email address still gets a 400 immediately),
+      // but the actual send can't delay or fail the visitor's "message sent"
+      // response.
+      after(async () => {
+        try {
+          // HTML-escape before interpolating into email HTML to prevent injection
+          const safeName    = esc(rawName)
+          const safeEmail   = esc(rawEmail)
+          const safeMessage = esc(rawMessage)
+          // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
+          // directly. The Resend SDK resolves (never rejects) on API-level
+          // failures, so the catch below never actually fired for the most
+          // common failure mode — see lib/server/email.ts for the full
+          // explanation. sendTransactionalEmail() checks the resolved `error`
+          // field and dead-letters into `failed_emails` for retry instead of
+          // the contact-form notification simply vanishing.
+          await sendTransactionalEmail({
+            type:    'contact_form',
+            to:      process.env.ADMIN_EMAIL || 'hello@pahadiroots.com',
+            from:    'HimVeda by Pahadi Roots Contact <noreply@pahadiroots.com>',
+            subject: `Contact form: ${safeName}`,
+            html:    `<p><b>Name:</b> ${safeName}<br><b>Email:</b> ${safeEmail}<br><b>Message:</b> ${safeMessage}</p>`,
+            context: { submitted_email: rawEmail },
+          })
+        } catch (e) {
+          // Catches errors from validating/building the email above —
+          // sendTransactionalEmail() itself never throws.
+          logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })
+        }
+      })
       return NextResponse.json({ success: true })
     }
 
