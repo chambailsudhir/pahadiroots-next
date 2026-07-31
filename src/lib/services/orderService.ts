@@ -538,13 +538,17 @@ export async function createOrder(
   //    FIX (restoring the original readable format): order numbers used to
   //    look like ORD-2026-00076 (see order id 82, the last one in this
   //    format, created 2026-05-17) via order_number_seq, a real Postgres
-  //    sequence that's still live in the DB. A later change replaced this
-  //    with a Date.now()-base36 + random-suffix string generated here in
-  //    application code, to avoid a race condition from a non-atomic
-  //    "SELECT MAX+1" approach -- but nextval() on a real sequence is
-  //    already atomic and safe under concurrency, so that trade-off was
-  //    never actually necessary. This restores the readable format via the
-  //    same sequence, atomically, with zero collision risk -- best of both.
+  //    sequence that's still live in the DB, generated automatically by a
+  //    set_order_number() BEFORE INSERT trigger on `orders`.
+  //    CONFIRMED root cause (found live while testing this fix, updating
+  //    this comment from an earlier, incorrect "avoiding a race condition"
+  //    theory): that trigger was NOT actually attached to the orders table
+  //    -- it had gone missing at some point, silently leaving order_number
+  //    NULL on insert (nullable column, no default). The Date.now()-base36
+  //    scheme that used to live here was a client-side stopgap for that, not
+  //    a deliberate collision-avoidance trade-off. The DB-side trigger has
+  //    since been restored as a defense-in-depth safety net (see migration
+  //    037), but this explicit call remains the primary path.
   const orderPrefix = (settings.order_prefix || 'PR').trim().toUpperCase()
   const { data: orderNumberResult, error: orderNumberErr } = await db.rpc('generate_order_number', { p_prefix: orderPrefix })
   if (orderNumberErr || !orderNumberResult) {
