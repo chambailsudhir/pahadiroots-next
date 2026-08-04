@@ -89,6 +89,16 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://cdn.razorpay.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://ulyrhnpoiypuvaurlqqi.supabase.co",
+              // BUG FIX (found via browser CSP block on the Hero Banner's
+              // Background Video): media-src has no fallback of its own —
+              // when unset, browsers fall back to default-src 'self', which
+              // silently blocks a <video src="https://...supabase.co/...mp4">
+              // from loading at all. img-src and connect-src already allow
+              // the Supabase storage domain; media-src needs the same, or
+              // any admin-uploaded hero video (or future audio/video content)
+              // just renders its poster frame with no console error a typical
+              // user would ever see — it looks identical to "no video set."
+              "media-src 'self' https://ulyrhnpoiypuvaurlqqi.supabase.co",
               "font-src 'self'",
               // BUG FIX (found via browser console CSP errors): Razorpay's checkout SDK
               // also calls lumberjack.razorpay.com for its own internal analytics/fraud
