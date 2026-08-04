@@ -48,6 +48,13 @@ export default function HeroBanner({ images, settings }: Props) {
   const total  = slides ? slides.length : 1
   const heroStats = getHeroStats(settings)
 
+  // Tap-to-unmute: browsers block unmuted autoplay outright, so every
+  // video starts muted (required for autoplay to work at all). This lets
+  // a visitor opt in to sound with one click — which browsers do allow,
+  // since it's a direct user gesture. Declared before the ref/play effect
+  // below since that effect reads isMuted.
+  const [isMuted, setIsMuted] = useState(true)
+
   // BUG FIX: all slides stay mounted simultaneously (only opacity toggles),
   // which means each slide's <video> element is already sitting in the DOM
   // well before it's ever shown. The HTML `autoplay` attribute only makes a
@@ -70,11 +77,6 @@ export default function HeroBanner({ images, settings }: Props) {
     })
   }, [current, isMuted])
 
-  // Tap-to-unmute: browsers block unmuted autoplay outright, so every
-  // video starts muted (required for autoplay to work at all). This lets
-  // a visitor opt in to sound with one click — which browsers do allow,
-  // since it's a direct user gesture.
-  const [isMuted, setIsMuted] = useState(true)
   useEffect(() => {
     videoRefs.current.forEach(el => { if (el) el.muted = isMuted })
   }, [isMuted])
