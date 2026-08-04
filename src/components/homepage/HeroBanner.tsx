@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { SiteSettings } from '@/types'
@@ -47,6 +47,28 @@ export default function HeroBanner({ images, settings }: Props) {
   const slides = images.length > 0 ? images : null
   const total  = slides ? slides.length : 1
   const heroStats = getHeroStats(settings)
+
+  // BUG FIX: all slides stay mounted simultaneously (only opacity toggles),
+  // which means each slide's <video> element is already sitting in the DOM
+  // well before it's ever shown. The HTML `autoplay` attribute only makes a
+  // browser start playback once, at the moment that element is first
+  // inserted/loaded — flipping the React `autoPlay` prop later (when a
+  // later slide's turn comes up in rotation) changes the attribute in the
+  // DOM, but browsers don't re-evaluate `autoplay` after the fact and start
+  // playing from that. Net effect: only the video on the slide that happens
+  // to be visible on initial page load ever actually plays; every other
+  // slide's video just sits on its first frame indefinitely, which looks
+  // identical to a static background image. Explicitly calling .play() /
+  // .pause() via refs, driven off `current`, fixes every slide regardless
+  // of load order.
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+  useEffect(() => {
+    videoRefs.current.forEach((el, i) => {
+      if (!el) return
+      if (i === current) el.play().catch(() => {}) // catch: browser may still block until user interacts once
+      else el.pause()
+    })
+  }, [current])
 
   // BUG FIX (found in a fresh re-audit): unlike CategoryTiles.tsx (which
   // correctly pauses its own autoplay on hover/touch), this had NO
@@ -171,6 +193,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 before. */}
             {img.video ? (
               <video
+                ref={el => { videoRefs.current[i] = el }}
                 src={img.video}
                 poster={img.url || undefined}
                 autoPlay={isVisible}
