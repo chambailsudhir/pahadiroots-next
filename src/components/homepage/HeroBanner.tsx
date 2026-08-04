@@ -65,10 +65,19 @@ export default function HeroBanner({ images, settings }: Props) {
   useEffect(() => {
     videoRefs.current.forEach((el, i) => {
       if (!el) return
-      if (i === current) el.play().catch(() => {}) // catch: browser may still block until user interacts once
+      if (i === current) { el.muted = isMuted; el.play().catch(() => {}) } // catch: browser may still block until user interacts once
       else el.pause()
     })
-  }, [current])
+  }, [current, isMuted])
+
+  // Tap-to-unmute: browsers block unmuted autoplay outright, so every
+  // video starts muted (required for autoplay to work at all). This lets
+  // a visitor opt in to sound with one click — which browsers do allow,
+  // since it's a direct user gesture.
+  const [isMuted, setIsMuted] = useState(true)
+  useEffect(() => {
+    videoRefs.current.forEach(el => { if (el) el.muted = isMuted })
+  }, [isMuted])
 
   // BUG FIX (found in a fresh re-audit): unlike CategoryTiles.tsx (which
   // correctly pauses its own autoplay on hover/touch), this had NO
@@ -197,7 +206,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 src={img.video}
                 poster={img.url || undefined}
                 autoPlay={isVisible}
-                muted
+                muted={isMuted}
                 loop
                 playsInline
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
@@ -291,6 +300,28 @@ export default function HeroBanner({ images, settings }: Props) {
             ›
           </button>
         </>)}
+
+        {/* Mute / unmute — only relevant when the current slide has a
+            video, and only rendered once here (not per-slide) since only
+            one video ever plays at a time. */}
+        {slides && slides[current]?.video && (
+          <button onClick={() => setIsMuted(m => !m)} aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+            style={{ position:'absolute', right:20, bottom:66, zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:40, height:40, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,.4)' }}>
+            {isMuted ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              </svg>
+            )}
+          </button>
+        )}
 
         {/* Dots */}
         {total > 1 && (
