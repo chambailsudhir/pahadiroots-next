@@ -318,6 +318,7 @@ export interface SiteSettings {
 
   // Checkout settings
   prepaid_discount_pct: string          // number as string e.g. '5'
+  cod_surcharge_amount: string          // flat ₹ COD handling fee, folded into total e.g. '20'
   cod_enabled: string
   cod_max_value: string                 // max COD order value e.g. '3000'
   cod_max_active_orders: string         // fraud: max active COD orders per phone

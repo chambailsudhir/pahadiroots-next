@@ -24,6 +24,7 @@ const CART_SETTING_KEYS = [
   'min_order_amount',
   'whatsapp_number',
   'prepaid_discount_pct',
+  'cod_surcharge_amount',
   'cod_enabled',
   'cod_max_value',
   // BUG FIX: upi_enabled and loyalty_enabled were missing but are consumed by

@@ -8,6 +8,7 @@ export interface PriceSummary {
   shipping:        number   // 0 or flat charge
   gstTotal:        number   // total GST included in items
   prepaidDiscount: number   // additional % off for prepaid
+  codSurcharge:    number   // flat COD handling fee -- folded into total, not shown as its own line at checkout
   loyaltyDiscount: number   // 🪙 coins redemption discount
   total:           number   // final payable
   freeShippingMin:        number
@@ -35,6 +36,7 @@ export function calcPriceSummary(
   const freeShippingMin  = asNumber(settings.free_shipping_min, 500)
   const flatShipping     = asNumber(settings.flat_shipping_charge, 99)
   const prepaidPct       = asNumber(settings.prepaid_discount_pct, 5)
+  const codSurchargeAmt  = asNumber(settings.cod_surcharge_amount, 0)
 
   const subtotal = Math.round(items.reduce((sum, item) => sum + item.price * item.qty, 0))
 
@@ -53,11 +55,19 @@ export function calcPriceSummary(
     ? Math.round(afterDiscount * prepaidPct / 100)
     : 0
 
+  // Flat COD handling fee — folded straight into `total`, deliberately not
+  // itemized as its own checkout line (matches how the prepaid discount is
+  // instead framed as "Pay Online — Save 5%" rather than "COD +₹X fee").
+  // Still returned on the summary object so admin-side reporting (order
+  // totals, margin calc) can see it if ever needed — just not rendered as a
+  // separate line in the checkout UI.
+  const codSurcharge = paymentMethod === 'cod' ? Math.round(codSurchargeAmt) : 0
+
   // BUG FIX: total could go negative if an admin sets prepaid_discount_pct > 100
   // (e.g. 150%). afterDiscount=100, prepaidDiscount=150 → total=-50.
   // A negative total is passed to Razorpay as a negative paise amount which
   // causes the API call to fail with a cryptic error. Clamp to 0.
-  const total = Math.max(0, afterDiscount + shipping - prepaidDiscount)
+  const total = Math.max(0, afterDiscount + shipping + codSurcharge - prepaidDiscount)
 
   return {
     subtotal,
@@ -66,6 +76,7 @@ export function calcPriceSummary(
     shipping,
     gstTotal,
     prepaidDiscount,
+    codSurcharge,
     total,
     freeShippingMin,
     isFreeShipping,

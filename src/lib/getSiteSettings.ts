@@ -54,6 +54,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   show_blog:               'false',
   catalogue_visible:       'true',
   prepaid_discount_pct:    '5',
+  cod_surcharge_amount:    '0',
   cod_enabled:             'false',   // currently false in your DB
   cod_max_value:           '3000',
   cod_max_active_orders:   '3',
