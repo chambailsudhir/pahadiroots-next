@@ -84,7 +84,10 @@ export const validateCouponSchema = z.object({
 // ─── Review Schema ─────────────────────────────────────────────────────────────
 
 export const reviewSchema = z.object({
-  product_id:    z.string().min(1),
+  // BUG FIX: was `z.string().min(1)`, left over from when reviews.product_id
+  // was mistakenly `uuid` in the DB (fixed via migration to match products.id,
+  // which is `bigint`). Matches notifyStockSchema's product_id validation.
+  product_id:    z.number().int().positive(),
   customer_name: z.string().trim().min(2).max(100),
   rating:        z.number().int().min(1).max(5),
   comment:       z.string().trim().max(1000).optional(),

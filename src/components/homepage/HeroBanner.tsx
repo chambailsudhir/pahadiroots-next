@@ -72,7 +72,16 @@ export default function HeroBanner({ images, settings }: Props) {
   useEffect(() => {
     videoRefs.current.forEach((el, i) => {
       if (!el) return
-      if (i === current) { el.muted = isMuted; el.play().catch(() => {}) } // catch: browser may still block until user interacts once
+      if (i === current) {
+        el.muted = isMuted
+        // el.play() returns a Promise in every evergreen browser, but is
+        // guarded here rather than assumed — some embedded/webview
+        // contexts and test environments (jsdom) don't return one.
+        const playResult = el.play()
+        if (playResult && typeof playResult.catch === 'function') {
+          playResult.catch(() => {}) // browser may still block until user interacts once
+        }
+      }
       else el.pause()
     })
   }, [current, isMuted])

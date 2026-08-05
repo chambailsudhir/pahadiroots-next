@@ -34,7 +34,11 @@ export const metadata: Metadata = {
     description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
     url: `${BASE}/regions`,
     type: 'website',
-    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Explore Himalayan Regions — HimVeda by Pahadi Roots' }],
+    // BUG FIX: '/og-default.jpg' does not exist in /public — this was
+    // producing a broken image in WhatsApp/Facebook link previews for
+    // this page. Matches layout.tsx's fallback (logo.png is a real,
+    // existing asset, though not an ideal 1200×630 shape — see Pending).
+    images: [{ url: '/logo.png', width: 1200, height: 630, alt: 'Explore Himalayan Regions — HimVeda by Pahadi Roots' }],
   },
   twitter: {
     card: 'summary_large_image',

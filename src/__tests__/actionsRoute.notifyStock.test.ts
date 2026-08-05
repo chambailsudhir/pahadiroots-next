@@ -17,6 +17,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
+// next/server's after() throws "called outside a request scope" when a
+// route handler is invoked directly (as these tests do) rather than through
+// Next's real request pipeline, which does establish that scope. Mocked
+// here to run the deferred callback fire-and-forget (matching real
+// production semantics — non-blocking, doesn't delay the response) instead
+// of throwing and turning every after()-using action into a false 500.
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server')
+  return { ...actual, after: (cb: () => void | Promise<void>) => { void cb() } }
+})
+
 const mockUpsert = vi.fn()
 const mockFrom   = vi.fn(() => ({ upsert: mockUpsert }))
 

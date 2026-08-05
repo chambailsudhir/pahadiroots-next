@@ -31,6 +31,12 @@ window.matchMedia = window.matchMedia || vi.fn().mockImplementation((query: stri
   removeEventListener: vi.fn(),
 }))
 
+// jsdom does not implement HTMLMediaElement.play() — it returns undefined
+// instead of a Promise, unlike every real browser. Mocked here so tests
+// reflect actual browser behavior rather than jsdom's gap.
+window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
+window.HTMLMediaElement.prototype.pause = vi.fn()
+
 import HeroBanner from '@/components/homepage/HeroBanner'
 import type { SiteSettings } from '@/types'
 

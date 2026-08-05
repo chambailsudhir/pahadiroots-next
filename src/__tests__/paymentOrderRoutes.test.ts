@@ -31,6 +31,18 @@ import {
 import crypto from 'crypto'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 
+// The route modules under test import after() from next/server internally
+// (deferred loyalty/email side-effects). after() throws "called outside a
+// request scope" unless invoked through Next's real request pipeline, which
+// importing the route module directly (as this file does below) does not
+// provide. Mocked to run the callback fire-and-forget — matching real
+// production semantics (non-blocking, doesn't delay the response) — instead
+// of throwing and turning every after()-using path into a false 500.
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server')
+  return { ...actual, after: (cb: () => void | Promise<void>) => { void cb() } }
+})
+
 // ─── Shared test fixtures ─────────────────────────────────────────────────────
 
 const VALID_ADDRESS = {
