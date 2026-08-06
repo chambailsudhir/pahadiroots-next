@@ -241,8 +241,9 @@ export interface Review {
   rating: number          // 1-5, default 5
   review_text: string | null
   comment: string | null  // added by migration, same as review_text
-  status: string          // 'approved' | 'pending'
-  is_approved?: boolean   // computed column added by migration
+  status: string          // 'approved' | 'pending' — the real source of truth (used by every actual query)
+  is_approved?: boolean   // LEGACY — unused by any query in either codebase; the RLS policy that
+                          // referenced it was dropped (duplicated status='approved', could drift out of sync)
   created_at: string
 }
 
@@ -318,7 +319,6 @@ export interface SiteSettings {
 
   // Checkout settings
   prepaid_discount_pct: string          // number as string e.g. '5'
-  cod_surcharge_amount: string          // flat ₹ COD handling fee, folded into total e.g. '20'
   cod_enabled: string
   cod_max_value: string                 // max COD order value e.g. '3000'
   cod_max_active_orders: string         // fraud: max active COD orders per phone

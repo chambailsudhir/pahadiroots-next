@@ -62,7 +62,7 @@ export function getHeroStats(settings: SiteSettings): HeroStat[] {
   const all: Array<HeroStat & { hidden: boolean }> = [
     {
       key: 'farmers',
-      num: `${settings.stat_farmer_families || '100'}+`,
+      num: `${settings.stat_farmer_families || '50'}+`,
       lbl: settings.stat_farmer_label || 'Farmer Families',
       hidden: settings.stat_hide_stat_farmer_families === 'true',
     },

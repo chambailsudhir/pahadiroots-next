@@ -40,7 +40,7 @@ describe('getHeroStats', () => {
 
   it('defaults to the same values as the admin panel', () => {
     const stats = getHeroStats(settings())
-    expect(stats.map(s => s.num)).toEqual(['100+', '10+', '10k+', '48hr'])
+    expect(stats.map(s => s.num)).toEqual(['50+', '10+', '10k+', '48hr'])
   })
 
   it('uses custom labels when the admin has set them', () => {
