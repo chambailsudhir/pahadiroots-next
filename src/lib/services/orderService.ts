@@ -534,6 +534,19 @@ export async function createOrder(
     throw new Error('COD is not available at this time')
   }
 
+  // 6b. FIX: cod_max_value (max order value eligible for COD) was only ever
+  // enforced client-side (useCheckoutPage.ts's `codOk`, which just disables
+  // the COD radio button) -- never here, meaning a direct API call could
+  // bypass it entirely regardless of what the admin configured. Real
+  // enforcement has to happen server-side; the client check remains as a
+  // UX nicety (disabling the button before the customer even tries).
+  if (input.paymentMethod === 'cod') {
+    const codMaxValue = parseFloat(settings.cod_max_value || '3000')
+    if (pricing.total > codMaxValue) {
+      throw new Error(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`)
+    }
+  }
+
   // 7. Generate order number — shown to customers and support.
   //    FIX (restoring the original readable format): order numbers used to
   //    look like ORD-2026-00076 (see order id 82, the last one in this
@@ -597,6 +610,25 @@ export async function createOrder(
     custId = rows?.[0]?.id ?? null
   }
   if (!custId) throw new Error('Could not create/find customer record')
+
+  // 7c-i. FIX: cod_max_active_orders (fraud prevention -- cap on how many
+  // COD orders a phone number can have in flight at once) was defined in
+  // types/index.ts and getSiteSettings.ts's defaults but never actually
+  // enforced anywhere in either codebase -- confirmed via a full-repo
+  // search. "Active" = not yet resolved either way (not delivered,
+  // cancelled, or returned) -- the risk window this setting exists to cap
+  // is real cash exposure on orders still in flight.
+  if (input.paymentMethod === 'cod') {
+    const codMaxActive = parseInt(settings.cod_max_active_orders || '3', 10)
+    if (codMaxActive > 0) {
+      const activeCodOrders = await sbGet('orders',
+        `customer_id=eq.${custId}&payment_method=in.(cod,whatsapp_cod)` +
+        `&order_status=not.in.(delivered,cancelled,returned)&select=id`)
+      if ((activeCodOrders?.length ?? 0) >= codMaxActive) {
+        throw new Error(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
+      }
+    }
+  }
 
   // 7c. Loyalty balance guard — verify the customer still holds enough points
   //     at this exact moment before we create the order.
