@@ -38,7 +38,7 @@ describe('AuthModal — Quick Links (P1 fix)', () => {
     render(<AuthModal />)
 
     const expected: Record<string, string> = {
-      'My Orders':       '/account/orders',
+      'My Orders':       '/account?tab=orders',
       'Wishlist':        '/wishlist',
       'Saved Addresses': '/account/addresses',
       'Contact Us':      '/contact',

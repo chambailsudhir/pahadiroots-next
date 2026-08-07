@@ -334,7 +334,7 @@ export default function AuthModal() {
                   would just trade one broken promise for a different one. */}
               <div className="am-ql-wrap">
                 {[
-                  { icon: '📦', href: '/account/orders',   label: 'My Orders',      sub: 'Track & manage orders' },
+                  { icon: '📦', href: '/account?tab=orders', label: 'My Orders',      sub: 'Track & manage orders' },
                   { icon: '🤍', href: '/wishlist',          label: 'Wishlist',        sub: 'Saved products' },
                   { icon: '📍', href: '/account/addresses', label: 'Saved Addresses', sub: 'Delivery locations' },
                   { icon: '💬', href: '/contact',           label: 'Contact Us',      sub: "We're here to help" },

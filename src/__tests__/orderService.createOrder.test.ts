@@ -495,3 +495,55 @@ describe('createOrder — confirmation_token generation (guest-safe order lookup
     expect(result.order.confirmationToken).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
   })
 })
+
+// AUDIT GAP (closed): order_prefix was a real P1 fix — order numbers used
+// to be hardcoded 'PR' in code; now settings.order_prefix (admin-editable)
+// is read and passed to the generate_order_number RPC as p_prefix. Every
+// existing test above only ever exercised the 'PR' fallback implicitly
+// (DEFAULT_SETTINGS never sets order_prefix at all) — nothing asserted the
+// actual wiring, or the fallback order-number scheme used the right prefix
+// when the RPC itself fails.
+describe('createOrder — order_prefix (settings-driven order numbering)', () => {
+  beforeEach(() => {
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+  })
+
+  it("passes the admin-configured order_prefix to generate_order_number, uppercased and trimmed", async () => {
+    wireOrderRpcSuccess()
+    const settingsWithPrefix = { ...DEFAULT_SETTINGS, order_prefix: '  ord  ' }
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(BASE_INPUT, settingsWithPrefix)
+
+    const call = mockDb.rpcCalls.find(c => c.rpcName === 'generate_order_number')
+    expect(call).toBeDefined()
+    expect((call!.args as any).p_prefix).toBe('ORD')
+  })
+
+  it("falls back to 'PR' when order_prefix isn't set", async () => {
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(BASE_INPUT, DEFAULT_SETTINGS) // no order_prefix key
+
+    const call = mockDb.rpcCalls.find(c => c.rpcName === 'generate_order_number')
+    expect((call!.args as any).p_prefix).toBe('PR')
+  })
+
+  it("uses the configured prefix in the client-side fallback order number too, if the RPC itself fails", async () => {
+    mockDb.rpcResponses['generate_order_number'] = '' // falsy but not nullish — the mock's `data: val ?? true` would silently override an explicit `null` back to `true`
+    wireOrderRpcSuccess()
+    const settingsWithPrefix = { ...DEFAULT_SETTINGS, order_prefix: 'ORD' }
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(BASE_INPUT, settingsWithPrefix)
+
+    // Fallback scheme is `${orderPrefix}${Date.now().toString(36)}...` — the
+    // prefix must still be the configured one, not a hardcoded 'PR'. Checked
+    // against what was actually passed to create_order_with_items (what
+    // really gets written to the DB), not the mock's fixed return value.
+    const call = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
+    expect((call!.args as any).p_order_number.startsWith('ORD')).toBe(true)
+  })
+})
