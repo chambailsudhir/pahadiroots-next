@@ -189,6 +189,13 @@ function wireHappyPathFetch(opts: { variantPrice?: number; gstRate?: number } = 
     (url, method) => method === 'POST' && url.includes('/customers'),
     [{ id: 'cust-uuid-001' }]
   )
+  // 5. cod_max_active_orders fraud-check lookup (sbGet) — default: no active
+  //    COD orders for this customer, so the guard never blocks by default.
+  //    Tests exercising the guard itself override this route explicitly.
+  route(
+    (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'),
+    []
+  )
 }
 
 function wireOrderRpcSuccess(overrides: Partial<{ id: string; order_number: string; total_amount: number; order_status: string }> = {}) {
@@ -405,6 +412,97 @@ describe('createOrder — payment method correctness (DATA INTEGRITY FIX)', () =
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(createOrder({ ...BASE_INPUT, paymentMethod: 'cod' }, { ...DEFAULT_SETTINGS, cod_enabled: 'false' }))
       .rejects.toThrow(/cod is not available/i)
+  })
+})
+
+describe('createOrder — cod_max_active_orders (fraud guard, previously untested)', () => {
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+  })
+
+  it('blocks a new COD order once the phone already has cod_max_active_orders active orders', async () => {
+    resetFetchRoutes()
+    // Wire product/variant/customer routes directly (skip wireHappyPathFetch's
+    // default empty-active-orders route, since this test overrides it).
+    route((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(VARIANT_ID),
+      [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
+    route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
+      [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
+    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
+    // 3 in-flight COD orders already exist for this phone → guard should block.
+    route(
+      (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'),
+      [{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]
+    )
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(
+      createOrder({ ...BASE_INPUT, paymentMethod: 'cod' }, { ...DEFAULT_SETTINGS, cod_max_active_orders: '3' })
+    ).rejects.toThrow(/3 COD order\(s\) already in progress/i)
+  })
+
+  it('allows the order when active COD orders are below the configured cap', async () => {
+    resetFetchRoutes()
+    route((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(VARIANT_ID),
+      [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
+    route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
+      [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
+    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
+    route(
+      (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'),
+      [{ id: 'o1' }]
+    )
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(
+      { ...BASE_INPUT, paymentMethod: 'cod' },
+      { ...DEFAULT_SETTINGS, cod_max_active_orders: '3' }
+    )
+    expect(result.alreadyExists).toBe(false)
+  })
+
+  it('skips the guard entirely for razorpay orders (guard only applies to cod/whatsapp_cod)', async () => {
+    resetFetchRoutes()
+    // No active-orders route wired at all — if the guard ran for razorpay,
+    // this would throw "no mock route" and fail the test.
+    route((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(VARIANT_ID),
+      [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
+    route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
+      [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
+    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(
+      { ...BASE_INPUT, paymentMethod: 'razorpay' },
+      { ...DEFAULT_SETTINGS, cod_max_active_orders: '1' }
+    )
+    expect(result.alreadyExists).toBe(false)
+  })
+
+  it('disables the guard entirely when cod_max_active_orders is set to 0', async () => {
+    resetFetchRoutes()
+    // No active-orders route wired — guard must not fire when the cap is 0.
+    route((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(VARIANT_ID),
+      [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
+    route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
+      [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
+    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(
+      { ...BASE_INPUT, paymentMethod: 'cod' },
+      { ...DEFAULT_SETTINGS, cod_max_active_orders: '0' }
+    )
+    expect(result.alreadyExists).toBe(false)
   })
 })
 
