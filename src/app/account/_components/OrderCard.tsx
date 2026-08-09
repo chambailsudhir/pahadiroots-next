@@ -23,6 +23,7 @@ const BADGE: Record<string, string> = {
   'badge-return_approved':  styles.badgeReturn,
   'badge-return_received':  styles.badgeReturn,
   'badge-return_refunded':  styles.badgeReturn,
+  'badge-return_replaced':  styles.badgeReturn,
   'badge-return_rejected':  styles.badgeReturn,
 }
 
@@ -38,6 +39,7 @@ const STRIPE: Record<string, string> = {
   'oc-stripe-return_approved': styles.ocStripeReturn,
   'oc-stripe-return_received': styles.ocStripeReturn,
   'oc-stripe-return_refunded': styles.ocStripeReturn,
+  'oc-stripe-return_replaced': styles.ocStripeReturn,
   'oc-stripe-return_rejected': styles.ocStripeReturn,
 }
 

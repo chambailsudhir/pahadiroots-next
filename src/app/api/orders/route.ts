@@ -70,20 +70,27 @@ async function getCustomerOrders(
 
   const rows = await sbAdmin(
     'GET',
-    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(emoji,image_url)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
+    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,variant_id,products(emoji,image_url)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
   ).catch(() => [])
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
     const rawItems = (o.order_items as Array<{
-      quantity: number; price_at_time: number; product_name_snapshot: string | null
-      variant_value_snapshot: string | null; product_id: string | null
+      id: number | string; quantity: number; price_at_time: number; product_name_snapshot: string | null
+      variant_value_snapshot: string | null; product_id: string | number | null; variant_id: string | number | null
       products?: { emoji?: string; image_url?: string }
     }>) || []
+    // id/variant_id/product_id added so the account UI (and the return/
+    // replace request it submits) can identify exactly which line item a
+    // customer is acting on — needed for the item picker + ownership check
+    // in /api/orders/[id]/return/route.ts.
     const items = rawItems.map(i => ({
+      id:         i.id,
       qty:       i.quantity,
       price:     i.price_at_time,
       name:      i.product_name_snapshot || 'Product',
       variant:   i.variant_value_snapshot || null,
+      variant_id: i.variant_id ?? null,
+      product_id: i.product_id ?? null,
       emoji:     i.products?.emoji     || '🌿',
       image_url: i.products?.image_url || null,
     }))

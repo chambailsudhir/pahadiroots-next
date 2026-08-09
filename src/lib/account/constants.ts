@@ -36,6 +36,16 @@ export const BADGE_CLASS: Record<string,string> = {
   return_requested:'badge-return_requested',return_approved:'badge-return_approved',
   return_received:'badge-return_received',return_refunded:'badge-return_refunded',
   return_rejected:'badge-return_rejected',
+  // BUG FIX: 'replaced' is a real returns.status value (Replacement
+  // workflow, migration 041 — admin can mark a return "Replaced" instead
+  // of "Refunded"), but none of the storefront's status maps had a
+  // matching 'return_replaced' entry (this map, RETURN_STATUS_TO_DISPLAY,
+  // STATUS_LABEL, STRIPE_CLASS, and OrderCard.tsx's BADGE/STRIPE lookups
+  // all lacked it). A replaced return would have shown the customer's
+  // order stuck at the underlying order_status ('delivered') instead of
+  // any "Replacement Shipped" indication — the return would appear to
+  // have vanished from their perspective.
+  return_replaced:'badge-return_replaced',
 }
 
 export const STATUS_LABEL: Record<string,string> = {
@@ -45,6 +55,7 @@ export const STATUS_LABEL: Record<string,string> = {
   return_requested:'Return Requested',return_approved:'Return Approved',
   return_received:'Item Received',return_refunded:'Refund Issued',
   return_rejected:'Return Rejected',
+  return_replaced:'Replacement Shipped',
 }
 
 export const STRIPE_CLASS: Record<string,string> = {
@@ -54,6 +65,7 @@ export const STRIPE_CLASS: Record<string,string> = {
   return_requested:'oc-stripe-return_requested',return_approved:'oc-stripe-return_approved',
   return_received:'oc-stripe-return_received',return_refunded:'oc-stripe-return_refunded',
   return_rejected:'oc-stripe-return_rejected',
+  return_replaced:'oc-stripe-return_replaced',
 }
 
 // BUG FIX: 'processing' removed. It is not a value order_status can ever
@@ -67,15 +79,18 @@ export const ACTIVE_STATUSES   = ['pending','confirmed','packed','shipped']
 // order_status value ever represents a return.
 export const RETURNS_FILTER_SENTINEL = '__has_return__'
 
-// Maps a `returns.status` value (the real 5-value lifecycle: requested,
-// approved, received, refunded, rejected) to the display-status vocabulary
-// above. Single source of truth — used by both /api/orders/route.ts and
-// /api/orders/[id]/route.ts so the list and detail pages never disagree.
+// Maps a `returns.status` value (the real 6-value lifecycle: requested,
+// approved, received, refunded, replaced, rejected — 'replaced' added by
+// migration 041 for the Replacement workflow) to the display-status
+// vocabulary above. Single source of truth — used by both
+// /api/orders/route.ts and /api/orders/[id]/route.ts so the list and detail
+// pages never disagree.
 export const RETURN_STATUS_TO_DISPLAY: Record<string, string> = {
   requested: 'return_requested',
   approved:  'return_approved',
   received:  'return_received',
   refunded:  'return_refunded',
+  replaced:  'return_replaced',
   rejected:  'return_rejected',
 }
 
@@ -108,6 +123,23 @@ export const RETURN_REASONS = [
 
 export const RETURN_REASON_CODES = RETURN_REASONS.map(r => r.code)
 export type ReturnReasonCode = typeof RETURN_REASONS[number]['code']
+
+// ── Replacement resolution ───────────────────────────────────────────────────
+// CROSS-REPO: mirrors pahadi-admin's src/lib/returns.js REPLACEMENT_ALLOWED_REASONS
+// / canReplace() exactly — same 4 codes, same order. Replacement (shipping a
+// working/correct unit instead of refunding) is scoped to genuine quality/
+// fulfillment issues only (evidenced against BigBasket's own T&Cs), never
+// 'changed_mind' or 'other'. Enforced server-side in
+// /api/orders/[id]/return/route.ts (never trust client gating) and mirrored
+// by the DB's returns_replace_reason_check constraint (migration 041) — this
+// is just the UI/client copy so the two repos can't drift apart.
+export const REPLACEMENT_ALLOWED_REASONS: ReturnReasonCode[] = [
+  'damaged', 'wrong_item', 'not_as_described', 'missing_parts',
+]
+
+export function canReplace(reason: string): boolean {
+  return (REPLACEMENT_ALLOWED_REASONS as string[]).includes(reason)
+}
 
 // BUG FIX (July 2026): the return-request API route
 // (/api/orders/[id]/return/route.ts) enforces a 48-hour window per the

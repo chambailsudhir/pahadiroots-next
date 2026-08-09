@@ -21,6 +21,14 @@ const OrderItemSchema = z.object({
   emoji:     z.string(),
   image_url: z.string().nullable(),
   variant:   z.string().nullable().optional(),
+  // Added so the account UI can identify exactly which line item a
+  // customer is requesting a return/replacement for (see
+  // /api/orders/route.ts and /api/orders/[id]/return/route.ts). Optional
+  // + nullable so this schema stays backward-compatible with any response
+  // shape that predates this field.
+  id:         z.union([z.string(), z.number()]).nullable().optional(),
+  variant_id: z.union([z.string(), z.number()]).nullable().optional(),
+  product_id: z.union([z.string(), z.number()]).nullable().optional(),
 })
 
 export const OrderSchema = z.object({

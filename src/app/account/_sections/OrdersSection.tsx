@@ -5,7 +5,7 @@ import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
 import ErrorBoundary  from '@/components/ui/ErrorBoundary'
 import { formatCurrency } from '@/lib/account/utils'
-import { RETURN_REASONS } from '@/lib/account/constants'
+import { RETURN_REASONS, canReplace } from '@/lib/account/constants'
 import type { useOrders } from '../hooks/useOrders'
 import type { Order }     from '../hooks/useOrders'
 import styles from '../styles/account.module.css'
@@ -18,10 +18,20 @@ interface Props {
 }
 
 export default function OrdersSection({ orders, showToast }: Props) {
-  const [returnModal, setReturnModal] = useState<{ orderId: string; orderNum: string } | null>(null)
+  const [returnModal, setReturnModal] = useState<{ orderId: string; orderNum: string; items: Order['items'] } | null>(null)
   const [returnReason,    setReturnReason]    = useState('')
   const [returnOtherText, setReturnOtherText] = useState('')
   const [submitting,      setSubmitting]      = useState(false)
+  // Item picker — only shown when the order has more than one item. Index
+  // into returnModal.items; null means "whole order" (preserves the
+  // original behavior for single-item orders).
+  const [selectedItemIdx, setSelectedItemIdx] = useState<number | null>(null)
+  // Refund/Replace toggle — only shown when canReplace(returnReason). Always
+  // resets to 'refund' when the reason changes to something that doesn't
+  // qualify, so the toggle can never silently stay on 'replace' for a
+  // disqualifying reason (server re-validates this too, but the UI should
+  // never even offer an inconsistent state).
+  const [resolution, setResolution] = useState<'refund' | 'replace'>('refund')
 
   // Focus management for keyboard-accessible modal
   const firstRadioRef  = useRef<HTMLInputElement>(null)
@@ -44,6 +54,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
     setReturnModal(null)
     setReturnReason('')
     setReturnOtherText('')
+    setSelectedItemIdx(null)
+    setResolution('refund')
     // Restore focus to the button that opened the modal
     triggerBtnRef.current?.focus()
     triggerBtnRef.current = null
@@ -85,21 +97,38 @@ export default function OrdersSection({ orders, showToast }: Props) {
     triggerBtnRef.current = triggerBtn ?? null
     setReturnReason('')
     setReturnOtherText('')
-    setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum })
+    // Item picker only shows (and only matters) when the order has more
+    // than one item — single-item orders keep the original whole-order
+    // behavior (no item fields sent, unchanged from before this feature).
+    setSelectedItemIdx(null)
+    setResolution('refund')
+    setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum, items: order.items || [] })
   }
+
+  // Multi-item order + no item picked yet = can't submit (ambiguous which
+  // item this is for). Single-item orders never hit this — the picker is
+  // hidden and the request stays whole-order, same as before this feature.
+  const needsItemSelection = (returnModal?.items?.length ?? 0) > 1 && selectedItemIdx === null
+  const selectedItem = returnModal && selectedItemIdx !== null ? returnModal.items[selectedItemIdx] : null
+  const replaceAvailable = !!returnReason && canReplace(returnReason)
 
   async function submitReturn() {
     if (!returnModal || !returnReason) return
     // If "Other" is selected, require the free-text explanation
     if (returnReason === 'other' && !returnOtherText.trim()) return
+    if (needsItemSelection) return
     setSubmitting(true)
     try {
       const res = await fetch(`/api/orders/${returnModal.orderId}/return`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          reason:       returnReason,
-          other_detail: returnReason === 'other' ? returnOtherText.trim() : undefined,
+          reason:        returnReason,
+          other_detail:  returnReason === 'other' ? returnOtherText.trim() : undefined,
+          order_item_id: selectedItem?.id ?? undefined,
+          variant_id:    selectedItem?.variant_id ?? undefined,
+          product_id:    selectedItem?.product_id ?? undefined,
+          resolution:    replaceAvailable ? resolution : 'refund',
         }),
       })
       const data = await res.json()
@@ -110,6 +139,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
         setReturnModal(null)
         setReturnReason('')
         setReturnOtherText('')
+        setSelectedItemIdx(null)
+        setResolution('refund')
         orders.refresh()
       }
     } catch (e: unknown) {
@@ -246,7 +277,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           <div ref={modalBoxRef} className={styles.modalBox}>
             <div className={styles.modalHeader}>
               <h3 id="return-modal-title" className={styles.modalTitle}>
-                Return Order {returnModal.orderNum}
+                {resolution === 'replace' ? 'Replace' : 'Return'} Order {returnModal.orderNum}
               </h3>
               <button
                 ref={closeButtonRef}
@@ -261,6 +292,25 @@ export default function OrdersSection({ orders, showToast }: Props) {
               Please select the reason for your return. Our team will contact you within 24–48 hours to arrange a pickup.
             </p>
 
+            {/* Item picker — only shown when the order has >1 item */}
+            {returnModal.items.length > 1 && (
+              <div className={styles.modalItemPicker}>
+                <div className={styles.fLbl}>Which item?</div>
+                {returnModal.items.map((it, idx) => (
+                  <label key={`${it.id ?? idx}`} className={styles.modalItemOption}>
+                    <input
+                      type="radio"
+                      name="return-item"
+                      checked={selectedItemIdx === idx}
+                      onChange={() => setSelectedItemIdx(idx)}
+                      className={styles.modalReasonRadio}
+                    />
+                    {it.name || 'Product'}{it.variant ? ` (${it.variant})` : ''} × {it.qty || 1}
+                  </label>
+                ))}
+              </div>
+            )}
+
             <div className={styles.modalReasons}>
               {RETURN_REASONS.map((reason, index) => (
                 <label key={reason.code} className={styles.modalReason}>
@@ -270,13 +320,44 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     name="return-reason"
                     value={reason.code}
                     checked={returnReason === reason.code}
-                    onChange={() => setReturnReason(reason.code)}
+                    onChange={() => {
+                      setReturnReason(reason.code)
+                      // Reset to Refund whenever the newly-selected reason
+                      // doesn't qualify for replacement, so the toggle can
+                      // never be left silently pointing at 'replace' for a
+                      // disqualifying reason (server re-validates this too).
+                      if (!canReplace(reason.code)) setResolution('refund')
+                    }}
                     className={styles.modalReasonRadio}
                   />
                   {reason.label}
                 </label>
               ))}
             </div>
+
+            {/* Refund/Replace toggle — only for qualifying reasons (mirrors
+                admin's canReplace() — damaged/wrong_item/not_as_described/
+                missing_parts only, never changed_mind/other). */}
+            {replaceAvailable && (
+              <div className={styles.modalResolutionRow} role="radiogroup" aria-label="Refund or replacement">
+                <button
+                  type="button"
+                  className={`${styles.modalResolutionBtn} ${resolution === 'refund' ? styles.modalResolutionBtnActive : ''}`}
+                  aria-pressed={resolution === 'refund'}
+                  onClick={() => setResolution('refund')}
+                >
+                  💰 Refund
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modalResolutionBtn} ${resolution === 'replace' ? styles.modalResolutionBtnActive : ''}`}
+                  aria-pressed={resolution === 'replace'}
+                  onClick={() => setResolution('replace')}
+                >
+                  📦 Replace
+                </button>
+              </div>
+            )}
 
             {/* Free-text explanation — required when "Other" is selected */}
             {returnReason === 'other' && (
@@ -313,11 +394,16 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 disabled={
                   !returnReason ||
                   (returnReason === 'other' && !returnOtherText.trim()) ||
+                  needsItemSelection ||
                   submitting
                 }
                 className={styles.btnPrimary}
               >
-                {submitting ? 'Submitting…' : 'Submit Return Request'}
+                {submitting
+                  ? 'Submitting…'
+                  : needsItemSelection
+                    ? 'Select an item first'
+                    : `Submit ${resolution === 'replace' ? 'Replacement' : 'Return'} Request`}
               </button>
             </div>
           </div>

@@ -197,7 +197,9 @@ export default function OrderDetailPage() {
           <div className={styles.odCardTitle}>Return Status</div>
           <div className={styles.odCancelledState}>
             <div className={styles.odCancelledIcon}>
-              {order._return.status === 'refunded' ? '💚' : order._return.status === 'rejected' ? '❌' : '↩️'}
+              {order._return.status === 'refunded' ? '💚'
+                : order._return.status === 'replaced' ? '📦'
+                : order._return.status === 'rejected' ? '❌' : '↩️'}
             </div>
             <div className={styles.odCancelledLabel}>
               {STATUS_LABEL[`return_${order._return.status}`] || order._return.status}

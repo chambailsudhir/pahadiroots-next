@@ -255,6 +255,16 @@
 .modalFooter .btnPrimary  { flex: 2; }
 .modalFooter .btnSecondary { flex: 1; }
 
+/* ── Item picker (Return/Replace modal, multi-item orders) ───── */
+.modalItemPicker   { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.modalItemOption   { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--color-border-tertiary,#e0e0e0); border-radius: 8px; cursor: pointer; font-size: 13px; background: transparent; transition: border-color 0.15s, background 0.15s; }
+.modalItemOption:has(input:checked) { border-color: var(--color-primary,#4a7c59); background: var(--color-primary-light,#f0f7f2); }
+
+/* ── Refund/Replace resolution toggle (Return/Replace modal) ── */
+.modalResolutionRow { display: flex; gap: 8px; margin-bottom: 18px; }
+.modalResolutionBtn { flex: 1; padding: 10px 12px; border: 1.5px solid var(--color-border-tertiary,#e0e0e0); border-radius: 8px; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s; color: var(--color-text-secondary,#666); }
+.modalResolutionBtnActive { border-color: var(--color-primary,#4a7c59); background: var(--color-primary-light,#f0f7f2); color: var(--color-primary,#4a7c59); }
+
 /* ── Forgot password link (PasswordSection) ─────────────────── */
 .forgotPwRow  { margin-top: 8px; }
 .forgotPwLink { background: none; border: none; padding: 0; color: #2d6a4f; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; transition: color .2s; }
