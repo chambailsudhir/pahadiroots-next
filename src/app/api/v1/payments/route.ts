@@ -341,6 +341,47 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      // BUG FIX (root cause of an empty `payments` table / broken admin
+      // reconciliation — found via live DB inspection, not just code
+      // review): this is the PRIMARY payment-confirmation path — it fires
+      // synchronously right after Razorpay checkout succeeds, and in
+      // practice wins the race against the async webhook almost every
+      // time. The webhook's own `payments` insert (added specifically for
+      // validate_waterfall() reconciliation — see its comment) only runs
+      // inside its `order_status === 'pending'` guard, which is false by
+      // the time the webhook arrives here, because THIS route already
+      // flipped it to 'confirmed' a moment earlier. Net effect: the
+      // webhook's insert essentially never fired, and `payments` stayed
+      // empty regardless of how many real online orders were placed —
+      // confirmed live: 0 rows in `payments` despite real captured
+      // razorpay orders. Mirrors the webhook's own insert exactly,
+      // including using the same (payment_provider, payment_reference)
+      // unique constraint (migration 033) as a race-safe backstop in case
+      // the webhook DOES win occasionally.
+      const { error: paymentInsertErr } = await db
+        .from('payments')
+        .insert({
+          order_id:          order_id,
+          payment_provider:  'razorpay',
+          payment_reference: razorpay_payment_id,
+          amount:            Number(currentOrder.total_amount),
+          status:            'captured',
+          paid_at:           new Date().toISOString(),
+        })
+        .select('id')
+      if (paymentInsertErr && !String(paymentInsertErr.message).includes('duplicate')) {
+        // Non-fatal — matches the webhook's own handling. The order is
+        // already confirmed at this point; failing the whole request over
+        // an audit-trail insert would tell the customer their payment
+        // failed when it didn't. Surface it so ops can backfill manually.
+        captureError(new Error('payments insert failed: ' + paymentInsertErr.message), {
+          action:             'payments.verify.payments_insert',
+          order_id,
+          razorpay_payment_id,
+          alert:              true,
+        })
+      }
+
       // 4. Site settings (single fetch, reused for loyalty + email)
       const settings = await getSiteSettings()
 
