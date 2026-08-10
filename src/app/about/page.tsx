@@ -12,12 +12,14 @@ export const metadata: Metadata = {
 
 export const revalidate = 3600
 
+interface FounderImage { url: string; caption: string | null }
+interface TeamMember { id: string; name: string; role: string; bio: string | null; image_url: string | null }
+
 export default async function AboutPage() {
   const settings = await getSiteSettings()
   const heroStats = getHeroStats(settings)
 
-  // Fetch team members if exists
-  let team = null
+  let team: TeamMember[] | null = null
   try {
     const { data } = await supabase
       .from('team_members')
@@ -27,38 +29,62 @@ export default async function AboutPage() {
     team = data
   } catch (e: unknown) { console.error("[about] team fetch failed:", e); team = null }
 
-  // Fetch founder images
-  let founderImages = null
+  let founderImages: FounderImage[] | null = null
   try {
     const { data } = await supabase
       .from('founder_images')
       .select('url, caption')
       .order('sort_order')
-      .limit(5)
     founderImages = data
   } catch (e: unknown) { console.error("[about] founderImages fetch failed:", e); founderImages = null }
 
-  const heroImage = founderImages?.[0] || null
-  const bentoImages = founderImages && founderImages.length > 0 ? founderImages : null
+  // Admin's own copy documents this contract: image 0 = hero background,
+  // image 1 = the origin-story side photo. The full set also powers the
+  // "From the Mountains" gallery grid below.
+  const heroBg    = founderImages?.[0] || null
+  const storyImg  = founderImages?.[1] || null
+  const gallery   = founderImages && founderImages.length > 0 ? founderImages : null
+
+  const values = [1, 2, 3, 4, 5, 6]
+    .map(i => ({
+      icon:   settings[`about_value_${i}_icon`]  || '',
+      title:  settings[`about_value_${i}_title`] || '',
+      body:   settings[`about_value_${i}_body`]  || '',
+      hidden: settings[`about_value_${i}_hide`] === 'true',
+    }))
+    .filter(v => !v.hidden && v.title)
+
+  const videoUrl = settings.about_video_url?.trim()
+  const showVideo = !!videoUrl && settings.about_video_hide !== 'true'
+  const embed = videoUrl ? toEmbed(videoUrl) : null
 
   return (
     <div>
       {/* ── Hero ── */}
       <div className="ab-hero">
+        {heroBg && (
+          <div className="ab-hero-bg">
+            <Image
+              src={heroBg.url}
+              alt={heroBg.caption || 'HimVeda by Pahadi Roots'}
+              fill
+              priority
+              sizes="100vw"
+              className="object-cover"
+            />
+          </div>
+        )}
+        <div className="ab-hero-scrim" />
         <ContourLines className="ab-hero-contours" />
         <div className="ab-hero-inner">
           <div className="ab-eyebrow">
-            <MountainMark /> Our Story
+            <MountainMark /> {settings.about_hero_eyebrow}
           </div>
           <h1>
-            Built on trust,<br />
-            carried from <em>the mountains</em>
+            {settings.about_hero_title_1}<br />
+            <em>{settings.about_hero_title_2}</em>
           </h1>
-          <p className="ab-hero-sub">
-            We started HimVeda by Pahadi Roots because people deserved to know
-            where their food comes from — and the farmers who grow it deserved
-            far more than what the middlemen ever paid them.
-          </p>
+          <p className="ab-hero-sub">{settings.about_hero_subtitle}</p>
         </div>
 
         {heroStats.length > 0 && (
@@ -77,37 +103,19 @@ export default async function AboutPage() {
       <section className="ab-story-wrap">
         <div className="ab-story-grid">
           <div>
-            <div className="ab-story-label">How It Started</div>
-            <h2>Everything nature<br />made — nothing it didn&rsquo;t.</h2>
-            <p className="ab-dropcap">
-              HimVeda by Pahadi Roots was born from a simple realisation — the
-              mountain farmers of Uttarakhand, Himachal Pradesh, and other
-              Himalayan states were producing some of the purest, most
-              extraordinary food in the world. Wild honey harvested from
-              cliff-hanging hives. Cold-pressed mustard oil from centuries-old
-              stone ghannies. Joha rice with an aroma that fills the entire
-              kitchen.
-            </p>
-            <p>
-              Yet most of this never reached anyone outside the villages. What
-              little did reach the cities passed through so many hands that
-              the farmer earned almost nothing — and the food lost its story
-              somewhere along the way.
-            </p>
-            <p>
-              We set out to fix that. No unnecessary middlemen. No fancy
-              certifications the farmers cannot afford. Just direct
-              relationships, fair prices, and honest products that carry the
-              mountains in every spoonful.
-            </p>
+            <div className="ab-story-label">{settings.about_story_eyebrow}</div>
+            <h2>{settings.about_story_heading}</h2>
+            <p className="ab-dropcap">{settings.about_story_p1}</p>
+            {settings.about_story_p2 && <p>{settings.about_story_p2}</p>}
+            {settings.about_story_p3 && <p>{settings.about_story_p3}</p>}
           </div>
 
           <div className="ab-note">
-            {heroImage ? (
+            {storyImg ? (
               <div className="ab-note-img">
                 <Image
-                  src={heroImage.url}
-                  alt={heroImage.caption || 'HimVeda by Pahadi Roots'}
+                  src={storyImg.url}
+                  alt={storyImg.caption || 'HimVeda by Pahadi Roots'}
                   fill
                   sizes="(max-width: 860px) 90vw, 400px"
                   className="object-cover"
@@ -116,41 +124,69 @@ export default async function AboutPage() {
             ) : (
               <span className="ab-note-mark">&ldquo;</span>
             )}
-            <p>
-              We didn&rsquo;t want to build another label on a shelf. We
-              wanted every jar to feel like it still had mountain air in it.
-            </p>
-            <div className="ab-note-sig">— The HimVeda Team</div>
+            <p>{settings.about_quote_text}</p>
+            <div className="ab-note-sig">— {settings.about_quote_attribution}</div>
           </div>
         </div>
       </section>
 
       {/* ── Values ── */}
-      <section className="ab-values">
-        <div className="ab-section-head">
-          <h2>What We Stand For</h2>
-          <p>The principles that decide every sourcing call we make.</p>
-        </div>
-        <div className="ab-value-grid">
-          {VALUES.map(v => (
-            <div key={v.title} className="ab-value-card">
-              <div className="ab-value-badge">{v.icon}</div>
-              <h3>{v.title}</h3>
-              <p>{v.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {values.length > 0 && (
+        <section className="ab-values">
+          <div className="ab-section-head">
+            <h2>What We Stand For</h2>
+            <p>The principles that decide every sourcing call we make.</p>
+          </div>
+          <div className="ab-value-grid">
+            {values.map(v => (
+              <div key={v.title} className="ab-value-card">
+                <div className="ab-value-badge">{VALUE_ICONS[v.icon] || VALUE_ICONS.leaf}</div>
+                <h3>{v.title}</h3>
+                <p>{v.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Farmer connection video ── */}
+      {showVideo && embed && (
+        <section className="ab-video-wrap">
+          <div className="ab-section-head">
+            <h2>{settings.about_video_heading}</h2>
+            <p>{settings.about_video_caption}</p>
+          </div>
+          <div className="ab-video-frame">
+            {embed.kind === 'iframe' ? (
+              <iframe
+                src={embed.src}
+                title={settings.about_video_heading || 'Meet the Farmers'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="ab-video-el"
+              />
+            ) : (
+              <video
+                src={embed.src}
+                poster={settings.about_video_poster || undefined}
+                controls
+                playsInline
+                className="ab-video-el"
+              />
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Gallery ── */}
-      {bentoImages && (
+      {gallery && (
         <section className="ab-gallery-wrap">
           <div className="ab-section-head">
             <h2>From the Mountains</h2>
             <p>A few honest glimpses of where your food actually comes from.</p>
           </div>
           <div className="ab-bento">
-            {bentoImages.map((img, i) => (
+            {gallery.map((img, i) => (
               <div key={i} className="ab-bento-item">
                 <Image
                   src={img.url}
@@ -203,8 +239,8 @@ export default async function AboutPage() {
       {/* ── CTA ── */}
       <section className="ab-cta">
         <ContourLines className="ab-cta-contours" />
-        <h2>Ready to Taste the Mountains?</h2>
-        <p>Every product has a story. Explore our full range of natural Himalayan products.</p>
+        <h2>{settings.about_cta_heading}</h2>
+        <p>{settings.about_cta_subtext}</p>
         <Link href="/products" className="ab-cta-btn">
           Shop Now
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
@@ -214,6 +250,21 @@ export default async function AboutPage() {
       </section>
     </div>
   )
+}
+
+/* ── Turn a pasted YouTube/Vimeo link or a direct video file URL
+   (Supabase Storage upload) into something we can render. ── */
+function toEmbed(raw: string): { kind: 'iframe' | 'video'; src: string } | null {
+  const url = raw.trim()
+  if (!url) return null
+
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/)
+  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}` }
+
+  const vimeo = url.match(/vimeo\.com\/(\d+)/)
+  if (vimeo) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vimeo[1]}` }
+
+  return { kind: 'video', src: url }
 }
 
 /* ── Signature motif: hand-drawn topographic contour lines,
@@ -240,69 +291,28 @@ function MountainMark() {
   )
 }
 
-const ICON_PROPS = { viewBox: '0 0 24 24', fill: 'none', stroke: '#f5d98a', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+/* Icon key -> SVG, must stay in sync with the admin's VALUE_ICONS list
+   (pahadi-admin src/app/admin/team/page.jsx). An icon key with no match
+   here falls back to the leaf icon rather than rendering nothing. */
+const IP = { viewBox: '0 0 24 24', fill: 'none', stroke: '#f5d98a', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 
-const VALUES = [
-  {
-    title: 'Direct from Farmers',
-    body: 'We work directly with farming families across 20+ Himalayan states. No middlemen, no aggregators.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M8 12l2 2 6-6" />
-        <circle cx="12" cy="12" r="9" />
-      </svg>
-    ),
-  },
-  {
-    title: '100% Natural',
-    body: 'No preservatives, no artificial colours or flavours. Products exactly as nature made them.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M12 21c-4-2-7-6-7-11a7 7 0 0114 0c0 5-3 9-7 11z" />
-        <path d="M12 21V10" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Fair Pricing',
-    body: 'Farmers receive prices that reflect the true value of their craft and knowledge.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M12 3v18M7 7h7a3 3 0 010 6H8" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Mountain to Doorstep',
-    body: 'Products travel from mountain farms to your home in the shortest possible chain.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M3 19l6-9 4 5.5L16 10l5 9H3z" />
-        <circle cx="19" cy="5" r="2" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Thoughtful Packaging',
-    body: 'Minimal, recyclable packaging that protects the product and respects the environment.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <path d="M21 8l-9-5-9 5 9 5 9-5z" />
-        <path d="M3 8v8l9 5 9-5V8" />
-        <path d="M12 13v8" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Community First',
-    body: 'Every purchase helps sustain traditional farming practices and mountain communities.',
-    icon: (
-      <svg {...ICON_PROPS}>
-        <circle cx="9" cy="8" r="3" />
-        <path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6" />
-        <circle cx="18" cy="9" r="2.4" />
-        <path d="M16 20c.2-2.6 2-4.6 4.5-5" />
-      </svg>
-    ),
-  },
-]
+const VALUE_ICONS: Record<string, React.ReactNode> = {
+  handshake: (
+    <svg {...IP}><path d="M8 12l2 2 6-6" /><circle cx="12" cy="12" r="9" /></svg>
+  ),
+  leaf: (
+    <svg {...IP}><path d="M12 21c-4-2-7-6-7-11a7 7 0 0114 0c0 5-3 9-7 11z" /><path d="M12 21V10" /></svg>
+  ),
+  scale: (
+    <svg {...IP}><path d="M12 3v18M7 7h7a3 3 0 010 6H8" /></svg>
+  ),
+  peak: (
+    <svg {...IP}><path d="M3 19l6-9 4 5.5L16 10l5 9H3z" /><circle cx="19" cy="5" r="2" /></svg>
+  ),
+  package: (
+    <svg {...IP}><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></svg>
+  ),
+  heart: (
+    <svg {...IP}><circle cx="9" cy="8" r="3" /><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6" /><circle cx="18" cy="9" r="2.4" /><path d="M16 20c.2-2.6 2-4.6 4.5-5" /></svg>
+  ),
+}

@@ -798,6 +798,12 @@ ul.mega-list.mega-list-2col {
   overflow: hidden;
   padding: 88px 24px 0;
 }
+.ab-hero-bg { position: absolute; inset: 0; }
+.ab-hero-bg img { filter: saturate(1.05); }
+.ab-hero-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(13,36,16,.88) 0%, rgba(22,58,28,.82) 55%, rgba(30,74,36,.8) 100%);
+}
 .ab-hero-contours {
   position: absolute; inset: 0; opacity: .16; pointer-events: none;
 }
@@ -917,6 +923,15 @@ ul.mega-list.mega-list-2col {
   font-size: 17px; font-weight: 700; color: var(--g); margin-bottom: 8px;
 }
 .ab-value-card p { font-size: 13.5px; color: var(--tx3); line-height: 1.65; }
+
+/* ── Farmer connection video ── */
+.ab-video-wrap { background: #fff; padding: 88px 24px 96px; }
+.ab-video-frame {
+  max-width: 900px; margin: 0 auto; position: relative; aspect-ratio: 16/9;
+  border-radius: 22px; overflow: hidden; background: #0d2410;
+  box-shadow: 0 24px 56px rgba(26,58,30,.22);
+}
+.ab-video-el { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
 
 /* ── Gallery (bento) ── */
 .ab-gallery-wrap { background: #fff; padding: 88px 24px; }

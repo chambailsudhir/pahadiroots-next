@@ -119,6 +119,40 @@ const DEFAULTS: Partial<SiteSettings> = {
   // Appears at bottom of every outgoing email" — confirmed via grep
   // that lib/server/email.ts never referenced this setting at all.
   email_footer_text:       '',
+
+  // About page — admin panel's /admin/team route ("About Page" in the
+  // sidebar) manages all of this under these exact keys (its "Page
+  // Content" tab), but src/app/about/page.tsx never actually read any
+  // of them — every string on the live /about page was hardcoded in
+  // this repo instead. Defaults below intentionally match the admin
+  // panel's own fallback copy exactly, so an unconfigured store still
+  // reads fine and a configured store's real copy takes over cleanly.
+  about_hero_eyebrow:      'Est. in the Himalayas',
+  about_hero_title_1:      'Our Story Begins',
+  about_hero_title_2:      'Where the Air Is Thin',
+  about_hero_subtitle:     'We started HimVeda by Pahadi Roots because people deserved to know where their food comes from — and the farmers deserved more than what middlemen ever paid them.',
+  about_story_eyebrow:     'How It Started',
+  about_story_heading:     'A simple realisation, high above the noise',
+  about_story_p1:          'HimVeda by Pahadi Roots was born from a simple realisation — the mountain farmers of Uttarakhand, Himachal Pradesh, and other Himalayan states were producing some of the purest, most extraordinary food in the world.',
+  about_story_p2:          'Yet most of this never reached anyone outside the villages. What little did reach cities passed through so many hands that the farmer earned almost nothing.',
+  about_story_p3:          'We set out to fix that. No unnecessary middlemen. No fancy certifications the farmers cannot afford. Just direct relationships, fair prices, and honest products.',
+  about_quote_text:        'Every jar, every bottle, every grain of rice carries a farmer\u2019s name behind it — even when we can\u2019t print it on the label.',
+  about_quote_attribution: 'The Founding Team',
+  about_value_1_icon: 'handshake', about_value_1_title: 'Direct from Farmers',  about_value_1_body: 'We work directly with farming families across the Himalayan belt. No middlemen, no aggregators.',                about_value_1_hide: 'false',
+  about_value_2_icon: 'leaf',      about_value_2_title: '100% Natural',         about_value_2_body: 'No preservatives, no artificial colours or flavours. Every product is exactly as the mountains made it.',              about_value_2_hide: 'false',
+  about_value_3_icon: 'scale',     about_value_3_title: 'Fair Pricing',         about_value_3_body: 'Farmers are paid for the true value of their craft and knowledge.',                                                    about_value_3_hide: 'false',
+  about_value_4_icon: 'peak',      about_value_4_title: 'Mountain to Doorstep', about_value_4_body: 'Every product travels from a Himalayan farm to your home in the shortest chain we can build.',                          about_value_4_hide: 'false',
+  about_value_5_icon: 'package',   about_value_5_title: 'Thoughtful Packaging', about_value_5_body: 'Minimal, recyclable materials that protect the product without costing the environment.',                              about_value_5_hide: 'false',
+  about_value_6_icon: 'heart',     about_value_6_title: 'Community First',      about_value_6_body: 'Every order helps sustain a traditional way of farming and the families who\u2019ve kept it alive.',                    about_value_6_hide: 'false',
+  about_cta_heading:       'Ready to Taste the Mountains?',
+  about_cta_subtext:       'Every product has a story. Explore our full range of natural Himalayan products.',
+  // Farmer connection video — optional; section is hidden until an admin
+  // uploads a clip or pastes a YouTube/Vimeo link (about_video_url).
+  about_video_url:         '',
+  about_video_poster:      '',
+  about_video_heading:     'Meet the Farmers',
+  about_video_caption:     'A short look at the families behind every harvest.',
+  about_video_hide:        'false',
 }
 
 // In-memory cache for server-side (Next.js ISR revalidation handles the rest)
