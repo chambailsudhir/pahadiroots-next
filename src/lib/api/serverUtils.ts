@@ -179,9 +179,16 @@ export async function syncCustomerProfile(user: {
 }) {
   const phone = user.phone || ''
   const email = user.email || ''
+  // BUG FIX: matching on the raw phone string missed existing customers
+  // whose number was stored in a different format (e.g. with vs without
+  // +91 country code) — the exact bug that caused a real customer's order
+  // history to silently split across two accounts (see migration 048).
+  // normalized_phone is a generated column (last 10 digits, no
+  // formatting) added specifically so this kind of match is format-proof.
+  const normalizedPhone = phone.replace(/\D/g, '').slice(-10)
 
   const orParts = [`auth_user_id.eq.${user.id}`]
-  if (phone) orParts.push(`phone.eq.${encodeURIComponent(phone)}`)
+  if (normalizedPhone) orParts.push(`normalized_phone.eq.${normalizedPhone}`)
   if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
 
   const rows = await sbAdmin(
@@ -192,7 +199,7 @@ export async function syncCustomerProfile(user: {
   if (rows && rows.length > 0) {
     let match =
       rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) ||
-      rows.find((r: Record<string, unknown>) => phone && r.phone === phone) ||
+      rows.find((r: Record<string, unknown>) => normalizedPhone && r.normalized_phone === normalizedPhone) ||
       rows[0]
 
     if (match.auth_user_id !== user.id) {

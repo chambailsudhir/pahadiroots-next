@@ -3,7 +3,7 @@ import { createOrder } from '@/lib/services/orderService'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { checkCsrf } from '@/lib/api/serverUtils'
+import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
@@ -102,6 +102,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // BUG FIX (root cause of orders silently splitting across duplicate
+    // customer records — see the doc comment on
+    // CreateOrderInput.authenticatedCustomerId for the full story): resolve
+    // the logged-in customer via the SAME mechanism /api/orders (My Orders)
+    // already uses, so checkout and order-listing can never disagree on
+    // who the customer is. Best-effort — any failure here (no session,
+    // expired token, etc.) just leaves this null and checkout proceeds as
+    // a guest, exactly as before this fix.
+    let authenticatedCustomerId: string | number | null = null
+    let refreshedAuth: { token: string; refresh: string } | null = null
+    try {
+      let token = getToken(req)
+      const refreshed = !token ? await tryRefresh(req) : null
+      if (refreshed) { token = refreshed.token; refreshedAuth = refreshed }
+      if (token) {
+        const user = await sbAuth('/user', null, token)
+        const profile = await syncCustomerProfile(user)
+        if (profile?.id) authenticatedCustomerId = profile.id
+      }
+    } catch {
+      // Not logged in, or session expired — guest checkout, unaffected.
+    }
+
     const { order, alreadyExists, customerId } = await createOrder({
       customerName:   name,
       customerPhone:  a.phone,
@@ -117,6 +140,7 @@ export async function POST(req: NextRequest) {
       idempotencyKey: d.idempotency_key,
       // ── Loyalty ─────────────────────────────────────────────────────────
       loyaltyPointsRedeemed: d.loyalty_points_redeemed ?? 0,
+      authenticatedCustomerId,
     }, settings)
 
     // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
@@ -287,10 +311,12 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    return NextResponse.json(
+    const successRes = NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },
       { status: alreadyExists ? 200 : 201 }
     )
+    if (refreshedAuth) applyNewCookies(successRes, refreshedAuth.token, refreshedAuth.refresh)
+    return successRes
   } catch (err: unknown) {
     logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'

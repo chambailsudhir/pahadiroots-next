@@ -229,6 +229,20 @@ export interface CreateOrderInput {
   couponCode?:    string
   idempotencyKey: string
   loyaltyPointsRedeemed?: number
+  // BUG FIX (root cause of orders silently splitting across duplicate
+  // customer records): the customer used to be resolved ENTIRELY by
+  // re-matching the phone/email typed into the checkout form, even for a
+  // fully logged-in user — with zero awareness of their actual session.
+  // A customer who typed their phone slightly differently than how it was
+  // stored (e.g. missing the +91 country code) would silently attach
+  // their order to a different/duplicate customer record instead of their
+  // real one, permanently splitting their order history. When the
+  // checkout route has a valid authenticated session, it now resolves the
+  // customer via the SAME authoritative mechanism /api/orders (My Orders)
+  // already uses — syncCustomerProfile(), keyed on auth_user_id, not
+  // free-text form fields — and passes that customer_id here directly,
+  // skipping the phone/email fallback matching entirely.
+  authenticatedCustomerId?: string | number | null
 }
 
 export interface OrderEmailItem {
@@ -597,12 +611,28 @@ export async function createOrder(
     pincode:       input.pincode || null,
   }
 
-  // Lookup: phone first, then email — avoids duplicate key on idx_customers_email
+  // Lookup: authenticated session first (authoritative — see
+  // authenticatedCustomerId doc comment above), then phone, then email as
+  // a guest-checkout fallback. Avoids duplicate key on idx_customers_email.
   let custId: string | null = null
   let existingCust: any = null
-  existingCust = await sbGetOne('customers', `phone=eq.${encodeURIComponent(input.customerPhone.trim())}&select=id&limit=1`)
-  if (!existingCust?.id && input.customerEmail?.trim()) {
-    existingCust = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+  if (input.authenticatedCustomerId != null) {
+    existingCust = { id: input.authenticatedCustomerId }
+  } else {
+    // BUG FIX: was an exact string match on phone (`phone=eq.<raw>`), which
+    // misses an existing customer whose number is stored in a different
+    // format (e.g. with vs without +91) — exactly the bug this whole fix
+    // addresses. Now matches against normalized_phone (last 10 digits,
+    // same normalization the DB's uniqueness constraint uses — migration
+    // 048), so format differences can't cause a miss here, and can't hit
+    // that constraint on insert either.
+    const normalizedPhone = input.customerPhone.replace(/\D/g, '').slice(-10)
+    existingCust = normalizedPhone
+      ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhone}&select=id&limit=1`)
+      : null
+    if (!existingCust?.id && input.customerEmail?.trim()) {
+      existingCust = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+    }
   }
 
   if (existingCust?.id) {
