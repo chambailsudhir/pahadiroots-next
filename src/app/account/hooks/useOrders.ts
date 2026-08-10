@@ -240,6 +240,9 @@ export function useOrders(markExpired?: () => void) {
   // object in its effect's dependency array.
   const stableFetchOrders = useCallback(() => setEnabled(true), [])
   const stableRefresh     = useCallback(() => { mutate(); setExtraOrders([]); setLoadedPage(1) }, [mutate])
+  // For the return/replace modal — photo-upload toggle + WhatsApp number.
+  // {} default so callers can destructure without a null check.
+  const settings = data?.settings ?? {}
 
   return {
     orders:      allOrders.length > 0 ? allOrders : null,
@@ -250,6 +253,7 @@ export function useOrders(markExpired?: () => void) {
     search,      setSearch,
     filtered:    allOrders,
     stats,
+    settings,
     fetchOrders: stableFetchOrders,
     refresh:     stableRefresh,
     canReturn,

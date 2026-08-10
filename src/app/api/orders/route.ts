@@ -181,15 +181,24 @@ export async function GET(req: NextRequest) {
 
     const needsStats = page === 1 && !search && !status
 
-    const [result, stats] = await Promise.all([
+    const [result, stats, settingsRows] = await Promise.all([
       getCustomerOrders(profile.id, { page, limit, search, status }),
       needsStats ? getStatsFromRpc(profile.id) : Promise.resolve(null),
+      // Small, targeted settings fetch for the return/replace modal —
+      // photo-upload toggle (admin can disable if storage cost becomes a
+      // concern) and the WhatsApp number for the "share via WhatsApp"
+      // button. Not using the full getSiteSettings() merge here since
+      // that's server-only-scoped for many more keys than this needs.
+      sbAdmin('GET', '/rest/v1/site_settings?key=in.(return_photo_upload_enabled,whatsapp_number)&select=key,value').catch(() => []),
     ])
+    const settings: Record<string, string> = {}
+    ;(settingsRows as Array<{ key: string; value: string }> || []).forEach(s => { settings[s.key] = s.value })
 
     const res = ok({
       success: true,
       ...result,
       ...(stats ? { stats } : {}),
+      settings,
     })
     ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)

@@ -61,6 +61,7 @@ const OrdersResponseSchema = z.object({
     cancelled: z.number(),
     spent:     z.number(),
   }).optional(),
+  settings: z.record(z.string(), z.string()).optional(),
 })
 
 export type Order          = z.infer<typeof OrderSchema>

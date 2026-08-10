@@ -12,6 +12,27 @@ import styles from '../styles/account.module.css'
 
 type Orders = ReturnType<typeof useOrders>
 
+// Builds a wa.me deep link pre-filled with order/reason/photo context, so
+// the customer can forward their return request to support over WhatsApp
+// as a secondary channel — common practice for COD-heavy Indian D2C brands
+// that monitor WhatsApp closely. wa.me needs digits only (no +, spaces, or
+// dashes), hence the strip.
+function buildWhatsAppShareUrl(
+  rawNumber: string,
+  info: { orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoUrls: string[] },
+): string {
+  const digits = rawNumber.replace(/\D/g, '')
+  const reasonLabel = RETURN_REASONS.find(r => r.code === info.reason)?.label || info.reason
+  const lines = [
+    `Hi, I've requested a ${info.resolution === 'replace' ? 'replacement' : 'return'} for order ${info.orderNum}.`,
+    `Reason: ${reasonLabel}`,
+  ]
+  if (info.photoUrls.length > 0) {
+    lines.push('', 'Photos:', ...info.photoUrls)
+  }
+  return `https://wa.me/${digits}?text=${encodeURIComponent(lines.join('\n'))}`
+}
+
 interface Props {
   orders:    Orders
   showToast: (msg: string, type?: 'success' | 'error') => void
@@ -32,6 +53,18 @@ export default function OrdersSection({ orders, showToast }: Props) {
   // disqualifying reason (server re-validates this too, but the UI should
   // never even offer an inconsistent state).
   const [resolution, setResolution] = useState<'refund' | 'replace'>('refund')
+  // Photo evidence (damaged/wrong item) — admin-toggleable via
+  // orders.settings.return_photo_upload_enabled (see useOrders.ts).
+  // Uploaded immediately on selection (not deferred to submit) so the
+  // customer sees each photo succeed/fail individually, matching the
+  // upload-then-preview pattern most shopping apps use.
+  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ url: string; name: string }>>([])
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const MAX_PHOTOS = 4
+  // Post-submit success view (within the same modal) so the WhatsApp
+  // share option — which needs the order/reason/photo context — has
+  // somewhere to live without a second round-trip or a separate modal.
+  const [submittedInfo, setSubmittedInfo] = useState<{ orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoUrls: string[] } | null>(null)
 
   // Focus management for keyboard-accessible modal
   const firstRadioRef  = useRef<HTMLInputElement>(null)
@@ -56,6 +89,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
     setReturnOtherText('')
     setSelectedItemIdx(null)
     setResolution('refund')
+    setUploadedPhotos([])
+    setSubmittedInfo(null)
     // Restore focus to the button that opened the modal
     triggerBtnRef.current?.focus()
     triggerBtnRef.current = null
@@ -102,6 +137,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
     // behavior (no item fields sent, unchanged from before this feature).
     setSelectedItemIdx(null)
     setResolution('refund')
+    setUploadedPhotos([])
+    setSubmittedInfo(null)
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum, items: order.items || [] })
   }
 
@@ -112,6 +149,60 @@ export default function OrdersSection({ orders, showToast }: Props) {
   const selectedItem = returnModal && selectedItemIdx !== null ? returnModal.items[selectedItemIdx] : null
   const replaceAvailable = !!returnReason && canReplace(returnReason)
 
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = '' // allow re-selecting the same file after a removal
+    if (!returnModal || files.length === 0) return
+    const remaining = MAX_PHOTOS - uploadedPhotos.length
+    if (remaining <= 0) {
+      showToast(`You can attach up to ${MAX_PHOTOS} photos`, 'error')
+      return
+    }
+    const toUpload = files.slice(0, remaining)
+    setUploadingPhoto(true)
+    try {
+      for (const file of toUpload) {
+        // Client-side checks mirror the server's — a fast, friendly reject
+        // before spending a round-trip, not a substitute for the server
+        // re-validating everything (which it does).
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+          showToast(`${file.name}: only JPEG, PNG, or WebP images are allowed`, 'error')
+          continue
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          showToast(`${file.name}: photos must be under 5MB`, 'error')
+          continue
+        }
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const urlRes = await fetch(`/api/orders/${returnModal.orderId}/return/upload-url`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ fileName: safeName, fileType: file.type }),
+        })
+        const urlData = await urlRes.json()
+        if (!urlRes.ok) {
+          showToast(urlData.error || `${file.name}: upload failed`, 'error')
+          continue
+        }
+        const putRes = await fetch(urlData.signedURL, {
+          method:  'PUT',
+          headers: { 'Content-Type': file.type },
+          body:    file,
+        })
+        if (!putRes.ok) {
+          showToast(`${file.name}: upload failed`, 'error')
+          continue
+        }
+        setUploadedPhotos(prev => [...prev, { url: urlData.publicUrl, name: file.name }])
+      }
+    } catch (e: unknown) {
+      console.error('[OrdersSection] photo upload failed:', e)
+      showToast('Photo upload failed — please try again', 'error')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
   async function submitReturn() {
     if (!returnModal || !returnReason) return
     // If "Other" is selected, require the free-text explanation
@@ -119,6 +210,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (needsItemSelection) return
     setSubmitting(true)
     try {
+      const finalResolution = replaceAvailable ? resolution : 'refund'
       const res = await fetch(`/api/orders/${returnModal.orderId}/return`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,7 +220,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
           order_item_id: selectedItem?.id ?? undefined,
           variant_id:    selectedItem?.variant_id ?? undefined,
           product_id:    selectedItem?.product_id ?? undefined,
-          resolution:    replaceAvailable ? resolution : 'refund',
+          resolution:    finalResolution,
+          photo_urls:    uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : undefined,
         }),
       })
       const data = await res.json()
@@ -136,11 +229,15 @@ export default function OrdersSection({ orders, showToast }: Props) {
         showToast(data.error || 'Return request failed', 'error')
       } else {
         showToast(data.message || '✅ Return request submitted!')
-        setReturnModal(null)
-        setReturnReason('')
-        setReturnOtherText('')
-        setSelectedItemIdx(null)
-        setResolution('refund')
+        // Switch to the success/share view instead of closing outright —
+        // the WhatsApp share option lives here, since it needs the order
+        // number, reason, and photo URLs that are about to be cleared.
+        setSubmittedInfo({
+          orderNum:   returnModal.orderNum,
+          reason:     returnReason,
+          resolution: finalResolution,
+          photoUrls:  uploadedPhotos.map(p => p.url),
+        })
         orders.refresh()
       }
     } catch (e: unknown) {
@@ -288,6 +385,30 @@ export default function OrdersSection({ orders, showToast }: Props) {
               >✕</button>
             </div>
 
+            {submittedInfo ? (
+              // ── Post-submit success + share view ──────────────────────
+              <div className={styles.returnSuccessWrap}>
+                <div className={styles.returnSuccessIcon}>✅</div>
+                <p className={styles.modalDesc}>
+                  Your {submittedInfo.resolution === 'replace' ? 'replacement' : 'return'} request for order{' '}
+                  <strong>{submittedInfo.orderNum}</strong> has been submitted. Our team will reach out within 24–48 hours.
+                </p>
+                {orders.settings?.whatsapp_number && (
+                  <a
+                    className={styles.btnWhatsapp}
+                    href={buildWhatsAppShareUrl(orders.settings.whatsapp_number, submittedInfo)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    💬 Share details on WhatsApp
+                  </a>
+                )}
+                <div className={styles.modalFooter}>
+                  <button onClick={closeReturnModal} className={styles.btnPrimary}>Done</button>
+                </div>
+              </div>
+            ) : (
+              <>
             <p className={styles.modalDesc}>
               Please select the reason for your return. Our team will contact you within 24–48 hours to arrange a pickup.
             </p>
@@ -359,6 +480,48 @@ export default function OrdersSection({ orders, showToast }: Props) {
               </div>
             )}
 
+            {/* Photo evidence — admin-toggleable (site_settings.
+                return_photo_upload_enabled). Optional but recommended for
+                damaged/wrong-item claims — speeds up approval, same as
+                Amazon/Flipkart-style platforms. */}
+            {orders.settings?.return_photo_upload_enabled === 'true' && (
+              <div className={styles.returnPhotoWrap}>
+                <label htmlFor="return-photo-input" className={styles.fLbl}>
+                  Add photos (optional, up to {MAX_PHOTOS})
+                </label>
+                {uploadedPhotos.length > 0 && (
+                  <div className={styles.returnPhotoPreviewRow}>
+                    {uploadedPhotos.map((p, idx) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <div key={p.url} className={styles.returnPhotoThumb}>
+                        <img src={p.url} alt={p.name} />
+                        <button
+                          type="button"
+                          className={styles.returnPhotoRemove}
+                          aria-label={`Remove ${p.name}`}
+                          onClick={() => setUploadedPhotos(prev => prev.filter((_, i) => i !== idx))}
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {uploadedPhotos.length < MAX_PHOTOS && (
+                  <>
+                    <input
+                      id="return-photo-input"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      onChange={handlePhotoSelect}
+                      disabled={uploadingPhoto}
+                      className={styles.returnPhotoInput}
+                    />
+                    {uploadingPhoto && <div className={styles.returnPhotoUploading}>Uploading…</div>}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Free-text explanation — required when "Other" is selected */}
             {returnReason === 'other' && (
               <div className={styles.returnOtherWrap}>
@@ -395,7 +558,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
                   !returnReason ||
                   (returnReason === 'other' && !returnOtherText.trim()) ||
                   needsItemSelection ||
-                  submitting
+                  submitting ||
+                  uploadingPhoto
                 }
                 className={styles.btnPrimary}
               >
@@ -406,6 +570,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     : `Submit ${resolution === 'replace' ? 'Replacement' : 'Return'} Request`}
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

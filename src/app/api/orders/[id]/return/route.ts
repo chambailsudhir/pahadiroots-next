@@ -7,7 +7,10 @@
 //  ✅ Only delivered orders within the 48-hour window are returnable
 //  ✅ Idempotent: 409 if a return is already in progress for the same item
 //  ✅ Body: { reason, other_detail?, order_item_id?, variant_id?, product_id?,
-//            quantity?, resolution? ('refund' | 'replace') }
+//            quantity?, resolution? ('refund' | 'replace'), photo_urls? }
+//  ✅ photo_urls: obtained via the sibling /return/upload-url route; only
+//     accepted here if they actually point at this order's own upload
+//     path — prevents attaching an arbitrary external URL as "evidence"
 //  ✅ Line-item aware: when an order has >1 item, the client identifies
 //     which one via variant_id/product_id (or order_item_id); server
 //     re-verifies it actually belongs to this order against order_items
@@ -88,6 +91,7 @@ export async function POST(
   let productId:   string | number | null = null
   let quantity:    number | null          = null
   let resolution:  'refund' | 'replace'   = 'refund'
+  let photoUrls:   string[]               = []
   try {
     const body  = await req.json()
     reason      = (body?.reason       ?? '').trim()
@@ -104,6 +108,17 @@ export async function POST(
       if (Number.isFinite(q) && q > 0) quantity = Math.floor(q)
     }
     if (body?.resolution === 'replace') resolution = 'replace'
+    // Photo evidence — only accept URLs that actually point at this
+    // order's own upload-url path (returns/<id>/...) in our own bucket, so
+    // a crafted request can't attach an arbitrary external image URL as
+    // "evidence". Capped defensively even though upload-url also caps it,
+    // since this route doesn't otherwise know how many were issued.
+    if (Array.isArray(body?.photo_urls)) {
+      const expectedPrefix = `/storage/v1/object/public/pahadi-images/returns/${id}/`
+      photoUrls = body.photo_urls
+        .filter((u: unknown) => typeof u === 'string' && u.includes(expectedPrefix))
+        .slice(0, 4)
+    }
   } catch {
     return fail(400, 'Invalid request body')
   }
@@ -189,7 +204,7 @@ export async function POST(
       variantId       = match.variant_id
       productId       = match.product_id
       matchedQuantity = match.quantity
-      if (quantity == null || quantity > match.quantity) quantity = match.quantity
+      if (quantity == null || quantity > matchedQuantity) quantity = matchedQuantity
     }
 
     // Idempotency check — confirmed real schema: a return "in progress" means
@@ -282,6 +297,7 @@ export async function POST(
         product_id:    productId,
         quantity:      quantity ?? 1,
         resolution,
+        photo_urls:    photoUrls.length > 0 ? photoUrls : null,
       },
       'return=minimal',
     )
