@@ -204,7 +204,7 @@ export async function POST(
       variantId       = match.variant_id
       productId       = match.product_id
       matchedQuantity = match.quantity
-      if (quantity == null || quantity > matchedQuantity) quantity = matchedQuantity
+      if (quantity == null || quantity > match.quantity) quantity = match.quantity
     }
 
     // Idempotency check — confirmed real schema: a return "in progress" means
