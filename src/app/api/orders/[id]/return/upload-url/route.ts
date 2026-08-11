@@ -122,7 +122,7 @@ export async function POST(
     const path = `returns/${id}/${Date.now()}-${fileName}`
 
     const signRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/sign/upload/${BUCKET}/${path}`,
+      `${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${path}`,
       {
         method:  'POST',
         headers: {
@@ -137,10 +137,20 @@ export async function POST(
       const err = await signRes.text()
       return fail(502, `Storage sign error: ${err}`)
     }
-    const { signedURL, token: uploadToken } = await signRes.json()
+    // BUG FIX: the raw Storage REST API returns a single relative
+    // `url` field with the token embedded as a query param —
+    // { url: "/object/upload/sign/{bucket}/{path}?token=..." } — NOT
+    // separate `signedURL`/`token` fields. Copied from pahadi-admin's
+    // get_upload_url action, which has the identical bug; that code path
+    // has apparently never been successfully exercised in production —
+    // every real image in the bucket appears to have gone through admin's
+    // OTHER (server-proxied) upload path instead.
+    const { url: relativeSignedUrl } = await signRes.json()
+    if (!relativeSignedUrl) return fail(502, 'Storage sign response missing url')
+    const signedURL = `${SUPABASE_URL}/storage/v1${relativeSignedUrl}`
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
 
-    const res = ok({ success: true, signedURL, token: uploadToken, publicUrl })
+    const res = ok({ success: true, signedURL, publicUrl })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
 

@@ -70,14 +70,15 @@ async function getCustomerOrders(
 
   const rows = await sbAdmin(
     'GET',
-    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,variant_id,products(emoji,image_url)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
+    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,variant_id,products(name,emoji,image_url),product_variants(variant_value)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
   ).catch(() => [])
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
     const rawItems = (o.order_items as Array<{
       id: number | string; quantity: number; price_at_time: number; product_name_snapshot: string | null
       variant_value_snapshot: string | null; product_id: string | number | null; variant_id: string | number | null
-      products?: { emoji?: string; image_url?: string }
+      products?: { name?: string; emoji?: string; image_url?: string }
+      product_variants?: { variant_value?: string }
     }>) || []
     // id/variant_id/product_id added so the account UI (and the return/
     // replace request it submits) can identify exactly which line item a
@@ -87,8 +88,15 @@ async function getCustomerOrders(
       id:         i.id,
       qty:       i.quantity,
       price:     i.price_at_time,
-      name:      i.product_name_snapshot || 'Product',
-      variant:   i.variant_value_snapshot || null,
+      // BUG FIX: product_name_snapshot/variant_value_snapshot were never
+      // populated by the order-creation RPC for ANY order (fixed at the
+      // source in migration 050, going forward). For orders placed before
+      // that fix — including ones whose order_items are now ledger-locked
+      // and can never be backfilled after the fact (immutability trigger,
+      // by design) — fall back to the live product/variant name via the
+      // join above, rather than the generic 'Product' placeholder.
+      name:      i.product_name_snapshot || i.products?.name || 'Product',
+      variant:   i.variant_value_snapshot || i.product_variants?.variant_value || null,
       variant_id: i.variant_id ?? null,
       product_id: i.product_id ?? null,
       emoji:     i.products?.emoji     || '🌿',

@@ -1,39 +1,69 @@
-# Payments + Reconciliation Fix — Summary
+# Three Bugs: Product Names, Photo Upload Error, Photo Storage/WhatsApp
 
-## Code file (goes to `pahadiroots-next-main`, main site)
+## Files changed (2, both `pahadiroots-next-main`)
 
 ```
 pahadiroots-next-main/
-└── src/app/api/v1/payments/route.ts
+├── src/app/api/orders/route.ts
+└── src/app/api/orders/[id]/return/upload-url/route.ts
 ```
 
-**What changed:** `verify_payment` (the route that confirms an order right
-after Razorpay checkout — the primary, fast confirmation path) now inserts
-a row into `payments` on success. Previously only the async webhook did
-this, and its `order_status = 'pending'` guard almost never passed because
-`verify_payment` already flips that status moments earlier. Net effect:
-`payments` was structurally empty regardless of real order volume —
-confirmed live: 0 rows before this fix.
+## Issue 1 — "Product × 1" instead of real names
 
-## DB migrations applied (tracked, with full audit trail)
+**Root cause, confirmed with certainty (checked the actual DB function
+source, not guessed):** the order-creation database function
+(`create_order_with_items`) never wrote `product_name_snapshot` or
+`variant_value_snapshot` when inserting `order_items` — not for this one
+order, for **every single order ever placed** (93/93 checked). The
+`|| 'Product'` fallback in the display code wasn't a rare edge case, it
+was firing 100% of the time.
 
-| # | What |
-|---|------|
-| 044 | Backfilled 4 historical online-order `payments` rows (pre-dated the code fix above). Used a labeled synthetic reference (`BACKFILL-<order_number>`) instead of a misleading raw value, since 3 of the 4 had a Razorpay *order* ID stored where a *payment* ID should be. Full audit trail in `order_events`. |
-| 045 | Backfilled a 5th missed order (its `payment_status` had changed to `'refunded'` so it didn't match migration 044's filter). Also fixed `validate_waterfall()` to include shipping charges and loyalty-point redemptions in expected revenue — both were silently excluded before. |
-| 046 | Fixed an asymmetric refund calculation in `validate_waterfall()` — refunds were subtracted from expected revenue but never from captured amount, comparing net vs. gross. |
-| 047 | Fixed a timing-mismatch bug: captured money was matched to the reconciliation window by payment/settlement date, while expected revenue was matched by order-creation date — two different timestamps that can be days apart. Now both sides are scoped to the exact same set of orders via a join, for any window size. |
+**Fixed:**
+- The database function now looks up the real product/variant name at
+  order-creation time, for every future order.
+- Backfilled existing orders where possible — but about half the
+  historical rows are protected by a genuine ledger-immutability trigger
+  (delivered orders are locked from editing, a real accounting-integrity
+  control, correctly left alone rather than worked around).
+- For those locked historical rows, `/api/orders/route.ts` now falls back
+  to the *live* product/variant name via a join, so every order displays
+  correctly regardless of when it was placed.
 
-## Verified result (live, after all 4 migrations)
+## Issue 2 — "Storage sign error: NoSuchKey" on photo upload
 
-| Window | Match |
-|---|---|
-| 7-day | 93.75% (one known test-data anomaly on a small base) |
-| 30-day | 99.8% ✅ |
-| 90-day (function default) | 99.87% ✅ |
-| 365-day | Fails — pre-dates real launch; full of ₹1 test transactions and round-number seed orders from the site's first days, not a code issue |
+**Root cause, confirmed against Supabase's own documentation (not
+guessed):** two separate bugs, both copied from `pahadi-admin`'s existing
+(also-broken) upload code:
+1. Wrong endpoint order — used `/object/sign/upload/...`, the correct
+   endpoint is `/object/upload/sign/...`.
+2. Wrong response shape assumed — the code expected `{ signedURL, token }`
+   as two separate fields; the real API returns a single `{ url: "...?token=..." }`
+   field with the token already embedded.
 
-## Not touched — flagged for your call, not guessed at
+This strongly suggests `pahadi-admin`'s own signed-upload code path has
+never actually worked in production — the real product images visible in
+storage all appear to have gone through a *different*, working
+(server-proxied) upload path instead. Worth a quick check on that side
+too, separately from this fix.
 
-- **Legacy test/seed orders** (₹1 Razorpay test transactions, `payment_method=NULL` round-number orders from March) — these make any full-history reconciliation fail, but they're not real transactions, so no formula fix addresses them. Recommend marking them `is_deleted` once you're done using them for testing.
-- **Order `ORD-2026-00094` and `ORDMRVZILJW4803`** — their `total_amount` doesn't match their own item/shipping/loyalty math by ₹50 and ₹10.67 respectively. Small, isolated, likely test-data artifacts — flagged rather than silently corrected.
+**Fixed** in the new customer-facing upload route only (this was a
+brand-new endpoint from this session, so no historical data was affected).
+
+## Issue 3 — where photos are saved / how WhatsApp share works
+
+Answering directly, now that the upload itself is fixed:
+
+- **Storage**: Supabase Storage, in the same `pahadi-images` bucket
+  product photos already use, under a `returns/<order_id>/` folder. Public
+  URLs (e.g. `https://<project>.supabase.co/storage/v1/object/public/pahadi-images/returns/124/...jpg`)
+  get saved into `returns.photo_urls` in the database and shown as
+  thumbnails in the admin return-review screen.
+- **WhatsApp share**: after a customer submits a return/replacement
+  request, a "Share details on WhatsApp" button appears. It opens
+  `wa.me/<your configured number>` with a pre-filled message containing
+  the order number, reason, and the photo links — the customer taps once
+  to send it as a normal WhatsApp message to your business number. This
+  is a *secondary* channel on top of the formal request (which is already
+  saved and visible in the admin returns page) — it exists so customers
+  who prefer WhatsApp can loop your support in immediately, for faster
+  human follow-up, not as the only record of the request.
