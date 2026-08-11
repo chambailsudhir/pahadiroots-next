@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getStoreData, buildCategories, imgFor } from '@/lib/storeData'
-import { applyProductImages, normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { getStoreData, buildCategories, imgFor, getProductsWithImages } from '@/lib/storeData'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -73,8 +73,18 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   const instock = sp.instock === 'true'
   const offset  = (page - 1) * PAGE_SIZE
 
-  // Get ALL products with images applied (SERVICE KEY — same as old site)
-  const allProductsWithImages = applyProductImages(storeData.products, storeData.product_images)
+  // BUG FIX (price mismatch — this page showed a different price than the
+  // homepage/products page/admin for the same product): was
+  // `applyProductImages(storeData.products, storeData.product_images)`,
+  // which never attaches product_variants. getBaseVariant() then always
+  // returned null here, so ProductCard fell back to the stale top-level
+  // `products.price` column (a leftover from an older pricing-engine run —
+  // confirmed live: 714.29, vs the real current price of 800 in
+  // products.selling_price / product_variants.price). Every other listing
+  // page (new-arrivals, /products, homepage via getNormalizedProducts())
+  // already uses this same combined helper — this page was the one
+  // outlier still doing the two steps manually and skipping the second one.
+  const allProductsWithImages = getProductsWithImages(storeData)
   const allNormalized = normalizeProducts(allProductsWithImages)
 
   // Filter by this category
