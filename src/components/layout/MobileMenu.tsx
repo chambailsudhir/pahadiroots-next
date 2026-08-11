@@ -71,6 +71,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   const showTrack    = isEnabled(settings.show_track_order_page)
   const showWishlist = isEnabled(settings.show_wishlist)
   const showBlog     = settings.show_blog !== 'false'
+  const showAbout    = settings.about_page_enabled !== 'false'
 
   const navLinks = [
     { href: '/',                         label: 'Home',        icon: '🏡' },
@@ -81,7 +82,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
     // desktop MegaMenu's CURATED list — added for parity.
     { href: '/new-arrivals',             label: 'New Arrivals', icon: '🆕' },
     { href: '/products',                 label: 'All Products', icon: '🌿' },
-    { href: '/about',                    label: 'Our Story',    icon: '📖' },
+    ...(showAbout    ? [{ href: '/about',    label: 'Our Story',   icon: '📖' }] : []),
     ...(showBlog     ? [{ href: '/blog',     label: 'Blog',        icon: '✍️' }] : []),
     ...(showTrack    ? [{ href: '/track',    label: 'Track Order', icon: '📦' }] : []),
     ...(showWishlist ? [{ href: '/wishlist', label: 'Wishlist',    icon: '❤️' }] : []),

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getHeroStats } from '@/lib/heroStats'
@@ -17,6 +18,12 @@ interface TeamMember { id: string; name: string; role: string; bio: string | nul
 
 export default async function AboutPage() {
   const settings = await getSiteSettings()
+
+  // Full kill-switch — admin's "Page is live at /about" toggle. Off means
+  // the route itself 404s (not just an empty section), and Header/Footer/
+  // MobileMenu independently hide the "Our Story" link using this same key.
+  if (settings.about_page_enabled === 'false') notFound()
+
   const heroStats = getHeroStats(settings)
 
   let team: TeamMember[] | null = null

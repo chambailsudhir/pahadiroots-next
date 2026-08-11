@@ -240,7 +240,8 @@ export default function Footer({ settings }: Props) {
               ['Shipping Policy',    '/policies/shipping'],
               ['Privacy Policy',     '/policies/privacy'],
               ['Terms & Conditions', '/policies/terms'],
-            ].map(([label, href]) => (
+            ].filter(([label]) => label !== 'Our Story' || settings.about_page_enabled !== 'false')
+              .map(([label, href]) => (
               <li key={label}>
                 <Link href={href} style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px', transition: 'all .2s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.paddingLeft = '5px' }}

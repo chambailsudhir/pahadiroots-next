@@ -58,6 +58,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
 
   const showWishlist = isEnabled(settings.show_wishlist)
   const showTrack    = isEnabled(settings.show_track_order_page)
+  const showAbout    = settings.about_page_enabled !== 'false'
   const siteName     = settings.site_name || 'HimVeda by Pahadi Roots'
   const logoUrl      = settings.logo_url || ''
   const freeShipMin  = settings.free_shipping_min || '0'
@@ -92,7 +93,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         {/* Desktop nav links */}
         <ul className="old-nav-links">
           <li><Link href="/">Home</Link></li>
-          <li><Link href="/about">Our Story</Link></li>
+          {showAbout && <li><Link href="/about">Our Story</Link></li>}
           <MegaMenu categories={categories} states={states} />
           {showTrack && <li><Link href="/track">Track Order</Link></li>}
           <li><Link href="/payment">Payment</Link></li>
