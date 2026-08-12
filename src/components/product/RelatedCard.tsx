@@ -13,6 +13,7 @@ interface RelatedProduct {
   slug: string
   emoji: string | null
   price: number
+  selling_price?: number | null
   mrp: number | null
   image_url: string | null
   unit_label: string | null
@@ -59,8 +60,10 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
   }, [])
 
   const baseVariant = p._variants?.[0] ?? null
-  const price = baseVariant?.price ?? p.price ?? 0
-  const mrp   = baseVariant?.mrp ?? p.mrp ?? 0
+  // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
+  // column the pricing engine no longer writes to — prefer selling_price.
+  const price = baseVariant?.price ?? p.selling_price ?? p.price ?? 0
+  const mrp   = baseVariant?.mrp ?? p.mrp ?? p.selling_price ?? 0
   const disc  = mrp && mrp > price ? Math.round((1 - price / mrp) * 100) : 0
   const img   = p._firstImage || p.image_url || ''
   const slug  = p.slug || String(p.id)

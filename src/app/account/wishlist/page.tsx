@@ -74,7 +74,7 @@ export default function WishlistPage() {
         const { data, error: dbError } = await supabase
           .from('products')
           .select(`
-            id, name, slug, emoji, price, mrp, available_stock, gst_rate,
+            id, name, slug, emoji, price, selling_price, mrp, available_stock, gst_rate,
             image_url, unit_label, badges, category_id,
             is_deleted, status,
             categories:categories(id, name, slug),

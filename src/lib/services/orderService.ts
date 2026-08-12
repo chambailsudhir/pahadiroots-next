@@ -370,7 +370,7 @@ export async function createOrder(
 
   const productIdList = allProductIds.join(',')
   const products: any[] = await sbGet('products',
-    `select=id,name,emoji,gst_rate,is_deleted,status,price,mrp,available_stock&id=in.(${productIdList})`
+    `select=id,name,emoji,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock&id=in.(${productIdList})`
   )
   if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
 
@@ -403,8 +403,18 @@ export async function createOrder(
         image:        null,
         emoji:        String(p?.emoji ?? '🌿'),
         size:         '',
-        price:        Number(p?.price) || 0,
-        mrp:          Number(p?.mrp)   || Number(p?.price) || 0,
+        // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a
+        // legacy column no code writes to anymore (the pricing engine only
+        // updates product_variants.price and products.selling_price) —
+        // confirmed live to disagree with the real price for nearly the
+        // whole catalogue (e.g. Sea Buckthorn: 714.29 stale vs 800 real).
+        // No live product currently has zero variants, so this branch
+        // wasn't actively mispricing anything yet, but it was one variant
+        // deletion away from silently undercharging a customer at
+        // checkout. Prefer selling_price; keep price as a last-resort
+        // fallback only for rows that somehow have neither set.
+        price:        Number(p?.selling_price ?? p?.price) || 0,
+        mrp:          Number(p?.mrp) || Number(p?.selling_price ?? p?.price) || 0,
         gstRate:      Number(p?.gst_rate ?? 0),
         qty:          i.qty,
         maxQty:       Number(p?.available_stock) || 999,

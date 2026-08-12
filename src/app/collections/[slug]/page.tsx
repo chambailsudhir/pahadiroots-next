@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData, buildCategories, imgFor, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData, getEffectivePrice } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -93,8 +93,18 @@ export default async function CollectionPage({ params, searchParams }: Props) {
 
   // Sort
   switch (sort) {
-    case 'price_asc':  catProducts.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));  break
-    case 'price_desc': catProducts.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));  break
+    // BUG FIX (found during Aug 2026 catalogue-wide audit): was sorting by
+    // raw a.price/b.price — the top-level products.price column, which is
+    // legacy and no longer written by the pricing engine (confirmed
+    // disagreeing with the real price for nearly the whole catalogue).
+    // ProductCard actually displays getEffectivePrice() (the base variant's
+    // price), so "Price ↑/↓" could visibly disagree with the prices shown
+    // on the very cards it was sorting. Every other listing page
+    // (new-arrivals, /products, BestSellersClient) already sorts by
+    // getEffectivePrice/getEffectiveMrp for this exact reason — this page
+    // was the one outlier still comparing the raw column directly.
+    case 'price_asc':  catProducts.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));  break
+    case 'price_desc': catProducts.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a));  break
     case 'popular':    catProducts.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0)); break
     default:           catProducts.sort((a: any, b: any) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime())
   }

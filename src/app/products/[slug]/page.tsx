@@ -96,8 +96,10 @@ export default async function ProductPage({ params }: Props) {
     ? activeVariants.reduce((min: any, v: any) => v.price < min.price ? v : min, activeVariants[0])
     : null
 
-  const displayPrice = baseVariant?.price ?? product.price
-  const displayMRP   = baseVariant?.mrp ?? product.mrp ?? product.price
+  // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
+  // column the pricing engine no longer writes to — prefer selling_price.
+  const displayPrice = baseVariant?.price ?? product.selling_price ?? product.price
+  const displayMRP   = baseVariant?.mrp ?? product.mrp ?? product.selling_price ?? product.price
   const savings      = savingsPercent(displayMRP ?? displayPrice, displayPrice)
   // BUG FIX (MEDIUM – null stockCount): product.available_stock can be null from
   // the DB. `null > 0` = false (shows OOS correctly) but `null <= 5` = false too

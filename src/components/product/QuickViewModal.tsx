@@ -32,8 +32,10 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
   const [selectedId, setSelectedId] = useState(initialVariant?.id ?? variants[0]?.id ?? null)
   const selected = variants.find(v => v.id === selectedId) ?? initialVariant
 
-  const price   = selected?.price ?? product.price
-  const mrp     = selected?.mrp   ?? product.mrp ?? product.price
+  // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
+  // column the pricing engine no longer writes to — prefer selling_price.
+  const price   = selected?.price ?? product.selling_price ?? product.price
+  const mrp     = selected?.mrp   ?? product.mrp ?? product.selling_price ?? product.price
   const savings = savingsPercent(mrp, price)
   const stock   = selected?.available_stock ?? product.available_stock ?? 0
   const inStock = stock > 0

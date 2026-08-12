@@ -52,8 +52,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const baseVariant = getBaseVariant(product)
   const variants     = product.product_variants?.filter(v => v.is_active) || []
 
-  const price   = baseVariant?.price ?? product.price
-  const mrp     = baseVariant?.mrp   ?? product.mrp ?? product.price
+  // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
+  // column the pricing engine no longer writes to — prefer selling_price.
+  const price   = baseVariant?.price ?? product.selling_price ?? product.price
+  const mrp     = baseVariant?.mrp   ?? product.mrp ?? product.selling_price ?? product.price
   const savings = savingsPercent(mrp, price)
 
   const stock   = baseVariant?.available_stock ?? product.available_stock ?? 0

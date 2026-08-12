@@ -60,7 +60,10 @@ export interface Product {
   status?: 'active' | 'inactive' | 'draft' // legacy, use is_active
   unit_label: string | null
   gst_rate: number
-  price: number           // base selling price
+  price: number           // LEGACY — no longer written by the pricing engine (see
+                           // normalizeProduct.ts's getEffectivePrice doc comment).
+                           // Prefer selling_price wherever it's available.
+  selling_price?: number | null  // the real current base price, kept in sync by the pricing engine
   selling: number | null
   mrp: number | null
   cost_price: number | null

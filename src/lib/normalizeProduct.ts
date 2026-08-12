@@ -16,7 +16,7 @@ import type { Product } from '@/types'
  * fixed alongside this one.
  */
 export const PRODUCT_SELECT = `
-  id, name, slug, emoji, price, mrp, cost_price, gst_rate, available_stock,
+  id, name, slug, emoji, price, selling_price, mrp, cost_price, gst_rate, available_stock,
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
@@ -173,7 +173,16 @@ export function getBaseVariant(p: Product) {
  * cards it's sorting.
  */
 export function getEffectivePrice(p: Product): number {
-  return getBaseVariant(p)?.price ?? p.price ?? 0
+  // BUG FIX (catalogue-wide audit, Aug 2026): the products.price column is
+  // legacy — no code writes to it anymore (the pricing engine only updates
+  // product_variants.price and products.selling_price). For a product with
+  // no active variants, this used to fall straight to the stale p.price,
+  // which was confirmed live to disagree with the real price on most of
+  // the catalogue (e.g. Sea Buckthorn: 714.29 stale vs 800 real). Prefer
+  // selling_price — the column the pricing engine actually maintains —
+  // and only fall back to the legacy column if selling_price is somehow
+  // unset (e.g. very old rows).
+  return getBaseVariant(p)?.price ?? p.selling_price ?? p.price ?? 0
 }
 
 /**

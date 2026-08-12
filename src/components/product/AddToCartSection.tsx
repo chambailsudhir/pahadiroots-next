@@ -34,8 +34,10 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const [added, setAdded]     = useState(false)
   const [buying, setBuying]   = useState(false)
 
-  const price    = selectedVariant?.price   ?? product.price
-  const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.price
+  // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
+  // column the pricing engine no longer writes to — prefer selling_price.
+  const price    = selectedVariant?.price   ?? product.selling_price ?? product.price
+  const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.selling_price ?? product.price
   const maxStock = selectedVariant?.available_stock ?? product.available_stock ?? 0
   const inStock  = maxStock > 0
 
