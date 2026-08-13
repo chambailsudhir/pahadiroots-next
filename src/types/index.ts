@@ -9,6 +9,10 @@ export interface Category {
   image_url: string | null
   is_active: boolean
   sort_order?: number | null
+  // Dedicated homepage-visibility flag (migration: add_categories_show_on_homepage_column).
+  // Optional because a few call sites construct partial Category-shaped objects
+  // (e.g. sitemap/legacy builders) that never touch buildCategories()'s filter.
+  show_on_homepage?: boolean
 }
 
 export interface State {

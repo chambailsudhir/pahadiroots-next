@@ -8,6 +8,7 @@
 import { unstable_cache } from 'next/cache'
 import { getServiceClient } from './supabase'
 import { applyProductImages, normalizeProducts } from './normalizeProduct'
+import { logger } from './logger'
 import type { Product, Category, State } from '@/types'
 
 // Minimal shapes for related tables (not full DB types)
@@ -104,7 +105,7 @@ async function _fetchStoreData(): Promise<StoreData> {
       .eq('is_active', true)
       .order('product_id').order('sort_order'),
     db.from('categories')
-      .select('id, name, slug, emoji, description, image_url, sort_order, is_active')
+      .select('id, name, slug, emoji, description, image_url, sort_order, is_active, show_on_homepage')
       .eq('is_active', true)
       .order('sort_order').order('name'),
     db.from('site_settings').select('key, value'),
@@ -178,8 +179,38 @@ export async function getStoreData(force = false): Promise<StoreData> {
   return force ? _getFreshStoreData() : _getCachedStoreData()
 }
 
-// ── Same imgFor() as old site main.js initCollectionImages ───────────────
+// ── imgFor() — category card image resolution ────────────────────────────
+//
+// BUG FIX (data-architecture, confirmed against live DB, not guessed):
+// categories.image_url is a real column on the categories table (already
+// used by the admin Catalogue tab) — but it sat unused/null while every
+// collection-card image actually lived in site_settings under
+// coll_img_<key>, where <key> was built from whichever of
+// cat.slug / cat.name / cat.name.toLowerCase() / cat.id happened to match
+// at save time. Because category names get edited over time (renames,
+// recapitalization) but the settings KEY was baked from the name/slug at
+// the moment of upload, this drifted: 8 categories still matched by luck,
+// but "Himalayan Honey" (slug: himalayan-honey) had its most recent image
+// saved under the stale key "coll_img_Himalayan-honey" (capital H) — a
+// plain JS object lookup is case-sensitive, so `coll_img_${cat.slug}`
+// never found it. The category silently rendered emoji-only.
+//
+// Fix: categories.image_url is now the single source of truth (migration:
+// backfill_category_image_url_from_legacy_settings, run 2026-08-13 —
+// verified by upload-timestamp clustering, not guessed). The old
+// coll_img_<key> settings lookup is kept ONLY as a legacy fallback for the
+// gap between "an admin uploads a new collection image" (still writes
+// site_settings, until pahadi-admin-main's Collection Images page is
+// migrated to PATCH categories.image_url directly — companion fix) and
+// this code deploying. Every time that fallback actually fires, it means
+// image_url is out of sync with the last-uploaded image, so it's logged
+// (not silent) to make the drift observable instead of it quietly working
+// "by luck" again. Once admin's write-path fix has shipped for a while,
+// this whole fallback branch can be deleted.
 export function imgFor(cat: Category, settings: Record<string, string>): string {
+  const primary = (cat.image_url || '').trim()
+  if (primary) return primary
+
   const keysToTry = [
     cat.slug,
     cat.name,
@@ -188,16 +219,44 @@ export function imgFor(cat: Category, settings: Record<string, string>): string 
   ].filter(Boolean)
   for (const k of keysToTry) {
     const v = (settings[`coll_img_${k}`] || '').trim()
-    if (v) return v
+    if (v) {
+      logger.warn('[imgFor] category.image_url missing — served from legacy coll_img_ setting', {
+        categoryId: cat.id, categorySlug: cat.slug, matchedKey: `coll_img_${k}`,
+      })
+      return v
+    }
   }
-  return (cat.image_url || '').trim()
+  return ''
 }
 
 // ── Build categories with images — same as old site initCollectionImages ─
+//
+// BUG FIX (data-architecture, companion to imgFor() above): homepage-hide
+// state used to live exclusively in coll_hidden_<key> settings — the exact
+// same case/rename-drift risk as coll_img_ (30 orphaned coll_hidden_* keys
+// found in the DB from past category renames, e.g. coll_hidden_"Wild Honey",
+// coll_hidden_"Spices of India" — none currently true, but the mechanism was
+// one rename away from silently un-hiding or mis-hiding a category the same
+// way images silently broke). categories.show_on_homepage is now the single
+// source of truth. Legacy settings kept as a logged fallback for the same
+// admin-deploy transition window as imgFor().
 export function buildCategories(storeData: StoreData) {
   const { categories, settings } = storeData
   return categories
-    .filter(c => settings[`coll_hidden_${c.slug || c.id}`] !== 'true')
+    .filter(c => {
+      if (c.show_on_homepage === false) return false
+      if (c.show_on_homepage === true) return true
+      // show_on_homepage is null/undefined only for rows the migration
+      // didn't touch (shouldn't happen post-migration, but don't assume) —
+      // fall back to the legacy key, logged so it's visible if ever hit.
+      const legacyHidden = settings[`coll_hidden_${c.slug || c.id}`] === 'true'
+      if (legacyHidden) {
+        logger.warn('[buildCategories] category.show_on_homepage unset — hidden via legacy coll_hidden_ setting', {
+          categoryId: c.id, categorySlug: c.slug,
+        })
+      }
+      return !legacyHidden
+    })
     .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
     .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
 }

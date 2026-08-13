@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
+import { captureError } from '@/lib/logger'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -191,10 +192,25 @@ export async function syncCustomerProfile(user: {
   if (normalizedPhone) orParts.push(`normalized_phone.eq.${normalizedPhone}`)
   if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
 
-  const rows = await sbAdmin(
-    'GET',
-    `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`,
-  ).catch(() => null)
+  // BUG FIX (observability, found while tracing a live 404 on /api/wishlist):
+  // this lookup used to swallow ANY failure (network blip, Supabase timeout)
+  // down to `null`, which fell straight into the "not found" branch below and
+  // attempted to INSERT a new customer row — for a user who almost certainly
+  // already has one. On a transient failure this risked creating a duplicate
+  // customer record instead of just failing the request. A lookup failure is
+  // now a hard error (thrown, not swallowed) so the caller's existing 401/503
+  // catch handling applies instead of silently reaching the insert path — and
+  // it's logged so it's visible in Vercel logs rather than invisible.
+  let rows: Record<string, unknown>[] | null
+  try {
+    rows = await sbAdmin(
+      'GET',
+      `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`,
+    )
+  } catch (e: unknown) {
+    captureError(e, { action: 'syncCustomerProfile.lookup', userId: user.id })
+    throw e
+  }
 
   if (rows && rows.length > 0) {
     let match =
@@ -228,7 +244,21 @@ export async function syncCustomerProfile(user: {
       email:        email || null,
     },
     'resolution=merge-duplicates,return=representation',
-  ).catch(() => null)
+  ).catch((e: unknown) => {
+    // BUG FIX (observability, found while tracing a live 404 on /api/wishlist):
+    // this used to be a bare `.catch(() => null)` — a genuine data-integrity
+    // problem (a real, authenticated Supabase user with no matching customers
+    // row, and the auto-create failing — e.g. a unique constraint clash on
+    // email/phone against a DIFFERENT existing customer row) surfaced to the
+    // user only as an unexplained 404 "Profile not found", with zero trace in
+    // Vercel logs to tell ops apart from "user just has no profile yet" (which
+    // is impossible here — this branch means it just failed to create one).
+    // `alert: true` so this is pageable, not just log noise: an authenticated
+    // user stuck with no working profile is a real, ongoing broken experience
+    // for that specific customer until someone investigates.
+    captureError(e, { action: 'syncCustomerProfile.create', userId: user.id, alert: true })
+    return null
+  })
   return created?.[0] ?? null
 }
 
