@@ -1,0 +1,15 @@
+-- Already applied to production (2026-08-13). Kept here for version control.
+--
+-- Companion fix to the image_url migration: coll_hidden_<key> in site_settings
+-- has the exact same architectural flaw as coll_img_<key> did (30 orphaned keys
+-- found — Fruit jams / Wild Honey / Spices of India / etc — accumulating every
+-- time a category was renamed). Verified zero categories are currently hidden
+-- (all coll_hidden_* = 'false'), so this is a zero-regression moment to add a
+-- real, stable column instead of leaving an identical landmine for next time.
+--
+-- Deliberately a NEW dedicated column, not a reuse of is_active/status — those
+-- likely gate broader catalogue/purchasability concerns elsewhere in the app;
+-- conflating "hidden from the homepage collection strip" with those would risk
+-- an unverified regression. This column's only consumer is the homepage
+-- category strip.
+alter table categories add column if not exists show_on_homepage boolean not null default true;
