@@ -46,6 +46,7 @@ export default async function HomePage() {
   const states     = await buildStates(storeData)
 
   const showTrustBar    = isEnabled(settings.show_trust_bar)
+  const showBestSellers = isEnabled(settings.show_best_sellers)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
   const showReviews     = isEnabled(settings.show_reviews_section)
   const featuredSlug    = settings.featured_collection_slug?.trim()
@@ -56,7 +57,7 @@ export default async function HomePage() {
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
       <CategoryTiles categories={categories} />
-      <BestSellers />
+      {showBestSellers && <BestSellers />}
       {states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}

@@ -1,6 +1,7 @@
 import BestSellersClient from './BestSellersClient'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { logger } from '@/lib/logger'
 import type { Product } from '@/types'
 
 interface Cat { id: number; name: string; slug: string; emoji?: string | null }
@@ -32,11 +33,32 @@ export default async function BestSellers() {
     // rather than one paginated page of 24.
     products   = normalizeProducts(withImgs).map(toCardProductData)
     categories = (storeData.categories ?? []).filter((c: any) => c.is_active !== false)
-  } catch {
+  } catch (err) {
+    // BUG FIX (observability — the "Bestsellers section just disappeared
+    // with no error anywhere" report): this used to be a bare `catch {
+    // return null }`. That's a reasonable fail-safe so one broken section
+    // can't 500 the entire homepage, but returning null with NO log line
+    // meant a real failure here was completely invisible — nothing in
+    // Vercel's function logs, nothing anywhere, just an empty gap on the
+    // page with zero breadcrumbs for anyone to debug from. Now the section
+    // still fails safe (homepage keeps rendering), but the actual error is
+    // captured so it shows up in Vercel logs / any log drain instead of
+    // vanishing.
+    logger.error('[BestSellers] failed to load — section hidden', {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    })
     return null
   }
 
-  if (!products.length) return null
+  if (!products.length) {
+    // Same observability gap as above, for the "fetch succeeded but the
+    // active catalog was empty" case — this can happen legitimately (e.g.
+    // right after all products are deactivated), but should still leave a
+    // trace instead of just silently omitting the section.
+    logger.warn('[BestSellers] no active products found — section hidden')
+    return null
+  }
 
   return <BestSellersClient initialProducts={products} categories={categories} />
 }
