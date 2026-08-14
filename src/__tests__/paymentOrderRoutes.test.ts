@@ -30,6 +30,7 @@ import {
 } from 'vitest'
 import crypto from 'crypto'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+import { Resend } from 'resend'
 
 // The route modules under test import after() from next/server internally
 // (deferred loyalty/email side-effects). after() throws "called outside a
@@ -643,6 +644,115 @@ describe('POST /api/v1/orders — COD', () => {
     const json = await res.json()
     expect(res.status).toBe(400)
     expect(json.error).toMatch(/unknown action/i)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Orders route (COD) — confirmation email content
+//
+// BUG FIX regression: the confirmation email used to show a generic emoji
+// for every product because orderService.ts hardcoded cartItems[i].image to
+// null (see orderService.createOrder.test.ts for the data-layer fix). This
+// covers the other half — that once `image` IS populated, the actual email
+// HTML sent via Resend renders a real <img> thumbnail, with the emoji as a
+// true fallback only when a product genuinely has no photo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/orders — COD — confirmation email content', () => {
+  async function callOrders(body: object, csrfHeader = true) {
+    const { POST } = await import('@/app/api/v1/orders/route')
+    return POST(makeReq(body, { csrfHeader }) as any)
+  }
+
+  function mockResendSend() {
+    const send = vi.fn().mockResolvedValue({ data: { id: 'email-mock-id' }, error: null })
+    // vi.fn() mockImplementation must return a real constructor (function or
+    // class) since email.ts calls `new Resend(...)` — an arrow function
+    // throws "is not a constructor" when invoked with `new`.
+    vi.mocked(Resend).mockImplementation(function (this: unknown) {
+      return { emails: { send } }
+    } as any)
+    return send
+  }
+
+  it('renders a real <img> thumbnail for a product that has an image', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'true', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '',
+    } as any)
+    const send = mockResendSend()
+    mockCreateOrder.mockResolvedValueOnce({
+      order: {
+        id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1000, total: 1000, status: 'confirmed',
+        cartItems: [{ name: 'Himalayan Honey', emoji: '🍯', image: 'https://cdn.example.com/honey.jpg', qty: 1, price: 1000 }],
+      },
+      alreadyExists: false, customerId: 'cust-uuid-001',
+    })
+
+    const res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(201)
+
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    const html = send.mock.calls[0][0].html as string
+
+    expect(html).toContain('<img src="https://cdn.example.com/honey.jpg"')
+    expect(html).toContain('Himalayan Honey')
+  })
+
+  it('falls back to the emoji (no <img> tag) for a product with no image', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'true', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '',
+    } as any)
+    const send = mockResendSend()
+    mockCreateOrder.mockResolvedValueOnce({
+      order: {
+        id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1000, total: 1000, status: 'confirmed',
+        cartItems: [{ name: 'Rock Salt', emoji: '🧂', image: null, qty: 1, price: 1000 }],
+      },
+      alreadyExists: false, customerId: 'cust-uuid-001',
+    })
+
+    const res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(201)
+
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    const html = send.mock.calls[0][0].html as string
+
+    expect(html).not.toContain('<img')
+    expect(html).toContain('🧂')
+    expect(html).toContain('Rock Salt')
+  })
+
+  it('a mix of items with and without images each render correctly in the same email', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'true', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '',
+    } as any)
+    const send = mockResendSend()
+    mockCreateOrder.mockResolvedValueOnce({
+      order: {
+        id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1300, total: 1300, status: 'confirmed',
+        cartItems: [
+          { name: 'Himalayan Honey', emoji: '🍯', image: 'https://cdn.example.com/honey.jpg', qty: 1, price: 1000 },
+          { name: 'Rock Salt',       emoji: '🧂', image: null,                                 qty: 1, price: 300  },
+        ],
+      },
+      alreadyExists: false, customerId: 'cust-uuid-001',
+    })
+
+    const res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(201)
+
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    const html = send.mock.calls[0][0].html as string
+
+    expect(html).toContain('<img src="https://cdn.example.com/honey.jpg"')
+    expect((html.match(/<img /g) || []).length).toBe(1) // exactly one real image, not two
+    expect(html).toContain('🧂')
   })
 })
 

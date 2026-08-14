@@ -523,6 +523,89 @@ describe('createOrder — happy path return shape', () => {
   })
 })
 
+// BUG FIX regression: the order-confirmation email used to show a generic
+// emoji for every product because this query never even fetched image_url,
+// so cartItems[i].image was hardcoded to null before it ever reached the
+// email template. These tests cover the fix: product_images is the real
+// source of truth (per the same pattern already established in
+// normalizeProduct.ts/cart-upsells), products.image_url is a last-resort
+// fallback, and — critically — a failure fetching images must never be able
+// to fail the order itself (it's cosmetic email data, not order-critical).
+describe('createOrder — product image resolution (order-confirmation email fix)', () => {
+  it('uses the product_images row as the source of truth for cartItems[i].image', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    route(
+      (url, method) => method === 'GET' && url.includes('/product_images') && url.includes(PRODUCT_ID),
+      [{ product_id: PRODUCT_ID, image_url: 'https://cdn.example.com/honey-real.jpg' }],
+    )
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    expect(result.order.cartItems[0].image).toBe('https://cdn.example.com/honey-real.jpg')
+  })
+
+  it('falls back to products.image_url when no product_images row exists', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    // wireHappyPathFetch's product row has no image_url — override it directly.
+    route(
+      (url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(VARIANT_ID),
+      [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }],
+    )
+    route(
+      (url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
+      [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', image_url: 'https://cdn.example.com/honey-fallback.jpg', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }],
+    )
+    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
+    route((url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'), [])
+    route(
+      (url, method) => method === 'GET' && url.includes('/product_images'),
+      [], // no rows for this product
+    )
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    expect(result.order.cartItems[0].image).toBe('https://cdn.example.com/honey-fallback.jpg')
+  })
+
+  it('image is null (not undefined, not a throw) when neither product_images nor products.image_url is set', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch() // default product fixture has no image_url
+    route((url, method) => method === 'GET' && url.includes('/product_images'), [])
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    expect(result.order.cartItems[0].image).toBeNull()
+  })
+
+  it('a failed product_images fetch never blocks order creation — falls back gracefully instead of throwing', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    // Deliberately NO route registered for /product_images → mockFetch's
+    // default "no mock route" 404 path, simulating a real fetch failure.
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    // Must resolve, not throw — a cosmetic image lookup failing must never
+    // take down real order creation.
+    const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+
+    expect(result.alreadyExists).toBe(false)
+    expect(result.order.cartItems[0].image).toBeNull()
+  })
+})
+
 describe('createOrder — confirmation_token generation (guest-safe order lookup)', () => {
   it('generates a cryptographically random UUID token and persists it via a normal REST update (not raw SQL)', async () => {
     mockDb.responses['orders'] = null

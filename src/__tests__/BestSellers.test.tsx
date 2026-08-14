@@ -9,7 +9,7 @@
  * normalizeProduct.test.ts / categoryEmoji.test.ts.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
 
@@ -25,6 +25,12 @@ vi.mock('@/components/homepage/BestSellersClient', () => ({
       `products:${initialProducts.length} categories:${categories.length}`),
 }))
 
+const mockLoggerError = vi.fn()
+const mockLoggerWarn  = vi.fn()
+vi.mock('@/lib/logger', () => ({
+  logger: { error: (...a: unknown[]) => mockLoggerError(...a), warn: (...a: unknown[]) => mockLoggerWarn(...a) },
+}))
+
 import BestSellers from '@/components/homepage/BestSellers'
 
 function product(overrides: Record<string, unknown> = {}) {
@@ -34,6 +40,10 @@ function product(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('BestSellers', () => {
   it('passes the full active catalog and active categories through to BestSellersClient', async () => {
@@ -60,11 +70,45 @@ describe('BestSellers', () => {
     expect(el).toBeNull()
   })
 
+  // BUG FIX regression (observability — "section disappeared with zero
+  // trace anywhere"): the empty-catalog fail-safe path used to be silent.
+  // It must now leave a log line so an empty active catalog is diagnosable
+  // instead of just being an unexplained gap on the homepage.
+  it('logs a warning (not silence) when there are no products', async () => {
+    mockGetStoreData.mockResolvedValue({ categories: [] })
+    mockGetProductsWithImages.mockReturnValue([])
+
+    await BestSellers()
+
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('[BestSellers]'),
+    )
+    expect(mockLoggerError).not.toHaveBeenCalled()
+  })
+
   it('renders nothing (fails safe) when the data fetch throws', async () => {
     mockGetStoreData.mockRejectedValue(new Error('db down'))
 
     const el = await BestSellers()
     expect(el).toBeNull()
+  })
+
+  // BUG FIX regression (observability — the exact bug reported: "Bestsellers
+  // section is missing with no error anywhere in the logs"): a bare
+  // `catch { return null }` swallowed the real error completely. This
+  // asserts the error is now captured with enough detail (message + stack)
+  // to actually debug a recurrence from Vercel's function logs.
+  it('logs the real error (message + stack) when the data fetch throws, instead of failing silently', async () => {
+    const err = new Error('db down')
+    mockGetStoreData.mockRejectedValue(err)
+
+    await BestSellers()
+
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      expect.stringContaining('[BestSellers]'),
+      expect.objectContaining({ error: 'db down', stack: expect.any(String) }),
+    )
+    expect(mockLoggerWarn).not.toHaveBeenCalled()
   })
 
   it('treats a category with no explicit is_active flag as active', async () => {
