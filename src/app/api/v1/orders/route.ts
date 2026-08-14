@@ -194,18 +194,33 @@ export async function POST(req: NextRequest) {
           const safeState   = esc(state)
           const safePincode = esc(a.pincode)
 
-          const itemsHtml = emailItems.map(i =>
-            `<tr>
+          // BUG FIX (order-confirmation email showing an emoji instead of the
+          // real product photo): i.image was always undefined before —
+          // orderService.ts hardcoded `image: null` on every cart item
+          // regardless of whether the product actually had a photo (see
+          // orderService.ts fix). Now that image is populated, render an
+          // actual <img> thumbnail when available and fall back to the emoji
+          // only for the rare product with no photo — same fallback most
+          // major e-commerce order emails (Amazon, Myntra, BigBasket) use.
+          const itemsHtml = emailItems.map(i => {
+            const thumb = i.image
+              ? `<img src="${esc(i.image)}" width="44" height="44" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;vertical-align:middle;border:1px solid #eee" />`
+              : `<span style="display:inline-block;width:44px;height:44px;border-radius:8px;background:#f0f7f4;text-align:center;line-height:44px;font-size:20px;vertical-align:middle">${esc(i.emoji) || '🌿'}</span>`
+            return `<tr>
               <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
-                <span style="font-size:16px">${esc(i.emoji) || '🌿'}</span>
-                <strong style="color:#1a1a1a;margin-left:8px">${esc(i.name)}</strong>
-                <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
+                <table style="border-collapse:collapse"><tr>
+                  <td style="padding:0 10px 0 0">${thumb}</td>
+                  <td>
+                    <strong style="color:#1a1a1a">${esc(i.name)}</strong>
+                    <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
+                  </td>
+                </tr></table>
               </td>
               <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
                 ₹${(i.price * i.qty).toLocaleString('en-IN')}
               </td>
             </tr>`
-          ).join('')
+          }).join('')
 
           const coinsHtml = settings.loyalty_enabled !== 'false' && coinsEarned > 0
             ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">

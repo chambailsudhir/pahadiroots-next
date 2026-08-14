@@ -249,6 +249,7 @@ export interface CreateOrderInput {
 export interface OrderEmailItem {
   name:  string
   emoji: string
+  image: string | null
   qty:   number
   price: number  // price per unit
 }
@@ -369,12 +370,49 @@ export async function createOrder(
   if (!allProductIds.length) throw new Error('Could not fetch product details')
 
   const productIdList = allProductIds.join(',')
+  // BUG FIX (order-confirmation email missing product photos): this select
+  // never fetched image_url, so both branches below hardcoded `image: null`
+  // on every cart item — not because images were unavailable, but because
+  // this query never asked for them. That null flows straight into
+  // OrderEmailItem, which is why the confirmation email could only ever
+  // show a generic emoji, never the real product photo.
+  //
   const products: any[] = await sbGet('products',
-    `select=id,name,emoji,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock&id=in.(${productIdList})`
+    `select=id,name,emoji,image_url,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock&id=in.(${productIdList})`
   )
   if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
 
+  // products.image_url is fetched only as a last-resort fallback — per the
+  // established pattern everywhere else in this codebase (applyProductImages
+  // in normalizeProduct.ts, cart-upsells/route.ts), product_images is the
+  // real source of truth and products.image_url can be stale/unset.
+  //
+  // Deliberately a SEPARATE, non-fatal fetch (not folded into the products
+  // Promise.all above): this is cosmetic data for the confirmation email
+  // only. If it fails for any reason, the order itself must still go
+  // through — the email just falls back to the emoji, same as before this
+  // fix. Never let a nice-to-have image lookup block a real order.
+  let productImageRows: any[] = []
+  try {
+    productImageRows = await sbGet('product_images',
+      `product_id=in.(${productIdList})&select=product_id,image_url&order=product_id.asc,sort_order.asc`
+    )
+  } catch (e) {
+    logger.error('[createOrder] product_images fetch failed (non-fatal — email will fall back to emoji)', {
+      action: 'createOrder.product_images', error: e instanceof Error ? e.message : String(e),
+    })
+    productImageRows = []
+  }
+
   const productMap = new Map(products.map((p: any) => [String(p.id), p]))
+  const productImageMap = new Map<string, string>()
+  ;(productImageRows || []).forEach((row: any) => {
+    if (!productImageMap.has(String(row.product_id)) && row.image_url) {
+      productImageMap.set(String(row.product_id), row.image_url)
+    }
+  })
+  const imageFor = (p: any): string | null =>
+    productImageMap.get(String(p?.id)) ?? p?.image_url ?? null
 
   // Validate all products/variants are active
   for (const v of variantRows) {
@@ -400,7 +438,7 @@ export async function createOrder(
         variantId:    i.variantId,
         name:         String(p?.name  ?? ''),
         slug:         '',
-        image:        null,
+        image:        imageFor(p),
         emoji:        String(p?.emoji ?? '🌿'),
         size:         '',
         // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a
@@ -432,7 +470,7 @@ export async function createOrder(
         variantId:    i.variantId,
         name:         String(p?.name  ?? ''),
         slug:         '',
-        image:        null,
+        image:        imageFor(p),
         emoji:        String(p?.emoji ?? '🌿'),
         size:         '',
         price:        Number(v?.price) || 0,
@@ -889,6 +927,7 @@ export async function createOrder(
       cartItems:    cartItems.map(i => ({
         name:  i.name,
         emoji: i.emoji ?? '🌿',
+        image: i.image ?? null,
         qty:   i.qty,
         price: i.price,
       })),
