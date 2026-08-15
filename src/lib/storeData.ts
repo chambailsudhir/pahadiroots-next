@@ -84,7 +84,46 @@ async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
   return rows
 }
 
+// BUG FIX (found via the "Bestsellers vanishes on hard refresh, reappears
+// after a client-side navigation" report): the fetch this powers gets
+// wrapped in TWO independent 60s caches — this function's own result via
+// unstable_cache('store-data') below, AND the homepage's own
+// `export const revalidate = 60` Full Route Cache in page.tsx. A single
+// transient hiccup here (Supabase cold-connection latency on a cold Lambda,
+// a momentary network blip — anything that would normally just be a rare,
+// forgotten one-off retry) doesn't stay transient once it happens to land
+// on the request that regenerates either of those caches: whatever this
+// function returns (or throws, triggering BestSellers.tsx's fail-safe
+// `return null`) gets BAKED IN and re-served as-is to every hard-refresh
+// visitor for the next 60 seconds. A client-side navigation to another page
+// doesn't hit the same Full Route Cache entry, so it can independently
+// trigger a fresh (successful) fetch — hence "goes to /products and back
+// fixes it," which is really just a second, uncached attempt succeeding.
+//
+// Fix: retry transient failures INSIDE the function that actually gets
+// cached, before either cache layer ever sees a failure to bake in. Same
+// withRetry pattern already used in orderService.ts/profileService.ts.
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 400): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < retries; i++) {
+    try { return await fn() } catch (err: unknown) {
+      lastErr = err
+      if (i < retries - 1) {
+        logger.warn('[storeData] fetch attempt failed — retrying', {
+          attempt: i + 1, retries, error: err instanceof Error ? err.message : String(err),
+        })
+        await new Promise(r => setTimeout(r, delayMs * 2 ** i))
+      }
+    }
+  }
+  throw lastErr
+}
+
 async function _fetchStoreData(): Promise<StoreData> {
+  return withRetry(() => _fetchStoreDataOnce())
+}
+
+async function _fetchStoreDataOnce(): Promise<StoreData> {
   const db = getServiceClient()
 
   const [
