@@ -138,4 +138,35 @@ describe('GET /api/orders/[id]/invoice — shipping recipient name + address key
     const html = await res.text()
     expect(html).toContain('Old Address')
   })
+
+  it('the <style> tag is properly opened (regression: CSS was previously dumped as visible page text)', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([{
+      id: 112, order_number: 'ORD-2026-00087', customer_id: 26, created_at: '2026-07-30T00:00:00Z',
+      total_amount: 589, coupon_discount: 0, shipping_charge: 99, tax: 33.84,
+      payment_method: 'cod', order_status: 'delivered',
+      shipping_address: { name: 'Sudhir Chambail', address_line1: 'C4/33', city: 'New Delhi', state: 'Delhi', pincode: '110091' },
+      order_items: ORDER_ITEMS,
+    }])
+
+    const res  = await callInvoice('112')
+    const html = await res.text()
+
+    // BUG FIX (found via a live report — the CSS block was rendering as
+    // literal visible text at the top of the invoice page): the </title>
+    // tag used to be followed directly by raw CSS rules with no <style>
+    // opening tag before them. Browsers move unrecognized text content out
+    // of <head> and into the visible page per HTML5 parsing rules, which is
+    // exactly what was happening — the entire ruleset appeared as plain
+    // text above the invoice content instead of being applied as styling.
+    const titleIdx = html.indexOf('</title>')
+    const styleIdx = html.indexOf('<style>')
+    const firstRuleIdx = html.indexOf('*, *::before, *::after')
+    expect(titleIdx).toBeGreaterThan(-1)
+    expect(styleIdx).toBeGreaterThan(-1)
+    // <style> must open BEFORE the CSS rules start, and the CSS rules must
+    // be INSIDE the tag, not dumped straight after </title>.
+    expect(styleIdx).toBeGreaterThan(titleIdx)
+    expect(firstRuleIdx).toBeGreaterThan(styleIdx)
+    expect(html).toContain('</style>')
+  })
 })

@@ -162,6 +162,7 @@ export async function GET(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invoice · ${orderNum} · HimVeda by Pahadi Roots</title>
+  <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body   { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; padding: 32px; max-width: 780px; margin: 0 auto; }
     .hdr   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #1a3a1e; }
