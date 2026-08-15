@@ -33,7 +33,7 @@ const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifi
 // reference, the same fix-shape as memoizing useToast's `show` and
 // useOrders' `fetchOrders`/`refresh` above, just achieved by relocation
 // instead of useCallback since no closure is needed at all.
-function getProfileSig(p: { first_name?: string; last_name?: string; address_line1?: string; city?: string; state?: string; postal_code?: string; phone?: string }): string {
+function getProfileSig(p: { first_name?: string | null; last_name?: string | null; address_line1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; phone?: string | null }): string {
   return [
     p.first_name, p.last_name,
     p.address_line1, p.city, p.state, p.postal_code,

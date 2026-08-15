@@ -12,25 +12,43 @@ import { captureError } from '@/lib/logger'
 import { z } from 'zod'
 
 // ── Zod Schemas — API response validation ────────────────────
+//
+// BUG FIX (root cause of "Something went wrong / Could not connect" on
+// /account, found via browser console): every field below used
+// `z.string().optional()`, which in Zod only accepts a MISSING key
+// (undefined) — NOT a JSON `null`. But /api/profile's own data layer
+// legitimately produces `null` for several of these on ordinary accounts:
+// syncCustomerProfile() in serverUtils.ts explicitly writes
+// `last_name: ... || null` for any user with only a single-word name (e.g.
+// Google OAuth with no surname), and phone/address fields are all nullable
+// columns that are simply empty until a customer fills them in. None of
+// that is malformed data — it's the normal shape for a real, common
+// account. Every one of those accounts hit
+// `ProfileResponseSchema.safeParse(raw)` failing with "Expected string,
+// received null", which isn't a 401 (so useAuth's init() didn't route it to
+// 'guest') and got treated as a hard failure → authState 'failed' → the
+// full-page error screen, on every single load, for as long as that field
+// stayed null. Fixed by accepting null (not just absence) for every field
+// that syncCustomerProfile can legitimately leave unset.
 export const ProfileSchema = z.object({
   id:              z.union([z.string(), z.number()]).optional(),
-  first_name:      z.string().optional(),
-  last_name:       z.string().optional(),
-  phone:           z.string().optional(),
-  email:           z.string().optional(),
-  address_line1:   z.string().optional(),
-  city:            z.string().optional(),
-  state:           z.string().optional(),
-  postal_code:     z.string().optional(),
-  saved_addresses: z.string().optional(),
+  first_name:      z.string().nullable().optional(),
+  last_name:       z.string().nullable().optional(),
+  phone:           z.string().nullable().optional(),
+  email:           z.string().nullable().optional(),
+  address_line1:   z.string().nullable().optional(),
+  city:            z.string().nullable().optional(),
+  state:           z.string().nullable().optional(),
+  postal_code:     z.string().nullable().optional(),
+  saved_addresses: z.string().nullable().optional(),
 }).catchall(z.unknown())
 
 export const ProfileResponseSchema = z.object({
   profile: ProfileSchema.optional(),
   user:    z.object({
     id:    z.union([z.string(), z.number()]).optional(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
+    email: z.string().nullable().optional(),
+    phone: z.string().nullable().optional(),
   }).catchall(z.unknown()).optional(),
 })
 
