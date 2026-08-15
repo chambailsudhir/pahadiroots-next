@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
 
@@ -47,19 +46,26 @@ export default function TrackPage() {
     setResult(null)
 
     try {
-      // Public query — returns only safe fields, no personal data
-      const { data, error: qErr } = await supabase
-        .from('orders')
-        .select('order_number, order_status, payment_method, created_at, total_amount')
-        .eq('order_number', orderNum.trim().toUpperCase())
-        .eq('customer_phone', phone.replace(/\D/g, '').slice(-10))
-        .single()
+      // BUG FIX (real infra gap, not cosmetic): this used to query the
+      // `orders` table directly from the browser with the public anon
+      // Supabase client. RLS restricts which ROWS a query can return, not
+      // which COLUMNS come back for a row it's allowed to see — so that
+      // approach was either (a) silently broken for every real order,
+      // because RLS has no anon SELECT policy on `orders`, or (b) a genuine
+      // PII leak, because making it work would require an anon SELECT
+      // policy that also lets anyone query the full table directly via the
+      // public anon key. Routed through a proper rate-limited server
+      // endpoint instead — same pattern as /api/v1/orders/lookup, DB only
+      // ever touched with the service-role key, from the server.
+      const params = new URLSearchParams({ order_number: orderNum.trim().toUpperCase(), phone: phone.trim() })
+      const res  = await fetch(`/api/v1/orders/track?${params.toString()}`)
+      const data = await res.json().catch(() => null)
 
-      if (qErr || !data) {
-        setError('Order not found. Check your order number and phone number.')
+      if (!res.ok || !data?.success || !data?.order) {
+        setError(data?.error || 'Order not found. Check your order number and phone number.')
         return
       }
-      setResult(data as TrackResult)
+      setResult(data.order as TrackResult)
     } catch (e: unknown) {
       // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — no logging.
       console.error('[track] order lookup failed:', e)
