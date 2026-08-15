@@ -685,10 +685,34 @@ export async function createOrder(
   }
 
   if (existingCust?.id) {
-    // Existing customer — update name/address but skip email to avoid unique constraint
     custId = existingCust.id
-    const { email: _e, ...patchBody } = custBody
-    await sbPost('customers', `id=eq.${custId}`, patchBody, 'PATCH').catch(() => null)
+    // BUG FIX (real, confirmed bug — not the phone-sharing theory from an
+    // earlier session, which was a different, separate risk): this used to
+    // unconditionally PATCH the customer's own permanent profile — name
+    // AND default address — with whatever was typed into THIS checkout's
+    // shipping form, every single time, for logged-in and guest checkout
+    // alike. For an authenticated user that's backwards: choosing to ship
+    // one order to a friend's or parent's saved address (a completely
+    // normal, one-off delivery choice) permanently overwrote their own
+    // account name and default address with that recipient's details —
+    // globally, for every future page load and every future invoice,
+    // until they happened to place another order to a different address.
+    // There is also no per-order recipient-name snapshot anywhere else in
+    // the schema (`p_shipping_address` below has no name field) — this
+    // PATCH was the only place a delivery name got recorded at all, which
+    // is exactly the architectural gap that made the bug possible.
+    //
+    // Fix: an authenticated user already has their own permanent profile,
+    // edited explicitly via /account — checkout must never silently
+    // overwrite it just because they shipped to a different address this
+    // time. Guest checkout is unaffected: with no auth session, this PATCH
+    // (keyed by phone/email lookup above) is the only mechanism recording
+    // that guest's contact details at all, so the existing upsert-style
+    // sync remains correct there.
+    if (input.authenticatedCustomerId == null) {
+      const { email: _e, ...patchBody } = custBody
+      await sbPost('customers', `id=eq.${custId}`, patchBody, 'PATCH').catch(() => null)
+    }
   } else {
     // New customer — insert, fallback to null email if constraint fires
     const rows: any[] = await sbPost('customers', '', custBody).catch(async () => {
@@ -815,6 +839,19 @@ export async function createOrder(
       p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
       p_items:                    rpcItems,
       p_shipping_address:         {
+        // BUG FIX (proper Amazon/Myntra-style fix, not just the earlier
+        // "stop overwriting the account" patch): this JSON is the only
+        // per-order record of shipping details, but it never stored WHO
+        // the delivery was actually addressed to. Amazon/Myntra always
+        // keep "who placed the order" (account holder — never changes)
+        // and "who this specific delivery is for" (may be a friend/
+        // parent's address) as two separate, independent pieces of data.
+        // Recording the recipient name HERE, per order, is what makes
+        // that separation actually work — the invoice/admin can now show
+        // "Billed to: Sudhir" + "Ship to: Vivek" instead of either losing
+        // the recipient name entirely or (the original bug) overwriting
+        // the account holder's own identity with it.
+        name:          input.customerName || null,
         address_line1: addressLine || null,
         city:          input.city    || null,
         state:         input.state   || null,

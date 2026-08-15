@@ -121,17 +121,30 @@ export async function GET(
     const orderStatus    = escHtml(String(o.order_status || '').replace(/_/g, ' '))
 
     let addrBlock = ''
+    let shipToName = ''
     try {
       const addr = typeof o.shipping_address === 'string'
         ? JSON.parse(o.shipping_address)
         : (o.shipping_address as Record<string, string> | null)
       if (addr) {
-        // escHtml each address field individually before joining — the joined
-        // string goes straight into HTML so each part must be safe.
-        addrBlock = [addr.name, addr.addr, addr.city, addr.state, addr.pin]
+        // BUG FIX: this read addr.addr/addr.pin, but orderService.ts's
+        // create_order_with_items RPC call actually writes
+        // address_line1/pincode — a genuine key-name mismatch (those short
+        // keys match the UNRELATED saved_addresses entry shape used on the
+        // account page, not the orders.shipping_address shape actually
+        // stored here). Every invoice was silently missing its street
+        // address line AND pincode — only city/state ever matched and
+        // rendered, which is exactly what showed up in the live report
+        // ("New Delhi, Delhi" with no street address or pincode).
+        addrBlock = [addr.address_line1, addr.city, addr.state, addr.pincode]
           .filter(Boolean)
           .map(v => escHtml(v))
           .join(', ')
+        // Recipient name for THIS delivery, distinct from the account
+        // holder above — only shown when it differs, so an order shipped
+        // to the account holder's own address doesn't show a redundant
+        // second name.
+        if (addr.name) shipToName = escHtml(addr.name)
       }
     } catch { /* no address */ }
 
@@ -217,8 +230,11 @@ export async function GET(
       <strong>${customerName}</strong><br/>
       ${customerPhone ? '+91 ' + customerPhone + '<br/>' : ''}
       ${customerEmail ? customerEmail + '<br/>' : ''}
-      ${addrBlock || ''}
     </p>
+    ${addrBlock ? `<p style="margin-top:10px">
+      <strong>Ship To${shipToName && shipToName !== customerName ? ': ' + shipToName : ''}</strong><br/>
+      ${addrBlock}
+    </p>` : ''}
   </div>
   <div class="meta-box">
     <h3>Order Details</h3>
