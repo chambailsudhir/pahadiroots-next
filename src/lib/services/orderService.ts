@@ -473,7 +473,12 @@ export async function createOrder(
         image:        imageFor(p),
         emoji:        String(p?.emoji ?? '🌿'),
         size:         '',
-        price:        Number(v?.price) || 0,
+        // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a
+        // legacy column the pricing engine no longer writes to — prefer
+        // selling_price. Also protects against a failed variant lookup
+        // ever pricing this line at ₹0 (confirmed live risk, see orderService
+        // audit notes for order 124/Aug 10).
+        price:        Number(v?.price) || Number(p?.selling_price ?? p?.price) || 0,
         mrp:          Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
         gstRate:      Number(p?.gst_rate ?? 0),
         qty:          i.qty,
@@ -798,9 +803,7 @@ export async function createOrder(
     }
   }
 
-  const rpcItems = input.items.map(i => {
-    const v: any = variantRows.find((vv: any) => String(vv.id) === String(i.variantId))
-    const p: any = productMap.get(String(v?.product_id ?? i.productId))
+  const rpcItems = input.items.map((i, idx) => {
     const resolvedVariantId = i.variantId === i.productId
       ? (defaultVariantMap.get(String(i.productId)) ?? i.variantId)
       : i.variantId
@@ -808,7 +811,19 @@ export async function createOrder(
       product_id:    i.productId,
       variant_id:    resolvedVariantId,
       quantity:      i.qty,
-      price_at_time: Number(v?.price) || Number(p?.price) || 0,
+      // ARCHITECTURAL FIX (found investigating a live production
+      // reconciliation gap, Aug 2026): this used to independently
+      // re-derive price via its own variantRows/productMap lookup,
+      // separate from the one that computed cartItems (which
+      // pricing.total — the amount actually charged — is built from).
+      // Two independent lookups for the same line item can silently
+      // drift from each other for any reason — confirmed this is exactly
+      // what produced order 124's live "Cross-table gap". Reusing the
+      // already-resolved cartItems price by index (input.items,
+      // cartItems, and rpcItems are all mapped from the same array in
+      // the same order) makes order_items.price_at_time always exactly
+      // what pricing.total was computed from — single source of truth.
+      price_at_time: Number(cartItems[idx]?.price) || 0,
     }
   })
 
