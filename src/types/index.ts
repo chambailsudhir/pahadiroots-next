@@ -141,13 +141,19 @@ export interface AppliedCoupon {
 // ─── Order Types ──────────────────────────────────────────────────────────────
 
 // BUG FIX (architecture): removed 'return_requested' and bare 'refunded' —
-// order_status is a live Postgres enum with exactly 7 values (confirmed via
-// information_schema.columns); it never holds a return-related value since
-// returns live in a separate `returns` table (see
-// PAHADI_ROOTS_SESSION_REPORT.md §2). 'pending_payment' and 'out_for_delivery'
-// are left as-is (unconfirmed either way this session — used only as
-// display-only stepper placeholders in track/page.tsx, never round-tripped
-// through a real order_status comparison that would break).
+// order_status is a live Postgres enum; returns live in a separate
+// `returns` table (see PAHADI_ROOTS_SESSION_REPORT.md §2), never a
+// return-related order_status value. 'pending_payment' is left as-is
+// (unconfirmed either way — used only as a display-only stepper placeholder
+// in track/page.tsx, never round-tripped through a real order_status
+// comparison that would break).
+//
+// UPDATE (Aug 2026): 'out_for_delivery' is now CONFIRMED real — added to
+// the live order_status_enum (positioned between 'shipped' and 'delivered',
+// verified via pg_enum), specifically so this type and the /track page
+// stepper that already displayed it as an inert step could actually be
+// backed by real data. It was previously listed here only as an unconfirmed
+// display placeholder; it no longer is one.
 export type OrderStatus =
   | 'pending'
   | 'pending_payment'
