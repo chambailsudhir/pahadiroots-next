@@ -496,6 +496,11 @@ export async function POST(req: NextRequest) {
     const lowerMessage = internalMessage.toLowerCase()
     const isUserFacing = lowerMessage.includes('stock')
       || lowerMessage.includes('cod is not available')
+      // BUG FIX [ERROR HANDLING] (kept in sync with orders/route.ts — see
+      // that file for the full incident writeup): these are the same
+      // createOrder() COD guardrails hitting the identical gap here.
+      || lowerMessage.includes('cod is only available')
+      || lowerMessage.includes('already in progress')
       || lowerMessage.includes('coupon')
       || lowerMessage.includes('no longer available')
       || lowerMessage.includes('insufficient loyalty balance')

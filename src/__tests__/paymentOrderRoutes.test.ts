@@ -364,6 +364,38 @@ describe('POST /api/v1/payments — create_payment', () => {
     expect(json.error).toMatch(/insufficient stock/i)
   })
 
+  // BUG FIX regression (found via a live "Order placement failed" report —
+  // Vercel logs showed the real, expected reason was "You have 3 COD
+  // order(s) already in progress...", not a crash, but the customer only
+  // ever saw the generic 500 message). Both of these are createOrder()'s
+  // own COD guardrails (cod_max_active_orders / cod_max_value) — perfectly
+  // clear, actionable messages that simply didn't match any substring in
+  // the isUserFacing whitelist, so they fell through to a 500 exactly like
+  // a genuine server crash would.
+  it('exposes the COD-active-orders-limit error as 409 with the real message, not a generic 500', async () => {
+    mockCreateOrder.mockRejectedValueOnce(
+      new Error('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
+    )
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/already in progress/i)
+  })
+
+  it('exposes the COD-max-order-value error as 409 with the real message, not a generic 500', async () => {
+    mockCreateOrder.mockRejectedValueOnce(
+      new Error('COD is only available for orders up to ₹3000. Please pay online for this order.')
+    )
+    const body = { action: 'create_payment', ...BASE_ORDER_BODY }
+    const res  = await callPayments(body)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/cod is only available/i)
+  })
+
   it('still hides genuinely internal errors (DB/RPC failures) behind a generic message in production', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     mockCreateOrder.mockRejectedValueOnce(new Error('Failed to create order: connection refused'))
@@ -630,6 +662,32 @@ describe('POST /api/v1/orders — COD', () => {
 
     // COD errors are user-facing → exposed in error message
     expect(json.error).toMatch(/COD/i)
+  })
+
+  // BUG FIX regression (found via a live "Order placement failed" report on
+  // this exact COD path — see the create_payment describe block above for
+  // the full incident writeup; both routes shared the identical whitelist
+  // gap for these two createOrder() COD guardrails).
+  it('COD active-orders limit error → 409 with the real message, not a generic 500', async () => {
+    mockCreateOrder.mockRejectedValueOnce(
+      new Error('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
+    )
+    const res  = await callOrders(COD_ORDER_BODY)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/already in progress/i)
+  })
+
+  it('COD max-order-value error → 409 with the real message, not a generic 500', async () => {
+    mockCreateOrder.mockRejectedValueOnce(
+      new Error('COD is only available for orders up to ₹3000. Please pay online for this order.')
+    )
+    const res  = await callOrders(COD_ORDER_BODY)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.error).toMatch(/cod is only available/i)
   })
 
   it('items array empty → 400', async () => {

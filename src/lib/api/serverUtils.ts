@@ -180,16 +180,45 @@ export async function syncCustomerProfile(user: {
 }) {
   const phone = user.phone || ''
   const email = user.email || ''
-  // BUG FIX: matching on the raw phone string missed existing customers
-  // whose number was stored in a different format (e.g. with vs without
-  // +91 country code) — the exact bug that caused a real customer's order
-  // history to silently split across two accounts (see migration 048).
-  // normalized_phone is a generated column (last 10 digits, no
-  // formatting) added specifically so this kind of match is format-proof.
-  const normalizedPhone = phone.replace(/\D/g, '').slice(-10)
 
+  // BUG FIX (CRITICAL — cross-account identity/PII leak, found via a live
+  // report: a user logging in with his own email/password saw a stranger's
+  // name, a stranger's saved addresses ("Parents"/"Friends" entries that
+  // weren't his), and a stranger's ~75-order/₹28k order history all
+  // presented as his own account, and his order invoices went out billed
+  // to the stranger's name):
+  //
+  // This used to also match an existing customers row purely by
+  // normalized_phone and silently ADOPT it — reassigning that row's
+  // auth_user_id (and with it, its name/addresses/full order history) to
+  // whoever next logged in with a matching phone number. Phone numbers are
+  // routinely SHARED between distinct real people for Indian COD delivery
+  // convenience — a family member or friend using someone else's number as
+  // the delivery contact for one order is completely normal and is NOT
+  // evidence they're the same person. Treating a phone match as "same
+  // person, hand over their whole account" silently merged two strangers'
+  // identities on login, with zero indication anything had merged and no
+  // way for either person to have consented to or noticed it.
+  //
+  // Fix: only auth_user_id (already logged in) or a verified EMAIL match
+  // (ownership proven via login/signup) are trusted as "this is definitely
+  // the same person." Phone match alone no longer causes row adoption.
+  // Guest orders placed under a shared phone number remain safely
+  // reachable by their rightful owner through the separate
+  // token/session-verified /api/v1/orders/lookup and /api/v1/orders/track
+  // endpoints, which check real proof of ownership per order rather than
+  // trusting a bare phone-number match to hand over an entire identity.
+  //
+  // ⚠ Verify before deploying: if `customers.phone` or `.normalized_phone`
+  // has a UNIQUE constraint in the live schema, two different people who
+  // share a phone number will now correctly get separate customer rows —
+  // but the second person's first insert could then hit that constraint.
+  // Confirm via Supabase SQL Editor (this repo's established policy — see
+  // storeData.ts's `select('*')` comment — is to verify schema live rather
+  // than assume) and drop/relax the constraint if it exists, since two
+  // people legitimately sharing one phone number is the exact scenario
+  // this fix now needs to support.
   const orParts = [`auth_user_id.eq.${user.id}`]
-  if (normalizedPhone) orParts.push(`normalized_phone.eq.${normalizedPhone}`)
   if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
 
   // BUG FIX (observability, found while tracing a live 404 on /api/wishlist):
@@ -215,7 +244,7 @@ export async function syncCustomerProfile(user: {
   if (rows && rows.length > 0) {
     let match =
       rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) ||
-      rows.find((r: Record<string, unknown>) => normalizedPhone && r.normalized_phone === normalizedPhone) ||
+      rows.find((r: Record<string, unknown>) => email && r.email === email) ||
       rows[0]
 
     if (match.auth_user_id !== user.id) {

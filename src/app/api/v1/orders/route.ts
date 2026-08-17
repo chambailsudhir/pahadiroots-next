@@ -360,6 +360,15 @@ export async function POST(req: NextRequest) {
     const isUserFacing = !isInfraFailure && (
       lowerMessage.includes('stock')
       || lowerMessage.includes('cod is not available')
+      // BUG FIX [ERROR HANDLING] (found via a live "Order placement failed"
+      // report — Vercel logs showed the real reason was a legitimate,
+      // user-actionable rejection, not a crash, but the customer only ever
+      // saw the generic 500 message): both of these are createOrder()'s own
+      // COD guardrails, thrown as plain, perfectly clear messages — they
+      // just didn't match any existing substring here, so they fell through
+      // to the generic "contact support" 500 like a genuine server crash.
+      || lowerMessage.includes('cod is only available')       // per-order COD value cap (cod_max_value)
+      || lowerMessage.includes('already in progress')         // active-COD-order count cap (cod_max_active_orders)
       || lowerMessage.includes('coupon')
       || lowerMessage.includes('no longer available')
       || lowerMessage.includes('insufficient loyalty balance')
