@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { subscribeSchema, reviewSchema, notifyStockSchema } from '@/lib/schemas'
+import { subscribeSchema, reviewSchema, notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
 import { esc } from '@/lib/server/htmlEscape'
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       const parsed = subscribeSchema.safeParse(body)
       if (!parsed.success) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
 
-      const { email, name } = parsed.data
+      const { email, name, source } = parsed.data
 
       // BUG FIX: name was inserted raw into the subscribers table with no HTML
       // stripping. A bot could store "<script>alert(1)</script>" as a subscriber
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
         // is_active is nullable but obviously means "this is a live
         // subscriber" — explicitly set true for a fresh signup rather
         // than leaving it NULL.
-        { email, name: safeName, is_active: true },
+        { email, name: safeName, is_active: true, source: source || null },
         { onConflict: 'email' }
       )
       if (subscribeError) {
@@ -284,6 +284,55 @@ export async function POST(req: NextRequest) {
           logger.error('actions: contact email send failed', { action: 'actions.contact.email', error: e instanceof Error ? e.message : String(e) })
         }
       })
+      return NextResponse.json({ success: true })
+    }
+
+    // ── Abandoned-cart capture ────────────────────────────────────────────
+    // Fired (debounced) from CheckoutClient once the customer has entered
+    // enough contact info to be reachable. Upserts on session_id — see
+    // db migration add_session_id_to_abandoned_carts. Never blocks
+    // checkout: any failure here is logged and swallowed, same pattern as
+    // the in-house analytics tracker.
+    if (action === 'save_abandoned_cart') {
+      const parsed = saveAbandonedCartSchema.safeParse(body)
+      if (!parsed.success) return NextResponse.json({ error: 'Invalid abandoned cart payload' }, { status: 400 })
+      const { session_id, email, phone, name, items, cart_total } = parsed.data
+      const safeName = name ? stripTags(name) : null
+
+      const { error } = await db.from('abandoned_carts').upsert(
+        {
+          session_id,
+          email:      email || null,
+          phone:      phone || null,
+          name:       safeName,
+          cart_items: items,
+          cart_total,
+          converted:  false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'session_id' },
+      )
+      if (error) {
+        logger.error('actions: abandoned_carts upsert failed', { action: 'actions.save_abandoned_cart', error: error.message })
+        return NextResponse.json({ error: 'Could not save cart' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    // Fired from order-success once we know an order genuinely went
+    // through — marks this session's draft cart as converted so it's
+    // excluded from reminder sends. No-op (not an error) if no row
+    // exists for this session (e.g. no email/phone was ever captured).
+    if (action === 'mark_cart_converted') {
+      const parsed = markCartConvertedSchema.safeParse(body)
+      if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+      const { error } = await db.from('abandoned_carts')
+        .update({ converted: true, updated_at: new Date().toISOString() })
+        .eq('session_id', parsed.data.session_id)
+      if (error) {
+        logger.error('actions: mark_cart_converted failed', { action: 'actions.mark_cart_converted', error: error.message })
+        // Non-fatal — the order itself already succeeded by the time this fires.
+      }
       return NextResponse.json({ success: true })
     }
 

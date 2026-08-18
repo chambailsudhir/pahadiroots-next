@@ -38,7 +38,7 @@ import { useCallback, useEffect, useRef }  from 'react'
 import { formatPrice }  from '@/lib/utils'
 import { INDIA_STATES } from '@/lib/account/constants'
 import { useCheckoutPage } from '@/hooks/useCheckoutPage'
-import { trackCheckoutStart } from '@/lib/analytics/track'
+import { trackCheckoutStart, saveAbandonedCart } from '@/lib/analytics/track'
 import type { SiteSettings } from '@/types'
 
 import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
@@ -88,6 +88,35 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       trackCheckoutStart()
     }
   }, [storeReady, items.length])
+
+  // Abandoned-cart capture: debounced save once the customer has entered
+  // enough contact info to be reachable (valid phone, or an email). This is
+  // what powers the admin "abandoned cart" reminder list — if they never
+  // complete the order, this row is what lets someone follow up on
+  // WhatsApp/email. Debounced so we don't fire on every keystroke.
+  useEffect(() => {
+    if (!storeReady || items.length === 0) return
+    const phoneValid = /^[6-9]\d{9}$/.test(addr.phone)
+    const emailValid = !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    if (!phoneValid && !emailValid) return
+
+    const timer = setTimeout(() => {
+      saveAbandonedCart({
+        email: emailValid ? email : undefined,
+        phone: phoneValid ? addr.phone : undefined,
+        name: addr.name || undefined,
+        items: items.map(it => ({
+          product_id: Number(it.productId) || undefined,
+          name: it.name,
+          qty: it.qty,
+          price: it.price,
+        })),
+        cart_total: pricing.total,
+      })
+    }, 2500)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeReady, items, addr.phone, addr.name, email, pricing.total])
 
   // PERF FIX: stable callbacks for JSX props that were previously inline arrow
   // functions, recreated on every render. Inline arrows defeat React.memo on

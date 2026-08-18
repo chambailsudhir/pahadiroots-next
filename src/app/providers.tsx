@@ -5,6 +5,7 @@ import { SWRConfig } from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { useCartStore } from '@/store/cartStore'
 import PageViewTracker from '@/components/analytics/PageViewTracker'
+import LeadCapturePopup from '@/components/analytics/LeadCapturePopup'
 
 // ── StoreHydrator ─────────────────────────────────────────────
 // Both stores use skipHydration:true — they start with empty defaults
@@ -36,6 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <StoreHydrator />
       <Suspense fallback={null}>
         <PageViewTracker />
+        <LeadCapturePopup />
       </Suspense>
       {children}
     </SWRConfig>

@@ -105,6 +105,7 @@ export const newsletterSchema = z.object({
 export const subscribeSchema = z.object({
   email: z.string().email().toLowerCase().trim(),
   name:  z.string().trim().max(100).optional(),
+  source: z.string().trim().max(50).optional(),
 })
 
 // ─── Stock Notification Schema ──────────────────────────────────────────────
@@ -115,6 +116,30 @@ export const subscribeSchema = z.object({
 export const notifyStockSchema = z.object({
   email:      z.string().email().toLowerCase().trim(),
   product_id: z.number().int().positive(),
+})
+
+// ─── Abandoned Cart Schemas ─────────────────────────────────────────────────
+// Backs the checkout-side cart-abandonment capture (CheckoutClient.tsx debounced
+// save) and the order-success conversion mark. One row per browsing session —
+// see analytics_sessions.session_id / abandoned_carts.session_id.
+export const abandonedCartItemSchema = z.object({
+  product_id: z.number().int().positive().optional(),
+  name:       z.string().trim().max(200),
+  qty:        z.number().int().positive(),
+  price:      z.number().nonnegative(),
+})
+
+export const saveAbandonedCartSchema = z.object({
+  session_id: z.string().trim().min(1).max(100),
+  email:      z.string().email().toLowerCase().trim().optional(),
+  phone:      z.string().trim().max(20).optional(),
+  name:       z.string().trim().max(100).optional(),
+  items:      z.array(abandonedCartItemSchema).min(1).max(50),
+  cart_total: z.number().nonnegative(),
+}).refine(d => !!d.email || !!d.phone, { message: 'email or phone required' })
+
+export const markCartConvertedSchema = z.object({
+  session_id: z.string().trim().min(1).max(100),
 })
 
 // ─── Search Schema ─────────────────────────────────────────────────────────────

@@ -107,7 +107,7 @@ describe('POST /api/v1/actions — subscribe (schema-drift bug found + fixed)', 
     // information_schema.columns) — every signup may have been silently
     // erroring. Real columns only: email, name, is_active.
     expect(payload).not.toHaveProperty('subscribed_at')
-    expect(payload).toEqual({ email: 'jane@example.com', name: null, is_active: true })
+    expect(payload).toEqual({ email: 'jane@example.com', name: null, is_active: true, source: null })
   })
 
   it('surfaces a subscribers-table error as a 500 instead of silently swallowing it', async () => {

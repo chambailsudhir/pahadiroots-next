@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals } from '@/lib/invoiceGst'
-import { trackPurchase } from '@/lib/analytics/track'
+import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -112,6 +112,7 @@ function SuccessContent() {
     if (purchaseFired.current || !hasOrderIdentifier) return
     purchaseFired.current = true
     trackPurchase(orderNum || orderId, Number(totalParam) || 0)
+    markCartConverted()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasOrderIdentifier])
 

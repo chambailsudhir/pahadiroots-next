@@ -159,3 +159,65 @@ export function trackCheckoutStart(): void {
 export function trackPurchase(orderId: string, value: number): void {
   track({ event_type: 'purchase', path: '/order-success', page_type: 'order_success', metadata: { order_id: orderId, value } })
 }
+
+// ─────────────────────────────────────────────────────────────
+// Abandoned-cart capture — separate from the event stream above.
+// Ties a draft cart to the current browsing session (not email/phone,
+// since email is optional and a phone-only match would need a DB
+// migration every retention window). One row per session, upserted as
+// the checkout form fills in; marked converted once the order succeeds
+// so it's excluded from reminder sends.
+// ─────────────────────────────────────────────────────────────
+
+export interface AbandonedCartItem {
+  product_id?: number
+  name: string
+  qty: number
+  price: number
+}
+
+let lastAbandonedCartSignature = ''
+
+export function saveAbandonedCart(payload: {
+  email?: string
+  phone?: string
+  name?: string
+  items: AbandonedCartItem[]
+  cart_total: number
+}): void {
+  if (typeof window === 'undefined') return
+  if (!payload.items?.length) return
+  if (!payload.email && !payload.phone) return // nothing to contact them with yet
+
+  // Cheap dedup: don't re-POST on every keystroke if nothing meaningful changed.
+  const signature = JSON.stringify([payload.email, payload.phone, payload.cart_total, payload.items.length])
+  if (signature === lastAbandonedCartSignature) return
+  lastAbandonedCartSignature = signature
+
+  try {
+    const { id: session_id } = getSessionId()
+    fetch('/api/v1/actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save_abandoned_cart', session_id, ...payload }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    // Never break checkout over this.
+  }
+}
+
+export function markCartConverted(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const { id: session_id } = getSessionId()
+    const body = JSON.stringify({ action: 'mark_cart_converted', session_id })
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/v1/actions', new Blob([body], { type: 'application/json' }))
+    } else {
+      fetch('/api/v1/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {})
+    }
+  } catch {
+    // Never break the order-success page over this.
+  }
+}
