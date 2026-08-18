@@ -39,6 +39,57 @@ async function ordersFetcher(
   return fetchOrders({ page, limit: PAGE_SIZE, search, status, signal })
 }
 
+// Moved to module scope (Aug 18) — purely a pure function of its argument
+// plus the module-level RETURNABLE_WINDOW_HOURS constant, no hook-state
+// closure needed. Exported (alongside useOrders below) so this specific
+// fix has direct test coverage — see
+// __tests__/canReturn-replaced-not-blocking.real.test.ts.
+export function canReturn(o: Order): boolean {
+  // A return still in progress for this order blocks a new one — matches
+  // the idempotency check in /api/orders/[id]/return/route.ts and admin's
+  // own exclusion list (pahadi-admin/src/app/admin/returns/page.jsx uses
+  // `!['refunded','rejected','replaced'].includes(r.status)` in all three
+  // of its duplicate-return guards). Once _displayStatus reflects a return in
+  // progress it won't equal 'delivered' either, but check _return
+  // directly too since this must stay correct even if _displayStatus
+  // computation ever changes.
+  // BUG FIX: this used to only exclude 'rejected'. Since `returns(...)`
+  // returns every return ever filed for the order and `_displayStatus`
+  // is computed from the single *most recent* one (see
+  // /api/orders/route.ts), a return that had already been fully
+  // 'refunded' (a terminal, resolved state) would still fail this check
+  // — and _displayStatus never reverts to 'delivered' afterward — so the
+  // Return button disappeared from the order card permanently, even for
+  // a different item on the same order that had never been returned.
+  // FIX (Aug 18): also excludes 'replaced' now — it's exactly as
+  // terminal/resolved as 'refunded' (a completed replacement, not an
+  // open return), and had the identical bug: a customer whose
+  // replacement unit later arrived damaged too could never get the
+  // Return button back for that order. Matches the same fix just made
+  // in admin's three duplicate-check exclusion lists.
+  const ret = (o as { _return?: { status?: string } | null })._return
+  if (ret && !['refunded', 'rejected', 'replaced'].includes(ret.status || '')) return false
+  // BUG FIX: was `(o._displayStatus || o.order_status) !== 'delivered'`.
+  // _displayStatus is intentionally sticky — it shows 'return_refunded'
+  // etc. permanently as the historical record of a resolved return (see
+  // /api/orders/route.ts), it never reverts to 'delivered'. Gating on it
+  // here would silently reintroduce the exact "Return button vanishes
+  // forever after one refund" bug the check above was just fixed for.
+  // The order's actual fulfillment state is order_status; whether a
+  // return is currently in progress is already covered by the ret.status
+  // check above.
+  if (o.order_status !== 'delivered') return false
+  const deliveredDate = o.delivered_at || o.updated_at
+  if (!deliveredDate) return true
+  // BUG FIX (July 2026): was `<= 7` days — didn't match the API route's
+  // actual 48-hour policy (RETURNABLE_WINDOW_HOURS, imported from the
+  // same constants.ts as the route uses). The button used to stay visible
+  // for 5 extra days after the real window closed, and clicking it always
+  // failed server-side. See the constant's own comment for the full trace.
+  const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
+  return hoursSince <= RETURNABLE_WINDOW_HOURS
+}
+
 export function useOrders(markExpired?: () => void) {
   const [enabled,      setEnabled]      = useState(false)
   const [filter,       setFilterState]  = useState<OrderFilter>('all')
@@ -133,46 +184,6 @@ export function useOrders(markExpired?: () => void) {
     } finally {
       setLoadingMore(false)
     }
-  }
-
-  function canReturn(o: Order): boolean {
-    // A return still in progress for this order blocks a new one — matches
-    // the idempotency check in /api/orders/[id]/return/route.ts and admin's
-    // own exclusion list (pahadi-admin/src/app/admin/returns/page.jsx uses
-    // `!['refunded','rejected'].includes(r.status)` in both of its
-    // duplicate-return guards). Once _displayStatus reflects a return in
-    // progress it won't equal 'delivered' either, but check _return
-    // directly too since this must stay correct even if _displayStatus
-    // computation ever changes.
-    // BUG FIX: this used to only exclude 'rejected'. Since `returns(...)`
-    // returns every return ever filed for the order and `_displayStatus`
-    // is computed from the single *most recent* one (see
-    // /api/orders/route.ts), a return that had already been fully
-    // 'refunded' (a terminal, resolved state) would still fail this check
-    // — and _displayStatus never reverts to 'delivered' afterward — so the
-    // Return button disappeared from the order card permanently, even for
-    // a different item on the same order that had never been returned.
-    const ret = (o as { _return?: { status?: string } | null })._return
-    if (ret && !['refunded', 'rejected'].includes(ret.status || '')) return false
-    // BUG FIX: was `(o._displayStatus || o.order_status) !== 'delivered'`.
-    // _displayStatus is intentionally sticky — it shows 'return_refunded'
-    // etc. permanently as the historical record of a resolved return (see
-    // /api/orders/route.ts), it never reverts to 'delivered'. Gating on it
-    // here would silently reintroduce the exact "Return button vanishes
-    // forever after one refund" bug the check above was just fixed for.
-    // The order's actual fulfillment state is order_status; whether a
-    // return is currently in progress is already covered by the ret.status
-    // check above.
-    if (o.order_status !== 'delivered') return false
-    const deliveredDate = o.delivered_at || o.updated_at
-    if (!deliveredDate) return true
-    // BUG FIX (July 2026): was `<= 7` days — didn't match the API route's
-    // actual 48-hour policy (RETURNABLE_WINDOW_HOURS, imported from the
-    // same constants.ts as the route uses). The button used to stay visible
-    // for 5 extra days after the real window closed, and clicking it always
-    // failed server-side. See the constant's own comment for the full trace.
-    const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
-    return hoursSince <= RETURNABLE_WINDOW_HOURS
   }
 
   const currentPageOrders = data?.orders ?? []

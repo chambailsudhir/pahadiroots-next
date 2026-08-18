@@ -16,22 +16,40 @@ export const INDIA_STATES = [
 export const ADDRESS_LABELS = ['Home','Office','Parents','Friends','Partner','Warehouse','Other']
 
 // ── Return/refund vocabulary ──────────────────────────────────────────────────
-// Reconciled against the real, live schema (see PAHADI_ROOTS_SESSION_REPORT.md
-// §2/§3): returns are NOT order_status enum values — order_status stays
-// 'delivered' for the life of a return. The real lifecycle lives entirely in
-// the dedicated `returns` table's `status` column, which has exactly 5 values
-// (confirmed via admin's pahadi-admin/src/app/admin/returns/page.jsx):
-//   requested → approved → received → refunded, or rejected
-// The keys below are prefixed `return_` (mapped from that column by
+// FIX (Aug 18): this comment previously claimed returns.status has "exactly
+// 5 values" and that order_status_enum has no 'processing'/'refund_initiated'/
+// 'refund_completed' — both wrong. Re-verified directly against the live
+// schema this session: returns.status has 6 real values (requested, approved,
+// received, refunded, replaced, rejected — 'replaced' via the Replacement
+// workflow), and order_status_enum has 16 values, INCLUDING 'processing',
+// 'refund_initiated', and 'refund_completed' (they exist on ORDERS, just
+// aren't the vocabulary this file's return_* keys map from — see below).
+// Returns are still not reflected in order_status itself — order_status
+// stays 'delivered' for the life of a return. The real return lifecycle
+// lives entirely in the dedicated `returns` table's `status` column. The
+// keys below are prefixed `return_` (mapped from that column by
 // /api/orders/route.ts's _displayStatus computation) so they never collide
 // with unrelated concepts that happen to share a word — e.g. orders.order_status
 // can independently be 'returned', and orders.payment_status can independently
-// be 'refunded'. There is no 'processing', 'refund_initiated', or
-// 'refund_completed' — those were invented statuses that don't exist in
-// either the DB enum or admin's actual workflow; removed rather than "fixed".
+// be 'refunded'.
 export const BADGE_CLASS: Record<string,string> = {
   pending:'badge-pending',confirmed:'badge-confirmed',
-  packed:'badge-packed',shipped:'badge-shipped',delivered:'badge-delivered',
+  // FIX (Aug 18): 'processing' and 'out_for_delivery' are both real, live
+  // order_status_enum values (16 total, re-verified directly against
+  // pg_enum this session — the comment that used to sit here claiming "7
+  // values, no processing" was simply wrong). Left unmapped, both fell
+  // through OrderCard.tsx's `BADGE[BADGE_CLASS[ds]] || styles.badgePending`
+  // fallback and rendered as a plain "Pending"-styled badge — misleading
+  // for 'out_for_delivery' especially, since that means the order is
+  // literally on its way to the customer right now. Rather than invent new
+  // badge colors (a design decision), reuse the closest existing,
+  // semantically-correct style: 'processing' behaves like early-pipeline
+  // 'confirmed', 'out_for_delivery' behaves like late-pipeline 'shipped' —
+  // both already have real CSS classes in OrderCard.tsx's BADGE/STRIPE maps.
+  processing:'badge-confirmed',
+  packed:'badge-packed',shipped:'badge-shipped',
+  out_for_delivery:'badge-shipped',
+  delivered:'badge-delivered',
   cancelled:'badge-cancelled',returned:'badge-returned',
   return_requested:'badge-return_requested',return_approved:'badge-return_approved',
   return_received:'badge-return_received',return_refunded:'badge-return_refunded',
@@ -50,7 +68,11 @@ export const BADGE_CLASS: Record<string,string> = {
 
 export const STATUS_LABEL: Record<string,string> = {
   pending:'Pending',confirmed:'Confirmed',
-  packed:'Packed',shipped:'Shipped',delivered:'Delivered',
+  // See BADGE_CLASS fix comment above — same live-enum values, same gap.
+  processing:'Processing',
+  packed:'Packed',shipped:'Shipped',
+  out_for_delivery:'Out for Delivery',
+  delivered:'Delivered',
   cancelled:'Cancelled',returned:'Returned',
   return_requested:'Return Requested',return_approved:'Return Approved',
   return_received:'Item Received',return_refunded:'Refund Issued',
@@ -59,7 +81,10 @@ export const STATUS_LABEL: Record<string,string> = {
 }
 
 export const STRIPE_CLASS: Record<string,string> = {
-  confirmed:'oc-stripe-confirmed',packed:'oc-stripe-packed',shipped:'oc-stripe-shipped',
+  confirmed:'oc-stripe-confirmed',
+  processing:'oc-stripe-confirmed',
+  packed:'oc-stripe-packed',shipped:'oc-stripe-shipped',
+  out_for_delivery:'oc-stripe-shipped',
   delivered:'oc-stripe-delivered',pending:'oc-stripe-pending',cancelled:'oc-stripe-cancelled',
   returned:'oc-stripe-returned',
   return_requested:'oc-stripe-return_requested',return_approved:'oc-stripe-return_approved',
@@ -68,11 +93,23 @@ export const STRIPE_CLASS: Record<string,string> = {
   return_replaced:'oc-stripe-return_replaced',
 }
 
-// BUG FIX: 'processing' removed. It is not a value order_status can ever
-// actually hold — confirmed against both the live order_status_enum (7 values,
-// no 'processing') and admin's own STATUSES list. It was a dead reference in
-// this constant, not a missing migration (see session report §3, mistake #2).
-export const ACTIVE_STATUSES   = ['pending','confirmed','packed','shipped']
+// FIX (Aug 18): this comment previously claimed "confirmed against the live
+// order_status_enum (7 values, no 'processing')" — that claim was wrong.
+// Re-verified directly against pg_enum this session: order_status_enum
+// actually has 16 values, and 'processing' and 'out_for_delivery' are both
+// real, live values sitting between 'confirmed' and 'delivered' in the
+// pipeline. Both were missing here, meaning any order in either status
+// would silently drop out of the customer's "Active Orders" filter tab
+// (ACTIVE_STATUSES is used directly as the active-tab query and to compute
+// the active-orders count in useOrders.ts) even though it's clearly still
+// in-flight — 'out_for_delivery' in particular means the order is literally
+// on its way to the customer right now. No live order currently sits in
+// either status (small dataset, all terminal today), so this hasn't visibly
+// fired yet, but the very next order to reach 'processing' or
+// 'out_for_delivery' would have vanished from Active until it hit a later
+// status. Matches the identical enum-drift bug already found and fixed this
+// session in pahadi-admin's PIPELINE_STATUSES/KNOWN_STATUSES.
+export const ACTIVE_STATUSES   = ['pending','confirmed','processing','packed','shipped','out_for_delivery']
 // Sentinel passed as the `status` query param to /api/orders — the API route
 // recognises this and does an inner join against `returns` (i.e. "orders that
 // have a linked return row") instead of filtering by order_status, since no

@@ -8,9 +8,14 @@ import { type Order } from '@/lib/services/orderService'
 import styles from '../styles/account.module.css'
 
 // CSS Module class map — converts old kebab-case strings to module classes
-// Reconciled to the real 5-value returns.status lifecycle (requested/
-// approved/received/refunded/rejected) — see constants.ts BADGE_CLASS.
-// There is no 'processing', 'refund_initiated', or 'refund_completed'.
+// Covers the return_* lifecycle (requested/approved/received/refunded/
+// replaced/rejected) plus base order statuses — see constants.ts
+// BADGE_CLASS/STRIPE_CLASS. 'processing' and 'out_for_delivery' ARE real,
+// live order_status_enum values (re-verified against pg_enum, 16 total) —
+// a prior version of this comment claimed otherwise; that was wrong. They
+// don't need separate keys here because constants.ts's BADGE_CLASS/
+// STRIPE_CLASS deliberately map them onto 'badge-confirmed'/'badge-shipped'
+// (see that file's fix comment) rather than inventing new colors.
 const BADGE: Record<string, string> = {
   'badge-confirmed':        styles.badgeConfirmed,
   'badge-packed':           styles.badgePacked,

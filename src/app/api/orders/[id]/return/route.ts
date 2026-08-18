@@ -211,11 +211,17 @@ export async function POST(
     // any row in `returns` for this order/item whose status is still active
     // (the admin's real 6-value lifecycle: requested → approved → received →
     // refunded/replaced, or rejected — see pahadi-admin/src/lib/returns.js
-    // RETURN_STATUSES). Matches admin's own exclusion list exactly (both
-    // identical filters in admin/returns/page.jsx use
-    // `!['refunded','rejected'].includes(r.status)`) — so only 'refunded'
-    // and 'rejected' are treated as non-blocking; 'replaced' still counts as
-    // in-progress there, so it does here too.
+    // RETURN_STATUSES).
+    // FIX (Aug 18): 'replaced' used to be treated as still-blocking here
+    // (and in every mirror of this list — admin's three exclusion lists,
+    // and useOrders.ts's canReturn()) even though it's exactly as
+    // terminal/resolved as 'refunded' — a completed replacement, not an
+    // open return. That meant a customer whose replacement unit later
+    // arrived damaged too could never submit another return for that item
+    // — the same permanently-blocked bug already fixed once below for
+    // 'refunded', just not extended to 'replaced' when the replacement
+    // workflow was added afterward. Now only 'requested'/'approved'/
+    // 'received' (the genuinely open states) block a new return.
     // BUG FIX: scoped to the same item (variant_id), matching admin's own
     // client-side duplicate check (pahadi-admin/src/app/admin/returns/page.jsx
     // — `(r.variant_id||null) === (form.variant_id||null)`). Without this, a
@@ -231,12 +237,12 @@ export async function POST(
     // item again — e.g. a second, unrelated defective delivery of the same
     // product on a later reorder would be permanently blocked. Admin's own
     // terminal-state exclusion list (pahadi-admin/src/lib/returns.js
-    // RETURN_STATUSES usage + the two identical filters in
-    // admin/returns/page.jsx) excludes both 'refunded' and 'rejected' —
-    // matched here.
+    // RETURN_STATUSES usage + the three identical filters in
+    // admin/returns/page.jsx) now excludes 'refunded', 'rejected', and
+    // 'replaced' — matched here.
     const existingList = Array.isArray(existingReturns) ? existingReturns : []
     const existing = existingList.find((r: { status: string; variant_id: string | number | null }) =>
-      !['refunded', 'rejected'].includes(r.status) && String(r.variant_id ?? '') === String(variantId ?? '')
+      !['refunded', 'rejected', 'replaced'].includes(r.status) && String(r.variant_id ?? '') === String(variantId ?? '')
     )
     if (existing) {
       return fail(409, 'A return request is already in progress for this item')
