@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import { useRouter } from 'next/navigation'
 import { usePDPAnalytics } from '@/hooks/useCheckoutAnalytics'
+import { trackProductView, trackAddToCart as trackInHouseAddToCart } from '@/lib/analytics/track'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 
 interface Props {
@@ -48,6 +49,22 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     itemName: product.name,
     price,
   })
+
+  // In-house product-view tracking (separate from the GA4 view_item above —
+  // this is what powers the admin "product interest" dashboard). Source is
+  // inferred from the referring page so we know search vs category vs direct.
+  useEffect(() => {
+    let source = 'direct'
+    const ref = typeof document !== 'undefined' ? document.referrer : ''
+    if (ref) {
+      if (ref.includes('/search'))                        source = 'search'
+      else if (ref.includes('/collections') || ref.includes('/regions')) source = 'category'
+      else if (!ref.includes(window.location.hostname))    source = 'external'
+      else                                                 source = 'internal'
+    }
+    trackProductView(product.id, source, `/products/${product.slug}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id])
 
   function selectVariant(v: ProductVariant) {
     if (v.available_stock <= 0) return

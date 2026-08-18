@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
+import { trackSearch } from '@/lib/analytics/track'
 import type { Product } from '@/types'
 
 function SearchContent() {
@@ -30,7 +31,9 @@ function SearchContent() {
     .eq('status', 'active')
         .or(`name.ilike.%${q}%,tags.ilike.%${q}%`)
         .limit(48)
-      return normalizeProducts(data ?? [])
+      const normalized = normalizeProducts(data ?? [])
+      trackSearch(q, normalized.length)
+      return normalized
     }
   )
 

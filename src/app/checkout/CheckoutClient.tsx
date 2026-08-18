@@ -34,10 +34,11 @@
 import './checkout.css'
 
 import Script from 'next/script'
-import { useCallback }  from 'react'
+import { useCallback, useEffect, useRef }  from 'react'
 import { formatPrice }  from '@/lib/utils'
 import { INDIA_STATES } from '@/lib/account/constants'
 import { useCheckoutPage } from '@/hooks/useCheckoutPage'
+import { trackCheckoutStart } from '@/lib/analytics/track'
 import type { SiteSettings } from '@/types'
 
 import CheckoutSkeleton     from '@/components/checkout/CheckoutSkeleton'
@@ -75,6 +76,18 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
     handleApplyLoyalty, handleRemoveLoyalty,
     handlePlace,
   } = useCheckoutPage(settings)
+
+  // In-house funnel tracking: fires once, only once real cart items are
+  // present (storeReady + items.length) — avoids logging a false checkout_start
+  // for someone who lands on /checkout with an empty cart (e.g. stale bookmark).
+  const checkoutStartFired = useRef(false)
+  useEffect(() => {
+    if (checkoutStartFired.current) return
+    if (storeReady && items.length > 0) {
+      checkoutStartFired.current = true
+      trackCheckoutStart()
+    }
+  }, [storeReady, items.length])
 
   // PERF FIX: stable callbacks for JSX props that were previously inline arrow
   // functions, recreated on every render. Inline arrows defeat React.memo on

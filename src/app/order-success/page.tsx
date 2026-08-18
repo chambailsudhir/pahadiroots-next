@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals } from '@/lib/invoiceGst'
+import { trackPurchase } from '@/lib/analytics/track'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -100,6 +101,19 @@ function SuccessContent() {
       setError(true)
     }
   }
+
+  // In-house funnel tracking — reaching this page WITH an order identifier
+  // means checkout genuinely succeeded, regardless of whether the richer
+  // order-lookup fetch below succeeds. Fires once, using whatever total we
+  // have at mount time (the ?total= URL param, same value the redirect from
+  // checkout always sets).
+  const purchaseFired = useRef(false)
+  useEffect(() => {
+    if (purchaseFired.current || !hasOrderIdentifier) return
+    purchaseFired.current = true
+    trackPurchase(orderNum || orderId, Number(totalParam) || 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOrderIdentifier])
 
   /* fetch order */
   // BUG FIX (found via production console 404s): this used to POST to
