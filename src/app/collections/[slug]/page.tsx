@@ -4,6 +4,7 @@ import { getStoreData, buildCategories, imgFor, getProductsWithImages } from '@/
 import { normalizeProducts, toCardProductData, getEffectivePrice } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
+import CategoryMotif from '@/components/collections/CategoryMotif'
 import type { Product } from '@/types'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -180,6 +181,11 @@ export default async function CollectionPage({ params, searchParams }: Props) {
             <div style={{ position: 'absolute', inset: 0, opacity: 0.06,
               backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)',
               backgroundSize: '28px 28px' }} />
+            {/* Bespoke on-brand line-art motif — see CategoryMotif.tsx for why
+                this exists instead of a stretched logo or a bare gradient. */}
+            <CategoryMotif slug={catSlug} style={{
+              position: 'absolute', top: '-60px', right: '-40px', width: '460px', height: '460px',
+            }} />
           </>
         )}
 
