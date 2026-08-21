@@ -42,6 +42,13 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: vi.fn() }),
 }))
 
+const mockTrackProductView = vi.fn()
+const mockTrackInHouseAddToCart = vi.fn()
+vi.mock('@/lib/analytics/track', () => ({
+  trackProductView: (...args: unknown[]) => mockTrackProductView(...args),
+  trackAddToCart:   (...args: unknown[]) => mockTrackInHouseAddToCart(...args),
+}))
+
 import AddToCartSection from '@/components/product/AddToCartSection'
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
@@ -87,6 +94,8 @@ beforeEach(() => {
   useUIStore.setState({ isCartOpen: false } as Partial<ReturnType<typeof useUIStore.getState>>)
   vi.useFakeTimers()
   mockPush.mockClear()
+  mockTrackProductView.mockClear()
+  mockTrackInHouseAddToCart.mockClear()
 })
 
 afterEach(() => {
@@ -306,6 +315,47 @@ describe('AddToCartSection — handleAdd', () => {
     expect(item.variantId).toBe('5') // falls back to product.id
     expect(item.price).toBe(120)
     expect(item.size).toBe('1kg')   // falls back to unit_label
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [BUG FIX] in-house analytics add_to_cart event was imported but never
+// actually called — analytics_events had zero add_to_cart rows, and the
+// admin "Top Products" view→cart / cart→purchase conversion columns always
+// showed 0% regardless of real activity.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AddToCartSection — in-house analytics add_to_cart event (BUG FIX)', () => {
+  it('fires the in-house trackAddToCart with productId, variantId, and the classified view source', () => {
+    const variants = [makeVariant({ id: 11, size: '500g', price: 250, mrp: 300, available_stock: 10 })]
+    render(el({ product: makeProduct({ id: 1 }), variants }))
+
+    fireEvent.click(screen.getByRole('button', { name: /add.*to cart/i }))
+
+    expect(mockTrackInHouseAddToCart).toHaveBeenCalledTimes(1)
+    expect(mockTrackInHouseAddToCart).toHaveBeenCalledWith(1, 11, 'direct')
+  })
+
+  it('passes variantId=undefined when no variant is selected (falls back to product-level add)', () => {
+    render(el({ product: makeProduct({ id: 5 }), variants: [] }))
+
+    fireEvent.click(screen.getByRole('button', { name: /add.*to cart/i }))
+
+    expect(mockTrackInHouseAddToCart).toHaveBeenCalledWith(5, undefined, 'direct')
+  })
+
+  it('also fires on Buy Now, not just Add to Cart', () => {
+    render(el({ product: makeProduct({ id: 1, available_stock: 10 }) }))
+
+    fireEvent.click(screen.getByRole('button', { name: /buy.*now/i }))
+
+    expect(mockTrackInHouseAddToCart).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire when the product is out of stock (handleAdd short-circuits)', () => {
+    render(el({ product: makeProduct({ available_stock: 0 }) }))
+    fireEvent.click(screen.getByRole('button', { name: /out of stock/i }))
+    expect(mockTrackInHouseAddToCart).not.toHaveBeenCalled()
   })
 })
 

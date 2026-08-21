@@ -53,6 +53,11 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   // In-house product-view tracking (separate from the GA4 view_item above —
   // this is what powers the admin "product interest" dashboard). Source is
   // inferred from the referring page so we know search vs category vs direct.
+  // Cached in a ref so handleAdd() below can tag the add-to-cart event with
+  // the same source without re-reading document.referrer (which no longer
+  // reflects the original landing referrer once the user has navigated
+  // around the PDP, e.g. switching variants).
+  const viewSourceRef = useRef('direct')
   useEffect(() => {
     let source = 'direct'
     const ref = typeof document !== 'undefined' ? document.referrer : ''
@@ -62,6 +67,7 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       else if (!ref.includes(window.location.hostname))    source = 'external'
       else                                                 source = 'internal'
     }
+    viewSourceRef.current = source
     trackProductView(product.id, source, `/products/${product.slug}`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id])
@@ -123,7 +129,20 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       isBestseller: product.badges_bestseller ?? false,
     })
 
+    // GA4/Meta remarketing pixel (usePDPAnalytics above).
     trackAddToCart({ itemId: variantId, itemName: product.name, price }, qty)
+
+    // BUG FIX: the in-house analytics add_to_cart event (imported as
+    // trackInHouseAddToCart to avoid the name collision with the GA4
+    // trackAddToCart above) was wired up as an import but never actually
+    // called here — so analytics_events had zero add_to_cart rows and the
+    // admin "Top Products" view→cart / cart→purchase conversion columns
+    // always showed 0%, even on products that genuinely were being added.
+    trackInHouseAddToCart(
+      product.id,
+      selectedVariant ? selectedVariant.id : undefined,
+      viewSourceRef.current,
+    )
 
     if (mode === 'buy') {
       setBuying(true)
