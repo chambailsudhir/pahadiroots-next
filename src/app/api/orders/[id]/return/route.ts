@@ -57,7 +57,7 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
-import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS, canReplace } from '@/lib/account/constants'
+import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS, canReplace, canSelfServeReturn } from '@/lib/account/constants'
 
 // Return window: 48 hours from delivery (see RETURNABLE_WINDOW_HOURS in
 // constants.ts for the single source of truth shared with the client-side
@@ -130,9 +130,15 @@ export async function POST(
   if (!RETURN_REASON_CODES.includes(reason as typeof RETURN_REASON_CODES[number])) {
     return fail(400, `Invalid reason. Must be one of: ${RETURN_REASON_CODES.join(', ')}`)
   }
-  // "other" requires a free-text explanation so admin staff have context
-  if (reason === 'other' && !otherDetail) {
-    return fail(400, 'Please provide a description when selecting "Other"')
+  // FSSAI-consistent food-safety policy (see canSelfServeReturn's own
+  // comment in constants.ts): self-serve returns/replacements are
+  // restricted to genuine quality/fulfillment issues only, same as every
+  // major food e-commerce player. 'changed_mind'/'other' are still valid
+  // reason codes overall (admin staff can log them manually on a
+  // customer's behalf via phone/WhatsApp), just not through this
+  // self-serve endpoint — never trust the client's dropdown options alone.
+  if (!canSelfServeReturn(reason)) {
+    return fail(422, 'Online returns are available for damaged, wrong item, not-as-described, or missing-item issues. For anything else, please contact support.')
   }
   // SEC/DATA-FIX: never trust the client's Refund/Replace toggle gating —
   // re-validate resolution against the reason server-side too. Mirrors

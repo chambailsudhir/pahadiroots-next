@@ -178,6 +178,38 @@ export function canReplace(reason: string): boolean {
   return (REPLACEMENT_ALLOWED_REASONS as string[]).includes(reason)
 }
 
+// ── Self-serve return eligibility (FSSAI-consistent food-safety policy) ──────
+// Food/consumable items, once out of the warehouse, can never be verified as
+// untampered and re-sold — same reason BigBasket, Blinkit, Amazon Fresh, and
+// every other serious Indian food e-commerce player restrict SELF-SERVE
+// returns to genuine quality/fulfillment issues only, never "changed my
+// mind" or unspecified "other" reasons. Every one of those would have to be
+// restock=false (never resold) and refunded anyway, so allowing them
+// self-serve is pure, unbounded loss with no policy friction — and publicly
+// inviting "no reason needed" refunds on consumables is inconsistent with
+// safe food-handling practice, separate from whether it's itself a
+// statutory violation (confirm exact FSSAI/consumer-protection obligations
+// with counsel — this is a business-policy alignment, not a legal opinion).
+//
+// Deliberately a SEPARATE constant from REPLACEMENT_ALLOWED_REASONS even
+// though the values start out identical — one gates which reasons can
+// result in a REPLACEMENT, the other gates which reasons a CUSTOMER can
+// self-serve submit at all (refund or replace). They happen to coincide
+// today; coupling them would silently break if that ever changes.
+//
+// Scope: storefront self-serve only. Admin staff logging a return manually
+// (phone/WhatsApp complaint) still have the FULL reason list, including
+// changed_mind/other, in pahadi-admin's own returns.js — staff judgment
+// applies there; this restriction exists specifically to prevent
+// unattended, one-click "changed my mind" refund requests on food.
+export const SELF_SERVE_RETURN_REASONS: ReturnReasonCode[] = [
+  'damaged', 'wrong_item', 'not_as_described', 'missing_parts',
+]
+
+export function canSelfServeReturn(reason: string): boolean {
+  return (SELF_SERVE_RETURN_REASONS as string[]).includes(reason)
+}
+
 // BUG FIX (July 2026): the return-request API route
 // (/api/orders/[id]/return/route.ts) enforces a 48-hour window per the
 // site's actual Return & Refund Policy (founder-confirmed). The client-side

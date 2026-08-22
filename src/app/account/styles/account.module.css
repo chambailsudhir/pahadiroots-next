@@ -288,10 +288,8 @@
 .forgotPwSent { font-size: 12px; color: #2e7d32; font-weight: 600; }
 
 /* ── Return "Other" free-text (OrdersSection) ───────────────── */
-.returnOtherWrap    { margin: 12px 0 4px; }
-.returnOtherTextarea { width: 100%; border: 1.5px solid #d0c9be; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 72px; outline: none; transition: border-color .2s; }
-.returnOtherTextarea:focus { border-color: #1a3a1e; }
-.returnOtherCount   { font-size: 11px; color: #bbb; text-align: right; margin-top: 4px; }
+.returnOtherHint     { margin: 4px 0 16px; font-size: 12px; color: #7a746a; line-height: 1.5; }
+.returnOtherHint a   { color: #1a3a1e; font-weight: 600; text-decoration: underline; }
 
 /* ── Mobile nav updates ─────────────────────────────────────── */
 .mobTabList { display: flex; width: 100%; }

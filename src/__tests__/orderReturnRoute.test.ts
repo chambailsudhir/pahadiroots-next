@@ -117,7 +117,43 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     expect(insertBody).not.toHaveProperty('return_requested_at')
   })
 
-  it('stores the "Other" free-text explanation in `description`, not concatenated into `reason`', async () => {
+  // FSSAI-consistent food-safety policy fix: self-serve returns/replacements
+  // restricted to genuine quality/fulfillment issues only (damaged,
+  // wrong_item, not_as_described, missing_parts) — 'changed_mind' and
+  // 'other' remain valid reason CODES overall (admin staff can still log
+  // them manually via phone/WhatsApp in pahadi-admin), but this self-serve
+  // endpoint must reject them before ever reaching the DB. Replaces the old
+  // "stores the Other free-text explanation" test, whose entire premise
+  // (self-serve 'other' submission) no longer exists on this endpoint.
+  it('422s a self-serve "changed_mind" request — not eligible for online returns', async () => {
+    mocks.sbAdmin.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path.includes('/rest/v1/orders?')) return [DELIVERED_ORDER]
+      if (method === 'GET' && path.includes('/rest/v1/returns?')) return []
+      throw new Error(`Unexpected sbAdmin call: ${method} ${path}`)
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/return/route')
+    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const res = await POST(req, { params })
+    expect(res.status).toBe(422)
+    expect(mocks.sbAdmin).not.toHaveBeenCalledWith('POST', expect.stringContaining('/rest/v1/returns'), expect.anything())
+  })
+
+  it('422s a self-serve "other" request the same way, with other_detail attached — never reaches the DB', async () => {
+    mocks.sbAdmin.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path.includes('/rest/v1/orders?')) return [DELIVERED_ORDER]
+      if (method === 'GET' && path.includes('/rest/v1/returns?')) return []
+      throw new Error(`Unexpected sbAdmin call: ${method} ${path}`)
+    })
+
+    const { POST } = await import('@/app/api/orders/[id]/return/route')
+    const { req, params } = makeRequest('501', { reason: 'other', other_detail: 'Box arrived crushed' })
+    const res = await POST(req, { params })
+    expect(res.status).toBe(422)
+    expect(mocks.sbAdmin).not.toHaveBeenCalledWith('POST', expect.stringContaining('/rest/v1/returns'), expect.anything())
+  })
+
+  it('still accepts a qualifying reason (damaged) end-to-end, confirming the gate is scoped to changed_mind/other only', async () => {
     mocks.sbAdmin.mockImplementation(async (method: string, path: string) => {
       if (method === 'GET' && path.includes('/rest/v1/orders?')) return [DELIVERED_ORDER]
       if (method === 'GET' && path.includes('/rest/v1/returns?')) return []
@@ -126,14 +162,9 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'other', other_detail: 'Box arrived crushed' })
-    await POST(req, { params })
-
-    const insertCall = mocks.sbAdmin.mock.calls.find(
-      ([method, path]) => method === 'POST' && String(path).includes('/rest/v1/returns'),
-    )
-    const [, , insertBody] = insertCall!
-    expect(insertBody).toMatchObject({ reason: 'other', description: 'Box arrived crushed' })
+    const { req, params } = makeRequest('501', { reason: 'wrong_item' })
+    const res = await POST(req, { params })
+    expect(res.status).toBe(200)
   })
 
   it('409s when a non-rejected return already exists — checked against the `returns` table, not order_status', async () => {
@@ -144,7 +175,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(409)
   })
@@ -158,7 +189,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(200)
   })
@@ -171,7 +202,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(422)
   })
@@ -185,7 +216,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(422)
   })
@@ -204,7 +235,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(422)
   })
@@ -237,7 +268,7 @@ describe('POST /api/orders/[id]/return — architecture fix', () => {
     })
 
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const { req, params } = makeRequest('501', { reason: 'changed_mind' })
+    const { req, params } = makeRequest('501', { reason: 'damaged' })
     const res = await POST(req, { params })
     expect(res.status).toBe(404)
   })

@@ -5,7 +5,7 @@ import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
 import ErrorBoundary  from '@/components/ui/ErrorBoundary'
 import { formatCurrency } from '@/lib/account/utils'
-import { RETURN_REASONS, canReplace } from '@/lib/account/constants'
+import { SELF_SERVE_RETURN_REASONS, RETURN_REASONS, canReplace } from '@/lib/account/constants'
 import type { useOrders } from '../hooks/useOrders'
 import type { Order }     from '../hooks/useOrders'
 import styles from '../styles/account.module.css'
@@ -41,7 +41,6 @@ interface Props {
 export default function OrdersSection({ orders, showToast }: Props) {
   const [returnModal, setReturnModal] = useState<{ orderId: string; orderNum: string; items: Order['items'] } | null>(null)
   const [returnReason,    setReturnReason]    = useState('')
-  const [returnOtherText, setReturnOtherText] = useState('')
   const [submitting,      setSubmitting]      = useState(false)
   // Item picker — only shown when the order has more than one item. Index
   // into returnModal.items; null means "whole order" (preserves the
@@ -86,7 +85,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (submitting) return
     setReturnModal(null)
     setReturnReason('')
-    setReturnOtherText('')
     setSelectedItemIdx(null)
     setResolution('refund')
     setUploadedPhotos([])
@@ -131,7 +129,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
     if (!order) return
     triggerBtnRef.current = triggerBtn ?? null
     setReturnReason('')
-    setReturnOtherText('')
     // Item picker only shows (and only matters) when the order has more
     // than one item — single-item orders keep the original whole-order
     // behavior (no item fields sent, unchanged from before this feature).
@@ -205,8 +202,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
 
   async function submitReturn() {
     if (!returnModal || !returnReason) return
-    // If "Other" is selected, require the free-text explanation
-    if (returnReason === 'other' && !returnOtherText.trim()) return
     if (needsItemSelection) return
     setSubmitting(true)
     try {
@@ -216,7 +211,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           reason:        returnReason,
-          other_detail:  returnReason === 'other' ? returnOtherText.trim() : undefined,
           order_item_id: selectedItem?.id ?? undefined,
           variant_id:    selectedItem?.variant_id ?? undefined,
           product_id:    selectedItem?.product_id ?? undefined,
@@ -433,7 +427,14 @@ export default function OrdersSection({ orders, showToast }: Props) {
             )}
 
             <div className={styles.modalReasons}>
-              {RETURN_REASONS.map((reason, index) => (
+              {/* FSSAI-consistent food-safety policy: self-serve returns
+                  restricted to genuine quality/fulfillment issues only —
+                  same list as canReplace's 4 codes, deliberately not the
+                  full RETURN_REASONS ('changed_mind'/'other' excluded).
+                  See SELF_SERVE_RETURN_REASONS's own comment in
+                  constants.ts. Anyone with a different reason is directed
+                  to contact support instead — see the note below. */}
+              {RETURN_REASONS.filter(r => SELF_SERVE_RETURN_REASONS.includes(r.code)).map((reason, index) => (
                 <label key={reason.code} className={styles.modalReason}>
                   <input
                     ref={index === 0 ? firstRadioRef : undefined}
@@ -522,26 +523,24 @@ export default function OrdersSection({ orders, showToast }: Props) {
               </div>
             )}
 
-            {/* Free-text explanation — required when "Other" is selected */}
-            {returnReason === 'other' && (
-              <div className={styles.returnOtherWrap}>
-                <label htmlFor="return-other-text" className={styles.fLbl}>
-                  Please describe your reason *
-                </label>
-                <textarea
-                  id="return-other-text"
-                  className={styles.returnOtherTextarea}
-                  value={returnOtherText}
-                  onChange={e => setReturnOtherText(e.target.value)}
-                  placeholder="Briefly describe why you'd like to return this item…"
-                  maxLength={500}
-                  rows={3}
-                  autoFocus
-                />
-                <div className={styles.returnOtherCount}>
-                  {returnOtherText.length}/500
-                </div>
-              </div>
+            {/* Not a qualifying reason? Point to support instead of a
+                dead-end "no reason fits" state — same pattern every major
+                food e-commerce site uses (see the SELF_SERVE_RETURN_REASONS
+                comment in constants.ts for why "Other"/"Changed my mind"
+                aren't self-serve options for consumables). Reuses the same
+                whatsapp_number setting (and guard) as the post-submit share
+                link below — no link at all if support hasn't configured one. */}
+            {orders.settings?.whatsapp_number && (
+              <p className={styles.returnOtherHint}>
+                Don&apos;t see your reason?{' '}
+                <a
+                  href={`https://wa.me/${orders.settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with order ${returnModal.orderNum} — my return reason isn't listed here.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Contact support
+                </a>{' '}and our team will help directly.
+              </p>
             )}
 
             <div className={styles.modalFooter}>
@@ -556,7 +555,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 onClick={submitReturn}
                 disabled={
                   !returnReason ||
-                  (returnReason === 'other' && !returnOtherText.trim()) ||
                   needsItemSelection ||
                   submitting ||
                   uploadingPhoto
