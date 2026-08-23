@@ -20,26 +20,12 @@ interface Props {
 const PAGE_SIZE = 24
 
 const SORT_OPTIONS = [
-  { value: 'newest',     label: 'Newest',      icon: '🆕' },
-  { value: 'price_asc',  label: 'Price ↑',     icon: '↑'  },
-  { value: 'price_desc', label: 'Price ↓',     icon: '↓'  },
-  { value: 'popular',    label: 'Best Sellers', icon: '⭐' },
+  { value: 'newest',     label: 'Newest' },
+  { value: 'price_asc',  label: 'Price ↑' },
+  { value: 'price_desc', label: 'Price ↓' },
+  { value: 'popular',    label: 'Best Sellers' },
 ]
 
-function emojiFor(name: string): string {
-  const n = name.toLowerCase()
-  if (n.includes('honey'))                          return '🍯'
-  if (n.includes('ghee'))                           return '🥛'
-  if (n.includes('herb') || n.includes('spice'))    return '🌿'
-  if (n.includes('tea'))                            return '🍵'
-  if (n.includes('rice') || n.includes('grain'))    return '🌾'
-  if (n.includes('oil'))                            return '🫙'
-  if (n.includes('juice'))                          return '🧃'
-  if (n.includes('shilajit'))                       return '🪨'
-  if (n.includes('jam') || n.includes('preserve'))  return '🍓'
-  if (n.includes('pulse') || n.includes('dal'))     return '🫘'
-  return '🏔️'
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
@@ -109,7 +95,6 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   const count      = catProducts.length
   const products   = catProducts.slice(offset, offset + PAGE_SIZE) as Product[]
   const totalPages = Math.ceil(count / PAGE_SIZE)
-  const emoji      = emojiFor(cat.name)
   const catSlug    = cat.slug
 
   function url(overrides: Record<string, string | undefined>) {
@@ -168,11 +153,8 @@ export default async function CollectionPage({ params, searchParams }: Props) {
             <span>/</span>
             <span style={{ color: '#fff' }}>{cat.name}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px' }}>
-            <span style={{ fontSize: '56px', lineHeight: 1 }}>{emoji}</span>
-            <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)',
-              fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>{cat.name}</h1>
-          </div>
+          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)',
+            fontWeight: 700, color: '#fff', margin: '0 0 10px', fontStyle: 'italic' }}>{cat.name}</h1>
           {cat.description && (
             <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '14px', maxWidth: '520px', margin: 0, lineHeight: 1.6 }}>
               {cat.description}
@@ -194,7 +176,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
           <div style={{ display: 'flex', gap: '8px', minWidth: 'max-content' }}>
             <Link href="/products" style={{ padding: '6px 16px', borderRadius: '20px', fontSize: '12px',
               fontWeight: 700, textDecoration: 'none', background: '#f0f7f1', color: '#1a3a1e',
-              border: '1.5px solid #c8d8ca', whiteSpace: 'nowrap' }}>🌿 All</Link>
+              border: '1.5px solid #c8d8ca', whiteSpace: 'nowrap' }}>All</Link>
             {allCategories.map(c => (
               <Link key={c.id} href={`/collections/${c.slug}`} style={{
                 padding: '6px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 700,
@@ -229,7 +211,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
                 background: sort === opt.value ? '#c8920a' : '#fff',
                 color:      sort === opt.value ? '#fff'    : '#555',
                 borderColor: sort === opt.value ? '#c8920a' : '#ddd' }}>
-                {opt.icon} {opt.label}
+                {opt.label}
               </Link>
             ))}
           </div>
@@ -239,7 +221,6 @@ export default async function CollectionPage({ params, searchParams }: Props) {
         {products.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
             padding: '80px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '52px', marginBottom: '16px' }}>🔍</div>
             <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
               No products found
             </h3>
