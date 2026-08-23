@@ -1,12 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getStoreData, buildCategories, imgFor, getProductsWithImages } from '@/lib/storeData'
+import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData, getEffectivePrice } from '@/lib/normalizeProduct'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import CategoryMotif from '@/components/collections/CategoryMotif'
 import type { Product } from '@/types'
-import Image from 'next/image'
 import Link from 'next/link'
 
 export const revalidate = 60
@@ -62,9 +61,6 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   // Find category using SERVICE KEY data (no RLS issues)
   const cat = storeData.categories.find(c => c.slug === slug)
   if (!cat) notFound()
-
-  // Get image via same imgFor() logic as old site
-  const catImageUrl = imgFor(cat, storeData.settings)
 
   // All categories for the nav bar (apply images same way)
   const allCategories = buildCategories(storeData)
@@ -123,126 +119,73 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     return `/collections/${catSlug}?${p.toString()}`
   }
 
-  // BUG FIX (Aug 21 2026 — collection hero looked "cheap"/template-y, flagged
-  // by user against a competitor screenshot): root-caused via live DB query —
-  // categories.image_url for every collection (uploaded in the same ~95s
-  // batch, e.g. natural-oils/1777632012074-yi4ic.jpg) is the flat brand
-  // SHIELD/TREE LOGO MARK, not landscape lifestyle photography. Two
-  // compounding problems, confirmed against the live render:
-  //   1) `opacity: 0.35` was applied to the WHOLE <Image>, which is a
-  //      uniform wash — it doesn't just dim behind the text, it ghosts out
-  //      the *entire* photo including the empty two-thirds where nothing
-  //      needs dimming. Real photography would look pale and cheap here too.
-  //   2) A square-ish logo mark, cover-cropped to a 100vw × 280px strip,
-  //      necessarily blows up and off-crops — that's the "weird" giant
-  //      floating shield the user circled. No amount of CSS makes a logo
-  //      look like an editorial banner photo.
-  // Fix ships two changes together:
-  //   a) Hero no longer stretches the category "photo" full-bleed. Until
-  //      real landscape lifestyle photography exists per collection, the
-  //      hero uses a rich brand-gradient + subtle pattern background and
-  //      features the category's own top PRODUCT shot (already professional
-  //      studio photography — see the bottle shots on the grid below) as a
-  //      contained, drop-shadowed visual on the right, the way premium DTC
-  //      collection pages actually do it when a custom banner isn't ready.
-  //   b) IF a category ever gets a proper wide (e.g. 1600×500+) lifestyle
-  //      photo uploaded, `heroPhotoUrl` below is used full-bleed with a
-  //      *directional* left-to-right scrim (dark only behind the text column)
-  //      instead of a uniform opacity wash, so the photography stays vivid
-  //      and full-strength on the right — this is what actually reads
-  //      "premium" instead of "faded."
-  const heroProduct    = catProducts[0]
-  const heroProductImg = (heroProduct as any)?.image_url || null
-  // Treat the current logo-style uploads as decorative-only (not a photo hero).
-  const heroPhotoUrl = null // swap to `catImageUrl` once a real landscape photo is uploaded per collection
+  // BUG FIX (Aug 23 2026 — user flagged the collection hero's product photo
+  // as still looking wrong, circled on Himalayan Tea): the featured product
+  // image approach from Aug 21 traded one problem for another. Several
+  // source product photos have letterboxing/black bars baked into the shot
+  // itself (visible in the product grid below the hero too) — contained at
+  // a fixed 210×210 box, that letterboxing shows up as ugly black rectangles
+  // floating in the hero. A decorative element sourced from data we don't
+  // fully control (arbitrary product photography) isn't reliable enough to
+  // keep shipping. Removed entirely per explicit request — the hero is now
+  // deliberately simple: gradient + line-art motif + text, matching the
+  // plain, considered look of the /products "All Products" hero, no photo.
+  // Also fixed a real color inconsistency flagged in the same message: this
+  // hero was using `120deg,#12271a→#1a3a1e→#2d5a35`, a different angle and a
+  // darker start stop than every other hero on the site. /products (and
+  // BestSellersClient) use `135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%` —
+  // this page now matches that exactly, and the dot-pattern opacity (was
+  // 0.06 here vs 0.04 on /products) matches too.
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
 
       {/* ── Hero ── */}
       <div style={{ position: 'relative', height: '320px', overflow: 'hidden',
-        background: 'linear-gradient(120deg,#12271a 0%,#1a3a1e 45%,#2d5a35 100%)' }}>
+        background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)' }}>
 
-        {heroPhotoUrl ? (
-          <>
-            <Image src={heroPhotoUrl} alt={cat.name} fill sizes="100vw"
-              style={{ objectFit: 'cover', objectPosition: 'center' }} priority
-            />
-            {/* Directional scrim: full strength behind the text column only —
-                the photo itself stays vivid, unlike the old uniform 0.35 wash. */}
-            <div style={{ position: 'absolute', inset: 0,
-              background: 'linear-gradient(90deg, rgba(15,35,20,.94) 0%, rgba(15,35,20,.82) 28%, rgba(15,35,20,.42) 52%, rgba(15,35,20,.08) 74%, transparent 100%)' }} />
-          </>
-        ) : (
-          <>
-            {/* Soft radial glow so a flat gradient doesn't read as a plain block */}
-            <div style={{ position: 'absolute', inset: 0,
-              background: 'radial-gradient(circle at 15% 30%, rgba(201,168,76,.14), transparent 55%)' }} />
-            <div style={{ position: 'absolute', inset: 0, opacity: 0.06,
-              backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)',
-              backgroundSize: '28px 28px' }} />
-            {/* Bespoke on-brand line-art motif — see CategoryMotif.tsx for why
-                this exists instead of a stretched logo or a bare gradient. */}
-            <CategoryMotif slug={catSlug} style={{
-              position: 'absolute', top: '-60px', right: '-40px', width: '460px', height: '460px',
-            }} />
-          </>
-        )}
+        {/* Soft radial glow so a flat gradient doesn't read as a plain block */}
+        <div style={{ position: 'absolute', inset: 0,
+          background: 'radial-gradient(circle at 15% 30%, rgba(201,168,76,.14), transparent 55%)' }} />
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.04,
+          backgroundImage: 'radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)',
+          backgroundSize: '28px 28px' }} />
+        {/* Bespoke on-brand line-art motif — see CategoryMotif.tsx */}
+        <CategoryMotif slug={catSlug} style={{
+          position: 'absolute', top: '-60px', right: '-40px', width: '460px', height: '460px',
+        }} />
 
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', gap: '24px', maxWidth: '1200px', margin: '0 auto',
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          justifyContent: 'center', maxWidth: '1200px', margin: '0 auto',
           left: 0, right: 0, padding: '0 40px' }}>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Breadcrumb */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
-              color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
-              <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
-              <span>/</span>
-              <Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link>
-              <span>/</span>
-              <span style={{ color: '#fff' }}>{cat.name}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px' }}>
-              <span style={{ fontSize: '56px', lineHeight: 1 }}>{emoji}</span>
-              <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)',
-                fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>{cat.name}</h1>
-            </div>
-            {cat.description && (
-              <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '14px', maxWidth: '520px', margin: 0, lineHeight: 1.6 }}>
-                {cat.description}
-              </p>
-            )}
-            <div style={{ marginTop: '12px' }}>
-              <span style={{ background: 'rgba(201,168,76,.25)', border: '1px solid rgba(201,168,76,.5)',
-                borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#f0d080', fontWeight: 700 }}>
-                {count} Products
-              </span>
-            </div>
+          {/* Breadcrumb */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
+            color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
+            <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
+            <span>/</span>
+            <Link href="/products" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Products</Link>
+            <span>/</span>
+            <span style={{ color: '#fff' }}>{cat.name}</span>
           </div>
-
-          {/* Featured product visual — real studio photography that already
-              exists, shown contained (never stretched/cropped) with a soft
-              drop shadow, instead of a blown-up logo. Hidden on narrow
-              screens where there's no room for it to breathe. */}
-          {heroProductImg && (
-            <div className="coll-hero-visual" style={{ flexShrink: 0, width: '230px', height: '230px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-              <div style={{ position: 'absolute', inset: '10%', borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(201,168,76,.25), transparent 70%)' }} />
-              <Image src={heroProductImg} alt="" width={210} height={210}
-                style={{ objectFit: 'contain', maxWidth: '100%', maxHeight: '100%',
-                  filter: 'drop-shadow(0 24px 28px rgba(0,0,0,.35))', position: 'relative' }} />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px' }}>
+            <span style={{ fontSize: '56px', lineHeight: 1 }}>{emoji}</span>
+            <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)',
+              fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>{cat.name}</h1>
+          </div>
+          {cat.description && (
+            <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '14px', maxWidth: '520px', margin: 0, lineHeight: 1.6 }}>
+              {cat.description}
+            </p>
           )}
+          <div style={{ marginTop: '12px' }}>
+            <span style={{ background: 'rgba(201,168,76,.25)', border: '1px solid rgba(201,168,76,.5)',
+              borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#f0d080', fontWeight: 700 }}>
+              {count} Products
+            </span>
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 760px) {
-          .coll-hero-visual { display: none; }
-        }
-      `}</style>
 
       {/* ── Category nav bar ── */}
       {allCategories.length > 1 && (
