@@ -227,25 +227,19 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
         </div>
       )}
 
-      {/* BUG FIX (Aug 23 2026 — background page text still legible through the
-          zoom backdrop, flagged with a screenshot after the stacking-context/
-          portal fix above): that portal fix was working correctly — pixel-
-          sampled the "visible" area and it's genuinely darkened uniformly
-          everywhere (~30/255, exactly what rgba(0,0,0,.88) produces over a
-          white background). The remaining problem is simpler: 88% opacity
-          black over crisp black-on-white body text still leaves just enough
-          contrast for the letterforms to read. No amount of opacity alone
-          fully solves this for arbitrary underlying contrast — 0.97 would
-          still leave *some* residual difference. Added `backdropFilter: blur`
-          instead (with a modest opacity bump), which destroys the letter
-          shapes geometrically rather than merely dimming them, so it can't
-          become readable again regardless of what's rendered underneath. */}
+      {/* BUG FIX (Aug 23 2026 — switched to a light backdrop per request,
+          matching the reference site's white/cream lightbox instead of a
+          dark one. Also updated the close/prev/next buttons in the same
+          change: they were white icons on `rgba(255,255,255,.15)`, which
+          was only visible against the old dark backdrop — against white
+          they'd have disappeared entirely. Inverted to a dark icon on a
+          soft dark-tinted circle so they stay visible on the new backdrop. */}
       {zoomed && createPortal(
         <div
           id="pdp-zoom-modal"
           onClick={closeZoom}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(10,12,10,.94)',
+            position: 'fixed', inset: 0, background: 'rgba(250,247,241,.97)',
             backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
             zIndex: 2000, display: 'flex', alignItems: 'center',
             justifyContent: 'center', cursor: 'zoom-out',
@@ -260,10 +254,11 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
             onClick={closeZoom}
             style={{
               position: 'absolute', top: '20px', right: '24px',
-              background: 'rgba(255,255,255,.15)', border: 'none',
-              color: '#fff', fontSize: '28px', cursor: 'pointer',
+              background: 'rgba(26,58,30,.08)', border: '1px solid rgba(26,58,30,.14)',
+              color: '#1a3a1e', fontSize: '26px', cursor: 'pointer',
               borderRadius: '50%', width: '44px', height: '44px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 10px rgba(0,0,0,.08)',
             }}
             aria-label="Close image zoom (Escape)"
           >×</button>
@@ -271,11 +266,17 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
             <>
               <button type="button" onClick={e => { e.stopPropagation(); prev() }}
                 aria-label="Previous image"
-                style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: '32px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(26,58,30,.08)', border: '1px solid rgba(26,58,30,.14)', color: '#1a3a1e',
+                  fontSize: '30px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,.08)' }}
               >‹</button>
               <button type="button" onClick={e => { e.stopPropagation(); next() }}
                 aria-label="Next image"
-                style={{ position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.15)', border: 'none', color: '#fff', fontSize: '32px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'rgba(26,58,30,.08)', border: '1px solid rgba(26,58,30,.14)', color: '#1a3a1e',
+                  fontSize: '30px', cursor: 'pointer', borderRadius: '50%', width: '50px', height: '50px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,.08)' }}
               >›</button>
             </>
           )}
