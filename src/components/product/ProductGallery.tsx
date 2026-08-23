@@ -227,17 +227,26 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
         </div>
       )}
 
-      {/* BUG FIX (A11y): Zoom lightbox now has:
-          - Escape key to close (via useEffect above)
-          - Focus trap cycling within the modal (Tab / Shift+Tab)
-          - Focus moves to the close button when it opens
-          - Focus restored to trigger element when it closes */}
+      {/* BUG FIX (Aug 23 2026 — background page text still legible through the
+          zoom backdrop, flagged with a screenshot after the stacking-context/
+          portal fix above): that portal fix was working correctly — pixel-
+          sampled the "visible" area and it's genuinely darkened uniformly
+          everywhere (~30/255, exactly what rgba(0,0,0,.88) produces over a
+          white background). The remaining problem is simpler: 88% opacity
+          black over crisp black-on-white body text still leaves just enough
+          contrast for the letterforms to read. No amount of opacity alone
+          fully solves this for arbitrary underlying contrast — 0.97 would
+          still leave *some* residual difference. Added `backdropFilter: blur`
+          instead (with a modest opacity bump), which destroys the letter
+          shapes geometrically rather than merely dimming them, so it can't
+          become readable again regardless of what's rendered underneath. */}
       {zoomed && createPortal(
         <div
           id="pdp-zoom-modal"
           onClick={closeZoom}
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.88)',
+            position: 'fixed', inset: 0, background: 'rgba(10,12,10,.94)',
+            backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
             zIndex: 2000, display: 'flex', alignItems: 'center',
             justifyContent: 'center', cursor: 'zoom-out',
           }}
