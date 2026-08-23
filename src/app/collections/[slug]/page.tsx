@@ -122,12 +122,26 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   // this page now matches that exactly, and the dot-pattern opacity (was
   // 0.06 here vs 0.04 on /products) matches too.
 
+  // BUG FIX (Aug 23 2026 — hero was visibly taller than /products' hero for
+  // the same amount of content, flagged with a side-by-side comparison):
+  // root cause was a structural mismatch, not a tunable number. /products'
+  // hero has no fixed height — it's `padding: 40px 40px 36px` and the box
+  // sizes itself to whatever content is inside. This page instead forced
+  // `height: 320px` and absolutely centered a flex column inside it, so it
+  // was always exactly 320px regardless of content — taller than /products
+  // for the same title + one line of text. Removed the fixed height and the
+  // absolute-center layout; this hero now uses the identical padding-based
+  // box as /products, so the two are the same size for the same content.
+  // The product-count pill was also its own row before (extra height /products
+  // doesn't have) — it now sits inline with the description on one line,
+  // the way /products keeps its count line to one row.
+
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
 
-      {/* ── Hero ── */}
-      <div style={{ position: 'relative', height: '320px', overflow: 'hidden',
-        background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)' }}>
+      {/* ── Hero — same box model as /products: padding-based, not fixed-height ── */}
+      <div style={{ background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',
+        padding: '40px 40px 36px', position: 'relative', overflow: 'hidden' }}>
 
         {/* Soft radial glow so a flat gradient doesn't read as a plain block */}
         <div style={{ position: 'absolute', inset: 0,
@@ -140,9 +154,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
           position: 'absolute', top: '-60px', right: '-40px', width: '460px', height: '460px',
         }} />
 
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-          justifyContent: 'center', maxWidth: '1200px', margin: '0 auto',
-          left: 0, right: 0, padding: '0 40px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
 
           {/* Breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px',
@@ -153,16 +165,17 @@ export default async function CollectionPage({ params, searchParams }: Props) {
             <span>/</span>
             <span style={{ color: '#fff' }}>{cat.name}</span>
           </div>
-          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)',
-            fontWeight: 700, color: '#fff', margin: '0 0 10px', fontStyle: 'italic' }}>{cat.name}</h1>
-          {cat.description && (
-            <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '14px', maxWidth: '520px', margin: 0, lineHeight: 1.6 }}>
-              {cat.description}
-            </p>
-          )}
-          <div style={{ marginTop: '12px' }}>
+          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
+            fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>{cat.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            {cat.description && (
+              <p style={{ color: 'rgba(255,255,255,.75)', fontSize: '14px', maxWidth: '520px', margin: 0, lineHeight: 1.6 }}>
+                {cat.description}
+              </p>
+            )}
             <span style={{ background: 'rgba(201,168,76,.25)', border: '1px solid rgba(201,168,76,.5)',
-              borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#f0d080', fontWeight: 700 }}>
+              borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#f0d080', fontWeight: 700,
+              whiteSpace: 'nowrap' }}>
               {count} Products
             </span>
           </div>
