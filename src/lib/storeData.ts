@@ -123,17 +123,36 @@ async function _fetchStoreData(): Promise<StoreData> {
   return withRetry(() => _fetchStoreDataOnce())
 }
 
+// BUG FIX (Aug 23 2026 — "images/Bestsellers sometimes there, sometimes not,
+// no error anywhere" report): found by actually reading every line of this
+// function against the `error` field Supabase returns, not by guessing.
+// `fetchAllActiveProducts` above correctly does `if (error) throw error` —
+// but the other SIX queries in the `Promise.all` below only ever destructured
+// `{ data }`. Supabase-js does not reject the promise on a query failure; it
+// resolves successfully with `{ data: null, error: {...} }`. So a transient
+// failure on categories/product_images/product_variants/site_settings/
+// states/state_images — a timeout, a momentary connection-pool blip, exactly
+// the kind of thing the retry/single-flight machinery below exists to catch —
+// was silently becoming `[]` or `{}` instead. That doesn't just skip the
+// retry: `withRetry` only re-runs on a *thrown* error, and none of these six
+// were ever capable of throwing, retried or not. The result renders fine
+// (no 500, no crash) with quietly missing categories/images/variants, and
+// nothing anywhere logs it — which matches "sometimes coming, sometimes not,
+// I don't know what happened" exactly. Fixed by checking every one of these
+// for `error` and throwing, same as the products query already does, so a
+// real transient failure now actually engages the existing retry instead of
+// silently degrading to empty data.
 async function _fetchStoreDataOnce(): Promise<StoreData> {
   const db = getServiceClient()
 
   const [
     products,
-    { data: productImages },
-    { data: productVariants },
-    { data: categories },
-    { data: siteSettings },
-    { data: states },
-    { data: stateImages },
+    productImagesRes,
+    productVariantsRes,
+    categoriesRes,
+    siteSettingsRes,
+    statesRes,
+    stateImagesRes,
   ] = await Promise.all([
     fetchAllActiveProducts(db),
     db.from('product_images')
@@ -161,6 +180,25 @@ async function _fetchStoreDataOnce(): Promise<StoreData> {
     // paying for this unused query. Removed entirely rather than left for
     // just one page, since it's a single shared cache used by all of them.
   ])
+
+  // Any one of these failing (timeout, connection blip, etc.) previously
+  // degraded silently to an empty array/object — see comment above. Now it
+  // throws, so `withRetry` in `_fetchStoreData` actually retries it, and if
+  // both attempts fail, the error surfaces to whichever caller's try/catch
+  // (e.g. BestSellers.tsx logs it) instead of vanishing.
+  if (productImagesRes.error)  throw productImagesRes.error
+  if (productVariantsRes.error) throw productVariantsRes.error
+  if (categoriesRes.error)     throw categoriesRes.error
+  if (siteSettingsRes.error)   throw siteSettingsRes.error
+  if (statesRes.error)         throw statesRes.error
+  if (stateImagesRes.error)    throw stateImagesRes.error
+
+  const productImages   = productImagesRes.data
+  const productVariants = productVariantsRes.data
+  const categories       = categoriesRes.data
+  const siteSettings     = siteSettingsRes.data
+  const states           = statesRes.data
+  const stateImages      = stateImagesRes.data
 
   // Convert settings array → object (same as old site)
   const settings: Record<string, string> = {}
