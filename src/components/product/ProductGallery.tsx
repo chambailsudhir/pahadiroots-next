@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 
 interface GalleryImage { url: string; alt: string }
@@ -9,6 +10,27 @@ interface Props { images: GalleryImage[]; productName: string; savings?: number 
 export default function ProductGallery({ images, productName, savings = 0 }: Props) {
   const [active, setActive]   = useState(0)
   const [zoomed, setZoomed]   = useState(false)
+  // BUG FIX (portal): the lightbox was rendered in-place as a plain
+  // descendant of ProductGallery, which lives inside `.pdp-img-col`
+  // (`position: sticky` in pdp.css). `position: sticky` unconditionally
+  // creates a new CSS stacking context (same as fixed/absolute + z-index,
+  // per the CSS Positioned Layout spec) — so even though the modal is
+  // `position: fixed` with `zIndex: 2000`, that z-index was only ever being
+  // compared against OTHER elements inside `.pdp-img-col`'s own stacking
+  // context. It could never out-rank `.pdp-info-col` (the variant/qty/
+  // Add-to-Cart/Buy-Now column), a plain sibling one level up in the grid —
+  // that column simply paints after `.pdp-img-col` in normal DOM order and
+  // wins by default, regardless of the modal's z-index. That's exactly
+  // what was reported: the dark zoom backdrop showing behind the fully
+  // opaque buy box instead of underneath it.
+  // `createPortal` renders the modal as a direct child of <body>, outside
+  // every ancestor's stacking context (including any future one), so its
+  // z-index is finally compared at the document root where 2000 actually
+  // wins against everything else in the app (highest prior use was 200,
+  // in QuickViewModal). No mount-guard/useEffect needed for the SSR/client
+  // document check — `zoomed` can only ever become true via the onClick/
+  // onKeyDown handlers below, which only run after hydration, so `document`
+  // is always defined by the time this branch renders.
   // BUG FIX (3.7 + A11y): track the trigger element so focus can be restored
   // to it when the lightbox closes (WCAG 2.1 SC 2.4.3)
   const triggerRef            = useRef<HTMLDivElement>(null)
@@ -210,7 +232,7 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
           - Focus trap cycling within the modal (Tab / Shift+Tab)
           - Focus moves to the close button when it opens
           - Focus restored to trigger element when it closes */}
-      {zoomed && (
+      {zoomed && createPortal(
         <div
           id="pdp-zoom-modal"
           onClick={closeZoom}
@@ -261,7 +283,8 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
               priority
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
