@@ -33,7 +33,46 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export const revalidate = 60
+// BUG FIX (Aug 26 2026 — "sometimes Bestsellers doesn't show, then clicking
+// View All Products and coming back to Home fixes it" — traced this exactly,
+// line by line, instead of guessing again):
+//
+// There are TWO separate caching layers stacked on top of each other here,
+// and they were compounding:
+//   Layer A — lib/storeData.ts wraps getStoreData() in `unstable_cache` with
+//             its own independent 60s TTL (Next's Data Cache). This layer
+//             is fine and already self-heals: if a fetch fails, it throws,
+//             and a thrown/rejected result is never cached — the very next
+//             call gets a fresh attempt.
+//   Layer B — THIS page had its own `export const revalidate = 60` (Next's
+//             Full Route Cache / ISR) on top of Layer A.
+//
+// The failure sequence: if one of the six Supabase queries inside
+// storeData.ts has a transient blip badly enough that both retries fail,
+// BestSellers.tsx's try/catch (a deliberate fail-safe, so one broken
+// section can't 500 the whole homepage) catches it and returns `null` —
+// which is a perfectly successful render, just missing that section. From
+// Layer B's point of view, the WHOLE PAGE rendered fine — no error was
+// thrown at the page level — so Next.js takes that Bestsellers-less HTML
+// and freezes it as the page's cached output for the next 60 seconds. Even
+// though Layer A's data can (and usually does) recover within seconds, the
+// degraded HTML stays locked in until Layer B's own 60s window separately
+// expires. That's the exact mechanism behind "it comes back eventually" —
+// clicking to /products and back isn't what fixes it; enough time passing
+// for Layer B's independent window to lapse is what fixes it, and it just
+// looks connected to the click because that's when the next visit happens
+// to land after that window closed.
+//
+// Fix: drop the page-level ISR entirely and rely solely on Layer A (which
+// already has its own TTL, single-flight, and now-correct retry/error
+// surfacing — see storeData.ts). `force-dynamic` means this page's HTML is
+// no longer independently frozen — every request re-renders using
+// whatever storeData.ts's own 60s data cache currently holds, so a
+// self-healed fetch shows up on the very next request instead of waiting
+// out a second, redundant cache window. The underlying product/category
+// data is still cached for 60s either way (that cost doesn't change) —
+// this only removes the *extra*, redundant page-level freeze on top of it.
+export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
   const [settings, storeData] = await Promise.all([
