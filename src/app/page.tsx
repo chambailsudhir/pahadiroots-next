@@ -84,6 +84,7 @@ export default async function HomePage() {
   const heroImages = buildHeroImages(settings)
   const states     = await buildStates(storeData)
 
+  const showCategoryTiles = isEnabled(settings.show_category_tiles)
   const showTrustBar    = isEnabled(settings.show_trust_bar)
   const showBestSellers = isEnabled(settings.show_best_sellers)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
@@ -95,7 +96,7 @@ export default async function HomePage() {
       <HeroBanner images={heroImages} settings={settings} />
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
-      <CategoryTiles categories={categories} />
+      {showCategoryTiles && <CategoryTiles categories={categories} />}
       {showBestSellers && <BestSellers />}
       {states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
