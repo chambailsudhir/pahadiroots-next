@@ -70,18 +70,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: { slug?: string; all?: boolean; settings?: boolean }
+  let body: { slug?: string; all?: boolean; settings?: boolean; blogSlug?: string; blogAll?: boolean }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { slug, all, settings } = body
+  const { slug, all, settings, blogSlug, blogAll } = body
 
-  if (!slug && !all && !settings) {
+  if (!slug && !all && !settings && !blogSlug && !blogAll) {
     return NextResponse.json(
-      { error: 'Provide { slug }, { all: true }, or { settings: true }' },
+      { error: 'Provide { slug }, { all: true }, { settings: true }, { blogSlug }, or { blogAll: true }' },
       { status: 400 }
     )
   }
@@ -125,6 +125,25 @@ export async function POST(req: NextRequest) {
       revalidatePath('/', 'page')
       revalidatePath('/maintenance', 'page')
       revalidated.push('/ (layout)', '/ (page)', '/maintenance')
+    }
+
+    // SEO blog engine (047_blog_seo_engine.sql): a post published or edited
+    // from pahadi-admin's /admin/blog should show up without waiting for the
+    // article page's 24h ISR window or sitemap.xml's 1h window. Called from
+    // pahadi-admin right after a blog_posts write moves a post to/within
+    // 'published', or after any edit to an already-published post.
+    if (blogSlug || blogAll) {
+      if (blogAll) {
+        revalidatePath('/blog', 'page')
+        revalidatePath('/blog/[slug]', 'page')
+        revalidatePath('/sitemap.xml')
+        revalidated.push('/blog', '/blog/[slug] (all)', '/sitemap.xml')
+      } else if (blogSlug) {
+        revalidatePath(`/blog/${blogSlug}`)
+        revalidatePath('/blog', 'page')
+        revalidatePath('/sitemap.xml')
+        revalidated.push(`/blog/${blogSlug}`, '/blog', '/sitemap.xml')
+      }
     }
 
     return NextResponse.json({ success: true, revalidated })

@@ -3,6 +3,13 @@ import { supabase } from '@/lib/supabase'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
+// SEO blog engine: without an explicit revalidate window, Next can treat this
+// route as fully static at build time — a new blog post published from the
+// admin autopilot would never appear in sitemap.xml until the next deploy.
+// 1 hour keeps Google's crawl reasonably fresh without hitting Supabase on
+// every single sitemap request.
+export const revalidate = 3600
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
@@ -16,6 +23,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/regions`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/about`,  lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/contact`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    // SEO blog engine: the listing page itself, separate from the per-post
+    // entries below, so Google always has an entry point into the section
+    // even in the rare case the posts query below fails.
+    { url: `${BASE}/blog`,   lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
   ]
 
   // Products
@@ -64,5 +75,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.65,
   }))
 
-  return [...staticPages, ...productPages, ...collectionPages, ...regionPages]
+  // Blog posts (SEO blog engine — 047_blog_seo_engine.sql)
+  // Only is_published=true rows are ever eligible for the sitemap — the
+  // editorial `status` column (draft/pending_review/scheduled) is kept in
+  // sync with is_published by a DB trigger, so this one filter is always
+  // correct regardless of how a post reached publication.
+  let blogPosts = null
+  try {
+    const { data } = await supabase
+      .from('blog_posts')
+      .select('slug, updated_at, published_at')
+      .eq('is_published', true)
+    blogPosts = data
+  } catch (e: unknown) { console.error('[sitemap] blog fetch failed:', e) }
+
+  const blogPages: MetadataRoute.Sitemap = (blogPosts || []).map(p => ({
+    url:             `${BASE}/blog/${p.slug}`,
+    lastModified:    new Date(p.updated_at || p.published_at || now),
+    changeFrequency: 'monthly' as const,
+    priority:        0.6,
+  }))
+
+  return [...staticPages, ...productPages, ...collectionPages, ...regionPages, ...blogPages]
 }
