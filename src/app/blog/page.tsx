@@ -115,7 +115,7 @@ export default async function BlogPage({
                   {featured.cover_image ? (
                     <Image src={featured.cover_image} alt={featured.title} fill sizes="(max-width: 900px) 100vw, 1100px" className="object-cover" priority />
                   ) : (
-                    <div className="bl-featured-fallback">🏔️</div>
+                    <div className="bl-featured-fallback"><ContourLines className="bl-fallback-contours" /><MountainMark /></div>
                   )}
                 </div>
                 <div className="bl-featured-copy">
@@ -142,7 +142,7 @@ export default async function BlogPage({
                       {post.cover_image ? (
                         <Image src={post.cover_image} alt={post.title} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
                       ) : (
-                        <div className="bl-card-fallback">🏔️</div>
+                        <div className="bl-card-fallback"><ContourLines className="bl-fallback-contours" /><MountainMark /></div>
                       )}
                     </div>
                     <div className="bl-card-body">

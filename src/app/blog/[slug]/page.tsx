@@ -7,7 +7,7 @@ import { sanitizeHtml } from '@/lib/server/sanitize'
 import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { formatDate, truncate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
-import { ContourLines } from '@/components/brand/BrandMotifs'
+import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 import type { Product } from '@/types'
 
 export const revalidate = 86400
@@ -286,7 +286,7 @@ export default async function BlogArticlePage({ params }: Props) {
                       {s.cover_image ? (
                         <Image src={s.cover_image} alt={s.title} fill sizes="280px" className="object-cover" />
                       ) : (
-                        <div className="bp-more-fallback">🏔️</div>
+                        <div className="bp-more-fallback"><ContourLines className="bl-fallback-contours" /><MountainMark /></div>
                       )}
                     </div>
                     <div className="bp-more-title">{s.title}</div>
