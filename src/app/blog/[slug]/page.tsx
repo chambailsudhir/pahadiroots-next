@@ -7,6 +7,7 @@ import { sanitizeHtml } from '@/lib/server/sanitize'
 import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
 import { formatDate, truncate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
+import { ContourLines } from '@/components/brand/BrandMotifs'
 import type { Product } from '@/types'
 
 export const revalidate = 86400
@@ -37,7 +38,6 @@ interface BlogPostRow {
   related_product_ids: number[] | null
 }
 
-// BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
 interface Props { params: Promise<{ slug: string }> }
 
 const POST_SELECT = 'id, title, slug, content, cover_image, og_image, published_at, updated_at, excerpt, meta_title, meta_description, focus_keyword, keywords, canonical_url, category, tags, author, reading_time_minutes, faq, related_product_id, related_product_ids'
@@ -98,8 +98,6 @@ export default async function BlogArticlePage({ params }: Props) {
   const post = await fetchPost(slug)
   if (!post) notFound()
 
-  // Related products — supports the new multi-product array while staying
-  // backward compatible with the original single related_product_id column.
   const productIds = Array.from(new Set([
     ...(post.related_product_ids || []),
     ...(post.related_product_id ? [post.related_product_id] : []),
@@ -119,14 +117,28 @@ export default async function BlogArticlePage({ params }: Props) {
     }
   }
 
+  // "More Stories" strip — up to 3 other published posts, most recent
+  // first, excluding this one. Gives every article an exit into more
+  // content instead of a dead end at the bottom of the page.
+  let moreStories: { title: string; slug: string; cover_image: string | null; reading_time_minutes: number | null }[] = []
+  try {
+    const { data } = await supabase
+      .from('blog_posts')
+      .select('title, slug, cover_image, reading_time_minutes')
+      .eq('is_published', true)
+      .neq('id', post.id)
+      .order('published_at', { ascending: false })
+      .limit(3)
+    moreStories = data || []
+  } catch (e) {
+    console.error('[blog more stories] fetch failed:', e)
+  }
+
   const canonicalUrl = post.canonical_url || `${BASE}/blog/${post.slug}`
   const coverImage = post.cover_image || post.og_image
+  const authorName = post.author || 'HimVeda Team'
+  const authorInitial = authorName.trim()[0]?.toUpperCase() || 'H'
 
-  // ── JSON-LD: BlogPosting ─────────────────────────────────────────────────
-  // Same XSS-safe escaping pattern used on the PDP's Product JSON-LD:
-  // JSON.stringify does not escape < / > / & so a title containing
-  // "</script>" could break out of the script tag — escape to \uXXXX
-  // sequences, which are valid JSON and safe inside <script>.
   const escapeJsonLd = (obj: unknown) =>
     JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
 
@@ -138,7 +150,7 @@ export default async function BlogArticlePage({ params }: Props) {
     image: coverImage ? [coverImage] : undefined,
     datePublished: post.published_at || undefined,
     dateModified: post.updated_at || post.published_at || undefined,
-    author: { '@type': 'Organization', name: post.author || 'HimVeda Team' },
+    author: { '@type': 'Organization', name: authorName },
     publisher: {
       '@type': 'Organization',
       name: 'HimVeda by Pahadi Roots',
@@ -158,9 +170,6 @@ export default async function BlogArticlePage({ params }: Props) {
     ],
   }
 
-  // FAQPage schema is a genuine rich-result eligibility win in Google Search
-  // when the on-page FAQ block matches what's marked up here — only emit it
-  // when real Q&A content exists.
   const faqLd = post.faq && post.faq.length >= 2
     ? {
         '@context': 'https://schema.org',
@@ -173,106 +182,123 @@ export default async function BlogArticlePage({ params }: Props) {
       }
     : null
 
+  const shareText = encodeURIComponent(post.title)
+  const shareUrl = encodeURIComponent(canonicalUrl)
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(blogPostingLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(breadcrumbLd) }} />
       {faqLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(faqLd) }} />}
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1 text-xs text-stone-400 mb-6">
-          <Link href="/" className="hover:text-forest-700">Home</Link>
-          <span>/</span>
-          <Link href="/blog" className="hover:text-forest-700">Blog</Link>
-          <span>/</span>
-          <span className="text-stone-600 line-clamp-1">{post.title}</span>
-        </div>
-
-        {/* Header */}
-        <header className="mb-8">
-          <div className="flex items-center gap-3 text-xs text-stone-400 mb-3">
-            {post.published_at && <span>{formatDate(post.published_at)}</span>}
-            {post.reading_time_minutes && (
-              <>
-                <span aria-hidden>·</span>
-                <span>{post.reading_time_minutes} min read</span>
-              </>
-            )}
-            {post.category && (
-              <>
-                <span aria-hidden>·</span>
-                <span className="uppercase tracking-wide text-forest-700 font-semibold">{post.category.replace(/-/g, ' ')}</span>
-              </>
-            )}
+      <article className="bp-wrap">
+        {/* ── Masthead ── */}
+        <header className="bp-head">
+          <div className="bp-breadcrumb">
+            <Link href="/">Home</Link><span>/</span><Link href="/blog">Blog</Link>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-4 leading-tight">{post.title}</h1>
-          {post.excerpt && <p className="text-stone-500 leading-relaxed">{post.excerpt}</p>}
+          {post.category && <div className="bp-eyebrow">{post.category.replace(/-/g, ' ')}</div>}
+          <h1>{post.title}</h1>
+          {post.excerpt && <p className="bp-excerpt">{post.excerpt}</p>}
+          <div className="bp-byline">
+            <div className="bp-avatar">{authorInitial}</div>
+            <div>
+              <div className="bp-byline-name">{authorName}</div>
+              <div className="bp-byline-meta">
+                {post.published_at && formatDate(post.published_at)}
+                {post.reading_time_minutes && <> · {post.reading_time_minutes} min read</>}
+              </div>
+            </div>
+          </div>
         </header>
 
-        {/* Cover image */}
+        {/* ── Cover image ── */}
         {coverImage && (
-          <div className="relative aspect-[16/9] rounded-2xl overflow-hidden mb-8">
-            <Image src={coverImage} alt={post.title} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" priority />
+          <div className="bp-cover">
+            <Image src={coverImage} alt={post.title} fill sizes="(max-width: 860px) 100vw, 860px" className="object-cover" priority />
           </div>
         )}
 
-        {/* Content */}
-        {/* BUG FIX (found via manual audit): post.content was rendered raw via
-            dangerouslySetInnerHTML with zero sanitization — a real stored-XSS
-            risk if blog content is ever compromised or a rich-text editor
-            allows raw HTML through. Sanitized with the same server-safe
-            utility already used for the PDP's AI content fields. */}
-        {post.content && (
-          <div
-            className="prose prose-stone prose-sm max-w-none text-stone-700 leading-relaxed mb-10"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
-          />
-        )}
-
-        {/* Tags */}
-        {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-10">
-            {post.tags.map(tag => (
-              <span key={tag} className="text-xs bg-stone-50 border border-stone-100 text-stone-500 rounded-full px-3 py-1">#{tag}</span>
-            ))}
+        <div className="bp-layout">
+          {/* ── Share rail ── */}
+          <div className="bp-share">
+            <span className="bp-share-label">Share</span>
+            <a href={`https://wa.me/?text=${shareText}%20${shareUrl}`} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp" className="bp-share-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347M12.05 21.785h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26C2.167 6.443 6.601 2.01 12.053 2.01c2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884" /></svg>
+            </a>
+            <a href={`https://twitter.com/intent/tweet?text=${shareText}&url=${shareUrl}`} target="_blank" rel="noopener noreferrer" aria-label="Share on X" className="bp-share-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.6 8.7L23.3 22H16.7l-5.2-6.8L5.5 22H2.4l8.2-9.3L1.7 2h6.8l4.7 6.3L18.9 2zm-1.2 18h1.7L7.4 4H5.6l12.1 16z"/></svg>
+            </a>
+            <a href={`mailto:?subject=${shareText}&body=${shareUrl}`} aria-label="Share by email" className="bp-share-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+            </a>
           </div>
-        )}
 
-        {/* FAQ (mirrors the FAQPage JSON-LD above — kept visually in sync) */}
-        {post.faq && post.faq.length > 0 && (
-          <div className="border-t border-stone-100 pt-8 mb-10">
-            <h2 className="text-base font-bold text-stone-900 mb-4">Frequently Asked Questions</h2>
-            <div className="space-y-4">
-              {post.faq.map((f, i) => (
-                <div key={i}>
-                  <h3 className="text-sm font-semibold text-stone-800 mb-1">{f.question}</h3>
-                  <p className="text-sm text-stone-500 leading-relaxed">{f.answer}</p>
+          {/* ── Content ── */}
+          <div className="bp-content">
+            {post.content && (
+              <div className="bp-prose" dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }} />
+            )}
+
+            {post.tags && post.tags.length > 0 && (
+              <div className="bp-tags">
+                {post.tags.map(tag => <span key={tag} className="bp-tag">#{tag}</span>)}
+              </div>
+            )}
+
+            {/* ── FAQ ── */}
+            {post.faq && post.faq.length > 0 && (
+              <section className="bp-faq">
+                <h2>Frequently Asked Questions</h2>
+                <div className="bp-faq-list">
+                  {post.faq.map((f, i) => (
+                    <div key={i} className="bp-faq-card">
+                      <h3>{f.question}</h3>
+                      <p>{f.answer}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </section>
+            )}
 
-        {/* Related products */}
-        {relatedProducts.length > 0 && (
-          <div className="border-t border-stone-100 pt-8">
-            <h2 className="text-base font-bold text-stone-900 mb-4">
-              {relatedProducts.length > 1 ? 'Featured Products' : 'Featured Product'}
-            </h2>
-            <div className={relatedProducts.length > 1 ? 'grid grid-cols-2 sm:grid-cols-3 gap-4' : 'max-w-xs'}>
-              {relatedProducts.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
+            {/* ── Related products ── */}
+            {relatedProducts.length > 0 && (
+              <section className="bp-products">
+                <h2>{relatedProducts.length > 1 ? 'Featured in this story' : 'Featured Product'}</h2>
+                <div className={relatedProducts.length > 1 ? 'bp-products-grid' : 'bp-products-single'}>
+                  {relatedProducts.map(p => <ProductCard key={p.id} product={p} />)}
+                </div>
+              </section>
+            )}
           </div>
-        )}
-
-        {/* Back */}
-        <div className="border-t border-stone-100 pt-6 mt-8">
-          <Link href="/blog" className="text-sm text-forest-700 font-semibold hover:underline">
-            ← Back to Blog
-          </Link>
         </div>
-      </div>
+
+        {/* ── More stories ── */}
+        {moreStories.length > 0 && (
+          <section className="bp-more">
+            <ContourLines className="bp-more-contours" />
+            <div className="bp-more-inner">
+              <h2>More Stories</h2>
+              <div className="bp-more-grid">
+                {moreStories.map(s => (
+                  <Link key={s.slug} href={`/blog/${s.slug}`} className="bp-more-card">
+                    <div className="bp-more-img">
+                      {s.cover_image ? (
+                        <Image src={s.cover_image} alt={s.title} fill sizes="280px" className="object-cover" />
+                      ) : (
+                        <div className="bp-more-fallback">🏔️</div>
+                      )}
+                    </div>
+                    <div className="bp-more-title">{s.title}</div>
+                    {s.reading_time_minutes && <div className="bp-more-meta">{s.reading_time_minutes} min read</div>}
+                  </Link>
+                ))}
+              </div>
+              <Link href="/blog" className="bp-more-all">Browse all stories →</Link>
+            </div>
+          </section>
+        )}
+      </article>
     </>
   )
 }

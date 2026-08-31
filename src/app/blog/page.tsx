@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
+import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
@@ -31,6 +32,7 @@ interface PostCard {
   published_at: string | null
   category: string | null
   reading_time_minutes: number | null
+  author: string | null
 }
 
 export default async function BlogPage({
@@ -48,7 +50,7 @@ export default async function BlogPage({
   try {
     let query = supabase
       .from('blog_posts')
-      .select('id, title, slug, excerpt, cover_image, published_at, category, reading_time_minutes')
+      .select('id, title, slug, excerpt, cover_image, published_at, category, reading_time_minutes, author')
       .eq('is_published', true)
       .order('published_at', { ascending: false })
       .limit(30)
@@ -56,8 +58,6 @@ export default async function BlogPage({
     const { data } = await query
     posts = data
 
-    // Category pills — pulled from all published posts, not just the
-    // filtered set, so switching filters doesn't hide the other options.
     const { data: allCats } = await supabase
       .from('blog_posts')
       .select('category')
@@ -66,72 +66,101 @@ export default async function BlogPage({
     categories = Array.from(new Set((allCats || []).map(c => c.category).filter(Boolean))) as string[]
   } catch { posts = null }
 
+  // The most recent post (only when browsing "All", not a filtered
+  // category — a featured slot inside a filtered view would misrepresent
+  // what the filter actually returned) gets the large hero treatment;
+  // everything else goes in the grid below.
+  const featured = !category && posts && posts.length > 0 ? posts[0] : null
+  const rest = featured ? posts!.slice(1) : (posts || [])
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-stone-900 mb-2">Stories from the Mountains</h1>
-        <p className="text-stone-500 text-sm max-w-md mx-auto">Health benefits, recipes, and buying guides — straight from the source.</p>
+    <div>
+      {/* ── Hero ── */}
+      <div className="bl-hero">
+        <ContourLines className="bl-hero-contours" />
+        <div className="bl-hero-inner">
+          <div className="bl-eyebrow">
+            <MountainMark /> From the Source
+          </div>
+          <h1>Stories from the <em>Mountains</em></h1>
+          <p className="bl-hero-sub">Health benefits, recipes, and buying guides — written by the people who source it.</p>
+        </div>
       </div>
 
-      {categories.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-2 mb-8">
-          <Link
-            href="/blog"
-            className={`text-xs font-semibold rounded-full px-4 py-1.5 border transition-colors ${!category ? 'bg-forest-700 text-white border-forest-700' : 'bg-white text-stone-500 border-stone-200 hover:border-forest-300'}`}
-          >
-            All
-          </Link>
-          {categories.map(c => (
-            <Link
-              key={c}
-              href={`/blog?category=${encodeURIComponent(c)}`}
-              className={`text-xs font-semibold rounded-full px-4 py-1.5 border capitalize transition-colors ${category === c ? 'bg-forest-700 text-white border-forest-700' : 'bg-white text-stone-500 border-stone-200 hover:border-forest-300'}`}
-            >
-              {c.replace(/-/g, ' ')}
-            </Link>
-          ))}
-        </div>
-      )}
+      <div className="bl-body">
+        {/* ── Category pills ── */}
+        {categories.length > 0 && (
+          <div className="bl-pills">
+            <Link href="/blog" className={`bl-pill${!category ? ' active' : ''}`}>All Stories</Link>
+            {categories.map(c => (
+              <Link key={c} href={`/blog?category=${encodeURIComponent(c)}`} className={`bl-pill${category === c ? ' active' : ''}`}>
+                {c.replace(/-/g, ' ')}
+              </Link>
+            ))}
+          </div>
+        )}
 
-      {!posts || posts.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="text-4xl mb-4">✍️</div>
-          <h2 className="text-lg font-semibold text-stone-700 mb-2">Stories coming soon</h2>
-          <p className="text-stone-400 text-sm">We&apos;re writing about the mountains. Check back soon!</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {posts.map(post => (
-            <Link
-              key={post.id}
-              href={`/blog/${post.slug}`}
-              className="group flex flex-col bg-white border border-stone-100 rounded-2xl overflow-hidden hover:shadow-lg transition-all"
-            >
-              <div className="relative aspect-[16/9] bg-stone-50">
-                {post.cover_image ? (
-                  <Image src={post.cover_image} alt={post.title} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover group-hover:scale-105 transition-transform duration-300" />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-forest-100 to-earth-100 flex items-center justify-center text-4xl">🏔️</div>
-                )}
-              </div>
-              <div className="p-4 flex flex-col flex-1">
-                <div className="flex items-center gap-2 text-xs text-stone-400 mb-1">
-                  <span>{post.published_at ? formatDate(post.published_at) : ''}</span>
-                  {post.reading_time_minutes && (
-                    <>
-                      <span aria-hidden>·</span>
-                      <span>{post.reading_time_minutes} min read</span>
-                    </>
+        {!posts || posts.length === 0 ? (
+          <div className="bl-empty">
+            <div className="bl-empty-icon">🖋️</div>
+            <h2>Stories coming soon</h2>
+            <p>We&apos;re writing about the mountains. Check back soon.</p>
+          </div>
+        ) : (
+          <>
+            {/* ── Featured post ── */}
+            {featured && (
+              <Link href={`/blog/${featured.slug}`} className="bl-featured">
+                <div className="bl-featured-img">
+                  {featured.cover_image ? (
+                    <Image src={featured.cover_image} alt={featured.title} fill sizes="(max-width: 900px) 100vw, 1100px" className="object-cover" priority />
+                  ) : (
+                    <div className="bl-featured-fallback">🏔️</div>
                   )}
                 </div>
-                <h2 className="text-sm font-bold text-stone-900 mb-2 line-clamp-2 group-hover:text-forest-700 transition-colors">{post.title}</h2>
-                {post.excerpt && <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed flex-1">{post.excerpt}</p>}
-                <span className="mt-3 text-xs font-semibold text-forest-700 group-hover:text-forest-900">Read more →</span>
+                <div className="bl-featured-copy">
+                  <div className="bl-featured-eyebrow">
+                    Latest Story
+                    {featured.category && <><span aria-hidden>·</span>{featured.category.replace(/-/g, ' ')}</>}
+                  </div>
+                  <h2>{featured.title}</h2>
+                  {featured.excerpt && <p>{featured.excerpt}</p>}
+                  <div className="bl-featured-meta">
+                    {featured.published_at && <span>{formatDate(featured.published_at)}</span>}
+                    {featured.reading_time_minutes && <><span aria-hidden>·</span><span>{featured.reading_time_minutes} min read</span></>}
+                  </div>
+                </div>
+              </Link>
+            )}
+
+            {/* ── Grid ── */}
+            {rest.length > 0 && (
+              <div className="bl-grid">
+                {rest.map(post => (
+                  <Link key={post.id} href={`/blog/${post.slug}`} className="bl-card">
+                    <div className="bl-card-img">
+                      {post.cover_image ? (
+                        <Image src={post.cover_image} alt={post.title} fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+                      ) : (
+                        <div className="bl-card-fallback">🏔️</div>
+                      )}
+                    </div>
+                    <div className="bl-card-body">
+                      <div className="bl-card-meta">
+                        {post.published_at && <span>{formatDate(post.published_at)}</span>}
+                        {post.reading_time_minutes && <><span aria-hidden>·</span><span>{post.reading_time_minutes} min</span></>}
+                      </div>
+                      <h3>{post.title}</h3>
+                      {post.excerpt && <p>{post.excerpt}</p>}
+                      <span className="bl-card-cta">Read the story →</span>
+                    </div>
+                  </Link>
+                ))}
               </div>
-            </Link>
-          ))}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
