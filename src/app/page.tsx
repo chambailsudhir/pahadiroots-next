@@ -26,10 +26,30 @@ import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings()
   const siteName = settings.site_name || 'HimVeda by Pahadi Roots'
+  const title = settings.meta_title || `${siteName} — Pure Himalayan Natural Products`
+  const description = settings.meta_description ||
+    'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers.'
+  // SEO FIX: the single most important page on the site had no canonical
+  // and no OG/Twitter override — it silently inherited the layout's
+  // generic OG data, so sharing the homepage link looked no different
+  // from sharing any other page. Every other top-level page (products,
+  // regions, blog, about) already sets these; the homepage was the one
+  // gap.
   return {
-    title: settings.meta_title || `${siteName} — Pure Himalayan Natural Products`,
-    description: settings.meta_description ||
-      'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers.',
+    title,
+    description,
+    alternates: { canonical: 'https://pahadiroots.com' },
+    openGraph: {
+      title,
+      description,
+      url:  'https://pahadiroots.com',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
   }
 }
 

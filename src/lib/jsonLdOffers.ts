@@ -38,6 +38,20 @@ function availability(stock: number | null | undefined): string {
   return Number(stock ?? 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'
 }
 
+// SEO FIX: offers had no priceValidUntil — Google's Product structured-data
+// docs recommend it, and its absence is a common cause of "missing field"
+// warnings in Search Console for Product rich results. Computed fresh at
+// render time (30 days out) rather than hardcoded, so it's always correct
+// regardless of when a page was last rendered — safely inside this page's
+// existing 1-hour revalidate window (see `export const revalidate = 3600`
+// in products/[slug]/page.tsx), so the real price is never stale by more
+// than an hour even though this date says 30 days.
+function priceValidUntil(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 30)
+  return d.toISOString().slice(0, 10)
+}
+
 /**
  * Builds the JSON-LD `offers` value for a Product: an array of per-variant
  * Offer objects when variants exist, a single-element array for a variant-less
@@ -57,6 +71,7 @@ export function buildOffersList(
       name:          v.size ? `${product.name} - ${v.size}` : product.name,
       priceCurrency: 'INR',
       price:         String(v.price),
+      priceValidUntil: priceValidUntil(),
       availability:  availability(v.available_stock),
       seller:        SELLER,
       url:           productUrl,
@@ -70,6 +85,7 @@ export function buildOffersList(
     '@type':       'Offer',
     priceCurrency: 'INR',
     price:         String(displayPrice),
+    priceValidUntil: priceValidUntil(),
     availability:  inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     seller:        SELLER,
     url:           productUrl,

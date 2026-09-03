@@ -27,6 +27,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // entries below, so Google always has an entry point into the section
     // even in the rare case the posts query below fails.
     { url: `${BASE}/blog`,   lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
+    // SEO FIX: these 4 legal/policy pages existed, had real content, and
+    // (as of this same fix pass) real per-page metadata — but were never
+    // in the sitemap at all, so Google had no declared entry point to
+    // them beyond whatever internal links happen to point there (mostly
+    // just the footer). Low priority since they're not sales-driving
+    // pages, but shipping/returns policy pages do get real search volume
+    // for FMCG ("cash on delivery available", "return policy") and can
+    // build trust signals when they rank.
+    { url: `${BASE}/policies/shipping`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${BASE}/policies/returns`,  lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${BASE}/policies/privacy`,  lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${BASE}/policies/terms`,    lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
   ]
 
   // Products

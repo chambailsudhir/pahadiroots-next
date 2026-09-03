@@ -108,4 +108,19 @@ describe('sitemap()', () => {
     expect(hpEntry).toBeDefined()
     expect(new Date(hpEntry!.lastModified as string | Date).toISOString()).toBe(knownDate)
   })
+
+  it('SEO fix — includes all 4 policy pages (shipping, returns, privacy, terms), previously absent entirely', async () => {
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: {
+        from: () => ({ select: () => makeChain([], []) }),
+      },
+    }))
+
+    const { default: sitemap } = await import('@/app/sitemap')
+    const entries = await sitemap()
+
+    for (const slug of ['shipping', 'returns', 'privacy', 'terms']) {
+      expect(entries.some(e => e.url.endsWith(`/policies/${slug}`))).toBe(true)
+    }
+  })
 })
