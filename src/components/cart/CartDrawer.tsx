@@ -423,6 +423,16 @@ export default function CartDrawer({ settings }: Props) {
                   {pricing.isFreeShipping ? 'FREE' : formatPrice(pricing.shipping)}
                 </dd>
               </div>
+              {/* TRANSPARENCY FIX: pricing.codSurcharge was already being added into
+                  pricing.total (see pricingService.ts) but was never itemized anywhere
+                  on this drawer — Subtotal + Shipping silently didn't add up to Total.
+                  Amazon/Myntra-style checkouts itemize every charge; do the same here. */}
+              {pricing.codSurcharge > 0 && (
+                <div className="flex justify-between text-stone-600">
+                  <dt>COD Charges</dt>
+                  <dd>{formatPrice(pricing.codSurcharge)}</dd>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-stone-900 text-base pt-1 border-t border-stone-100">
                 <dt>Total</dt>
                 <dd>{formatPrice(pricing.total)}</dd>

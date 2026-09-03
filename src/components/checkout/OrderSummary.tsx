@@ -370,6 +370,19 @@ const OrderSummary = memo(function OrderSummary({
               {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
             </span>
           </div>
+          {/* TRANSPARENCY FIX: pricing.codSurcharge was already being added into
+              pricing.total (see pricingService.ts) but was never itemized anywhere
+              on this page — Subtotal + Shipping silently didn't add up to Total.
+              Amazon/Myntra-style checkouts itemize every charge; do the same here.
+              pricing.codSurcharge is already 0 when payMethod === 'razorpay'
+              (see pricingService.ts), so this naturally disappears when the
+              customer switches to online payment — no extra guard needed. */}
+          {pricing.codSurcharge > 0 && (
+            <div className="os-price-row">
+              <span>COD Charges</span>
+              <span>{formatPrice(pricing.codSurcharge)}</span>
+            </div>
+          )}
           {pricing.gstTotal > 0 && (
             <div className="os-price-row os-price-row--muted">
               <span>GST (inclusive)</span>

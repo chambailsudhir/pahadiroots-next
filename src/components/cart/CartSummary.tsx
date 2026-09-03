@@ -211,6 +211,16 @@ const CartSummary = memo(function CartSummary({
             ) : formatPrice(pricing.shipping)}
           </span>
         </div>
+        {/* TRANSPARENCY FIX: pricing.codSurcharge was already being added into
+            pricing.total (see pricingService.ts) but was never itemized anywhere
+            on this page — Subtotal + Shipping silently didn't add up to Total.
+            Amazon/Myntra-style checkouts itemize every charge; do the same here. */}
+        {pricing.codSurcharge > 0 && (
+          <div className={styles.row}>
+            <span>COD Charges</span>
+            <span>{formatPrice(pricing.codSurcharge)}</span>
+          </div>
+        )}
         <div className={styles.divider} />
         <div className={styles.total}>
           <span>Total</span>
