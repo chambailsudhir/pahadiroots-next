@@ -16,6 +16,12 @@ import AuthModal from '@/components/auth/AuthModal'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 
+// SEO FIX: matches the same env-var-with-fallback pattern already used in
+// sitemap.ts and robots.ts, so the Organization/WebSite JSON-LD below (and
+// generateMetadata()'s metadataBase) all agree on one source of truth for
+// the canonical site origin instead of three independently hardcoded copies.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+
 const playfair = Playfair_Display({
   variable: '--font-playfair',
   subsets: ['latin'],
@@ -59,7 +65,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const ogImage = settings.og_image || '/logo.png'
 
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'),
+    metadataBase: new URL(SITE_URL),
     title: {
       default: title,
       template: `%s | ${siteName}`,
@@ -69,7 +75,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type:        'website',
       locale:      'en_IN',
-      url:         'https://pahadiroots.com',
+      url:         SITE_URL,
       siteName,
       images: [{
         url:    ogImage,
@@ -140,22 +146,37 @@ export default async function RootLayout({
             build time; see globals.css for the matching fix). Preconnecting
             to a domain the page never actually requests wastes a DNS/TLS
             handshake for nothing. */}
-        {/* Organization JSON-LD */}
+        {/* Organization JSON-LD
+            SEO FIX (consistency/staleness): name/url/logo were hardcoded to
+            'HimVeda by Pahadi Roots' / pahadiroots.com — the exact same
+            string generateMetadata() above already sources from
+            settings.site_name with a matching fallback. Hardcoding it a
+            second time here meant this block would silently go stale the
+            day an admin renames the site in Settings, while every <title>
+            and OG tag on the site updated instantly. Now single-sourced
+            from the same settings field, same fallback, so it can't drift. */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type':    'Organization',
-              name:       'HimVeda by Pahadi Roots',
-              url:        'https://pahadiroots.com',
-              logo:       'https://pahadiroots.com/logo.png',
-              contactPoint: {
-                '@type':             'ContactPoint',
-                telephone:           settings.contact_phone || '',
-                contactType:         'customer service',
-                availableLanguage:   ['English', 'Hindi'],
-              },
+              name:       settings.site_name || 'HimVeda by Pahadi Roots',
+              url:        SITE_URL,
+              logo:       `${SITE_URL}/logo.png`,
+              // SEO FIX: an empty telephone string in ContactPoint is a
+              // known Google Rich Results / schema.org validator warning
+              // ("telephone: value is not a valid phone number") — omit the
+              // whole contactPoint when there's no real number rather than
+              // emit a guaranteed-invalid empty one.
+              ...(settings.contact_phone ? {
+                contactPoint: {
+                  '@type':             'ContactPoint',
+                  telephone:           settings.contact_phone,
+                  contactType:         'customer service',
+                  availableLanguage:   ['English', 'Hindi'],
+                },
+              } : {}),
               sameAs: [
                 // BUG FIX: same class of bug as Footer.tsx — this read
                 // instagram_url/facebook_url/youtube_url, keys with no
@@ -177,20 +198,22 @@ export default async function RootLayout({
             that's specifically what makes Google eligible to show a
             sitelinks search box directly in brand-name search results
             (e.g. searching "HimVeda"), a feature large e-commerce brands
-            commonly have. Points at the existing /search page's ?q= param. */}
+            commonly have. Points at the existing /search page's ?q= param.
+            SEO FIX (consistency): name/url now sourced from settings.site_name
+            / SITE_URL for the same reason as the Organization block above. */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type':    'WebSite',
-              name:       'HimVeda by Pahadi Roots',
-              url:        'https://pahadiroots.com',
+              name:       settings.site_name || 'HimVeda by Pahadi Roots',
+              url:        SITE_URL,
               potentialAction: {
                 '@type':    'SearchAction',
                 target: {
                   '@type':       'EntryPoint',
-                  urlTemplate:   'https://pahadiroots.com/search?q={search_term_string}',
+                  urlTemplate:   `${SITE_URL}/search?q={search_term_string}`,
                 },
                 'query-input': 'required name=search_term_string',
               },

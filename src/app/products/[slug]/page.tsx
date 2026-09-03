@@ -67,7 +67,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, related, reviewStats, reviews }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
@@ -180,6 +180,7 @@ export default async function ProductPage({ params }: Props) {
     activeVariants.map((v: any) => ({ size: v.size, price: v.price, available_stock: v.available_stock, sku: v.sku })),
     displayPrice,
     inStock,
+    settings.site_name,
   )
 
   const jsonLd: Record<string, unknown> = {
@@ -189,7 +190,12 @@ export default async function ProductPage({ params }: Props) {
     description: (product.short_description || ''),
     image:       allImages.map((i: any) => i.url),
     url:         `https://pahadiroots.com/products/${product.slug}`,
-    brand:       { '@type': 'Brand', name: 'HimVeda by Pahadi Roots' },
+    brand:       { '@type': 'Brand', name: settings.site_name || 'HimVeda by Pahadi Roots' },
+    // SEO FIX: Product structured data had no `category` — Google's Product
+    // docs list it as a recommended field (helps Search/Shopping categorize
+    // the item correctly) and it costs nothing extra to fetch since it's a
+    // single indexed lookup by the category_id every product already has.
+    ...(categoryName ? { category: categoryName } : {}),
     ...(reviewStats && reviewStats.count > 0 ? {
       aggregateRating: {
         '@type':      'AggregateRating',
@@ -726,7 +732,7 @@ async function fetchProductData(slug: string) {
 async function fetchProductDataInner(slug: string) {
   try {
     const { product: rawProduct, variants: rawVariants, images: rawImages } = await getProductBySlug(slug)
-    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [] }
+    if (!rawProduct) return { product: null, variants: [], images: [], stateData: null, categoryName: null, related: [], reviewStats: null, reviews: [] }
 
     // Normalize badges
     const badges: string[] = Array.isArray(rawProduct.badges) ? rawProduct.badges : []
@@ -735,6 +741,23 @@ async function fetchProductDataInner(slug: string) {
       badges_bestseller: badges.includes('bestseller'),
       badges_new:        badges.includes('new'),
       badges_organic:    badges.includes('organic'),
+      // BUG FIX (verified live against production schema): the `products`
+      // table has no `sku` column at all — only `sku_backup` (see the
+      // "BUG FIX ATTEMPT REVERTED" comment in lib/storeData.ts, which hit
+      // this exact gap from the other direction and left a warning not to
+      // guess column names without checking live schema first). The
+      // Product TS type's `sku` field was therefore always undefined via
+      // `select('*')`, so every read of `product.sku` (jsonLdOffers' single-
+      // offer fallback, the JSON-LD offer builder call below) silently
+      // no-op'd. Currently harmless in production — all 13 active products
+      // have at least one variant, so the variant-less fallback path never
+      // actually runs — but it's real dead code presenting as working, and
+      // will misbehave the moment a variant-less product is ever added.
+      // sku_backup is the real column holding this data; aliasing it here
+      // (matching this file's own existing pattern of aliasing renamed
+      // columns, e.g. variant `mrp` ← `original_price` below) fixes it at
+      // the one normalization point instead of at every call site.
+      sku: (rawProduct as any).sku_backup ?? null,
     }
 
     const variants = rawVariants.map((v: any) => ({
@@ -763,11 +786,20 @@ async function fetchProductDataInner(slug: string) {
     // shift (skeleton → content). Now we fetch the full review rows here in the
     // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
     // becomes a pure display component that accepts pre-fetched rows as props.
-    const [stateData, related, reviewResult] = await Promise.all([
+    const [stateData, categoryRow, related, reviewResult] = await Promise.all([
       // State data — direct lookup instead of scanning the full states list
       product.state_id
         ? anonClient.from('states').select('*').eq('id', product.state_id).maybeSingle()
             .then(({ data }) => data || null)
+        : Promise.resolve(null),
+
+      // SEO FIX: category name for Product JSON-LD's `category` field —
+      // products only stores category_id (a bare FK, no name), so this is a
+      // single indexed lookup, same targeted-fetch pattern as stateData
+      // directly above rather than a full categories table scan.
+      product.category_id
+        ? anonClient.from('categories').select('name').eq('id', product.category_id).maybeSingle()
+            .then(({ data }) => data?.name || null)
         : Promise.resolve(null),
 
       // Related: same state OR same category, exclude self, max 4 — fetched via a
@@ -809,10 +841,10 @@ async function fetchProductDataInner(slug: string) {
       }
     }
 
-    return { product, variants, images, stateData, related, reviewStats, reviews }
+    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews }
   } catch (err) {
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, related: [], reviewStats: null, reviews: [] }
+    return { product: null, variants: [], images: [], stateData: null, categoryName: null, related: [], reviewStats: null, reviews: [] }
   }
 }
 

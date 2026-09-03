@@ -32,7 +32,18 @@ interface OfferProduct {
   sku?: string | null
 }
 
-const SELLER = { '@type': 'Organization', name: 'HimVeda by Pahadi Roots' } as const
+const DEFAULT_SELLER_NAME = 'HimVeda by Pahadi Roots'
+
+// SEO FIX (consistency/staleness — same class of fix as layout.tsx's
+// Organization/WebSite JSON-LD): seller name is now an optional parameter
+// sourced from site_settings.site_name by the caller, defaulting to the
+// previous hardcoded value so nothing changes for a site that hasn't
+// renamed itself. Kept as a function (not a shared constant) since this
+// module has no access to site settings on its own — it stays a pure,
+// unit-testable function per the original extraction rationale above.
+function seller(name?: string | null) {
+  return { '@type': 'Organization', name: name || DEFAULT_SELLER_NAME } as const
+}
 
 function availability(stock: number | null | undefined): string {
   return Number(stock ?? 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'
@@ -62,8 +73,10 @@ export function buildOffersList(
   activeVariants: OfferVariant[],
   displayPrice: number | null | undefined,
   inStock: boolean,
+  sellerName?: string | null,
 ): Record<string, unknown>[] {
   const productUrl = `https://pahadiroots.com/products/${product.slug}`
+  const SELLER = seller(sellerName)
 
   if (activeVariants.length > 0) {
     return activeVariants.map(v => ({

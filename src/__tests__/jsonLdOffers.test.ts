@@ -68,6 +68,38 @@ describe('buildOffersList', () => {
   })
 })
 
+describe('buildOffersList — seller name', () => {
+  // SEO FIX (consistency/staleness): seller name is now sourced from
+  // site_settings.site_name by the caller instead of a hardcoded brand
+  // string baked into this module, matching the same fix applied to the
+  // Organization/WebSite JSON-LD in layout.tsx.
+  it('defaults every offer\'s seller to the historical brand name when none is passed', () => {
+    const offers = buildOffersList(product, [{ size: '500ml', price: 299, available_stock: 5 }], 299, true)
+    expect(offers[0].seller).toEqual({ '@type': 'Organization', name: 'HimVeda by Pahadi Roots' })
+  })
+
+  it('uses the provided site name for every offer\'s seller when one is passed', () => {
+    const offers = buildOffersList(
+      product,
+      [
+        { size: '500ml', price: 299, available_stock: 10 },
+        { size: '1L', price: 549, available_stock: 0 },
+      ],
+      299,
+      true,
+      'Custom Brand Name',
+    )
+    for (const o of offers) {
+      expect(o.seller).toEqual({ '@type': 'Organization', name: 'Custom Brand Name' })
+    }
+  })
+
+  it('falls back to the historical brand name for a blank site name (admin cleared the setting)', () => {
+    const offers = buildOffersList(product, [], 199, true, '')
+    expect(offers[0].seller).toEqual({ '@type': 'Organization', name: 'HimVeda by Pahadi Roots' })
+  })
+})
+
 describe('offersListToJsonLdValue', () => {
   it('collapses a single offer to a bare object (not a 1-element array)', () => {
     const value = offersListToJsonLdValue([{ '@type': 'Offer', price: '199' }])
