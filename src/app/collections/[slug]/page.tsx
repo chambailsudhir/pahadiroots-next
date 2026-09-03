@@ -27,15 +27,38 @@ const SORT_OPTIONS = [
 ]
 
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params
+  const sp = await searchParams
   const storeData = await getStoreData()
   const cat = storeData.categories.find(c => c.slug === slug)
-  if (!cat) return { title: 'Collection Not Found' }
+  if (!cat) return { title: 'Collection Not Found', robots: { index: false, follow: false } }
+
+  const canonicalUrl = `${BASE}/collections/${slug}`
+
+  // SEO FIX: no canonical previously — with ?sort=/?page=/?instock= all live
+  // on this route, Google could index /collections/honey?sort=price_asc and
+  // /collections/honey?page=2 as separate near-duplicate pages competing
+  // with the real category page. Same fix already applied on /products —
+  // canonical always points at the clean category URL, and any filtered/
+  // paginated variant is explicitly noindexed so it never competes.
+  const page = Math.max(1, parseInt(sp.page || '1'))
+  const isFiltered = page > 1 || sp.instock === 'true' || (sp.sort && sp.sort !== 'newest')
+
   return {
     title:       `${cat.name} — Himalayan ${cat.name} | HimVeda by Pahadi Roots`,
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
-    openGraph:   { images: cat.image_url ? [{ url: cat.image_url }] : [] },
+    alternates:  { canonical: canonicalUrl },
+    robots:      isFiltered ? { index: false, follow: true } : undefined,
+    openGraph: {
+      title:       `${cat.name} | HimVeda by Pahadi Roots`,
+      description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
+      url:         canonicalUrl,
+      type:        'website',
+      images:      cat.image_url ? [{ url: cat.image_url }] : [],
+    },
   }
 }
 
@@ -138,6 +161,54 @@ export default async function CollectionPage({ params, searchParams }: Props) {
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
+
+      {/* SEO FIX: category pages had zero structured data despite being the
+          highest-intent search landing pages on the site (e.g. "buy honey
+          online India") — every product page and region page already carries
+          BreadcrumbList. Matches the exact pattern + XSS-safe escaping used
+          on /regions/[slug]. CollectionPage + ItemList lets Google understand
+          this is a product listing, not a generic page. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'CollectionPage',
+            name: cat.name,
+            description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
+            url: `${BASE}/collections/${catSlug}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              numberOfItems: count,
+              itemListElement: products.map((p, i) => ({
+                '@type': 'ListItem',
+                position: offset + i + 1,
+                url: `${BASE}/products/${p.slug}`,
+              })),
+            },
+          })
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026'),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'BreadcrumbList',
+            itemListElement: [
+              { '@type': 'ListItem', position: 1, name: 'Home', item: `${BASE}/` },
+              { '@type': 'ListItem', position: 2, name: 'Products', item: `${BASE}/products` },
+              { '@type': 'ListItem', position: 3, name: cat.name },
+            ],
+          })
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026'),
+        }}
+      />
 
       {/* ── Hero — same box model as /products: padding-based, not fixed-height ── */}
       <div style={{ background: 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',

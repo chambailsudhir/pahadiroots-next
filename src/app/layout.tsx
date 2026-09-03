@@ -88,6 +88,13 @@ export async function generateMetadata(): Promise<Metadata> {
       follow:            true,
       googleBot: { index: true, follow: true },
     },
+    // SEO FIX: no GSC/Bing verification wired in previously — without it,
+    // there's no way to submit the sitemap for priority crawling or see
+    // indexing/Core Web Vitals data from day one. Renders nothing until an
+    // admin sets google_site_verification in Settings > SEO.
+    ...(settings.google_site_verification
+      ? { verification: { google: settings.google_site_verification } }
+      : {}),
   }
 }
 
@@ -162,6 +169,31 @@ export default async function RootLayout({
                 settings.social_twitter,
                 settings.social_pinterest,
               ].filter(Boolean),
+            }),
+          }}
+        />
+        {/* SEO FIX (WebSite + SearchAction): Organization schema was already
+            wired in, but there was no WebSite type with a SearchAction —
+            that's specifically what makes Google eligible to show a
+            sitelinks search box directly in brand-name search results
+            (e.g. searching "HimVeda"), a feature large e-commerce brands
+            commonly have. Points at the existing /search page's ?q= param. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type':    'WebSite',
+              name:       'HimVeda by Pahadi Roots',
+              url:        'https://pahadiroots.com',
+              potentialAction: {
+                '@type':    'SearchAction',
+                target: {
+                  '@type':       'EntryPoint',
+                  urlTemplate:   'https://pahadiroots.com/search?q={search_term_string}',
+                },
+                'query-input': 'required name=search_term_string',
+              },
             }),
           }}
         />

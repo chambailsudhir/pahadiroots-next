@@ -7,9 +7,19 @@ import { getSiteSettings } from '@/lib/getSiteSettings'
 import { getHeroStats } from '@/lib/heroStats'
 import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 
+// SEO FIX: no canonical, no OG/Twitter override previously — page inherited
+// the layout's generic OG image/description, so sharing this page's link
+// looked identical to sharing the homepage.
 export const metadata: Metadata = {
   title:       'Our Story — HimVeda by Pahadi Roots',
   description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
+  alternates:  { canonical: '/about' },
+  openGraph: {
+    title:       'Our Story — HimVeda by Pahadi Roots',
+    description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
+    url:         'https://pahadiroots.com/about',
+    type:        'website',
+  },
 }
 
 export const revalidate = 3600

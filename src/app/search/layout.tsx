@@ -1,8 +1,17 @@
 import type { Metadata } from 'next'
 
+// SEO FIX: this route reads real query strings directly (?q=...) with no
+// noindex directive — unlike /cart and /wishlist, which correctly noindex
+// their personal/transient pages. Every distinct search query a visitor
+// types could otherwise get indexed as its own thin-content URL, a classic
+// large-scale duplicate/thin-content problem for sites with real search
+// volume. The canonical search UI itself is still useful and linkable, so
+// it's follow:true — just not eligible to rank on its own.
 export const metadata: Metadata = {
   title: 'Search Products — HimVeda by Pahadi Roots',
   description: 'Search our full range of Himalayan natural products — spices, herbs, honey, teas, and more from the mountains of India.',
+  robots: { index: false, follow: true },
+  alternates: { canonical: '/search' },
   openGraph: {
     title: 'Search Products — HimVeda by Pahadi Roots',
     description: 'Find authentic Himalayan natural products from HimVeda by Pahadi Roots.',

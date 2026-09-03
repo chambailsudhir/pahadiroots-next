@@ -82,8 +82,20 @@ export default async function ProductPage({ params }: Props) {
   const showRelated    = isEnabled(settings.show_related_products)
 
   // Images: product_images table (full res, sorted) → fallback image_url
+  // SEO/A11y FIX: every gallery photo previously got the exact same alt
+  // text (just product.name) — product_images has no per-image caption
+  // column to draw real distinguishing text from, and inventing fake
+  // captions ("front view", "close-up") would be misleading since we don't
+  // actually know what each photo shows. Appending position ("image 2 of
+  // 4") is the honest middle ground: screen reader users navigating the
+  // gallery can tell photos apart, and it's still accurate. First image
+  // stays unnumbered since it's the one used everywhere else (cards, OG,
+  // JSON-LD) with plain product.name.
   const allImages = images.length > 0
-    ? images.map((i: any) => ({ url: i.image_url || i.url, alt: product.name }))
+    ? images.map((i: any, idx: number) => ({
+        url: i.image_url || i.url,
+        alt: images.length > 1 ? `${product.name} — image ${idx + 1} of ${images.length}` : product.name,
+      }))
     : product.image_url ? [{ url: product.image_url, alt: product.name }] : []
 
   // Active variants sorted by price
@@ -142,6 +154,23 @@ export default async function ProductPage({ params }: Props) {
   // BUG FIX (3.3): aggregateRating was hardcoded to 4.8 / 39 on every product.
   // Now wired to real review data from fetchProductData.
   // JSON-LD: only include aggregateRating when there are real reviews.
+  // SEO FIX: aggregateRating alone was wired in, but individual Review
+  // objects (with the actual reviewer/text/date) weren't — Google's
+  // Product rich-result docs list both as valid, and having real Review
+  // entries strengthens rich-result eligibility beyond just the aggregate
+  // number. Capped at 5 most recent (matches what ReviewsSection shows
+  // above the fold) so this doesn't bloat the page with dozens of reviews'
+  // full text in every response. No effect today (reviews is empty in
+  // production) — this activates automatically as real reviews come in,
+  // no further code change needed.
+  const reviewsForJsonLd = (reviews || []).slice(0, 5).map((r: any) => ({
+    '@type': 'Review',
+    reviewRating: { '@type': 'Rating', ratingValue: String(r.rating) },
+    author: { '@type': 'Person', name: r.customer_name || 'Verified Buyer' },
+    ...(r.created_at ? { datePublished: new Date(r.created_at).toISOString().slice(0, 10) } : {}),
+    ...(r.review_text ? { reviewBody: r.review_text } : {}),
+  }))
+
   // BUG FIX (MEDIUM – audit finding #5, single-Offer JSON-LD): see
   // lib/jsonLdOffers.ts for the full rationale (AggregateOffer is explicitly
   // not the right schema.org tool for size/variant pricing per Google's docs;
@@ -168,6 +197,7 @@ export default async function ProductPage({ params }: Props) {
         reviewCount:  String(reviewStats.count),
       },
     } : {}),
+    ...(reviewsForJsonLd.length > 0 ? { review: reviewsForJsonLd } : {}),
     ...(offersListToJsonLdValue(offersList) !== undefined
       ? { offers: offersListToJsonLdValue(offersList) }
       : {}),

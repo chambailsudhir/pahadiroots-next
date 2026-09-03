@@ -1,8 +1,12 @@
 import type { Metadata } from 'next'
 
+// SEO FIX: added canonical — same gap as /about, no other public page fix
+// needed here since this is a simple informational page with no OG-worthy
+// image to share.
 export const metadata: Metadata = {
   title: 'Payment Methods | HimVeda by Pahadi Roots',
   description: 'Secure payment options — UPI, Cards, Net Banking and Cash on Delivery',
+  alternates: { canonical: '/payment' },
 }
 
 export default function PaymentPage() {

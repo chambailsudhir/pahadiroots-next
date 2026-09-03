@@ -514,11 +514,25 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
   },
 }
 
+// SEO FIX: metadata was title-only — no description (Google falls back to
+// auto-extracting one, usually fine for legal pages, but a written one is
+// more reliable) and no canonical (these 4 URLs had no declared authority).
+const POLICY_DESCRIPTIONS: Record<string, string> = {
+  returns:  `${BRAND}'s return and refund policy — eligibility windows, damaged-item claims, and how refunds are processed.`,
+  shipping: `${BRAND}'s shipping policy — delivery timelines, courier partners, and coverage across India.`,
+  privacy:  `${BRAND}'s privacy policy — what data we collect, how it's used, and your rights.`,
+  terms:    `${BRAND}'s terms of service governing use of the ${BRAND} website and purchases.`,
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { type } = await params
   const policy = POLICIES[type]
-  if (!policy) return { title: 'Policy Not Found' }
-  return { title: `${policy.title} — ${BRAND}` }
+  if (!policy) return { title: 'Policy Not Found', robots: { index: false, follow: false } }
+  return {
+    title: `${policy.title} — ${BRAND}`,
+    description: POLICY_DESCRIPTIONS[type] || `${policy.title} for ${BRAND}.`,
+    alternates: { canonical: `/policies/${type}` },
+  }
 }
 
 export default async function PolicyPage({ params }: Props) {

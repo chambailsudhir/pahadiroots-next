@@ -115,6 +115,15 @@ const DEFAULTS: Partial<SiteSettings> = {
   // setting anywhere on the main site.
   google_tag_id:           '',
 
+  // SEO FIX: Google Search Console verification — needed pre-launch to
+  // submit the sitemap for priority crawling and get indexing/Core Web
+  // Vitals visibility from day one, instead of waiting for organic
+  // discovery. Empty by default (no-op) until an admin pastes the
+  // verification code GSC gives them under Settings > Ownership
+  // verification > HTML tag method (just the content= value, not the
+  // full <meta> tag).
+  google_site_verification: '',
+
   // Email — BUG FIX: admin panel's Email tab claims "Email Footer Text:
   // Appears at bottom of every outgoing email" — confirmed via grep
   // that lib/server/email.ts never referenced this setting at all.
