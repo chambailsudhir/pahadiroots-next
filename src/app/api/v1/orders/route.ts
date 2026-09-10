@@ -255,10 +255,14 @@ export async function POST(req: NextRequest) {
     <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
     <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
     <table style="width:100%;border-collapse:collapse;margin-top:12px">
+      <tr><td style="padding:6px 0;color:#555">Subtotal</td><td style="text-align:right;color:#555">₹${(order.subtotal ?? 0).toLocaleString('en-IN')}</td></tr>
+      ${(order.discount ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#2d7a3a">Discount</td><td style="text-align:right;color:#2d7a3a">−₹${(order.discount ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
+      <tr><td style="padding:6px 0;color:#555">Shipping</td><td style="text-align:right;color:#555">${(order.shippingCharge ?? 0) === 0 ? 'FREE' : '₹' + (order.shippingCharge ?? 0).toLocaleString('en-IN')}</td></tr>
+      ${(order.codSurcharge ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#555">COD Charges</td><td style="text-align:right;color:#555">₹${(order.codSurcharge ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
       <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${esc(payLabel)}</td></tr>
       <tr>
-        <td style="padding:6px 0;font-size:17px;font-weight:900;color:#1a3a1e">Total</td>
-        <td style="text-align:right;font-size:17px;font-weight:900;color:#1a3a1e">₹${order.total_amount.toLocaleString('en-IN')}</td>
+        <td style="padding:10px 0 0;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">Total</td>
+        <td style="text-align:right;padding-top:10px;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">₹${order.total_amount.toLocaleString('en-IN')}</td>
       </tr>
     </table>
   </div>

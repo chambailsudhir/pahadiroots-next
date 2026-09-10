@@ -85,21 +85,47 @@ export function getSupplyType(buyerState: string | null | undefined): SupplyType
 }
 
 export interface InvoiceTotals {
-  taxableValue: number
-  cgst:         number
-  sgst:         number
-  igst:         number
-  totalTax:     number
-  grandTotal:   number
+  taxableValue:      number
+  cgst:              number
+  sgst:              number
+  igst:              number
+  totalTax:          number
+  grandTotal:        number
+  // COD Charges broken out separately so the invoice can show it as its
+  // own line (taxable value + tax), the way Myntra shows "Platform Fee"
+  // as its own taxed line rather than folding it silently into the total.
+  codSurchargeTaxable: number
+  codSurchargeTax:     number
 }
+
+// GST rate applied to the COD handling fee. Treated as a taxable service
+// charge (not a non-taxable pass-through like shipping) — cash-on-delivery
+// convenience fees are standard-rated services under GST, and 18% is the
+// standard slab e-commerce platforms apply to service/handling fees (see
+// Myntra's own Platform Fee invoice: ₹23 = ₹19.49 taxable + ₹3.51 IGST,
+// i.e. 18%). Confirm the exact rate/HSN with your CA before relying on
+// this for filing — this is the standard default, not a certified rate
+// for your specific registration.
+export const COD_SURCHARGE_GST_RATE = 18
 
 export function computeInvoiceTotals(
   lines: InvoiceLineResult[],
   supplyType: SupplyType,
   shippingCharge = 0,
+  codSurcharge = 0,
 ): InvoiceTotals {
   const taxableValue = lines.reduce((s, l) => s + l.lineTaxableTotal, 0)
-  const totalTax     = lines.reduce((s, l) => s + l.lineTaxTotal, 0)
+  const itemTax       = lines.reduce((s, l) => s + l.lineTaxTotal, 0)
+
+  // codSurcharge (e.g. ₹50) is GST-inclusive, same as item prices — back
+  // calculate its taxable value and tax the same way computeInvoiceLine
+  // does for products, instead of treating it as an untaxed flat add-on.
+  const codSurchargeTaxable = codSurcharge > 0
+    ? codSurcharge / (1 + COD_SURCHARGE_GST_RATE / 100)
+    : 0
+  const codSurchargeTax = codSurcharge - codSurchargeTaxable
+
+  const totalTax = itemTax + codSurchargeTax
 
   return {
     taxableValue,
@@ -107,10 +133,16 @@ export function computeInvoiceTotals(
     sgst:       supplyType === 'intra' ? totalTax / 2 : 0,
     igst:       supplyType === 'inter' ? totalTax : 0,
     totalTax,
+    codSurchargeTaxable,
+    codSurchargeTax,
     // Shipping is not tax-split here — the site advertises free shipping
     // sitewide, and on the rare non-free order this matches how tax/total
     // are already computed and displayed elsewhere (shipping added after
     // the taxed subtotal, not itself broken into CGST/SGST/IGST).
-    grandTotal: taxableValue + totalTax + shippingCharge,
+    // codSurcharge IS tax-split (see codSurchargeTaxable/codSurchargeTax
+    // above) — only its taxable portion is added here, since its tax
+    // portion is already folded into totalTax. Adding the full
+    // (GST-inclusive) codSurcharge here as well would double-count that tax.
+    grandTotal: taxableValue + codSurchargeTaxable + totalTax + shippingCharge,
   }
 }

@@ -116,6 +116,7 @@ export async function GET(
       subtotal:         raw.subtotal        != null ? Number(raw.subtotal)        : undefined,
       coupon_discount:  raw.coupon_discount != null ? Number(raw.coupon_discount) : undefined,
       shipping_charge:  raw.shipping_charge != null ? Number(raw.shipping_charge) : undefined,
+      cod_surcharge:    raw.cod_surcharge   != null ? Number(raw.cod_surcharge)   : undefined,
       tax:              raw.tax             != null ? Number(raw.tax)             : undefined,
       created_at:       raw.created_at,
       tracking_number:  raw.tracking_number ?? null,

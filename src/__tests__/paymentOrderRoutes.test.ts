@@ -812,6 +812,69 @@ describe('POST /api/v1/orders — COD — confirmation email content', () => {
     expect((html.match(/<img /g) || []).length).toBe(1) // exactly one real image, not two
     expect(html).toContain('🧂')
   })
+
+  // DATA-INTEGRITY FIX regression test: the confirmation email used to show
+  // only item lines + Total, with no Subtotal/Shipping/COD Charges
+  // breakdown — meaning a COD surcharge was charged but never itemized
+  // anywhere the customer could see. This locks in the itemized breakdown.
+  it('itemizes Subtotal / Shipping / COD Charges / Total when a COD surcharge applies', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'true', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '',
+    } as any)
+    const send = mockResendSend()
+    mockCreateOrder.mockResolvedValueOnce({
+      order: {
+        id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 249, total: 249, status: 'confirmed',
+        subtotal: 100, shippingCharge: 99, codSurcharge: 50, discount: 0,
+        cartItems: [{ name: 'Shilajit', emoji: '🪨', image: null, qty: 1, price: 100 }],
+      },
+      alreadyExists: false, customerId: 'cust-uuid-001',
+    })
+
+    const res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(201)
+
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    const html = send.mock.calls[0][0].html as string
+
+    expect(html).toContain('Subtotal')
+    expect(html).toContain('₹100')
+    expect(html).toContain('COD Charges')
+    expect(html).toContain('₹50')
+    expect(html).toContain('₹99') // shipping
+    expect(html).toContain('₹249') // total_amount — must reconcile with the lines above
+  })
+
+  // Guards the defensive fallback added alongside the breakdown above: any
+  // caller (or future mock) that doesn't populate subtotal/shippingCharge/
+  // codSurcharge/discount must not crash email generation — it should
+  // degrade to showing ₹0 for the missing pieces rather than losing the
+  // entire confirmation email (this exact gap broke 3 tests once before).
+  it('does not crash the confirmation email when pricing breakdown fields are absent from the order object', async () => {
+    vi.mocked(getSiteSettings).mockResolvedValueOnce({
+      cod_enabled: 'true', order_email_enabled: 'true', loyalty_enabled: 'false',
+      loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
+      admin_notify_email: '',
+    } as any)
+    const send = mockResendSend()
+    mockCreateOrder.mockResolvedValueOnce({
+      order: {
+        id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D', total_amount: 1000, total: 1000, status: 'confirmed',
+        cartItems: [{ name: 'Himalayan Honey', emoji: '🍯', image: null, qty: 1, price: 1000 }],
+        // subtotal/shippingCharge/codSurcharge/discount intentionally omitted
+      },
+      alreadyExists: false, customerId: 'cust-uuid-001',
+    })
+
+    const res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(201)
+
+    await vi.waitFor(() => expect(send).toHaveBeenCalled())
+    const html = send.mock.calls[0][0].html as string
+    expect(html).toContain('₹1,000') // total_amount still renders correctly
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

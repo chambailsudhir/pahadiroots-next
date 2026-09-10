@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
-import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals } from '@/lib/invoiceGst'
+import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals, COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
 import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -27,6 +27,7 @@ interface Order {
   total_amount?: number
   subtotal?: number
   shipping_charge?: number
+  cod_surcharge?: number
   discount_amount?: number
   tax?: number
   created_at?: string
@@ -592,6 +593,7 @@ function SuccessContent() {
           const total    = order.total_amount || 0
           const sub      = order.subtotal || total
           const ship     = order.shipping_charge || 0
+          const codCharge = order.cod_surcharge || 0
           const disc     = order.discount_amount || 0
           const tax      = order.tax || 0
           const trackNum = order.tracking_number || ''
@@ -657,6 +659,7 @@ function SuccessContent() {
                   <span className="oc-sum-lbl">Shipping</span>
                   <span className={`oc-sum-val${ship === 0 ? ' oc-free-ship' : ''}`}>{ship === 0 ? '🎉 FREE' : `₹${ship}`}</span>
                 </div>
+                {codCharge > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl">COD Charges</span><span className="oc-sum-val">₹{codCharge.toLocaleString('en-IN')}</span></div>}
                 <div className="oc-sum-row total"><span>Total Paid</span><span>₹{total.toLocaleString('en-IN')}</span></div>
               </div>
 
@@ -732,7 +735,7 @@ function SuccessContent() {
                     quantity:     it.qty ?? it.quantity ?? 1,
                     priceInclGst: it.price ?? it.price_at_time ?? 0,
                   }))
-                  const totals = computeInvoiceTotals(lines, supplyType, ship)
+                  const totals = computeInvoiceTotals(lines, supplyType, ship, codCharge)
 
                   return (
                     <>
@@ -797,11 +800,38 @@ function SuccessContent() {
                               <td>₹{l.lineTotal.toFixed(2)}</td>
                             </tr>
                           ))}
+                          {/* COD Charges as its own taxed line — same pattern Myntra uses for
+                              its "Platform Fee" line (own taxable value + GST% + tax split),
+                              not an untaxed pass-through folded silently into the total. */}
+                          {codCharge > 0 && (
+                            <tr>
+                              <td>{lines.length + 1}</td>
+                              <td>COD Charges</td>
+                              <td>—</td>
+                              <td>1</td>
+                              <td>₹{codCharge.toFixed(2)}</td>
+                              <td>₹{totals.codSurchargeTaxable.toFixed(2)}</td>
+                              <td>{COD_SURCHARGE_GST_RATE}%</td>
+                              {supplyType === 'intra' ? (
+                                <>
+                                  <td>₹{(totals.codSurchargeTax / 2).toFixed(2)}</td>
+                                  <td>₹{(totals.codSurchargeTax / 2).toFixed(2)}</td>
+                                </>
+                              ) : (
+                                <td>₹{totals.codSurchargeTax.toFixed(2)}</td>
+                              )}
+                              <td>₹{codCharge.toFixed(2)}</td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
 
                       <div className="inv-totals">
-                        <div><span>Taxable Value</span><span>₹{totals.taxableValue.toFixed(2)}</span></div>
+                        {/* Combined taxable value = products + COD Charges (see
+                            computeInvoiceTotals) so this + CGST/SGST/IGST below
+                            reconciles to Grand Total without re-listing COD
+                            Charges a second time as an untaxed line. */}
+                        <div><span>Taxable Value</span><span>₹{(totals.taxableValue + totals.codSurchargeTaxable).toFixed(2)}</span></div>
                         {supplyType === 'intra' ? (
                           <>
                             <div><span>CGST</span><span>₹{totals.cgst.toFixed(2)}</span></div>

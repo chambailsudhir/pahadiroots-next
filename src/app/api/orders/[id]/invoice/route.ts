@@ -16,6 +16,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
+import { COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
 
 function fail(status: number, msg: string) {
   return new NextResponse(msg, { status, headers: { 'Content-Type': 'text/plain' } })
@@ -102,8 +103,26 @@ export async function GET(
     const subtotal       = items.reduce((s, i) => s + i.total, 0)
     const discount       = Number(o.coupon_discount)  || 0
     const shipping       = Number(o.shipping_charge)  || 0
-    const tax            = Number(o.tax)              || 0
-    const grandTotal     = Number(o.total_amount)     || subtotal - discount + shipping + tax
+    // DATA-INTEGRITY FIX: order.cod_surcharge is now persisted per-order
+    // (previously only folded invisibly into total_amount). Treated as a
+    // GST-inclusive taxable service charge — same back-calculation as
+    // computeInvoiceTotals in invoiceGst.ts — not an untaxed pass-through
+    // like shipping, matching how Myntra breaks out its own "Platform Fee"
+    // as a taxed line rather than a flat add-on.
+    const codSurcharge       = Number(o.cod_surcharge) || 0
+    const codSurchargeTax    = codSurcharge > 0 ? codSurcharge - codSurcharge / (1 + COD_SURCHARGE_GST_RATE / 100) : 0
+    // `tax` here is informational only (shown as its own line below) — it is
+    // NOT added into grandTotal. subtotal and codSurcharge are already
+    // GST-inclusive gross amounts (they embed their own tax), so adding tax
+    // again on top would double-count it. PRE-EXISTING BUG FIX: the old
+    // fallback formula (`subtotal - discount + shipping + tax`) already had
+    // this double-count for item tax; fixed here rather than extended to
+    // cod tax too. This fallback only fires when total_amount is
+    // missing/0, which shouldn't happen for a real committed order — the
+    // authoritative Number(o.total_amount) is what's actually used almost
+    // always — but it must still be arithmetically correct.
+    const tax            = (Number(o.tax) || 0) + codSurchargeTax
+    const grandTotal     = Number(o.total_amount)     || subtotal - discount + shipping + codSurcharge
     // BUG FIX: escape every user-controlled value before HTML interpolation.
     // Raw profile fields (first_name, last_name, phone) come from the customers
     // table and are user-editable via POST /api/profile with no HTML stripping.
@@ -266,6 +285,7 @@ export async function GET(
   <div class="trow"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
   ${discount > 0 ? `<div class="trow disc"><span>Discount</span><span>- ${fmt(discount)}</span></div>` : ''}
   ${shipping > 0 ? `<div class="trow"><span>Shipping</span><span>${fmt(shipping)}</span></div>` : ''}
+  ${codSurcharge > 0 ? `<div class="trow"><span>COD Charges</span><span>${fmt(codSurcharge)}</span></div>` : ''}
   ${tax > 0 ? `<div class="trow"><span>Tax</span><span>${fmt(tax)}</span></div>` : ''}
   <div class="trow grand"><span>Total</span><span>${fmt(grandTotal)}</span></div>
 </div>

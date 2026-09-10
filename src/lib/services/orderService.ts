@@ -260,6 +260,12 @@ export interface CreatedOrder {
   total_amount: number
   total:        number
   status:       string
+  // Pricing breakdown — lets the confirmation email itemize Subtotal /
+  // Shipping / COD Charges instead of only showing Total.
+  subtotal:       number
+  shippingCharge: number
+  codSurcharge:   number
+  discount:       number
   cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
   // Guest-safe capability token for the order-success confirmation page —
   // null when token generation failed (non-fatal) or for the idempotency
@@ -291,6 +297,13 @@ export async function createOrder(
         total_amount: existing.total_amount,
         total:        existing.total_amount,
         status:       existing.order_status,
+        // Not needed — email (the only reader of these) is skipped when
+        // alreadyExists is true. Zeroed rather than omitted to satisfy
+        // CreatedOrder's type without implying these are real values.
+        subtotal:       0,
+        shippingCharge: 0,
+        codSurcharge:   0,
+        discount:       0,
         cartItems:    [], // not needed — email is skipped when alreadyExists is true
         confirmationToken: existing.confirmation_token ?? null,
       },
@@ -853,6 +866,14 @@ export async function createOrder(
       p_idempotency_key:          input.idempotencyKey,
       p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
       p_items:                    rpcItems,
+      // DATA INTEGRITY FIX: pricing.codSurcharge was already being charged
+      // (folded into p_total_amount) but was never persisted as its own
+      // value — no page reading this order back (invoice, "My Orders",
+      // admin order detail, confirmation emails) could ever show it as a
+      // line item, only the opaque total. Snapshotting it here means those
+      // surfaces can now itemize it AND it stays correct historically even
+      // if settings.cod_surcharge_amount changes later.
+      p_cod_surcharge:            pricing.codSurcharge,
       p_shipping_address:         {
         // BUG FIX (proper Amazon/Myntra-style fix, not just the earlier
         // "stop overwriting the account" patch): this JSON is the only
@@ -976,6 +997,14 @@ export async function createOrder(
       total_amount: newOrder!.total_amount,
       total:        newOrder!.total_amount,
       status:       newOrder!.order_status,
+      // Pricing breakdown alongside the order — lets orders/route.ts build
+      // a fully itemized confirmation email (Subtotal / Shipping / COD
+      // Charges / Total) instead of only showing item lines + Total, which
+      // silently didn't add up whenever a COD surcharge applied.
+      subtotal:        pricing.subtotal,
+      shippingCharge:  pricing.shipping,
+      codSurcharge:    pricing.codSurcharge,
+      discount:        pricing.discount,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
         emoji: i.emoji ?? '🌿',

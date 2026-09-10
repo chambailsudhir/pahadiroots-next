@@ -51,6 +51,7 @@ type OrderDetail = Record<string, unknown> & {
   subtotal?:        number
   coupon_discount?: number
   shipping_charge?: number
+  cod_surcharge?:   number
   tax?:             number
   created_at:       string
   shipping_address?: Record<string, string>
@@ -281,6 +282,15 @@ export default function OrderDetailPage() {
             <div className={styles.odPriceRow}>
               <span>Shipping</span>
               <span>{order.shipping_charge === 0 ? 'FREE' : formatCurrency(order.shipping_charge)}</span>
+            </div>
+          )}
+          {/* TRANSPARENCY / DATA-INTEGRITY FIX: order.cod_surcharge is now
+              persisted per-order — without this line Subtotal + Shipping
+              silently didn't add up to Total Paid on COD orders. */}
+          {(order.cod_surcharge || 0) > 0 && (
+            <div className={styles.odPriceRow}>
+              <span>COD Charges</span>
+              <span>{formatCurrency(order.cod_surcharge!)}</span>
             </div>
           )}
           <hr className={styles.odPriceDivider} />
