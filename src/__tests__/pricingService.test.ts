@@ -398,3 +398,54 @@ describe('calcPriceSummary — edge cases', () => {
     expect(result.total).toBeGreaterThanOrEqual(0)
   })
 })
+
+// UI FEATURE: MRP Total / Discount on MRP — the "was ₹X" product-level
+// discount shown above Subtotal in the cart drawer, cart page, and
+// checkout summary (distinct from a coupon discount, which is applied on
+// top of subtotal separately).
+describe('calcPriceSummary — MRP total / discount on MRP', () => {
+  it('mrpTotal sums mrp*qty, mrpDiscount is the gap to subtotal', () => {
+    // default makeItem: price=200, mrp=250
+    const items  = [makeItem({ price: 200, mrp: 250, qty: 2 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.subtotal).toBe(400)     // 200*2
+    expect(result.mrpTotal).toBe(500)     // 250*2
+    expect(result.mrpDiscount).toBe(100)  // 500-400
+  })
+
+  it('mrpDiscount is 0 when mrp equals price (no product-level discount)', () => {
+    const items  = [makeItem({ price: 200, mrp: 200, qty: 1 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.mrpTotal).toBe(200)
+    expect(result.mrpDiscount).toBe(0)
+  })
+
+  it('mrpDiscount is never negative even if mrp is (incorrectly) set below price', () => {
+    const items  = [makeItem({ price: 200, mrp: 150, qty: 1 })]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    // mrpTotal falls back to price (not the bogus lower mrp), so
+    // mrpTotal >= subtotal always holds and mrpDiscount is never negative.
+    expect(result.mrpTotal).toBe(200)
+    expect(result.mrpDiscount).toBe(0)
+  })
+
+  it('sums correctly across a multi-item cart with mixed discounts', () => {
+    const items = [
+      makeItem({ variantId: 'v1', price: 200, mrp: 250, qty: 2 }), // mrp 500, price 400
+      makeItem({ variantId: 'v2', price: 100, mrp: 100, qty: 1 }), // mrp 100, price 100 (no discount)
+    ]
+    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    expect(result.subtotal).toBe(500)     // 400+100
+    expect(result.mrpTotal).toBe(600)     // 500+100
+    expect(result.mrpDiscount).toBe(100)
+  })
+
+  it('mrpTotal and mrpDiscount do not affect total — additive display fields only', () => {
+    const items    = [makeItem({ price: 200, mrp: 250, qty: 1 })]
+    const withMrp  = calcPriceSummary(items, DEFAULT_SETTINGS, null)
+    const noMrp    = calcPriceSummary([makeItem({ price: 200, mrp: 200, qty: 1 })], DEFAULT_SETTINGS, null)
+    // Same subtotal (200) → same total, regardless of what mrp is set to.
+    expect(withMrp.total).toBe(noMrp.total)
+  })
+})
+

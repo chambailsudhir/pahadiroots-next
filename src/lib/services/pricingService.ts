@@ -4,6 +4,8 @@ import { getServiceClient } from '@/lib/supabase'
 
 export interface PriceSummary {
   subtotal:        number   // sum of (price * qty)
+  mrpTotal:        number   // sum of (mrp * qty) — pre-discount "was" price
+  mrpDiscount:     number   // mrpTotal - subtotal — product-level discount, distinct from a coupon
   discount:        number   // coupon discount
   shipping:        number   // 0 or flat charge
   gstTotal:        number   // total GST included in items
@@ -40,6 +42,13 @@ export function calcPriceSummary(
 
   const subtotal = Math.round(items.reduce((sum, item) => sum + item.price * item.qty, 0))
 
+  // MRP Total / Discount on MRP — the product-level "was ₹X, now ₹Y" discount,
+  // distinct from a coupon discount. mrp is already on CartItem for every item
+  // (falls back to price itself for items with no mrp set, so mrpDiscount is
+  // never negative and mrpTotal is never less than subtotal).
+  const mrpTotal    = Math.round(items.reduce((sum, item) => sum + Math.max(item.mrp, item.price) * item.qty, 0))
+  const mrpDiscount = Math.max(0, mrpTotal - subtotal)
+
   const discount = coupon ? coupon.discount : 0
 
   const afterDiscount = Math.max(0, subtotal - discount - loyaltyDiscount)
@@ -55,12 +64,10 @@ export function calcPriceSummary(
     ? Math.round(afterDiscount * prepaidPct / 100)
     : 0
 
-  // Flat COD handling fee — folded straight into `total`, deliberately not
-  // itemized as its own checkout line (matches how the prepaid discount is
-  // instead framed as "Pay Online — Save 5%" rather than "COD +₹X fee").
-  // Still returned on the summary object so admin-side reporting (order
-  // totals, margin calc) can see it if ever needed — just not rendered as a
-  // separate line in the checkout UI.
+  // Flat COD handling fee — folded into `total`. Shown as its own "COD
+  // Charges" line in the cart drawer, cart page, and checkout summary (see
+  // CartDrawer.tsx / CartSummary.tsx / OrderSummary.tsx) — no longer a
+  // hidden add-on; it's itemized like everything else.
   const codSurcharge = paymentMethod === 'cod' ? Math.round(codSurchargeAmt) : 0
 
   // BUG FIX: total could go negative if an admin sets prepaid_discount_pct > 100
@@ -71,6 +78,8 @@ export function calcPriceSummary(
 
   return {
     subtotal,
+    mrpTotal,
+    mrpDiscount,
     discount,
     loyaltyDiscount,
     shipping,

@@ -193,6 +193,22 @@ const CartSummary = memo(function CartSummary({
 
       {/* Price breakdown */}
       <div className={styles.prices}>
+        {/* MRP Total / Discount on MRP — product-level "was ₹X" discount,
+            shown separately from the coupon discount below. mrp falls back
+            to price on items with no mrp set, so this line only appears
+            when there's a real saving to show. */}
+        {pricing.mrpDiscount > 0 && (
+          <div className={styles.row}>
+            <span>MRP Total</span>
+            <span>{formatPrice(pricing.mrpTotal)}</span>
+          </div>
+        )}
+        {pricing.mrpDiscount > 0 && (
+          <div className={`${styles.row} ${styles.rowGreen}`}>
+            <span>Discount on MRP</span>
+            <span>−{formatPrice(pricing.mrpDiscount)}</span>
+          </div>
+        )}
         <div className={styles.row}>
           <span>Subtotal ({totalQty} item{totalQty > 1 ? 's' : ''})</span>
           <span>{formatPrice(pricing.subtotal)}</span>
@@ -221,14 +237,21 @@ const CartSummary = memo(function CartSummary({
             <span>{formatPrice(pricing.codSurcharge)}</span>
           </div>
         )}
+        {/* GST as a real line item (item prices are GST-inclusive, so this
+            is informational, not additive — matches how it's shown at
+            checkout in OrderSummary.tsx) instead of the old footnote-only
+            "* Prices include GST" text with no amount. */}
+        {pricing.gstTotal > 0 && (
+          <div className={styles.row}>
+            <span>GST (inclusive)</span>
+            <span>{formatPrice(pricing.gstTotal)}</span>
+          </div>
+        )}
         <div className={styles.divider} />
         <div className={styles.total}>
           <span>Total</span>
           <span>{formatPrice(pricing.total)}</span>
         </div>
-        {pricing.gstTotal > 0 && (
-          <div className={styles.gstNote}>* Prices include GST</div>
-        )}
         {pricing.discount > 0 && (
           // A5: aria-hidden on 🎉 — the saving amount text is the meaningful content
           <div className={styles.savePill}>

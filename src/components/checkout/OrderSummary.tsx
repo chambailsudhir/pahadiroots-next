@@ -341,6 +341,19 @@ const OrderSummary = memo(function OrderSummary({
 
         {/* Price table */}
         <div className="os-price-table">
+          {/* MRP Total / Discount on MRP — see pricingService.ts / CartSummary.tsx for the same pattern */}
+          {pricing.mrpDiscount > 0 && (
+            <div className="os-price-row">
+              <span>MRP Total</span>
+              <span>{formatPrice(pricing.mrpTotal)}</span>
+            </div>
+          )}
+          {pricing.mrpDiscount > 0 && (
+            <div className="os-price-row os-price-row--green">
+              <span>Discount on MRP</span>
+              <span>−{formatPrice(pricing.mrpDiscount)}</span>
+            </div>
+          )}
           <div className="os-price-row">
             <span>Subtotal</span>
             <span>{formatPrice(pricing.subtotal)}</span>
@@ -386,7 +399,7 @@ const OrderSummary = memo(function OrderSummary({
           {pricing.gstTotal > 0 && (
             <div className="os-price-row os-price-row--muted">
               <span>GST (inclusive)</span>
-              <span>₹{pricing.gstTotal}</span>
+              <span>{formatPrice(pricing.gstTotal)}</span>
             </div>
           )}
 

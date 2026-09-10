@@ -407,6 +407,19 @@ export default function CartDrawer({ settings }: Props) {
              * <dl> wrapping <div>s containing <dt>/<dd> pairs is valid HTML5.
              */}
             <dl className="space-y-1.5 text-sm">
+              {/* MRP Total / Discount on MRP — see CartSummary.tsx for the same pattern */}
+              {pricing.mrpDiscount > 0 && (
+                <div className="flex justify-between text-stone-600">
+                  <dt>MRP Total</dt>
+                  <dd>{formatPrice(pricing.mrpTotal)}</dd>
+                </div>
+              )}
+              {pricing.mrpDiscount > 0 && (
+                <div className="flex justify-between text-forest-600">
+                  <dt>Discount on MRP</dt>
+                  <dd>−{formatPrice(pricing.mrpDiscount)}</dd>
+                </div>
+              )}
               <div className="flex justify-between text-stone-600">
                 <dt>Subtotal</dt>
                 <dd>{formatPrice(pricing.subtotal)}</dd>
@@ -431,6 +444,12 @@ export default function CartDrawer({ settings }: Props) {
                 <div className="flex justify-between text-stone-600">
                   <dt>COD Charges</dt>
                   <dd>{formatPrice(pricing.codSurcharge)}</dd>
+                </div>
+              )}
+              {pricing.gstTotal > 0 && (
+                <div className="flex justify-between text-stone-600">
+                  <dt>GST (inclusive)</dt>
+                  <dd>{formatPrice(pricing.gstTotal)}</dd>
                 </div>
               )}
               <div className="flex justify-between font-bold text-stone-900 text-base pt-1 border-t border-stone-100">
