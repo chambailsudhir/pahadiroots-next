@@ -55,7 +55,24 @@ export function checkCsrf(req: NextRequest): NextResponse | null {
   const origin  = req.headers.get('origin')
   const referer = req.headers.get('referer')
 
-  const source = origin || (referer ? new URL(referer).origin : null)
+  // BUG FIX (live bare 500 with no JSON body, no logger trace — order-success's
+  // markCartConverted() fires via navigator.sendBeacon() right as the page
+  // loads, and beacon requests are known to occasionally carry a malformed or
+  // truncated Referer header around page-unload/navigation timing). `new
+  // URL(referer)` had no error handling: a malformed-but-present referer threw
+  // synchronously here, BEFORE either calling route's own try/catch even
+  // starts (checkCsrf always runs first) — Next.js then returns its own
+  // generic, unstructured 500 with none of this app's usual error JSON or
+  // logging. checkCsrf gates every unauthenticated request to two routes
+  // (orders, actions); it should never crash on attacker- or browser-supplied
+  // input, only ever return an explicit allow/deny. A referer that fails to
+  // parse is treated the same as a missing one (falls through to the
+  // no-source branch below) rather than taking down the whole request.
+  let refererOrigin: string | null = null
+  if (referer) {
+    try { refererOrigin = new URL(referer).origin } catch { refererOrigin = null }
+  }
+  const source = origin || refererOrigin
   if (!source) {
     // No origin header at all — only safe to allow in non-production (e.g. curl in dev)
     if (process.env.NODE_ENV !== 'production') return null
