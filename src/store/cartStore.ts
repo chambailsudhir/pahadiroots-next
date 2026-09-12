@@ -218,7 +218,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name:    'pr-cart',
-      version: 3,  // bumped: strips maxQty from persisted items (security fix)
+      version: 4,  // bumped: coerces productId/variantId to strings (see migrate below)
       skipHydration: true,
       // FIX: localStorage quota guard. On iOS Safari under storage pressure,
       // localStorage.setItem() throws a QuotaExceededError silently — Zustand's
@@ -269,7 +269,23 @@ export const useCartStore = create<CartStore>()(
       // Migrate persisted state across schema versions.
       // v1: no partialize — coupon may exist in old localStorage, drop it.
       // v2: items persisted with maxQty — strip it on load.
-      // v3: items persisted without maxQty (current).
+      // v3: items persisted without maxQty.
+      // v4: items persisted with productId/variantId possibly still numbers
+      //     from before every add-to-cart call site wrapped them in
+      //     String(...) — coerce on load (current).
+      //
+      // BUG FIX (live "Expected string, received number" 400 at checkout):
+      // CartItem.productId/variantId are typed `string` at compile time, but
+      // that guarantee doesn't reach data that was already sitting in
+      // localStorage from an older build — TypeScript can't retroactively
+      // fix bytes on disk. A cart item added before the String(...) wrapping
+      // existed could carry a raw number for either field indefinitely
+      // (this store persists across every deploy), and the order API's
+      // runtime Zod validation correctly rejects that — the type was never
+      // actually enforced, just assumed. Coercing here fixes it at the
+      // source so it's consistent everywhere the cart is read (checkout
+      // payload, cart page keys, dedup-by-variantId checks), not just the
+      // one call site that happened to submit the order.
       //
       // Bug-fix: the original fromVersion < 2 branch returned early, so a user
       // upgrading directly from v1 → v3 (never having run v2) would have their
@@ -295,6 +311,19 @@ export const useCartStore = create<CartStore>()(
               void _mq
               return rest
             }),
+          }
+        }
+
+        // v3 → v4: coerce productId/variantId to strings on every persisted item
+        if (fromVersion < 4) {
+          const items = (state.items as Array<Record<string, unknown>> | undefined) ?? []
+          state = {
+            ...state,
+            items: items.map(item => ({
+              ...item,
+              productId: item.productId != null ? String(item.productId) : item.productId,
+              variantId: item.variantId != null ? String(item.variantId) : item.variantId,
+            })),
           }
         }
 

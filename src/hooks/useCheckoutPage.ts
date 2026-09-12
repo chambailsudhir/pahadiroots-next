@@ -954,7 +954,19 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           label:   addr.label,
         },
         customer_email:          email || user?.email || '',
-        items:                   items.map(i => ({ productId: i.productId, variantId: i.variantId, qty: i.qty })),
+        // BUG FIX (live "Expected string, received number" 400 on checkout):
+        // CartItem.productId/variantId are typed `string`, but that's compile-time
+        // only — the cart is a *persisted* Zustand store (localStorage, survives
+        // deploys), and older items added before every add-to-cart call site was
+        // updated to wrap these in String(...) can still be sitting in a
+        // returning customer's browser as raw numbers. The server's Zod schema
+        // then rejects the whole order with no indication of which item, since
+        // this is the actual API boundary — never trust a persisted client value
+        // to still match its TS type. Coerced here as the guaranteed fix; the
+        // cart store's own migration (see cartStore.ts v4) cleans the stored
+        // data itself so the rest of the app (cart page, dedup checks) is
+        // consistent too, but this line is what actually unblocks checkout.
+        items: items.map(i => ({ productId: String(i.productId), variantId: String(i.variantId), qty: i.qty })),
         payment_method:          payMethod,
         coupon_code:             coupon?.code,
         idempotency_key:         orderKey,
