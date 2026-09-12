@@ -27,6 +27,41 @@
  */
 
 import { captureError, logger } from '@/lib/logger'
+import { getServiceClient } from '@/lib/supabase'
+
+// BUG FIX (defense-in-depth): checkRateLimitKv() previously failed OPEN
+// (allowed every request, no real limiting) whenever Upstash env vars were
+// unavailable at runtime. That's been the confirmed live state in production
+// — UPSTASH_REDIS_REST_URL/TOKEN show as configured in Vercel's dashboard,
+// but a documented Vercel platform bug around "Sensitive" environment
+// variables means the value doesn't reliably reach the function at runtime
+// (see project notes; also reported independently on Vercel's own community
+// forum with the identical symptom — dashboard shows configured, runtime
+// reads empty). Waiting on that to be fixed on the dashboard side would
+// leave orders/coupons/payments with zero real rate-limit protection in the
+// meantime, so this adds a genuine Postgres-backed fallback (rate_limit_check
+// RPC, migration add_db_rate_limit_fallback) rather than just failing open.
+// Same fixed-window semantics as the Upstash path (INCR + EXPIRE NX),
+// verified atomic and correct via direct SQL testing before being wired in
+// here. This runs whenever KV is unavailable OR unhealthy — not just when
+// unconfigured — so a transient Upstash outage gets real protection too, not
+// just a logged warning.
+async function checkRateLimitDb(key: string, limit: number, windowSec: number): Promise<boolean> {
+  try {
+    const db = getServiceClient()
+    const { data, error } = await db.rpc('rate_limit_check', {
+      p_key: key, p_limit: limit, p_window_sec: windowSec,
+    })
+    if (error) {
+      logger.metric('kv.db_fallback.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key })
+      return true // DB fallback itself unhealthy — fail-open as a last resort, same as the KV path
+    }
+    return data as boolean
+  } catch {
+    logger.metric('kv.db_fallback.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key })
+    return true
+  }
+}
 
 export async function checkRateLimitKv(
   key:      string,
@@ -49,7 +84,8 @@ export async function checkRateLimitKv(
         },
       )
     }
-    return true // fail-open: middleware general limit still applies
+    // Real protection via Postgres instead of failing open outright.
+    return checkRateLimitDb(key, limit, windowSec)
   }
 
   try {
@@ -73,7 +109,8 @@ export async function checkRateLimitKv(
         status: res.status,
       })
       logger.warn('[rateLimitKv] KV responded with non-OK status', { status: res.status })
-      return true // KV unhealthy — fail-open
+      // KV unhealthy — real protection via Postgres instead of failing open.
+      return checkRateLimitDb(key, limit, windowSec)
     }
 
     const result = await res.json() as [[string, number], [string, number]]
@@ -85,6 +122,7 @@ export async function checkRateLimitKv(
       key_prefix: key.split(':')[2] ?? key,
       reason:     isTimeout ? 'timeout' : 'network',
     })
-    return true // fail-open
+    // KV unreachable — real protection via Postgres instead of failing open.
+    return checkRateLimitDb(key, limit, windowSec)
   }
 }
