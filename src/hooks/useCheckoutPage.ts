@@ -977,14 +977,30 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        const dbData = await safeJsonParse<{ order_number: string; confirmation_token?: string }>(dbRes)
+        const dbData = await safeJsonParse<{
+          order_number: string; confirmation_token?: string
+          details?: Record<string, string[] | undefined>
+        }>(dbRes)
         if (!dbRes.ok) {
           // BUG FIX: dbData.error is now only populated when the body genuinely
           // parsed as JSON with that field. When the server/platform returned
           // something else entirely (HTML error page, empty body, etc.),
           // dbData is `{}` and we fall through to a clean, actionable message
           // instead of a raw parser error.
-          throw new Error(dbData.error || `Order save failed (${dbRes.status}). Please try again.`)
+          //
+          // BUG FIX (dead-end error message): the server's 400 response has
+          // always included `details` — a per-field breakdown from the Zod
+          // schema (e.g. { "address.pincode": ["Invalid 6-digit pincode"] })
+          // — but this branch discarded it and showed the customer a bare
+          // "Invalid request" with no way to know what to fix. Surface the
+          // first concrete field error when present, so the customer (and
+          // support, reading a screenshot) can actually act on it.
+          const firstFieldError = dbData.details
+            ? Object.values(dbData.details).flat().find(Boolean)
+            : undefined
+          throw new Error(
+            firstFieldError || dbData.error || `Order save failed (${dbRes.status}). Please try again.`
+          )
         }
         const orderNumber = dbData.order_number || ''
         trackOrderPlaced(orderNumber, pricingTotal, 'cod')

@@ -59,7 +59,15 @@ export async function POST(req: NextRequest) {
     const body   = await req.json()
     const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten().fieldErrors }, { status: 400 })
+      // BUG FIX (observability): this branch previously returned the field
+      // errors to the client but never logged them server-side. Every rejected
+      // order silently vanished from Vercel logs with zero trace — impossible
+      // to diagnose from the dashboard, only from the client's console. Now
+      // logged as a structured warning so real failures are visible in
+      // Vercel function logs going forward.
+      const fieldErrors = parsed.error.flatten().fieldErrors
+      logger.warn('orders: schema validation failed', { action: 'orders.post.validate', fieldErrors })
+      return NextResponse.json({ error: 'Invalid request', details: fieldErrors }, { status: 400 })
     }
 
     const d = parsed.data
