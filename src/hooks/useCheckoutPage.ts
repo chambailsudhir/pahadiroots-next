@@ -302,6 +302,22 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const storeReady = useCartStore(selectHasHydrated)
   const [payMethod,      setPayMethod]      = useState<'razorpay' | 'cod'>('cod')
   const [placing,        setPlacing]        = useState(false)
+  // BUG FIX (live self-inflicted 429 on order placement): `placing` (state)
+  // was checked nowhere at the top of handlePlace, and even if it had been,
+  // React state updates are async — two calls to handlePlace in the same
+  // synchronous tick (checkout has two submit CTAs — OrderSummary's inline
+  // button and CheckoutClient's mobile sticky-bar button — both wired
+  // directly to handlePlace with no shared disabled-state check between
+  // them) would both read the pre-update `placing` value and both proceed.
+  // This was invisible for months because the order API's own idempotency
+  // key silently deduped the resulting double order row — but the rate
+  // limiter runs BEFORE that dedup logic and counts each attempt
+  // separately, so a plain double-click (or both CTAs firing near-
+  // simultaneously) could burn 2 of the tight 3-per-60s per-phone budget on
+  // a single "legitimate" checkout attempt. A ref is synchronous — reading
+  // and setting it happens in the same tick, unlike state — so it actually
+  // blocks the second call.
+  const placingRef = useRef(false)
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   // BUG FIX (CRITICAL — found via live report: "Loading payment..." stuck
   // forever): the Razorpay <Script>'s onError handler only logged to the
@@ -927,6 +943,15 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   }, [])
 
   const handlePlace = useCallback(async () => {
+    // BUG FIX (live self-inflicted 429 — see placingRef declaration above for
+    // the full incident writeup): synchronous guard against two near-
+    // simultaneous invocations (checkout's two submit CTAs, or a fast
+    // double-click) both slipping through before React's `placing` state
+    // update is visible. Must be checked and set before anything else,
+    // including validation — a second call must bail out immediately, not
+    // after re-running validation.
+    if (placingRef.current) return
+    placingRef.current = true
     const required = ['name','phone','flat','city','state','pincode'] as const
     setTouched(prev => { const n={...prev}; required.forEach(f => { n[f]=true }); return n })
     const fieldLabels: Record<string, string> = {
@@ -934,11 +959,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       city: 'City', state: 'State', pincode: 'Pincode',
     }
     for (const f of required) {
-      if (!addr[f]?.toString().trim()) { setError(`Please fill in: ${fieldLabels[f]}`); return }
+      if (!addr[f]?.toString().trim()) { placingRef.current = false; setError(`Please fill in: ${fieldLabels[f]}`); return }
     }
-    if (!/^[6-9]\d{9}$/.test(addr.phone)) { setError('Enter a valid 10-digit mobile number'); return }
-    if (!/^\d{6}$/.test(addr.pincode))     { setError('Enter a valid 6-digit pincode'); return }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
+    if (!/^[6-9]\d{9}$/.test(addr.phone)) { placingRef.current = false; setError('Enter a valid 10-digit mobile number'); return }
+    if (!/^\d{6}$/.test(addr.pincode))     { placingRef.current = false; setError('Enter a valid 6-digit pincode'); return }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { placingRef.current = false; setError('Enter a valid email address'); return }
     setError(''); setPlacing(true)
     try {
       const orderKey = idempotencyKey || ensureIdempotencyKey()
@@ -1103,11 +1128,12 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
               setError(msg + ' Contact support with payment ID: ' + response.razorpay_payment_id)
+              placingRef.current = false
               setPlacing(false)
             }
           },
           modal: {
-            ondismiss: () => { setPlacing(false); ensureIdempotencyKey() },
+            ondismiss: () => { placingRef.current = false; setPlacing(false); ensureIdempotencyKey() },
           },
         })
         trackPaymentInitiated(pricingTotal)
@@ -1116,6 +1142,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong.')
+      placingRef.current = false
       setPlacing(false)
     }
   }, [
