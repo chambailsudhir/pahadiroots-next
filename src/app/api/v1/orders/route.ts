@@ -34,6 +34,45 @@ function getDeliveryEstimate(): string {
   return `${from} - ${to}`
 }
 
+// BUG FIX (live 504 "Order save failed" — Vercel Runtime Timeout Error:
+// "Task timed out after 15 seconds"): confirmed via Supabase logs that this
+// specific order's entire 15-second execution window overlapped exactly with
+// a recurring PostgREST "Thread killed by timeout manager" incident (a known,
+// ongoing resource-tier characteristic of this project's Supabase compute —
+// see project notes). createOrder() and the loyalty award/redeem calls below
+// it are all awaited directly with no per-step timeout, so a single hung
+// Postgres/PostgREST call during one of these periodic hiccups silently
+// consumes the entire request with no feedback, until Vercel's own hard
+// 15-second limit kills the function — the customer sees a bare, unexplained
+// 504 after a long silent wait, with no indication of what happened or that
+// retrying is likely to work.
+//
+// This wraps the single biggest, most DB-heavy step (createOrder) in an
+// explicit timeout, leaving a ~5s buffer under Vercel's 15s hard limit for
+// CSRF/rate-limit checks and response serialization already spent by this
+// point. On timeout, the customer gets a fast (~10s, not 15s), clear,
+// specifically-worded "temporarily slow, please retry" message instead of a
+// silent hang ending in a generic error — and because the idempotency key is
+// unchanged, a prompt retry is safe even if the original createOrder() call
+// is still finishing in the background (Node doesn't truly cancel the
+// underlying network call just because this function stopped awaiting it).
+//
+// This does not fix the underlying PostgREST resource-tier issue itself —
+// that requires a Supabase compute upgrade, a decision explicitly deferred
+// by the user for now — it only stops that issue from producing a silent,
+// unexplained 15-second hang on the customer-facing order-creation path.
+class OrderCreateTimeoutError extends Error {
+  constructor() { super('ORDER_CREATE_TIMEOUT') }
+}
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new OrderCreateTimeoutError()), ms)
+    }),
+  ])
+}
+
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
   const csrfError = checkCsrf(req)
@@ -133,7 +172,7 @@ export async function POST(req: NextRequest) {
       // Not logged in, or session expired — guest checkout, unaffected.
     }
 
-    const { order, alreadyExists, customerId } = await createOrder({
+    const { order, alreadyExists, customerId } = await withTimeout(createOrder({
       customerName:   name,
       customerPhone:  a.phone,
       customerEmail:  d.customer_email || undefined,
@@ -149,7 +188,7 @@ export async function POST(req: NextRequest) {
       // ── Loyalty ─────────────────────────────────────────────────────────
       loyaltyPointsRedeemed: d.loyalty_points_redeemed ?? 0,
       authenticatedCustomerId,
-    }, settings)
+    }, settings), 10_000)
 
     // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
     if (!alreadyExists && d.payment_method === 'cod') {
@@ -347,6 +386,19 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
+
+    // BUG FIX (live 504 mitigation — see OrderCreateTimeoutError/withTimeout
+    // above for the full incident writeup): a fast, specific 503 instead of
+    // silently riding out the remaining time until Vercel's hard 15s kill
+    // produces a bare, unexplained 504. Checked first so it can never be
+    // misclassified by the generic message-sniffing below.
+    if (err instanceof OrderCreateTimeoutError) {
+      return NextResponse.json(
+        { error: 'Our server is briefly slow right now — please try again in a few seconds.' },
+        { status: 503, headers: { 'Retry-After': '5' } },
+      )
+    }
+
     // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
     // but never expose raw DB error messages in production — they leak table names,
     // constraint names, and Supabase internals to attackers.
