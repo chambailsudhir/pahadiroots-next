@@ -113,8 +113,35 @@ export async function checkRateLimitKv(
       return checkRateLimitDb(key, limit, windowSec)
     }
 
-    const result = await res.json() as [[string, number], [string, number]]
-    return result[0][1] <= limit
+    // BUG FIX (CRITICAL — "Too many requests" on the very first, single click):
+    // Upstash's pipeline REST API returns an array of RESULT OBJECTS —
+    // [{"result": 1}, {"result": "OK"}] — per Upstash's own documentation and
+    // blog (upstash.com/blog/pipeline). This code previously typed and indexed
+    // the response as [["INCR", 1], ["EXPIRE", "OK"]] tuples — result[0][1] on
+    // an actual {result: 1} object reads a nonexistent numeric property and
+    // returns `undefined`. `undefined <= limit` is ALWAYS false in JavaScript
+    // (undefined coerces to NaN; every comparison with NaN is false) — so
+    // once Upstash was actually reachable (after the env-var fix), EVERY
+    // single call to checkRateLimitKv returned "blocked", regardless of the
+    // real count. This is why a customer's very first, single checkout click
+    // showed "Too many requests" — not an actual limit being exceeded.
+    // The unit tests never caught this because their mocked fetch responses
+    // matched this same wrong shape (fixed alongside this, see
+    // rateLimitKv.test.ts) — asserting against an invented contract instead
+    // of Upstash's real one. Only live testing surfaced it.
+    const result = await res.json() as Array<{ result?: number | string; error?: string }>
+    const incrResult = result[0]?.result
+    if (typeof incrResult !== 'number') {
+      // Malformed/unexpected response shape (or Upstash returned an
+      // {error: ...} entry for the INCR command) — treat as a KV failure
+      // rather than silently miscounting forever.
+      logger.metric('kv.error', 1, 'count', {
+        key_prefix: key.split(':')[2] ?? key,
+        reason: 'unexpected_response_shape',
+      })
+      return checkRateLimitDb(key, limit, windowSec)
+    }
+    return incrResult <= limit
   } catch (e: unknown) {
     const isTimeout = e instanceof Error && e.name === 'TimeoutError'
     // BUG FIX 7: track connectivity failures as metrics

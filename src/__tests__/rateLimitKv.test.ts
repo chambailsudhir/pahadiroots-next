@@ -58,7 +58,11 @@ describe('checkRateLimitKv — Upstash configured and healthy', () => {
   it('allows the request when the KV count is within limit', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => [['INCR', 1], ['EXPIRE', 1]],
+      // BUG FIX: real Upstash pipeline responses are objects — {result: N} —
+      // not [name, value] tuples. This mock previously matched the same
+      // wrong shape the buggy code assumed, which is exactly why this test
+      // suite didn't catch the "always blocks" bug that live testing found.
+      json: async () => [{ result: 1 }, { result: 'OK' }],
     }) as unknown as typeof fetch
 
     const allowed = await checkRateLimitKv('mw:rl:orders_ip:1.2.3.4', 10, 60)
@@ -69,7 +73,7 @@ describe('checkRateLimitKv — Upstash configured and healthy', () => {
   it('blocks the request when the KV count exceeds limit', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => [['INCR', 11], ['EXPIRE', 1]],
+      json: async () => [{ result: 11 }, { result: 'OK' }],
     }) as unknown as typeof fetch
 
     const allowed = await checkRateLimitKv('mw:rl:orders_ip:1.2.3.4', 10, 60)
@@ -151,5 +155,56 @@ describe('checkRateLimitKv — Upstash not configured (the live production state
     mocks.rpc.mockRejectedValue(new Error('supabase client init failed'))
     const allowed = await checkRateLimitKv('mw:rl:orders_ip:1.2.3.4', 10, 60)
     expect(allowed).toBe(true)
+  })
+})
+
+describe('checkRateLimitKv — real Upstash response shape (regression for the live "blocks everything" bug)', () => {
+  // BUG FIX (CRITICAL): a customer's very first, single checkout click showed
+  // "Too many requests" — not an actual limit being exceeded. Root cause: the
+  // code indexed Upstash's pipeline response as [["INCR", n], ["EXPIRE", ok]]
+  // tuples, but Upstash's real format (per upstash.com/blog/pipeline) is an
+  // array of {result: value} objects. result[0][1] on a real {result: 1}
+  // object reads a nonexistent property → undefined, and `undefined <= limit`
+  // is ALWAYS false in JS — so once Upstash was actually reachable, every
+  // single call returned "blocked" regardless of the true count. The original
+  // version of this test suite used the same wrong mock shape as the buggy
+  // code, which is exactly why it didn't catch this — these tests use the
+  // real, documented Upstash shape instead.
+  beforeEach(() => {
+    process.env.UPSTASH_REDIS_REST_URL   = 'https://fake-kv.upstash.io'
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token'
+  })
+
+  it('[BUG FIX] allows a single request with the real {result: 1} response shape', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ result: 1 }, { result: 'OK' }],
+    }) as unknown as typeof fetch
+
+    const allowed = await checkRateLimitKv('mw:rl:orders_phone:9876543210', 3, 60)
+    expect(allowed).toBe(true)
+    expect(mocks.rpc).not.toHaveBeenCalled() // must not need the DB fallback for a normal healthy response
+  })
+
+  it('blocks only once the real count actually exceeds the limit', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ result: 4 }, { result: 'OK' }],
+    }) as unknown as typeof fetch
+
+    const allowed = await checkRateLimitKv('mw:rl:orders_phone:9876543210', 3, 60)
+    expect(allowed).toBe(false)
+  })
+
+  it('falls back to the DB check on a malformed/unexpected response shape rather than silently blocking forever', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ error: 'ERR wrong type' }, { result: 'OK' }],
+    }) as unknown as typeof fetch
+    mocks.rpc.mockResolvedValue({ data: true, error: null })
+
+    const allowed = await checkRateLimitKv('mw:rl:orders_phone:9876543210', 3, 60)
+    expect(allowed).toBe(true)
+    expect(mocks.rpc).toHaveBeenCalled()
   })
 })

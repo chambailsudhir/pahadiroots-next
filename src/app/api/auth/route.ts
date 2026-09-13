@@ -85,12 +85,29 @@ async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<b
         signal: AbortSignal.timeout(1500),  // never stall auth for more than 1.5 s
       })
       if (res.ok) {
-        const result = await res.json() as [[string, number], [string, number]]
-        const count  = result[0][1]  // INCR return value
-        return count <= maxHits      // true = allowed, false = blocked
+        // BUG FIX (CRITICAL — same class of bug found and fixed in
+        // rateLimitKv.ts): Upstash's pipeline REST API returns an array of
+        // RESULT OBJECTS — [{"result": 1}, {"result": "OK"}] — per Upstash's
+        // own documentation (upstash.com/blog/pipeline), not
+        // [["INCR", 1], ["EXPIRE", "OK"]] tuples. result[0][1] on a real
+        // {result: 1} object reads a nonexistent property → undefined, and
+        // `undefined <= maxHits` is ALWAYS false in JavaScript — so once
+        // Upstash was actually reachable, every single login attempt would
+        // have been rate-limited immediately, regardless of the true count.
+        // This is the login/auth route, so this bug would have blocked
+        // real customer logins outright, not just shown a confusing message.
+        const result = await res.json() as Array<{ result?: number | string; error?: string }>
+        const count  = result[0]?.result
+        if (typeof count === 'number') {
+          return count <= maxHits      // true = allowed, false = blocked
+        }
+        console.warn('[rateLimit] Upstash returned an unexpected response shape:', result[0])
+        // Falls through to the in-process fallback below rather than
+        // silently miscounting (and, previously, blocking) every request.
+      } else {
+        // KV returned an unexpected status — log and fall through to in-process
+        console.warn('[rateLimit] Upstash returned non-OK status:', res.status)
       }
-      // KV returned an unexpected status — log and fall through to in-process
-      console.warn('[rateLimit] Upstash returned non-OK status:', res.status)
     } catch (e) {
       // KV unreachable (timeout / network) — fall through to in-process limiter
       console.warn('[rateLimit] Upstash unreachable, falling back to in-process limiter:', e)

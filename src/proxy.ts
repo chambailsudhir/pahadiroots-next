@@ -138,10 +138,24 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
       })
 
       if (res.ok) {
-        const result = await res.json() as [[string, number], [string, number]]
-        const count  = result[0][1]
+        // BUG FIX (same class of bug found and fixed in rateLimitKv.ts and
+        // api/auth/route.ts): Upstash's pipeline REST API returns an array
+        // of RESULT OBJECTS — [{"result": 1}, {"result": "OK"}] — not
+        // [["INCR", 1], ["EXPIRE", "OK"]] tuples. result[0][1] on a real
+        // {result: 1} object reads a nonexistent property → undefined.
+        // Here the bug ran the OTHER direction from the route-level checks:
+        // `undefined > GLOBAL_LIMIT` is ALSO always false in JavaScript, so
+        // this global edge-level limiter could never trigger at all — it
+        // silently did nothing for every request, rather than blocking
+        // everything. Lower severity than the route-level version (this is
+        // defense-in-depth on top of the route-level IP/phone limits, not
+        // the only protection), but still a real gap: this global layer is
+        // meant to catch basic bot/abuse traffic before it even reaches a
+        // route handler.
+        const result = await res.json() as Array<{ result?: number | string; error?: string }>
+        const count  = result[0]?.result
 
-        if (count > GLOBAL_LIMIT) {
+        if (typeof count === 'number' && count > GLOBAL_LIMIT) {
           return NextResponse.json(
             { error: 'Too many requests — please wait a moment' },
             { status: 429, headers: { 'Retry-After': String(WINDOW_SEC) } },
