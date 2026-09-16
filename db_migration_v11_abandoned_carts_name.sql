@@ -1,0 +1,32 @@
+-- ============================================================
+-- PAHADI ROOTS — DB MIGRATION v11: ABANDONED_CARTS.NAME COLUMN
+-- Run in Supabase SQL Editor. Safe to run any number of times
+-- (IF NOT EXISTS guard).
+--
+-- BUG FIX (found via live console + Vercel runtime-error report,
+-- 2026-09-16): POST /api/v1/actions with action=save_abandoned_cart
+-- has always sent a `name` field in its upsert to `abandoned_carts`,
+-- but the real table (confirmed via information_schema.columns) never
+-- had that column. Every call failed with:
+--
+--   "Could not find the 'name' column of 'abandoned_carts' in the
+--    schema cache"
+--
+-- 17 occurrences logged in a single 24h window. Non-fatal to checkout
+-- (the error is caught and logged, not surfaced to the shopper), but
+-- it silently broke personalization downstream: the admin Marketing
+-- tab's cart-recovery messages read `cart.name` directly —
+--
+--   `Hi${cart.name ? ' ' + cart.name : ''}! You left ... in your cart`
+--   (pahadi-admin src/app/admin/marketing/page.jsx)
+--
+-- — so every recovery WhatsApp/email sent since that feature shipped
+-- rendered as a bare "Hi!" with no name, because the column never
+-- existed to read back from.
+--
+-- Fix: add the missing column. No code change needed on either repo —
+-- both the storefront's save_abandoned_cart upsert and the admin's
+-- marketing-page read already assumed this column existed.
+-- ============================================================
+
+ALTER TABLE abandoned_carts ADD COLUMN IF NOT EXISTS name text;
