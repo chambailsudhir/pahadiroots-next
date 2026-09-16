@@ -127,19 +127,55 @@ export async function POST(req: NextRequest) {
       // BUG FIX (live report — COD Charges saved as ₹0 in admin, storefront
       // checkout still showed ₹50): this block cleared getSiteSettings()'s
       // in-process cache and the homepage/layout ISR pages, but never
-      // touched /api/v1/cart-settings — the endpoint CheckoutClient/
-      // useCartPage actually fetches settings from at checkout. That route
+      // touched /api/v1/cart-settings — the endpoint useCartPage (the /cart
+      // page, a client component) actually fetches settings from. That route
       // has its OWN independent caching (an underlying fetch with
       // `next: { revalidate: 60 }`, plus its own response `Cache-Control:
       // public, max-age=60, s-maxage=60` for the CDN edge and the browser) —
       // none of which is the same cache clearSiteSettingsCache() clears, and
       // none of which revalidatePath('/', ...) touches either, since it's a
       // different route entirely. A cod_surcharge_amount change (or any
-      // other cart-settings key) could sit stale at checkout for up to ~60s
-      // — and up to 120s counting stale-while-revalidate — with this
+      // other cart-settings key) could sit stale at /cart for up to ~60s —
+      // and up to 120s counting stale-while-revalidate — with this
       // revalidate call doing nothing to shorten that wait.
       revalidatePath('/api/v1/cart-settings')
-      revalidated.push('/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings')
+      // BUG FIX (live report — Free Shipping threshold changed 0 → 100 in
+      // admin, /checkout still showed FREE on a ₹20 order minutes later):
+      // the comment above this block wrongly assumed /checkout reads
+      // settings via /api/v1/cart-settings like /cart does. It doesn't —
+      // src/app/checkout/page.tsx is a SERVER component that calls
+      // getSiteSettings() directly and passes the result to CheckoutClient
+      // as a prop. clearSiteSettingsCache() clears the in-process data
+      // cache, but /checkout has no `revalidate`/`dynamic` export of its
+      // own, so it inherits the ROOT LAYOUT's `export const revalidate =
+      // 300` and is cached as its own full-route-cache entry for up to 5
+      // minutes — a cache revalidatePath('/', 'layout') does NOT reach,
+      // exactly as already reasoned about for /api/v1/cart-settings above:
+      // a layout revalidation only covers content rendered by the layout
+      // itself (Header/Footer), never a sibling route's own cached page
+      // output. Same gap, same fix: an explicit revalidatePath for the
+      // route.
+      //
+      // Two other cached routes read the exact same site_settings and had
+      // the identical gap, just with longer, more visible windows:
+      //   - /products/[slug] (revalidate = 3600s): reads free_shipping_min
+      //     for its own "free shipping above ₹X" PDP messaging.
+      //   - /about (revalidate = 3600s): reads ~30 about_* keys wholesale
+      //     (hero copy, story copy, values, video) — every field the
+      //     admin's About Page editor manages. Without this, an About Page
+      //     edit could sit unpublished for up to an hour despite the same
+      //     "Changes go live instantly" promise.
+      //   - /blog (revalidate = 3600s): gates the whole route on
+      //     show_blog — disabling the blog in Settings wouldn't actually
+      //     take the route down for up to an hour.
+      revalidatePath('/checkout')
+      revalidatePath('/products/[slug]', 'page')
+      revalidatePath('/about')
+      revalidatePath('/blog')
+      revalidated.push(
+        '/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings',
+        '/checkout', '/products/[slug] (all)', '/about', '/blog'
+      )
     }
 
     // SEO blog engine (047_blog_seo_engine.sql): a post published or edited
