@@ -124,7 +124,22 @@ export async function POST(req: NextRequest) {
       revalidatePath('/', 'layout')
       revalidatePath('/', 'page')
       revalidatePath('/maintenance', 'page')
-      revalidated.push('/ (layout)', '/ (page)', '/maintenance')
+      // BUG FIX (live report — COD Charges saved as ₹0 in admin, storefront
+      // checkout still showed ₹50): this block cleared getSiteSettings()'s
+      // in-process cache and the homepage/layout ISR pages, but never
+      // touched /api/v1/cart-settings — the endpoint CheckoutClient/
+      // useCartPage actually fetches settings from at checkout. That route
+      // has its OWN independent caching (an underlying fetch with
+      // `next: { revalidate: 60 }`, plus its own response `Cache-Control:
+      // public, max-age=60, s-maxage=60` for the CDN edge and the browser) —
+      // none of which is the same cache clearSiteSettingsCache() clears, and
+      // none of which revalidatePath('/', ...) touches either, since it's a
+      // different route entirely. A cod_surcharge_amount change (or any
+      // other cart-settings key) could sit stale at checkout for up to ~60s
+      // — and up to 120s counting stale-while-revalidate — with this
+      // revalidate call doing nothing to shorten that wait.
+      revalidatePath('/api/v1/cart-settings')
+      revalidated.push('/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings')
     }
 
     // SEO blog engine (047_blog_seo_engine.sql): a post published or edited

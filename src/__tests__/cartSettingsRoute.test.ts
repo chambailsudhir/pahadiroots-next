@@ -79,19 +79,26 @@ describe('GET /api/v1/cart-settings — happy path', () => {
     expect(json.settings).toEqual({})
   })
 
-  // BUG FIX regression: s-maxage alone is a CDN-only directive with no effect
-  // on the browser. The fix added `public, max-age=60` so the browser also
-  // caches the response, eliminating a redundant fetch on every page mount.
-  it('sets BOTH max-age (browser) and s-maxage (CDN) in Cache-Control', async () => {
+  // BUG FIX (superseded, live report): the earlier fix here added
+  // `public, max-age=60` alongside `s-maxage=60` — s-maxage alone is a
+  // CDN-only directive with no browser effect, so that were correct as far
+  // as it went. But a later live report showed a COD-charges setting change
+  // in admin still charging the old amount at checkout: neither directive
+  // is invalidated by the admin's on-demand revalidate call, and this data
+  // drives real checkout math (COD charges, min order amount, prepaid
+  // discount %) — staleness here is a pricing-correctness problem, not a
+  // cosmetic one. This ~15-row indexed SELECT is cheap enough that
+  // always-fresh costs nothing meaningful, so caching was removed entirely
+  // rather than chase a shorter window across two separate cache layers
+  // (Next's data cache and the CDN edge) that revalidatePath can't both reach.
+  it('[BUG FIX] never caches — Cache-Control is no-store (pricing-affecting data)', async () => {
     mockFetchOnce(true, [{ key: 'free_shipping_min', value: '799' }])
 
     const { GET } = await import('@/app/api/v1/cart-settings/route')
     const res = await GET()
     const cacheControl = res.headers.get('Cache-Control') ?? ''
 
-    expect(cacheControl).toContain('public')
-    expect(cacheControl).toContain('max-age=60')
-    expect(cacheControl).toContain('s-maxage=60')
+    expect(cacheControl).toBe('no-store')
   })
 
   it('passes through unexpected/extra keys from the DB without filtering', async () => {
@@ -184,5 +191,18 @@ describe('GET /api/v1/cart-settings — request shape', () => {
     const [url] = fetchMock.mock.calls[0]
     expect(url).toContain('/rest/v1/site_settings')
     expect(url).toContain('select=key,value')
+  })
+
+  it('[BUG FIX] fetches with cache: no-store — never relies on Next\'s data cache either', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true, status: 200, json: async () => [],
+    }))
+    global.fetch = fetchMock as unknown as typeof globalThis.fetch
+
+    const { GET } = await import('@/app/api/v1/cart-settings/route')
+    await GET()
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect((init as RequestInit).cache).toBe('no-store')
   })
 })

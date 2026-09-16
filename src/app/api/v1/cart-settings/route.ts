@@ -67,7 +67,20 @@ async function fetchCartSettings(): Promise<Record<string, string>> {
     // blocking the entire cart page render. 4 s is generous for a simple indexed
     // SELECT on ~15 rows.
     signal: AbortSignal.timeout(4_000),
-    next: { revalidate: 60 },
+    // BUG FIX (live report — COD Charges saved as ₹0 in admin, checkout still
+    // charged ₹50): this used `next: { revalidate: 60 }`, and the response
+    // below also set `Cache-Control: s-maxage=60` (a CDN-edge directive —
+    // revalidatePath() cannot purge a response the CDN already cached under
+    // an explicit s-maxage; that's a separate layer from Next's own ISR/data
+    // cache). A setting change could sit stale at checkout for up to 60s (up
+    // to 120s counting stale-while-revalidate below) with no way to force it
+    // sooner — and this specific data drives real checkout math (COD
+    // charges, min order amount, prepaid discount %), where staleness is a
+    // pricing-correctness problem, not just a cosmetic one. This is a ~15-row
+    // indexed SELECT — cheap enough that always-fresh costs nothing
+    // meaningful, so removed the cache entirely rather than chase a shorter
+    // window across two separate cache layers.
+    cache: 'no-store',
   })
 
   if (!res.ok) throw new Error(`site_settings fetch failed: ${res.status}`)
@@ -81,15 +94,13 @@ export async function GET() {
     const settings = await fetchCartSettings()
     return NextResponse.json(
       { settings },
-      // BUG FIX: the previous header was `s-maxage=60, stale-while-revalidate=120`.
-      // s-maxage is a CDN/edge directive — it tells Vercel's edge cache to hold the
-      // response for 60 s.  It has NO effect on the browser.  Every page mount
-      // therefore fired a fresh HTTP request to this route even though the settings
-      // change at most once a day.  Adding `public, max-age=60` lets the browser
-      // also cache the response for 60 s, eliminating the redundant round-trips.
+      // BUG FIX: was `public, max-age=60, s-maxage=60, stale-while-revalidate=120`
+      // — see the fetchCartSettings() comment above for why that's wrong for
+      // pricing-affecting settings specifically. no-store here too, for the
+      // same reason: correctness at checkout over shaving one cheap query.
       {
         headers: {
-          'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=120',
+          'Cache-Control': 'no-store',
         },
       },
     )
