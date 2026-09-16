@@ -31,7 +31,14 @@ const STATUS_INDEX: Record<string, number> = {
 // (see PAHADI_ROOTS_SESSION_REPORT.md §2). Real "special state" order
 // statuses are just 'cancelled' and 'returned'; a return in progress is
 // now shown via the dedicated Return Status card below instead.
-const CANCELLED_STATUSES = ['cancelled', 'returned']
+//
+// Sept 2026: 'payment_failed' added here too. It is a real order_status_enum
+// value (migration 048) written by the Razorpay payment.failed webhook. It is
+// absent from STATUS_INDEX above by design — a failed payment never entered
+// the fulfilment pipeline — so without this entry the page rendered neither
+// the stepper (currentStep === -1) nor the terminal-state card: an empty
+// "Order Status" box with no explanation of what happened.
+const CANCELLED_STATUSES = ['cancelled', 'returned', 'payment_failed']
 
 type OrderDetail = Record<string, unknown> & {
   id:               string
@@ -140,10 +147,19 @@ export default function OrderDetailPage() {
         {isCancelled ? (
           <div className={styles.odCancelledState}>
             <div className={styles.odCancelledIcon}>
-              {order.order_status === 'cancelled' ? '❌' : '↩️'}
+              {order.order_status === 'cancelled'
+                ? '❌'
+                : order.order_status === 'payment_failed' ? '💳' : '↩️'}
             </div>
             <div className={styles.odCancelledLabel}>
-              {order.order_status.replace(/_/g, ' ')}
+              {order.order_status === 'payment_failed'
+                // Wording deliberately does NOT claim "no amount was charged":
+                // a Razorpay payment.failed can still involve a debit that the
+                // bank reverses, which is exactly what Razorpay's own failure
+                // email tells the customer. Promising them otherwise here would
+                // contradict that email and generate support tickets.
+                ? 'Payment failed — this order was not placed. If any amount was debited, your bank will reverse it within 5–7 working days.'
+                : order.order_status.replace(/_/g, ' ')}
             </div>
           </div>
         ) : (

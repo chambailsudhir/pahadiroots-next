@@ -73,11 +73,18 @@ interface MockDb {
   // genuine TOCTOU race: a concurrent webhook delivery won between this
   // request's SELECT and its UPDATE.
   updateResultOverride: Record<string, unknown[]>
+  // Forces update().select() to resolve with an ERROR for a table, which
+  // `updateResultOverride` (data-only) cannot express. Needed to cover the
+  // Sept 2026 fix: before it, the payment.failed UPDATE's error was never
+  // destructured at all, so a failing UPDATE (it failed on every single call —
+  // 'payment_failed' was not yet a member of order_status_enum) was swallowed
+  // silently while the stock restore ran anyway.
+  updateErrorOverride:  Record<string, Error>
 }
 let mockDb: MockDb
 
 function resetMockDb() {
-  mockDb = { responses: {}, updateCalls: [], insertCalls: [], updateResultOverride: {} }
+  mockDb = { responses: {}, updateCalls: [], insertCalls: [], updateResultOverride: {}, updateErrorOverride: {} }
 }
 
 function buildQueryBuilder(table: string) {
@@ -116,6 +123,9 @@ function buildQueryBuilder(table: string) {
     then:        (...a: unknown[]) => {
       const resolved = wentThroughUpdate
         ? (() => {
+            if (table in mockDb.updateErrorOverride) {
+              return { data: null, error: mockDb.updateErrorOverride[table] }
+            }
             if (table in mockDb.updateResultOverride) {
               return { data: mockDb.updateResultOverride[table], error: null }
             }
@@ -443,6 +453,71 @@ describe('POST /webhook/razorpay — payment.failed', () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     const res = await POST(req)
 
+    expect(res.status).toBe(200)
+    expect(mockRestoreStock).not.toHaveBeenCalled()
+  })
+
+  // ── Sept 2026 regression suite ────────────────────────────────────────────
+  // Context: 'payment_failed' was never a member of the live order_status_enum,
+  // so this UPDATE failed with Postgres 22P02 on every call. The route did not
+  // destructure the error, so the failure was invisible: the order stayed
+  // 'pending', which meant the `order_status === 'pending'` guard at the top of
+  // this branch stayed true forever — and a SECOND payment.failed event for the
+  // same order (a customer retrying and failing again on the same order row,
+  // which the idempotency key makes the normal case) restored the same reserved
+  // stock a second time, silently inflating inventory.
+  //
+  // Fixed by (a) DB migration 048 adding the enum value, and (b) reordering
+  // this branch so the guarded transition runs FIRST and stock is restored only
+  // if this process actually won pending → payment_failed. The three tests
+  // below pin the reordering; the enum value itself is a DB-side fact.
+
+  it('applies the transition with an atomic order_status=pending guard on the UPDATE', async () => {
+    mockDb.responses['orders'] = { id: 'order-db-uuid-006', order_status: 'pending' }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }]
+
+    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-006' }))
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(req)
+
+    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
+    // Without this WHERE clause two concurrent deliveries of the same event
+    // could both pass the earlier SELECT-based check and both restore stock.
+    expect(orderUpdate!.eqCalls).toContainEqual(['order_status', 'pending'])
+  })
+
+  it('does NOT restore stock when the UPDATE matched 0 rows (duplicate/replayed event)', async () => {
+    mockDb.responses['orders'] = { id: 'order-db-uuid-007', order_status: 'pending' }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 3 }]
+    // The SELECT still sees 'pending', but the guarded UPDATE affects no rows:
+    // another delivery of this same event already made the transition and
+    // already restored this stock.
+    mockDb.updateResultOverride['orders'] = []
+
+    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-007' }))
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(req)
+
+    expect(res.status).toBe(200)
+    expect(mockRestoreStock).not.toHaveBeenCalled()
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(
+      'order-db-uuid-007', 'payment_failed_webhook', 'razorpay', expect.anything(),
+    )
+  })
+
+  it('does NOT restore stock when the UPDATE itself errors (the exact silent-failure path)', async () => {
+    mockDb.responses['orders'] = { id: 'order-db-uuid-008', order_status: 'pending' }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }]
+    mockDb.updateErrorOverride['orders'] = new Error(
+      'invalid input value for enum order_status_enum: "payment_failed"',
+    )
+
+    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-008' }))
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(req)
+
+    // Still 200 — Razorpay must not retry-storm — but the order is untouched,
+    // so nothing may act as though the transition succeeded.
     expect(res.status).toBe(200)
     expect(mockRestoreStock).not.toHaveBeenCalled()
   })

@@ -233,48 +233,113 @@ export async function POST(req: Request) {
         .single()
 
       if (order && order.order_status === 'pending') {
-        // BUG FIX 1 — stock never restored on payment failure.
-        // Stock is atomically reserved at order-creation time.  When payment
-        // fails the reservation must be released so the items can be purchased
-        // again.  Fetch order_items and call restoreStock() before updating
-        // the order row, so that even a DB crash after restore still leaves
-        // the order in 'pending' and allows an ops retry.
-        const { data: orderItems } = await db
-          .from('order_items')
-          .select('product_id, variant_id, quantity')
-          .eq('order_id', order.id)
+        // ── BUG FIX (Sept 2026, live-verified) — two real defects here ────────
+        //
+        // 1. 'payment_failed' was NOT a member of the live order_status_enum
+        //    (verified against pg_enum: 16 values, none of them this one), so
+        //    this UPDATE failed every time with Postgres 22P02
+        //    "invalid input value for enum order_status_enum". The result was
+        //    never checked, so the failure was swallowed silently: the order
+        //    stayed 'pending' with payment_status 'pending'. Fixed on the DB
+        //    side by migration 048 (ALTER TYPE ... ADD VALUE 'payment_failed'
+        //    AFTER 'cancelled'), and here by destructuring and checking the
+        //    error instead of discarding it.
+        //
+        // 2. Ordering: stock was restored BEFORE the status transition. With
+        //    the silently-failing UPDATE above, the guard on the next line
+        //    (order_status === 'pending') stayed true forever — so a SECOND
+        //    payment.failed event for the same DB order (a customer retrying
+        //    and failing again on the same order, which is the common case,
+        //    since the idempotency key makes the retry reuse this same order
+        //    row rather than reserving stock again) restored the same stock a
+        //    second time. Net effect: inventory silently inflates on every
+        //    repeated failure.
+        //
+        //    Now the guarded transition runs FIRST and stock is restored only
+        //    if this process actually won the pending → payment_failed
+        //    transition (rowsUpdated.length > 0). The .eq('order_status',
+        //    'pending') clause makes that atomic at the row level, so two
+        //    concurrent deliveries of the same event can never both restore.
+        //    Trade-off, stated explicitly: if the process dies between the
+        //    UPDATE and restoreStock(), the reservation stays locked until an
+        //    ops fix. That is the strictly safer failure direction —
+        //    under-counted stock is a missed sale, over-counted stock is an
+        //    oversell we cannot fulfil.
+        //
+        // Note on triggers (verified live): handle_order_status_change()'s
+        // CASE maps pending→RESERVE, confirmed/shipped→OUT, cancelled→RELEASE,
+        // returned→RETURN and NULL for anything else. 'payment_failed' hits
+        // the NULL branch, so NO stock_movements row is written and this
+        // application-level restoreStock() remains the single restore path.
+        // (This is exactly why 'payment_failed' was added as its own enum
+        // value rather than reusing 'cancelled', which WOULD have fired a
+        // RELEASE movement on top of this call — a double restore.)
+        const { data: rowsUpdated, error: statusUpdateErr } = await db
+          .from('orders')
+          .update({
+            order_status:   'payment_failed',
+            payment_status: 'failed',
+            updated_at:     new Date().toISOString(),
+          })
+          .eq('id', order.id)
+          .eq('order_status', 'pending')   // atomic guard — single-winner transition
+          .select('id')
 
-        if (orderItems && orderItems.length > 0) {
-          const { restoreStock } = await import('@/lib/services/inventoryService')
-          await restoreStock(
-            orderItems.map((i: { product_id: unknown; variant_id: unknown; quantity: unknown }) => ({
-              variantId: String(i.variant_id),
-              productId: String(i.product_id),
-              qty:       Number(i.quantity),
-            }))
-          ).catch(err =>
-            captureError(err, {
-              action:   'webhook.razorpay.restoreStock',
-              order_id: order.id,
-              alert:    true,
-            })
-          )
+        // Deliberately NOT an early `return` on either failure path below:
+        // the block at the end of this try marks this webhook_logs row as
+        // 'processed', and returning here would leave it stuck at 'received'
+        // forever — invisible to any ops query that looks for unprocessed
+        // events. We skip the side-effects instead and fall through.
+        const ownsTransition = !statusUpdateErr && !!rowsUpdated && rowsUpdated.length > 0
+
+        if (statusUpdateErr) {
+          // Do NOT restore stock when we cannot prove we own the transition —
+          // that is precisely the path that produced the double restore above.
+          captureError(new Error('payment.failed order update failed: ' + statusUpdateErr.message), {
+            action:     'webhook.razorpay.payment_failed.order_update',
+            order_id:   order.id,
+            payment_id: payment.id,
+            alert:      true,
+          })
+        } else if (!ownsTransition) {
+          // Lost the race, or a replayed/duplicate payment.failed delivery —
+          // another process already transitioned this order and restored its
+          // stock. Nothing further to do.
+          logger.info('webhook: payment.failed already handled for this order', {
+            action:     'webhook.razorpay.payment_failed.duplicate',
+            order_id:   order.id,
+            payment_id: payment.id,
+          })
         }
 
-        // BUG FIX 2 — order_status left as 'pending' after payment failure.
-        // 'pending' implies the order is still awaiting payment, but the
-        // payment has definitively failed.  Setting it to 'payment_failed'
-        // prevents the payment.failed guard from triggering again on a retry
-        // webhook delivery, which would attempt a double stock-restore.
-        await db.from('orders').update({
-          order_status:   'payment_failed',
-          payment_status: 'failed',
-          updated_at:     new Date().toISOString(),
-        }).eq('id', order.id)
+        if (ownsTransition) {
+          // We own the transition — release the stock reserved at order creation.
+          const { data: orderItems } = await db
+            .from('order_items')
+            .select('product_id, variant_id, quantity')
+            .eq('order_id', order.id)
 
-        await logOrderEvent(order.id, 'payment_failed_webhook', 'razorpay', {
-          reason: payment.error_reason,
-        })
+          if (orderItems && orderItems.length > 0) {
+            const { restoreStock } = await import('@/lib/services/inventoryService')
+            await restoreStock(
+              orderItems.map((i: { product_id: unknown; variant_id: unknown; quantity: unknown }) => ({
+                variantId: String(i.variant_id),
+                productId: String(i.product_id),
+                qty:       Number(i.quantity),
+              }))
+            ).catch(err =>
+              captureError(err, {
+                action:   'webhook.razorpay.restoreStock',
+                order_id: order.id,
+                alert:    true,
+              })
+            )
+          }
+
+          await logOrderEvent(order.id, 'payment_failed_webhook', 'razorpay', {
+            reason: payment.error_reason,
+          })
+        }
 
         const { error: failedPaymentInsertErr } = await db
           .from('payments')

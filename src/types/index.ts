@@ -154,9 +154,19 @@ export interface AppliedCoupon {
 // stepper that already displayed it as an inert step could actually be
 // backed by real data. It was previously listed here only as an unconfirmed
 // display placeholder; it no longer is one.
+// UPDATE (Sept 2026): 'payment_failed' added to the live order_status_enum
+// (migration 048, ALTER TYPE ... ADD VALUE, positioned after 'cancelled' —
+// verified via pg_enum). It is written by the Razorpay payment.failed
+// webhook and is the terminal state for an online order whose payment was
+// definitively rejected by the gateway. Distinct from 'cancelled', which is
+// an admin/customer action and fires a RELEASE stock movement via the
+// handle_order_status_change() DB trigger; 'payment_failed' deliberately
+// hits that trigger's NULL branch so the webhook's own restoreStock() call
+// remains the single stock-restore path.
 export type OrderStatus =
   | 'pending'
   | 'pending_payment'
+  | 'payment_failed'
   | 'confirmed'
   | 'packed'
   | 'shipped'

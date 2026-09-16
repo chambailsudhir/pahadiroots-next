@@ -22,8 +22,15 @@ import { RETURNS_FILTER_SENTINEL, RETURN_STATUS_TO_DISPLAY } from '@/lib/account
 // value here — returns live entirely in the separate `returns` table, joined
 // in below. The "Returns" tab is now handled via RETURNS_FILTER_SENTINEL
 // (an inner join on `returns`), not by filtering order_status.
+// Sept 2026: 'payment_failed' added (migration 048 — real order_status_enum
+// value written by the Razorpay payment.failed webhook). This Set is the
+// allow-list for the ?status= filter; an unlisted value is silently dropped
+// from the query, so without this entry an order in that status could never
+// be filtered for at all. It is deliberately NOT in ACTIVE_STATUSES
+// (constants.ts) — a failed payment is terminal, not in-flight.
 const VALID_DB_STATUSES = new Set([
   'pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned',
+  'payment_failed',
 ])
 
 async function getCustomerOrders(

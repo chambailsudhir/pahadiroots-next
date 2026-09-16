@@ -51,6 +51,15 @@ export const BADGE_CLASS: Record<string,string> = {
   out_for_delivery:'badge-shipped',
   delivered:'badge-delivered',
   cancelled:'badge-cancelled',returned:'badge-returned',
+  // Sept 2026: 'payment_failed' is a real order_status_enum value (migration
+  // 048), written by the Razorpay payment.failed webhook. Reuses the existing
+  // 'cancelled' badge/stripe styling rather than inventing a new colour — from
+  // the customer's point of view both are terminal, non-fulfilled states, and
+  // the distinct STATUS_LABEL below ('Payment Failed') is what actually tells
+  // them what happened and that they can order again. Without these three
+  // entries the order rendered as a raw lowercase "payment_failed" string in a
+  // Pending-coloured badge (OrderCard.tsx falls back to styles.badgePending).
+  payment_failed:'badge-cancelled',
   return_requested:'badge-return_requested',return_approved:'badge-return_approved',
   return_received:'badge-return_received',return_refunded:'badge-return_refunded',
   return_rejected:'badge-return_rejected',
@@ -74,6 +83,7 @@ export const STATUS_LABEL: Record<string,string> = {
   out_for_delivery:'Out for Delivery',
   delivered:'Delivered',
   cancelled:'Cancelled',returned:'Returned',
+  payment_failed:'Payment Failed',
   return_requested:'Return Requested',return_approved:'Return Approved',
   return_received:'Item Received',return_refunded:'Refund Issued',
   return_rejected:'Return Rejected',
@@ -86,6 +96,7 @@ export const STRIPE_CLASS: Record<string,string> = {
   packed:'oc-stripe-packed',shipped:'oc-stripe-shipped',
   out_for_delivery:'oc-stripe-shipped',
   delivered:'oc-stripe-delivered',pending:'oc-stripe-pending',cancelled:'oc-stripe-cancelled',
+  payment_failed:'oc-stripe-cancelled',
   returned:'oc-stripe-returned',
   return_requested:'oc-stripe-return_requested',return_approved:'oc-stripe-return_approved',
   return_received:'oc-stripe-return_received',return_refunded:'oc-stripe-return_refunded',
