@@ -50,6 +50,14 @@ function buildQueryBuilder(table: string) {
   const response = () => {
     const val = mockDb.responses[table]
     if (val instanceof Error) return { data: null, error: val }
+    // Count-style queries (.select('id', { count: 'exact', head: true })) —
+    // used by the per-customer coupon usage check — resolve to
+    // { count, error }, not { data, error }. A canned response shaped like
+    // { count: N } is treated as a count response; everything else keeps
+    // the existing { data, error } shape untouched.
+    if (val && typeof val === 'object' && !Array.isArray(val) && 'count' in val) {
+      return { data: null, error: null, count: (val as { count: number }).count }
+    }
     return { data: val ?? null, error: null }
   }
 
@@ -110,6 +118,17 @@ function resetFetchRoutes() {
 
 function route(matcher: (url: string, method: string) => boolean, json: unknown) {
   fetchRoutes.push({ match: matcher, respond: () => ({ ok: true, json }) })
+}
+
+// Same as route(), but takes priority over routes already registered (e.g.
+// wireHappyPathFetch's default "customer not found" route, which matches
+// any /customers URL containing "phone=eq." — including our
+// "normalized_phone=eq." per-customer-limit lookup, since that string
+// contains "phone=eq." as a substring). Tests that need to simulate an
+// *existing* customer for that lookup register their override with this
+// instead of route().
+function routeFirst(matcher: (url: string, method: string) => boolean, json: unknown) {
+  fetchRoutes.unshift({ match: matcher, respond: () => ({ ok: true, json }) })
 }
 
 const mockFetch = vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
@@ -329,6 +348,86 @@ describe('createOrder — coupon server-side re-validation (defence in depth)', 
     // instead of double-incrementing.
     const eqOnUsesCount = couponUpdate!.eqCalls.some(args => args[0] === 'uses_count' && args[1] === 5)
     expect(eqOnUsesCount).toBe(true)
+  })
+})
+
+describe('createOrder — per-customer coupon usage limit (user_limit, authoritative gate)', () => {
+  // FEATURE FIX (Sep 2026): coupons.user_limit ("uses per customer") existed
+  // on this table with real configured values (both live coupons had
+  // user_limit=1) but nothing in createOrder ever checked it — only the
+  // store-wide max_uses/uses_count check above did. A coupon meant to be
+  // "once per customer" behaved as "once ever, for the whole store": the
+  // first customer's redemption exhausted it for every future customer too.
+  //
+  // This block is the authoritative, can't-be-bypassed check — it must
+  // still enforce the limit even when the client-side pre-check
+  // (validateCouponServer, see validateCouponUserLimit.test.ts) was never
+  // called, e.g. a direct POST to /api/v1/orders.
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+  })
+
+  it('rejects an order when the matched customer has already reached their per-customer limit', async () => {
+    mockDb.responses['coupons'] = {
+      id: 7, code: 'WELCOME50', value: 50, type: 'flat', max_uses: 100, uses_count: 1,
+      is_active: true, expires_at: null, min_order: null, max_discount: null, user_limit: 1,
+    }
+    routeFirst(
+      (url, method) => method === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'),
+      [{ id: 'cust-uuid-existing' }],
+    )
+    mockDb.responses['coupon_usage'] = { count: 1 }
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS))
+      .rejects.toThrow(/already used this coupon/i)
+  })
+
+  it('allows a brand-new customer to use a user_limit=1 coupon (no existing customer row to match)', async () => {
+    // wireHappyPathFetch's default customer lookup (matches "phone=eq.",
+    // which "normalized_phone=eq." also contains) returns [] — not found —
+    // so candidateCustId stays null and the per-customer check is skipped,
+    // exactly as it should be for someone who's never ordered before.
+    mockDb.responses['coupons'] = {
+      id: 8, code: 'WELCOME50', value: 50, type: 'flat', max_uses: 100, uses_count: 1,
+      is_active: true, expires_at: null, min_order: null, max_discount: null, user_limit: 1,
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(false)
+  })
+
+  it('does not reject when user_limit is null (unlimited per customer), even for a customer with heavy prior usage', async () => {
+    mockDb.responses['coupons'] = {
+      id: 9, code: 'ALWAYSOK', value: 50, type: 'flat', max_uses: null, uses_count: 50,
+      is_active: true, expires_at: null, min_order: null, max_discount: null, user_limit: null,
+    }
+    routeFirst(
+      (url, method) => method === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'),
+      [{ id: 'cust-uuid-existing' }],
+    )
+    mockDb.responses['coupon_usage'] = { count: 999 }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, couponCode: 'ALWAYSOK' }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(false)
+  })
+
+  it('uses authenticatedCustomerId directly when logged in, without hitting the phone-lookup route', async () => {
+    mockDb.responses['coupons'] = {
+      id: 10, code: 'MEMBER1', value: 50, type: 'flat', max_uses: 100, uses_count: 1,
+      is_active: true, expires_at: null, min_order: null, max_discount: null, user_limit: 1,
+    }
+    mockDb.responses['coupon_usage'] = { count: 1 }
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(
+      createOrder({ ...BASE_INPUT, couponCode: 'MEMBER1', authenticatedCustomerId: 'auth-cust-1' }, DEFAULT_SETTINGS),
+    ).rejects.toThrow(/already used this coupon/i)
+
+    expect(fetchCalls.some(c => c.url.includes('normalized_phone=eq.'))).toBe(false)
   })
 })
 

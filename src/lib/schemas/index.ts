@@ -79,6 +79,13 @@ export const validateCouponSchema = z.object({
   // of actual order value.  Cap at 1,000,000 (₹10 lakh) — well above any realistic
   // single order while still defending against arithmetic abuse.
   subtotal: z.number().positive().max(1_000_000),
+  // Optional — lets the client-facing pre-check apply the per-customer
+  // limit (coupons.user_limit) before order creation, not just at final
+  // submit. Not required: on the cart page (before an address/phone is
+  // known) this is simply omitted and the check is skipped here — the
+  // authoritative enforcement in orderService.createOrder still catches
+  // it at order time regardless of whether this pre-check ran it.
+  phone: z.string().trim().max(20).optional(),
 })
 
 // ─── Review Schema ─────────────────────────────────────────────────────────────

@@ -544,6 +544,49 @@ export async function createOrder(
         throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
       }
 
+      // FEATURE FIX (Sep 2026): coupons.user_limit ("uses per customer") was
+      // never enforced anywhere — only the store-wide max_uses/uses_count
+      // check above ran. A coupon configured as "once per customer" behaved
+      // as "once ever, for the whole store": the first redemption exhausted
+      // it for every future customer too (see WELCOME50/MYPAHADI, both
+      // configured with user_limit=1).
+      //
+      // This is the authoritative gate — /api/v1/coupons (pricingService.ts)
+      // does the same check for fast UX feedback, but only when a phone has
+      // already been typed in; a direct call to this endpoint could
+      // otherwise skip it entirely, so it must also live here.
+      //
+      // Read-only identity lookup — mirrors the real customer upsert later
+      // in this function (step 7b) but doesn't create anything. A brand-new
+      // customer naturally has no match, so priorUses is correctly 0.
+      if (coupon.user_limit != null) {
+        let candidateCustId: string | number | null = input.authenticatedCustomerId ?? null
+        if (candidateCustId == null) {
+          const normalizedPhoneForCheck = input.customerPhone.replace(/\D/g, '').slice(-10)
+          const custByPhone = normalizedPhoneForCheck
+            ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhoneForCheck}&select=id&limit=1`)
+            : null
+          candidateCustId = custByPhone?.id ?? null
+          if (candidateCustId == null && input.customerEmail?.trim()) {
+            const custByEmail = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+            candidateCustId = custByEmail?.id ?? null
+          }
+        }
+        if (candidateCustId != null) {
+          const { count: priorUses } = await withTimeout(
+            db.from('coupon_usage')
+              .select('id', { count: 'exact', head: true })
+              .eq('coupon_id', coupon.id)
+              .eq('customer_id', candidateCustId),
+            8_000,
+            'coupon per-customer usage check',
+          )
+          if ((priorUses ?? 0) >= coupon.user_limit) {
+            throw new Error('You have already used this coupon')
+          }
+        }
+      }
+
       couponDbRow = { id: coupon.id, code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
       const discountAmt = coupon.type === 'percent'
         ? Math.min(

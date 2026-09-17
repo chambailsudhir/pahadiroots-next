@@ -99,7 +99,10 @@ export function calcPriceSummary(
 // Server-side: validate coupon code against DB
 export async function validateCouponServer(
   code: string,
-  subtotal: number
+  subtotal: number,
+  // Optional — only known once the checkout form has a phone filled in
+  // (or the customer is logged in). See the per-customer check below.
+  customerPhone?: string,
 ): Promise<{ valid: boolean; coupon?: AppliedCoupon; error?: string }> {
   const db = getServiceClient()
 
@@ -121,6 +124,41 @@ export async function validateCouponServer(
   // real limit. orderService.ts already uses this pattern correctly.
   if (data.max_uses != null && data.uses_count >= data.max_uses) {
     return { valid: false, error: 'Coupon usage limit reached' }
+  }
+
+  // FEATURE FIX (Sep 2026): coupons.user_limit ("uses per customer") has
+  // existed on this table the whole time — both live coupons already have
+  // it set to 1 — but nothing in the app ever read it. Only the store-wide
+  // max_uses/uses_count check above ran, so a coupon meant to be "₹50 off,
+  // once per customer" behaved as "₹50 off, once ever, for the whole
+  // store" instead: the first customer's redemption exhausted it for
+  // everyone else too.
+  //
+  // This is a pre-check for fast UX feedback on the checkout page, only
+  // possible once a phone number has been typed in — it mirrors the
+  // authoritative check in orderService.createOrder, which runs
+  // regardless of whether this ran (see that file for why it can't be
+  // skipped here without a real gap: a direct /api/v1/orders call could
+  // otherwise bypass this entirely).
+  if (data.user_limit != null && customerPhone) {
+    const normalizedPhone = customerPhone.replace(/\D/g, '').slice(-10)
+    if (normalizedPhone) {
+      const { data: existingCust } = await db
+        .from('customers')
+        .select('id')
+        .eq('normalized_phone', normalizedPhone)
+        .maybeSingle()
+      if (existingCust?.id) {
+        const { count: priorUses } = await db
+          .from('coupon_usage')
+          .select('id', { count: 'exact', head: true })
+          .eq('coupon_id', data.id)
+          .eq('customer_id', existingCust.id)
+        if ((priorUses ?? 0) >= data.user_limit) {
+          return { valid: false, error: 'You have already used this coupon' }
+        }
+      }
+    }
   }
 
   // Check min order value

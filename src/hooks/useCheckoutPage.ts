@@ -686,7 +686,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: pricing.subtotal }),
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined }),
         signal:  ac.signal,
       })
         .then(async res => {
@@ -711,6 +711,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }, 800)
 
     return () => { clearTimeout(timer); ac.abort() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- addr.phone read at call-time, same pattern as handleCoupon below; re-running this effect on every keystroke in the phone field isn't desired.
   }, [coupon, pricing.subtotal, applyCoupon, removeCouponFromStore])
 
   // DATA INTEGRITY FIX — loyalty redemption revalidation on checkout.
@@ -825,6 +826,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         body: JSON.stringify({
           code:     couponCode.trim().toUpperCase(),
           subtotal: pricing.subtotal,
+          phone:    addr.phone || undefined,
         }),
       })
       if (!mountedRef.current) return
@@ -857,7 +859,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }, [couponCode, pricing.subtotal, applyCoupon, trackCouponApplied, trackCouponError])
+  }, [couponCode, pricing.subtotal, addr.phone, applyCoupon, trackCouponApplied, trackCouponError])
 
   // PERF FIX: wrapped in useCallback. pricing.subtotal is a dep; stable
   // dispatcher/store refs and mountedRef (a ref) are not.
@@ -869,7 +871,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     try {
       const res  = await fetch('/api/v1/coupons', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal }),
+        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal, phone: addr.phone || undefined }),
       })
       if (!mountedRef.current) return
       const data = await res.json()
@@ -893,7 +895,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }, [pricing.subtotal, applyCoupon, trackCouponApplied, trackCouponError])
+  }, [pricing.subtotal, addr.phone, applyCoupon, trackCouponApplied, trackCouponError])
 
   // BUG FIX: mountedRef guards added — same class of bug as handleCoupon /
   // handleApplyCouponHint (fixed in the previous pass, Fix 13 in useCartPage).

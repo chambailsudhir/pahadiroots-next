@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
-    const result = await validateCouponServer(parsed.data.code, parsed.data.subtotal)
+    const result = await validateCouponServer(parsed.data.code, parsed.data.subtotal, parsed.data.phone)
     if (!result.valid) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
