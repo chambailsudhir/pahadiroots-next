@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 import { toCardProductData } from '@/lib/normalizeProduct'
@@ -98,12 +97,6 @@ export default async function RegionPage({ params, searchParams }: Props) {
   const state = (storeData.states || []).find((s: any) => String(s.id) === slug)
   if (!state) notFound()
 
-  // Get state image
-  const stateImages = (storeData.state_images || [])
-    .filter((i: any) => String(i.state_id) === String(state.id))
-    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-  const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
-
   // Get products for this state
   // BUG FIX (perf): this ran a full-catalog normalize independently on
   // every one of the 12 statically-generated /regions/[slug] pages during
@@ -152,43 +145,29 @@ export default async function RegionPage({ params, searchParams }: Props) {
         }}
       />
 
-      {/* Hero
-          BUG FIX (content/UX pass, Sep 2026): was a fixed 280px tall on
-          every viewport — on mobile that's most of the first screen given
-          over to a decorative background image with only 3 short lines of
-          real content on it. Now clamps down to 190px on narrow phones,
-          scaling up to the original 280px on desktop, where the extra
-          height actually has room to breathe.
-      */}
+      {/* Hero — same box model as /collections/[slug]: padding-based, not
+          fixed-height, no background photo. Previously this hero absolutely
+          positioned the state photo (dimmed under a dark gradient) inside a
+          fixed/clamped-height box; removed the image entirely per explicit
+          request and switched to the collections hero's padding-driven
+          sizing so the two hero types stay visually consistent. */}
       <div style={{
-        position: 'relative', height: 'clamp(190px, 32vw, 280px)',
-        background: meta?.panelBg ?? 'linear-gradient(135deg,#1a3a1e,#2d5a35)',
-        overflow: 'hidden'
+        background: meta?.panelBg ?? 'linear-gradient(135deg,#1a3a1e 0%,#2d5a35 60%,#3a7042 100%)',
+        padding: '40px 40px 36px', position: 'relative', overflow: 'hidden'
       }}>
-        {stateImageUrl && (
-          <Image
-            src={stateImageUrl}
-            alt={state.name}
-            fill
-            sizes="100vw"
-            style={{ objectFit: 'cover', objectPosition: 'center 30%', opacity: 0.55 }}
-            priority
-          />
-        )}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 60%)' }} />
-        <div className="region-hero-content" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '10px' }}>
+        <div className="region-hero-content" style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'rgba(255,255,255,.6)', marginBottom: '16px' }}>
             <Link href="/" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Home</Link>
             <span>/</span>
             <Link href="/regions" style={{ color: 'rgba(255,255,255,.6)', textDecoration: 'none' }}>Regions</Link>
             <span>/</span>
             <span style={{ color: '#fff' }}>{state.name}</span>
           </div>
-          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>
+          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)', fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
             {meta?.emoji ? `${meta.emoji} ` : ''}{state.name}
           </h1>
           {meta?.tagline && (
-            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.7)', marginTop: '6px', fontFamily: 'Lato,sans-serif' }}>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,.75)', margin: 0, lineHeight: 1.6, maxWidth: '520px' }}>
               {meta.tagline}
             </p>
           )}
