@@ -152,9 +152,16 @@ export default async function RegionPage({ params, searchParams }: Props) {
         }}
       />
 
-      {/* Hero */}
+      {/* Hero
+          BUG FIX (content/UX pass, Sep 2026): was a fixed 280px tall on
+          every viewport — on mobile that's most of the first screen given
+          over to a decorative background image with only 3 short lines of
+          real content on it. Now clamps down to 190px on narrow phones,
+          scaling up to the original 280px on desktop, where the extra
+          height actually has room to breathe.
+      */}
       <div style={{
-        position: 'relative', height: '280px',
+        position: 'relative', height: 'clamp(190px, 32vw, 280px)',
         background: meta?.panelBg ?? 'linear-gradient(135deg,#1a3a1e,#2d5a35)',
         overflow: 'hidden'
       }}>
