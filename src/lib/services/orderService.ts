@@ -516,7 +516,7 @@ export async function createOrder(
   // the only line of defence.
   let appliedCoupon: import('@/types').AppliedCoupon | null = null
   // Retain the raw DB row so we can atomically increment uses_count after order creation.
-  let couponDbRow: { code: string; uses_count: number; max_uses: number | null } | null = null
+  let couponDbRow: { id: number; code: string; uses_count: number; max_uses: number | null } | null = null
   if (input.couponCode) {
     const { data: coupon } = await withTimeout(
       db.from('coupons')
@@ -544,7 +544,7 @@ export async function createOrder(
         throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
       }
 
-      couponDbRow = { code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
+      couponDbRow = { id: coupon.id, code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
       const discountAmt = coupon.type === 'percent'
         ? Math.min(
             Math.round(subtotalForCheck * coupon.value / 100),
@@ -977,6 +977,32 @@ export async function createOrder(
         action:  'createOrder.coupon_increment',
         code:    couponDbRow.code,
         error:   couponIncrErr.message,
+      })
+    }
+
+    // BUG FIX (found live via ORD-2026-00119): the block above only bumps
+    // coupons.uses_count. It never wrote a coupon_usage row — but the admin
+    // Coupons page computes both "Uses" and "Discount Given" entirely from
+    // coupon_usage (grouped/summed client-side), not from uses_count. Every
+    // real coupon order was invisible in that reporting. Insert it here too.
+    // coupon_usage.order_id now has a unique constraint (added alongside this
+    // fix) so an idempotency-key retry just hits a harmless conflict.
+    const { error: couponUsageErr } = await withTimeout(
+      db.from('coupon_usage').insert({
+        coupon_id:       couponDbRow.id,
+        order_id:        newOrder!.id,
+        customer_id:     custId,
+        discount_amount: appliedCoupon?.discount ?? 0,
+      }),
+      8_000,
+      'coupon usage record',
+    )
+    if (couponUsageErr && couponUsageErr.code !== '23505') { // 23505 = unique_violation (retry), not a real failure
+      logger.error('[createOrder] coupon_usage insert failed', {
+        action:  'createOrder.coupon_usage_insert',
+        code:    couponDbRow.code,
+        orderId: newOrder!.id,
+        error:   couponUsageErr.message,
       })
     }
   }
