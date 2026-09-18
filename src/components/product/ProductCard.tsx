@@ -275,7 +275,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             aria-haspopup="dialog"
             aria-label={`Quick view ${product.name}`}
           >
-            👁 Quick View
+            <span aria-hidden="true">👁</span>
+            <span className="piw-qv-label"> Quick View</span>
           </button>
         </div>
 

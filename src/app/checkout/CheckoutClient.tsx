@@ -34,6 +34,7 @@
 import './checkout.css'
 
 import Script from 'next/script'
+import Link from 'next/link'
 import { useCallback, useEffect, useRef }  from 'react'
 import { formatPrice }  from '@/lib/utils'
 import { INDIA_STATES } from '@/lib/account/constants'
@@ -209,10 +210,18 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       {/* Breadcrumb */}
       <nav className="ck-nav">
         <div className="ck-nav-inner">
-          <div className="ck-crumb ck-crumb--done">
+          {/* BUG FIX (navigation dead-end): the completed "Cart" step was a
+              plain <div>, not a link — checkout had no way back to the cart
+              or anywhere else in the store short of the header logo (easy to
+              miss once scrolled), which is especially bad on any screen that
+              blocks Place Order (e.g. the bothPayOff alert below), since the
+              customer was otherwise stuck. Completed steps in a checkout
+              breadcrumb are conventionally clickable to go back; only "Cart"
+              qualifies (Confirmation is ahead, not reachable early). */}
+          <Link href="/cart" className="ck-crumb ck-crumb--done ck-crumb--link">
             <div className="ck-crumb-dot ck-crumb-dot--done">✓</div>
             <span>Cart</span>
-          </div>
+          </Link>
           <div className="ck-crumb-line ck-crumb-line--done" />
           <div className="ck-crumb ck-crumb--active">
             <div className="ck-crumb-dot ck-crumb-dot--active">2</div>
@@ -227,7 +236,10 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       </nav>
 
       {bothPayOff && (
-        <div className="ck-alert">⚠ Checkout temporarily unavailable. Please contact support.</div>
+        <div className="ck-alert">
+          ⚠ Checkout temporarily unavailable. Please contact support.{' '}
+          <Link href="/cart" className="ck-alert-link">← Back to Cart</Link>
+        </div>
       )}
 
       <div className="ck-page">

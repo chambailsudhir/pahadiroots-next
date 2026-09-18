@@ -28,8 +28,18 @@
 .ck-crumb-line       { flex: 0 0 40px; height: 1px; background: #E0D8CE; margin: 0 8px; }
 .ck-crumb-line--done { background: #B8D4A8; }
 
+/* BUG FIX (navigation dead-end): the "Cart" breadcrumb step is now a real
+   link (see CheckoutClient.tsx); style it so it still reads as a completed
+   step at rest, with an obvious link affordance on hover/focus rather than
+   looking clickable only via cursor. */
+.ck-crumb--link { text-decoration: none; cursor: pointer; }
+.ck-crumb--link:hover, .ck-crumb--link:focus-visible { color: #4A7A3A; }
+.ck-crumb--link:focus-visible { outline: 2px solid #4A7A3A; outline-offset: 3px; border-radius: 4px; }
+
 /* ── Alerts ────────────────────────────────────────────── */
 .ck-alert { background: #FEF0EE; border-bottom: 1px solid #F5C8C0; color: #B03020; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 40px; text-align: center; }
+.ck-alert-link { color: #B03020; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.ck-alert-link:hover, .ck-alert-link:focus-visible { color: #7A1F14; }
 
 /* ── Page layout ───────────────────────────────────────── */
 .ck-page { background: #F7F2EB; min-height: calc(100vh - 100px); width: 100%; }
