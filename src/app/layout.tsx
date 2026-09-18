@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
+import MobileBottomNav from '@/components/layout/MobileBottomNav'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
@@ -261,6 +262,11 @@ export default async function RootLayout({
             />
           </noscript>
         )}
+        {/* Sentinel for MobileBottomNav's scroll-to-top button — observed
+            via IntersectionObserver instead of a scroll listener so the
+            button's show/hide never runs on the scroll thread. Sits at
+            the true top of the page regardless of header height. */}
+        <div id="mbn-scroll-sentinel" aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1 }} />
         {/* Skip-to-content: visible on focus for keyboard / screen-reader users */}
         <SkipLink />
         <ScrollRestorationFix />
@@ -273,6 +279,7 @@ export default async function RootLayout({
           <CartDrawer settings={settings} />
           <SearchOverlay />
           <MobileMenu settings={settings} categories={categories} states={states} />
+          <MobileBottomNav settings={settings} />
           <AuthModal />
           <GoogleAuthHandler />
           <ProfilePrefetcher />

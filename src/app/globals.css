@@ -37,8 +37,27 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scrollbar-gutter: stable; }
-body { font-family: var(--font-lato), 'Lato', sans-serif; color: var(--tx); background: #fff; overflow-x: hidden; }
+/* BUG FIX (P1, confirmed via CartDrawer.tsx audit): the page-wide
+   horizontal-pan/blank-space bug reported on mobile. CartDrawer stays
+   mounted at all times (fixed, right-0, w-full max-w-md) and is only
+   pushed off-canvas with translateX(100%) when closed — it never
+   unmounts, because unmounting would kill its own slide-in CSS
+   transition when opened. On iOS Safari specifically, a `fixed`
+   element parked outside the visual viewport via `transform` can still
+   inflate the browser's *layout* viewport (used for scroll/rubber-band
+   extents), even though `overflow-x:hidden` was already set on <body>.
+   Per the HTML5 "overflow propagation" rule, <body>'s overflow is only
+   promoted to the viewport when <html> itself declares no explicit
+   overflow — leaving it undeclared (as it was) is exactly the gap
+   Safari's non-conformant fixed-element handling falls through. Setting
+   overflow-x directly on <html> (not just <body>) removes that gap:
+   it's the standard belt-and-suspenders fix for this exact class of bug
+   and matches how large e-commerce sites constrain the root element
+   rather than relying on propagation alone. width:100% + position:relative
+   on both pins the containing block so no descendant (however positioned)
+   can widen the scrollable area past the true viewport width. */
+html { scroll-behavior: smooth; scrollbar-gutter: stable; overflow-x: hidden; width: 100%; position: relative; }
+body { font-family: var(--font-lato), 'Lato', sans-serif; color: var(--tx); background: #fff; overflow-x: hidden; width: 100%; position: relative; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
 
@@ -385,6 +404,58 @@ footer.site-footer {
 .mob-nav-logo { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: var(--g); margin-bottom: 20px; }
 .mob-nav a { display: block; padding: 11px 14px; color: var(--tx); font-weight: 700; border-radius: 10px; font-size: 14px; }
 .mob-nav a:hover { background: rgba(26,58,30,.07); color: var(--g); }
+
+/* ── MOBILE BOTTOM NAV (app-shell pattern, matches header's 900px breakpoint) ── */
+.mbn { display: none; }
+@media (max-width: 900px) {
+  .mbn {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0;
+    /* BUG FIX (found on re-check): was z-index:900, which sat ABOVE
+       CartDrawer/SearchOverlay/MobileFilterBar (all z-index 40-50) —
+       opening the cart on mobile would show this bar painted over the
+       drawer's checkout button. 35 sits just above the header (30) and
+       normal page content, but below every drawer/modal/overlay in the
+       app (lowest is 40), so any of them correctly covers it while open. */
+    z-index: 35;
+    background: #fff; border-top: 1px solid rgba(26,58,30,.12);
+    box-shadow: 0 -4px 20px rgba(0,0,0,.06);
+    /* env() keeps the bar clear of the home-indicator / gesture area on
+       notched phones — without it the last row of icons sits half
+       under the system UI on iPhone/most Android gesture nav. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* Content must not render underneath the fixed bar — height match the
+     visual bar height (56px) + safe-area so the last bit of every page
+     (and the footer) is never hidden behind it. */
+  #main-content { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+}
+.mbn-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; height: 56px; background: none; border: none; color: #7a7a7a;
+  font-size: 10.5px; font-weight: 700; font-family: inherit; text-decoration: none;
+  cursor: pointer; position: relative; transition: color .15s;
+}
+.mbn-item svg { width: 21px; height: 21px; }
+.mbn-item.active, .mbn-item:active { color: var(--g); }
+.mbn-badge {
+  position: absolute; top: 2px; right: calc(50% - 18px);
+  background: #c0392b; color: #fff; border-radius: 50%;
+  min-width: 15px; height: 15px; font-size: 9px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center; border: 1.5px solid #fff;
+}
+
+/* ── SCROLL TO TOP ── */
+.stt-btn {
+  position: fixed; right: 16px; z-index: 34;
+  bottom: calc(16px + 56px + env(safe-area-inset-bottom, 0px));
+  width: 42px; height: 42px; border-radius: 50%; border: none;
+  background: var(--g); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  opacity: 0; pointer-events: none; transform: translateY(8px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.stt-btn.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+@media (min-width: 901px) { .stt-btn { bottom: 24px; } }
 
 /* ── DARK MODE ── */
 /* BUG FIX (P1): dark mode was completely non-functional for the page

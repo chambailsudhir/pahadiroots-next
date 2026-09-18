@@ -159,6 +159,14 @@ export default function MobileFilterBar({
           padding: 13px 26px; font-size: 14px; font-weight: 700;
           box-shadow: 0 8px 24px rgba(26,58,30,.35); cursor: pointer;
         }
+        /* BUG FIX (found on re-check after adding the global mobile bottom
+           nav): this trigger was pinned at a flat bottom:18px, which now
+           sits inside the new 56px-tall bottom nav bar's footprint,
+           overlapping its icons. Lifted to clear the bar + safe area on
+           the same breakpoint the bar itself uses (900px). */
+        @media (max-width: 900px) {
+          .mfb-trigger { bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 14px); }
+        }
         .mfb-trigger-badge {
           background: #c8920a; color: #fff; border-radius: 50%;
           width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
