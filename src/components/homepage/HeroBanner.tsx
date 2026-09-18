@@ -394,6 +394,42 @@ export default function HeroBanner({ images, settings }: Props) {
         @media(max-width:540px){
           .hslide-content-inner { padding: 0 16px !important; }
         }
+        /* BUG FIX (mobile hero cropped/"zoomed" — reported via screenshot,
+           pahadiroots.com vs. a competitor's site rendering the same kind
+           of banner correctly on phone):
+           The container above is a fixed 82vh tall regardless of viewport
+           width. That's a deliberate, tuned trade-off on desktop (see the
+           long comment on #home-hero-banner) where 82vh keeps the
+           container's shape close to these banners' native ~1.87:1 aspect
+           ratio, so object-fit:cover only crops a small amount off the
+           top/bottom. On a narrow phone, 82vh is still 82% of the SCREEN
+           HEIGHT — e.g. ~550-600px tall on a typical phone — against a
+           viewport that's only ~380-420px WIDE. That makes the container's
+           shape roughly 0.65:1 (tall and narrow) instead of 1.87:1 (wide),
+           the opposite problem from desktop: now object-fit:cover has to
+           crop enormously off the LEFT and RIGHT to fill that tall shape,
+           which is exactly what sliced the "V" off "Veda" and the bottle
+           label in the reported screenshot — only a thin center strip of
+           each wide banner survives.
+           Fix: below 768px, let the container's height follow the image's
+           own aspect ratio (matching the ~1.87:1 these banners are shot
+           at, per the note above) instead of a fixed viewport-height
+           value. With the container's shape matching the image's shape,
+           cover has nothing left to crop horizontally — the full banner
+           (all baked-in text/logo included) stays in frame, just shorter,
+           the same way a responsive banner behaves on any other mobile
+           commerce site. !important is required on height/min-height/
+           max-height only because those three are set via inline style
+           above, which otherwise always wins over an external stylesheet
+           rule regardless of specificity. */
+        @media(max-width:768px){
+          #home-hero-banner {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            aspect-ratio: 1.87 / 1;
+          }
+        }
       `}</style>
     </>
   )
