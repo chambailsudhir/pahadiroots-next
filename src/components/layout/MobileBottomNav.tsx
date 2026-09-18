@@ -85,7 +85,18 @@ export default function MobileBottomNav({ settings }: Props) {
       </button>
 
       <nav className="mbn" aria-label="Mobile quick navigation">
-        <Link href="/" className="mbn-item">
+        {/* BUG FIX (found on re-check — earlier report claimed this was done,
+            it wasn't): globals.css already defines .mbn-item.active (color:
+            var(--g)) but nothing ever applied that class, so "Home" never
+            visually confirmed you were on the homepage. Home is the only
+            item that maps to a real route — Search/Cart/Menu just open
+            overlays over whatever page you're already on — so it's the only
+            one that can meaningfully be "active" by URL. */}
+        <Link
+          href="/"
+          className={`mbn-item${pathname === '/' ? ' active' : ''}`}
+          aria-current={pathname === '/' ? 'page' : undefined}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V9.5z" />
           </svg>

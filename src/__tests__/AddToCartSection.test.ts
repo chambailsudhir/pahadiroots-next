@@ -30,12 +30,13 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent, screen } from '@testing-library/react'
+import { render, fireEvent, screen, act } from '@testing-library/react'
 import React from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUserStore } from '@/store/userStore'
 import { useUIStore } from '@/store/uiStore'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
+import { resetIntersectionObserverMock, fireIntersection, instances as ioInstances } from './__mocks__/intersectionObserver'
 
 const mockPush = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -96,6 +97,7 @@ beforeEach(() => {
   mockPush.mockClear()
   mockTrackProductView.mockClear()
   mockTrackInHouseAddToCart.mockClear()
+  resetIntersectionObserverMock()
 })
 
 afterEach(() => {
@@ -375,5 +377,82 @@ describe('AddToCartSection — variant save % display', () => {
     const variants = [makeVariant({ id: 11, size: '500g', price: 250, mrp: 250, available_stock: 10 })]
     render(el({ product: makeProduct(), variants }))
     expect(screen.queryByText(/save \d+%/i)).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MISSING TEST COVERAGE FIX — mobile sticky Add to Cart / Buy Now bar
+// (.pdp-mob-bar, driven by showMobBar). Had ZERO coverage despite the file
+// having its own detailed test suite — the IntersectionObserver crash in
+// jsdom (see __mocks__/intersectionObserver.ts) meant no test could render
+// this logic at all until that mock existed.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('AddToCartSection — mobile sticky bar (.pdp-mob-bar)', () => {
+  it('is not in the DOM before any intersection event fires (buy box presumed in view on mount)', () => {
+    const { container } = render(el())
+    expect(container.querySelector('.pdp-mob-bar')).toBeNull()
+  })
+
+  it('appears once the buy box scrolls above the viewport (boundingClientRect.top < 0)', () => {
+    const { container } = render(el())
+    act(() => fireIntersection(false, -120))
+    expect(container.querySelector('.pdp-mob-bar')).not.toBeNull()
+  })
+
+  it('does NOT appear when not-intersecting because the page hasn\'t scrolled to it YET (top > 0) — the top < 0 check exists precisely to distinguish these two cases', () => {
+    const { container } = render(el())
+    act(() => fireIntersection(false, 150)) // not intersecting, but below viewport, not above it
+    expect(container.querySelector('.pdp-mob-bar')).toBeNull()
+  })
+
+  it('disappears again once the buy box scrolls back into view', () => {
+    const { container } = render(el())
+    act(() => fireIntersection(false, -120))
+    expect(container.querySelector('.pdp-mob-bar')).not.toBeNull()
+    act(() => fireIntersection(true))
+    expect(container.querySelector('.pdp-mob-bar')).toBeNull()
+  })
+
+  it('shows the current price, and the struck-through MRP when discounted', () => {
+    const variants = [makeVariant({ id: 11, size: '500g', price: 220, mrp: 300, available_stock: 10 })]
+    const { container } = render(el({ variants }))
+    act(() => fireIntersection(false, -120))
+    expect(container.querySelector('.pdp-mob-price')?.textContent).toContain('220')
+    expect(container.querySelector('.pdp-mob-mrp')?.textContent).toContain('300')
+  })
+
+  it('clicking the sticky Add to Cart button adds the item and opens the cart, same as the real button', () => {
+    const { container } = render(el())
+    act(() => fireIntersection(false, -120))
+    const btn = container.querySelector('.pdp-mob-atc') as HTMLButtonElement
+    fireEvent.click(btn)
+    expect(useCartStore.getState().items.length).toBe(1)
+    expect(useUIStore.getState().isCartOpen).toBe(true)
+  })
+
+  it('clicking the sticky Buy Now button navigates to /checkout, same as the real button', () => {
+    const { container } = render(el())
+    act(() => fireIntersection(false, -120))
+    const btn = container.querySelector('.pdp-mob-buy') as HTMLButtonElement
+    fireEvent.click(btn)
+    vi.advanceTimersByTime(300)
+    expect(mockPush).toHaveBeenCalledWith('/checkout')
+  })
+
+  it('shows "Out of Stock" and disables both sticky buttons for an out-of-stock product', () => {
+    const { container } = render(el({ product: makeProduct({ available_stock: 0 }) }))
+    act(() => fireIntersection(false, -120))
+    const atcBtn = container.querySelector('.pdp-mob-atc') as HTMLButtonElement
+    expect(atcBtn.disabled).toBe(true)
+    expect(atcBtn.textContent).toMatch(/out of stock/i)
+    // Buy Now isn't rendered at all when out of stock, same as the real button's {inStock && (...)}
+    expect(container.querySelector('.pdp-mob-buy')).toBeNull()
+  })
+
+  it('disconnects its observer on unmount (no leaked callback)', () => {
+    const { unmount } = render(el())
+    const instance = ioInstances.at(-1)
+    unmount()
+    expect(instance?.disconnect).toHaveBeenCalled()
   })
 })
