@@ -454,29 +454,29 @@ export default function HeroBanner({ images, settings }: Props) {
             aspect-ratio: 1.87 / 1;
           }
         }
-        /* BUG FIX (mobile hero arrows sitting off-center — reported via
-           screenshot): the -35px top offset and 46px size above were
-           tuned for the tall 82vh desktop hero, where nudging the arrows
-           up slightly off dead-center is a deliberate design choice. On
-           mobile, the fix above shrinks the same container down to an
-           ~1.87:1 banner (as short as ~200-230px on a typical phone) —
-           against that height, a fixed -35px offset is a huge fraction
-           of the container, so the arrows land visibly above center
-           instead of beside the content, which is what made them look
-           misplaced/oversized in the screenshot. True-centering them and
-           trimming the size/inset to match the now-much-shorter banner
-           fixes both. Swipe gestures (see touchStart/touchEnd handlers
-           above) are the primary mobile navigation now; these arrows are
-           a secondary affordance, which is also why they shrink rather
-           than disappear. !important needed for the same reason as
-           #home-hero-banner above — these are inline styles otherwise. */
+        /* BUG FIX (mobile hero arrows still reading as too big/prominent —
+           reported via screenshot even after the shrink-and-recenter fix
+           above): shrinking them to 36px was a half-measure. Every major
+           FMCG/D2C mobile hero (Amazon, Nykaa, Blinkit, Sephora, etc.)
+           doesn't show prev/next arrow buttons on phones at all — on a
+           touch screen, swipe is the expected gesture, and a persistent
+           dark circle sitting on top of hero art/copy just adds visual
+           clutter with no real function once swipe works. The dot/pill
+           position indicator (rendered separately, unaffected by this
+           change) is what phones use to show "which slide am I on";
+           arrows are a mouse-era affordance that only earns its place on
+           desktop, where there's no swipe gesture and hover discovery
+           makes sense. Hiding them outright (rather than the earlier
+           shrink) matches that convention and fully declutters the
+           banner on mobile; the touchStart/touchEnd swipe handlers above
+           are untouched and remain the only mobile navigation. Desktop
+           (>768px) keeps the original 46px arrows exactly as before —
+           this rule only fires below the same 768px breakpoint already
+           used for the rest of the mobile hero layout. */
         @media(max-width:768px){
           .hhero-arrow {
-            width: 36px !important; height: 36px !important; font-size: 20px !important;
-            top: 50% !important; transform: translateY(-50%) !important;
+            display: none !important;
           }
-          .hhero-arrow-prev { left: 10px !important; }
-          .hhero-arrow-next { right: 10px !important; }
         }
       `}</style>
     </>
