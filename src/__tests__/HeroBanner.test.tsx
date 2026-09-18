@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('next/image', () => ({
@@ -145,5 +145,71 @@ describe('HeroBanner — admin-schema fields (eyebrow, colours, coupon, CTAs, vi
     const { container } = render(<HeroBanner images={[{ url: '/hero1.jpg', subtitle: 'Handcrafted in small batches' }]} settings={settings} />)
     expect(container.textContent).toContain('Explore Our Store')
     expect(container.textContent).toContain('Handcrafted in small batches')
+  })
+})
+
+describe('HeroBanner — mobile touch-swipe navigation (missing-feature fix)', () => {
+  // MISSING FEATURE FIX: touch previously only paused autoplay
+  // (onTouchStart/onTouchEnd) — swiping the banner itself never changed
+  // slides, unlike the tap-arrows or dots. These tests exercise the new
+  // touchstart/touchend handlers directly against the real DOM node,
+  // the same way a phone would drive them, rather than calling internal
+  // state setters.
+  const banner = (container: HTMLElement) => container.querySelector('#home-hero-banner') as HTMLElement
+
+  it('advances to the next slide on a left swipe past the 40px threshold', () => {
+    const { container } = render(<HeroBanner images={slides} settings={settings} />)
+    const el = banner(container)
+    fireEvent.touchStart(el, { touches: [{ clientX: 300 }] })
+    fireEvent.touchEnd(el, { changedTouches: [{ clientX: 250 }] }) // -50px = left swipe
+    expect(container.querySelector('h1')?.textContent).toBe('Second Slide')
+  })
+
+  it('goes to the previous (wraps to last) slide on a right swipe past the threshold', () => {
+    const { container } = render(<HeroBanner images={slides} settings={settings} />)
+    const el = banner(container)
+    fireEvent.touchStart(el, { touches: [{ clientX: 200 }] })
+    fireEvent.touchEnd(el, { changedTouches: [{ clientX: 260 }] }) // +60px = right swipe, wraps
+    expect(container.querySelector('h1')?.textContent).toBe('Third Slide')
+  })
+
+  it('ignores a swipe shorter than the 40px threshold (treats it as a tap/jitter)', () => {
+    const { container } = render(<HeroBanner images={slides} settings={settings} />)
+    const el = banner(container)
+    fireEvent.touchStart(el, { touches: [{ clientX: 300 }] })
+    fireEvent.touchEnd(el, { changedTouches: [{ clientX: 285 }] }) // -15px, under threshold
+    expect(container.querySelector('h1')?.textContent).toBe('First Slide')
+  })
+
+  it('does not throw or navigate on a single-slide banner (no swipe target to move to)', () => {
+    const { container } = render(<HeroBanner images={[slides[0]]} settings={settings} />)
+    const el = banner(container)
+    expect(() => {
+      fireEvent.touchStart(el, { touches: [{ clientX: 300 }] })
+      fireEvent.touchEnd(el, { changedTouches: [{ clientX: 100 }] })
+    }).not.toThrow()
+    expect(container.querySelector('h1')?.textContent).toBe('First Slide')
+  })
+})
+
+describe('HeroBanner — prev/next arrow buttons', () => {
+  it('the Next arrow advances the slide and the Previous arrow returns to it', () => {
+    const { container, getByLabelText } = render(<HeroBanner images={slides} settings={settings} />)
+    fireEvent.click(getByLabelText('Next'))
+    expect(container.querySelector('h1')?.textContent).toBe('Second Slide')
+    fireEvent.click(getByLabelText('Previous'))
+    expect(container.querySelector('h1')?.textContent).toBe('First Slide')
+  })
+
+  it('the Previous arrow wraps to the last slide from the first', () => {
+    const { container, getByLabelText } = render(<HeroBanner images={slides} settings={settings} />)
+    fireEvent.click(getByLabelText('Previous'))
+    expect(container.querySelector('h1')?.textContent).toBe('Third Slide')
+  })
+
+  it('does not render arrows at all for a single-slide banner', () => {
+    const { queryByLabelText } = render(<HeroBanner images={[slides[0]]} settings={settings} />)
+    expect(queryByLabelText('Next')).toBeNull()
+    expect(queryByLabelText('Previous')).toBeNull()
   })
 })

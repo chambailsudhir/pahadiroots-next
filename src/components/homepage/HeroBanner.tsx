@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, type TouchEvent } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { SiteSettings } from '@/types'
@@ -98,10 +98,34 @@ export default function HeroBanner({ images, settings }: Props) {
   const [isHovering, setIsHovering] = useState(false)
 
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
+  const prev = useCallback(() => setCurrent(c => (c - 1 + total) % total), [total])
   // BUG FIX (P2): previously a raw setInterval with no
   // prefers-reduced-motion check and no pause when the tab is
   // backgrounded — see hooks/useAutoplayInterval.ts.
   useAutoplayInterval(next, 4500, total > 1 && !isHovering)
+
+  // MISSING FEATURE (found during mobile audit): touch users had no way
+  // to change slides except tapping the tiny arrow buttons — swiping the
+  // banner itself, which is the expected gesture on every mobile
+  // storefront/app carousel, did nothing but pause autoplay. Tracked via
+  // a ref (not state) since we only need the value at touchend, and a
+  // ref avoids a re-render on every touchstart. 40px threshold matches
+  // common carousel libraries (Swiper's default is 50px) — high enough
+  // to ignore an accidental brush, low enough to feel responsive.
+  const touchStartX = useRef<number | null>(null)
+  const handleTouchStart = (e: TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    setIsHovering(true)
+  }
+  const handleTouchEnd = (e: TouchEvent) => {
+    if (touchStartX.current !== null && total > 1) {
+      const delta = e.changedTouches[0].clientX - touchStartX.current
+      if (delta < -40) next()
+      else if (delta > 40) prev()
+    }
+    touchStartX.current = null
+    setTimeout(() => setIsHovering(false), 1800)
+  }
 
   return (
     <>
@@ -129,9 +153,9 @@ export default function HeroBanner({ images, settings }: Props) {
         id="home-hero-banner"
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        onTouchStart={() => setIsHovering(true)}
-        onTouchEnd={() => setTimeout(() => setIsHovering(false), 1800)}
-        style={{ position: 'relative', width: '100%', height: '82vh', minHeight: 540, maxHeight: '82vh', overflow: 'hidden' }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{ position: 'relative', width: '100%', height: '82vh', minHeight: 540, maxHeight: '82vh', overflow: 'hidden', touchAction: 'pan-y' }}
       >
 
         {slides ? slides.map((img, i) => {
@@ -302,11 +326,11 @@ export default function HeroBanner({ images, settings }: Props) {
 
         {/* Prev / Next arrows */}
         {total > 1 && (<>
-          <button onClick={() => setCurrent(c => (c - 1 + total) % total)} aria-label="Previous"
+          <button onClick={prev} aria-label="Previous" className="hhero-arrow hhero-arrow-prev"
             style={{ position:'absolute', left:20, top:'calc(50% - 35px)', transform:'translateY(-50%)', zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:46, height:46, borderRadius:'50%', fontSize:26, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,.4)' }}>
             ‹
           </button>
-          <button onClick={next} aria-label="Next"
+          <button onClick={next} aria-label="Next" className="hhero-arrow hhero-arrow-next"
             style={{ position:'absolute', right:20, top:'calc(50% - 35px)', transform:'translateY(-50%)', zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:46, height:46, borderRadius:'50%', fontSize:26, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,.4)' }}>
             ›
           </button>
@@ -429,6 +453,30 @@ export default function HeroBanner({ images, settings }: Props) {
             max-height: none !important;
             aspect-ratio: 1.87 / 1;
           }
+        }
+        /* BUG FIX (mobile hero arrows sitting off-center — reported via
+           screenshot): the -35px top offset and 46px size above were
+           tuned for the tall 82vh desktop hero, where nudging the arrows
+           up slightly off dead-center is a deliberate design choice. On
+           mobile, the fix above shrinks the same container down to an
+           ~1.87:1 banner (as short as ~200-230px on a typical phone) —
+           against that height, a fixed -35px offset is a huge fraction
+           of the container, so the arrows land visibly above center
+           instead of beside the content, which is what made them look
+           misplaced/oversized in the screenshot. True-centering them and
+           trimming the size/inset to match the now-much-shorter banner
+           fixes both. Swipe gestures (see touchStart/touchEnd handlers
+           above) are the primary mobile navigation now; these arrows are
+           a secondary affordance, which is also why they shrink rather
+           than disappear. !important needed for the same reason as
+           #home-hero-banner above — these are inline styles otherwise. */
+        @media(max-width:768px){
+          .hhero-arrow {
+            width: 36px !important; height: 36px !important; font-size: 20px !important;
+            top: 50% !important; transform: translateY(-50%) !important;
+          }
+          .hhero-arrow-prev { left: 10px !important; }
+          .hhero-arrow-next { right: 10px !important; }
         }
       `}</style>
     </>
