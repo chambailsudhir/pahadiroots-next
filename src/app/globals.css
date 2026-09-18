@@ -1298,6 +1298,9 @@ ul.mega-list.mega-list-2col {
 @media (max-width: 560px) {
   .bl-grid { grid-template-columns: 1fr; }
   .bl-hero { padding: 64px 20px 48px; }
-  .bp-products-grid, .bp-more-grid { grid-template-columns: 1fr; }
+  /* BUG FIX: matched the shopping grids' mobile fix — these related-product
+     and more-stories grids on blog pages were also dropping to a single
+     column below 560px instead of staying at 2, same root cause. */
+  .bp-products-grid, .bp-more-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .bp-prose > *:first-child::first-letter { font-size: 44px; }
 }
