@@ -283,8 +283,14 @@ export default async function BlogArticlePage({ params }: Props) {
                 {moreStories.map(s => (
                   <Link key={s.slug} href={`/blog/${s.slug}`} className="bp-more-card">
                     <div className="bp-more-img">
+                      {/* BUG FIX: sizes was a flat 280px regardless of how many
+                          columns actually render (.bp-more-grid is 3 cols above
+                          900px, 2 cols at/below it — same class of bug as the
+                          product-grid image-sizing fix above). Matched to the
+                          grid's real breakpoints so mobile/tablet don't download
+                          a wider image than the slot needs. */}
                       {s.cover_image ? (
-                        <Image src={s.cover_image} alt={s.title} fill sizes="280px" className="object-cover" />
+                        <Image src={s.cover_image} alt={s.title} fill sizes="(max-width:900px) 50vw, 320px" className="object-cover" />
                       ) : (
                         <div className="bp-more-fallback"><ContourLines className="bl-fallback-contours" /><MountainMark /></div>
                       )}
