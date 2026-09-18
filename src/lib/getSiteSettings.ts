@@ -34,6 +34,17 @@ const DEFAULTS: Partial<SiteSettings> = {
   contact_phone:           '+919899984895',
   contact_address:         'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
   // New section toggle keys (added by migration)
+  // MINOR CONSISTENCY FIX (sync audit): this key is genuinely read on the
+  // homepage (isEnabled(settings.show_category_tiles) in page.tsx) and the
+  // admin panel has a working toggle for it ("Browse Collections" in
+  // Homepage Sections) -- it was just missing from this fallback object,
+  // unlike every sibling show_* key. Not a live bug: isEnabled()'s own
+  // default parameter already treats undefined as true (shown), which
+  // happens to match the intended default -- but leaving it out here means
+  // the one path where getSiteSettings() falls back to DEFAULTS wholesale
+  // (a Supabase read failure) is only "correct by coincidence" rather than
+  // by explicit default, same as every other section toggle here.
+  show_category_tiles:     'true',
   show_trust_bar:          'true',
   trust_bg_color:          '#1a3a1e',
   trust_text_color:        '#ffffff',
