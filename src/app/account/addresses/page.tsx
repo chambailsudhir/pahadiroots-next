@@ -113,6 +113,21 @@ export default function AddressesPage() {
                 className={styles.saFInp}
               />
             </div>
+            {/* Phone */}
+            <div className={styles.saFormSpan2}>
+              <label className={styles.saFLbl}>Phone Number *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={addrs.form.phone}
+                onChange={e => addrs.setField('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit mobile number"
+                maxLength={10}
+                autoComplete="tel"
+                className={`${styles.saFInp}${addrs.formErr.phone ? ' ' + styles.saFErr : ''}`}
+              />
+              {addrs.formErr.phone && <p className={styles.saFErrMsg}>{addrs.formErr.phone}</p>}
+            </div>
             {/* Street */}
             <div className={styles.saFormSpan2}>
               <label className={styles.saFLbl}>Street / Flat / Colony *</label>
@@ -202,6 +217,7 @@ export default function AddressesPage() {
                 {addr.name && <div className={styles.saCardName}>{addr.name}</div>}
                 <div className={styles.saCardLine}>{addr.addr}</div>
                 <div className={styles.saCardSub}>{[addr.city, addr.state, addr.pin].filter(Boolean).join(', ')}</div>
+                {addr.phone && <div className={styles.saCardSub}>{addr.phone}</div>}
               </div>
               <div className={styles.saCardActions}>
                 <button

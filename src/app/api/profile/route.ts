@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       syncCustomerProfile(user),
       sbAdmin(
         'GET',
-        `/rest/v1/saved_addresses?select=id,label,name,addr,city,state,pin,customer_id,customers!inner(auth_user_id)&customers.auth_user_id=eq.${user.id}&order=created_at.asc&limit=20`,
+        `/rest/v1/saved_addresses?select=id,label,name,phone,addr,city,state,pin,customer_id,customers!inner(auth_user_id)&customers.auth_user_id=eq.${user.id}&order=created_at.asc&limit=20`,
       ).catch(() => null),  // null = !inner JOIN not supported (older PostgREST)
     ])
 
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       savedAddressRows = profile?.id
         ? await sbAdmin(
             'GET',
-            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=id,label,name,addr,city,state,pin&order=created_at.asc&limit=20`,
+            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=id,label,name,phone,addr,city,state,pin&order=created_at.asc&limit=20`,
           ).catch(() => [] as unknown[])
         : []
     } else {
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
       id:          string
       label:       string
       name?:       string
+      phone?:      string
       addr:        string
       city:        string
       state:       string
@@ -173,6 +174,9 @@ export async function POST(req: NextRequest) {
           customer_id: profile.id,
           label: a.label  || 'Home',
           name:  a.name   || null,
+          // Per-address contact number — normalized to bare 10 digits so a
+          // pasted "+91 98765-43210" from the client never gets stored raw.
+          phone: typeof a.phone === 'string' ? (a.phone.replace(/\D/g, '').slice(-10) || null) : null,
           addr:  a.addr   || '',
           city:  a.city   || '',
           state: a.state  || '',

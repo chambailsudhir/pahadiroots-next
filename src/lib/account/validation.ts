@@ -53,7 +53,7 @@ export function validateAddress(fields: {
 }
 
 export function validateNewAddress(fields: {
-  label: string; flat: string; city: string; state: string; pin: string
+  label: string; flat: string; city: string; state: string; pin: string; phone: string
 }): FormErrors {
   const e: FormErrors = {}
   if (!fields.label)              e.label = 'Please select a label'
@@ -61,6 +61,10 @@ export function validateNewAddress(fields: {
   if (!fields.city.trim())        e.city  = 'City is required'
   if (!fields.state)              e.state = 'Please select a state'
   if (fields.pin && !validate.pincode(fields.pin)) e.pin = 'Enter a valid 6-digit pincode'
+  // Required — this is the number the courier actually calls for THIS address,
+  // which may differ from the account holder's own phone (Office/Parents/etc).
+  if (!fields.phone.trim())       e.phone = 'Phone number is required'
+  else if (!validate.phone(fields.phone)) e.phone = 'Enter a valid 10-digit mobile number (starts with 6–9)'
   return e
 }
 

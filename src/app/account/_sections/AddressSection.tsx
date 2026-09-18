@@ -57,6 +57,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
               <div className={styles.addrLine}>
                 {a.name && <><strong>{a.name}</strong><br /></>}
                 {[a.addr, a.city, a.state, a.pin].filter(Boolean).join(', ')}
+                {a.phone && <><br /><span style={{ color: '#888' }}>{a.phone}</span></>}
               </div>
               <div className={styles.addrActions}>
                 {addresses.confirmDeleteId === a.id ? (
@@ -141,6 +142,21 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                     placeholder="Full name"
                     autoComplete="name"
                   />
+                </div>
+                <div>
+                  <label htmlFor="addr-phone" className={styles.fLbl}>Phone Number *</label>
+                  <input
+                    id="addr-phone"
+                    className={`${styles.fInp}${addresses.formErr.phone ? ' ' + styles.fErr : ''}`}
+                    value={addresses.form.phone}
+                    onChange={e => addresses.setField('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="tel"
+                    aria-describedby={addresses.formErr.phone ? 'addr-phone-err' : undefined}
+                  />
+                  {addresses.formErr.phone && <div id="addr-phone-err" className={styles.errTxt}>{addresses.formErr.phone}</div>}
                 </div>
                 <div className={styles.formFull}>
                   <label htmlFor="addr-street" className={styles.fLbl}>Street / Flat / Colony *</label>

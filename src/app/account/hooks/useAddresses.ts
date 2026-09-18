@@ -24,7 +24,7 @@ import type { FormErrors }    from '@/lib/account/validation'
 import type { SavedAddress } from '@/lib/account/utils'
 
 export const EMPTY_ADDRESS_FORM = {
-  label: '', name: '', addr: '', city: '', state: '', pin: '',
+  label: '', name: '', phone: '', addr: '', city: '', state: '', pin: '',
 }
 export type AddressForm = typeof EMPTY_ADDRESS_FORM
 
@@ -68,7 +68,7 @@ export function useAddresses(config: AddressesConfig) {
 
   function startEdit(addr: SavedAddress) {
     setFormState({
-      label: addr.label, name: addr.name, addr: addr.addr,
+      label: addr.label, name: addr.name, phone: addr.phone || '', addr: addr.addr,
       city:  addr.city,  state: addr.state, pin: addr.pin,
     })
     setEditId(addr.id)
@@ -92,7 +92,7 @@ export function useAddresses(config: AddressesConfig) {
     // validateNewAddress uses 'flat' as the street-address key; remap to 'addr'.
     const raw = validateNewAddress({
       label: form.label, flat: form.addr,
-      city:  form.city,  state: form.state, pin: form.pin,
+      city:  form.city,  state: form.state, pin: form.pin, phone: form.phone,
     })
     if (Object.keys(raw).length) {
       const errs: FormErrors = { ...raw }
@@ -103,9 +103,12 @@ export function useAddresses(config: AddressesConfig) {
     setFormErr({})
     setSaving(true)
     try {
+      // Normalize to bare 10 digits so a pasted "+91 98765-43210" style
+      // value is stored the same way as a typed one.
+      const cleanForm = { ...form, phone: form.phone.replace(/\D/g, '').slice(-10) }
       let updated: SavedAddress[]
       if (editId) {
-        updated = current.map(a => a.id === editId ? { ...a, ...form } : a)
+        updated = current.map(a => a.id === editId ? { ...a, ...cleanForm } : a)
       } else {
         if (current.length >= 10) {
           showToast('Maximum 10 addresses allowed. Remove one first.', 'error')
@@ -117,7 +120,7 @@ export function useAddresses(config: AddressesConfig) {
           a.pin === form.pin
         )
         if (isDuplicate) { showToast('This address already exists.', 'error'); return }
-        updated = [...current, { id: crypto.randomUUID(), ...form }]
+        updated = [...current, { id: crypto.randomUUID(), ...cleanForm }]
       }
       await persist(updated)
       showToast(editId ? '✅ Address updated!' : '✅ Address saved!')

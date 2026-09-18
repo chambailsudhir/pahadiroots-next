@@ -13,6 +13,9 @@ export interface SavedAddress {
   id:    string   // crypto.randomUUID() generated on the client
   label: string   // 'Home' | 'Office' | … (from ADDRESS_LABELS)
   name:  string   // contact name (optional in form, defaults to '')
+  phone: string   // contact mobile number FOR THIS ADDRESS — not the account phone.
+                   // Required so couriers reach whoever is actually at Office/Parents/
+                   // Friends addresses instead of always calling the account holder.
   addr:  string   // street / flat / colony
   city:  string
   state: string
@@ -69,6 +72,7 @@ export function getSavedAddresses(
       id:    String(raw.id),
       label: typeof raw.label === 'string' ? raw.label : '',
       name:  typeof raw.name  === 'string' ? raw.name  : '',
+      phone: typeof raw.phone === 'string' ? raw.phone : '',
       addr:  typeof raw.addr  === 'string' ? raw.addr  : '',
       city:  typeof raw.city  === 'string' ? raw.city  : '',
       state: typeof raw.state === 'string' ? raw.state : '',
