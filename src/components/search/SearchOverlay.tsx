@@ -129,7 +129,15 @@ export default function SearchOverlay() {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeSearch} />
 
       {/* Panel */}
-      <div className="relative z-10 max-w-xl mx-auto mt-16 mx-4 sm:mx-auto px-4">
+      {/* BUG FIX (mobile): "mx-auto" and "mx-4" both applied at the base
+          breakpoint (mx-4 had no prefix, sm:mx-auto only kicks in at sm+),
+          so the two conflicting margin utilities raced on Tailwind's CSS
+          source order rather than className order — on some builds this
+          left the panel flush against the screen edges on mobile instead
+          of the intended 16px breathing room. Removed the redundant base
+          mx-auto so mx-4 always wins on mobile, sm:mx-auto takes over once
+          max-w-xl actually has room to center. */}
+      <div className="relative z-10 max-w-xl mt-16 mx-4 sm:mx-auto px-4">
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
 
           {/* Input */}

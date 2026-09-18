@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData, getEffectivePrice } from '@/lib/normalizeProduct'
-import { getSiteSettings } from '@/lib/getSiteSettings'
 import ProductCard from '@/components/product/ProductCard'
 import CategoryMotif from '@/components/collections/CategoryMotif'
 import type { Product } from '@/types'
@@ -63,8 +62,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 }
 
 export default async function CollectionPage({ params, searchParams }: Props) {
-  const [{ slug }, sp, storeData, settings] = await Promise.all([
-    params, searchParams, getStoreData(), getSiteSettings(),
+  // BUG FIX (sync audit): getSiteSettings() was fetched here and never used
+  // anywhere in this file — an unused settings read (and its own Supabase
+  // hit / cache entry) on every single category-page load, unlike /products
+  // and /products/[slug] which fetch it and actually consume the fields.
+  // Removed; nothing else in this file referenced it.
+  const [{ slug }, sp, storeData] = await Promise.all([
+    params, searchParams, getStoreData(),
   ])
 
   // Find category using SERVICE KEY data (no RLS issues)
