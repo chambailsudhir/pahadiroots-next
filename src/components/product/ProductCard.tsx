@@ -246,11 +246,12 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             // downloaded an image 1.5-3x larger in each dimension — 2-9x the
             // file size — than the ~320-340px it's ever actually shown at.
             // Fixed to describe the real rendered width at each breakpoint
-            // instead of a viewport fraction: full-width on phones (1
-            // column), ~half-width on small tablets (2 columns), and the
+            // instead of a viewport fraction: ~half-width on phones and
+            // small tablets (2 columns — see the .prod-page-grid mobile
+            // breakpoints in globals.css, both now 2 columns), and the
             // fixed 340px card cap everywhere wider (3+ columns, where width
             // stops growing with the viewport).
-            sizes="(max-width:480px) 100vw, (max-width:768px) 50vw, 340px"
+            sizes="(max-width:768px) 50vw, 340px"
             quality={75}
             loading={priority ? 'eager' : 'lazy'}
             priority={priority}

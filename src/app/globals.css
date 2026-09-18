@@ -515,7 +515,13 @@ footer.site-footer {
 /* sidebar=200px + gap=24px + padding=80px → remaining ≈ 1096px → 4 cols × ~260px each */
 .prod-page-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,320px)); justify-content: center; gap: 20px; }
 @media(max-width:768px)  { .prod-page-grid { grid-template-columns: repeat(2,1fr); gap: 12px; } }
-@media(max-width:480px)  { .prod-page-grid { grid-template-columns: repeat(1,1fr); } }
+/* BUG FIX: this used to drop to a single column below 480px, so every
+   listing page built on .prod-page-grid (Shop All /products, /new-arrivals,
+   /collections/[slug]) showed one product per row on phones, while the
+   homepage grids (.pgrid, .pr-spgrid below) stayed at 2 columns all the way
+   down. Matched this grid to the same 2-column mobile behavior instead of
+   overriding back to 1. */
+@media(max-width:480px)  { .prod-page-grid { grid-template-columns: repeat(2,1fr); gap: 10px; } }
 
 /* ══════════════════════════════════════════════════════════
    MEGA MENU — after @tailwind base, wins over Preflight
