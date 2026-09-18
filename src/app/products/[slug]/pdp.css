@@ -226,3 +226,37 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-wl-btn{width:44px;height:44px;border:2px solid rgba(26,58,30,.12);border-radius:50%;background:#fff;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .pdp-wl-btn:hover{border-color:#2d5233}
 .pdp-wl-btn.active{border-color:#e74c3c;background:#fff5f5}
+
+/* ── Mobile sticky Add-to-Cart bar (mobile audit follow-up) ──
+   Hidden by default; only rendered by React once the real buy box has
+   scrolled out of view, so this display:none is a second safety net that
+   also keeps it off desktop regardless of that JS state. Sits above the
+   global mobile bottom nav (.mbn, z-index:35, 56px tall) rather than under
+   it — same offset math as MobileFilterBar's fix — and below every
+   drawer/modal (40+) so the cart/search overlays still correctly cover it. */
+.pdp-mob-bar{
+  display:none;
+}
+@media(max-width:900px){
+  .pdp-mob-bar{
+    display:flex; position:fixed; left:0; right:0;
+    bottom:calc(56px + env(safe-area-inset-bottom,0px));
+    z-index:36; background:rgba(255,255,255,.97); backdrop-filter:blur(16px);
+    border-top:1px solid rgba(26,58,30,.12);
+    box-shadow:0 -6px 24px rgba(0,0,0,.08);
+    padding:10px 14px; align-items:center; justify-content:space-between; gap:12px;
+  }
+}
+.pdp-mob-price-col{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
+.pdp-mob-price{font-size:18px;font-weight:800;color:#1a3a1e;font-family:inherit}
+.pdp-mob-mrp{font-size:12px;color:#999;text-decoration:line-through}
+.pdp-mob-actions{display:flex;gap:8px;flex:1;min-width:0}
+.pdp-mob-atc,.pdp-mob-buy{
+  flex:1;height:42px;border:none;border-radius:10px;font-size:13px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+  font-family:inherit;white-space:nowrap;transition:opacity .2s;
+}
+.pdp-mob-atc{background:#c0392b;color:#fff}
+.pdp-mob-atc.added{background:#922b21}
+.pdp-mob-atc:disabled,.pdp-mob-buy:disabled{opacity:.45;cursor:not-allowed}
+.pdp-mob-buy{background:linear-gradient(135deg,#1a3a1e,#2d5a32);color:#fff}

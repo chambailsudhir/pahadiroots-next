@@ -35,6 +35,42 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const [added, setAdded]     = useState(false)
   const [buying, setBuying]   = useState(false)
 
+  // BUG FIX (mobile — missed in the earlier mobile audit): once the user
+  // scrolls past this buy box on a phone (into description/reviews/related
+  // products, all of which can run long), Add to Cart and Buy Now scroll
+  // out of view entirely with nothing to replace them — the user has to
+  // scroll all the way back up to purchase. Checkout and /account already
+  // have their own sticky mobile bars for exactly this reason; the PDP
+  // never got one. Same IntersectionObserver technique already used for
+  // MobileBottomNav's scroll-to-top button (off the scroll thread, no
+  // scroll-event jank) — watches the buy box itself rather than a separate
+  // sentinel, so no extra DOM node is needed.
+  const [showMobBar, setShowMobBar] = useState(false)
+  const buyBoxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = buyBoxRef.current
+    // Guard for environments with no IntersectionObserver (older browsers,
+    // and jsdom in the test suite, which doesn't implement it at all) — the
+    // sticky bar just doesn't appear in that case; the always-visible buy
+    // box above still works, so this is a safe no-op fallback rather than
+    // a crash.
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) { setShowMobBar(false); return }
+        // Not intersecting can mean two different things: the buy box has
+        // scrolled UP out of view (top < 0 — user is past it, show the bar)
+        // or it hasn't been scrolled TO yet (top > 0, e.g. right after
+        // mount before any scrolling) — don't show the bar in that case.
+        setShowMobBar(entry.boundingClientRect.top < 0)
+      },
+      { threshold: 0 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+
   // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
   // column the pricing engine no longer writes to — prefer selling_price.
   const price    = selectedVariant?.price   ?? product.selling_price ?? product.price
@@ -225,7 +261,7 @@ export default function AddToCartSection({ product, variants, settings }: Props)
       )}
 
       {/* ── Qty + Cart row ── */}
-      <div className="pdp-qty-atc">
+      <div className="pdp-qty-atc" ref={buyBoxRef}>
         <div className="pdp-qty-row">
           {/* Qty control */}
           <div className="pdp-qty-ctrl">
@@ -303,6 +339,49 @@ export default function AddToCartSection({ product, variants, settings }: Props)
           </button>
         )}
       </div>
+
+      {/* Mobile sticky bar — mirrors checkout's .ck-mob-bar pattern. Hidden
+          on desktop via CSS (pdp.css); shown only once showMobBar flips true,
+          i.e. only after the real buy box above has scrolled out of view, so
+          it never double-renders both at once. Sits above the global mobile
+          bottom nav (.mbn, z-index:35) rather than replacing it — same
+          approach as MobileFilterBar's reposition fix, not a route-level
+          suppression, since the bottom nav's Home/Search/Cart/Menu links are
+          still useful context while browsing a product page. */}
+      {showMobBar && (
+        <div className="pdp-mob-bar" role="region" aria-label={`Quick add — ${product.name}`}>
+          <div className="pdp-mob-price-col">
+            <span className="pdp-mob-price">₹{price}</span>
+            {mrp > price && <span className="pdp-mob-mrp">₹{mrp}</span>}
+          </div>
+          <div className="pdp-mob-actions">
+            <button
+              type="button"
+              className={`pdp-mob-atc${added ? ' added' : ''}`}
+              onClick={() => handleAdd('add')}
+              disabled={!inStock || added}
+              aria-label={
+                added    ? `${product.name} added to cart` :
+                !inStock ? `${product.name} out of stock` :
+                `Add ${product.name} to cart`
+              }
+            >
+              {added ? '✅ Added' : !inStock ? 'Out of Stock' : '🛒 Add to Cart'}
+            </button>
+            {inStock && (
+              <button
+                type="button"
+                className="pdp-mob-buy"
+                onClick={() => handleAdd('buy')}
+                disabled={buying}
+                aria-label={buying ? `Processing order for ${product.name}` : `Buy ${product.name} now`}
+              >
+                {buying ? '⚡…' : '⚡ Buy Now'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   )

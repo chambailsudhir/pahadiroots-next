@@ -10,6 +10,12 @@ interface Props { images: GalleryImage[]; productName: string; savings?: number 
 export default function ProductGallery({ images, productName, savings = 0 }: Props) {
   const [active, setActive]   = useState(0)
   const [zoomed, setZoomed]   = useState(false)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  // Distinguishes a swipe from a tap so the click handler below (which opens
+  // the zoom lightbox) doesn't also fire right after a swipe — mobile
+  // browsers dispatch a synthetic click after touchend unless the swipe
+  // itself was on a non-clickable target.
+  const didSwipeRef = useRef(false)
   // BUG FIX (portal): the lightbox was rendered in-place as a plain
   // descendant of ProductGallery, which lives inside `.pdp-img-col`
   // (`position: sticky` in pdp.css). `position: sticky` unconditionally
@@ -91,6 +97,36 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
   const prev = () => setActive(i => (i - 1 + images.length) % images.length)
   const next = () => setActive(i => (i + 1) % images.length)
 
+  // BUG FIX (mobile — missed in the earlier mobile audit): the gallery had
+  // prev/next arrow buttons and tap-thumbnail switching, but no swipe
+  // gesture on the main image itself — the interaction mobile shoppers
+  // actually reach for first on a product gallery. Threshold-based touch
+  // tracking (not a full gesture library, since this is a single
+  // horizontal swipe, not a draggable/animated carousel): a swipe is only
+  // registered past SWIPE_THRESHOLD px so an accidental small drag doesn't
+  // change the image, and a mostly-vertical touch (page scroll) is ignored
+  // by comparing horizontal vs vertical distance before deciding.
+  const SWIPE_THRESHOLD = 40
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    touchStartRef.current = { x: t.clientX, y: t.clientY }
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touchStartRef.current
+    touchStartRef.current = null
+    if (!start || images.length < 2) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return
+    didSwipeRef.current = true
+    if (dx < 0) next(); else prev()
+  }
+  function handleTriggerClick() {
+    if (didSwipeRef.current) { didSwipeRef.current = false; return }
+    openZoom()
+  }
+
   return (
     <>
       {/* Main image */}
@@ -101,7 +137,9 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
           background: '#f8f5f0', aspectRatio: '4/5', cursor: 'zoom-in',
           boxShadow: '0 8px 40px rgba(0,0,0,.14)'
         }}
-        onClick={openZoom}
+        onClick={handleTriggerClick}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
         role="button"
         aria-label="View full image"
         tabIndex={0}
