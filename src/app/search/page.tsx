@@ -18,7 +18,20 @@ function SearchContent() {
   const { data: results, isLoading } = useSWR<Product[]>(
     q ? `search-full-${q}` : null,
     async () => {
-      const { data } = await supabase
+      // BUG FIX: `tags` is a Postgres ARRAY column (see src/types/index.ts's
+      // stale `tags: string | null` typing — the code here was written as if
+      // it were plain text). PostgREST's `ilike` operator isn't valid on an
+      // array column, so `tags.ilike.%${q}%` made the whole `.or(...)` filter
+      // invalid. Supabase returned that as an error with `data: null`, and
+      // this call threw the error away (`data ?? []`), so EVERY search —
+      // any term, not just "Honey" — silently came back as "0 results"
+      // instead of surfacing the failure. Matching by name alone is what
+      // actually works today (no product currently has tags populated —
+      // confirmed live: 0 of 17 rows have a non-empty tags array); tag
+      // search can be reintroduced later via an RPC that does
+      // `EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ...)`, which is
+      // the correct way to substring-match inside an array column.
+      const { data, error } = await supabase
         .from('products')
         .select(`
           id, name, slug, emoji, price, selling_price, mrp, available_stock, gst_rate,
@@ -28,9 +41,12 @@ function SearchContent() {
           product_variants(id, price, original_price, variant_value, available_stock, is_active)
         `)
         .eq('is_deleted', false)
-    .eq('status', 'active')
-        .or(`name.ilike.%${q}%,tags.ilike.%${q}%`)
+        .eq('status', 'active')
+        .ilike('name', `%${q}%`)
         .limit(48)
+      if (error) {
+        console.error('[search] product search query failed', error)
+      }
       const normalized = normalizeProducts(data ?? [])
       trackSearch(q, normalized.length)
       return normalized
