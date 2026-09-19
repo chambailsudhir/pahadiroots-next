@@ -248,6 +248,7 @@ export default function HeroBanner({ images, settings }: Props) {
               />
             ) : img.url ? (
               <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                className={!hasOverlayContent ? 'hhero-baked-img' : undefined}
                 style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
@@ -452,6 +453,37 @@ export default function HeroBanner({ images, settings }: Props) {
             min-height: 0 !important;
             max-height: none !important;
             aspect-ratio: 1.87 / 1;
+          }
+        }
+        /* BUG FIX (mobile hero still slicing baked-in text — reported via
+           screenshot even after the aspect-ratio fix above): 1.87:1 is a
+           typical/average value for these banners ("these banners are
+           shot at" — see the long comment above), not each individual
+           image's EXACT ratio. The aspect-ratio fix above makes the
+           container's shape close to right, but "close" still leaves
+           object-fit:cover free to crop a little off the side that's
+           still mismatched — invisible on a banner where that sliver of
+           edge is just background, but immediately visible as a cut
+           letter/logo edge on a self-contained banner graphic (no
+           Eyebrow/Headline/Subtext set — hasOverlayContent is false —
+           meaning the text IS the photo, with nothing this component
+           could reflow around a crop). Confirmed live: this exact slide
+           (hero_slide_1) has every overlay field blank in Supabase.
+           Fix: only for these baked-in-text slides (.hhero-baked-img,
+           set conditionally above), switch to object-fit:contain on
+           mobile — the one object-fit value that can never crop into the
+           image no matter how far off 1.87:1 the real file is. Any
+           resulting letterbox strip is at most a sliver now that the
+           container's shape is already close (the fix above), and the
+           gradient behind it (next rule) reads as an intentional edge
+           rather than blank space. Slides WITH overlay content (real
+           Eyebrow/Headline/Subtext text drawn by this component, not
+           baked into the photo) keep object-fit:cover exactly as before —
+           a small side-crop there only trims background, never text. */
+        @media(max-width:768px){
+          .hhero-baked-img{
+            object-fit: contain !important;
+            background: linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%);
           }
         }
         /* BUG FIX (mobile hero arrows still reading as too big/prominent —
