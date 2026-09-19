@@ -69,7 +69,20 @@ GRAMMAR RULES (Critical):
 • है/हैं = हाई/ऐ/हन (NEVER छा/छां — छां = past tense था/थे only)
 • हूँ = हां (मई खरा हां = I am fine)
 • हम = असां | मैं = मई | तुम/आप = तुसां | वह = सि/उनी
-• हमारा = म्हारा/साड़े | तुम्हारा = थुआड़ा/तुहाड़ा | मेरा = म्हारा/मेरा
+• हमारा = म्हारा/साड़े | तुम्हारा = थुआड़ा (preferred) — do NOT use तुहाड़ा, that is Punjabi | मेरा = म्हारा/मेरा
+
+DIALECT PURITY (Critical — do not mix in Punjabi):
+Kangri and Punjabi sound similar but are NOT the same language. Because you have
+seen far more Punjabi text in training than Kangri, your default instinct on an
+unfamiliar word or sentence will lean Punjabi — actively resist that. When replying
+in "kngr", NEVER substitute a Punjabi word/spelling for a Kangri one, even if it
+"sounds close enough." Common leaks to avoid specifically:
+  ✗ ਕੀ ਹਾਲ ਏ / ki haal ae, ਤੁਹਾਨੂੰ / tuhanu, ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਜੀ ਹਾਂ / ji haan, ਨਹੀਂ / nahi
+  ✓ Use instead: क्या हाल-चाल, तुसांगी/थुआं, राम-राम जी or जय हिमाचल, हां जी, नेईं/नां
+If you are not confident a word is genuinely Kangri (versus Punjabi or generic
+Hindi), prefer a plain Hindi word over guessing a Punjabi-sounding one — a
+Kangri speaker will forgive occasional Hindi mixed in (that's how the boli is
+actually spoken day-to-day) far more readily than they'll forgive Punjabi.
 
 AUTHENTIC KANGRI WORD LIST (Kangri word → Hindi meaning):
 
@@ -250,24 +263,10 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   /* ── STYLES ───────────────────────────────────────────── */
   const css = document.createElement('style');
   css.textContent = `
-  #pr-wa {
-    position:fixed; right:90px; bottom:30px;
-    width:52px; height:52px; border-radius:50%;
-    background:#25D366; border:none; cursor:pointer;
-    box-shadow:0 4px 16px rgba(37,211,102,.45);
-    display:flex; align-items:center; justify-content:center;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1);
-    z-index:2147483645;
-  }
-  #pr-wa:hover { transform:scale(1.1) }
-  #pr-wa svg { width:27px; height:27px; fill:#fff }
-  .pr-wa-tip {
-    position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
-    background:rgba(0,0,0,.75); color:#fff; font-size:11px;
-    padding:4px 10px; border-radius:7px; white-space:nowrap;
-    opacity:0; pointer-events:none; transition:opacity .18s; font-family:inherit;
-  }
-  #pr-wa:hover .pr-wa-tip { opacity:1 }
+  /* NOTE: the widget's own floating WhatsApp button (#pr-wa) was removed
+     here — pahadiroots-next's mobile bottom nav (MobileBottomNav.tsx)
+     already has its own "Chat" WhatsApp entry, so keeping both gave
+     visitors two overlapping WhatsApp buttons on the same screen. */
 
   #pr-ai-fab {
     position:fixed; right:24px; bottom:30px;
@@ -277,6 +276,19 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     transition:transform .22s cubic-bezier(.34,1.56,.64,1);
     animation:pr-pulse 3s ease-out infinite;
     z-index:2147483645;
+  }
+  /* Site's own scroll-to-top button (.stt-btn, globals.css) sits at
+     right:16px and, on screens ≤900px, stacks above MobileBottomNav
+     (.mbn, 56px tall). Stack the AI fab directly above stt-btn (12px gap)
+     on both breakpoints so the two never overlap, and move the chat panel
+     up to match. Formula mirrors globals.css's own calc() exactly so this
+     stays correct if either widget's height/gaps ever change together. */
+  @media(min-width:901px) { #pr-ai-fab { bottom:78px } /* 24(stt-btn bottom) + 42(stt-btn height) + 12(gap) */ }
+  @media(max-width:900px) {
+    #pr-ai-fab {
+      right:16px;
+      bottom:calc(126px + env(safe-area-inset-bottom,0px)); /* 16+56(mbn)+42(stt-btn)+12(gap) */
+    }
   }
   #pr-ai-fab:hover { transform:scale(1.08) }
   #pr-ai-fab.open  { animation:none }
@@ -309,7 +321,10 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
   #pr-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all }
-  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px; bottom:108px } }
+  /* Keep in sync with #pr-ai-fab's offsets above: fab_bottom + 56(fab height) + 14(gap). */
+  @media(min-width:901px) { #pr-panel { bottom:148px } }
+  @media(max-width:900px) { #pr-panel { right:16px; bottom:calc(196px + env(safe-area-inset-bottom,0px)) } }
+  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
 
   #pr-drag {
     height:20px; border-radius:18px 18px 0 0;
@@ -358,10 +373,23 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     background:#ffffff; border:1.5px solid #2d5233;
     border-radius:10px; overflow:hidden; z-index:99999;
     box-shadow:0 8px 24px rgba(0,0,0,.18);
-    max-height:260px; overflow-y:auto; min-width:130px;
+    max-height:320px; min-width:190px;
+    display:none; flex-direction:column;
+  }
+  .pr-lang-menu.open { display:flex; }
+  .pr-lang-search-wrap {
+    padding:8px; flex-shrink:0; border-bottom:1px solid #e5e7eb; background:#fff;
+  }
+  .pr-lang-search {
+    width:100%; box-sizing:border-box; padding:7px 10px;
+    border:1.3px solid rgba(200,146,10,.5); border-radius:7px;
+    font-size:12px; font-family:inherit; outline:none; color:#1a3a1e;
+  }
+  .pr-lang-search:focus { border-color:#2d5233; }
+  .pr-lang-list {
+    overflow-y:auto; flex:1;
     scrollbar-width:thin; scrollbar-color:#2d5233 #f0f7f1;
   }
-  .pr-lang-menu.open { display:block; }
   .pr-lang-group {
     padding:5px 10px 2px; font-size:9.5px; font-weight:800;
     color:#9ca3af; text-transform:uppercase; letter-spacing:.5px;
@@ -374,6 +402,9 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   }
   .pr-lang-opt:hover { background:#d4ecd9; color:#1a3a1e; }
   .pr-lang-opt.active { background:#2d5233; color:#ffffff; }
+  .pr-lang-noresult {
+    padding:14px; font-size:12px; color:#9ca3af; text-align:center; font-family:inherit;
+  }
 
   .pr-chips-toggle {
     padding:5px 12px; display:flex; align-items:center; gap:6px;
@@ -440,6 +471,8 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
 
   .pr-toast { position:fixed; bottom:115px; left:50%; transform:translateX(-50%) translateY(14px); border-radius:9px; padding:8px 18px; font-size:12px; font-weight:600; opacity:0; transition:all .28s; z-index:2147483647; pointer-events:none; font-family:inherit; white-space:nowrap }
   .pr-toast.show { opacity:1; transform:translateX(-50%) translateY(0) }
+  /* Keep clear of the raised fab (see #pr-ai-fab) on mobile: fab_bottom + 56 + 29. */
+  @media(max-width:900px) { .pr-toast { bottom:calc(211px + env(safe-area-inset-bottom,0px)) } }
   .pr-src { font-size:10px; color:#9ca3af; margin-top:4px; padding-left:35px; }
   .pr-src a { color:#2d5233; text-decoration:none }
   .pr-src a:hover { color:#1a3a1e; }
@@ -468,15 +501,10 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     document.querySelectorAll('.pr-pcb').forEach(b => { b.style.background=GOLD; b.style.color='#1a1a0a'; });
   }
 
-  /* ── WhatsApp button ──────────────────────────────────── */
-  const waBtn = document.createElement('button');
-  waBtn.id = 'pr-wa';
-  waBtn.setAttribute('aria-label', 'WhatsApp');
-  waBtn.innerHTML = '<span class="pr-wa-tip">WhatsApp us</span><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
-  waBtn.addEventListener('click', () => {
-    window.open('https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent('Namaste! I want to know more about your Himalayan products'), '_blank');
-  });
-  document.body.appendChild(waBtn);
+  /* NOTE: the widget's own floating WhatsApp button used to be created
+     here. Removed — see the #pr-ai-fab CSS comment above for why.
+     WA_NUM is kept (read from data-whatsapp) in case a future feature
+     needs it again; it's currently unused. */
 
   /* ── AI FAB ───────────────────────────────────────────── */
   const fab = document.createElement('button');
@@ -496,9 +524,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     + '<div class="pr-lang-wrap" id="pr-lang-wrap">'
     + '<button class="pr-lang-btn" id="pr-lang-btn"><span id="pr-lang-label">English</span><span class="pr-lang-arrow">▼</span></button>'
     + '<div class="pr-lang-menu" id="pr-lang-menu">'
-    + '<div class="pr-lang-group">🇮🇳 Major Indian Languages</div>'
-    + '<div class="pr-lang-opt active" data-lang="en">🇬🇧 English</div>'
+    + '<div class="pr-lang-search-wrap"><input type="text" class="pr-lang-search" id="pr-lang-search" placeholder="Search language…" autocomplete="off"></div>'
+    + '<div class="pr-lang-list" id="pr-lang-list">'
+    + '<div class="pr-lang-group">⭐ Recommended</div>'
+    + '<div class="pr-lang-opt" data-lang="kngr">कांगड़ी/हिमाचली — Kangri Pahari (HP)</div>'
     + '<div class="pr-lang-opt" data-lang="hi">हिंदी — Hindi</div>'
+    + '<div class="pr-lang-opt active" data-lang="en">🇬🇧 English</div>'
+    + '<div class="pr-lang-group">🇮🇳 More Indian Languages</div>'
     + '<div class="pr-lang-opt" data-lang="pa">ਪੰਜਾਬੀ — Punjabi</div>'
     + '<div class="pr-lang-opt" data-lang="bn">বাংলা — Bengali</div>'
     + '<div class="pr-lang-opt" data-lang="ta">தமிழ் — Tamil</div>'
@@ -508,16 +540,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     + '<div class="pr-lang-opt" data-lang="kn">ಕನ್ನಡ — Kannada</div>'
     + '<div class="pr-lang-opt" data-lang="ml">മലയാളം — Malayalam</div>'
     + '<div class="pr-lang-opt" data-lang="or">ଓଡ଼ିଆ — Odia</div>'
-    + '<div class="pr-lang-opt" data-lang="as">অসমীয়া — Assamese</div>'
     + '<div class="pr-lang-opt" data-lang="ur">اردو — Urdu</div>'
     + '<div class="pr-lang-opt" data-lang="ne">नेपाली — Nepali</div>'
     + '<div class="pr-lang-opt" data-lang="mai">मैथिली — Maithili</div>'
     + '<div class="pr-lang-opt" data-lang="kok">कोंकणी — Konkani</div>'
-    + '<div class="pr-lang-opt" data-lang="mni">মৈতৈ — Manipuri</div>'
     + '<div class="pr-lang-opt" data-lang="sa">संस्कृत — Sanskrit</div>'
     + '<div class="pr-lang-opt" data-lang="si">සිංහල — Sinhala</div>'
-    + '<div class="pr-lang-group">🏔️ Pahadi Bolis</div>'
-    + '<div class="pr-lang-opt" data-lang="kngr">कांगड़ी/हिमाचली — Kangri Pahari (HP)</div>'
+    + '<div class="pr-lang-group">🏔️ Other Pahadi Bolis</div>'
     + '<div class="pr-lang-opt" data-lang="garh">गढ़वाली — Garhwali (Uttarakhand)</div>'
     + '<div class="pr-lang-opt" data-lang="kum">कुमाऊँनी — Kumaoni (Uttarakhand)</div>'
     + '<div class="pr-lang-opt" data-lang="doi">डोगरी — Dogri (J&K)</div>'
@@ -540,6 +569,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     + '<div class="pr-lang-opt" data-lang="es">Español — Spanish</div>'
     + '<div class="pr-lang-opt" data-lang="ru">Русский — Russian</div>'
     + '<div class="pr-lang-opt" data-lang="pt">Português — Portuguese</div>'
+    + '<div class="pr-lang-noresult" id="pr-lang-noresult" style="display:none">No language found</div>'
     + '</div></div></div>'
     + '<div class="pr-chips-toggle" id="pr-chips-toggle"><span>💬 Quick Questions</span><span class="pr-chips-arrow" id="pr-chips-arrow">▼</span></div>'
     + '<div class="pr-chips" id="pr-chips">'
@@ -675,6 +705,48 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     history = [];
     msgs.innerHTML = '';
     welcome();
+  });
+
+  /* ── LANGUAGE SEARCH ──────────────────────────────────── */
+  // Filters the long language list live as the user types (matches native
+  // script or English name, e.g. "kangri", "pun", "हिंदी"). Group headers
+  // hide themselves when every option under them is filtered out, and a
+  // "No language found" row appears if the query matches nothing.
+  var langSearch  = document.getElementById('pr-lang-search');
+  var langNoRes   = document.getElementById('pr-lang-noresult');
+  if (langSearch) {
+    langSearch.addEventListener('click', function(e) { e.stopPropagation(); });
+    langSearch.addEventListener('input', function() {
+      var q = langSearch.value.trim().toLowerCase();
+      var anyVisible = false;
+      var rows = langMenu.querySelectorAll('#pr-lang-list > div');
+      var pendingGroup = null;
+      var groupHasVisibleOpt = false;
+      rows.forEach(function(row) {
+        if (row.classList.contains('pr-lang-group')) {
+          if (pendingGroup) pendingGroup.style.display = groupHasVisibleOpt ? '' : 'none';
+          pendingGroup = row;
+          groupHasVisibleOpt = false;
+          return;
+        }
+        if (row.id === 'pr-lang-noresult') return;
+        var match = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) { anyVisible = true; groupHasVisibleOpt = true; }
+      });
+      if (pendingGroup) pendingGroup.style.display = groupHasVisibleOpt ? '' : 'none';
+      if (langNoRes) langNoRes.style.display = anyVisible ? 'none' : 'block';
+    });
+  }
+  // Reset the search box on every toggle so old filter text doesn't hide
+  // options next time the dropdown opens; focus it once open.
+  langBtn.addEventListener('click', function() {
+    if (!langSearch) return;
+    langSearch.value = '';
+    langSearch.dispatchEvent(new Event('input'));
+    setTimeout(function() {
+      if (langMenu.classList.contains('open')) langSearch.focus();
+    }, 60);
   });
 
   /* ── TOGGLE ───────────────────────────────────────────── */
