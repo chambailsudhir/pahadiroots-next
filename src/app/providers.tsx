@@ -5,7 +5,6 @@ import { SWRConfig } from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { useCartStore } from '@/store/cartStore'
 import PageViewTracker from '@/components/analytics/PageViewTracker'
-import LeadCapturePopup from '@/components/analytics/LeadCapturePopup'
 
 // ── StoreHydrator ─────────────────────────────────────────────
 // Both stores use skipHydration:true — they start with empty defaults
@@ -37,7 +36,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <StoreHydrator />
       <Suspense fallback={null}>
         <PageViewTracker />
-        <LeadCapturePopup />
+        {/* BUG FIX (removed per explicit request): the "Get 5% Off Your
+            First Order" email-capture modal (LeadCapturePopup) advertised
+            a discount the store isn't actually running — not a bug in the
+            popup's own code, a real business-facing mistake in what it
+            promised. Un-mounted here rather than deleting the component
+            file outright, so it's a one-line change to bring back later
+            if a real first-order offer is ever created. */}
       </Suspense>
       {children}
     </SWRConfig>
