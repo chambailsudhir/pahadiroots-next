@@ -1,32 +1,29 @@
-FIX (round 2): Mobile hero — flat-colour letterbox bars showed as an
-obvious green bar on some banners
+FIX (round 3): Mobile hero — grey/blurred band still visible even after
+the blurred-backdrop fix
 
 File changed:
   src/components/homepage/HeroBanner.tsx
 
 What was wrong (confirmed via your follow-up screenshot):
-  The previous fix switched baked-in-text hero slides (no admin overlay
-  text — the text is part of the photo itself) to object-fit:contain on
-  mobile, so the image could never be cropped. That's correct as far as
-  it goes, but the gap contain can leave around the image was filled with
-  a flat dark-green gradient — and that only looks fine when a banner's
-  real aspect ratio happens to be close to the container's 1.87:1
-  assumption. Checked live in Supabase: Wild Honey and Sea Buckthorn are
-  BOTH baked-in-text slides (identical code path, both have every overlay
-  field blank), but Sea Buckthorn's actual photo sits close enough to
-  1.87:1 that its gap was never visible, while Wild Honey's doesn't match
-  as closely — leaving a real, visible top/bottom gap that the flat green
-  fill turned into an obvious, broken-looking bar.
+  Round 2 blurred the letterbox gap instead of filling it with a flat
+  colour, so it no longer looked like a broken solid bar — but there was
+  still a real, visible gap on Wild Honey, because the container's shape
+  was still just a guessed 1.87:1 average across every banner, not that
+  banner's own real proportions. Blur hides what fills a gap; it doesn't
+  remove the fact that a gap exists.
 
-Fix:
-  Replaced the flat-colour fallback with a blurred, scaled-up copy of the
-  SAME image rendered behind the sharp one (Netflix/YouTube-style
-  letterbox fill — the standard technique for exactly this problem). Any
-  gap contain leaves, on any banner regardless of that banner's own real
-  aspect ratio, now reads as a soft blurred continuation of the photo
-  rather than a mismatched solid-colour bar. No per-banner tuning needed
-  going forward — this works uniformly whether a future banner's ratio is
-  close to 1.87:1 or far from it.
+Real fix this time:
+  Stopped guessing one ratio for every banner. Each image's real aspect
+  ratio is now measured the moment it finishes loading (naturalWidth /
+  naturalHeight, via onLoad), stored per slide, and the hero container's
+  shape on mobile now matches THAT slide's own measured ratio exactly
+  (via a CSS custom property), not a fixed average. With the container's
+  shape correct for the specific banner actually on screen, object-fit:
+  contain fits it with zero or an imperceptible sub-pixel gap — no crop,
+  no visible band. 1.87:1 remains only as the brief fallback shown for an
+  instant before an image's own dimensions are known; the blurred backdrop
+  from the previous fix stays in place purely as a safety net for that
+  brief moment, not as the main fix anymore.
 
 Verification:
   - npx tsc --noEmit -> 0 errors
@@ -37,5 +34,5 @@ Verification:
 
 Drop-in instructions:
   Replace src/components/homepage/HeroBanner.tsx in your repo with the
-  file in this zip (this supersedes the previous hero-crop-fix zip — use
-  this one instead, not both). No other files touched.
+  file in this zip (supersedes both earlier hero-crop-fix zips — use only
+  this one). No other files touched.

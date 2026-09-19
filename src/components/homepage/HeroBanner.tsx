@@ -48,6 +48,29 @@ export default function HeroBanner({ images, settings }: Props) {
   const total  = slides ? slides.length : 1
   const heroStats = getHeroStats(settings)
 
+  // BUG FIX (mobile hero, round 3 — reported via screenshot: even the
+  // blurred backdrop from the previous fix still left a visible grey band
+  // on Wild Honey, since blur only hides WHAT fills a gap, not the fact
+  // there IS one). The real fix is to stop guessing a single 1.87:1 ratio
+  // for every banner and instead measure each image's own actual ratio
+  // once it loads, then shape the container to match THAT slide exactly.
+  // With the container's shape correct for the specific banner on screen,
+  // object-fit:contain fits it with zero (or a sub-pixel, imperceptible)
+  // gap — no crop, no visible letterbox, no blur workaround needed for
+  // properly-measured slides. 1.87 stays only as the fallback shown for
+  // an instant before an image's own dimensions are known (or if `onLoad`
+  // never fires for some reason) — the blurred backdrop from the previous
+  // fix stays in place purely as a safety net for that brief/edge case,
+  // not as the primary fix anymore.
+  const [slideRatios, setSlideRatios] = useState<Record<number, number>>({})
+  const handleImgLoad = useCallback((i: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth: w, naturalHeight: h } = e.currentTarget
+    if (w > 0 && h > 0) {
+      setSlideRatios(prev => (prev[i] ? prev : { ...prev, [i]: w / h }))
+    }
+  }, [])
+  const activeRatio = slideRatios[current] ?? 1.87
+
   // Tap-to-unmute: browsers block unmuted autoplay outright, so every
   // video starts muted (required for autoplay to work at all). This lets
   // a visitor opt in to sound with one click — which browsers do allow,
@@ -155,7 +178,7 @@ export default function HeroBanner({ images, settings }: Props) {
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        style={{ position: 'relative', width: '100%', height: '82vh', minHeight: 540, maxHeight: '82vh', overflow: 'hidden', touchAction: 'pan-y' }}
+        style={{ position: 'relative', width: '100%', height: '82vh', minHeight: 540, maxHeight: '82vh', overflow: 'hidden', touchAction: 'pan-y', ['--hero-ratio' as string]: activeRatio }}
       >
 
         {slides ? slides.map((img, i) => {
@@ -274,6 +297,7 @@ export default function HeroBanner({ images, settings }: Props) {
                     style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
                   <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                     className="hhero-baked-img"
+                    onLoad={e => handleImgLoad(i, e)}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }} priority={i === 0} />
                 </div>
               ) : (
@@ -482,7 +506,12 @@ export default function HeroBanner({ images, settings }: Props) {
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
-            aspect-ratio: 1.87 / 1;
+            /* BUG FIX (round 3): was a flat 1.87 for every banner; now
+               reads the current slide's own measured ratio via the
+               --hero-ratio custom property set above (falls back to 1.87
+               only before that slide's real ratio is known). See the
+               long comment by slideRatios/activeRatio above for why. */
+            aspect-ratio: var(--hero-ratio, 1.87) / 1;
           }
         }
         /* BUG FIX (round 2 — mobile hero letterbox bars showed as a solid
