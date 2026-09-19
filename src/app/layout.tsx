@@ -8,6 +8,7 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
+import Script from 'next/script'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
@@ -284,6 +285,19 @@ export default async function RootLayout({
           <GoogleAuthHandler />
           <ProfilePrefetcher />
         </Providers>
+        {/* Pahadi_AI — ported verbatim from the old site (public/js/ai-assistant.js).
+            Self-contained IIFE: injects its own <style>, builds its own DOM
+            (chat fab + panel + WhatsApp button), and talks to /api/chat
+            (Gemini primary, Claude fallback — see src/app/api/chat/route.ts).
+            Reads --g/--g2/--gd/--gd2 theme vars from globals.css, which already
+            match the old site 1:1, so no visual changes were needed. */}
+        <Script
+          src="/js/ai-assistant.js"
+          data-name="Pahadi_AI"
+          data-tagline="Himalayan Shopping Guide · Online"
+          data-whatsapp="919899984895"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   )
