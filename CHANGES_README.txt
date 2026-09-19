@@ -1,68 +1,53 @@
-PAHADI ROOTS — MOBILE UI FIXES (from screenshots, Sept 18 2026)
-==================================================================
+FIX: Mobile header — account icon (and other icons) cut off at screen edge
 
-ISSUE 1 — Quick View / wishlist heart overlapping on product cards (mobile)
------------------------------------------------------------------
-Root cause: the earlier a11y/touch fix that made the Quick View pill and
-wishlist heart always-visible on touch devices (previously they only
-appeared one at a time, on desktop hover) introduced a collision that
-never existed before: on a narrow 2-column mobile card, the centered
-"👁 Quick View" text pill is wide enough that it runs directly under the
-heart circle fixed at bottom-right.
+File changed:
+  src/components/layout/Header.tsx
 
-Fix: on devices with no real hover (`@media (hover: none)`), Quick View
-collapses to an icon-only circle (same size/style as the heart) and docks
-directly to its left with a clean 10px gap — both sit as a paired row,
-bottom-right. Desktop keeps the original full pill with the "Quick View"
-label, unchanged, since that only ever shows one control at a time on
-hover.
+What was wrong (confirmed from your screenshot):
+  On a real phone, the header's right-side icon cluster (.old-nav-right)
+  had SIX items crammed in: Search, Wishlist, Account, Dark-mode toggle,
+  Cart, and a hamburger "mobile menu" button — sized for desktop, never
+  trimmed down for mobile. On a ~390px-wide screen that's simply more
+  content than the row has room for, once you also account for the logo
+  block on the left.
 
-Files changed:
-- src/components/product/ProductCard.tsx  (wrapped the button's text in a
-  <span className="piw-qv-label"> so it can be hidden at this breakpoint;
-  aria-label on the button is untouched, so screen readers still announce
-  "Quick view <product name>" regardless)
-- src/app/globals.css  (new hover:none media block; desktop hover:hover
-  block untouched)
+  Before the earlier overflow-x fix (Fix 1, mobile audit), this overflow
+  would have shown up as a horizontally-scrollable page — annoying, but at
+  least everything was reachable by scrolling sideways. Fix 1 correctly
+  added `overflow-x: hidden` on <html> (to stop CartDrawer's fixed
+  positioning from creating a phantom scrollable area), but that same rule
+  means ANY other horizontal overflow — including this header's — now gets
+  silently clipped at the viewport edge instead of being scrollable. That's
+  exactly the symptom in your screenshot: the account icon cut in half at
+  the right edge, with the dark-mode and cart icons pushed entirely
+  off-screen and invisible.
 
-ISSUE 2 — No way back/home from Checkout
------------------------------------------------------------------
-Root cause: the checkout page had no back-to-cart or continue-shopping
-link anywhere in its own UI — only the global header logo (easy to miss
-once scrolled past) led back to the store. This is a real dead-end
-whenever Place Order is blocked (e.g. the "temporarily unavailable"
-alert when both payment methods are off), since the customer had
-nothing actionable to do on the page itself.
+Root cause, precisely:
+  Three of those six header icons are exact duplicates of icons already in
+  MobileBottomNav (added earlier in this mobile audit) — Search, Cart, and
+  the hamburger menu all call the identical store actions (openSearch,
+  openCart, openMobileMenu) as MobileBottomNav's own Search/Cart/More
+  buttons, and both components already switch to mobile mode at the exact
+  same 900px breakpoint. The header was never updated to drop its now-
+  redundant copies once the bottom nav took over that job.
 
 Fix:
-1. The "Cart" breadcrumb step (already shown as ✓ done) is now a real
-   link back to /cart — a standard checkout convention (completed steps
-   are clickable to go back; "Confirmation" stays non-interactive since
-   it isn't reachable yet).
-2. When the "Checkout temporarily unavailable" alert shows, it now
-   includes an explicit "← Back to Cart" link inline, so that specific
-   dead-end state always has an escape route, not just a static warning.
+  At the existing 900px breakpoint (same one already used to hide the
+  desktop nav-links), the header's Search button, Cart button, and mobile
+  hamburger button are now hidden — each has an identical, already-visible
+  equivalent in MobileBottomNav. Wishlist and Account stay in the header
+  (no MobileBottomNav equivalent exists for either), and so does the
+  dark-mode toggle (not duplicated anywhere). This drops the mobile
+  header's right-side cluster from 6 icons to 2, comfortably fitting next
+  to the logo with no overflow — no icon disappears from the app, since
+  every hidden one has a working twin one tap away in the bottom nav.
 
-Files changed:
-- src/app/checkout/CheckoutClient.tsx  (Cart crumb → Link; alert → Link)
-- src/app/checkout/checkout.css  (.ck-crumb--link, .ck-alert-link styles)
+Verification:
+  - npx tsc --noEmit -> 0 errors
+  - npx eslint (Header.tsx) -> 0 errors
+  - npx vitest run (full suite) -> 104 files / 1247 tests passed, 5 skipped
+    (unchanged), 0 regressions
 
-NOTE — separate from these two UI fixes: while checking the checkout
-screenshot I found `cod_enabled` and `upi_enabled` are both `false` in
-live site_settings right now, which is what actually triggers the
-"temporarily unavailable" alert — confirmed intentional (payments off
-during testing), so nothing was changed there.
-
-VERIFICATION
-- npx tsc --noEmit → clean, 0 errors
-- npx eslint (both changed files) → 0 errors, 0 new warnings (1
-  pre-existing unrelated warning in CheckoutClient.tsx, same as before
-  this change)
-- npx vitest run (full suite) → 103 test files, 1213 tests passed, 5
-  pre-existing skips, 0 regressions
-- npm run build → blocked in this sandbox only by outbound network
-  policy rejecting the Google Fonts fetch (403) — same sandbox-only
-  limitation noted in the earlier mobile-fix report, not a code issue
-
-DROP-IN
-Matches your exact repo folder structure — replace the four files above.
+Drop-in instructions:
+  Replace src/components/layout/Header.tsx in your repo with the file in
+  this zip. No other files touched.

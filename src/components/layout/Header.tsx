@@ -323,12 +323,40 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-mob-btn{display:none!important}
         @media(max-width:900px){
           .old-nav-links{display:none!important}
-          .old-mob-btn{display:flex!important}
+          /* BUG FIX (mobile header overflow): this used to force the
+             hamburger button visible here (display:flex!important),
+             adding a 6th icon — search, wishlist, account, dark-mode,
+             cart, AND this hamburger — into .old-nav-right on top of the
+             logo block. On a real phone width that's simply more content
+             than the row has space for; with html/body's overflow-x:hidden
+             (added for the earlier CartDrawer fix), the excess no longer
+             causes a visible horizontal scroll — it silently gets clipped
+             at the viewport edge instead, which is exactly the reported
+             symptom (account icon cut off, other icons invisible past it).
+             This hamburger opens the exact same mobile-menu drawer
+             (openMobileMenu) as MobileBottomNav's "More" button below —
+             both mount at this identical 900px breakpoint — so showing it
+             here duplicated an already-present control rather than adding
+             one. Left at its base display:none!important (just above)
+             instead of re-forcing it visible. */
         }
         @media(max-width:520px){
           .old-nav{padding:0 12px}
           .old-cart-btn span:first-child{display:none}
           .old-logo-tl{font-size:8px}
+        }
+        /* BUG FIX (mobile header overflow, continued): same overflow as
+           above, from the same two redundant controls. Search (openSearch)
+           and Cart (openCart) in this header call the exact same store
+           actions as MobileBottomNav's own Search and Cart icons — both
+           components share one source of truth (see MobileBottomNav.tsx's
+           top comment). Keeping both copies visible was the rest of what
+           overflowed .old-nav-right on a real phone width; Wishlist and
+           Account stay, since neither has a MobileBottomNav equivalent.
+           Dark-mode toggle also stays — not duplicated anywhere on mobile. */
+        @media(max-width:900px){
+          .old-nav-right > button[aria-label="Search"],
+          .old-cart-btn{ display:none!important; }
         }
         .old-skip-link{
           position:absolute;left:-9999px;top:4px;z-index:9999;
