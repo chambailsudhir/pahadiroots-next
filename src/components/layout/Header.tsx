@@ -354,9 +354,20 @@ export default function Header({ settings, categories = [], states = [] }: Props
            overflowed .old-nav-right on a real phone width; Wishlist and
            Account stay, since neither has a MobileBottomNav equivalent.
            Dark-mode toggle also stays — not duplicated anywhere on mobile. */
+        /* BUG FIX (mobile header overflow, round 2): trimming Search/Cart/
+           hamburger (above) wasn't enough on its own — Wishlist + Account +
+           this dark-mode toggle, next to the logo, was STILL too tight on a
+           real phone width (confirmed via a follow-up screenshot showing
+           the toggle itself now clipped at the edge instead). Rather than
+           dropping the feature on mobile, it now lives in MobileMenu.tsx's
+           drawer instead (opened via MobileBottomNav's "More", same
+           breakpoint) — same treatment as Search/Cart/hamburger already
+           got. Wishlist and Account are the only two left in the header
+           on mobile, which is what actually fits. */
         @media(max-width:900px){
           .old-nav-right > button[aria-label="Search"],
-          .old-cart-btn{ display:none!important; }
+          .old-cart-btn,
+          .old-dark-btn{ display:none!important; }
         }
         .old-skip-link{
           position:absolute;left:-9999px;top:4px;z-index:9999;

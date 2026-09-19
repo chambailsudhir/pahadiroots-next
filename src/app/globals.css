@@ -429,6 +429,8 @@ footer.site-footer {
 .mob-nav-logo { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: var(--g); margin-bottom: 20px; }
 .mob-nav a { display: block; padding: 11px 14px; color: var(--tx); font-weight: 700; border-radius: 10px; font-size: 14px; }
 .mob-nav a:hover { background: rgba(26,58,30,.07); color: var(--g); }
+.mob-dark-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 14px; margin-bottom: 8px; color: var(--tx); font-weight: 700; font-size: 14px; font-family: inherit; background: rgba(26,58,30,.04); border: none; border-radius: 10px; cursor: pointer; text-align: left; }
+.mob-dark-toggle:hover { background: rgba(26,58,30,.07); color: var(--g); }
 
 /* ── MOBILE BOTTOM NAV (app-shell pattern, matches header's 900px breakpoint) ── */
 .mbn { display: none; }

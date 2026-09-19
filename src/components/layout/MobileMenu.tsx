@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
@@ -21,6 +21,23 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   // WCAG 2.1 §3.2 — focus must return to whatever opened the dialog once
   // it closes.
   const openerRef = useRef<HTMLElement | null>(null)
+
+  // BUG FIX (mobile header overflow, continued): Header.tsx's dark-mode
+  // toggle is now hidden at the same ≤900px breakpoint as the other
+  // overflow-causing icons (see globals.css/Header.tsx) — even after
+  // trimming Search/Cart/hamburger, Wishlist + Account + this toggle still
+  // didn't leave enough room next to the logo on a real phone width (the
+  // toggle was the one getting clipped this time). Rather than dropping
+  // the feature on mobile, it moves in here, same class of fix as Search/
+  // Cart/hamburger already being covered by MobileBottomNav. Same mount-
+  // guard pattern as Header.tsx's own toggle — reading document.documentElement
+  // during render (before mount) would cause a hydration mismatch (React
+  // errors #418/#423/#425), so `isDark` starts false and syncs in an effect.
+  const [isDark, setIsDark] = useState(false)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsDark(document.documentElement.classList.contains('dark'))
+  }, [])
 
   // BUG FIX (P2): this declared role="dialog" aria-modal="true" but
   // implemented none of the behavior that contract promises — no initial
@@ -96,6 +113,23 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
       <div className="mob-nav-panel" ref={panelRef}>
         <button ref={closeRef} className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>
         <div className="mob-nav-logo">🌿 {settings.site_name || 'HimVeda by Pahadi Roots'}</div>
+
+        {/* Dark mode toggle — moved here from the header (see the effect
+            above for why); same aria-pressed contract as Header.tsx's
+            original button (WCAG 4.1.2). */}
+        <button
+          type="button"
+          className="mob-dark-toggle"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-pressed={isDark}
+          onClick={() => {
+            document.documentElement.classList.toggle('dark')
+            setIsDark(d => !d)
+          }}
+        >
+          <span aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
+          {isDark ? 'Light Mode' : 'Dark Mode'}
+        </button>
 
         {/* Primary links */}
         {navLinks.map(item => (
