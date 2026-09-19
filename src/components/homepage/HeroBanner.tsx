@@ -247,9 +247,39 @@ export default function HeroBanner({ images, settings }: Props) {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
               />
             ) : img.url ? (
-              <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
-                className={!hasOverlayContent ? 'hhero-baked-img' : undefined}
-                style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
+              !hasOverlayContent ? (
+                // BUG FIX (mobile hero letterbox bars — reported via
+                // screenshot, right after the object-fit:contain fix
+                // above): a flat-colour backdrop behind the contained
+                // image works fine when a banner's real aspect ratio is
+                // close to the container's 1.87:1 (invisible sliver), but
+                // Wild Honey's actual ratio is far enough off 1.87:1 that
+                // contain leaves a real gap top and bottom — and a flat
+                // dark-green bar filling that gap reads as an obviously
+                // broken UI element, not a subtle edge, exactly as
+                // reported. Sea Buckthorn (also baked-in-text, confirmed
+                // via the same blank-overlay-fields check) happens to be
+                // shot close enough to 1.87:1 that its own gap was never
+                // visible — which is why only one of the two banners
+                // showed the problem despite both using the same code
+                // path. A blurred, scaled-up copy of the SAME image
+                // behind the sharp contained one (the standard technique
+                // for exactly this — Netflix/YouTube-style letterbox
+                // fill) means any gap, regardless of its size on any
+                // given banner, blends as a soft continuation of the
+                // photo rather than a mismatched solid bar.
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+                  <Image src={img.url} alt="" aria-hidden="true" fill sizes="100vw"
+                    className="hhero-baked-backdrop"
+                    style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
+                  <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                    className="hhero-baked-img"
+                    style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }} priority={i === 0} />
+                </div>
+              ) : (
+                <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                  style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
+              )
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
@@ -455,35 +485,27 @@ export default function HeroBanner({ images, settings }: Props) {
             aspect-ratio: 1.87 / 1;
           }
         }
-        /* BUG FIX (mobile hero still slicing baked-in text — reported via
-           screenshot even after the aspect-ratio fix above): 1.87:1 is a
-           typical/average value for these banners ("these banners are
-           shot at" — see the long comment above), not each individual
-           image's EXACT ratio. The aspect-ratio fix above makes the
-           container's shape close to right, but "close" still leaves
-           object-fit:cover free to crop a little off the side that's
-           still mismatched — invisible on a banner where that sliver of
-           edge is just background, but immediately visible as a cut
-           letter/logo edge on a self-contained banner graphic (no
-           Eyebrow/Headline/Subtext set — hasOverlayContent is false —
-           meaning the text IS the photo, with nothing this component
-           could reflow around a crop). Confirmed live: this exact slide
-           (hero_slide_1) has every overlay field blank in Supabase.
-           Fix: only for these baked-in-text slides (.hhero-baked-img,
-           set conditionally above), switch to object-fit:contain on
-           mobile — the one object-fit value that can never crop into the
-           image no matter how far off 1.87:1 the real file is. Any
-           resulting letterbox strip is at most a sliver now that the
-           container's shape is already close (the fix above), and the
-           gradient behind it (next rule) reads as an intentional edge
-           rather than blank space. Slides WITH overlay content (real
-           Eyebrow/Headline/Subtext text drawn by this component, not
-           baked into the photo) keep object-fit:cover exactly as before —
-           a small side-crop there only trims background, never text. */
+        /* BUG FIX (round 2 — mobile hero letterbox bars showed as a solid
+           green bar on Wild Honey, reported via screenshot; Sea Buckthorn
+           didn't show it despite the identical code path, because its own
+           image happens to already sit close to 1.87:1 — different
+           banners genuinely have different real aspect ratios, so a flat-
+           colour fallback was always going to look fine on some and
+           broken on others). Replaced the flat-gradient backdrop with a
+           blurred, scaled-up copy of the SAME image (.hhero-baked-backdrop,
+           rendered behind this one in the JSX above) — the standard fix
+           for letterboxing (Netflix/YouTube use the same technique): any
+           gap this leaves, on any banner regardless of its real ratio,
+           now reads as a soft continuation of the photo instead of a
+           mismatched solid bar. scale(1.15) keeps the blur's own soft
+           edge from ever being visible at the container's boundary. */
         @media(max-width:768px){
           .hhero-baked-img{
             object-fit: contain !important;
-            background: linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%);
+          }
+          .hhero-baked-backdrop{
+            filter: blur(30px) brightness(0.75);
+            transform: scale(1.15);
           }
         }
         /* BUG FIX (mobile hero arrows still reading as too big/prominent —
