@@ -1,38 +1,39 @@
-FIX (round 3): Mobile hero — grey/blurred band still visible even after
-the blurred-backdrop fix
+FIX (round 2): Mobile header overflow — still cutting off after the first fix
 
-File changed:
-  src/components/homepage/HeroBanner.tsx
+Files changed:
+  src/components/layout/Header.tsx
+  src/components/layout/MobileMenu.tsx
+  src/app/globals.css
 
 What was wrong (confirmed via your follow-up screenshot):
-  Round 2 blurred the letterbox gap instead of filling it with a flat
-  colour, so it no longer looked like a broken solid bar — but there was
-  still a real, visible gap on Wild Honey, because the container's shape
-  was still just a guessed 1.87:1 average across every banner, not that
-  banner's own real proportions. Blur hides what fills a gap; it doesn't
-  remove the fact that a gap exists.
+  The previous fix hid Search, Cart, and the hamburger menu button on
+  mobile (all exact duplicates of MobileBottomNav icons), dropping the
+  header's right-side cluster from 6 icons to 3: Wishlist, Account, and
+  the dark-mode toggle. That wasn't quite enough — on a real phone width,
+  those 3 icons plus the logo block were STILL right at the edge of
+  overflowing, and your new screenshot showed the dark-mode toggle itself
+  now getting clipped at the right edge instead.
 
-Real fix this time:
-  Stopped guessing one ratio for every banner. Each image's real aspect
-  ratio is now measured the moment it finishes loading (naturalWidth /
-  naturalHeight, via onLoad), stored per slide, and the hero container's
-  shape on mobile now matches THAT slide's own measured ratio exactly
-  (via a CSS custom property), not a fixed average. With the container's
-  shape correct for the specific banner actually on screen, object-fit:
-  contain fits it with zero or an imperceptible sub-pixel gap — no crop,
-  no visible band. 1.87:1 remains only as the brief fallback shown for an
-  instant before an image's own dimensions are known; the blurred backdrop
-  from the previous fix stays in place purely as a safety net for that
-  brief moment, not as the main fix anymore.
+Fix:
+  Unlike Search/Cart/hamburger, the dark-mode toggle had no equivalent
+  anywhere else in the mobile UI — hiding it outright would have silently
+  removed the feature on phones. Instead, it now lives in the mobile menu
+  drawer (MobileMenu.tsx, opened via MobileBottomNav's "More" or the
+  header's own menu access), styled to match the drawer's existing nav
+  links. The header's copy is hidden on mobile (same 900px breakpoint as
+  the earlier three). That leaves just Wishlist + Account in the header's
+  mobile row — comfortably fits next to the logo with real margin this
+  time, not a knife's-edge fit.
 
 Verification:
   - npx tsc --noEmit -> 0 errors
-  - npx eslint (HeroBanner.tsx) -> 0 errors
+  - npx eslint (both changed files) -> 0 errors
   - npx vitest run (full suite) -> 104 files / 1247 tests passed, 5 skipped
-    (unchanged), 0 regressions — including the existing HeroBanner.test.tsx
-    suite (22 tests)
+    (unchanged), 0 regressions — including the existing
+    mobileMenuRegions.test.ts suite
 
 Drop-in instructions:
-  Replace src/components/homepage/HeroBanner.tsx in your repo with the
-  file in this zip (supersedes both earlier hero-crop-fix zips — use only
-  this one). No other files touched.
+  Replace all three files above in your repo with the ones in this zip.
+  No other files touched. (globals.css is included because only one small
+  CSS rule was added for the new drawer toggle's styling — everything else
+  in that file is untouched from your current repo.)
