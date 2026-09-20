@@ -14,10 +14,15 @@
 // We transcribe it with Gemini's audio understanding, reusing the same
 // GEMINI_API_KEY already used by /api/chat — no new credentials needed.
 //
-// Anthropic's Messages API has no audio-input support, so there is no
-// Claude fallback here. If GEMINI_API_KEY is not configured, transcription
-// is simply unavailable and the client shows a "please type instead"
-// message — it never breaks the rest of the chat widget.
+// Anthropic's Claude models have no audio-input support in the Messages
+// API, so Claude can never do the transcription itself. What it CAN do is
+// stand in as a *text* fallback: if Gemini is unavailable (quota exhausted,
+// down, misconfigured, etc.), we ask Claude — reusing the same
+// ANTHROPIC_KEY already used as the /api/chat fallback — to write a short,
+// warm, correctly-worded message in the user's selected language telling
+// them voice isn't available right now and to type their question instead.
+// That also sidesteps hand-maintaining "please type" translations for the
+// ~35 languages the widget supports.
 
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -25,16 +30,20 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
+
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`
+const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 
 // Hard cap on the base64 payload we'll accept. A 60-second clip at any of
 // the mime types the client uses comes in well under this; this just stops
 // a stray/huge request from reaching Gemini.
 const MAX_BASE64_LEN = 11_000_000
 
-// Mirrors the language codes already used in ai-assistant.js's LANG_NAMES,
-// used only to hint Gemini toward the expected language — it still
-// transcribes whatever language is actually spoken.
+// Mirrors the language codes already used in ai-assistant.js's LANG_NAMES.
+// Used both to hint Gemini toward the expected language (it still
+// transcribes whatever is actually spoken) and to tell Claude which
+// language to write the fallback message in.
 const LANG_HINTS: Record<string, string> = {
   en: 'English', hi: 'Hindi', pa: 'Punjabi', bn: 'Bengali', ta: 'Tamil', te: 'Telugu',
   mr: 'Marathi', gu: 'Gujarati', kn: 'Kannada', ml: 'Malayalam', or: 'Odia', as: 'Assamese',
@@ -45,14 +54,41 @@ const LANG_HINTS: Record<string, string> = {
   fr: 'French', de: 'German', es: 'Spanish', ru: 'Russian', pt: 'Portuguese',
 }
 
-export async function POST(req: NextRequest) {
-  if (!GEMINI_KEY) {
-    return NextResponse.json(
-      { error: 'Voice transcription is not configured on this server.' },
-      { status: 501 }
-    )
-  }
+// Used if BOTH Gemini and Claude are unavailable — the last resort.
+const HARDCODED_FALLBACK = "🎤 Voice input isn't available right now. Please type your question instead!"
 
+async function claudeFallbackMessage(langName: string | null): Promise<string | null> {
+  if (!ANTHROPIC_KEY) return null
+
+  const instruction = langName
+    ? `Write ONE short, warm sentence in ${langName} telling a shopper that voice input isn't working right now and asking them to type their question instead. Start it with a 🎤 emoji. Output ONLY that sentence — no preamble, no quotes, no translation, no alternatives.`
+    : `Write ONE short, warm sentence in English telling a shopper that voice input isn't working right now and asking them to type their question instead. Start it with a 🎤 emoji. Output ONLY that sentence — no preamble, no quotes, no alternatives.`
+
+  try {
+    const res = await fetch(CLAUDE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{ role: 'user', content: instruction }],
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const text = (data.content?.[0]?.text || '').trim()
+    return text || null
+  } catch (err: any) {
+    console.error('[api/transcribe] Claude fallback error:', err.message)
+    return null
+  }
+}
+
+export async function POST(req: NextRequest) {
   let body: any
   try {
     body = await req.json()
@@ -61,6 +97,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { audio, mimeType, lang } = body || {}
+  const langName = typeof lang === 'string' ? LANG_HINTS[lang] || null : null
 
   if (!audio || typeof audio !== 'string') {
     return NextResponse.json({ error: 'Missing audio data' }, { status: 400 })
@@ -72,7 +109,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing mimeType' }, { status: 400 })
   }
 
-  const langName = typeof lang === 'string' ? LANG_HINTS[lang] : null
+  // ── If Gemini isn't even configured, go straight to the Claude fallback ──
+  if (!GEMINI_KEY) {
+    const msg = await claudeFallbackMessage(langName)
+    return NextResponse.json({ text: '', message: msg || HARDCODED_FALLBACK }, { status: 200 })
+  }
 
   const prompt = langName
     ? `Transcribe the speech in this audio clip verbatim, in ${langName} if that is the language spoken (otherwise transcribe in whatever language is actually spoken). Output ONLY the transcript text — no preamble, no quotes, no commentary. If the audio has no discernible speech, output nothing.`
@@ -98,12 +139,17 @@ export async function POST(req: NextRequest) {
 
     const data = await geminiRes.json()
 
+    // ── Gemini unavailable (quota, rate limit, outage, bad key, etc.) ──
+    // Fall back to Claude for a friendly localized message. This is a text
+    // fallback only — Claude cannot transcribe the audio itself.
     if (!geminiRes.ok) {
-      console.error('[api/transcribe] Gemini error:', data?.error?.message || geminiRes.status)
-      return NextResponse.json(
-        { error: data?.error?.message || 'Transcription failed' },
-        { status: geminiRes.status }
+      console.warn(
+        '[api/transcribe] Gemini failed:',
+        data?.error?.message || geminiRes.status,
+        '— using Claude fallback message'
       )
+      const msg = await claudeFallbackMessage(langName)
+      return NextResponse.json({ text: '', message: msg || HARDCODED_FALLBACK }, { status: 200 })
     }
 
     const text = (data.candidates?.[0]?.content?.parts || [])
@@ -113,7 +159,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ text }, { status: 200 })
   } catch (err: any) {
-    console.error('[api/transcribe] fetch error:', err.message)
-    return NextResponse.json({ error: 'Transcription service unavailable' }, { status: 500 })
+    console.error('[api/transcribe] Gemini fetch error:', err.message, '— using Claude fallback message')
+    const msg = await claudeFallbackMessage(langName)
+    return NextResponse.json({ text: '', message: msg || HARDCODED_FALLBACK }, { status: 200 })
   }
 }

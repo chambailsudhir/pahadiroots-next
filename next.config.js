@@ -69,7 +69,18 @@ const nextConfig = {
           { key: 'X-Frame-Options',        value: 'DENY' },
           { key: 'X-Content-Type-Options',  value: 'nosniff' },
           { key: 'Referrer-Policy',         value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',      value: 'camera=(), microphone=(), geolocation=()' },
+          // BUG FIX (voice input silently blocked on every device): this was
+          // `microphone=()`, which disables getUserMedia() site-wide via the
+          // Permissions-Policy header — before the browser even shows an
+          // "Allow microphone?" prompt. That's why the Pahadi_AI widget's
+          // voice button failed identically on every browser/OS with no
+          // permission dialog ever appearing: it wasn't a user denial, the
+          // page itself was forbidden from asking. `microphone=(self)` scopes
+          // access to this origin only (still blocked for any iframed
+          // third-party content) — just enough for the widget's own
+          // MediaRecorder-based voice input (see public/js/ai-assistant.js
+          // and src/app/api/transcribe/route.ts) to work at all.
+          { key: 'Permissions-Policy',      value: 'camera=(), microphone=(self), geolocation=()' },
           {
             key:   'Strict-Transport-Security',
             value: 'max-age=63072000; includeSubDomains; preload',

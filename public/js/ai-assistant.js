@@ -1316,6 +1316,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
           .then(function(r){
             setVoiceBusy(false);
             if(!r.ok){ addMsg('bot', voiceMsg('fail')); return; }
+            // Gemini couldn't transcribe (down/out of quota/misconfigured) —
+            // the server asked Claude for a friendly, localized heads-up
+            // instead. Show that rather than pretending nothing was said.
+            var message = r.data && r.data.message;
+            if(message){ addMsg('bot', message); return; }
             var text = (r.data && r.data.text || '').trim();
             if(!text){ addMsg('bot', voiceMsg('empty')); return; }
             input.value = text; autoR(input); input.focus();
