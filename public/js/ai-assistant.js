@@ -361,7 +361,20 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     bottom:calc(198px + env(safe-area-inset-bottom, 0px));
     width:380px; height:560px;
     min-width:280px; min-height:380px;
-    max-width:min(700px,96vw); max-height:92vh;
+    max-width:min(700px,96vw);
+    /* BUG FIX (round 3): max-height was a flat 92vh, which never
+       accounted for how much room the panel's own bottom offset
+       already eats out of the viewport. bottom:198px + height:560px
+       needs ~758px of vertical space on mobile (162px + 560px = 722px
+       on desktop) — on any browser window shorter than that, 92vh
+       let the panel grow tall enough that its top edge pushed up
+       past the visible viewport, under the browser's own address
+       bar/chrome (exactly the screenshot). max-height must instead be
+       capped by whatever vertical space is actually left above the
+       panel's bottom offset, with a small 16px breathing gap from the
+       very top of the viewport, and use min() so it still respects
+       the original 92vh ceiling on tall viewports. */
+    max-height:min(92vh, calc(100vh - 198px - env(safe-area-inset-bottom, 0px) - 16px));
     overflow:hidden; background:#ffffff; border-radius:18px;
     box-shadow:0 8px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     display:flex; flex-direction:column;
@@ -370,7 +383,12 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
   #pr-panel.open { transform:translateY(0) scale(1); opacity:1; pointer-events:all }
-  @media(min-width:901px) { #pr-panel { bottom:162px } }
+  @media(min-width:901px) {
+    #pr-panel {
+      bottom:162px;
+      max-height:min(92vh, calc(100vh - 162px - 16px));
+    }
+  }
   @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
 
   /* Site's own desktop scroll-to-top button (.stt-btn, defined in
@@ -659,6 +677,27 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   const bottomEdge = document.getElementById('pr-bottom-edge');
   let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0;
 
+  /* BUG FIX (round 3): mirrors the #pr-panel max-height fix above.
+     These handlers used a flat window.innerHeight*.92 (or *.9 for the
+     touch path) as the resize ceiling, which ignored the panel's own
+     bottom offset (162px desktop / 198px + safe-area mobile) — the
+     same root cause as the screenshot. Dragging the top edge on a
+     shorter viewport could grow the panel past that flat cap and still
+     push its top edge above the visible viewport. getMaxPanelH()
+     computes the real remaining space the same way the CSS does, so
+     manual resizing can never reintroduce the overflow. */
+  function getMaxPanelH() {
+    var bottomOffset = window.innerWidth >= 901 ? 162 : 198;
+    var safeBottom = 0;
+    try {
+      var probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;bottom:env(safe-area-inset-bottom,0px);height:0';
+      document.body.appendChild(probe);
+      safeBottom = window.innerHeight - probe.getBoundingClientRect().bottom;
+      document.body.removeChild(probe);
+    } catch (err) { safeBottom = 0; }
+    return Math.min(window.innerHeight*.92, window.innerHeight - bottomOffset - safeBottom - 16);
+  }
   function startResize(type, e) {
     resizing=true; resizeType=type;
     rX0=e.clientX; rY0=e.clientY;
@@ -672,7 +711,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   bottomEdge.addEventListener('mousedown', function(e){ startResize('bottom',e); });
   document.addEventListener('mousemove', function(e) {
     if (!resizing) return;
-    var maxW=Math.min(700,window.innerWidth*.96), maxH=window.innerHeight*.92;
+    var maxW=Math.min(700,window.innerWidth*.96), maxH=getMaxPanelH();
     if (resizeType==='top')    panel.style.height=Math.min(Math.max(rH0+(rY0-e.clientY),380),maxH)+'px';
     if (resizeType==='left')   panel.style.width =Math.min(Math.max(rW0+(rX0-e.clientX),280),maxW)+'px';
     if (resizeType==='bottom') panel.style.height=Math.min(Math.max(rH0-(rY0-e.clientY),380),maxH)+'px';
@@ -684,7 +723,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   leftEdge.addEventListener('touchstart', function(e){ var t=e.touches[0]; resizing=true; resizeType='left'; rX0=t.clientX; rW0=panel.offsetWidth; },{passive:true});
   document.addEventListener('touchmove', function(e){
     if(!resizing) return; var t=e.touches[0];
-    if(resizeType==='top')  panel.style.height=Math.min(Math.max(rH0+(rY0-t.clientY),380),window.innerHeight*.9)+'px';
+    if(resizeType==='top')  panel.style.height=Math.min(Math.max(rH0+(rY0-t.clientY),380),getMaxPanelH())+'px';
     if(resizeType==='left') panel.style.width =Math.min(Math.max(rW0+(rX0-t.clientX),280),700)+'px';
   },{passive:true});
   document.addEventListener('touchend', function(){ resizing=false; });
