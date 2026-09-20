@@ -295,11 +295,15 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     opacity:0; pointer-events:none; transition:opacity .18s; font-family:inherit;
   }
   #pr-wa:hover .pr-wa-tip { opacity:1 }
-  /* Hidden while the chat panel is open (see TOGGLE section) — with the
-     panel taking up the bottom-right corner, a lone WhatsApp button
-     floating at the very edge of it looked cluttered/half-covered. Only
-     the AI fab (which turns into the ✕ close button) stays visible. */
-  body.pr-chat-open #pr-wa { opacity:0; pointer-events:none; transform:scale(.6); }
+  /* BUG FIX (round 5): previously hidden while the chat panel was
+     open ("looked cluttered/half-covered" per the original comment),
+     but the panel is anchored well above this button (bottom:162px
+     desktop vs. this button's bottom:24px) so they never actually
+     overlap in the default docked position — verified against the
+     live CSS above, not assumed. Removed the hide so WhatsApp stays
+     reachable on desktop while chatting, per user report. If the
+     panel is later dragged down over this corner, that's a deliberate
+     user action, not a layout bug. */
 
   /* AI fab: bottom-right, stacked above the site's other fixed controls.
      BUG FIX: this used to be pinned to the vertical middle of the right
@@ -416,6 +420,19 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     cursor:ns-resize; z-index:10;
   }
   #pr-bottom-edge:hover { background:rgba(200,146,10,.15) }
+  /* FEATURE (round 5): right edge + 4 corners, so resizing works from
+     all 8 directions, not just top/left/bottom as before. */
+  #pr-right-edge {
+    position:absolute; right:0; top:20px; bottom:0; width:5px;
+    cursor:ew-resize; z-index:10; border-radius:0 18px 18px 0;
+  }
+  #pr-right-edge:hover { background:rgba(200,146,10,.2) }
+  .pr-corner { position:absolute; width:14px; height:14px; z-index:11; }
+  #pr-corner-nw { left:0; top:0; cursor:nwse-resize; border-radius:18px 0 0 0; }
+  #pr-corner-ne { right:0; top:0; cursor:nesw-resize; border-radius:0 18px 0 0; }
+  #pr-corner-sw { left:0; bottom:0; cursor:nesw-resize; border-radius:0 0 0 18px; }
+  #pr-corner-se { right:0; bottom:0; cursor:nwse-resize; border-radius:0 0 18px 0; }
+  .pr-corner:hover { background:rgba(200,146,10,.25) }
 
   .pr-hd {
     padding:11px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0;
@@ -601,7 +618,9 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   /* ── Panel ────────────────────────────────────────────── */
   const panel = document.createElement('div');
   panel.id = 'pr-panel';
-  panel.innerHTML = '<div id="pr-left-edge"></div><div id="pr-bottom-edge"></div><div id="pr-drag"></div>'
+  panel.innerHTML = '<div id="pr-left-edge"></div><div id="pr-right-edge"></div><div id="pr-bottom-edge"></div><div id="pr-drag"></div>'
+    + '<div id="pr-corner-nw" class="pr-corner"></div><div id="pr-corner-ne" class="pr-corner"></div>'
+    + '<div id="pr-corner-sw" class="pr-corner"></div><div id="pr-corner-se" class="pr-corner"></div>'
     + '<div class="pr-hd">'
     + '<div class="pr-hav"><img src="' + AI_CFG.avatar + '" alt="AI"></div>'
     + '<div><div class="pr-hn" id="pr-name">' + AI_CFG.name + '</div>'
@@ -683,18 +702,20 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
 
   /* ── POSITION & RESIZE ───────────────────────────────────
      Panel starts anchored bottom-right (via CSS `right`/`bottom`),
-     same as before. Dragging the header (FEATURE: move) switches it
-     to free left/top positioning the first time it's dragged, so a
-     user who never touches it sees no change in behaviour. Dragging
-     the edges (existing RESIZE feature) still works in either mode —
-     see applyResize() below, which keeps the *opposite* edge fixed on
-     screen either way, matching the direction you'd naturally expect
-     from grabbing that edge. */
+     same as before. Dragging the header (move) or any edge/corner
+     (resize) switches it to free left/top positioning the first time
+     it's touched, so a user who never interacts with it sees no
+     change in behaviour. */
   const dragBar    = document.getElementById('pr-drag');
   const leftEdge   = document.getElementById('pr-left-edge');
   const bottomEdge = document.getElementById('pr-bottom-edge');
+  const rightEdge  = document.getElementById('pr-right-edge');
+  const cornerNW   = document.getElementById('pr-corner-nw');
+  const cornerNE   = document.getElementById('pr-corner-ne');
+  const cornerSW   = document.getElementById('pr-corner-sw');
+  const cornerSE   = document.getElementById('pr-corner-se');
   const hd         = document.querySelector('.pr-hd');
-  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0, rBottomRef=0, rRightRef=0;
+  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0, rLeft0=0, rTop0=0;
   let panelMoved=false, moving=false, mvX0=0, mvY0=0, mvL0=0, mvT0=0;
 
   function getViewportW() { return (window.visualViewport && window.visualViewport.width)  || window.innerWidth; }
@@ -729,9 +750,10 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     return Math.min(vh*.92, vh - bottomOffset - getSafeBottom() - 16);
   }
   /* Re-clamps size/position against the *current* real viewport. Runs
-     on open, and on every resize/orientation/visualViewport change —
-     the latter is what actually fires when a mobile browser's address
-     bar shows or hides, which plain window 'resize' often misses. */
+     on open, after every move/resize, and on every resize/orientation/
+     visualViewport change — the latter is what actually fires when a
+     mobile browser's address bar shows or hides, which plain window
+     'resize' often misses. */
   function enforcePanelBounds() {
     if (!isOpen) return;
     var capH = getMaxPanelH();
@@ -752,34 +774,50 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     window.visualViewport.addEventListener('scroll', enforcePanelBounds);
   }
 
-  function startResize(type, e) {
+  /* FEATURE (round 5): resize from all 8 directions (4 edges + 4
+     corners), not just top/left/bottom. `type` is a compass string —
+     'n','s','e','w','ne','nw','se','sw' — and each letter independently
+     drives one axis, so corners just combine two edges' math. Capturing
+     the panel's actual on-screen rect via getBoundingClientRect() at
+     drag start (rather than trusting CSS anchor keywords) means this
+     works correctly whether the panel is still docked bottom-right or
+     has already been moved/resized earlier. */
+  var CURSORS = { n:'ns-resize', s:'ns-resize', e:'ew-resize', w:'ew-resize',
+                  ne:'nesw-resize', sw:'nesw-resize', nw:'nwse-resize', se:'nwse-resize' };
+  function startResize(type, cx, cy) {
     resizing=true; resizeType=type;
-    rX0=e.clientX; rY0=e.clientY;
-    rW0=panel.offsetWidth; rH0=panel.offsetHeight;
     var rect=panel.getBoundingClientRect();
-    rBottomRef = rect.top + rect.height;
-    rRightRef  = rect.left + rect.width;
+    rX0=cx; rY0=cy; rLeft0=rect.left; rTop0=rect.top; rW0=rect.width; rH0=rect.height;
     document.body.style.userSelect='none';
-    document.body.style.cursor = type==='left' ? 'ew-resize' : 'ns-resize';
-    e.preventDefault();
+    document.body.style.cursor = CURSORS[type] || 'default';
   }
   function applyResize(type, cx, cy) {
-    var maxW=Math.min(700,getViewportW()*.96), maxH=getMaxPanelH();
-    if (type==='top' || type==='bottom') {
-      var newH = type==='top' ? Math.min(Math.max(rH0+(rY0-cy),380),maxH)
-                               : Math.min(Math.max(rH0-(rY0-cy),380),maxH);
-      panel.style.height = newH+'px';
-      if (panelMoved) panel.style.top = (rBottomRef - newH) + 'px';
-    }
-    if (type==='left') {
-      var newW = Math.min(Math.max(rW0+(rX0-cx),280),maxW);
-      panel.style.width = newW+'px';
-      if (panelMoved) panel.style.left = (rRightRef - newW) + 'px';
-    }
+    var dx=cx-rX0, dy=cy-rY0;
+    var maxW=Math.min(700, getViewportW()*.96), minW=280, minH=380;
+    var left=rLeft0, top=rTop0, w=rW0, h=rH0;
+    if (type.indexOf('e')>-1) w = Math.min(Math.max(rW0+dx, minW), maxW);
+    if (type.indexOf('w')>-1) { w = Math.min(Math.max(rW0-dx, minW), maxW); left = rLeft0 + (rW0-w); }
+    if (type.indexOf('s')>-1) h = Math.max(rH0+dy, minH);
+    if (type.indexOf('n')>-1) { h = Math.max(rH0-dy, minH); top = rTop0 + (rH0-h); }
+    panel.style.left=left+'px'; panel.style.top=top+'px';
+    panel.style.width=w+'px';   panel.style.height=h+'px';
+    panel.style.right='auto';   panel.style.bottom='auto';
+    panelMoved = true;
+    enforcePanelBounds();
   }
-  dragBar.addEventListener('mousedown',    function(e){ startResize('top',e); });
-  leftEdge.addEventListener('mousedown',   function(e){ startResize('left',e); });
-  bottomEdge.addEventListener('mousedown', function(e){ startResize('bottom',e); });
+  function bindHandle(el, type) {
+    if (!el) return;
+    el.addEventListener('mousedown', function(e){ startResize(type, e.clientX, e.clientY); e.preventDefault(); });
+    el.addEventListener('touchstart', function(e){ var t=e.touches[0]; startResize(type, t.clientX, t.clientY); }, {passive:true});
+  }
+  bindHandle(dragBar,    'n');
+  bindHandle(bottomEdge, 's');
+  bindHandle(leftEdge,   'w');
+  bindHandle(rightEdge,  'e');
+  bindHandle(cornerNW,   'nw');
+  bindHandle(cornerNE,   'ne');
+  bindHandle(cornerSW,   'sw');
+  bindHandle(cornerSE,   'se');
   document.addEventListener('mousemove', function(e) {
     if (!resizing) return;
     applyResize(resizeType, e.clientX, e.clientY);
@@ -787,23 +825,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   document.addEventListener('mouseup', function() {
     if(resizing){ resizing=false; document.body.style.userSelect=''; document.body.style.cursor=''; }
   });
-  dragBar.addEventListener('touchstart', function(e){
-    var t=e.touches[0]; resizing=true; resizeType='top'; rY0=t.clientY; rH0=panel.offsetHeight;
-    var rect=panel.getBoundingClientRect(); rBottomRef=rect.top+rect.height;
-  },{passive:true});
-  leftEdge.addEventListener('touchstart', function(e){
-    var t=e.touches[0]; resizing=true; resizeType='left'; rX0=t.clientX; rW0=panel.offsetWidth;
-    var rect=panel.getBoundingClientRect(); rRightRef=rect.left+rect.width;
-  },{passive:true});
-  bottomEdge.addEventListener('touchstart', function(e){
-    var t=e.touches[0]; resizing=true; resizeType='bottom'; rY0=t.clientY; rH0=panel.offsetHeight;
-    var rect=panel.getBoundingClientRect(); rBottomRef=rect.top+rect.height;
-  },{passive:true});
   document.addEventListener('touchmove', function(e){
     if(!resizing) return; var t=e.touches[0];
     applyResize(resizeType, t.clientX, t.clientY);
   },{passive:true});
-  document.addEventListener('touchend', function(){ resizing=false; });
+  document.addEventListener('touchend', function(){
+    if(resizing){ resizing=false; document.body.style.userSelect=''; document.body.style.cursor=''; }
+  });
 
   /* FEATURE: drag the header to move the whole panel anywhere on
      screen. Excludes the language dropdown so it stays clickable. */
