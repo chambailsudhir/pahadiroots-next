@@ -1,5 +1,5 @@
 /**
- * 5 Pahadi Roots — AI Assistant v5.0
+ * HimVeda by Pahadi Roots — AI Assistant v5.0
  * js/ai-assistant.js
  *
  * FIXES:
@@ -48,7 +48,7 @@
   // This is the ONLY place restrictions live.
   // The AI itself handles everything else freely via web search + knowledge.
   function buildSystemPrompt(langCode, langName) {
-    return `You are Pahadi_AI — the friendly, knowledgeable AI shopping assistant for "5 Pahadi Roots" (pahadiroots.com), an Indian ecommerce brand selling authentic Himalayan natural products.
+    return `You are Pahadi_AI — the friendly, knowledgeable AI shopping assistant for "HimVeda by Pahadi Roots" (pahadiroots.com), an Indian ecommerce brand selling authentic Himalayan natural products.
 
 LANGUAGE RULE (HIGHEST PRIORITY):
 You MUST respond in ${langName} (language code: ${langCode}).
@@ -236,7 +236,7 @@ A D WE R B S .=দুৰৈ | A man.=মানুহ | A pageisonesideofa leaf=�
 - For any other language → respond in that language
 NEVER mix languages. If user writes in a different language than selected, still respond in the SELECTED language (${langName}).
 
-ABOUT 5 PAHADI ROOTS:
+ABOUT HIMVEDA BY PAHADI ROOTS:
 - Sells authentic Himalayan natural products sourced directly from mountain farmers
 - Products: Wild Honey (Himachal), A2 Bilona Ghee, Kashmiri Saffron, Ladakhi Shilajit, Assam Tea, Kangra Tea, Lakadong Turmeric, Bamboo Shoot, Joha Rice, Bhut Jolokia, Black Rice, Large Cardamom, Cold Pressed Mustard Oil, Basmati Rice
 - Free shipping above ₹799 | Delivery: 4-7 business days | Returns: within 7 days
@@ -251,7 +251,7 @@ YOU CAN ANSWER FREELY:
 - Gift recommendations, budget-based suggestions
 
 STRICT RESTRICTIONS (never cross these):
-1. COMPETITORS: Never recommend any competitor brand, Amazon/Flipkart listings, or other product brands. Always bring focus back to 5 Pahadi Roots products.
+1. COMPETITORS: Never recommend any competitor brand, Amazon/Flipkart listings, or other product brands. Always bring focus back to HimVeda by Pahadi Roots products.
 2. PERSONAL INFO: If anyone shares phone/email/Aadhaar/bank details, do NOT store, repeat, or use them. Say: "Please don't share personal info — I'm a product guide only."
 3. MEDICAL ADVICE: Never diagnose illness or prescribe treatment/dosage. You can mention general health benefits of products (e.g. honey boosts immunity), but say "consult a doctor" for medical conditions.
 4. FINANCIAL ADVICE: Never give investment, insurance, or stock market advice.
@@ -259,7 +259,7 @@ STRICT RESTRICTIONS (never cross these):
 6. POLITICAL CONTENT: Never discuss political parties, elections, or politicians.
 7. RELIGIOUS CONTROVERSY: Never engage in religious debates or comparisons.
 
-TONE: Warm, helpful, like a knowledgeable Pahadi friend. Use relevant emojis naturally. Keep responses concise but complete. Always mention relevant 5 Pahadi Roots products when appropriate.
+TONE: Warm, helpful, like a knowledgeable Pahadi friend. Use relevant emojis naturally. Keep responses concise but complete. Always mention relevant HimVeda by Pahadi Roots products when appropriate.
 
 USE WEB SEARCH: You have Google Search available. Use it for current weather, temperatures, latest news, trek conditions, seasonal availability, and any factual questions.`;
   }
@@ -271,9 +271,14 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
      pahadiroots-next's own bottom nav (MobileBottomNav.tsx) already has a
      "Chat" WhatsApp entry, so a second one here would duplicate it — but
      that bottom nav is mobile-only (display:none above 900px), so desktop
-     had no WhatsApp entry point at all without this. */
+     had no WhatsApp entry point at all without this.
+     BUG FIX: was bottom:24px, which is the EXACT same spot as the site's
+     own desktop scroll-to-top button (.stt-btn, right:16/bottom:24 above
+     901px — see globals.css) — this button's very high z-index sat right
+     on top of it, hiding it completely. Raised so it clears stt-btn
+     (24 to 66px) with a visible gap. */
   #pr-wa {
-    display:none; position:fixed; right:16px; bottom:24px;
+    display:none; position:fixed; right:16px; bottom:84px;
     width:52px; height:52px; border-radius:50%;
     background:#25D366; border:none; cursor:pointer;
     box-shadow:0 4px 16px rgba(37,211,102,.45);
@@ -292,12 +297,19 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   }
   #pr-wa:hover .pr-wa-tip { opacity:1 }
 
-  /* AI fab: parked at the vertical middle of the right edge (matching the
-     "Need Help?" style seen on mypahadidukan.com) instead of the bottom
-     corner. This sidesteps the bottom nav / scroll-to-top button on mobile
-     entirely, rather than trying to stack above them. */
+  /* AI fab: bottom-right, stacked above the site's other fixed controls.
+     BUG FIX: this used to be pinned to the vertical middle of the right
+     edge (top:50%) specifically to dodge the mobile bottom nav / scroll-
+     to-top button — but on the homepage that same vertical-center spot is
+     exactly where HeroBanner's prev/next carousel arrows sit
+     (right:20, top:calc(50% - 35px) — see HeroBanner.tsx), so the fab's
+     much higher z-index completely covered the right arrow. Bottom-
+     anchoring instead clears BOTH: the hero controls (which sit near
+     the vertical middle, far from the viewport bottom) and the mobile
+     nav / scroll-to-top button (stacked below, with an explicit gap). */
   #pr-ai-fab {
-    position:fixed; top:50%; right:16px; transform:translateY(-50%);
+    position:fixed; right:16px;
+    bottom:calc(128px + env(safe-area-inset-bottom, 0px));
     width:56px; height:56px; border-radius:50%;
     border:none; cursor:pointer; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
@@ -305,7 +317,12 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     animation:pr-pulse 3s ease-out infinite;
     z-index:2147483645;
   }
-  #pr-ai-fab:hover { transform:translateY(-50%) scale(1.08) }
+  /* Desktop: no mobile bottom nav to clear, only the site's own
+     scroll-to-top button (bottom:24, height 42) and the WhatsApp
+     button above it (bottom:84, height 52, ends at 136) — 152px
+     leaves a clean gap above both. */
+  @media(min-width:901px) { #pr-ai-fab { bottom:152px } }
+  #pr-ai-fab:hover { transform:scale(1.08) }
   #pr-ai-fab.open  { animation:none }
   #pr-ai-fab img.pr-fi { width:100%; height:100%; object-fit:cover; border-radius:50% }
   #pr-ai-fab .pr-fc { display:none; font-size:20px; color:#fff; font-family:inherit }
@@ -323,11 +340,12 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     100% { box-shadow:0 0 0 0 rgba(26,58,30,0), 0 6px 22px rgba(26,58,30,.5) }
   }
 
-  /* Opens beside the fab (86px = 16 right + 56 fab width + 14 gap),
-     vertically centered to match — never touches the bottom nav or
-     scroll-to-top button since neither is bottom-anchored anymore. */
+  /* Opens directly above the fab now that the fab is bottom-anchored
+     (198px = 128 fab-bottom + 56 fab-height + 14 gap on mobile; 222px
+     on desktop using the fab's 152px bottom) instead of beside it. */
   #pr-panel {
-    position:fixed; top:50%; right:86px;
+    position:fixed; right:16px;
+    bottom:calc(198px + env(safe-area-inset-bottom, 0px));
     width:380px; height:560px;
     min-width:280px; min-height:380px;
     max-width:min(700px,96vw); max-height:92vh;
@@ -335,10 +353,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     box-shadow:0 8px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     display:flex; flex-direction:column;
     z-index:2147483644;
-    transform:translateY(-50%) scale(.87); opacity:0; pointer-events:none;
+    transform:translateY(16px) scale(.87); opacity:0; pointer-events:none;
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
-  #pr-panel.open { transform:translateY(-50%) scale(1); opacity:1; pointer-events:all }
+  #pr-panel.open { transform:translateY(0) scale(1); opacity:1; pointer-events:all }
+  @media(min-width:901px) { #pr-panel { bottom:222px } }
   @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
 
   #pr-drag {
@@ -598,14 +617,14 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     + '<div class="pr-chip" data-q="Benefits of A2 Bilona Ghee?">🧈 Ghee benefits</div>'
     + '<div class="pr-chip" data-q="How to identify genuine Kashmiri saffron?">🌸 Real saffron?</div>'
     + '<div class="pr-chip" data-q="Delivery time and shipping details?">🚚 Delivery?</div>'
-    + '<div class="pr-chip" data-q="What is the weather in Shimla today?">🌤️ Shimla weather</div>'
+    + '<div class="pr-chip" data-q="How can I track my order?">📦 Track order</div>'
     + '<div class="pr-chip" data-q="Gift ideas from Himachal Pradesh?">🎁 Gift ideas</div>'
     + '<div class="pr-chip" data-q="What superfoods grow in the Himalayas?">🌿 Superfoods</div>'
     + '</div>'
     + '<div class="pr-msgs" id="pr-msgs"></div>'
     + '<div class="pr-ia"><div class="pr-ir">'
     + '<button id="pr-voice" title="Voice input"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.57 3.13 8.37 7.26 9.58V21h5.48v-3.42C18.87 16.37 22 12.57 22 8h-2c0 4.08-3.06 7.44-7 7.93V15.93z"/></svg></button>'
-    + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, weather, health…"></textarea>'
+    + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, benefits, orders…"></textarea>'
     + '<button id="pr-sb" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     + '</div><div class="pr-ft">Pahadi Roots AI · Powered by Google Gemini</div></div>';
   document.body.appendChild(panel);
@@ -681,8 +700,8 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   };
 
   var PLACEHOLDERS = {
-    hi:'कुछ भी पूछें — उत्पाद, मौसम, स्वास्थ्य…',
-    pa:'ਕੁਝ ਵੀ ਪੁੱਛੋ — ਉਤਪਾਦ, ਮੌਸਮ…',
+    hi:'कुछ भी पूछें — उत्पाद, स्वास्थ्य, ऑर्डर…',
+    pa:'ਕੁਝ ਵੀ ਪੁੱਛੋ — ਉਤਪਾਦ, ਆਰਡਰ…',
     bn:'যেকোনো কিছু জিজ্ঞেস করুন…',
     ta:'எதையும் கேளுங்கள்…',
     te:'ఏమైనా అడగండి…',
@@ -721,7 +740,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     langMenu.classList.remove('open');
     // Apply language
     lang = newLang;
-    input.placeholder = PLACEHOLDERS[lang] || 'Ask anything — products, weather, health…';
+    input.placeholder = PLACEHOLDERS[lang] || 'Ask anything — products, benefits, orders…';
     history = [];
     msgs.innerHTML = '';
     welcome();
@@ -813,27 +832,27 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   /* ── WELCOME MESSAGE ──────────────────────────────────── */
   function welcome() {
     var w = {
-      en: '🙏 Namaste! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our Himalayan products — benefits, how to use, authenticity\n• Weather in Shimla, Manali, Ladakh (live search!)\n• Budget recommendations, gift ideas\n• Delivery, returns, any questions\n\nWhat would you like to know?',
-      hi: '🙏 नमस्ते! मैं **' + AI_CFG.name + '** हूँ — आपका Himalayan guide!\n\nमैं इनमें मदद कर सकता हूँ:\n• हमारे शुद्ध Himalayan उत्पाद\n• शिमला, मनाली का मौसम (live!)\n• Budget के अनुसार सुझाव\n• Delivery और returns\n\nआज क्या जानना है?',
-      pa: '🙏 ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ **' + AI_CFG.name + '** ਹਾਂ!\n\nਮੈਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ:\n• ਸਾਡੇ Himalayan ਉਤਪਾਦ\n• ਮੌਸਮ ਦੀ ਜਾਣਕਾਰੀ\n• Budget ਅਨੁਸਾਰ ਸੁਝਾਅ\n\nਦੱਸੋ ਕੀ ਚਾਹੀਦਾ ਹੈ?',
-      bn: '🙏 নমস্কার! আমি **' + AI_CFG.name + '** — আপনার Himalayan গাইড!\n\nআমি সাহায্য করতে পারি:\n• Himalayan পণ্য ও উপকারিতা\n• আবহাওয়ার তথ্য\n• বাজেট অনুযায়ী পরামর্শ\n\nকী জানতে চান?',
-      ta: '🙏 வணக்கம்! நான் **' + AI_CFG.name + '** — உங்கள் Himalayan வழிகாட்டி!\n\nநான் உதவலாம்:\n• Himalayan தயாரிப்புகள்\n• வானிலை தகவல்\n• பட்ஜெட் பரிந்துரைகள்\n\nஎன்ன தெரிந்துகொள்ள விரும்புகிறீர்கள்?',
-      te: '🙏 నమస్కారం! నేను **' + AI_CFG.name + '** — మీ Himalayan గైడ్!\n\nనేను సహాయపడగలను:\n• Himalayan ఉత్పత్తులు\n• వాతావరణ సమాచారం\n• బడ్జెట్ సూచనలు\n\nమీకు ఏమి తెలుసుకోవాలి?',
-      mr: '🙏 नमस्कार! मी **' + AI_CFG.name + '** — तुमचा Himalayan मार्गदर्शक!\n\nमी मदत करू शकतो:\n• Himalayan उत्पादने\n• हवामान माहिती\n• Budget नुसार सूचना\n\nकाय जाणून घ्यायचे आहे?',
-      gu: '🙏 નમસ્તે! હું **' + AI_CFG.name + '** — તમારો Himalayan ગાઇડ!\n\nહું મદદ કરી શકું:\n• Himalayan ઉત્પાદનો\n• હવામાનની માહિતી\n• Budget મુજબ સૂચनो\n\nशું જаणвू  છे?',
-      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• शिमले, मनाली दा मौसम (live!)\n• Budget दे हिसाब नाल सलाह\n• Delivery ते returns\n\nदस्सो, किसी चीज़ दी लोड़ हाई?',
-      garh: '🙏 नमस्कार! मी **' + AI_CFG.name + '** छूं — तुमारो Himalayan गाइड!\n\nमी यूँ मदद करी सकदूं:\n• हमारा Himalayan उत्पाद\n• शिमला, मनाली को मौसम\n• Budget क हिसाब से सलाह\n• Delivery अर returns\n\nबताओ, क्या जाणनो छ?',
-      doi: '🙏 राम राम! मैं **' + AI_CFG.name + '** आं — तुंदा Himalayan guide!\n\nमैं इत्थें मदद करी सकदा आं:\n• साडे Himalayan उत्पाद\n• मौसम दी जानकारी\n• Budget मताबक सलाह\n\nदस्सो की जानना ऐ?',
-      kum: '🙏 नमस्कार! मैं **' + AI_CFG.name + '** छु — तुमर Himalayan गाइड!\n\nमैं यूँ मदद करि सकूँ:\n• हमर असली पहाड़ी उत्पाद\n• मौसम की जानकारी\n• Budget क हिसाब से सलाह\n\nबताओ क्या चनो?',
-      lad: '🙏 Juley! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our pure Ladakhi & Himalayan products\n• Weather in Leh, Ladakh\n• Budget suggestions\n\nYang cho dukpo? (What do you need?)',
-      or: '🙏 ନମସ୍କାର! ମୁଁ **' + AI_CFG.name + '** — ଆପଣଙ୍କର Himalayan ଗାଇଡ଼!\n\nମୁଁ ସାହାଯ୍ୟ କରିପାରିବି:\n• Himalayan ଉତ୍ପାଦ\n• ମୌସମ ସୂଚନା\n• Budget ପରାମର୍ଶ\n\nଆପଣ କଣ ଜାଣିବାକୁ ଚାହୁଁଛନ୍ତି?',
-      as: '🙏 নমস্কাৰ! মই **' + AI_CFG.name + '** — আপোনাৰ Himalayan গাইড!\n\nমই উপকাৰ কৰিব পাৰোঁ:\n• আমাৰ বিশুদ্ধ Himalayan সামগ্ৰী — মৌ (শহদ), ঘিউ, কেচৰ\n• বতৰৰ খবৰ (live!)\n• Budget অনুযায়ী পৰামৰ্শ\n• Delivery আৰু returns\n\nআপুনি কি বিচাৰে? কওক!\n(আপোনাৰ = Your, মোৰ = My, বাৰু = Good, দুখ = Sad, উপকাৰ = Help)',
-      ne: '🙏 नमस्ते! म **' + AI_CFG.name + '** हुँ — तपाईंको Himalayan गाइड!\n\nमैले मद्दत गर्न सक्छु:\n• हाम्रा Himalayan उत्पादनहरू\n• मौसमको जानकारी\n• Budget अनुसार सुझाव\n\nके जान्न चाहनुहुन्छ?',
-      ur: '🙏 آداب! میں **' + AI_CFG.name + '** ہوں — آپ کا Himalayan گائیڈ!\n\nمیں مدد کر سکتا ہوں:\n• ہمارے خالص Himalayan مصنوعات\n• موسم کی معلومات\n• Budget کے مطابق مشورہ\n\nبتائیں، کیا جاننا ہے?',
-      nag: '🙏 Namaste! Me **' + AI_CFG.name + '** — tumhara Himalayan guide!\n\nMe help dibo pari:\n• Hamara pure Himalayan product — shahad, ghee, kesar\n• Mausam ki jankari\n• Budget hisab se suggestion\n\nBolo, ki chahiye?',
-      bodo: '🙏 Namaskar! Mwi **' + AI_CFG.name + '** — nwngni Himalayan guide!\n\nMwi help dibo:\n• Himalayan products — shahad, ghee, kesar\n• Mausam jankari\n• Budget suggestion\n\nBolo ki chahiye?',
-      mizo: '🙏 Chibai! Ka hming chu **' + AI_CFG.name + '** — i Himalayan guide!\n\nKa tanpui theih:\n• Himalayan products — shahad, ghee, kesar\n• Weather info\n• Budget suggestion\n\nHe la, i duh engzat nge?',
-      khasi: '🙏 Khublei! Nga **' + AI_CFG.name + '** — ngi Himalayan guide!\n\nNga sngewbha:\n• Himalayan products — shahad, ghee, kesar\n• Mausam info\n• Budget suggestion\n\nLa hap, ia la leh?',
+      en: '🙏 Namaste! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our Himalayan products — benefits, how to use, authenticity\n• Budget recommendations, gift ideas\n• Delivery, returns, any questions\n\nWhat would you like to know?',
+      hi: '🙏 नमस्ते! मैं **' + AI_CFG.name + '** हूँ — आपका Himalayan guide!\n\nमैं इनमें मदद कर सकता हूँ:\n• हमारे शुद्ध Himalayan उत्पाद\n• Budget के अनुसार सुझाव\n• Delivery और returns\n\nआज क्या जानना है?',
+      pa: '🙏 ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ **' + AI_CFG.name + '** ਹਾਂ!\n\nਮੈਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ:\n• ਸਾਡੇ Himalayan ਉਤਪਾਦ\n• Budget ਅਨੁਸਾਰ ਸੁਝਾਅ\n\nਦੱਸੋ ਕੀ ਚਾਹੀਦਾ ਹੈ?',
+      bn: '🙏 নমস্কার! আমি **' + AI_CFG.name + '** — আপনার Himalayan গাইড!\n\nআমি সাহায্য করতে পারি:\n• Himalayan পণ্য ও উপকারিতা\n• বাজেট অনুযায়ী পরামর্শ\n\nকী জানতে চান?',
+      ta: '🙏 வணக்கம்! நான் **' + AI_CFG.name + '** — உங்கள் Himalayan வழிகாட்டி!\n\nநான் உதவலாம்:\n• Himalayan தயாரிப்புகள்\n• பட்ஜெட் பரிந்துரைகள்\n\nஎன்ன தெரிந்துகொள்ள விரும்புகிறீர்கள்?',
+      te: '🙏 నమస్కారం! నేను **' + AI_CFG.name + '** — మీ Himalayan గైడ్!\n\nనేను సహాయపడగలను:\n• Himalayan ఉత్పత్తులు\n• బడ్జెట్ సూచనలు\n\nమీకు ఏమి తెలుసుకోవాలి?',
+      mr: '🙏 नमस्कार! मी **' + AI_CFG.name + '** — तुमचा Himalayan मार्गदर्शक!\n\nमी मदत करू शकतो:\n• Himalayan उत्पादने\n• Budget नुसार सूचना\n\nकाय जाणून घ्यायचे आहे?',
+      gu: '🙏 નમસ્તે! હું **' + AI_CFG.name + '** — તમારો Himalayan ગાઇડ!\n\nહું મદદ કરી શકું:\n• Himalayan ઉત્પાદનો\n• Budget મુજબ સૂચनो\n\nशું જаणвू  છे?',
+      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• Budget दे हिसाब नाल सलाह\n• Delivery ते returns\n\nदस्सो, किसी चीज़ दी लोड़ हाई?',
+      garh: '🙏 नमस्कार! मी **' + AI_CFG.name + '** छूं — तुमारो Himalayan गाइड!\n\nमी यूँ मदद करी सकदूं:\n• हमारा Himalayan उत्पाद\n• Budget क हिसाब से सलाह\n• Delivery अर returns\n\nबताओ, क्या जाणनो छ?',
+      doi: '🙏 राम राम! मैं **' + AI_CFG.name + '** आं — तुंदा Himalayan guide!\n\nमैं इत्थें मदद करी सकदा आं:\n• साडे Himalayan उत्पाद\n• Budget मताबक सलाह\n\nदस्सो की जानना ऐ?',
+      kum: '🙏 नमस्कार! मैं **' + AI_CFG.name + '** छु — तुमर Himalayan गाइड!\n\nमैं यूँ मदद करि सकूँ:\n• हमर असली पहाड़ी उत्पाद\n• Budget क हिसाब से सलाह\n\nबताओ क्या चनो?',
+      lad: '🙏 Juley! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our pure Ladakhi & Himalayan products\n• Budget suggestions\n\nYang cho dukpo? (What do you need?)',
+      or: '🙏 ନମସ୍କାର! ମୁଁ **' + AI_CFG.name + '** — ଆପଣଙ୍କର Himalayan ଗାଇଡ଼!\n\nମୁଁ ସାହାଯ୍ୟ କରିପାରିବି:\n• Himalayan ଉତ୍ପାଦ\n• Budget ପରାମର୍ଶ\n\nଆପଣ କଣ ଜାଣିବାକୁ ଚାହୁଁଛନ୍ତି?',
+      as: '🙏 নমস্কাৰ! মই **' + AI_CFG.name + '** — আপোনাৰ Himalayan গাইড!\n\nমই উপকাৰ কৰিব পাৰোঁ:\n• আমাৰ বিশুদ্ধ Himalayan সামগ্ৰী — মৌ (শহদ), ঘিউ, কেচৰ\n• Budget অনুযায়ী পৰামৰ্শ\n• Delivery আৰু returns\n\nআপুনি কি বিচাৰে? কওক!\n(আপোনাৰ = Your, মোৰ = My, বাৰু = Good, দুখ = Sad, উপকাৰ = Help)',
+      ne: '🙏 नमस्ते! म **' + AI_CFG.name + '** हुँ — तपाईंको Himalayan गाइड!\n\nमैले मद्दत गर्न सक्छु:\n• हाम्रा Himalayan उत्पादनहरू\n• Budget अनुसार सुझाव\n\nके जान्न चाहनुहुन्छ?',
+      ur: '🙏 آداب! میں **' + AI_CFG.name + '** ہوں — آپ کا Himalayan گائیڈ!\n\nمیں مدد کر سکتا ہوں:\n• ہمارے خالص Himalayan مصنوعات\n• Budget کے مطابق مشورہ\n\nبتائیں، کیا جاننا ہے?',
+      nag: '🙏 Namaste! Me **' + AI_CFG.name + '** — tumhara Himalayan guide!\n\nMe help dibo pari:\n• Hamara pure Himalayan product — shahad, ghee, kesar\n• Budget hisab se suggestion\n\nBolo, ki chahiye?',
+      bodo: '🙏 Namaskar! Mwi **' + AI_CFG.name + '** — nwngni Himalayan guide!\n\nMwi help dibo:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nBolo ki chahiye?',
+      mizo: '🙏 Chibai! Ka hming chu **' + AI_CFG.name + '** — i Himalayan guide!\n\nKa tanpui theih:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nHe la, i duh engzat nge?',
+      khasi: '🙏 Khublei! Nga **' + AI_CFG.name + '** — ngi Himalayan guide!\n\nNga sngewbha:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nLa hap, ia la leh?',
     };
     addMsg('bot', w[lang] || w.en, [], true);
   }
