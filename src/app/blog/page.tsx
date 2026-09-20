@@ -9,6 +9,11 @@ import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
 
+// BUG FIX: openGraph here had no `images` field. A page's own `openGraph`
+// object replaces the layout's entirely (Next.js does not deep-merge it),
+// so this page had zero og:image — sharing a blog listing link in
+// WhatsApp/Facebook fell back to the site favicon instead of a real image.
+// Same fix applied across every route below with its own openGraph block.
 export const metadata: Metadata = {
   title:       'Blog — HimVeda by Pahadi Roots',
   description: 'Stories from the mountains — health benefits, recipes, buying guides, and honest sourcing notes on Himalayan honey, ghee, shilajit, saffron, and more.',
@@ -18,6 +23,13 @@ export const metadata: Metadata = {
     title: 'Blog — HimVeda by Pahadi Roots',
     description: 'Health benefits, recipes, and buying guides for authentic Himalayan natural products.',
     url: `${BASE}/blog`,
+    images: [{ url: '/logo.png', width: 1200, height: 630, alt: 'Blog — HimVeda by Pahadi Roots' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Blog — HimVeda by Pahadi Roots',
+    description: 'Health benefits, recipes, and buying guides for authentic Himalayan natural products.',
+    images: ['/logo.png'],
   },
 }
 

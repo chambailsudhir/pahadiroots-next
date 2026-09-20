@@ -66,8 +66,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const rawDesc = post.meta_description || post.excerpt || ''
   const description = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
   const canonicalUrl = post.canonical_url || `${BASE}/blog/${post.slug}`
-  const image = post.og_image || post.cover_image
-  const ogImages = image ? [{ url: image, width: 1200, height: 630, alt: post.title }] : []
+  // BUG FIX: fell back to `[]` (no image at all) when a post has neither
+  // og_image nor cover_image set — same class of bug as page.tsx/collections/
+  // products, causing a broken WhatsApp/Facebook share preview for any post
+  // without a photo. Falls back to the real logo instead.
+  const image = post.og_image || post.cover_image || '/logo.png'
+  const ogImages = [{ url: image, width: 1200, height: 630, alt: post.title }]
 
   return {
     title,
@@ -88,7 +92,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       card: 'summary_large_image',
       title: post.title,
       description,
-      images: image ? [image] : undefined,
+      images: [image],
     },
   }
 }

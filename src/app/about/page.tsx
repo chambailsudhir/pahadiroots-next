@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
     url:         'https://pahadiroots.com/about',
     type:        'website',
+    // BUG FIX: no `images` here — this page's own openGraph object
+    // replaces the layout's entirely, so this route had no og:image.
+    images:      [{ url: '/logo.png', width: 1200, height: 630, alt: 'Our Story — HimVeda by Pahadi Roots' }],
   },
 }
 

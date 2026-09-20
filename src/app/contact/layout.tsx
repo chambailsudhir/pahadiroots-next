@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     url: 'https://pahadiroots.com/contact',
     siteName: 'HimVeda by Pahadi Roots',
     type: 'website',
+    // BUG FIX: no `images` here — this page's own openGraph object
+    // replaces the layout's entirely, so this route had no og:image.
+    images: [{ url: '/logo.png', width: 1200, height: 630, alt: 'Contact Us — HimVeda by Pahadi Roots' }],
   },
   twitter: {
     card: 'summary',

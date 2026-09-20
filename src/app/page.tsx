@@ -23,12 +23,27 @@ import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 // static metadata export was already correctly picking up the admin's
 // real meta_title/meta_description; the homepage alone was still stuck
 // on hardcoded text no matter what an admin configured.
+//
+// BUG FIX (confirmed live, root cause of broken WhatsApp/Facebook share
+// preview): Next.js does NOT deep-merge a page's `openGraph`/`twitter`
+// object with the parent layout's — a page that defines its own
+// `openGraph` REPLACES the layout's entirely, images included. This
+// page's openGraph had no `images` field, so the homepage — literally
+// the URL people share — had zero og:image in production. Chat apps
+// that find no og:image commonly fall back to the site favicon, which
+// is exactly the plain leaf icon users were seeing instead of the real
+// logo when sharing pahadiroots.com on WhatsApp. Same class of bug found
+// and fixed across every other route with its own openGraph block (see
+// blog, about, contact, track, wishlist, search, cart, collections,
+// products) — all now explicitly fall back to /logo.png so no page is
+// ever left without a real, on-brand share image.
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings()
   const siteName = settings.site_name || 'HimVeda by Pahadi Roots'
   const title = settings.meta_title || `${siteName} — Pure Himalayan Natural Products`
   const description = settings.meta_description ||
     'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers.'
+  const ogImage = settings.og_image || '/logo.png'
   // SEO FIX: the single most important page on the site had no canonical
   // and no OG/Twitter override — it silently inherited the layout's
   // generic OG data, so sharing the homepage link looked no different
@@ -44,11 +59,13 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       url:  'https://pahadiroots.com',
       type: 'website',
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
+      images: [ogImage],
     },
   }
 }

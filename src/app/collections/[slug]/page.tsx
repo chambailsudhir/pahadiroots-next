@@ -56,7 +56,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
       url:         canonicalUrl,
       type:        'website',
-      images:      cat.image_url ? [{ url: cat.image_url }] : [],
+      // BUG FIX: fell back to `[]` (no image at all) when a category has no
+      // image_url — same class of bug as page.tsx/blog/products, causing a
+      // broken WhatsApp/Facebook share preview for any category without a
+      // photo. Falls back to the real logo instead.
+      images:      [{ url: cat.image_url || '/logo.png', width: 1200, height: 630, alt: cat.name }],
     },
   }
 }

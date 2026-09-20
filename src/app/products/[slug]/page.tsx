@@ -35,9 +35,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // adds ellipsis) instead of the raw .slice(0,155) that cut mid-word.
   const desc = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
   const canonicalUrl = `https://pahadiroots.com/products/${product.slug}`
-  const ogImage = product.image_url
-    ? [{ url: product.image_url, width: 800, height: 800, alt: product.name }]
-    : []
+  // BUG FIX: fell back to `[]` (no image at all) when a product has no
+  // image_url — same class of bug as page.tsx/blog/collections, causing a
+  // broken WhatsApp/Facebook share preview for any product without a photo.
+  // Falls back to the real logo instead.
+  const ogImage = [{ url: product.image_url || '/logo.png', width: 800, height: 800, alt: product.name }]
 
   return {
     // BUG FIX (3.1): was `${product.name} — HimVeda by Pahadi Roots` which rendered
