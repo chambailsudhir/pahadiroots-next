@@ -79,6 +79,18 @@ in "kngr", NEVER substitute a Punjabi word/spelling for a Kangri one, even if it
 "sounds close enough." Common leaks to avoid specifically:
   ✗ ਕੀ ਹਾਲ ਏ / ki haal ae, ਤੁਹਾਨੂੰ / tuhanu, ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਜੀ ਹਾਂ / ji haan, ਨਹੀਂ / nahi
   ✓ Use instead: क्या हाल-चाल, तुसांगी/थुआं, राम-राम जी or जय हिमाचल, हां जी, नेईं/नां
+The leak above is written in Gurmukhi script — but since you always write Kangri in
+Devanagari, that exact form will never actually appear in your output, so don't rely
+on that example alone to feel safe. The leak that actually happens is the SAME
+Punjabi grammar words spelled out in Devanagari instead, which reads as fluent
+Kangri at a glance but isn't:
+  ✗ दी / दे / दा (Punjabi ਦੀ/ਦੇ/ਦਾ, "of") — e.g. "शहद दी गल", "करण दी लोड़ हाई"
+  ✗ नाल (ਨਾਲ, "with") — e.g. "हिसाब नाल"
+  ✗ ते (ਤੇ, "and", used as a conjunction) — e.g. "Delivery ते returns"
+  ✗ गल/गल्ल (ਗੱਲ, "matter/talking about") — e.g. "शहद दी गल कर रहे हो"
+  ✗ लोड़ (ਲੋੜ, "need") when spelled/used this way is Punjabi-Dogri, not Kangri
+  ✓ Use plain Hindi instead: का/की/के (of), साथ (with), और (and), बात (matter),
+    ज़रूरत (need) — per the rule below, plain Hindi beats a guessed Punjabi word.
 If you are not confident a word is genuinely Kangri (versus Punjabi or generic
 Hindi), prefer a plain Hindi word over guessing a Punjabi-sounding one — a
 Kangri speaker will forgive occasional Hindi mixed in (that's how the boli is
@@ -1052,7 +1064,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
       te: '🙏 నమస్కారం! నేను **' + AI_CFG.name + '** — మీ Himalayan గైడ్!\n\nనేను సహాయపడగలను:\n• Himalayan ఉత్పత్తులు\n• బడ్జెట్ సూచనలు\n\nమీకు ఏమి తెలుసుకోవాలి?',
       mr: '🙏 नमस्कार! मी **' + AI_CFG.name + '** — तुमचा Himalayan मार्गदर्शक!\n\nमी मदत करू शकतो:\n• Himalayan उत्पादने\n• Budget नुसार सूचना\n\nकाय जाणून घ्यायचे आहे?',
       gu: '🙏 નમસ્તે! હું **' + AI_CFG.name + '** — તમારો Himalayan ગાઇડ!\n\nહું મદદ કરી શકું:\n• Himalayan ઉત્પાદનો\n• Budget મુજબ સૂચनो\n\nशું જаणвू  છे?',
-      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• Budget दे हिसाब नाल सलाह\n• Delivery ते returns\n\nदस्सो, किसी चीज़ दी लोड़ हाई?',
+      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• Budget के हिसाब से सलाह\n• Delivery और returns\n\nबताओ, किसी चीज़ की ज़रूरत हाई?',
       garh: '🙏 नमस्कार! मी **' + AI_CFG.name + '** छूं — तुमारो Himalayan गाइड!\n\nमी यूँ मदद करी सकदूं:\n• हमारा Himalayan उत्पाद\n• Budget क हिसाब से सलाह\n• Delivery अर returns\n\nबताओ, क्या जाणनो छ?',
       doi: '🙏 राम राम! मैं **' + AI_CFG.name + '** आं — तुंदा Himalayan guide!\n\nमैं इत्थें मदद करी सकदा आं:\n• साडे Himalayan उत्पाद\n• Budget मताबक सलाह\n\nदस्सो की जानना ऐ?',
       kum: '🙏 नमस्कार! मैं **' + AI_CFG.name + '** छु — तुमर Himalayan गाइड!\n\nमैं यूँ मदद करि सकूँ:\n• हमर असली पहाड़ी उत्पाद\n• Budget क हिसाब से सलाह\n\nबताओ क्या चनो?',
