@@ -560,6 +560,9 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   #pr-voice svg { width:15px; height:15px }
   #pr-voice.rec { border-color:#ff5252; animation:pr-rec .8s ease-in-out infinite }
   @keyframes pr-rec { 0%,100%{box-shadow:0 0 0 0 rgba(255,82,82,.4)} 50%{box-shadow:0 0 0 7px rgba(255,82,82,0)} }
+  #pr-voice.busy { border-color:#c8920a; cursor:wait; pointer-events:none }
+  #pr-voice.busy svg { animation:pr-spin .9s linear infinite }
+  @keyframes pr-spin { to{ transform:rotate(360deg) } }
   #pr-sb { width:35px; height:35px; flex-shrink:0; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .15s }
   #pr-sb:hover:not(:disabled) { transform:scale(1.1) }
   #pr-sb:disabled { opacity:.35; cursor:not-allowed }
@@ -883,7 +886,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   });
 
   /* ── STATE ────────────────────────────────────────────── */
-  var isOpen=false, isThinking=false, history=[], lang='en', isRec=false, rec=null;
+  var isOpen=false, isThinking=false, history=[], lang='en', isRec=false;
   var msgs    = document.getElementById('pr-msgs');
   var input   = document.getElementById('pr-ti');
   var sb      = document.getElementById('pr-sb');
@@ -899,15 +902,6 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     nag:'Nagamese', bodo:'Bodo', mizo:'Mizo', khasi:'Khasi', sikkimese:'Sikkimese',
     zh:'Chinese', ja:'Japanese', ko:'Korean', ar:'Arabic',
     fr:'French', de:'German', es:'Spanish', ru:'Russian', pt:'Portuguese',
-  };
-
-  var VOICE_MAP = {
-    en:'en-IN', hi:'hi-IN', pa:'pa-IN', bn:'bn-IN', ta:'ta-IN', te:'te-IN',
-    mr:'mr-IN', gu:'gu-IN', kn:'kn-IN', ml:'ml-IN', or:'or-IN', as:'as-IN',
-    ne:'ne-NP', kngr:'hi-IN', garh:'hi-IN', doi:'hi-IN', kum:'hi-IN', lad:'hi-IN',
-    nag:'en-IN', bodo:'hi-IN', mizo:'en-IN', khasi:'en-IN', sikkimese:'ne-NP',
-    ur:'ur-PK', si:'si-LK', zh:'zh-CN', ru:'ru-RU', pt:'pt-BR', ja:'ja-JP', ko:'ko-KR', ar:'ar-SA', fr:'fr-FR',
-    de:'de-DE', es:'es-ES',
   };
 
   var PLACEHOLDERS = {
@@ -1213,17 +1207,138 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     });
   }
 
-  /* ── VOICE ────────────────────────────────────────────── */
-  voice.addEventListener('click', function(){
-    if(!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)){
-      addMsg('bot','🎤 Voice works in Chrome. Please type your question!'); return;
+  /* ── VOICE ────────────────────────────────────────────────────────
+   * Records audio with MediaRecorder and sends it to /api/transcribe
+   * (server-side Gemini transcription) instead of relying on the
+   * browser's built-in SpeechRecognition API.
+   *
+   * SpeechRecognition doesn't exist at all in iOS Safari (or any iOS
+   * browser — they all run on WebKit) and is unreliable inside many
+   * Android in-app browsers/WebViews, so it silently failed on most
+   * phones. getUserMedia + MediaRecorder is supported everywhere
+   * (including iOS Safari 14.5+), so this works the same way on every
+   * platform.
+   * ────────────────────────────────────────────────────────────────── */
+  var mediaStream = null, mediaRec = null, audioChunks = [], voiceBusy = false;
+  var VOICE_MSG = {
+    en: { denied: '🎤 Microphone access was blocked. Please allow it in your browser settings, or just type your question.',
+          none:   '🎤 No microphone was found on this device. Please type your question instead.',
+          unsupported: '🎤 Voice input isn\'t supported in this browser. Please type your question instead.',
+          empty:  '🎤 I couldn\'t hear anything. Please try again or type your question.',
+          fail:   '🎤 Sorry, I couldn\'t transcribe that. Please try again or type your question.' },
+    hi: { denied: '🎤 माइक्रोफ़ोन की अनुमति नहीं मिली। कृपया browser settings में इसे allow करें, या अपना सवाल type करें।',
+          none:   '🎤 इस डिवाइस पर कोई माइक्रोफ़ोन नहीं मिला। कृपया type करें।',
+          unsupported: '🎤 इस browser में voice input सपोर्ट नहीं है। कृपया type करें।',
+          empty:  '🎤 कुछ सुनाई नहीं दिया। दोबारा कोशिश करें या type करें।',
+          fail:   '🎤 माफ़ करें, समझ नहीं आया। दोबारा कोशिश करें या type करें।' },
+  };
+  function voiceMsg(key){ var m = VOICE_MSG[lang] || VOICE_MSG.en; return (m[key] || VOICE_MSG.en[key]); }
+
+  // Pick the best mime type this browser's MediaRecorder can actually record.
+  function pickMimeType(){
+    var candidates = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/mp4;codecs=mp4a.40.2','audio/aac','audio/ogg;codecs=opus'];
+    if(!('MediaRecorder' in window)) return null;
+    for(var i=0;i<candidates.length;i++){
+      if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
     }
-    if(isRec){ if(rec) rec.stop(); voice.classList.remove('rec'); isRec=false; return; }
-    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    rec=new SR(); rec.lang=VOICE_MAP[lang]||'en-IN'; rec.interimResults=false;
-    rec.onresult=function(e){ input.value=e.results[0][0].transcript; autoR(input); voice.classList.remove('rec'); isRec=false; };
-    rec.onerror=function(){ voice.classList.remove('rec'); isRec=false; };
-    rec.start(); voice.classList.add('rec'); isRec=true;
+    return ''; // let the browser pick its own default
+  }
+
+  function blobToBase64(blob){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onloadend = function(){
+        // reader.result is "data:<mime>;base64,<data>" — strip the prefix.
+        var res = String(reader.result || '');
+        var idx = res.indexOf(',');
+        resolve(idx >= 0 ? res.slice(idx+1) : res);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function setVoiceBusy(on){
+    voiceBusy = on;
+    voice.classList.toggle('busy', on);
+  }
+
+  function stopStream(){
+    if(mediaStream){ mediaStream.getTracks().forEach(function(t){ t.stop(); }); mediaStream = null; }
+  }
+
+  function startRecording(){
+    if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !('MediaRecorder' in window)){
+      addMsg('bot', voiceMsg('unsupported')); return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
+      mediaStream = stream;
+      var mimeType = pickMimeType();
+      try {
+        mediaRec = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+      } catch(e) {
+        stopStream();
+        addMsg('bot', voiceMsg('unsupported'));
+        return;
+      }
+      audioChunks = [];
+      var recStartedAt = Date.now();
+      var autoStopTimer = setTimeout(function(){ if(isRec) mediaRec.stop(); }, 60000); // 60s safety cap
+
+      mediaRec.ondataavailable = function(e){ if(e.data && e.data.size > 0) audioChunks.push(e.data); };
+      mediaRec.onerror = function(){
+        clearTimeout(autoStopTimer);
+        isRec = false; voice.classList.remove('rec'); stopStream();
+        addMsg('bot', voiceMsg('fail'));
+      };
+      mediaRec.onstop = function(){
+        clearTimeout(autoStopTimer);
+        isRec = false; voice.classList.remove('rec'); stopStream();
+
+        var recordedMs = Date.now() - recStartedAt;
+        var outMime = (mediaRec.mimeType || mimeType || 'audio/webm').split(';')[0];
+        var blob = new Blob(audioChunks, { type: outMime });
+        audioChunks = [];
+
+        if(recordedMs < 350 || blob.size < 800){
+          // Too short to contain real speech — most likely an accidental tap.
+          return;
+        }
+
+        setVoiceBusy(true);
+        blobToBase64(blob).then(function(b64){
+          return fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio: b64, mimeType: outMime, lang: lang }),
+          });
+        }).then(function(res){ return res.json().then(function(data){ return { ok: res.ok, data: data }; }); })
+          .then(function(r){
+            setVoiceBusy(false);
+            if(!r.ok){ addMsg('bot', voiceMsg('fail')); return; }
+            var text = (r.data && r.data.text || '').trim();
+            if(!text){ addMsg('bot', voiceMsg('empty')); return; }
+            input.value = text; autoR(input); input.focus();
+          }).catch(function(){
+            setVoiceBusy(false);
+            addMsg('bot', voiceMsg('fail'));
+          });
+      };
+
+      mediaRec.start();
+      isRec = true; voice.classList.add('rec');
+    }).catch(function(err){
+      var name = err && err.name;
+      if(name === 'NotAllowedError' || name === 'PermissionDeniedError'){ addMsg('bot', voiceMsg('denied')); }
+      else if(name === 'NotFoundError' || name === 'DevicesNotFoundError'){ addMsg('bot', voiceMsg('none')); }
+      else { addMsg('bot', voiceMsg('unsupported')); }
+    });
+  }
+
+  voice.addEventListener('click', function(){
+    if(voiceBusy) return; // already transcribing — ignore extra taps
+    if(isRec){ if(mediaRec && mediaRec.state !== 'inactive') mediaRec.stop(); return; }
+    startRecording();
   });
 
   input.addEventListener('keydown', function(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} });
