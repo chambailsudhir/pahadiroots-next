@@ -272,18 +272,17 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
      "Chat" WhatsApp entry, so a second one here would duplicate it — but
      that bottom nav is mobile-only (display:none above 900px), so desktop
      had no WhatsApp entry point at all without this.
-     BUG FIX: was bottom:24px, which is the EXACT same spot as the site's
-     own desktop scroll-to-top button (.stt-btn, right:16/bottom:24 above
-     901px — see globals.css) — this button's very high z-index sat right
-     on top of it, hiding it completely. Raised so it clears stt-btn
-     (24 to 66px) with a visible gap. */
+     BUG FIX (round 2): now sits PARALLEL to the site's own desktop
+     scroll-to-top button (.stt-btn, right:16/bottom:24 above 901px — see
+     globals.css) — same row, side by side — instead of stacked above it.
+     right:72px = 16 (stt-btn's own right) + 42 (stt-btn width) + 14 (gap). */
   #pr-wa {
-    display:none; position:fixed; right:16px; bottom:84px;
+    display:none; position:fixed; right:72px; bottom:24px;
     width:52px; height:52px; border-radius:50%;
     background:#25D366; border:none; cursor:pointer;
     box-shadow:0 4px 16px rgba(37,211,102,.45);
     align-items:center; justify-content:center;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1);
+    transition:transform .2s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
     z-index:2147483645;
   }
   @media(min-width:901px) { #pr-wa { display:flex } }
@@ -296,6 +295,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     opacity:0; pointer-events:none; transition:opacity .18s; font-family:inherit;
   }
   #pr-wa:hover .pr-wa-tip { opacity:1 }
+  /* Hidden while the chat panel is open (see TOGGLE section) — with the
+     panel taking up the bottom-right corner, a lone WhatsApp button
+     floating at the very edge of it looked cluttered/half-covered. Only
+     the AI fab (which turns into the ✕ close button) stays visible. */
+  body.pr-chat-open #pr-wa { opacity:0; pointer-events:none; transform:scale(.6); }
 
   /* AI fab: bottom-right, stacked above the site's other fixed controls.
      BUG FIX: this used to be pinned to the vertical middle of the right
@@ -306,7 +310,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
      much higher z-index completely covered the right arrow. Bottom-
      anchoring instead clears BOTH: the hero controls (which sit near
      the vertical middle, far from the viewport bottom) and the mobile
-     nav / scroll-to-top button (stacked below, with an explicit gap). */
+     nav / scroll-to-top button (stacked below, with an explicit gap).
+     This SAME reasoning applies identically on mobile and desktop, which
+     is why the fab moved on both — the hero arrows and the mobile bottom
+     nav are two different things it has to clear, but "sit low, above
+     everything else fixed" solves both the same way. */
   #pr-ai-fab {
     position:fixed; right:16px;
     bottom:calc(128px + env(safe-area-inset-bottom, 0px));
@@ -315,13 +323,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     display:flex; align-items:center; justify-content:center;
     transition:transform .22s cubic-bezier(.34,1.56,.64,1);
     animation:pr-pulse 3s ease-out infinite;
-    z-index:2147483645;
+    z-index:2147483646;
   }
-  /* Desktop: no mobile bottom nav to clear, only the site's own
-     scroll-to-top button (bottom:24, height 42) and the WhatsApp
-     button above it (bottom:84, height 52, ends at 136) — 152px
-     leaves a clean gap above both. */
-  @media(min-width:901px) { #pr-ai-fab { bottom:152px } }
+  /* Desktop: WhatsApp now sits beside the scroll-to-top button (same
+     row, bottom:24) instead of above it, so the fab only needs to clear
+     that single row — 24 + 52 (taller of the two, WA) + 14 gap = 90,
+     rounded up to 92. */
+  @media(min-width:901px) { #pr-ai-fab { bottom:92px } }
   #pr-ai-fab:hover { transform:scale(1.08) }
   #pr-ai-fab.open  { animation:none }
   #pr-ai-fab img.pr-fi { width:100%; height:100%; object-fit:cover; border-radius:50% }
@@ -340,9 +348,14 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     100% { box-shadow:0 0 0 0 rgba(26,58,30,0), 0 6px 22px rgba(26,58,30,.5) }
   }
 
-  /* Opens directly above the fab now that the fab is bottom-anchored
-     (198px = 128 fab-bottom + 56 fab-height + 14 gap on mobile; 222px
-     on desktop using the fab's 152px bottom) instead of beside it. */
+  /* Opens directly above the fab (198px = 128 fab-bottom + 56 fab-height
+     + 14 gap on mobile; 162px on desktop using the fab's new 92px bottom
+     now that WhatsApp moved out of the stack). BUG FIX (round 2): while
+     the panel is open, the site's scroll-to-top button (.stt-btn) and
+     the WhatsApp button are hidden (see TOGGLE section) — previously
+     they stayed visible right at the panel's bottom-right corner, which
+     read as the buttons "overlapping" the freshly-opened panel. With
+     them hidden, the panel is the only thing in that corner. */
   #pr-panel {
     position:fixed; right:16px;
     bottom:calc(198px + env(safe-area-inset-bottom, 0px));
@@ -357,8 +370,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
   #pr-panel.open { transform:translateY(0) scale(1); opacity:1; pointer-events:all }
-  @media(min-width:901px) { #pr-panel { bottom:222px } }
+  @media(min-width:901px) { #pr-panel { bottom:162px } }
   @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
+
+  /* Site's own desktop scroll-to-top button (.stt-btn, defined in
+     globals.css) — hidden the same way as #pr-wa while the chat panel
+     is open, for the same reason (kept clear of the panel's corner). */
+  body.pr-chat-open .stt-btn { opacity:0 !important; pointer-events:none !important; }
 
   #pr-drag {
     height:20px; border-radius:18px 18px 0 0;
@@ -793,6 +811,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     isOpen = !isOpen;
     fab.classList.toggle('open', isOpen);
     panel.classList.toggle('open', isOpen);
+    // BUG FIX (round 2): hide the WhatsApp + scroll-to-top buttons while
+    // the chat panel is open — see the body.pr-chat-open rules above —
+    // so they don't sit visually crowded into the panel's bottom-right
+    // corner. Only the fab (now showing ✕) stays visible to close it.
+    document.body.classList.toggle('pr-chat-open', isOpen);
     var b = document.getElementById('pr-badge');
     if(b) b.remove();
     if(isOpen && !msgs.children.length) welcome();
@@ -802,6 +825,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   document.addEventListener('click', function(e) {
     if(isOpen && !panel.contains(e.target) && !fab.contains(e.target)) {
       isOpen=false; fab.classList.remove('open'); panel.classList.remove('open');
+      document.body.classList.remove('pr-chat-open');
     }
   });
   // Toggle chips
