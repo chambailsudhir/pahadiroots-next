@@ -389,7 +389,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
       max-height:min(92vh, calc(100vh - 162px - 16px));
     }
   }
-  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
+  /* Note: no !important here (removed as part of round 4) — this must
+     stay overridable by the inline left/top/width styles the new
+     move/resize features set, or a phone user could never actually
+     reposition or resize the panel away from this default. */
+  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px); right:8px } }
 
   /* Site's own desktop scroll-to-top button (.stt-btn, defined in
      globals.css) — hidden the same way as #pr-wa while the chat panel
@@ -416,7 +420,13 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   .pr-hd {
     padding:11px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0;
     border-bottom:1px solid rgba(200,146,10,.18);
+    /* FEATURE: header doubles as a move handle — see the MOVE block in
+       JS — so it needs a grab cursor to signal that (the language
+       dropdown inside it is excluded from drag via its own target check). */
+    cursor:grab; touch-action:none;
   }
+  #pr-panel.pr-moving .pr-hd { cursor:grabbing }
+  #pr-panel.pr-moving { transition:none !important; user-select:none; }
   .pr-hav { width:72px; height:72px; border-radius:50%; overflow:hidden; flex-shrink:0; border:2px solid rgba(200,146,10,.5); }
   .pr-hav img { width:100%; height:100%; object-fit:cover }
   .pr-hn { font-size:14px; font-weight:700; color:#f0ede0; line-height:1.2; font-family:inherit }
@@ -671,62 +681,178 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
 
   setTimeout(applyTheme, 50);
 
-  /* ── RESIZE ───────────────────────────────────────────── */
+  /* ── POSITION & RESIZE ───────────────────────────────────
+     Panel starts anchored bottom-right (via CSS `right`/`bottom`),
+     same as before. Dragging the header (FEATURE: move) switches it
+     to free left/top positioning the first time it's dragged, so a
+     user who never touches it sees no change in behaviour. Dragging
+     the edges (existing RESIZE feature) still works in either mode —
+     see applyResize() below, which keeps the *opposite* edge fixed on
+     screen either way, matching the direction you'd naturally expect
+     from grabbing that edge. */
   const dragBar    = document.getElementById('pr-drag');
   const leftEdge   = document.getElementById('pr-left-edge');
   const bottomEdge = document.getElementById('pr-bottom-edge');
-  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0;
+  const hd         = document.querySelector('.pr-hd');
+  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0, rBottomRef=0, rRightRef=0;
+  let panelMoved=false, moving=false, mvX0=0, mvY0=0, mvL0=0, mvT0=0;
 
-  /* BUG FIX (round 3): mirrors the #pr-panel max-height fix above.
-     These handlers used a flat window.innerHeight*.92 (or *.9 for the
-     touch path) as the resize ceiling, which ignored the panel's own
-     bottom offset (162px desktop / 198px + safe-area mobile) — the
-     same root cause as the screenshot. Dragging the top edge on a
-     shorter viewport could grow the panel past that flat cap and still
-     push its top edge above the visible viewport. getMaxPanelH()
-     computes the real remaining space the same way the CSS does, so
-     manual resizing can never reintroduce the overflow. */
-  function getMaxPanelH() {
-    var bottomOffset = window.innerWidth >= 901 ? 162 : 198;
-    var safeBottom = 0;
+  function getViewportW() { return (window.visualViewport && window.visualViewport.width)  || window.innerWidth; }
+  function getViewportH() { return (window.visualViewport && window.visualViewport.height) || window.innerHeight; }
+  function getSafeBottom() {
     try {
       var probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;bottom:env(safe-area-inset-bottom,0px);height:0';
+      probe.style.cssText = 'position:fixed;bottom:env(safe-area-inset-bottom,0px);height:0;width:0';
       document.body.appendChild(probe);
-      safeBottom = window.innerHeight - probe.getBoundingClientRect().bottom;
+      var v = getViewportH() - probe.getBoundingClientRect().bottom;
       document.body.removeChild(probe);
-    } catch (err) { safeBottom = 0; }
-    return Math.min(window.innerHeight*.92, window.innerHeight - bottomOffset - safeBottom - 16);
+      return v > 0 ? v : 0;
+    } catch (err) { return 0; }
   }
+  /* BUG FIX (round 3+4): max-height was a flat 92vh, which never
+     accounted for how much room the panel's own bottom offset already
+     eats out of the viewport, AND mobile browsers report `vh` against
+     their largest (toolbar-collapsed) viewport, not what's actually
+     visible when the address bar is showing — so even the calc()-based
+     CSS fix could still overflow above the fold on a phone. Using
+     window.visualViewport (kept live via the resize/scroll listeners
+     below) and computing an exact pixel cap in JS, re-applied whenever
+     the visible viewport actually changes, fixes both the desktop calc
+     bug and the mobile toolbar-collapse bug at once. */
+  function getMaxPanelH() {
+    var vh = getViewportH();
+    if (panelMoved) {
+      var top = panel.getBoundingClientRect().top;
+      return Math.max(320, vh - top - 8);
+    }
+    var bottomOffset = getViewportW() >= 901 ? 162 : 198;
+    return Math.min(vh*.92, vh - bottomOffset - getSafeBottom() - 16);
+  }
+  /* Re-clamps size/position against the *current* real viewport. Runs
+     on open, and on every resize/orientation/visualViewport change —
+     the latter is what actually fires when a mobile browser's address
+     bar shows or hides, which plain window 'resize' often misses. */
+  function enforcePanelBounds() {
+    if (!isOpen) return;
+    var capH = getMaxPanelH();
+    panel.style.maxHeight = capH + 'px';
+    if (panel.offsetHeight > capH) panel.style.height = capH + 'px';
+    var capW = Math.min(700, getViewportW()*.96);
+    if (panel.offsetWidth > capW) panel.style.width = capW + 'px';
+    if (panelMoved) {
+      var vw=getViewportW(), vh=getViewportH(), rect=panel.getBoundingClientRect();
+      panel.style.left = Math.min(Math.max(rect.left, 4), vw - panel.offsetWidth  - 4) + 'px';
+      panel.style.top  = Math.min(Math.max(rect.top,  4), vh - panel.offsetHeight - 4) + 'px';
+    }
+  }
+  window.addEventListener('resize', enforcePanelBounds);
+  window.addEventListener('orientationchange', function(){ setTimeout(enforcePanelBounds, 150); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', enforcePanelBounds);
+    window.visualViewport.addEventListener('scroll', enforcePanelBounds);
+  }
+
   function startResize(type, e) {
     resizing=true; resizeType=type;
     rX0=e.clientX; rY0=e.clientY;
     rW0=panel.offsetWidth; rH0=panel.offsetHeight;
+    var rect=panel.getBoundingClientRect();
+    rBottomRef = rect.top + rect.height;
+    rRightRef  = rect.left + rect.width;
     document.body.style.userSelect='none';
     document.body.style.cursor = type==='left' ? 'ew-resize' : 'ns-resize';
     e.preventDefault();
+  }
+  function applyResize(type, cx, cy) {
+    var maxW=Math.min(700,getViewportW()*.96), maxH=getMaxPanelH();
+    if (type==='top' || type==='bottom') {
+      var newH = type==='top' ? Math.min(Math.max(rH0+(rY0-cy),380),maxH)
+                               : Math.min(Math.max(rH0-(rY0-cy),380),maxH);
+      panel.style.height = newH+'px';
+      if (panelMoved) panel.style.top = (rBottomRef - newH) + 'px';
+    }
+    if (type==='left') {
+      var newW = Math.min(Math.max(rW0+(rX0-cx),280),maxW);
+      panel.style.width = newW+'px';
+      if (panelMoved) panel.style.left = (rRightRef - newW) + 'px';
+    }
   }
   dragBar.addEventListener('mousedown',    function(e){ startResize('top',e); });
   leftEdge.addEventListener('mousedown',   function(e){ startResize('left',e); });
   bottomEdge.addEventListener('mousedown', function(e){ startResize('bottom',e); });
   document.addEventListener('mousemove', function(e) {
     if (!resizing) return;
-    var maxW=Math.min(700,window.innerWidth*.96), maxH=getMaxPanelH();
-    if (resizeType==='top')    panel.style.height=Math.min(Math.max(rH0+(rY0-e.clientY),380),maxH)+'px';
-    if (resizeType==='left')   panel.style.width =Math.min(Math.max(rW0+(rX0-e.clientX),280),maxW)+'px';
-    if (resizeType==='bottom') panel.style.height=Math.min(Math.max(rH0-(rY0-e.clientY),380),maxH)+'px';
+    applyResize(resizeType, e.clientX, e.clientY);
   });
   document.addEventListener('mouseup', function() {
     if(resizing){ resizing=false; document.body.style.userSelect=''; document.body.style.cursor=''; }
   });
-  dragBar.addEventListener('touchstart', function(e){ var t=e.touches[0]; resizing=true; resizeType='top'; rY0=t.clientY; rH0=panel.offsetHeight; },{passive:true});
-  leftEdge.addEventListener('touchstart', function(e){ var t=e.touches[0]; resizing=true; resizeType='left'; rX0=t.clientX; rW0=panel.offsetWidth; },{passive:true});
+  dragBar.addEventListener('touchstart', function(e){
+    var t=e.touches[0]; resizing=true; resizeType='top'; rY0=t.clientY; rH0=panel.offsetHeight;
+    var rect=panel.getBoundingClientRect(); rBottomRef=rect.top+rect.height;
+  },{passive:true});
+  leftEdge.addEventListener('touchstart', function(e){
+    var t=e.touches[0]; resizing=true; resizeType='left'; rX0=t.clientX; rW0=panel.offsetWidth;
+    var rect=panel.getBoundingClientRect(); rRightRef=rect.left+rect.width;
+  },{passive:true});
+  bottomEdge.addEventListener('touchstart', function(e){
+    var t=e.touches[0]; resizing=true; resizeType='bottom'; rY0=t.clientY; rH0=panel.offsetHeight;
+    var rect=panel.getBoundingClientRect(); rBottomRef=rect.top+rect.height;
+  },{passive:true});
   document.addEventListener('touchmove', function(e){
     if(!resizing) return; var t=e.touches[0];
-    if(resizeType==='top')  panel.style.height=Math.min(Math.max(rH0+(rY0-t.clientY),380),getMaxPanelH())+'px';
-    if(resizeType==='left') panel.style.width =Math.min(Math.max(rW0+(rX0-t.clientX),280),700)+'px';
+    applyResize(resizeType, t.clientX, t.clientY);
   },{passive:true});
   document.addEventListener('touchend', function(){ resizing=false; });
+
+  /* FEATURE: drag the header to move the whole panel anywhere on
+     screen. Excludes the language dropdown so it stays clickable. */
+  function beginMove(x, y) {
+    var rect = panel.getBoundingClientRect();
+    panel.style.left   = rect.left + 'px';
+    panel.style.top    = rect.top  + 'px';
+    panel.style.right  = 'auto';
+    panel.style.bottom = 'auto';
+    panelMoved = true; moving = true;
+    mvX0=x; mvY0=y; mvL0=rect.left; mvT0=rect.top;
+    panel.classList.add('pr-moving');
+    document.body.style.userSelect='none';
+  }
+  function doMove(x, y) {
+    if (!moving) return;
+    var vw=getViewportW(), vh=getViewportH();
+    panel.style.left = Math.min(Math.max(mvL0+(x-mvX0), 4), vw - panel.offsetWidth  - 4) + 'px';
+    panel.style.top  = Math.min(Math.max(mvT0+(y-mvY0), 4), vh - panel.offsetHeight - 4) + 'px';
+    enforcePanelBounds();
+  }
+  function endMove() {
+    if (!moving) return;
+    moving=false; document.body.style.userSelect='';
+    panel.classList.remove('pr-moving');
+  }
+  hd.addEventListener('mousedown', function(e){
+    if (e.target.closest('.pr-lang-wrap')) return;
+    beginMove(e.clientX, e.clientY); e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){ doMove(e.clientX, e.clientY); });
+  document.addEventListener('mouseup', endMove);
+  hd.addEventListener('touchstart', function(e){
+    if (e.target.closest('.pr-lang-wrap')) return;
+    var t=e.touches[0]; beginMove(t.clientX, t.clientY);
+  }, {passive:true});
+  document.addEventListener('touchmove', function(e){
+    if (!moving) return; var t=e.touches[0]; doMove(t.clientX, t.clientY);
+  }, {passive:true});
+  document.addEventListener('touchend', endMove);
+  // Double-click/tap the header to snap the panel back to its default
+  // bottom-right docked position and size.
+  hd.addEventListener('dblclick', function(e){
+    if (e.target.closest('.pr-lang-wrap')) return;
+    panel.style.left=''; panel.style.top=''; panel.style.right=''; panel.style.bottom='';
+    panel.style.width=''; panel.style.height=''; panel.style.maxHeight='';
+    panelMoved = false;
+    enforcePanelBounds();
+  });
 
   /* ── STATE ────────────────────────────────────────────── */
   var isOpen=false, isThinking=false, history=[], lang='en', isRec=false, rec=null;
@@ -860,6 +986,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     if(isOpen && !msgs.children.length) welcome();
     if(isOpen) setTimeout(function(){ input.focus(); }, 300);
     if(isOpen) setTimeout(applyTheme, 60);
+    if(isOpen) enforcePanelBounds();
   });
   document.addEventListener('click', function(e) {
     if(isOpen && !panel.contains(e.target) && !fab.contains(e.target)) {
