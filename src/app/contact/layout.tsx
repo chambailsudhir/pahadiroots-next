@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Contact Us — HimVeda by Pahadi Roots',
     description: 'Reach out to the HimVeda by Pahadi Roots team — we\'d love to hear from you.',
-    url: 'https://pahadiroots.com/contact',
+    url: 'https://www.pahadiroots.com/contact',
     siteName: 'HimVeda by Pahadi Roots',
     type: 'website',
     // BUG FIX: no `images` here — this page's own openGraph object

@@ -64,7 +64,7 @@ describe('buildOffersList', () => {
 
   it('every offer carries the canonical product URL, for Merchant Center matching', () => {
     const offers = buildOffersList(product, [{ size: '500ml', price: 299, available_stock: 5 }], 299, true)
-    expect(offers[0].url).toBe('https://pahadiroots.com/products/mustard-oil')
+    expect(offers[0].url).toBe('https://www.pahadiroots.com/products/mustard-oil')
   })
 })
 

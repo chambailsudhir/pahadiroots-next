@@ -1082,7 +1082,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           order_id:    data.razorpay_order_id,
           name:        'HimVeda by Pahadi Roots',
           description: 'Natural Himalayan Products',
-          image:       'https://pahadiroots.com/favicon.ico',
+          image:       'https://www.pahadiroots.com/favicon.ico',
           prefill:     { name: addr.name, email: email || user?.email || '', contact: addr.phone },
           notes:       { db_order_id: data.order_id || '' },
           theme:       { color: '#2C4A2E' },

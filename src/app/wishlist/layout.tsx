@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Your Wishlist — HimVeda by Pahadi Roots',
     description: 'Your saved Himalayan natural products from HimVeda by Pahadi Roots.',
-    url: 'https://pahadiroots.com/wishlist',
+    url: 'https://www.pahadiroots.com/wishlist',
     siteName: 'HimVeda by Pahadi Roots',
     type: 'website',
     // BUG FIX: no `images` here — this page's own openGraph object

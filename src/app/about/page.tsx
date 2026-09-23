@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title:       'Our Story — HimVeda by Pahadi Roots',
     description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
-    url:         'https://pahadiroots.com/about',
+    url:         'https://www.pahadiroots.com/about',
     type:        'website',
     // BUG FIX: no `images` here — this page's own openGraph object
     // replaces the layout's entirely, so this route had no og:image.

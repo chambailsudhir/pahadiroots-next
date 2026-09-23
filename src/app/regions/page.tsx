@@ -8,10 +8,10 @@ import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 import { getRegionMeta } from '@/lib/regionMeta'
 
 // BUG FIX: uses NEXT_PUBLIC_SITE_URL like sitemap.ts, rather than hardcoding
-// "https://pahadiroots.com" (as /products/[slug] currently does) — a
+// "https://www.pahadiroots.com" (as /products/[slug] currently does) — a
 // hardcoded domain would make canonical/og:url point at production even
 // when rendered on a Vercel preview deploy.
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 // BUG FIX (#27): previously 300s — looser than the 60s unstable_cache TTL on
 // the underlying data (getStoreData/getNormalizedProducts in storeData.ts),

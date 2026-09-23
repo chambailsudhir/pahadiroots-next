@@ -12,7 +12,7 @@ import type { Product } from '@/types'
 
 export const revalidate = 86400
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 interface BlogPostRow {
   id: string

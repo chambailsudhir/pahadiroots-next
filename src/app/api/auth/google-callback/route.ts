@@ -16,7 +16,7 @@ import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const SITE_URL      = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const SITE_URL      = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 const IS_PROD       = process.env.NODE_ENV === 'production'
 
 function cookieBase() {

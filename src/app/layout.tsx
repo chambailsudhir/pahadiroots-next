@@ -22,7 +22,7 @@ import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 // sitemap.ts and robots.ts, so the Organization/WebSite JSON-LD below (and
 // generateMetadata()'s metadataBase) all agree on one source of truth for
 // the canonical site origin instead of three independently hardcoded copies.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 const playfair = Playfair_Display({
   variable: '--font-playfair',

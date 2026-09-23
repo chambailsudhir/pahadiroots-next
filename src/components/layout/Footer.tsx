@@ -258,7 +258,7 @@ export default function Footer({ settings }: Props) {
             Connect With Us
           </div>
           {[
-            { icon: '🌐', text: 'pahadiroots.com', href: 'https://pahadiroots.com' },
+            { icon: '🌐', text: 'pahadiroots.com', href: 'https://www.pahadiroots.com' },
             { icon: '📧', text: email2, href: `mailto:${email2}` },
             { icon: '📞', text: phone, href: `tel:${phone.replace(/\s/g,'')}` },
             { icon: '📍', text: address, href: undefined },

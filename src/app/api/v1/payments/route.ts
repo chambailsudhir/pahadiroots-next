@@ -454,7 +454,7 @@ export async function POST(req: NextRequest) {
                        <strong>Delivery:</strong> 3–5 business days</p>
                     ${coinsHtml}
                     <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
-                    <a href="https://pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
+                    <a href="https://www.pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
                   </div>
                   <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
                     HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895

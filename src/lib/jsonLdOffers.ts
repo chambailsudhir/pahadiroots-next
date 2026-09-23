@@ -75,7 +75,7 @@ export function buildOffersList(
   inStock: boolean,
   sellerName?: string | null,
 ): Record<string, unknown>[] {
-  const productUrl = `https://pahadiroots.com/products/${product.slug}`
+  const productUrl = `https://www.pahadiroots.com/products/${product.slug}`
   const SELLER = seller(sellerName)
 
   if (activeVariants.length > 0) {

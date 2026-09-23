@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 // BUG FIX: openGraph here had no `images` field. A page's own `openGraph`
 // object replaces the layout's entirely (Next.js does not deep-merge it),

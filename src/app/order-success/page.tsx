@@ -971,7 +971,7 @@ function SuccessContent() {
           <div>
             <div className="oc-fh">Connect With Us</div>
             {[
-              {icon:'🌐', text:'pahadiroots.com', href:'https://pahadiroots.com'},
+              {icon:'🌐', text:'pahadiroots.com', href:'https://www.pahadiroots.com'},
               {icon:'📧', text:'hello@pahadiroots.com', href:'mailto:hello@pahadiroots.com'},
               {icon:'📞', text:'+91 98999 84895', href:'tel:+919899984895'},
               {icon:'📍', text:'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082', href:null},

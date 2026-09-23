@@ -17,7 +17,7 @@ import { truncate } from '@/lib/utils'
 // than inventing a second sort implementation for this page.
 import { sortProducts, type ProductSort } from '@/lib/filterAndSortProducts'
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 const REGION_SORT_OPTIONS = [
   { value: 'newest',     label: 'Newest',      icon: '🆕' },

@@ -321,7 +321,7 @@ export async function POST(req: NextRequest) {
   <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
     <div style="color:rgba(255,255,255,.5);font-size:12px;line-height:1.8">
       🌿 HimVeda by Pahadi Roots — Pure Himalayan Goodness<br>
-      <a href="https://pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
+      <a href="https://www.pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
       &nbsp;·&nbsp;
       <a href="https://wa.me/919899984895" style="color:#e8b84b;text-decoration:none">WhatsApp Us</a>
     </div>

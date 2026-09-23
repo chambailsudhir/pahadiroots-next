@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Track Your Order — HimVeda by Pahadi Roots',
     description: 'Check your HimVeda by Pahadi Roots order status and delivery updates.',
-    url: 'https://pahadiroots.com/track',
+    url: 'https://www.pahadiroots.com/track',
     siteName: 'HimVeda by Pahadi Roots',
     type: 'website',
     // BUG FIX: no `images` here — this page's own openGraph object

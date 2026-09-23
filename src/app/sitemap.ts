@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 import { supabase } from '@/lib/supabase'
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 // SEO blog engine: without an explicit revalidate window, Next can treat this
 // route as fully static at build time — a new blog post published from the

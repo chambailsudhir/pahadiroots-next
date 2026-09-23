@@ -292,7 +292,7 @@ export async function GET(
 
 <div class="footer">
   <div class="footer-note">
-    HimVeda by Pahadi Roots · pahadiroots.com<br/>
+    HimVeda by Pahadi Roots · www.pahadiroots.com<br/>
     Questions? WhatsApp us at +91 98999 84895<br/>
     Thank you for supporting Himalayan farming communities 🙏
   </div>

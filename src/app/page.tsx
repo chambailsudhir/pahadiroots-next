@@ -53,11 +53,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: 'https://pahadiroots.com' },
+    alternates: { canonical: 'https://www.pahadiroots.com' },
     openGraph: {
       title,
       description,
-      url:  'https://pahadiroots.com',
+      url:  'https://www.pahadiroots.com',
       type: 'website',
       images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },

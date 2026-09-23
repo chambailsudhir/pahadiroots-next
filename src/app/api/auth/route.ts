@@ -408,7 +408,7 @@ export async function POST(req: NextRequest) {
     // Also add this URL to your Supabase Google OAuth Authorized Redirect URLs.
     const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
       ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/google-callback`
-      : 'https://pahadiroots.com/auth/google-callback'
+      : 'https://www.pahadiroots.com/auth/google-callback'
     const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
     return ok({ url })
   }
@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
     const { email } = body as { email?: string }
     if (!email) return err(400, 'Email required')
     const RESEND_KEY = process.env.RESEND_API_KEY
-    const SITE_URL   = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+    const SITE_URL   = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
     if (!RESEND_KEY) {
       console.error('[forgot_password] RESEND_API_KEY not set')
       return err(500, 'Email service not configured')

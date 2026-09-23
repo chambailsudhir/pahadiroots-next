@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // BUG FIX (5.3): use the existing truncate() utility (word-boundary aware,
   // adds ellipsis) instead of the raw .slice(0,155) that cut mid-word.
   const desc = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
-  const canonicalUrl = `https://pahadiroots.com/products/${product.slug}`
+  const canonicalUrl = `https://www.pahadiroots.com/products/${product.slug}`
   // BUG FIX: fell back to `[]` (no image at all) when a product has no
   // image_url — same class of bug as page.tsx/blog/collections, causing a
   // broken WhatsApp/Facebook share preview for any product without a photo.
@@ -191,7 +191,7 @@ export default async function ProductPage({ params }: Props) {
     name:        product.name,
     description: (product.short_description || ''),
     image:       allImages.map((i: any) => i.url),
-    url:         `https://pahadiroots.com/products/${product.slug}`,
+    url:         `https://www.pahadiroots.com/products/${product.slug}`,
     brand:       { '@type': 'Brand', name: settings.site_name || 'HimVeda by Pahadi Roots' },
     // SEO FIX: Product structured data had no `category` — Google's Product
     // docs list it as a recommended field (helps Search/Shopping categorize
@@ -249,13 +249,13 @@ export default async function ProductPage({ params }: Props) {
                 '@type': 'ListItem',
                 position: 1,
                 name: 'Home',
-                item: 'https://pahadiroots.com/',
+                item: 'https://www.pahadiroots.com/',
               },
               {
                 '@type': 'ListItem',
                 position: 2,
                 name: 'All Products',
-                item: 'https://pahadiroots.com/products',
+                item: 'https://www.pahadiroots.com/products',
               },
               {
                 '@type': 'ListItem',
@@ -602,7 +602,7 @@ function AccItem({ title, icon, open = false, children }: {
 function ShareRow({ productName, productSlug, productImage, productPrice }: {
   productName: string; productSlug: string; productImage: string | null; productPrice: number
 }) {
-  const url = `https://pahadiroots.com/products/${productSlug}`
+  const url = `https://www.pahadiroots.com/products/${productSlug}`
   const waText = encodeURIComponent(`🌿 Check out *${productName}* at ₹${productPrice} on HimVeda by Pahadi Roots!\n🏔️ Pure Himalayan, directly from mountain farmers.\n👉 ${url}`)
   return (
     <div className="pdp-share-row">

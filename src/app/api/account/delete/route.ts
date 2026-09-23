@@ -39,7 +39,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY!
 const IS_PROD      = process.env.NODE_ENV === 'production'
 const RESEND_KEY   = process.env.RESEND_API_KEY
-const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 // ── Step 5.5: Send deletion confirmation email ────────────────
 // Non-fatal — deletion proceeds even if Resend is unreachable.

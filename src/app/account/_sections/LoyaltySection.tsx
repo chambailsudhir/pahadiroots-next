@@ -9,12 +9,12 @@ import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 // BUG FIX (found in a fresh audit): the referral link below used to
-// hardcode 'https://pahadiroots.com' in two places, independent of the
+// hardcode 'https://www.pahadiroots.com' in two places, independent of the
 // NEXT_PUBLIC_SITE_URL env var that layout.tsx's metadataBase already
 // reads for this exact purpose. Same shared value now used here too,
 // so the two can't drift apart if the real domain is ever configured
 // differently via that env var.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://pahadiroots.com'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 interface Transaction {
   id:           string
