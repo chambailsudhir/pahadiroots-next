@@ -151,6 +151,22 @@ export default async function AboutPage() {
         </div>
       </section>
 
+      {/* ENTITY-DISAMBIGUATION FIX: plain, crawlable text stating this is an
+          independent brand. Search engines and AI browsing tools weight
+          real page content at least as heavily as JSON-LD when resolving
+          which of two similarly-named organizations a query means — this
+          is the human-readable counterpart to the disambiguatingDescription
+          added to the Organization schema in layout.tsx. Kept short and
+          factual (no claims about the other brand) so it reads as
+          normal About-page copy rather than a disclaimer banner. */}
+      <section className="ab-story-wrap" style={{ paddingTop: 0 }}>
+        <p style={{ maxWidth: 720, margin: '0 auto', fontSize: '0.95rem', opacity: 0.75, textAlign: 'center' }}>
+          {(settings.site_name || 'HimVeda by Pahadi Roots')} is an independently owned Himalayan food brand,
+          based in Kangra, Himachal Pradesh. We are not affiliated with, and have no business
+          relationship to, any other company using a similar &ldquo;Pahadi&rdquo;-prefixed brand name.
+        </p>
+      </section>
+
       {/* ── Values ── */}
       {values.length > 0 && (
         <section className="ab-values">

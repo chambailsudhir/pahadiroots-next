@@ -164,8 +164,40 @@ export default async function RootLayout({
               '@context': 'https://schema.org',
               '@type':    'Organization',
               name:       settings.site_name || 'HimVeda by Pahadi Roots',
+              // ENTITY-DISAMBIGUATION FIX: there is at least one large, well-
+              // covered, unrelated brand with a near-identical name in the
+              // exact same category (Himalayan-origin natural/wellness
+              // products), which has caused AI answer engines to attribute
+              // that brand's products to us. alternateName + description +
+              // disambiguatingDescription + a real registered address are
+              // exactly the schema.org signals search/LLM entity resolution
+              // uses to tell two similarly-named organizations apart —
+              // sourced from settings with the same fallback pattern as the
+              // rest of this file, so it stays in sync if the brand name or
+              // address ever changes in Settings.
+              alternateName: 'HimVeda',
+              description: settings.meta_description ||
+                'Pahadi Roots (HimVeda) sources honey, spices, grains, and other natural staples directly from Himalayan mountain farming communities and delivers them across India.',
+              disambiguatingDescription:
+                'Pahadi Roots, also known as HimVeda, is an independent Himalayan food and grocery brand. It is not affiliated with, and has no business relationship to, any other company using a similar "Pahadi"-prefixed name in the beauty, skincare, or wellness category.',
               url:        SITE_URL,
               logo:       `${SITE_URL}/logo.png`,
+              // Real registered address (Kangra, Himachal Pradesh) — a
+              // distinct, verifiable physical location is one of the
+              // strongest disambiguation signals for Google's Knowledge
+              // Graph and for LLMs doing entity resolution between two
+              // similarly-named brands.
+              ...(settings.contact_address ? {
+                address: {
+                  '@type':          'PostalAddress',
+                  streetAddress:    settings.contact_address,
+                  addressCountry:   'IN',
+                },
+                foundingLocation: {
+                  '@type': 'Place',
+                  address: { '@type': 'PostalAddress', streetAddress: settings.contact_address, addressCountry: 'IN' },
+                },
+              } : {}),
               // SEO FIX: an empty telephone string in ContactPoint is a
               // known Google Rich Results / schema.org validator warning
               // ("telephone: value is not a valid phone number") — omit the
