@@ -130,6 +130,17 @@ export default async function RootLayout({
     ...s,
     slug: s.id,  // In admin, the id IS the slug
   })) as any[]
+  // BUG FIX: store_open === 'false' previously only redirected page content
+  // to /maintenance (see proxy.ts) — this root layout kept rendering the
+  // full Header, promo bar, nav, cart, mobile menu, and the Pahadi_AI chat
+  // widget script on top of it regardless, since none of it was ever gated
+  // on this flag. Result: the maintenance page showed the entire live site
+  // chrome around it, and the AI assistant kept answering product questions
+  // (and calling the paid Gemini/Claude backend) for a store nobody could
+  // actually check out on. When the store is closed, /maintenance is the
+  // only route customers can reach anyway (proxy.ts redirects everything
+  // else), so there is nothing for any of this chrome to usefully do.
+  const isMaintenanceMode = settings.store_open === 'false'
 
   return (
     <html lang="en-IN" suppressHydrationWarning>
@@ -304,32 +315,41 @@ export default async function RootLayout({
         <SkipLink />
         <ScrollRestorationFix />
         <Providers>
-          <Header settings={settings} categories={categories} states={states} />
+          {!isMaintenanceMode && <Header settings={settings} categories={categories} states={states} />}
           <main id="main-content" className="min-h-screen">
             {children}
           </main>
-          <Footer settings={settings} />
-          <CartDrawer settings={settings} />
-          <SearchOverlay />
-          <MobileMenu settings={settings} categories={categories} states={states} />
-          <MobileBottomNav settings={settings} />
-          <AuthModal />
-          <GoogleAuthHandler />
-          <ProfilePrefetcher />
+          {!isMaintenanceMode && (
+            <>
+              <Footer settings={settings} />
+              <CartDrawer settings={settings} />
+              <SearchOverlay />
+              <MobileMenu settings={settings} categories={categories} states={states} />
+              <MobileBottomNav settings={settings} />
+              <AuthModal />
+              <GoogleAuthHandler />
+              <ProfilePrefetcher />
+            </>
+          )}
         </Providers>
         {/* Pahadi_AI — ported verbatim from the old site (public/js/ai-assistant.js).
             Self-contained IIFE: injects its own <style>, builds its own DOM
             (chat fab + panel + WhatsApp button), and talks to /api/chat
             (Gemini primary, Claude fallback — see src/app/api/chat/route.ts).
             Reads --g/--g2/--gd/--gd2 theme vars from globals.css, which already
-            match the old site 1:1, so no visual changes were needed. */}
-        <Script
-          src="/js/ai-assistant.js"
-          data-name="Pahadi_AI"
-          data-tagline="Himalayan Shopping Guide · Online"
-          data-whatsapp="919899984895"
-          strategy="afterInteractive"
-        />
+            match the old site 1:1, so no visual changes were needed.
+            BUG FIX: gated on isMaintenanceMode — see comment above — so the
+            widget (and its live /api/chat calls) don't run while the store
+            is closed and nobody can actually check out. */}
+        {!isMaintenanceMode && (
+          <Script
+            src="/js/ai-assistant.js"
+            data-name="Pahadi_AI"
+            data-tagline="Himalayan Shopping Guide · Online"
+            data-whatsapp="919899984895"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   )
