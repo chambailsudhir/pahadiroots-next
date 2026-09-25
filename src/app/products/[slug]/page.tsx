@@ -442,17 +442,6 @@ export default async function ProductPage({ params }: Props) {
                 : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro 3–5 days · Others 7–12 days`}
             </div>
 
-            {/* Trust badges */}
-            <div className="pdp-trust-badges">
-              <div className="pdp-trust-badge"><div className="pdp-tb-icon">🔬</div><div className="pdp-tb-label">Lab Tested & Certified</div></div>
-              <div className="pdp-trust-badge"><div className="pdp-tb-icon">🌿</div><div className="pdp-tb-label">100% Pure & Natural</div></div>
-              <div className="pdp-trust-badge"><div className="pdp-tb-icon">🏔️</div><div className="pdp-tb-label">Direct from Farmers</div></div>
-              <div className="pdp-trust-badge">
-                <div className="pdp-tb-icon">🚚</div>
-                <div className="pdp-tb-label">{freeShipMin === 0 ? 'Free Delivery' : `Free ₹${freeShipMin}+`}</div>
-              </div>
-            </div>
-
             {/* Certificate — gated by the site-wide "show_certificates" admin
                 toggle (CertificatesTab) AND by this product having an active
                 certificate linked. Either being off hides the card. */}
