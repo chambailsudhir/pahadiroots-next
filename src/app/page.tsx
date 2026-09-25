@@ -126,6 +126,15 @@ export default async function HomePage() {
   const showBestSellers = isEnabled(settings.show_best_sellers)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
   const showReviews     = isEnabled(settings.show_reviews_section)
+  // BUG FIX (companion to pahadi-admin's new "Explore by Region" toggle):
+  // `show_state_stories` already existed as a declared settings key with a
+  // 'true' default (src/types/index.ts, getSiteSettings.ts) but was never
+  // actually read here — <ExploreByRegion/> only ever conditioned on
+  // `states.length > 0`, so there was no way to take the whole section off
+  // without deactivating/deleting every state row individually. Matches
+  // the exact isEnabled() pattern every sibling section flag above already
+  // uses.
+  const showStateStories = isEnabled(settings.show_state_stories)
   const featuredSlug    = settings.featured_collection_slug?.trim()
 
   return (
@@ -135,7 +144,7 @@ export default async function HomePage() {
       {/* Browse Collections — "What the Mountains Offer" */}
       {showCategoryTiles && <CategoryTiles categories={categories} />}
       {showBestSellers && <BestSellers />}
-      {states.length > 0 && <ExploreByRegion states={states} />}
+      {showStateStories && states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />
