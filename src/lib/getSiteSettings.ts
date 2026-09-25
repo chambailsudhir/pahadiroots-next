@@ -1,6 +1,7 @@
 import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
 import { logger } from '@/lib/logger'
+import { unstable_cache, revalidateTag } from 'next/cache'
 
 // Default fallback values — site works even if settings are missing
 const DEFAULTS: Partial<SiteSettings> = {
@@ -176,9 +177,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   about_video_hide:        'false',
 }
 
-// In-memory cache for server-side (Next.js ISR revalidation handles the rest)
-let _cache: { data: SiteSettings; ts: number } | null = null
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const CACHE_TTL_SECONDS = 5 * 60 // 5 minutes — now only a safety-net TTL (see below)
+const SITE_SETTINGS_TAG = 'site-settings'
 
 // BUG FIX (found via production log storm — Vercel logs showed dozens of
 // concurrent "getSiteSettings timed out" errors across /regions/* pages
@@ -194,75 +194,107 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 // moment it's already under pressure, and cascading into timeouts on
 // unrelated routes that share the same connection pool.
 // Fix: single-flight — while a fetch is already in progress, every other
-// caller awaits that SAME promise instead of starting a new request.
+// caller awaits that SAME promise instead of starting a new request. Kept
+// even after moving to unstable_cache below, since that's a distributed
+// cache — several instances can still all miss it simultaneously on a
+// genuinely cold key, and this only protects the (cheap, in-process) case
+// of concurrent callers on the SAME instance.
 let _inFlight: Promise<SiteSettings> | null = null
 
-export async function getSiteSettings(): Promise<SiteSettings> {
-  // Return cache if fresh
-  if (_cache && Date.now() - _cache.ts < CACHE_TTL) {
-    return _cache.data
-  }
+async function fetchSiteSettingsFromDB(): Promise<SiteSettings> {
+  // Use service client server-side to bypass RLS on site_settings
+  const client = (() => { try { return getServiceClient() } catch { return supabase } })()
 
-  if (_inFlight) return _inFlight
+  // BUG FIX: the Supabase JS SDK does not support AbortSignal or built-in
+  // timeouts.  Without a timeout, a slow or unresponsive Supabase instance
+  // hangs this call indefinitely — blocking any route that calls getSiteSettings()
+  // (orders, payments) until Vercel's hard 15-second limit fires and kills the
+  // entire request.  getSiteSettings is in the critical path of order creation.
+  //
+  // Fix: race the SDK call against an 8-second timeout Promise.  On timeout we
+  // throw so the caller falls back to DEFAULTS — the site continues to function
+  // with sensible fallback values rather than hanging and returning a 500 to
+  // the customer mid-checkout.  8 s matches the AbortSignal.timeout used by
+  // every other Supabase fetch in the codebase (sbAdmin in serverUtils.ts,
+  // sbGet in orderService.ts).
+  const timeoutMs = 8_000
+  const queryPromise = client.from('site_settings').select('key, value')
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`getSiteSettings timed out after ${timeoutMs}ms`)), timeoutMs)
+  )
 
-  _inFlight = (async () => {
-    try {
-      // Use service client server-side to bypass RLS on site_settings
-      const client = (() => { try { return getServiceClient() } catch { return supabase } })()
+  const { data, error } = await Promise.race([queryPromise, timeoutPromise])
 
-      // BUG FIX: the Supabase JS SDK does not support AbortSignal or built-in
-      // timeouts.  Without a timeout, a slow or unresponsive Supabase instance
-      // hangs this call indefinitely — blocking any route that calls getSiteSettings()
-      // (orders, payments) until Vercel's hard 15-second limit fires and kills the
-      // entire request.  getSiteSettings is in the critical path of order creation.
-      //
-      // Fix: race the SDK call against an 8-second timeout Promise.  On timeout we
-      // throw so the catch block returns DEFAULTS — the site continues to function
-      // with sensible fallback values rather than hanging and returning a 500 to
-      // the customer mid-checkout.  8 s matches the AbortSignal.timeout used by
-      // every other Supabase fetch in the codebase (sbAdmin in serverUtils.ts,
-      // sbGet in orderService.ts).
-      const timeoutMs = 8_000
-      const queryPromise = client.from('site_settings').select('key, value')
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`getSiteSettings timed out after ${timeoutMs}ms`)), timeoutMs)
-      )
+  if (error) throw error
 
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise])
+  const fromDB = Object.fromEntries(
+    (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
+  )
 
-      if (error) throw error
-
-      const fromDB = Object.fromEntries(
-        (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
-      )
-
-      // Merge: defaults first, then DB values override
-      const settings = { ...DEFAULTS, ...fromDB } as SiteSettings
-
-      _cache = { data: settings, ts: Date.now() }
-      return settings
-    } catch (err) {
-      logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
-      return DEFAULTS as SiteSettings
-    } finally {
-      _inFlight = null
-    }
-  })()
-
-  return _inFlight
+  // Merge: defaults first, then DB values override
+  return { ...DEFAULTS, ...fromDB } as SiteSettings
 }
 
-// BUG FIX: site_settings (Ann Bar, Ticker, Trust Bar, Hero Stats, Store
-// Status) had no way to be invalidated on demand. getSiteSettings() held its
-// own 5-minute in-process cache on top of layout.tsx's 300s ISR revalidate
-// and page.tsx's 60s ISR revalidate — stacked, that's up to ~10 minutes of
-// staleness in the worst case, even though the admin panel's Settings page
-// tells the store owner "Changes go live instantly." Exported so
-// /api/v1/revalidate can clear this the moment an admin saves a setting,
-// the same way getStoreData(true) already does for product data.
+// BUG FIX (cross-instance staleness — "hero banner change takes minutes to
+// show up"): the cache here used to be a plain module-level variable
+// (`let _cache`), which lives in the memory of ONE serverless function
+// instance only. Vercel routinely keeps several instances of the same
+// function warm concurrently, so clearSiteSettingsCache() — called from
+// /api/v1/revalidate right after an admin save — only ever cleared the
+// _cache belonging to whichever single instance happened to handle that
+// revalidate request. Every OTHER warm instance kept serving its own
+// stale in-memory copy for up to the full 5-minute TTL regardless, which
+// is exactly why a Hero Banner (or any settings) change could take up to
+// ~5 minutes to appear depending on which instance served a given visitor
+// — even though the revalidate call itself succeeded every time.
+//
+// Fix: use Next's built-in Data Cache (unstable_cache), tagged
+// 'site-settings', instead of a local variable. Unlike a module-level
+// variable, this cache is shared across every instance of the deployment,
+// so revalidateTag('site-settings') — now called from
+// clearSiteSettingsCache() below — invalidates it everywhere at once
+// instead of in just one instance. The 5-minute `revalidate` below is only
+// a safety-net TTL for the case an admin save's revalidate call never
+// fires at all (e.g. REVALIDATE_SECRET misconfigured); the tag is what
+// actually makes a save go live within seconds, matching what the admin
+// UI already promises.
+const getCachedSiteSettings = unstable_cache(
+  async () => {
+    if (_inFlight) return _inFlight
+    _inFlight = fetchSiteSettingsFromDB().finally(() => { _inFlight = null })
+    return _inFlight
+  },
+  ['site-settings-v1'],
+  { tags: [SITE_SETTINGS_TAG], revalidate: CACHE_TTL_SECONDS }
+)
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  try {
+    // A thrown/rejected call is never cached by unstable_cache (same
+    // self-healing behavior already relied on for getStoreData() in
+    // storeData.ts) — so a transient Supabase blip here doesn't get
+    // locked in as "the" cached value for the next 5 minutes.
+    return await getCachedSiteSettings()
+  } catch (err) {
+    logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
+    return DEFAULTS as SiteSettings
+  }
+}
+
+// Exported so /api/v1/revalidate can invalidate this the moment an admin
+// saves a setting (site_settings covers Ann Bar, Ticker, Trust Bar, Hero
+// Banners/Stats, Store Status, and everything else in the table), the same
+// way getStoreData(true) already does for product data. Backed by
+// revalidateTag now (see the long comment on getCachedSiteSettings above)
+// so this invalidates the cache for every instance of the deployment, not
+// just whichever one happens to handle the revalidate request.
 export function clearSiteSettingsCache(): void {
-  _cache = null
-  _inFlight = null
+  // Next 16's revalidateTag requires a second "profile" argument saying how
+  // aggressively to treat the tag as stale. { expire: 0 } means "treat as
+  // expired immediately" — the on-demand-invalidation behavior this
+  // function has always been meant to provide, independent of whatever TTL
+  // the underlying unstable_cache call above was given.
+  revalidateTag(SITE_SETTINGS_TAG, { expire: 0 })
 }
 
 // Helper: parse a boolean setting (handles 'true', 'false', missing)

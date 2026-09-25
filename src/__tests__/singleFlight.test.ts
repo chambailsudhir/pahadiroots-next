@@ -17,9 +17,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 beforeEach(() => {
-  vi.resetModules() // fresh module-level _cache/_inFlight state per test
+  vi.resetModules() // fresh module-level _inFlight state, and fresh mockUnstableCache() store, per test
   vi.clearAllMocks()
 })
+
+// BUG FIX (added alongside the cross-instance-staleness fix to
+// getSiteSettings.ts): getSiteSettings now wraps its fetch in
+// unstable_cache, which has no real implementation outside a running Next
+// server, so it must be mocked here. A plain identity passthrough
+// (`fn => fn`, as getStoreData's test below uses) is NOT equivalent to the
+// real thing for these particular tests — it provides zero caching between
+// separate calls, which breaks the "warm cache reuse" test even though the
+// underlying single-flight logic is unaffected. This mock instead behaves
+// like the real unstable_cache closely enough for these tests: memoize by
+// cache-key until the wrapped fn's promise resolves successfully (a
+// rejected call is never cached, matching Next's real behavior and the
+// existing self-healing behavior documented on getStoreData/storeData.ts).
+function mockUnstableCache() {
+  const store = new Map<string, unknown>()
+  return {
+    unstable_cache: (fn: (...a: unknown[]) => unknown, keyParts: string[] = []) => {
+      const key = JSON.stringify(keyParts)
+      return async (...args: unknown[]) => {
+        if (store.has(key)) return store.get(key)
+        const result = await fn(...args) // a throw here propagates uncached
+        store.set(key, result)
+        return result
+      }
+    },
+    revalidateTag: vi.fn(),
+  }
+}
 
 describe('getSiteSettings — single-flight de-duplication', () => {
   it('fires exactly ONE Supabase query when 20 concurrent callers all hit a cold cache at once', async () => {
@@ -38,6 +66,7 @@ describe('getSiteSettings — single-flight de-duplication', () => {
       supabase: client,
       getServiceClient: () => client,
     }))
+    vi.doMock('next/cache', mockUnstableCache)
 
     const { getSiteSettings } = await import('@/lib/getSiteSettings')
 
@@ -55,6 +84,7 @@ describe('getSiteSettings — single-flight de-duplication', () => {
       }),
     }
     vi.doMock('@/lib/supabase', () => ({ supabase: client, getServiceClient: () => client }))
+    vi.doMock('next/cache', mockUnstableCache)
 
     const { getSiteSettings } = await import('@/lib/getSiteSettings')
     await getSiteSettings()                 // populates cache
@@ -76,6 +106,7 @@ describe('getSiteSettings — single-flight de-duplication', () => {
       }),
     }
     vi.doMock('@/lib/supabase', () => ({ supabase: client, getServiceClient: () => client }))
+    vi.doMock('next/cache', mockUnstableCache)
 
     const { getSiteSettings } = await import('@/lib/getSiteSettings')
     const first = await getSiteSettings()  // fails → falls back to DEFAULTS, cache NOT populated
