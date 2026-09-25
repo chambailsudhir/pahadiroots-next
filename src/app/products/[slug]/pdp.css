@@ -130,6 +130,23 @@
 .pdp-tb-label{font-size:9.5px;font-weight:700;color:#4a4a4a;letter-spacing:.3px;line-height:1.4;text-transform:uppercase;font-family:'Josefin Sans',sans-serif}
 @media(max-width:480px){.pdp-trust-badges{grid-template-columns:repeat(2,1fr)}}
 
+/* ── Certificate card ── */
+.pdp-certificate-section{margin-top:18px}
+.pdp-certificate-label{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#1a3a1e;margin-bottom:8px}
+.pdp-certificate-card{display:flex;gap:14px;align-items:flex-start;padding:18px;border:1px solid rgba(26,58,30,.16);border-radius:16px;background:linear-gradient(160deg,#f4f8f2,#eaf2e6)}
+.pdp-cert-icon{flex-shrink:0;width:52px;height:52px;border-radius:50%;background:#1a3a1e;display:flex;align-items:center;justify-content:center}
+.pdp-cert-body{flex:1;min-width:0}
+.pdp-cert-heading{font-family: var(--font-playfair), 'Playfair Display', serif;font-size:17px;font-weight:700;color:#1a3a1e;margin-bottom:10px}
+.pdp-cert-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.pdp-cert-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.pdp-cert-chip--green{background:rgba(63,142,79,.14);color:#2e6b3d}
+.pdp-cert-chip--peach{background:rgba(224,140,90,.16);color:#b0602f}
+.pdp-cert-chip--purple{background:rgba(151,110,214,.16);color:#6d4aa8}
+.pdp-cert-chip--blue{background:rgba(90,140,224,.16);color:#3868b5}
+.pdp-cert-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#1a3a1e;text-decoration:underline;text-underline-offset:3px}
+.pdp-cert-link:hover{color:#2e6b3d}
+@media(max-width:480px){.pdp-certificate-card{padding:14px;gap:10px}.pdp-cert-icon{width:44px;height:44px}.pdp-cert-heading{font-size:15px}}
+
 /* ── Origin card ── */
 .pdp-origin-card{border:1px solid #e8e0d0;border-radius:16px;overflow:hidden;background:#fff;margin-top:18px}
 .pdp-origin-head{background:#1a3a1e;color:#fff;padding:10px 16px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px;letter-spacing:.3px}

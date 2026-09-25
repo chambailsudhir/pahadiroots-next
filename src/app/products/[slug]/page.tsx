@@ -11,6 +11,7 @@ import { sanitizeHtml } from '@/lib/server/sanitize'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 import ProductGallery from '@/components/product/ProductGallery'
 import AddToCartSection from '@/components/product/AddToCartSection'
+import CertificateCard from '@/components/product/CertificateCard'
 import ReviewsSection from '@/components/product/ReviewsSection'
 import RelatedProducts from '@/components/product/RelatedProducts'
 import PincodeRow from '@/components/product/PincodeRow'
@@ -69,7 +70,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews, certificate }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
@@ -451,6 +452,10 @@ export default async function ProductPage({ params }: Props) {
               </div>
             </div>
 
+            {/* Certificate — only renders when this product has an active
+                certificate linked in admin (Catalogue → Certificates). */}
+            {certificate && <CertificateCard certificate={certificate} />}
+
             {/* Origin card */}
             <div className="pdp-origin-card">
               <div className="pdp-origin-head">
@@ -788,7 +793,7 @@ async function fetchProductDataInner(slug: string) {
     // shift (skeleton → content). Now we fetch the full review rows here in the
     // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
     // becomes a pure display component that accepts pre-fetched rows as props.
-    const [stateData, categoryRow, related, reviewResult] = await Promise.all([
+    const [stateData, categoryRow, related, reviewResult, certResult] = await Promise.all([
       // State data — direct lookup instead of scanning the full states list
       product.state_id
         ? anonClient.from('states').select('*').eq('id', product.state_id).maybeSingle()
@@ -826,6 +831,28 @@ async function fetchProductDataInner(slug: string) {
           ({ data }) => ({ data, error: null as unknown }),
           (error) => ({ data: null, error }),
         ),
+
+      // Certificate ("Lab Tested & Verified" card) — per Sudhir (Sept 2026):
+      // certificates cover a harvest/source, not a single pack, so this is
+      // an active-certificate lookup via the product_certificates junction,
+      // not a batch/order-specific query. No harvest or batch data is
+      // stored or shown — see CertificatesTab in pahadi-admin for why.
+      // !inner forces the join so is_active/product_id filters actually
+      // apply (a left join would ignore filters on the embedded table).
+      // Wrapped the same way reviews are — a certificate lookup failure
+      // must never 404 the whole PDP.
+      anonClient
+        .from('certificates')
+        .select('report_url, has_purity, has_heavy_metals, has_pesticides, has_active_ingredients, product_certificates!inner(product_id)')
+        .eq('is_active', true)
+        .eq('product_certificates.product_id', product.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(
+          ({ data }) => ({ data, error: null as unknown }),
+          (error) => ({ data: null, error }),
+        ),
     ])
 
     let reviewStats: { avg: number; count: number } | null = null
@@ -843,10 +870,25 @@ async function fetchProductDataInner(slug: string) {
       }
     }
 
-    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews }
+    let certificate: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean } | null = null
+    if (certResult.error) {
+      // Non-fatal — PDP renders fine without the certificate card, same as reviews above.
+      console.warn('[fetchProductData] certificate fetch failed:', certResult.error)
+    } else if (certResult.data) {
+      const c = certResult.data as any
+      certificate = {
+        reportUrl:            c.report_url,
+        hasPurity:            Boolean(c.has_purity),
+        hasHeavyMetals:       Boolean(c.has_heavy_metals),
+        hasPesticides:        Boolean(c.has_pesticides),
+        hasActiveIngredients: Boolean(c.has_active_ingredients),
+      }
+    }
+
+    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews, certificate }
   } catch (err) {
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, categoryName: null, related: [], reviewStats: null, reviews: [] }
+    return { product: null, variants: [], images: [], stateData: null, categoryName: null, related: [], reviewStats: null, reviews: [], certificate: null }
   }
 }
 
