@@ -1,3 +1,11 @@
+// Server-only: this file imports revalidateTag/unstable_cache from
+// next/cache. If a client component ever imports from this file again
+// (directly, or transitively), this line makes the build fail immediately
+// with "This module cannot be imported from a Client Component" instead of
+// Turbopack's harder-to-trace "Pages Router" error (see MobileMenu.tsx /
+// Header.tsx — they import isEnabled from siteSettingsHelpers.ts instead,
+// specifically to avoid pulling this file into the client bundle).
+import 'server-only'
 import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
 import { logger } from '@/lib/logger'
@@ -297,16 +305,8 @@ export function clearSiteSettingsCache(): void {
   revalidateTag(SITE_SETTINGS_TAG, { expire: 0 })
 }
 
-// Helper: parse a boolean setting (handles 'true', 'false', missing)
-export function isEnabled(value: string | undefined, defaultValue = true): boolean {
-  if (value === undefined) return defaultValue
-  return value !== 'false'
-}
-
-// Helper: parse a number setting
-export function asNumber(value: string | undefined, defaultValue: number): number {
-  if (!value) return defaultValue
-  const n = parseFloat(value)
-  return isNaN(n) ? defaultValue : n
-}
+// isEnabled/asNumber moved to siteSettingsHelpers.ts (client-safe, no
+// next/cache import) — re-exported here so every existing server-side
+// importer of getSiteSettings.ts keeps working without changes.
+export { isEnabled, asNumber } from './siteSettingsHelpers'
 

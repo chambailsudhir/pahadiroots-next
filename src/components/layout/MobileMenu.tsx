@@ -5,7 +5,7 @@ import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
 import type { SiteSettings, Category, State } from '@/types'
-import { isEnabled } from '@/lib/getSiteSettings'
+import { isEnabled } from '@/lib/siteSettingsHelpers'
 
 interface Props {
   settings:    SiteSettings
