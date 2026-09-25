@@ -71,6 +71,11 @@ const DEFAULTS: Partial<SiteSettings> = {
   show_reviews_on_pdp:     'true',
   show_related_products:   'true',
   show_track_order_page:   'true',
+  // Master on/off for the "Lab Tested & Verified" certificate card on the
+  // PDP (CertificatesTab in pahadi-admin). Off hides it everywhere even if
+  // individual products have an active certificate linked — a quick kill
+  // switch without touching every certificate's own is_active flag.
+  show_certificates:       'true',
   show_blog:               'false',
   catalogue_visible:       'true',
   prepaid_discount_pct:    '5',

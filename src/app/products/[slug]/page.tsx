@@ -81,8 +81,9 @@ export default async function ProductPage({ params }: Props) {
 
   const freeShipMin    = parseInt(settings.free_shipping_min || '0')
   const flatShipCharge = parseInt(settings.flat_shipping_charge || '0')
-  const showReviews    = isEnabled(settings.show_reviews_on_pdp)
-  const showRelated    = isEnabled(settings.show_related_products)
+  const showReviews     = isEnabled(settings.show_reviews_on_pdp)
+  const showRelated     = isEnabled(settings.show_related_products)
+  const showCertificate = isEnabled(settings.show_certificates)
 
   // Images: product_images table (full res, sorted) → fallback image_url
   // SEO/A11y FIX: every gallery photo previously got the exact same alt
@@ -452,9 +453,10 @@ export default async function ProductPage({ params }: Props) {
               </div>
             </div>
 
-            {/* Certificate — only renders when this product has an active
-                certificate linked in admin (Catalogue → Certificates). */}
-            {certificate && <CertificateCard certificate={certificate} />}
+            {/* Certificate — gated by the site-wide "show_certificates" admin
+                toggle (CertificatesTab) AND by this product having an active
+                certificate linked. Either being off hides the card. */}
+            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
 
             {/* Origin card */}
             <div className="pdp-origin-card">
