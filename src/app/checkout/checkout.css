@@ -14,8 +14,18 @@
 
 /* ── Navigation breadcrumb ─────────────────────────────── */
 .ck-nav { background: #FDFAF5; border-bottom: 1px solid #E8E0D5; }
-.ck-nav-inner { max-width: 1440px; margin: 0 auto; padding: 12px 40px; display: flex; align-items: center; gap: 0; }
+.ck-nav-inner { max-width: 1440px; margin: 0 auto; padding: 12px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 @media (max-width: 640px) { .ck-nav-inner { padding: 12px 16px; } }
+@media (max-width: 480px) {
+  .ck-nav-back span.ck-nav-back-full { display: none; }
+  .ck-crumb-line { flex-basis: 20px; margin: 0 4px; }
+  .ck-crumb span { display: none; }
+}
+
+.ck-nav-back { display: flex; align-items: center; gap: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700; color: #2C4A2E; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+.ck-nav-back:hover, .ck-nav-back:focus-visible { text-decoration: underline; }
+
+.ck-nav-crumbs { display: flex; align-items: center; gap: 0; }
 
 .ck-crumb { display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
 .ck-crumb--done   { color: #7A9A6A; }

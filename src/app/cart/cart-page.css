@@ -66,16 +66,31 @@
 
 /* ── Progress steps ─────────────────────────────────────────────────────────── */
 .cp-steps {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
   padding: 14px 16px;
   background: var(--white);
   border-bottom: 1px solid var(--border-lt);
 }
 
+.cp-steps-back {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--forest);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cp-steps-back:hover { text-decoration: underline; }
+
 /* ol/li used for accessibility semantics — reset list styling */
 .cp-steps-list {
+  grid-column: 2;
   display: flex;
   align-items: center;
   list-style: none;

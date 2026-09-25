@@ -148,6 +148,7 @@ export default function CartPage() {
 
       {/* ── Checkout progress steps ────────────────────────────────────────── */}
       <nav className="cp-steps" aria-label="Checkout progress">
+        <Link href="/" className="cp-steps-back">← Continue Shopping</Link>
         <ol className="cp-steps-list">
           <li className="cp-step cp-step-active" aria-current="step"><span aria-hidden="true">1</span> Cart</li>
           <li className="cp-step-line" aria-hidden="true" />

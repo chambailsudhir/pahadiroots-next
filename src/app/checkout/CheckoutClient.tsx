@@ -210,6 +210,12 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       {/* Breadcrumb */}
       <nav className="ck-nav">
         <div className="ck-nav-inner">
+          {/* Explicit, unmistakable back link — the "Cart" breadcrumb step
+              below is also a real link, but as a checkmark bubble it reads
+              as a status indicator first and a link second. This makes the
+              way back obvious at a glance, not just on hover. */}
+          <Link href="/cart" className="ck-nav-back">← Back<span className="ck-nav-back-full"> to Cart</span></Link>
+          <div className="ck-nav-crumbs">
           {/* BUG FIX (navigation dead-end): the completed "Cart" step was a
               plain <div>, not a link — checkout had no way back to the cart
               or anywhere else in the store short of the header logo (easy to
@@ -231,6 +237,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           <div className="ck-crumb">
             <div className="ck-crumb-dot">3</div>
             <span>Confirmation</span>
+          </div>
           </div>
         </div>
       </nav>
