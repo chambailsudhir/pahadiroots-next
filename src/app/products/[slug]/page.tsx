@@ -633,7 +633,7 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div>
                 <div className="pdp-source-region">Manali &amp; Spiti, {regionName}</div>
-                <p className="pdp-source-text">Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas — the same origin shown in the certificate and journey above.</p>
+                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Origin Story above for the full account.</p>
               </div>
             </div>
           </div>
@@ -758,16 +758,10 @@ export default async function ProductPage({ params }: Props) {
             </div>
             <div className="pdp-acc-list">
               <AccItem title="Where is the honey sourced?" icon="who">
-                Manali &amp; Spiti, Himachal Pradesh — sourced directly from farming families in the region.
+                Manali &amp; Spiti, Himachal Pradesh — see the Origin Story above for the full account.
               </AccItem>
               <AccItem title="Is it raw and unfiltered?" icon="desc">
-                Yes — never heated or filtered, drained straight from the comb.
-              </AccItem>
-              <AccItem title="Why does honey crystallise?" icon="storage">
-                Crystallisation is natural and indicates purity. Gently warm the jar in lukewarm water to soften it if you prefer it liquid.
-              </AccItem>
-              <AccItem title="How should I store it?" icon="storage">
-                Keep it cool and dark, in an airtight glass container, away from sunlight and moisture.
+                Yes, always — see Description above for details.
               </AccItem>
               <AccItem title="How long does it last?" icon="desc">
                 [ADD VERIFIED SHELF LIFE]
