@@ -309,6 +309,21 @@ export default async function ProductPage({ params }: Props) {
               <p className="pdp-tagline">{product.short_description}</p>
             )}
 
+            {/* NEW — Stat trio (additive, brand redesign).
+                FLAG for Mishika: page.tsx is the SHARED template for every
+                product (turmeric, tea, shilajit, etc.), but this copy is
+                honey-specific. Gated to this one slug for the demo so it
+                doesn't show wrong stats on other products — before wider
+                rollout this needs a real per-product data field (e.g. an
+                ai_stat_trio / highlights column) instead of hardcoded text. */}
+            {product.slug === 'himalayan-wild-honey' && (
+              <div className="pdp-stat-trio">
+                <div><div className="pdp-stat-num">2</div><div className="pdp-stat-label">Himalayan Origins</div></div>
+                <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Unfiltered</div></div>
+                <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
+              </div>
+            )}
+
             {/* BUG FIX (3.3 + 3.6): Rating row — no longer hardcoded to 4.8/39.
                 Only shown when real review data exists (reviewStats from DB).
                 The "(N reviews)" span now scrolls to the reviews section on
@@ -470,6 +485,67 @@ export default async function ProductPage({ params }: Props) {
 
           </div>
         </div>
+
+        {/* NEW — Journey story section (additive, brand redesign).
+            FLAG for Mishika: same as the stat trio above — this is honey-
+            specific copy and photography, gated to this one product slug.
+            Photos are the real ones you sent, saved to
+            /public/journey/honey/. Rolling this out to other products
+            means either writing a per-product version of this block or
+            moving this content into an admin-editable field + a generic
+            component that maps images/copy per product. */}
+        {product.slug === 'himalayan-wild-honey' && (
+          <div className="pdp-journey">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">The Journey</div>
+              <h2 className="pdp-journey-title">From the Himalayas to Your Home</h2>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/01-origin.png" alt="Beehives on a Himalayan hillside at sunrise" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">01 — Origin</div>
+                <h3 className="pdp-journey-h3">Where it begins. <em>High above Manali.</em></h3>
+                <p className="pdp-journey-p">Sourced directly from farming families in Himachal Pradesh — hives set on the forested slopes above Manali, grown at altitude and harvested with traditional methods.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/02-landscape.png" alt="Bees foraging on wild Himalayan blossoms" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">02 — Landscape</div>
+                <h3 className="pdp-journey-h3">The flowers behind it. <em>Wild, not planted.</em></h3>
+                <p className="pdp-journey-p">Wildflowers, rhododendrons, and medicinal herbs growing at high altitude give this honey its distinct floral character.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/03-harvest.png" alt="Beekeeper lifting a honeycomb frame" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">03 — Harvest</div>
+                <h3 className="pdp-journey-h3">Lifted by hand. <em>Frame by frame.</em></h3>
+                <p className="pdp-journey-p">Each frame is checked and lifted by hand at the hive, the way it has always been done here.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/04-handling.png" alt="Honeycomb being strained into raw honey" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">04 — Handling</div>
+                <h3 className="pdp-journey-h3">From comb to jar. <em>Nothing added.</em></h3>
+                <p className="pdp-journey-p">Never heated or processed — just raw honey, strained and filtered, preserving its natural enzymes and crystalline structure.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Accordion section ── */}
         <div className="pdp-acc-section">
