@@ -580,6 +580,97 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
+        {/* NEW — Journey story section for Himachali Pahari Cow Ghee
+            (additive, brand redesign). Same pattern as the honey block
+            above — gated to this one product slug, generic .pdp-journey
+            classes reused as-is (no CSS changes needed). Photos are the
+            real ones supplied for this product, saved to
+            /public/journey/ghee/. Copy is original — not reused from the
+            honey section.
+            NOTE for Mishika/JK: there was no dedicated "fresh milk" photo
+            among the 6 images supplied, so stage 02 (The Milk) uses a
+            text placeholder tile — same pattern already used for honey's
+            "05 — Testing" stage above (.pdp-journey-media.placeholder).
+            One supplied photo (the ghee being strained through cloth into
+            the brass pot) wasn't used, to avoid re-using a near-duplicate
+            image back-to-back with the "05 — The Ghee" photo — it's still
+            in the uploads if you'd rather swap it in for the Milk
+            placeholder or elsewhere. Flagging both for approval. */}
+        {product.slug === 'himachali-pahari-cow-ghee' && (
+          <div className="pdp-journey">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">The Journey</div>
+              <h2 className="pdp-journey-title">From the Himalayan Hills to Your Home</h2>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">01 — Origin</div>
+                <h3 className="pdp-journey-h3">Where it begins. <em>In the mountain homes of Himachal.</em></h3>
+                <p className="pdp-journey-p">Made from the milk of local Himachali Pahari cows, rooted in the traditional food culture of Himachal Pradesh.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media placeholder">
+                <div className="pdp-journey-placeholder-text">Milk from Himachali Pahari cows, gathered fresh from mountain homes</div>
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">02 — The Milk</div>
+                <h3 className="pdp-journey-h3">From local Pahari cows. <em>The beginning of something golden.</em></h3>
+                <p className="pdp-journey-p">Milk from Himachali Pahari cows forms the foundation of this traditionally crafted ghee.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">03 — Bilona</div>
+                <h3 className="pdp-journey-h3">An old craft. <em>Churned the traditional way.</em></h3>
+                <p className="pdp-journey-p">The curd is traditionally churned using the Bilona method, following a time-honoured process of making ghee.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media">
+                <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">04 — The Butter</div>
+                <h3 className="pdp-journey-h3">Slowly gathered. <em>Carefully transformed.</em></h3>
+                <p className="pdp-journey-p">The butter separated through the traditional churning process becomes the foundation for the next stage.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">05 — The Ghee</div>
+                <h3 className="pdp-journey-h3">Slowly simmered. <em>Golden by nature.</em></h3>
+                <p className="pdp-journey-p">The butter is gently heated until it transforms into rich, aromatic golden ghee.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media">
+                <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">06 — The Jar</div>
+                <h3 className="pdp-journey-h3">From a mountain tradition. <em>To your home.</em></h3>
+                <p className="pdp-journey-p">The finished Himachali Pahari Cow Ghee is carefully filled and packed under HimVeda by Pahadi Roots.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* NEW — Why It's Different (additive, brand redesign). Gated to
             honey. Claims used: Raw & Unfiltered / Lab Tested & Certified are
             the existing verified label + certificate data; High Altitude
