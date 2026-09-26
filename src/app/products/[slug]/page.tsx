@@ -541,7 +541,99 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-journey-text">
                 <div className="pdp-journey-num">04 — Handling</div>
                 <h3 className="pdp-journey-h3">From comb to jar. <em>Nothing added.</em></h3>
-                <p className="pdp-journey-p">Never heated or processed — just raw honey, strained and filtered, preserving its natural enzymes and crystalline structure.</p>
+                <p className="pdp-journey-p">Never heated, never filtered — just raw honey drained straight from the comb, preserving its natural enzymes and crystalline structure.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media placeholder">
+                <div className="pdp-journey-placeholder-text">Every batch is lab tested before it ships</div>
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">05 — Testing</div>
+                <h3 className="pdp-journey-h3">Checked before it travels. <em>Lab verified.</em></h3>
+                <p className="pdp-journey-p">Tested for purity, heavy metals, pesticides, and active ingredients — the same certificate shown above, before any jar leaves for you.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row rev">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/06-bottling.png" alt="Himalayan Wild Honey jar, sealed and labelled" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">06 — Bottling</div>
+                <h3 className="pdp-journey-h3">Sealed with care. <em>Glass, not plastic.</em></h3>
+                <p className="pdp-journey-p">Packed in glass jars with recycled cardboard — zero single-use plastic, the same as every HimVeda product.</p>
+              </div>
+            </div>
+
+            <div className="pdp-journey-row">
+              <div className="pdp-journey-media">
+                <Image src="/journey/honey/07-your-home.png" alt="Himalayan Wild Honey jar ready for your home" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div className="pdp-journey-text">
+                <div className="pdp-journey-num">07 — Your Home</div>
+                <h3 className="pdp-journey-h3">From the mountains. <em>To your table.</em></h3>
+                <p className="pdp-journey-p">Dispatched within 1–2 business days, so the same jar that left the hive reaches your kitchen with nothing changed along the way.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW — Why It's Different (additive, brand redesign). Gated to
+            honey. Claims used: Raw & Unfiltered / Lab Tested & Certified are
+            the existing verified label + certificate data; High Altitude
+            Origin and Small Batch are per Mishika's direct confirmation
+            (Sept 2026) — no specific altitude figure or batch size is
+            stated since neither is verified/available. */}
+        {product.slug === 'himalayan-wild-honey' && (
+          <div className="pdp-why-diff">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Why It's Different</div>
+            </div>
+            <div className="pdp-why-diff-grid">
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🍯</div>
+                <div className="pdp-why-diff-title">Raw &amp; Unfiltered</div>
+                <div className="pdp-why-diff-desc">Never heated or filtered — drained straight from the comb.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🏔️</div>
+                <div className="pdp-why-diff-title">High Altitude Origin</div>
+                <div className="pdp-why-diff-desc">Harvested from wild hives set high in the Himalayas, above Manali and Spiti.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🐝</div>
+                <div className="pdp-why-diff-title">Small Batch</div>
+                <div className="pdp-why-diff-desc">Small, seasonal harvests — not mass-produced.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">✅</div>
+                <div className="pdp-why-diff-title">Fully Certified</div>
+                <div className="pdp-why-diff-desc">FSSAI licensed and lab tested for purity, heavy metals, pesticides &amp; active ingredients.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW — Know Your Source (additive, brand redesign). Reuses the
+            same regionName/stateImg/rEmoji already fetched above for the
+            Origin card — no new data source, no invented geography. */}
+        {product.slug === 'himalayan-wild-honey' && (
+          <div className="pdp-source">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Know Your Source</div>
+              <h2 className="pdp-journey-title">Know Where Your Food Comes From</h2>
+            </div>
+            <div className="pdp-source-card">
+              <div className="pdp-source-img">
+                {stateImg
+                  ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                  : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
+              </div>
+              <div>
+                <div className="pdp-source-region">Manali &amp; Spiti, {regionName}</div>
+                <p className="pdp-source-text">Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas — the same origin shown in the certificate and journey above.</p>
               </div>
             </div>
           </div>
@@ -609,6 +701,88 @@ export default async function ProductPage({ params }: Props) {
 
           </div>
         </div>
+
+        {/* NEW — How to Enjoy, visual redesign of the existing How to Use
+            accordion content (additive, brand redesign). Reuses the same
+            howToUse array already parsed above — no new copy invented.
+            The original "How to Use" accordion item above is left in
+            place untouched, per instruction not to remove anything
+            without confirmation — flagging the duplication to Mishika. */}
+        {product.slug === 'himalayan-wild-honey' && howToUse.length > 0 && (
+          <div className="pdp-enjoy">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">How to Enjoy</div>
+              <h2 className="pdp-journey-title">How to Enjoy Your Honey</h2>
+            </div>
+            <div className="pdp-enjoy-grid">
+              {howToUse.map((s: any, i: number) => (
+                <div key={i} className="pdp-enjoy-card">
+                  <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
+                  <div className="pdp-enjoy-text">{typeof s === 'string' ? s : s?.step || ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* NEW — Natural Variation education (additive, brand redesign).
+            General true-for-raw-honey facts, not batch-specific claims —
+            safe without any product-specific data. */}
+        {product.slug === 'himalayan-wild-honey' && (
+          <div className="pdp-variation">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Natural Variation</div>
+              <h2 className="pdp-journey-title">No Two Harvests Are Exactly Alike</h2>
+              <p className="pdp-source-text" style={{ marginTop: '14px' }}>
+                Because this honey is raw and unfiltered, small differences between jars are normal — not a flaw.
+              </p>
+            </div>
+            <div className="pdp-why-diff-grid">
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Colour</div><div className="pdp-why-diff-desc">Can shift lighter or darker between harvests depending on the season's bloom.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Aroma &amp; Taste</div><div className="pdp-why-diff-desc">Floral character varies with whatever was blooming at harvest time.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — a sign of purity, not spoilage.</div></div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW — FAQ (additive, brand redesign). Every answer below reuses
+            verified copy already established elsewhere on this page
+            (description, storage tips, shipping, certificate). Two
+            questions from the spec are left as honest placeholders since
+            the underlying data doesn't exist yet — see brand-redesign
+            notes on batch traceability and shelf life. */}
+        {product.slug === 'himalayan-wild-honey' && (
+          <div className="pdp-acc-section" style={{ marginTop: '8px' }}>
+            <div className="pdp-journey-head" style={{ marginBottom: '24px' }}>
+              <div className="pdp-journey-eyebrow">FAQ</div>
+            </div>
+            <div className="pdp-acc-list">
+              <AccItem title="Where is the honey sourced?" icon="who">
+                Manali &amp; Spiti, Himachal Pradesh — sourced directly from farming families in the region.
+              </AccItem>
+              <AccItem title="Is it raw and unfiltered?" icon="desc">
+                Yes — never heated or filtered, drained straight from the comb.
+              </AccItem>
+              <AccItem title="Why does honey crystallise?" icon="storage">
+                Crystallisation is natural and indicates purity. Gently warm the jar in lukewarm water to soften it if you prefer it liquid.
+              </AccItem>
+              <AccItem title="How should I store it?" icon="storage">
+                Keep it cool and dark, in an airtight glass container, away from sunlight and moisture.
+              </AccItem>
+              <AccItem title="How long does it last?" icon="desc">
+                [ADD VERIFIED SHELF LIFE]
+              </AccItem>
+              <AccItem title="Can I see the lab report?" icon="cert">
+                {showCertificate && certificate
+                  ? <>Yes — <a href={certificate.reportUrl} target="_blank" rel="noopener noreferrer">view the Authenticity Report here</a>.</>
+                  : '[ADD VERIFIED SOURCE INFORMATION]'}
+              </AccItem>
+              <AccItem title="How can I verify my batch?" icon="cert">
+                [ADD VERIFIED SOURCE INFORMATION] — batch-level traceability isn't available yet.
+              </AccItem>
+            </div>
+          </div>
+        )}
 
         {/* ── Reviews ── */}
         {showReviews && (

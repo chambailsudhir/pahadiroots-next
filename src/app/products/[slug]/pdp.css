@@ -304,3 +304,34 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-h3 em{font-style:italic;color:#3a7042}
 .pdp-journey-p{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px;max-width:420px}
 @media(max-width:760px){.pdp-journey-row,.pdp-journey-row.rev{flex-direction:column;gap:20px;padding:32px 20px}.pdp-stat-trio{gap:20px}}
+
+/* ── Journey media placeholder (no photo yet, e.g. Testing step) ── */
+.pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+.pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
+
+/* ── Why It's Different ── */
+.pdp-why-diff{padding:56px 32px 20px;max-width:1180px;margin:0 auto}
+.pdp-why-diff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;max-width:1100px;margin:0 auto}
+.pdp-why-diff-card{background:#fff;border:1px solid rgba(26,58,30,.1);border-radius:12px;padding:22px 18px;text-align:center;box-shadow:0 8px 24px -14px rgba(26,58,30,.15)}
+.pdp-why-diff-icon{font-size:26px}
+.pdp-why-diff-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:15px;color:#1a3a1e;margin-top:10px;font-weight:700}
+.pdp-why-diff-desc{font-size:12.5px;color:#5a5a5a;margin-top:6px;line-height:1.5}
+@media(max-width:760px){.pdp-why-diff-grid{grid-template-columns:1fr 1fr}}
+
+/* ── Know Your Source ── */
+.pdp-source{padding:20px 32px 56px;max-width:900px;margin:0 auto}
+.pdp-source-card{display:flex;gap:24px;align-items:center;background:#fff;border-radius:14px;padding:26px;box-shadow:0 8px 24px -14px rgba(26,58,30,.15)}
+.pdp-source-img{width:100px;height:100px;border-radius:50%;overflow:hidden;background:#f2eadc;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pdp-source-region{font-family:var(--font-playfair),'Playfair Display',serif;font-size:18px;color:#1a3a1e;font-weight:700}
+.pdp-source-text{font-size:13.5px;color:#5a5a5a;line-height:1.6;margin-top:8px}
+
+/* ── How to Enjoy ── */
+.pdp-enjoy{background:#f2eadc;padding:56px 32px}
+.pdp-enjoy-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;max-width:1100px;margin:0 auto}
+.pdp-enjoy-card{background:#fff;border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 8px 24px -14px rgba(26,58,30,.15)}
+.pdp-enjoy-num{font-family:var(--font-playfair),'Playfair Display',serif;font-size:20px;color:#c8920a}
+.pdp-enjoy-text{font-size:12.5px;color:#3a342a;margin-top:8px;line-height:1.5}
+@media(max-width:760px){.pdp-enjoy-grid{grid-template-columns:1fr 1fr}}
+
+/* ── Natural Variation ── */
+.pdp-variation{padding:56px 32px;max-width:1180px;margin:0 auto}
