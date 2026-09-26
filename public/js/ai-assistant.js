@@ -79,18 +79,6 @@ in "kngr", NEVER substitute a Punjabi word/spelling for a Kangri one, even if it
 "sounds close enough." Common leaks to avoid specifically:
   ✗ ਕੀ ਹਾਲ ਏ / ki haal ae, ਤੁਹਾਨੂੰ / tuhanu, ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਜੀ ਹਾਂ / ji haan, ਨਹੀਂ / nahi
   ✓ Use instead: क्या हाल-चाल, तुसांगी/थुआं, राम-राम जी or जय हिमाचल, हां जी, नेईं/नां
-The leak above is written in Gurmukhi script — but since you always write Kangri in
-Devanagari, that exact form will never actually appear in your output, so don't rely
-on that example alone to feel safe. The leak that actually happens is the SAME
-Punjabi grammar words spelled out in Devanagari instead, which reads as fluent
-Kangri at a glance but isn't:
-  ✗ दी / दे / दा (Punjabi ਦੀ/ਦੇ/ਦਾ, "of") — e.g. "शहद दी गल", "करण दी लोड़ हाई"
-  ✗ नाल (ਨਾਲ, "with") — e.g. "हिसाब नाल"
-  ✗ ते (ਤੇ, "and", used as a conjunction) — e.g. "Delivery ते returns"
-  ✗ गल/गल्ल (ਗੱਲ, "matter/talking about") — e.g. "शहद दी गल कर रहे हो"
-  ✗ लोड़ (ਲੋੜ, "need") when spelled/used this way is Punjabi-Dogri, not Kangri
-  ✓ Use plain Hindi instead: का/की/के (of), साथ (with), और (and), बात (matter),
-    ज़रूरत (need) — per the rule below, plain Hindi beats a guessed Punjabi word.
 If you are not confident a word is genuinely Kangri (versus Punjabi or generic
 Hindi), prefer a plain Hindi word over guessing a Punjabi-sounding one — a
 Kangri speaker will forgive occasional Hindi mixed in (that's how the boli is
@@ -248,7 +236,7 @@ A D WE R B S .=দুৰৈ | A man.=মানুহ | A pageisonesideofa leaf=�
 - For any other language → respond in that language
 NEVER mix languages. If user writes in a different language than selected, still respond in the SELECTED language (${langName}).
 
-ABOUT HIMVEDA BY PAHADI ROOTS:
+ABOUT 5 PAHADI ROOTS:
 - Sells authentic Himalayan natural products sourced directly from mountain farmers
 - Products: Wild Honey (Himachal), A2 Bilona Ghee, Kashmiri Saffron, Ladakhi Shilajit, Assam Tea, Kangra Tea, Lakadong Turmeric, Bamboo Shoot, Joha Rice, Bhut Jolokia, Black Rice, Large Cardamom, Cold Pressed Mustard Oil, Basmati Rice
 - Free shipping above ₹799 | Delivery: 4-7 business days | Returns: within 7 days
@@ -284,17 +272,17 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
      "Chat" WhatsApp entry, so a second one here would duplicate it — but
      that bottom nav is mobile-only (display:none above 900px), so desktop
      had no WhatsApp entry point at all without this.
-     BUG FIX (round 2): now sits PARALLEL to the site's own desktop
-     scroll-to-top button (.stt-btn, right:16/bottom:24 above 901px — see
-     globals.css) — same row, side by side — instead of stacked above it.
-     right:72px = 16 (stt-btn's own right) + 42 (stt-btn width) + 14 (gap). */
+     Stacked 12px above the site's own scroll-to-top button (.stt-btn in
+     globals.css: desktop bottom:24px, right:16px, 42px tall) instead of
+     sharing its exact spot — round 3 put both at bottom:24/right:16, which
+     overlapped them directly. */
   #pr-wa {
-    display:none; position:fixed; right:72px; bottom:24px;
+    display:none; position:fixed; right:16px; bottom:78px; /* 24 + 42 + 12 */
     width:52px; height:52px; border-radius:50%;
     background:#25D366; border:none; cursor:pointer;
     box-shadow:0 4px 16px rgba(37,211,102,.45);
     align-items:center; justify-content:center;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1), opacity .2s ease;
+    transition:transform .2s cubic-bezier(.34,1.56,.64,1);
     z-index:2147483645;
   }
   @media(min-width:901px) { #pr-wa { display:flex } }
@@ -307,45 +295,26 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     opacity:0; pointer-events:none; transition:opacity .18s; font-family:inherit;
   }
   #pr-wa:hover .pr-wa-tip { opacity:1 }
-  /* BUG FIX (round 5): previously hidden while the chat panel was
-     open ("looked cluttered/half-covered" per the original comment),
-     but the panel is anchored well above this button (bottom:162px
-     desktop vs. this button's bottom:24px) so they never actually
-     overlap in the default docked position — verified against the
-     live CSS above, not assumed. Removed the hide so WhatsApp stays
-     reachable on desktop while chatting, per user report. If the
-     panel is later dragged down over this corner, that's a deliberate
-     user action, not a layout bug. */
 
-  /* AI fab: bottom-right, stacked above the site's other fixed controls.
-     BUG FIX: this used to be pinned to the vertical middle of the right
-     edge (top:50%) specifically to dodge the mobile bottom nav / scroll-
-     to-top button — but on the homepage that same vertical-center spot is
-     exactly where HeroBanner's prev/next carousel arrows sit
-     (right:20, top:calc(50% - 35px) — see HeroBanner.tsx), so the fab's
-     much higher z-index completely covered the right arrow. Bottom-
-     anchoring instead clears BOTH: the hero controls (which sit near
-     the vertical middle, far from the viewport bottom) and the mobile
-     nav / scroll-to-top button (stacked below, with an explicit gap).
-     This SAME reasoning applies identically on mobile and desktop, which
-     is why the fab moved on both — the hero arrows and the mobile bottom
-     nav are two different things it has to clear, but "sit low, above
-     everything else fixed" solves both the same way. */
+  /* AI fab: pinned just below the header/announcement bar on the right
+     edge, instead of dead-center of the viewport. Vertical-center (round 3)
+     fixed the bottom-nav/scroll-to-top overlap but created a new one: on
+     pahadiroots.com the hero banner's own carousel arrows sit right at
+     viewport-center too, so the fab was landing on top of them. Anchoring
+     to a fixed distance below the header sidesteps both the top hero
+     carousel AND the bottom nav/scroll-to-top, on every screen size.
+     If your exact header height differs, adjust --pr-fab-top below —
+     everything else (panel, WA button gap) is unaffected by that number. */
+  :root { --pr-fab-top: 130px; }
   #pr-ai-fab {
-    position:fixed; right:16px;
-    bottom:calc(128px + env(safe-area-inset-bottom, 0px));
+    position:fixed; top:var(--pr-fab-top); right:16px;
     width:56px; height:56px; border-radius:50%;
     border:none; cursor:pointer; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     transition:transform .22s cubic-bezier(.34,1.56,.64,1);
     animation:pr-pulse 3s ease-out infinite;
-    z-index:2147483646;
+    z-index:2147483645;
   }
-  /* Desktop: WhatsApp now sits beside the scroll-to-top button (same
-     row, bottom:24) instead of above it, so the fab only needs to clear
-     that single row — 24 + 52 (taller of the two, WA) + 14 gap = 90,
-     rounded up to 92. */
-  @media(min-width:901px) { #pr-ai-fab { bottom:92px } }
   #pr-ai-fab:hover { transform:scale(1.08) }
   #pr-ai-fab.open  { animation:none }
   #pr-ai-fab img.pr-fi { width:100%; height:100%; object-fit:cover; border-radius:50% }
@@ -364,57 +333,22 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     100% { box-shadow:0 0 0 0 rgba(26,58,30,0), 0 6px 22px rgba(26,58,30,.5) }
   }
 
-  /* Opens directly above the fab (198px = 128 fab-bottom + 56 fab-height
-     + 14 gap on mobile; 162px on desktop using the fab's new 92px bottom
-     now that WhatsApp moved out of the stack). BUG FIX (round 2): while
-     the panel is open, the site's scroll-to-top button (.stt-btn) and
-     the WhatsApp button are hidden (see TOGGLE section) — previously
-     they stayed visible right at the panel's bottom-right corner, which
-     read as the buttons "overlapping" the freshly-opened panel. With
-     them hidden, the panel is the only thing in that corner. */
+  /* Opens beside the fab (86px = 16 right + 56 fab width + 14 gap),
+     top-aligned to match #pr-ai-fab's --pr-fab-top. */
   #pr-panel {
-    position:fixed; right:16px;
-    bottom:calc(198px + env(safe-area-inset-bottom, 0px));
+    position:fixed; top:var(--pr-fab-top); right:86px;
     width:380px; height:560px;
     min-width:280px; min-height:380px;
-    max-width:min(700px,96vw);
-    /* BUG FIX (round 3): max-height was a flat 92vh, which never
-       accounted for how much room the panel's own bottom offset
-       already eats out of the viewport. bottom:198px + height:560px
-       needs ~758px of vertical space on mobile (162px + 560px = 722px
-       on desktop) — on any browser window shorter than that, 92vh
-       let the panel grow tall enough that its top edge pushed up
-       past the visible viewport, under the browser's own address
-       bar/chrome (exactly the screenshot). max-height must instead be
-       capped by whatever vertical space is actually left above the
-       panel's bottom offset, with a small 16px breathing gap from the
-       very top of the viewport, and use min() so it still respects
-       the original 92vh ceiling on tall viewports. */
-    max-height:min(92vh, calc(100vh - 198px - env(safe-area-inset-bottom, 0px) - 16px));
+    max-width:min(700px,96vw); max-height:min(560px, calc(100vh - var(--pr-fab-top) - 16px));
     overflow:hidden; background:#ffffff; border-radius:18px;
     box-shadow:0 8px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     display:flex; flex-direction:column;
     z-index:2147483644;
-    transform:translateY(16px) scale(.87); opacity:0; pointer-events:none;
+    transform:scale(.87) translateY(-10px); opacity:0; pointer-events:none;
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
-  #pr-panel.open { transform:translateY(0) scale(1); opacity:1; pointer-events:all }
-  @media(min-width:901px) {
-    #pr-panel {
-      bottom:162px;
-      max-height:min(92vh, calc(100vh - 162px - 16px));
-    }
-  }
-  /* Note: no !important here (removed as part of round 4) — this must
-     stay overridable by the inline left/top/width styles the new
-     move/resize features set, or a phone user could never actually
-     reposition or resize the panel away from this default. */
-  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px); right:8px } }
-
-  /* Site's own desktop scroll-to-top button (.stt-btn, defined in
-     globals.css) — hidden the same way as #pr-wa while the chat panel
-     is open, for the same reason (kept clear of the panel's corner). */
-  body.pr-chat-open .stt-btn { opacity:0 !important; pointer-events:none !important; }
+  #pr-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all }
+  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
 
   #pr-drag {
     height:20px; border-radius:18px 18px 0 0;
@@ -432,30 +366,11 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     cursor:ns-resize; z-index:10;
   }
   #pr-bottom-edge:hover { background:rgba(200,146,10,.15) }
-  /* FEATURE (round 5): right edge + 4 corners, so resizing works from
-     all 8 directions, not just top/left/bottom as before. */
-  #pr-right-edge {
-    position:absolute; right:0; top:20px; bottom:0; width:5px;
-    cursor:ew-resize; z-index:10; border-radius:0 18px 18px 0;
-  }
-  #pr-right-edge:hover { background:rgba(200,146,10,.2) }
-  .pr-corner { position:absolute; width:14px; height:14px; z-index:11; }
-  #pr-corner-nw { left:0; top:0; cursor:nwse-resize; border-radius:18px 0 0 0; }
-  #pr-corner-ne { right:0; top:0; cursor:nesw-resize; border-radius:0 18px 0 0; }
-  #pr-corner-sw { left:0; bottom:0; cursor:nesw-resize; border-radius:0 0 0 18px; }
-  #pr-corner-se { right:0; bottom:0; cursor:nwse-resize; border-radius:0 0 18px 0; }
-  .pr-corner:hover { background:rgba(200,146,10,.25) }
 
   .pr-hd {
     padding:11px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0;
     border-bottom:1px solid rgba(200,146,10,.18);
-    /* FEATURE: header doubles as a move handle — see the MOVE block in
-       JS — so it needs a grab cursor to signal that (the language
-       dropdown inside it is excluded from drag via its own target check). */
-    cursor:grab; touch-action:none;
   }
-  #pr-panel.pr-moving .pr-hd { cursor:grabbing }
-  #pr-panel.pr-moving { transition:none !important; user-select:none; }
   .pr-hav { width:72px; height:72px; border-radius:50%; overflow:hidden; flex-shrink:0; border:2px solid rgba(200,146,10,.5); }
   .pr-hav img { width:100%; height:100%; object-fit:cover }
   .pr-hn { font-size:14px; font-weight:700; color:#f0ede0; line-height:1.2; font-family:inherit }
@@ -572,9 +487,6 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   #pr-voice svg { width:15px; height:15px }
   #pr-voice.rec { border-color:#ff5252; animation:pr-rec .8s ease-in-out infinite }
   @keyframes pr-rec { 0%,100%{box-shadow:0 0 0 0 rgba(255,82,82,.4)} 50%{box-shadow:0 0 0 7px rgba(255,82,82,0)} }
-  #pr-voice.busy { border-color:#c8920a; cursor:wait; pointer-events:none }
-  #pr-voice.busy svg { animation:pr-spin .9s linear infinite }
-  @keyframes pr-spin { to{ transform:rotate(360deg) } }
   #pr-sb { width:35px; height:35px; flex-shrink:0; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .15s }
   #pr-sb:hover:not(:disabled) { transform:scale(1.1) }
   #pr-sb:disabled { opacity:.35; cursor:not-allowed }
@@ -633,9 +545,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   /* ── Panel ────────────────────────────────────────────── */
   const panel = document.createElement('div');
   panel.id = 'pr-panel';
-  panel.innerHTML = '<div id="pr-left-edge"></div><div id="pr-right-edge"></div><div id="pr-bottom-edge"></div><div id="pr-drag"></div>'
-    + '<div id="pr-corner-nw" class="pr-corner"></div><div id="pr-corner-ne" class="pr-corner"></div>'
-    + '<div id="pr-corner-sw" class="pr-corner"></div><div id="pr-corner-se" class="pr-corner"></div>'
+  panel.innerHTML = '<div id="pr-left-edge"></div><div id="pr-bottom-edge"></div><div id="pr-drag"></div>'
     + '<div class="pr-hd">'
     + '<div class="pr-hav"><img src="' + AI_CFG.avatar + '" alt="AI"></div>'
     + '<div><div class="pr-hn" id="pr-name">' + AI_CFG.name + '</div>'
@@ -697,16 +607,16 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     + '<div class="pr-chip" data-q="Benefits of A2 Bilona Ghee?">🧈 Ghee benefits</div>'
     + '<div class="pr-chip" data-q="How to identify genuine Kashmiri saffron?">🌸 Real saffron?</div>'
     + '<div class="pr-chip" data-q="Delivery time and shipping details?">🚚 Delivery?</div>'
-    + '<div class="pr-chip" data-q="How can I track my order?">📦 Track order</div>'
+    + '<div class="pr-chip" data-q="What is the weather in Shimla today?">🌤️ Shimla weather</div>'
     + '<div class="pr-chip" data-q="Gift ideas from Himachal Pradesh?">🎁 Gift ideas</div>'
     + '<div class="pr-chip" data-q="What superfoods grow in the Himalayas?">🌿 Superfoods</div>'
     + '</div>'
     + '<div class="pr-msgs" id="pr-msgs"></div>'
     + '<div class="pr-ia"><div class="pr-ir">'
     + '<button id="pr-voice" title="Voice input"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.57 3.13 8.37 7.26 9.58V21h5.48v-3.42C18.87 16.37 22 12.57 22 8h-2c0 4.08-3.06 7.44-7 7.93V15.93z"/></svg></button>'
-    + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, benefits, orders…"></textarea>'
+    + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, weather, health…"></textarea>'
     + '<button id="pr-sb" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
-    + '</div><div class="pr-ft">Pahadi Roots AI · Powered by Google Gemini</div></div>';
+    + '</div><div class="pr-ft">HimVeda by Pahadi Roots AI · Powered by Google Gemini</div></div>';
   document.body.appendChild(panel);
 
   const toast = document.createElement('div');
@@ -715,190 +625,44 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
 
   setTimeout(applyTheme, 50);
 
-  /* ── POSITION & RESIZE ───────────────────────────────────
-     Panel starts anchored bottom-right (via CSS `right`/`bottom`),
-     same as before. Dragging the header (move) or any edge/corner
-     (resize) switches it to free left/top positioning the first time
-     it's touched, so a user who never interacts with it sees no
-     change in behaviour. */
+  /* ── RESIZE ───────────────────────────────────────────── */
   const dragBar    = document.getElementById('pr-drag');
   const leftEdge   = document.getElementById('pr-left-edge');
   const bottomEdge = document.getElementById('pr-bottom-edge');
-  const rightEdge  = document.getElementById('pr-right-edge');
-  const cornerNW   = document.getElementById('pr-corner-nw');
-  const cornerNE   = document.getElementById('pr-corner-ne');
-  const cornerSW   = document.getElementById('pr-corner-sw');
-  const cornerSE   = document.getElementById('pr-corner-se');
-  const hd         = document.querySelector('.pr-hd');
-  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0, rLeft0=0, rTop0=0;
-  let panelMoved=false, moving=false, mvX0=0, mvY0=0, mvL0=0, mvT0=0;
+  let resizing=false, resizeType='', rX0=0, rY0=0, rW0=0, rH0=0;
 
-  function getViewportW() { return (window.visualViewport && window.visualViewport.width)  || window.innerWidth; }
-  function getViewportH() { return (window.visualViewport && window.visualViewport.height) || window.innerHeight; }
-  function getSafeBottom() {
-    try {
-      var probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;bottom:env(safe-area-inset-bottom,0px);height:0;width:0';
-      document.body.appendChild(probe);
-      var v = getViewportH() - probe.getBoundingClientRect().bottom;
-      document.body.removeChild(probe);
-      return v > 0 ? v : 0;
-    } catch (err) { return 0; }
-  }
-  /* BUG FIX (round 3+4): max-height was a flat 92vh, which never
-     accounted for how much room the panel's own bottom offset already
-     eats out of the viewport, AND mobile browsers report `vh` against
-     their largest (toolbar-collapsed) viewport, not what's actually
-     visible when the address bar is showing — so even the calc()-based
-     CSS fix could still overflow above the fold on a phone. Using
-     window.visualViewport (kept live via the resize/scroll listeners
-     below) and computing an exact pixel cap in JS, re-applied whenever
-     the visible viewport actually changes, fixes both the desktop calc
-     bug and the mobile toolbar-collapse bug at once. */
-  function getMaxPanelH() {
-    var vh = getViewportH();
-    if (panelMoved) {
-      var top = panel.getBoundingClientRect().top;
-      return Math.max(320, vh - top - 8);
-    }
-    var bottomOffset = getViewportW() >= 901 ? 162 : 198;
-    return Math.min(vh*.92, vh - bottomOffset - getSafeBottom() - 16);
-  }
-  /* Re-clamps size/position against the *current* real viewport. Runs
-     on open, after every move/resize, and on every resize/orientation/
-     visualViewport change — the latter is what actually fires when a
-     mobile browser's address bar shows or hides, which plain window
-     'resize' often misses. */
-  function enforcePanelBounds() {
-    if (!isOpen) return;
-    var capH = getMaxPanelH();
-    panel.style.maxHeight = capH + 'px';
-    if (panel.offsetHeight > capH) panel.style.height = capH + 'px';
-    var capW = Math.min(700, getViewportW()*.96);
-    if (panel.offsetWidth > capW) panel.style.width = capW + 'px';
-    if (panelMoved) {
-      var vw=getViewportW(), vh=getViewportH(), rect=panel.getBoundingClientRect();
-      panel.style.left = Math.min(Math.max(rect.left, 4), vw - panel.offsetWidth  - 4) + 'px';
-      panel.style.top  = Math.min(Math.max(rect.top,  4), vh - panel.offsetHeight - 4) + 'px';
-    }
-  }
-  window.addEventListener('resize', enforcePanelBounds);
-  window.addEventListener('orientationchange', function(){ setTimeout(enforcePanelBounds, 150); });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', enforcePanelBounds);
-    window.visualViewport.addEventListener('scroll', enforcePanelBounds);
-  }
-
-  /* FEATURE (round 5): resize from all 8 directions (4 edges + 4
-     corners), not just top/left/bottom. `type` is a compass string —
-     'n','s','e','w','ne','nw','se','sw' — and each letter independently
-     drives one axis, so corners just combine two edges' math. Capturing
-     the panel's actual on-screen rect via getBoundingClientRect() at
-     drag start (rather than trusting CSS anchor keywords) means this
-     works correctly whether the panel is still docked bottom-right or
-     has already been moved/resized earlier. */
-  var CURSORS = { n:'ns-resize', s:'ns-resize', e:'ew-resize', w:'ew-resize',
-                  ne:'nesw-resize', sw:'nesw-resize', nw:'nwse-resize', se:'nwse-resize' };
-  function startResize(type, cx, cy) {
+  function startResize(type, e) {
     resizing=true; resizeType=type;
-    var rect=panel.getBoundingClientRect();
-    rX0=cx; rY0=cy; rLeft0=rect.left; rTop0=rect.top; rW0=rect.width; rH0=rect.height;
+    rX0=e.clientX; rY0=e.clientY;
+    rW0=panel.offsetWidth; rH0=panel.offsetHeight;
     document.body.style.userSelect='none';
-    document.body.style.cursor = CURSORS[type] || 'default';
+    document.body.style.cursor = type==='left' ? 'ew-resize' : 'ns-resize';
+    e.preventDefault();
   }
-  function applyResize(type, cx, cy) {
-    var dx=cx-rX0, dy=cy-rY0;
-    var maxW=Math.min(700, getViewportW()*.96), minW=280, minH=380;
-    var left=rLeft0, top=rTop0, w=rW0, h=rH0;
-    if (type.indexOf('e')>-1) w = Math.min(Math.max(rW0+dx, minW), maxW);
-    if (type.indexOf('w')>-1) { w = Math.min(Math.max(rW0-dx, minW), maxW); left = rLeft0 + (rW0-w); }
-    if (type.indexOf('s')>-1) h = Math.max(rH0+dy, minH);
-    if (type.indexOf('n')>-1) { h = Math.max(rH0-dy, minH); top = rTop0 + (rH0-h); }
-    panel.style.left=left+'px'; panel.style.top=top+'px';
-    panel.style.width=w+'px';   panel.style.height=h+'px';
-    panel.style.right='auto';   panel.style.bottom='auto';
-    panelMoved = true;
-    enforcePanelBounds();
-  }
-  function bindHandle(el, type) {
-    if (!el) return;
-    el.addEventListener('mousedown', function(e){ startResize(type, e.clientX, e.clientY); e.preventDefault(); });
-    el.addEventListener('touchstart', function(e){ var t=e.touches[0]; startResize(type, t.clientX, t.clientY); }, {passive:true});
-  }
-  bindHandle(dragBar,    'n');
-  bindHandle(bottomEdge, 's');
-  bindHandle(leftEdge,   'w');
-  bindHandle(rightEdge,  'e');
-  bindHandle(cornerNW,   'nw');
-  bindHandle(cornerNE,   'ne');
-  bindHandle(cornerSW,   'sw');
-  bindHandle(cornerSE,   'se');
+  dragBar.addEventListener('mousedown',    function(e){ startResize('top',e); });
+  leftEdge.addEventListener('mousedown',   function(e){ startResize('left',e); });
+  bottomEdge.addEventListener('mousedown', function(e){ startResize('bottom',e); });
   document.addEventListener('mousemove', function(e) {
     if (!resizing) return;
-    applyResize(resizeType, e.clientX, e.clientY);
+    var maxW=Math.min(700,window.innerWidth*.96), maxH=window.innerHeight*.92;
+    if (resizeType==='top')    panel.style.height=Math.min(Math.max(rH0+(rY0-e.clientY),380),maxH)+'px';
+    if (resizeType==='left')   panel.style.width =Math.min(Math.max(rW0+(rX0-e.clientX),280),maxW)+'px';
+    if (resizeType==='bottom') panel.style.height=Math.min(Math.max(rH0-(rY0-e.clientY),380),maxH)+'px';
   });
   document.addEventListener('mouseup', function() {
     if(resizing){ resizing=false; document.body.style.userSelect=''; document.body.style.cursor=''; }
   });
+  dragBar.addEventListener('touchstart', function(e){ var t=e.touches[0]; resizing=true; resizeType='top'; rY0=t.clientY; rH0=panel.offsetHeight; },{passive:true});
+  leftEdge.addEventListener('touchstart', function(e){ var t=e.touches[0]; resizing=true; resizeType='left'; rX0=t.clientX; rW0=panel.offsetWidth; },{passive:true});
   document.addEventListener('touchmove', function(e){
     if(!resizing) return; var t=e.touches[0];
-    applyResize(resizeType, t.clientX, t.clientY);
+    if(resizeType==='top')  panel.style.height=Math.min(Math.max(rH0+(rY0-t.clientY),380),window.innerHeight*.9)+'px';
+    if(resizeType==='left') panel.style.width =Math.min(Math.max(rW0+(rX0-t.clientX),280),700)+'px';
   },{passive:true});
-  document.addEventListener('touchend', function(){
-    if(resizing){ resizing=false; document.body.style.userSelect=''; document.body.style.cursor=''; }
-  });
-
-  /* FEATURE: drag the header to move the whole panel anywhere on
-     screen. Excludes the language dropdown so it stays clickable. */
-  function beginMove(x, y) {
-    var rect = panel.getBoundingClientRect();
-    panel.style.left   = rect.left + 'px';
-    panel.style.top    = rect.top  + 'px';
-    panel.style.right  = 'auto';
-    panel.style.bottom = 'auto';
-    panelMoved = true; moving = true;
-    mvX0=x; mvY0=y; mvL0=rect.left; mvT0=rect.top;
-    panel.classList.add('pr-moving');
-    document.body.style.userSelect='none';
-  }
-  function doMove(x, y) {
-    if (!moving) return;
-    var vw=getViewportW(), vh=getViewportH();
-    panel.style.left = Math.min(Math.max(mvL0+(x-mvX0), 4), vw - panel.offsetWidth  - 4) + 'px';
-    panel.style.top  = Math.min(Math.max(mvT0+(y-mvY0), 4), vh - panel.offsetHeight - 4) + 'px';
-    enforcePanelBounds();
-  }
-  function endMove() {
-    if (!moving) return;
-    moving=false; document.body.style.userSelect='';
-    panel.classList.remove('pr-moving');
-  }
-  hd.addEventListener('mousedown', function(e){
-    if (e.target.closest('.pr-lang-wrap')) return;
-    beginMove(e.clientX, e.clientY); e.preventDefault();
-  });
-  document.addEventListener('mousemove', function(e){ doMove(e.clientX, e.clientY); });
-  document.addEventListener('mouseup', endMove);
-  hd.addEventListener('touchstart', function(e){
-    if (e.target.closest('.pr-lang-wrap')) return;
-    var t=e.touches[0]; beginMove(t.clientX, t.clientY);
-  }, {passive:true});
-  document.addEventListener('touchmove', function(e){
-    if (!moving) return; var t=e.touches[0]; doMove(t.clientX, t.clientY);
-  }, {passive:true});
-  document.addEventListener('touchend', endMove);
-  // Double-click/tap the header to snap the panel back to its default
-  // bottom-right docked position and size.
-  hd.addEventListener('dblclick', function(e){
-    if (e.target.closest('.pr-lang-wrap')) return;
-    panel.style.left=''; panel.style.top=''; panel.style.right=''; panel.style.bottom='';
-    panel.style.width=''; panel.style.height=''; panel.style.maxHeight='';
-    panelMoved = false;
-    enforcePanelBounds();
-  });
+  document.addEventListener('touchend', function(){ resizing=false; });
 
   /* ── STATE ────────────────────────────────────────────── */
-  var isOpen=false, isThinking=false, history=[], lang='en', isRec=false;
+  var isOpen=false, isThinking=false, history=[], lang='en', isRec=false, rec=null;
   var msgs    = document.getElementById('pr-msgs');
   var input   = document.getElementById('pr-ti');
   var sb      = document.getElementById('pr-sb');
@@ -916,9 +680,18 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     fr:'French', de:'German', es:'Spanish', ru:'Russian', pt:'Portuguese',
   };
 
+  var VOICE_MAP = {
+    en:'en-IN', hi:'hi-IN', pa:'pa-IN', bn:'bn-IN', ta:'ta-IN', te:'te-IN',
+    mr:'mr-IN', gu:'gu-IN', kn:'kn-IN', ml:'ml-IN', or:'or-IN', as:'as-IN',
+    ne:'ne-NP', kngr:'hi-IN', garh:'hi-IN', doi:'hi-IN', kum:'hi-IN', lad:'hi-IN',
+    nag:'en-IN', bodo:'hi-IN', mizo:'en-IN', khasi:'en-IN', sikkimese:'ne-NP',
+    ur:'ur-PK', si:'si-LK', zh:'zh-CN', ru:'ru-RU', pt:'pt-BR', ja:'ja-JP', ko:'ko-KR', ar:'ar-SA', fr:'fr-FR',
+    de:'de-DE', es:'es-ES',
+  };
+
   var PLACEHOLDERS = {
-    hi:'कुछ भी पूछें — उत्पाद, स्वास्थ्य, ऑर्डर…',
-    pa:'ਕੁਝ ਵੀ ਪੁੱਛੋ — ਉਤਪਾਦ, ਆਰਡਰ…',
+    hi:'कुछ भी पूछें — उत्पाद, मौसम, स्वास्थ्य…',
+    pa:'ਕੁਝ ਵੀ ਪੁੱਛੋ — ਉਤਪਾਦ, ਮੌਸਮ…',
     bn:'যেকোনো কিছু জিজ্ঞেস করুন…',
     ta:'எதையும் கேளுங்கள்…',
     te:'ఏమైనా అడగండి…',
@@ -957,7 +730,7 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     langMenu.classList.remove('open');
     // Apply language
     lang = newLang;
-    input.placeholder = PLACEHOLDERS[lang] || 'Ask anything — products, benefits, orders…';
+    input.placeholder = PLACEHOLDERS[lang] || 'Ask anything — products, weather, health…';
     history = [];
     msgs.innerHTML = '';
     welcome();
@@ -1010,22 +783,15 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     isOpen = !isOpen;
     fab.classList.toggle('open', isOpen);
     panel.classList.toggle('open', isOpen);
-    // BUG FIX (round 2): hide the WhatsApp + scroll-to-top buttons while
-    // the chat panel is open — see the body.pr-chat-open rules above —
-    // so they don't sit visually crowded into the panel's bottom-right
-    // corner. Only the fab (now showing ✕) stays visible to close it.
-    document.body.classList.toggle('pr-chat-open', isOpen);
     var b = document.getElementById('pr-badge');
     if(b) b.remove();
     if(isOpen && !msgs.children.length) welcome();
     if(isOpen) setTimeout(function(){ input.focus(); }, 300);
     if(isOpen) setTimeout(applyTheme, 60);
-    if(isOpen) enforcePanelBounds();
   });
   document.addEventListener('click', function(e) {
     if(isOpen && !panel.contains(e.target) && !fab.contains(e.target)) {
       isOpen=false; fab.classList.remove('open'); panel.classList.remove('open');
-      document.body.classList.remove('pr-chat-open');
     }
   });
   // Toggle chips
@@ -1056,27 +822,27 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   /* ── WELCOME MESSAGE ──────────────────────────────────── */
   function welcome() {
     var w = {
-      en: '🙏 Namaste! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our Himalayan products — benefits, how to use, authenticity\n• Budget recommendations, gift ideas\n• Delivery, returns, any questions\n\nWhat would you like to know?',
-      hi: '🙏 नमस्ते! मैं **' + AI_CFG.name + '** हूँ — आपका Himalayan guide!\n\nमैं इनमें मदद कर सकता हूँ:\n• हमारे शुद्ध Himalayan उत्पाद\n• Budget के अनुसार सुझाव\n• Delivery और returns\n\nआज क्या जानना है?',
-      pa: '🙏 ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ **' + AI_CFG.name + '** ਹਾਂ!\n\nਮੈਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ:\n• ਸਾਡੇ Himalayan ਉਤਪਾਦ\n• Budget ਅਨੁਸਾਰ ਸੁਝਾਅ\n\nਦੱਸੋ ਕੀ ਚਾਹੀਦਾ ਹੈ?',
-      bn: '🙏 নমস্কার! আমি **' + AI_CFG.name + '** — আপনার Himalayan গাইড!\n\nআমি সাহায্য করতে পারি:\n• Himalayan পণ্য ও উপকারিতা\n• বাজেট অনুযায়ী পরামর্শ\n\nকী জানতে চান?',
-      ta: '🙏 வணக்கம்! நான் **' + AI_CFG.name + '** — உங்கள் Himalayan வழிகாட்டி!\n\nநான் உதவலாம்:\n• Himalayan தயாரிப்புகள்\n• பட்ஜெட் பரிந்துரைகள்\n\nஎன்ன தெரிந்துகொள்ள விரும்புகிறீர்கள்?',
-      te: '🙏 నమస్కారం! నేను **' + AI_CFG.name + '** — మీ Himalayan గైడ్!\n\nనేను సహాయపడగలను:\n• Himalayan ఉత్పత్తులు\n• బడ్జెట్ సూచనలు\n\nమీకు ఏమి తెలుసుకోవాలి?',
-      mr: '🙏 नमस्कार! मी **' + AI_CFG.name + '** — तुमचा Himalayan मार्गदर्शक!\n\nमी मदत करू शकतो:\n• Himalayan उत्पादने\n• Budget नुसार सूचना\n\nकाय जाणून घ्यायचे आहे?',
-      gu: '🙏 નમસ્તે! હું **' + AI_CFG.name + '** — તમારો Himalayan ગાઇડ!\n\nહું મદદ કરી શકું:\n• Himalayan ઉત્પાદનો\n• Budget મુજબ સૂચनो\n\nशું જаणвू  છे?',
-      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• Budget के हिसाब से सलाह\n• Delivery और returns\n\nबताओ, किसी चीज़ की ज़रूरत हाई?',
-      garh: '🙏 नमस्कार! मी **' + AI_CFG.name + '** छूं — तुमारो Himalayan गाइड!\n\nमी यूँ मदद करी सकदूं:\n• हमारा Himalayan उत्पाद\n• Budget क हिसाब से सलाह\n• Delivery अर returns\n\nबताओ, क्या जाणनो छ?',
-      doi: '🙏 राम राम! मैं **' + AI_CFG.name + '** आं — तुंदा Himalayan guide!\n\nमैं इत्थें मदद करी सकदा आं:\n• साडे Himalayan उत्पाद\n• Budget मताबक सलाह\n\nदस्सो की जानना ऐ?',
-      kum: '🙏 नमस्कार! मैं **' + AI_CFG.name + '** छु — तुमर Himalayan गाइड!\n\nमैं यूँ मदद करि सकूँ:\n• हमर असली पहाड़ी उत्पाद\n• Budget क हिसाब से सलाह\n\nबताओ क्या चनो?',
-      lad: '🙏 Juley! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our pure Ladakhi & Himalayan products\n• Budget suggestions\n\nYang cho dukpo? (What do you need?)',
-      or: '🙏 ନମସ୍କାର! ମୁଁ **' + AI_CFG.name + '** — ଆପଣଙ୍କର Himalayan ଗାଇଡ଼!\n\nମୁଁ ସାହାଯ୍ୟ କରିପାରିବି:\n• Himalayan ଉତ୍ପାଦ\n• Budget ପରାମର୍ଶ\n\nଆପଣ କଣ ଜାଣିବାକୁ ଚାହୁଁଛନ୍ତି?',
-      as: '🙏 নমস্কাৰ! মই **' + AI_CFG.name + '** — আপোনাৰ Himalayan গাইড!\n\nমই উপকাৰ কৰিব পাৰোঁ:\n• আমাৰ বিশুদ্ধ Himalayan সামগ্ৰী — মৌ (শহদ), ঘিউ, কেচৰ\n• Budget অনুযায়ী পৰামৰ্শ\n• Delivery আৰু returns\n\nআপুনি কি বিচাৰে? কওক!\n(আপোনাৰ = Your, মোৰ = My, বাৰু = Good, দুখ = Sad, উপকাৰ = Help)',
-      ne: '🙏 नमस्ते! म **' + AI_CFG.name + '** हुँ — तपाईंको Himalayan गाइड!\n\nमैले मद्दत गर्न सक्छु:\n• हाम्रा Himalayan उत्पादनहरू\n• Budget अनुसार सुझाव\n\nके जान्न चाहनुहुन्छ?',
-      ur: '🙏 آداب! میں **' + AI_CFG.name + '** ہوں — آپ کا Himalayan گائیڈ!\n\nمیں مدد کر سکتا ہوں:\n• ہمارے خالص Himalayan مصنوعات\n• Budget کے مطابق مشورہ\n\nبتائیں، کیا جاننا ہے?',
-      nag: '🙏 Namaste! Me **' + AI_CFG.name + '** — tumhara Himalayan guide!\n\nMe help dibo pari:\n• Hamara pure Himalayan product — shahad, ghee, kesar\n• Budget hisab se suggestion\n\nBolo, ki chahiye?',
-      bodo: '🙏 Namaskar! Mwi **' + AI_CFG.name + '** — nwngni Himalayan guide!\n\nMwi help dibo:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nBolo ki chahiye?',
-      mizo: '🙏 Chibai! Ka hming chu **' + AI_CFG.name + '** — i Himalayan guide!\n\nKa tanpui theih:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nHe la, i duh engzat nge?',
-      khasi: '🙏 Khublei! Nga **' + AI_CFG.name + '** — ngi Himalayan guide!\n\nNga sngewbha:\n• Himalayan products — shahad, ghee, kesar\n• Budget suggestion\n\nLa hap, ia la leh?',
+      en: '🙏 Namaste! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our Himalayan products — benefits, how to use, authenticity\n• Delivery, returns, any questions\n\nWhat would you like to know?',
+      hi: '🙏 नमस्ते! मैं **' + AI_CFG.name + '** हूँ — आपका Himalayan guide!\n\nमैं इनमें मदद कर सकता हूँ:\n• हमारे शुद्ध Himalayan उत्पाद\n• Delivery और returns\n\nआज क्या जानना है?',
+      pa: '🙏 ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ **' + AI_CFG.name + '** ਹਾਂ!\n\nਮੈਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ:\n• ਸਾਡੇ Himalayan ਉਤਪਾਦ\n• Delivery ਅਤੇ returns\n\nਦੱਸੋ ਕੀ ਚਾਹੀਦਾ ਹੈ?',
+      bn: '🙏 নমস্কার! আমি **' + AI_CFG.name + '** — আপনার Himalayan গাইড!\n\nআমি সাহায্য করতে পারি:\n• Himalayan পণ্য ও উপকারিতা\n• Delivery ও returns\n\nকী জানতে চান?',
+      ta: '🙏 வணக்கம்! நான் **' + AI_CFG.name + '** — உங்கள் Himalayan வழிகாட்டி!\n\nநான் உதவலாம்:\n• Himalayan தயாரிப்புகள்\n• Delivery, returns\n\nஎன்ன தெரிந்துகொள்ள விரும்புகிறீர்கள்?',
+      te: '🙏 నమస్కారం! నేను **' + AI_CFG.name + '** — మీ Himalayan గైడ్!\n\nనేను సహాయపడగలను:\n• Himalayan ఉత్పత్తులు\n• Delivery, returns\n\nమీకు ఏమి తెలుసుకోవాలి?',
+      mr: '🙏 नमस्कार! मी **' + AI_CFG.name + '** — तुमचा Himalayan मार्गदर्शक!\n\nमी मदत करू शकतो:\n• Himalayan उत्पादने\n• Delivery, returns\n\nकाय जाणून घ्यायचे आहे?',
+      gu: '🙏 નમસ્તે! હું **' + AI_CFG.name + '** — તમારો Himalayan ગાઇડ!\n\nહું મદદ કરી શકું:\n• Himalayan ઉત્પાદનો\n• Delivery, returns\n\nશું જાણવું છે?',
+      kngr: '🙏 राम राम जी! मई **' + AI_CFG.name + '** हां — थुआड़ा Himachali गाइड!\n\nमई इत मदद करी सकदा हां:\n• साड़े असल पहाड़ी माल — मखीर (शहद), घियो (घी), केसर\n• Delivery ते returns\n\nदस्सो, किसी चीज़ दी लोड़ हाई?',
+      garh: '🙏 नमस्कार! मी **' + AI_CFG.name + '** छूं — तुमारो Himalayan गाइड!\n\nमी यूँ मदद करी सकदूं:\n• हमारा Himalayan उत्पाद\n• Delivery अर returns\n\nबताओ, क्या जाणनो छ?',
+      doi: '🙏 राम राम! मैं **' + AI_CFG.name + '** आं — तुंदा Himalayan guide!\n\nमैं इत्थें मदद करी सकदा आं:\n• साडे Himalayan उत्पाद\n• Delivery ते returns\n\nदस्सो की जानना ऐ?',
+      kum: '🙏 नमस्कार! मैं **' + AI_CFG.name + '** छु — तुमर Himalayan गाइड!\n\nमैं यूँ मदद करि सकूँ:\n• हमर असली पहाड़ी उत्पाद\n• Delivery, returns\n\nबताओ क्या चनो?',
+      lad: '🙏 Juley! I am **' + AI_CFG.name + '** — your Himalayan guide!\n\nI can help with:\n• Our pure Ladakhi & Himalayan products\n• Delivery, returns\n\nYang cho dukpo? (What do you need?)',
+      or: '🙏 ନମସ୍କାର! ମୁଁ **' + AI_CFG.name + '** — ଆପଣଙ୍କର Himalayan ଗାଇଡ଼!\n\nମୁଁ ସାହାଯ୍ୟ କରିପାରିବି:\n• Himalayan ଉତ୍ପାଦ\n• Delivery, returns\n\nଆପଣ କଣ ଜାଣିବାକୁ ଚାହୁଁଛନ୍ତି?',
+      as: '🙏 নমস্কাৰ! মই **' + AI_CFG.name + '** — আপোনাৰ Himalayan গাইড!\n\nমই উপকাৰ কৰিব পাৰোঁ:\n• আমাৰ বিশুদ্ধ Himalayan সামগ্ৰী — মৌ (শহদ), ঘিউ, কেচৰ\n• Delivery আৰু returns\n\nআপুনি কি বিচাৰে? কওক!\n(আপোনাৰ = Your, মোৰ = My, বাৰু = Good, দুখ = Sad, উপকাৰ = Help)',
+      ne: '🙏 नमस्ते! म **' + AI_CFG.name + '** हुँ — तपाईंको Himalayan गाइड!\n\nमैले मद्दत गर्न सक्छु:\n• हाम्रा Himalayan उत्पादनहरू\n• Delivery, returns\n\nके जान्न चाहनुहुन्छ?',
+      ur: '🙏 آداب! میں **' + AI_CFG.name + '** ہوں — آپ کا Himalayan گائیڈ!\n\nمیں مدد کر سکتا ہوں:\n• ہمارے خالص Himalayan مصنوعات\n• Delivery, returns\n\nبتائیں، کیا جاننا ہے?',
+      nag: '🙏 Namaste! Me **' + AI_CFG.name + '** — tumhara Himalayan guide!\n\nMe help dibo pari:\n• Hamara pure Himalayan product — shahad, ghee, kesar\n• Delivery, returns\n\nBolo, ki chahiye?',
+      bodo: '🙏 Namaskar! Mwi **' + AI_CFG.name + '** — nwngni Himalayan guide!\n\nMwi help dibo:\n• Himalayan products — shahad, ghee, kesar\n• Delivery, returns\n\nBolo ki chahiye?',
+      mizo: '🙏 Chibai! Ka hming chu **' + AI_CFG.name + '** — i Himalayan guide!\n\nKa tanpui theih:\n• Himalayan products — shahad, ghee, kesar\n• Delivery, returns\n\nHe la, i duh engzat nge?',
+      khasi: '🙏 Khublei! Nga **' + AI_CFG.name + '** — ngi Himalayan guide!\n\nNga sngewbha:\n• Himalayan products — shahad, ghee, kesar\n• Delivery, returns\n\nLa hap, ia la leh?',
     };
     addMsg('bot', w[lang] || w.en, [], true);
   }
@@ -1219,143 +985,17 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     });
   }
 
-  /* ── VOICE ────────────────────────────────────────────────────────
-   * Records audio with MediaRecorder and sends it to /api/transcribe
-   * (server-side Gemini transcription) instead of relying on the
-   * browser's built-in SpeechRecognition API.
-   *
-   * SpeechRecognition doesn't exist at all in iOS Safari (or any iOS
-   * browser — they all run on WebKit) and is unreliable inside many
-   * Android in-app browsers/WebViews, so it silently failed on most
-   * phones. getUserMedia + MediaRecorder is supported everywhere
-   * (including iOS Safari 14.5+), so this works the same way on every
-   * platform.
-   * ────────────────────────────────────────────────────────────────── */
-  var mediaStream = null, mediaRec = null, audioChunks = [], voiceBusy = false;
-  var VOICE_MSG = {
-    en: { denied: '🎤 Microphone access was blocked. Please allow it in your browser settings, or just type your question.',
-          none:   '🎤 No microphone was found on this device. Please type your question instead.',
-          unsupported: '🎤 Voice input isn\'t supported in this browser. Please type your question instead.',
-          empty:  '🎤 I couldn\'t hear anything. Please try again or type your question.',
-          fail:   '🎤 Sorry, I couldn\'t transcribe that. Please try again or type your question.' },
-    hi: { denied: '🎤 माइक्रोफ़ोन की अनुमति नहीं मिली। कृपया browser settings में इसे allow करें, या अपना सवाल type करें।',
-          none:   '🎤 इस डिवाइस पर कोई माइक्रोफ़ोन नहीं मिला। कृपया type करें।',
-          unsupported: '🎤 इस browser में voice input सपोर्ट नहीं है। कृपया type करें।',
-          empty:  '🎤 कुछ सुनाई नहीं दिया। दोबारा कोशिश करें या type करें।',
-          fail:   '🎤 माफ़ करें, समझ नहीं आया। दोबारा कोशिश करें या type करें।' },
-  };
-  function voiceMsg(key){ var m = VOICE_MSG[lang] || VOICE_MSG.en; return (m[key] || VOICE_MSG.en[key]); }
-
-  // Pick the best mime type this browser's MediaRecorder can actually record.
-  function pickMimeType(){
-    var candidates = ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/mp4;codecs=mp4a.40.2','audio/aac','audio/ogg;codecs=opus'];
-    if(!('MediaRecorder' in window)) return null;
-    for(var i=0;i<candidates.length;i++){
-      if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
-    }
-    return ''; // let the browser pick its own default
-  }
-
-  function blobToBase64(blob){
-    return new Promise(function(resolve, reject){
-      var reader = new FileReader();
-      reader.onloadend = function(){
-        // reader.result is "data:<mime>;base64,<data>" — strip the prefix.
-        var res = String(reader.result || '');
-        var idx = res.indexOf(',');
-        resolve(idx >= 0 ? res.slice(idx+1) : res);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
-  function setVoiceBusy(on){
-    voiceBusy = on;
-    voice.classList.toggle('busy', on);
-  }
-
-  function stopStream(){
-    if(mediaStream){ mediaStream.getTracks().forEach(function(t){ t.stop(); }); mediaStream = null; }
-  }
-
-  function startRecording(){
-    if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !('MediaRecorder' in window)){
-      addMsg('bot', voiceMsg('unsupported')); return;
-    }
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
-      mediaStream = stream;
-      var mimeType = pickMimeType();
-      try {
-        mediaRec = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
-      } catch(e) {
-        stopStream();
-        addMsg('bot', voiceMsg('unsupported'));
-        return;
-      }
-      audioChunks = [];
-      var recStartedAt = Date.now();
-      var autoStopTimer = setTimeout(function(){ if(isRec) mediaRec.stop(); }, 60000); // 60s safety cap
-
-      mediaRec.ondataavailable = function(e){ if(e.data && e.data.size > 0) audioChunks.push(e.data); };
-      mediaRec.onerror = function(){
-        clearTimeout(autoStopTimer);
-        isRec = false; voice.classList.remove('rec'); stopStream();
-        addMsg('bot', voiceMsg('fail'));
-      };
-      mediaRec.onstop = function(){
-        clearTimeout(autoStopTimer);
-        isRec = false; voice.classList.remove('rec'); stopStream();
-
-        var recordedMs = Date.now() - recStartedAt;
-        var outMime = (mediaRec.mimeType || mimeType || 'audio/webm').split(';')[0];
-        var blob = new Blob(audioChunks, { type: outMime });
-        audioChunks = [];
-
-        if(recordedMs < 350 || blob.size < 800){
-          // Too short to contain real speech — most likely an accidental tap.
-          return;
-        }
-
-        setVoiceBusy(true);
-        blobToBase64(blob).then(function(b64){
-          return fetch('/api/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audio: b64, mimeType: outMime, lang: lang }),
-          });
-        }).then(function(res){ return res.json().then(function(data){ return { ok: res.ok, data: data }; }); })
-          .then(function(r){
-            setVoiceBusy(false);
-            if(!r.ok){ addMsg('bot', voiceMsg('fail')); return; }
-            // Gemini couldn't transcribe (down/out of quota/misconfigured) —
-            // the server asked Claude for a friendly, localized heads-up
-            // instead. Show that rather than pretending nothing was said.
-            var message = r.data && r.data.message;
-            if(message){ addMsg('bot', message); return; }
-            var text = (r.data && r.data.text || '').trim();
-            if(!text){ addMsg('bot', voiceMsg('empty')); return; }
-            input.value = text; autoR(input); input.focus();
-          }).catch(function(){
-            setVoiceBusy(false);
-            addMsg('bot', voiceMsg('fail'));
-          });
-      };
-
-      mediaRec.start();
-      isRec = true; voice.classList.add('rec');
-    }).catch(function(err){
-      var name = err && err.name;
-      if(name === 'NotAllowedError' || name === 'PermissionDeniedError'){ addMsg('bot', voiceMsg('denied')); }
-      else if(name === 'NotFoundError' || name === 'DevicesNotFoundError'){ addMsg('bot', voiceMsg('none')); }
-      else { addMsg('bot', voiceMsg('unsupported')); }
-    });
-  }
-
+  /* ── VOICE ────────────────────────────────────────────── */
   voice.addEventListener('click', function(){
-    if(voiceBusy) return; // already transcribing — ignore extra taps
-    if(isRec){ if(mediaRec && mediaRec.state !== 'inactive') mediaRec.stop(); return; }
-    startRecording();
+    if(!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)){
+      addMsg('bot','🎤 Voice works in Chrome. Please type your question!'); return;
+    }
+    if(isRec){ if(rec) rec.stop(); voice.classList.remove('rec'); isRec=false; return; }
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    rec=new SR(); rec.lang=VOICE_MAP[lang]||'en-IN'; rec.interimResults=false;
+    rec.onresult=function(e){ input.value=e.results[0][0].transcript; autoR(input); voice.classList.remove('rec'); isRec=false; };
+    rec.onerror=function(){ voice.classList.remove('rec'); isRec=false; };
+    rec.start(); voice.classList.add('rec'); isRec=true;
   });
 
   input.addEventListener('keydown', function(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} });
