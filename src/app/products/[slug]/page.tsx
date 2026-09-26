@@ -493,7 +493,19 @@ export default async function ProductPage({ params }: Props) {
 
             {/* Origin card — gated off for honey: double-checked, this exact
                 text is duplicated by Journey step 01 and Know Your Source
-                below. Left fully intact for every other product. */}
+                below. Left fully intact for every other product.
+                NEW for ghee: the shared paragraph below ("Grown at
+                altitude, harvested with traditional methods") is
+                harvest/agriculture language — it doesn't describe a dairy
+                product and reads wrong on this page, per your flag. Added
+                a ghee-specific line instead, gated on isGheePdp; every
+                other product (turmeric, tea, etc.) keeps the original
+                text exactly as-is, untouched.
+                FLAG: the replacement line below is a draft I wrote from
+                already-approved Journey copy (milk from Himachali Pahari
+                cows, Bilona churning, Himachal Pradesh) — no new claims
+                added. It wasn't given to me verbatim, so please read it
+                over before it goes live. */}
             {!isHoneyPdp && (
               <div className="pdp-origin-card">
                 <div className="pdp-origin-head">
@@ -510,7 +522,11 @@ export default async function ProductPage({ params }: Props) {
                   </div>
                   <div className="pdp-origin-text">
                     <div className="pdp-origin-region">{regionName}</div>
-                    <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
+                    {isGheePdp ? (
+                      <p>Made from the milk of Himachali Pahari cows in {regionName}, traditionally churned into ghee using the age-old Bilona method — a process passed down through generations in the mountain villages of Himachal Pradesh.</p>
+                    ) : (
+                      <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -646,7 +662,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">01 — Origin</div>
@@ -658,7 +674,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/02-milk.png" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/02-milk.png" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">02 — The Milk</div>
@@ -670,7 +686,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">03 — Bilona</div>
@@ -682,7 +698,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">04 — The Butter</div>
@@ -694,7 +710,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">05 — The Ghee</div>
@@ -706,7 +722,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">06 — The Jar</div>

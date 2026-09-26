@@ -323,24 +323,43 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
    without competing typographic layers. Not the honey stacked-
    block pattern, not a circles-on-a-dashed-line stepper. Own
    prefix .pdp-ghee-tl so it can't collide with .pdp-journey-*.
-   Product-specific by design. ── */
+   Product-specific by design.
+   v7 fixes: (1) images enlarged — was 46%/440px cap, now
+   54%/560px; (2) aspect-ratio changed 4:5 → 4:3 — the source
+   photos are mostly landscape/near-square, so a tall portrait
+   crop was cutting real content (hands, bucket) out of frame;
+   (3) row gap widened 56px → 96px and content gets its own
+   32px padding away from the spine, on top of that — the old
+   56px gap left only ~15–20px of real clearance once the image
+   grew taller than the text block (align-items:center then
+   centers the *text* on the row's own vertical middle, which is
+   dominated by the tall image — the dot at 50% was landing on
+   whatever line of text happened to sit at that midpoint, not
+   floating harmlessly in a gap); (4) headline enlarged
+   substantially, paragraph size left essentially as-is so it
+   reads as the quieter, factual line under a big headline. ── */
 .pdp-ghee-journey{background:#faf6ee;padding:64px 0 80px;margin-top:8px}
 .pdp-ghee-journey-head{text-align:center;max-width:640px;margin:0 auto;padding:0 24px}
 .pdp-ghee-journey-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
 
-.pdp-ghee-tl{position:relative;max-width:1080px;margin:64px auto 0;padding:0 24px}
+.pdp-ghee-tl{position:relative;max-width:1160px;margin:64px auto 0;padding:0 24px}
 .pdp-ghee-tl-spine{position:absolute;top:6px;bottom:6px;left:50%;width:1px;background:linear-gradient(#c8920a00,#c8920a66 8%,#c8920a66 92%,#c8920a00);transform:translateX(-50%);z-index:0}
-.pdp-ghee-tl-item{position:relative;z-index:1;display:flex;align-items:center;gap:56px;padding:50px 0}
+.pdp-ghee-tl-item{position:relative;z-index:1;display:flex;align-items:center;gap:96px;padding:56px 0}
 .pdp-ghee-tl-item.right{flex-direction:row-reverse}
 .pdp-ghee-tl-dot{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:50%;background:#c8920a;transform:translate(-50%,-50%);box-shadow:0 0 0 5px #faf6ee;z-index:2}
-.pdp-ghee-tl-media{flex:0 0 auto;width:46%;max-width:440px;aspect-ratio:4/5;border-radius:14px;overflow:hidden;box-shadow:0 20px 44px -18px rgba(26,20,10,.4)}
+.pdp-ghee-tl-media{flex:0 0 auto;width:54%;max-width:560px;aspect-ratio:4/3;border-radius:14px;overflow:hidden;box-shadow:0 20px 44px -18px rgba(26,20,10,.4)}
 .pdp-ghee-tl-media img{width:100%;height:100%;object-fit:cover;display:block}
-.pdp-ghee-tl-content{flex:1 1 0;min-width:0}
-.pdp-ghee-tl-item.right .pdp-ghee-tl-content{text-align:right}
+.pdp-ghee-tl-content{flex:1 1 0;min-width:0;padding-left:32px}
+.pdp-ghee-tl-item.right .pdp-ghee-tl-content{text-align:right;padding-left:0;padding-right:32px}
 .pdp-ghee-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
-.pdp-ghee-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(26px,2.6vw,32px);line-height:1.22;color:#1a3a1e;margin-top:10px}
-.pdp-ghee-tl-desc{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
+.pdp-ghee-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(30px,3.4vw,42px);line-height:1.18;color:#1a3a1e;margin-top:12px}
+.pdp-ghee-tl-desc{font-size:14px;color:#5a5a5a;line-height:1.65;margin-top:16px}
 
+@media(max-width:900px){
+  .pdp-ghee-tl-item,.pdp-ghee-tl-item.right{gap:44px}
+  .pdp-ghee-tl-content{padding-left:0}
+  .pdp-ghee-tl-item.right .pdp-ghee-tl-content{padding-right:0}
+}
 @media(max-width:760px){
   .pdp-ghee-tl-spine{left:20px}
   .pdp-ghee-tl-item,.pdp-ghee-tl-item.right{flex-direction:row;align-items:flex-start;gap:20px;padding-left:44px}
