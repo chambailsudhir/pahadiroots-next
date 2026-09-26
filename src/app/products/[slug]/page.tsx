@@ -491,22 +491,15 @@ export default async function ProductPage({ params }: Props) {
 
             {/* Certificate moved up near the top — see stat trio above */}
 
-            {/* Origin card — gated off for honey: double-checked, this exact
-                text is duplicated by Journey step 01 and Know Your Source
-                below. Left fully intact for every other product.
-                NEW for ghee: the shared paragraph below ("Grown at
-                altitude, harvested with traditional methods") is
-                harvest/agriculture language — it doesn't describe a dairy
-                product and reads wrong on this page, per your flag. Added
-                a ghee-specific line instead, gated on isGheePdp; every
-                other product (turmeric, tea, etc.) keeps the original
-                text exactly as-is, untouched.
-                FLAG: the replacement line below is a draft I wrote from
-                already-approved Journey copy (milk from Himachali Pahari
-                cows, Bilona churning, Himachal Pradesh) — no new claims
-                added. It wasn't given to me verbatim, so please read it
-                over before it goes live. */}
-            {!isHoneyPdp && (
+            {/* Origin card — gated off for honey AND ghee now.
+                Was gated off just for honey (this exact text duplicated
+                Journey step 01 / Know Your Source for honey). For ghee,
+                you asked to remove it outright (image 1) rather than
+                just fix its copy — so the earlier ghee-specific text
+                branch is gone; this card no longer renders for ghee at
+                all, same treatment as honey. Left fully intact, text
+                unchanged, for every other product (turmeric, tea, etc). */}
+            {!isHoneyPdp && !isGheePdp && (
               <div className="pdp-origin-card">
                 <div className="pdp-origin-head">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2" strokeLinejoin="round">
@@ -520,13 +513,10 @@ export default async function ProductPage({ params }: Props) {
                       ? <Image src={stateImg} alt={regionName} width={80} height={80} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                       : <span style={{ fontSize: '26px', lineHeight: '1' }}>{rEmoji}</span>}
                   </div>
+
                   <div className="pdp-origin-text">
                     <div className="pdp-origin-region">{regionName}</div>
-                    {isGheePdp ? (
-                      <p>Made from the milk of Himachali Pahari cows in {regionName}, traditionally churned into ghee using the age-old Bilona method — a process passed down through generations in the mountain villages of Himachal Pradesh.</p>
-                    ) : (
-                      <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
-                    )}
+                    <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
                   </div>
                 </div>
               </div>
@@ -721,8 +711,19 @@ export default async function ProductPage({ params }: Props) {
 
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {/* Jar tile only: this is the actual product shot, so
+                    losing any of it to a crop matters more here than on
+                    the lifestyle photos above — the source is a square
+                    (1254×1254) jar photo, and forcing the same 4:3
+                    landscape crop as the other five tiles was cutting
+                    the cap and base off, per your screenshot. object-fit
+                    switched to "contain" for just this one tile (via the
+                    "fit-full" modifier) so the whole jar always shows,
+                    at the cost of a bit of empty space beside it instead
+                    of a full-bleed crop — the trade-off that actually
+                    matters for a product shot. */}
+                <div className="pdp-ghee-tl-media fit-full">
+                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={640} height={640} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">06 — The Jar</div>
@@ -770,6 +771,51 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
+        {/* NEW — Why It's Different for ghee. Added per your request, but
+            deliberately NOT a reskin of honey's 4 cards — two of honey's
+            claims (Fully Certified / lab tested, and effectively High
+            Altitude Origin / Small Batch, which honey has because Mishika
+            directly confirmed them) aren't available for ghee yet: no
+            testing has happened, so a "Certified" or "Lab Tested" card
+            here would be actively false right now, not just unverified —
+            same reasoning as removing the Certifications accordion item
+            above. So all four cards below are built only from what the
+            approved Journey copy already establishes (Bilona churning,
+            Himachali Pahari cows, Himachal Pradesh, wood-fire simmering) —
+            no purity/testing/scale claims invented.
+            FLAG: this whole section is a draft — you didn't hand me
+            exact card copy for this one, so please read it before it
+            ships, same as the Origin-card text earlier. */}
+        {isGheePdp && (
+          <div className="pdp-why-diff">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Why It's Different</div>
+            </div>
+            <div className="pdp-why-diff-grid">
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🧈</div>
+                <div className="pdp-why-diff-title">Bilona Method</div>
+                <div className="pdp-why-diff-desc">Hand-churned from curd the traditional way — not machine-separated.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🐄</div>
+                <div className="pdp-why-diff-title">Pahari Cow Milk</div>
+                <div className="pdp-why-diff-desc">Made only from the milk of local Himachali Pahari cows.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🏔️</div>
+                <div className="pdp-why-diff-title">Himachal Pradesh Origin</div>
+                <div className="pdp-why-diff-desc">Prepared in the traditional mountain villages of Himachal Pradesh.</div>
+              </div>
+              <div className="pdp-why-diff-card">
+                <div className="pdp-why-diff-icon">🔥</div>
+                <div className="pdp-why-diff-title">Wood-Fire Simmered</div>
+                <div className="pdp-why-diff-desc">Slowly heated over a traditional wood fire until golden.</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* NEW — Know Your Source (additive, brand redesign). Reuses the
             same regionName/stateImg/rEmoji already fetched above for the
             Origin card — no new data source, no invented geography. */}
@@ -792,6 +838,36 @@ export default async function ProductPage({ params }: Props) {
             </div>
           </div>
         )}
+
+        {/* NEW — Know Your Source for ghee. Same component/structure as
+            honey's version above — no new data source. One deliberate
+            difference: honey hardcodes "Manali & Spiti" because that's
+            literally where those hives are. I don't have a confirmed
+            village/sub-region for the ghee cows beyond "Himachal
+            Pradesh" (that's as specific as the approved Journey copy
+            gets), so I left that hardcoded prefix out rather than guess
+            a place name — just {`{regionName}`} on its own. Fill in the
+            exact village/valley here if you have it. */}
+        {isGheePdp && (
+          <div className="pdp-source">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Know Your Source</div>
+              <h2 className="pdp-journey-title">Know Where Your Food Comes From</h2>
+            </div>
+            <div className="pdp-source-card">
+              <div className="pdp-source-img">
+                {stateImg
+                  ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                  : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
+              </div>
+              <div>
+                <div className="pdp-source-region">{regionName}</div>
+                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Journey above for the full account.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* ── Accordion section ── */}
         {!isHoneyPdp && (
@@ -832,7 +908,15 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {!isHoneyPdp && (
+            {/* Certifications — gated off for ghee too now. These badges
+                (Lab Tested, FSSAI Licensed, No Adulterants) are the exact
+                kind of unverified claim you flagged for the main
+                Benefits section — testing hasn't happened yet, so
+                showing them here would be actively false for this
+                product right now, not just a duplicate. Left unchanged
+                for every other product that already has this data
+                verified. */}
+            {!isHoneyPdp && !isGheePdp && (
               <AccItem title="Certifications" icon="cert">
                 <div className="pdp-cert-badges">
                   <div className="pdp-cert-badge">🔬 Lab Tested</div>
