@@ -91,6 +91,14 @@ export default async function ProductPage({ params }: Props) {
   const HONEY_PDP_SLUGS = ['himalayan-wild-honey', 'himalayan-wild-manali-honey']
   const isHoneyPdp = HONEY_PDP_SLUGS.includes((product.slug || '').toLowerCase().trim())
 
+  // NEW — Ghee PDP detection, same defensive pattern as isHoneyPdp above
+  // (normalized, array-based) rather than a second bare string-equality
+  // check, so a future slug rename doesn't silently drop this section the
+  // same way the honey one did. Same FLAG applies: please confirm the
+  // exact current slug for this product so it can be pinned precisely.
+  const GHEE_PDP_SLUGS = ['himachali-pahari-cow-ghee']
+  const isGheePdp = GHEE_PDP_SLUGS.includes((product.slug || '').toLowerCase().trim())
+
   const settings: SiteSettings = siteSettings as SiteSettings
 
   const freeShipMin    = parseInt(settings.free_shipping_min || '0')
@@ -600,6 +608,111 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-journey-num">07 — Your Home</div>
                 <h3 className="pdp-journey-h3">From the mountains. <em>To your table.</em></h3>
                 <p className="pdp-journey-p">Dispatched within 1–2 business days, so the same jar that left the hive reaches your kitchen with nothing changed along the way.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW — Journey section for Himachali Pahari Cow Ghee.
+            v5, after feedback that v3's images were too small (the
+            230px hard cap on .pdp-ghee-tl-media was the real culprit —
+            images now run 46% width / 440px cap, genuinely large) and
+            the text hierarchy was too flat. Dropped the oversized
+            ghost-numeral watermark entirely — the stage number now
+            lives in one small eyebrow line ("01 — Origin"), same device
+            honey uses for its per-stage number, so there's one large
+            poetic headline doing the emotional work instead of two
+            competing numeral treatments. Copy below is JK's — headline
+            carries the feeling, the paragraph stays plain and factual,
+            per his direction. Still a different structural layout from
+            honey (center-spine alternating timeline vs. honey's stacked
+            full-width rows) and from the original reference screenshot
+            (no circles, no dashed connector). Gated to this one product
+            slug only.
+            One open item still outstanding: the intro line under the
+            title ("An ancient Himalayan process...") is still mine, not
+            JK's — flag if it should go or be reworded. */}
+        {isGheePdp && (
+          <div className="pdp-ghee-journey">
+            <div className="pdp-ghee-journey-head">
+              <div className="pdp-journey-eyebrow">The Journey</div>
+              <h2 className="pdp-journey-title">From the Himalayan Hills to Your Home</h2>
+              <p className="pdp-ghee-journey-intro">An ancient Himalayan process — slow, natural, and true to how mountain families have always made ghee.</p>
+            </div>
+
+            <div className="pdp-ghee-tl">
+              <div className="pdp-ghee-tl-spine" aria-hidden="true"></div>
+
+              <div className="pdp-ghee-tl-item">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">01 — Origin</div>
+                  <h3 className="pdp-ghee-tl-title">Where the mountains begin the story.</h3>
+                  <p className="pdp-ghee-tl-desc">In the highland homes of Himachal, Pahari cows graze among the forests and mountain meadows — where a centuries-old food tradition begins.</p>
+                </div>
+              </div>
+
+              <div className="pdp-ghee-tl-item right">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/02-milk.png" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">02 — The Milk</div>
+                  <h3 className="pdp-ghee-tl-title">The first pour of something golden.</h3>
+                  <p className="pdp-ghee-tl-desc">Fresh milk from local Himachali Pahari cows becomes the beginning of a slow, traditional transformation.</p>
+                </div>
+              </div>
+
+              <div className="pdp-ghee-tl-item">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">03 — Bilona</div>
+                  <h3 className="pdp-ghee-tl-title">Churned by hand. The old way.</h3>
+                  <p className="pdp-ghee-tl-desc">Curd is patiently churned through the Bilona process, separating butter from buttermilk by a method carried through generations.</p>
+                </div>
+              </div>
+
+              <div className="pdp-ghee-tl-item right">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">04 — The Butter</div>
+                  <h3 className="pdp-ghee-tl-title">From milk, a softer beginning.</h3>
+                  <p className="pdp-ghee-tl-desc">The freshly gathered butter is carefully separated — ready for the slow transformation that follows.</p>
+                </div>
+              </div>
+
+              <div className="pdp-ghee-tl-item">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">05 — The Ghee</div>
+                  <h3 className="pdp-ghee-tl-title">Time turns butter into gold.</h3>
+                  <p className="pdp-ghee-tl-desc">Gently simmered over time, the butter transforms into fragrant, golden ghee.</p>
+                </div>
+              </div>
+
+              <div className="pdp-ghee-tl-item right">
+                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-ghee-tl-media">
+                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={600} height={750} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-tl-content">
+                  <div className="pdp-ghee-tl-eyebrow">06 — The Jar</div>
+                  <h3 className="pdp-ghee-tl-title">A mountain tradition, carried home.</h3>
+                  <p className="pdp-ghee-tl-desc">The finished Himachali Pahari Cow Ghee is carefully filled and packed under HimVeda by Pahadi Roots.</p>
+                </div>
               </div>
             </div>
           </div>
