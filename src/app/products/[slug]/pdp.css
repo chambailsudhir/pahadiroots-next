@@ -309,34 +309,40 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
 
-/* ── Ghee Journey (horizontal step-tracker — original layout,
-   deliberately NOT the honey stacked-block pattern above. Own
-   class prefix .pdp-ghee-journey / .pdp-ghee-step so it can't
-   collide with or be affected by .pdp-journey-* rules. Product-
-   specific by design — not every product gets this section. ── */
-.pdp-ghee-journey{background:#faf6ee;padding:64px 0 72px;margin-top:8px}
+/* ── Ghee Journey (editorial vertical timeline — own visual
+   language: rectangular photos, a center spine, alternating
+   left/right cards, oversized ghost-numerals as a typographic
+   device. Not the honey stacked-block pattern, not a circles-
+   on-a-dashed-line stepper. Own prefix .pdp-ghee-tl so it can't
+   collide with .pdp-journey-*. Product-specific by design. ── */
+.pdp-ghee-journey{background:#faf6ee;padding:64px 0 80px;margin-top:8px}
 .pdp-ghee-journey-head{text-align:center;max-width:640px;margin:0 auto;padding:0 24px}
 .pdp-ghee-journey-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
-.pdp-ghee-steps{position:relative;display:flex;justify-content:space-between;gap:8px;max-width:1180px;margin:56px auto 0;padding:0 40px}
-.pdp-ghee-steps-line{position:absolute;top:70px;left:104px;right:104px;height:1px;background-image:repeating-linear-gradient(to right,#c8920a 0 8px,transparent 8px 18px);z-index:0}
-.pdp-ghee-step{position:relative;z-index:1;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6px}
-.pdp-ghee-step-media{width:140px;height:140px;border-radius:50%;overflow:hidden;border:3px solid #fff9ee;box-shadow:0 12px 28px -12px rgba(26,20,10,.4);background:#e9dcbb;flex-shrink:0}
-.pdp-ghee-step-media img{width:100%;height:100%;object-fit:cover;display:block}
-.pdp-ghee-step-media.icon-only{display:flex;align-items:center;justify-content:center}
-.pdp-ghee-step-text{margin-top:16px}
-.pdp-ghee-step-num{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:12.5px;letter-spacing:2px;color:#c8920a}
-.pdp-ghee-step-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:19px;color:#1a3a1e;margin-top:4px}
-.pdp-ghee-step-desc{font-size:12.5px;color:#5a5a5a;line-height:1.55;margin-top:8px}
-@media(max-width:900px){
-  .pdp-ghee-steps{flex-wrap:wrap;row-gap:36px;column-gap:0;padding:0 24px}
-  .pdp-ghee-steps-line{display:none}
-  .pdp-ghee-step{flex:0 0 33.33%}
-}
-@media(max-width:560px){
-  .pdp-ghee-steps{flex-direction:column;align-items:stretch;gap:26px;padding:0 24px}
-  .pdp-ghee-step{flex-direction:row;text-align:left;gap:16px;padding:0}
-  .pdp-ghee-step-media{width:84px;height:84px}
-  .pdp-ghee-step-text{margin-top:0}
+
+.pdp-ghee-tl{position:relative;max-width:980px;margin:56px auto 0;padding:0 24px}
+.pdp-ghee-tl-spine{position:absolute;top:6px;bottom:6px;left:50%;width:1px;background:linear-gradient(#c8920a00,#c8920a66 8%,#c8920a66 92%,#c8920a00);transform:translateX(-50%);z-index:0}
+.pdp-ghee-tl-item{position:relative;z-index:1;display:flex;align-items:center;gap:44px;padding:38px 0}
+.pdp-ghee-tl-item.right{flex-direction:row-reverse}
+.pdp-ghee-tl-dot{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:50%;background:#c8920a;transform:translate(-50%,-50%);box-shadow:0 0 0 5px #faf6ee;z-index:2}
+.pdp-ghee-tl-media{flex:0 0 auto;width:38%;max-width:230px;aspect-ratio:4/5;border-radius:14px;overflow:hidden;box-shadow:0 18px 36px -16px rgba(26,20,10,.4)}
+.pdp-ghee-tl-media img{width:100%;height:100%;object-fit:cover;display:block}
+.pdp-ghee-tl-content{flex:1 1 0;min-width:0;position:relative}
+.pdp-ghee-tl-item.right .pdp-ghee-tl-content{text-align:right}
+.pdp-ghee-tl-ghost{position:absolute;top:-34px;font-family:var(--font-playfair),'Playfair Display',serif;font-size:88px;line-height:1;color:#1a3a1e;opacity:.07;left:0;z-index:0;pointer-events:none}
+.pdp-ghee-tl-item.right .pdp-ghee-tl-ghost{left:auto;right:0}
+.pdp-ghee-tl-eyebrow{position:relative;z-index:1;font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
+.pdp-ghee-tl-title{position:relative;z-index:1;font-family:var(--font-playfair),'Playfair Display',serif;font-size:24px;color:#1a3a1e;margin-top:6px}
+.pdp-ghee-tl-desc{position:relative;z-index:1;font-size:14px;color:#5a5a5a;line-height:1.7;margin-top:10px;max-width:340px}
+.pdp-ghee-tl-item.right .pdp-ghee-tl-desc{margin-left:auto}
+
+@media(max-width:760px){
+  .pdp-ghee-tl-spine{left:20px}
+  .pdp-ghee-tl-item,.pdp-ghee-tl-item.right{flex-direction:row;align-items:flex-start;gap:20px;padding-left:44px}
+  .pdp-ghee-tl-dot{left:20px}
+  .pdp-ghee-tl-media{width:88px;max-width:88px;aspect-ratio:1/1;border-radius:50%;flex-shrink:0}
+  .pdp-ghee-tl-content,.pdp-ghee-tl-item.right .pdp-ghee-tl-content{text-align:left}
+  .pdp-ghee-tl-ghost,.pdp-ghee-tl-item.right .pdp-ghee-tl-ghost{left:auto;right:0;top:-24px;font-size:56px}
+  .pdp-ghee-tl-desc,.pdp-ghee-tl-item.right .pdp-ghee-tl-desc{margin-left:0}
 }
 
 /* ── Why It's Different ── */
