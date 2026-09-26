@@ -643,12 +643,14 @@ export default async function ProductPage({ params }: Props) {
         <div className="pdp-acc-section">
           <div className="pdp-acc-list">
 
-            <AccItem title="Description" icon="desc" open>
-              {/* BUG FIX (02): sanitized above with server-safe sanitizeHtml() */}
-              <div dangerouslySetInnerHTML={{ __html: descHtml }} />
-            </AccItem>
+            {product.slug !== 'himalayan-wild-honey' && (
+              <AccItem title="Description" icon="desc" open>
+                {/* BUG FIX (02): sanitized above with server-safe sanitizeHtml() */}
+                <div dangerouslySetInnerHTML={{ __html: descHtml }} />
+              </AccItem>
+            )}
 
-            {howToUse.length > 0 && (
+            {product.slug !== 'himalayan-wild-honey' && howToUse.length > 0 && (
               <AccItem title="How to Use" icon="how">
                 <ul>
                   {howToUse.map((s: any, i: number) => (
@@ -658,7 +660,7 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {storageTips.length > 0 && (
+            {product.slug !== 'himalayan-wild-honey' && storageTips.length > 0 && (
               <AccItem title="Storage Tips" icon="storage">
                 <ul>
                   {storageTips.map((s: any, i: number) => (
@@ -668,21 +670,23 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {whoHtml && (
+            {product.slug !== 'himalayan-wild-honey' && whoHtml && (
               <AccItem title="Who Should Buy" icon="who">
                 {/* BUG FIX (02): sanitized above with server-safe sanitizeHtml() */}
                 <div dangerouslySetInnerHTML={{ __html: whoHtml }} />
               </AccItem>
             )}
 
-            <AccItem title="Certifications" icon="cert">
-              <div className="pdp-cert-badges">
-                <div className="pdp-cert-badge">🔬 Lab Tested</div>
-                <div className="pdp-cert-badge">🌿 100% Natural</div>
-                <div className="pdp-cert-badge">🏛️ FSSAI Licensed</div>
-                <div className="pdp-cert-badge">✅ No Adulterants</div>
-              </div>
-            </AccItem>
+            {product.slug !== 'himalayan-wild-honey' && (
+              <AccItem title="Certifications" icon="cert">
+                <div className="pdp-cert-badges">
+                  <div className="pdp-cert-badge">🔬 Lab Tested</div>
+                  <div className="pdp-cert-badge">🌿 100% Natural</div>
+                  <div className="pdp-cert-badge">🏛️ FSSAI Licensed</div>
+                  <div className="pdp-cert-badge">✅ No Adulterants</div>
+                </div>
+              </AccItem>
+            )}
 
             <AccItem title="Shipping" icon="ship">
               <strong>Pan India Shipping</strong><br /><br />
@@ -740,7 +744,8 @@ export default async function ProductPage({ params }: Props) {
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Colour</div><div className="pdp-why-diff-desc">Can shift lighter or darker between harvests depending on the season's bloom.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Aroma &amp; Taste</div><div className="pdp-why-diff-desc">Floral character varies with whatever was blooming at harvest time.</div></div>
-              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — a sign of purity, not spoilage.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — a sign of purity, not spoilage. Warm the jar gently in lukewarm water if you prefer it liquid.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Storage</div><div className="pdp-why-diff-desc">Keep it cool and dark in an airtight glass jar — avoid plastic and direct sunlight.</div></div>
             </div>
           </div>
         )}
