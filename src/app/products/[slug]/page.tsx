@@ -306,6 +306,19 @@ export default async function ProductPage({ params }: Props) {
           {/* LEFT: Gallery */}
           <div className="pdp-img-col">
             <ProductGallery images={allImages} productName={product.name} savings={savings} />
+
+            {/* NEW — Stat trio + Certificate, moved here below the gallery
+                images per Mishika's marked location (Sept 2026). Stat trio
+                is honey-specific (gated); Certificate is generic/shared and
+                shown for any product with an active certificate linked. */}
+            {isHoneyPdp && (
+              <div className="pdp-stat-trio">
+                <div><div className="pdp-stat-num">2</div><div className="pdp-stat-label">Himalayan Origins</div></div>
+                <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Unfiltered</div></div>
+                <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
+              </div>
+            )}
+            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
           </div>
 
           {/* RIGHT: Info */}
@@ -322,27 +335,6 @@ export default async function ProductPage({ params }: Props) {
             {product.short_description && (
               <p className="pdp-tagline">{product.short_description}</p>
             )}
-
-            {/* NEW — Stat trio (additive, brand redesign).
-                FLAG for Mishika: page.tsx is the SHARED template for every
-                product (turmeric, tea, shilajit, etc.), but this copy is
-                honey-specific. Gated to this one slug for the demo so it
-                doesn't show wrong stats on other products — before wider
-                rollout this needs a real per-product data field (e.g. an
-                ai_stat_trio / highlights column) instead of hardcoded text. */}
-            {isHoneyPdp && (
-              <div className="pdp-stat-trio">
-                <div><div className="pdp-stat-num">2</div><div className="pdp-stat-label">Himalayan Origins</div></div>
-                <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Unfiltered</div></div>
-                <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
-              </div>
-            )}
-
-            {/* Certificate — gated by the site-wide "show_certificates" admin
-                toggle (CertificatesTab) AND by this product having an active
-                certificate linked. Either being off hides the card. Moved up
-                here, near the title, per Mishika's marked location. */}
-            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
 
             {/* BUG FIX (3.3 + 3.6): Rating row — no longer hardcoded to 4.8/39.
                 Only shown when real review data exists (reviewStats from DB).
