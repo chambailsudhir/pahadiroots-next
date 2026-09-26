@@ -324,6 +324,12 @@ export default async function ProductPage({ params }: Props) {
               </div>
             )}
 
+            {/* Certificate — gated by the site-wide "show_certificates" admin
+                toggle (CertificatesTab) AND by this product having an active
+                certificate linked. Either being off hides the card. Moved up
+                here, near the title, per Mishika's marked location. */}
+            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
+
             {/* BUG FIX (3.3 + 3.6): Rating row — no longer hardcoded to 4.8/39.
                 Only shown when real review data exists (reviewStats from DB).
                 The "(N reviews)" span now scrolls to the reviews section on
@@ -457,31 +463,32 @@ export default async function ProductPage({ params }: Props) {
                 : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro 3–5 days · Others 7–12 days`}
             </div>
 
-            {/* Certificate — gated by the site-wide "show_certificates" admin
-                toggle (CertificatesTab) AND by this product having an active
-                certificate linked. Either being off hides the card. */}
-            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
+            {/* Certificate moved up near the top — see stat trio above */}
 
-            {/* Origin card */}
-            <div className="pdp-origin-card">
-              <div className="pdp-origin-head">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2" strokeLinejoin="round">
-                  <polygon points="3 20 9 8 13 14 16 10 21 20" /><circle cx="18.5" cy="5.5" r="1.5" fill="#f0c840" stroke="none" />
-                </svg>
-                Himalayan Origin Story
-              </div>
-              <div className="pdp-origin-body">
-                <div className="pdp-origin-map">
-                  {stateImg
-                    ? <Image src={stateImg} alt={regionName} width={80} height={80} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                    : <span style={{ fontSize: '26px', lineHeight: '1' }}>{rEmoji}</span>}
+            {/* Origin card — gated off for honey: double-checked, this exact
+                text is duplicated by Journey step 01 and Know Your Source
+                below. Left fully intact for every other product. */}
+            {product.slug !== 'himalayan-wild-honey' && (
+              <div className="pdp-origin-card">
+                <div className="pdp-origin-head">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2" strokeLinejoin="round">
+                    <polygon points="3 20 9 8 13 14 16 10 21 20" /><circle cx="18.5" cy="5.5" r="1.5" fill="#f0c840" stroke="none" />
+                  </svg>
+                  Himalayan Origin Story
                 </div>
-                <div className="pdp-origin-text">
-                  <div className="pdp-origin-region">{regionName}</div>
-                  <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
+                <div className="pdp-origin-body">
+                  <div className="pdp-origin-map">
+                    {stateImg
+                      ? <Image src={stateImg} alt={regionName} width={80} height={80} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                      : <span style={{ fontSize: '26px', lineHeight: '1' }}>{rEmoji}</span>}
+                  </div>
+                  <div className="pdp-origin-text">
+                    <div className="pdp-origin-region">{regionName}</div>
+                    <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
           </div>
         </div>
@@ -580,114 +587,6 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* NEW — Journey section for Himachali Pahari Cow Ghee.
-            Rebuilt again after feedback that v2 (circles + dashed line)
-            read as a copy of the reference screenshot's structure rather
-            than something original. This version is a different visual
-            language entirely: a vertical center spine with alternating
-            left/right cards, rectangular photos, and oversized
-            low-opacity numerals used as a typographic device — not
-            copied from honey's stacked blocks or from the reference
-            image's stepper. Own CSS prefix .pdp-ghee-tl in pdp.css.
-            Gated to this one product slug only.
-            "02 — The Milk" now uses the dedicated milking photo supplied
-            afterward (public/journey/ghee/02-milk.png) — the earlier
-            line-art-icon placeholder is gone, all six stages now use real
-            photography. One open item remains: the intro line under the
-            title is new copy I wrote (not in your approved list) —
-            edit/remove freely. */}
-        {product.slug === 'himachali-pahari-cow-ghee' && (
-          <div className="pdp-ghee-journey">
-            <div className="pdp-ghee-journey-head">
-              <div className="pdp-journey-eyebrow">The Journey</div>
-              <h2 className="pdp-journey-title">From the Himalayan Hills to Your Home</h2>
-              <p className="pdp-ghee-journey-intro">An ancient Himalayan process — slow, natural, and true to how mountain families have always made ghee.</p>
-            </div>
-
-            <div className="pdp-ghee-tl">
-              <div className="pdp-ghee-tl-spine" aria-hidden="true"></div>
-
-              <div className="pdp-ghee-tl-item">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">01</div>
-                  <div className="pdp-ghee-tl-eyebrow">Origin</div>
-                  <h3 className="pdp-ghee-tl-title">Where it begins</h3>
-                  <p className="pdp-ghee-tl-desc">Made from the milk of local Himachali Pahari cows, rooted in the traditional food culture of Himachal Pradesh.</p>
-                </div>
-              </div>
-
-              <div className="pdp-ghee-tl-item right">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/02-milk.png" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">02</div>
-                  <div className="pdp-ghee-tl-eyebrow">The Milk</div>
-                  <h3 className="pdp-ghee-tl-title">The foundation</h3>
-                  <p className="pdp-ghee-tl-desc">Milk from Himachali Pahari cows forms the foundation of this traditionally crafted ghee.</p>
-                </div>
-              </div>
-
-              <div className="pdp-ghee-tl-item">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">03</div>
-                  <div className="pdp-ghee-tl-eyebrow">Bilona</div>
-                  <h3 className="pdp-ghee-tl-title">An old craft</h3>
-                  <p className="pdp-ghee-tl-desc">The curd is traditionally churned using the Bilona method, a time-honoured process of making ghee.</p>
-                </div>
-              </div>
-
-              <div className="pdp-ghee-tl-item right">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">04</div>
-                  <div className="pdp-ghee-tl-eyebrow">The Butter</div>
-                  <h3 className="pdp-ghee-tl-title">Slowly gathered</h3>
-                  <p className="pdp-ghee-tl-desc">The butter separated through churning becomes the foundation for the next stage.</p>
-                </div>
-              </div>
-
-              <div className="pdp-ghee-tl-item">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">05</div>
-                  <div className="pdp-ghee-tl-eyebrow">The Ghee</div>
-                  <h3 className="pdp-ghee-tl-title">Golden by nature</h3>
-                  <p className="pdp-ghee-tl-desc">The butter is gently heated until it transforms into rich, aromatic golden ghee.</p>
-                </div>
-              </div>
-
-              <div className="pdp-ghee-tl-item right">
-                <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
-                <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={400} height={500} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-                <div className="pdp-ghee-tl-content">
-                  <div className="pdp-ghee-tl-ghost" aria-hidden="true">06</div>
-                  <div className="pdp-ghee-tl-eyebrow">The Jar</div>
-                  <h3 className="pdp-ghee-tl-title">To your home</h3>
-                  <p className="pdp-ghee-tl-desc">Carefully filled and packed under HimVeda by Pahadi Roots.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* NEW — Why It's Different (additive, brand redesign). Gated to
             honey. Claims used: Raw & Unfiltered / Lab Tested & Certified are
             the existing verified label + certificate data; High Altitude
@@ -741,13 +640,14 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div>
                 <div className="pdp-source-region">Manali &amp; Spiti, {regionName}</div>
-                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Origin Story above for the full account.</p>
+                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Journey above for the full account.</p>
               </div>
             </div>
           </div>
         )}
 
         {/* ── Accordion section ── */}
+        {product.slug !== 'himalayan-wild-honey' && (
         <div className="pdp-acc-section">
           <div className="pdp-acc-list">
 
@@ -796,23 +696,28 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            <AccItem title="Shipping" icon="ship">
-              <strong>Pan India Shipping</strong><br /><br />
-              {freeShipMin === 0
-                ? 'Free shipping on all orders · COD available. '
-                : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. COD available. `}
-              Dispatched within <strong>1–2 business days</strong>.<br />
-              Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
-            </AccItem>
+            {product.slug !== 'himalayan-wild-honey' && (
+              <AccItem title="Shipping" icon="ship">
+                <strong>Pan India Shipping</strong><br /><br />
+                {freeShipMin === 0
+                  ? 'Free shipping on all orders · COD available. '
+                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. COD available. `}
+                Dispatched within <strong>1–2 business days</strong>.<br />
+                Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
+              </AccItem>
+            )}
 
-            <AccItem title="Returns & Refunds" icon="returns">
-              ✅ <strong>Eligible:</strong> Damaged, defective or wrong item — report within <strong>48 hours</strong> with photo/video.<br /><br />
-              ❌ <strong>Not eligible:</strong> Opened/used edible products or items reported after 48 hours.<br /><br />
-              WhatsApp +91 {waNumDisplay} with order number & photo. Refunds within <strong>7–10 business days</strong>.
-            </AccItem>
+            {product.slug !== 'himalayan-wild-honey' && (
+              <AccItem title="Returns & Refunds" icon="returns">
+                ✅ <strong>Eligible:</strong> Damaged, defective or wrong item — report within <strong>48 hours</strong> with photo/video.<br /><br />
+                ❌ <strong>Not eligible:</strong> Opened/used edible products or items reported after 48 hours.<br /><br />
+                WhatsApp +91 {waNumDisplay} with order number & photo. Refunds within <strong>7–10 business days</strong>.
+              </AccItem>
+            )}
 
           </div>
         </div>
+        )}
 
         {/* NEW — How to Enjoy, visual redesign of the existing How to Use
             accordion content (additive, brand redesign). Reuses the same
@@ -871,7 +776,7 @@ export default async function ProductPage({ params }: Props) {
             </div>
             <div className="pdp-acc-list">
               <AccItem title="Where is the honey sourced?" icon="who">
-                Manali &amp; Spiti, Himachal Pradesh — see the Origin Story above for the full account.
+                Manali &amp; Spiti, Himachal Pradesh — see the Journey above for the full account.
               </AccItem>
               <AccItem title="Is it raw and unfiltered?" icon="desc">
                 Yes, always — see Description above for details.
@@ -886,6 +791,21 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
               <AccItem title="How can I verify my batch?" icon="cert">
                 [ADD VERIFIED SOURCE INFORMATION] — batch-level traceability isn't available yet.
+              </AccItem>
+
+              <AccItem title="Shipping" icon="ship">
+                <strong>Pan India Shipping</strong><br /><br />
+                {freeShipMin === 0
+                  ? 'Free shipping on all orders · COD available. '
+                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. COD available. `}
+                Dispatched within <strong>1–2 business days</strong>.<br />
+                Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
+              </AccItem>
+
+              <AccItem title="Returns & Refunds" icon="returns">
+                ✅ <strong>Eligible:</strong> Damaged, defective or wrong item — report within <strong>48 hours</strong> with photo/video.<br /><br />
+                ❌ <strong>Not eligible:</strong> Opened/used edible products or items reported after 48 hours.<br /><br />
+                WhatsApp +91 {waNumDisplay} with order number & photo. Refunds within <strong>7–10 business days</strong>.
               </AccItem>
             </div>
           </div>
