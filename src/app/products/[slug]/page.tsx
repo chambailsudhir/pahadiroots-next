@@ -580,92 +580,101 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* NEW — Journey story section for Himachali Pahari Cow Ghee
-            (additive, brand redesign). Same pattern as the honey block
-            above — gated to this one product slug, generic .pdp-journey
-            classes reused as-is (no CSS changes needed). Photos are the
-            real ones supplied for this product, saved to
-            /public/journey/ghee/. Copy is original — not reused from the
-            honey section.
-            NOTE for Mishika/JK: there was no dedicated "fresh milk" photo
-            among the 6 images supplied, so stage 02 (The Milk) uses a
-            text placeholder tile — same pattern already used for honey's
-            "05 — Testing" stage above (.pdp-journey-media.placeholder).
-            One supplied photo (the ghee being strained through cloth into
-            the brass pot) wasn't used, to avoid re-using a near-duplicate
-            image back-to-back with the "05 — The Ghee" photo — it's still
-            in the uploads if you'd rather swap it in for the Milk
-            placeholder or elsewhere. Flagging both for approval. */}
+        {/* NEW — Journey section for Himachali Pahari Cow Ghee.
+            Deliberately its own layout — a horizontal step-tracker with
+            circular photo icons on a connecting line — NOT the honey
+            section's stacked alternating-block pattern. Own CSS prefix
+            (.pdp-ghee-journey / .pdp-ghee-step in pdp.css), gated to this
+            one product slug only; other products are untouched and don't
+            need to carry this section at all.
+            NOTE for Mishika/JK: the intro line under the title ("An
+            ancient Himalayan process...") is new copy I wrote to fill the
+            space under the heading the way the reference layout does —
+            it wasn't in your approved list, so flag/edit/remove as you
+            like; every other line is your approved copy verbatim.
+            The "02 — The Milk" circle still has no dedicated photo (see
+            prior note) — it now shows a small line-art droplet icon
+            instead of the earlier text placeholder, since a paragraph of
+            text doesn't fit a small circle. Swap in a real photo any time
+            by replacing the icon-only div with an <Image>, same as the
+            other five steps. */}
         {product.slug === 'himachali-pahari-cow-ghee' && (
-          <div className="pdp-journey">
-            <div className="pdp-journey-head">
+          <div className="pdp-ghee-journey">
+            <div className="pdp-ghee-journey-head">
               <div className="pdp-journey-eyebrow">The Journey</div>
               <h2 className="pdp-journey-title">From the Himalayan Hills to Your Home</h2>
+              <p className="pdp-ghee-journey-intro">An ancient Himalayan process — slow, natural, and true to how mountain families have always made ghee.</p>
             </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">01 — Origin</div>
-                <h3 className="pdp-journey-h3">Where it begins. <em>In the mountain homes of Himachal.</em></h3>
-                <p className="pdp-journey-p">Made from the milk of local Himachali Pahari cows, rooted in the traditional food culture of Himachal Pradesh.</p>
-              </div>
-            </div>
+            <div className="pdp-ghee-steps">
+              <div className="pdp-ghee-steps-line" aria-hidden="true"></div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media placeholder">
-                <div className="pdp-journey-placeholder-text">Milk from Himachali Pahari cows, gathered fresh from mountain homes</div>
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media">
+                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={280} height={280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">01</div>
+                  <div className="pdp-ghee-step-title">Origin</div>
+                  <p className="pdp-ghee-step-desc">Made from the milk of local Himachali Pahari cows, rooted in the traditional food culture of Himachal Pradesh.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">02 — The Milk</div>
-                <h3 className="pdp-journey-h3">From local Pahari cows. <em>The beginning of something golden.</em></h3>
-                <p className="pdp-journey-p">Milk from Himachali Pahari cows forms the foundation of this traditionally crafted ghee.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media icon-only" aria-hidden="true">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#c8920a" strokeWidth="1.4">
+                    <path d="M12 3c3 4 5.5 7.2 5.5 10.2a5.5 5.5 0 1 1-11 0C6.5 10.2 9 7 12 3Z" />
+                  </svg>
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">02</div>
+                  <div className="pdp-ghee-step-title">The Milk</div>
+                  <p className="pdp-ghee-step-desc">Milk from Himachali Pahari cows forms the foundation of this traditionally crafted ghee.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">03 — Bilona</div>
-                <h3 className="pdp-journey-h3">An old craft. <em>Churned the traditional way.</em></h3>
-                <p className="pdp-journey-p">The curd is traditionally churned using the Bilona method, following a time-honoured process of making ghee.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media">
-                <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media">
+                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={280} height={280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">03</div>
+                  <div className="pdp-ghee-step-title">Bilona</div>
+                  <p className="pdp-ghee-step-desc">The curd is traditionally churned using the Bilona method, a time-honoured process of making ghee.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">04 — The Butter</div>
-                <h3 className="pdp-journey-h3">Slowly gathered. <em>Carefully transformed.</em></h3>
-                <p className="pdp-journey-p">The butter separated through the traditional churning process becomes the foundation for the next stage.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media">
+                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={280} height={280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">04</div>
+                  <div className="pdp-ghee-step-title">The Butter</div>
+                  <p className="pdp-ghee-step-desc">The butter separated through churning becomes the foundation for the next stage.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">05 — The Ghee</div>
-                <h3 className="pdp-journey-h3">Slowly simmered. <em>Golden by nature.</em></h3>
-                <p className="pdp-journey-p">The butter is gently heated until it transforms into rich, aromatic golden ghee.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media">
-                <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media">
+                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={280} height={280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">05</div>
+                  <div className="pdp-ghee-step-title">The Ghee</div>
+                  <p className="pdp-ghee-step-desc">The butter is gently heated until it transforms into rich, aromatic golden ghee.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">06 — The Jar</div>
-                <h3 className="pdp-journey-h3">From a mountain tradition. <em>To your home.</em></h3>
-                <p className="pdp-journey-p">The finished Himachali Pahari Cow Ghee is carefully filled and packed under HimVeda by Pahadi Roots.</p>
+
+              <div className="pdp-ghee-step">
+                <div className="pdp-ghee-step-media">
+                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={280} height={280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-ghee-step-text">
+                  <div className="pdp-ghee-step-num">06</div>
+                  <div className="pdp-ghee-step-title">The Jar</div>
+                  <p className="pdp-ghee-step-desc">Carefully filled and packed under HimVeda by Pahadi Roots.</p>
+                </div>
               </div>
             </div>
           </div>

@@ -309,6 +309,36 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
 
+/* ── Ghee Journey (horizontal step-tracker — original layout,
+   deliberately NOT the honey stacked-block pattern above. Own
+   class prefix .pdp-ghee-journey / .pdp-ghee-step so it can't
+   collide with or be affected by .pdp-journey-* rules. Product-
+   specific by design — not every product gets this section. ── */
+.pdp-ghee-journey{background:#faf6ee;padding:64px 0 72px;margin-top:8px}
+.pdp-ghee-journey-head{text-align:center;max-width:640px;margin:0 auto;padding:0 24px}
+.pdp-ghee-journey-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
+.pdp-ghee-steps{position:relative;display:flex;justify-content:space-between;gap:8px;max-width:1180px;margin:56px auto 0;padding:0 40px}
+.pdp-ghee-steps-line{position:absolute;top:70px;left:104px;right:104px;height:1px;background-image:repeating-linear-gradient(to right,#c8920a 0 8px,transparent 8px 18px);z-index:0}
+.pdp-ghee-step{position:relative;z-index:1;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6px}
+.pdp-ghee-step-media{width:140px;height:140px;border-radius:50%;overflow:hidden;border:3px solid #fff9ee;box-shadow:0 12px 28px -12px rgba(26,20,10,.4);background:#e9dcbb;flex-shrink:0}
+.pdp-ghee-step-media img{width:100%;height:100%;object-fit:cover;display:block}
+.pdp-ghee-step-media.icon-only{display:flex;align-items:center;justify-content:center}
+.pdp-ghee-step-text{margin-top:16px}
+.pdp-ghee-step-num{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:12.5px;letter-spacing:2px;color:#c8920a}
+.pdp-ghee-step-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:19px;color:#1a3a1e;margin-top:4px}
+.pdp-ghee-step-desc{font-size:12.5px;color:#5a5a5a;line-height:1.55;margin-top:8px}
+@media(max-width:900px){
+  .pdp-ghee-steps{flex-wrap:wrap;row-gap:36px;column-gap:0;padding:0 24px}
+  .pdp-ghee-steps-line{display:none}
+  .pdp-ghee-step{flex:0 0 33.33%}
+}
+@media(max-width:560px){
+  .pdp-ghee-steps{flex-direction:column;align-items:stretch;gap:26px;padding:0 24px}
+  .pdp-ghee-step{flex-direction:row;text-align:left;gap:16px;padding:0}
+  .pdp-ghee-step-media{width:84px;height:84px}
+  .pdp-ghee-step-text{margin-top:0}
+}
+
 /* ── Why It's Different ── */
 .pdp-why-diff{padding:56px 32px 20px;max-width:1180px;margin:0 auto}
 .pdp-why-diff-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;max-width:1100px;margin:0 auto}
