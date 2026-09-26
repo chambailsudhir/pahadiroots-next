@@ -40,7 +40,7 @@ export default function Footer({ settings }: Props) {
   // at all), and Pinterest wasn't rendered anywhere despite the admin
   // panel already having a field for it.
   const instagramUrl = settings.social_instagram || 'https://www.instagram.com/5pahadiroots/?hl=en'
-  const facebookUrl  = settings.social_facebook  || 'https://www.facebook.com/pahadiroots'
+  const facebookUrl  = settings.social_facebook  || 'https://www.facebook.com/HimVedaByPahadiRoots'
   const youtubeUrl   = settings.social_youtube   || 'https://www.youtube.com/@pahadiroots'
   const twitterUrl   = settings.social_twitter   || 'https://twitter.com/pahadiroots'
   // No fabricated fallback for Pinterest — the admin panel has no default

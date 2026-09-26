@@ -465,6 +465,7 @@ export default async function ProductPage({ params }: Props) {
               productSlug={product.slug}
               productImage={product.image_url}
               productPrice={displayPrice}
+              facebookUrl={settings.social_facebook}
               instagramUrl={settings.social_instagram}
               youtubeUrl={settings.social_youtube}
             />
@@ -889,19 +890,23 @@ function AccItem({ title, icon, open = false, children }: {
   )
 }
 
-function ShareRow({ productName, productSlug, productImage, productPrice, instagramUrl, youtubeUrl }: {
+function ShareRow({ productName, productSlug, productImage, productPrice, facebookUrl, instagramUrl, youtubeUrl }: {
   productName: string; productSlug: string; productImage: string | null; productPrice: number
-  instagramUrl?: string; youtubeUrl?: string
+  facebookUrl?: string; instagramUrl?: string; youtubeUrl?: string
 }) {
   const url = `https://www.pahadiroots.com/products/${productSlug}`
   const waText = encodeURIComponent(`🌿 Check out *${productName}* at ₹${productPrice} on HimVeda by Pahadi Roots!\n🏔️ Pure Himalayan, directly from mountain farmers.\n👉 ${url}`)
-  // Instagram and YouTube have no public "share this URL" intent the way
-  // WhatsApp/Facebook/X/Telegram/Pinterest do, so these two open the
-  // brand's own profile (same social_instagram/social_youtube values the
-  // footer uses, kept from getSiteSettings so admin edits apply everywhere)
-  // rather than a share dialog for this specific product.
+  // Facebook, Instagram and YouTube all now open the brand's own page/
+  // profile (social_facebook/social_instagram/social_youtube from
+  // getSiteSettings, same values the footer uses) instead of a share
+  // dialog for this one product — Facebook's sharer.php intent was
+  // technically working, but it dropped a visitor into a share composer
+  // instead of the brand's actual page, which read as "broken" from the
+  // click. Instagram/YouTube never had a share-intent option to begin
+  // with, so they were already follow links.
+  const fbUrl = facebookUrl  || 'https://www.facebook.com/HimVedaByPahadiRoots'
   const igUrl = instagramUrl || 'https://www.instagram.com/5pahadiroots/?hl=en'
-  const ytUrl = youtubeUrl || 'https://www.youtube.com/@pahadiroots'
+  const ytUrl = youtubeUrl   || 'https://www.youtube.com/@pahadiroots'
   return (
     <div className="pdp-share-row">
       <span className="pdp-share-label">Share on</span>
@@ -909,14 +914,11 @@ function ShareRow({ productName, productSlug, productImage, productPrice, instag
         <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-wa" title="WhatsApp">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12.004 2.003A9.997 9.997 0 002.007 12c0 1.762.461 3.418 1.268 4.861L2.003 22l5.29-1.247A9.952 9.952 0 0012.004 22c5.523 0 9.997-4.477 9.997-9.998A9.997 9.997 0 0012.004 2.003z"/></svg>
         </a>
-        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-fb" title="Facebook">
+        <a href={fbUrl} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-fb" title="Facebook">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#1877f2"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.791-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.883v2.271h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
         </a>
         <a href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(productName + ' — HimVeda by Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-tw" title="X / Twitter">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#000"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.74l7.73-8.835L1.254 2.25H8.08l4.261 5.633 5.903-5.633zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-        </a>
-        <a href={`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(productName)}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-tg" title="Telegram">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="#229ed9"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
         </a>
         <a href={`https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&media=${encodeURIComponent(productImage || '')}&description=${encodeURIComponent(productName + ' — HimVeda by Pahadi Roots')}`} target="_blank" rel="noopener noreferrer" className="pdp-share-btn pdp-share-pin" title="Pinterest">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="#e60023"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 01.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
