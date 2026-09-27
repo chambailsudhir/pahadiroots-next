@@ -740,30 +740,45 @@ export default async function ProductPage({ params }: Props) {
             the existing verified label + certificate data; High Altitude
             Origin and Small Batch are per Mishika's direct confirmation
             (Sept 2026) — no specific altitude figure or batch size is
-            stated since neither is verified/available. */}
+            stated since neither is verified/available.
+            v12: emoji replaced with your own illustration set (sepia
+            version, chosen over the full-color one — no red anywhere
+            else in the brand system, and sepia matches the ghee
+            illustrations already in place, so both product pages read as
+            one brand system). Cropped straight from your composite image,
+            same img-card component built for ghee. public/why-different/
+            honey/. */}
         {isHoneyPdp && (
           <div className="pdp-why-diff">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">Why It's Different</div>
             </div>
             <div className="pdp-why-diff-grid">
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🍯</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/honey/raw-unfiltered.png" alt="Honeycomb dripping raw honey into a bowl" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Raw &amp; Unfiltered</div>
                 <div className="pdp-why-diff-desc">Never heated or filtered — drained straight from the comb.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🏔️</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/honey/high-altitude.png" alt="Beehives set high in the Himalayan mountains" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">High Altitude Origin</div>
                 <div className="pdp-why-diff-desc">Harvested from wild hives set high in the Himalayas, above Manali and Spiti.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🐝</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/honey/small-batch.png" alt="Beekeeper hand-harvesting a honeycomb frame" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Small Batch</div>
                 <div className="pdp-why-diff-desc">Small, seasonal harvests — not mass-produced.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">✅</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/honey/certified.png" alt="Honey jar beside an FSSAI certificate" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Fully Certified</div>
                 <div className="pdp-why-diff-desc">FSSAI licensed and lab tested for purity, heavy metals, pesticides &amp; active ingredients.</div>
               </div>
