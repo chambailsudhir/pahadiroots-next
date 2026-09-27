@@ -315,37 +315,41 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
 
-/* ── Sea Buckthorn Journey (v2) — editorial photo-bleed chapters ──
-   Each photo fades into the section's cream background via a
-   mask-image feather (both outer edges) plus an organic torn-paper
-   clip-path (direction mirrored depending on which side the image
-   sits), instead of the rectangular-card treatment v1 used. */
-.sbj-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
-.sbj-row{display:flex;align-items:center;gap:12px;max-width:1180px;margin:0 auto;padding:36px 24px}
-.sbj-row.rev{flex-direction:row-reverse}
-.sbj-image-wrap{position:relative;flex:1.15 1 0;min-width:0;min-height:340px;overflow:hidden;background:transparent;
-  -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.35) 5%,#000 14%,#000 86%,rgba(0,0,0,.35) 95%,transparent 100%);
-  mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.35) 5%,#000 14%,#000 86%,rgba(0,0,0,.35) 95%,transparent 100%);
+/* ── Sea Buckthorn Journey (v3) — rebuilt on the same vertical-timeline
+   language as the ghee journey below (center spine, alternating
+   left/right, stage number as a small eyebrow), replacing v2's
+   torn-paper photo-bleed treatment so the two product journeys read
+   as one consistent brand system. Own prefix .pdp-sb-tl, same reason
+   ghee's block gives for its own prefix: keeps this from colliding
+   with .pdp-journey-* (honey) or .pdp-ghee-tl-* (ghee) if any one of
+   the three is tuned later without touching the others. */
+.pdp-sb-journey{background:#faf6ee;padding:64px 0 80px;margin-top:8px}
+.pdp-sb-journey-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
+
+.pdp-sb-tl{position:relative;max-width:1160px;margin:64px auto 0;padding:0 24px}
+.pdp-sb-tl-spine{position:absolute;top:6px;bottom:6px;left:50%;width:1px;background:linear-gradient(#c8920a00,#c8920a66 8%,#c8920a66 92%,#c8920a00);transform:translateX(-50%);z-index:0}
+.pdp-sb-tl-item{position:relative;z-index:1;display:flex;align-items:center;gap:96px;padding:56px 0}
+.pdp-sb-tl-item.right{flex-direction:row-reverse}
+.pdp-sb-tl-dot{position:absolute;left:50%;top:50%;width:9px;height:9px;border-radius:50%;background:#c8920a;transform:translate(-50%,-50%);box-shadow:0 0 0 5px #faf6ee;z-index:2}
+.pdp-sb-tl-media{flex:0 0 auto;width:54%;max-width:560px;aspect-ratio:4/3;border-radius:14px;overflow:hidden;box-shadow:0 20px 44px -18px rgba(26,20,10,.4)}
+.pdp-sb-tl-media img{width:100%;height:100%;object-fit:cover;display:block}
+.pdp-sb-tl-content{flex:1 1 0;min-width:0;padding-left:32px}
+.pdp-sb-tl-item.right .pdp-sb-tl-content{text-align:right;padding-left:0;padding-right:32px}
+.pdp-sb-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
+.pdp-sb-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(30px,3.4vw,42px);line-height:1.18;color:#1a3a1e;margin-top:12px}
+.pdp-sb-tl-desc{font-size:14px;color:#5a5a5a;line-height:1.65;margin-top:16px}
+
+@media(max-width:900px){
+  .pdp-sb-tl-item,.pdp-sb-tl-item.right{gap:44px}
+  .pdp-sb-tl-content{padding-left:0}
+  .pdp-sb-tl-item.right .pdp-sb-tl-content{padding-right:0}
 }
-.sbj-image{width:100%;height:100%;min-height:340px;object-fit:cover;display:block}
-.sbj-text{flex:1 1 0;min-width:0}
-.sbj-num{font-size:11.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#c8920a;font-family:'Josefin Sans',sans-serif}
-.sbj-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:26px;color:#1a3a1e;margin-top:12px;line-height:1.25}
-.sbj-desc{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px;max-width:420px}
-/* torn-paper edge, mirrored by which side the image sits on */
-.sbj-left{clip-path:polygon(2% 4%,96% 0,100% 22%,97% 46%,100% 70%,95% 97%,4% 100%,0 76%,4% 52%,0 26%)}
-.sbj-right{clip-path:polygon(4% 0,98% 4%,100% 26%,96% 52%,100% 76%,96% 100%,3% 97%,0 70%,5% 46%,1% 22%)}
-/* Bottle tile: real product shot (can + bottle) — same reasoning as the
-   ghee jar tile above, an organic crop risks cutting into the actual
-   product, so it keeps the feather mask but skips the clip-path cutout. */
-.sbj-fit-full{clip-path:none}
 @media(max-width:760px){
-  .sbj-row,.sbj-row.rev{flex-direction:column;gap:16px;padding:28px 20px}
-  .sbj-image-wrap{clip-path:none;min-height:220px;
-    -webkit-mask-image:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.35) 6%,#000 16%,#000 84%,rgba(0,0,0,.35) 94%,transparent 100%);
-    mask-image:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.35) 6%,#000 16%,#000 84%,rgba(0,0,0,.35) 94%,transparent 100%);
-  }
-  .sbj-image{min-height:220px}
+  .pdp-sb-tl-spine{left:20px}
+  .pdp-sb-tl-item,.pdp-sb-tl-item.right{flex-direction:row;align-items:flex-start;gap:20px;padding-left:44px}
+  .pdp-sb-tl-dot{left:20px}
+  .pdp-sb-tl-media{width:100px;max-width:100px;aspect-ratio:1/1;border-radius:50%;flex-shrink:0}
+  .pdp-sb-tl-content,.pdp-sb-tl-item.right .pdp-sb-tl-content{text-align:left}
 }
 
 /* ── Ghee Journey (editorial vertical timeline — own visual
