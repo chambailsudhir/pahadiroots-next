@@ -86,9 +86,20 @@ export default async function ProductPage({ params }: Props) {
   // new section again. FLAG: this is still slug-string matching, which is
   // inherently fragile to a future rename — the durable fix is a real
   // per-product flag/column (e.g. has_premium_pdp) instead of matching
-  // text. Please confirm the exact current slug (check the browser address
-  // bar on the product page) so this can be pinned precisely.
-  const HONEY_PDP_SLUGS = ['himalayan-wild-honey', 'himalayan-wild-manali-honey']
+  // text.
+  //
+  // BUG FIX (confirmed against the live site): the Spiti Valley journey/
+  // photoset this whole section was built for lives on
+  // 'himalayan-spiti-valley-multiflora-honey' — a third slug that was never
+  // added to this list. Confirmed live: the Journey section was completely
+  // absent from https://www.pahadiroots.com/products/himalayan-spiti-valley-multiflora-honey
+  // and the Origin card (which this same flag is supposed to hide for honey)
+  // was still showing there. Added below.
+  const HONEY_PDP_SLUGS = [
+    'himalayan-wild-honey',
+    'himalayan-wild-manali-honey',
+    'himalayan-spiti-valley-multiflora-honey',
+  ]
   const isHoneyPdp = HONEY_PDP_SLUGS.includes((product.slug || '').toLowerCase().trim())
 
   // NEW — Ghee PDP detection, same defensive pattern as isHoneyPdp above
