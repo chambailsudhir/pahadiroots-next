@@ -384,8 +384,21 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-why-diff-icon{font-size:26px}
 .pdp-why-diff-icon.icon-svg{width:60px;height:60px;margin:0 auto;border-radius:50%;background:#f6efdd;display:flex;align-items:center;justify-content:center}
 .pdp-why-diff-icon.icon-svg svg{width:30px;height:30px}
-.pdp-why-diff-icon.icon-img{width:100%;aspect-ratio:16/10;overflow:hidden;border-radius:12px 12px 0 0;margin-bottom:14px}
-.pdp-why-diff-icon.icon-img img{width:100%;height:100%;object-fit:cover;display:block}
+/* ── Why It's Different — decorative chrome added to match Mishika's
+   reference banner (leaf icon, gold flanking lines on the heading, a
+   short gold underline beneath each card title, faint corner botanical
+   line art). The 4 photo cards were already wired in; this is purely the
+   surrounding frame, so it doesn't touch .pdp-why-diff-grid/-card/-icon
+   at all. ── */
+.pdp-why-diff{position:relative;overflow:hidden}
+.pdp-why-diff-head{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:28px}
+.pdp-why-diff-head-row{display:flex;align-items:center;gap:18px}
+.pdp-why-diff-rule{width:64px;height:1px;background:#c8920a}
+.pdp-why-diff-underline{display:block;width:34px;height:2px;background:#c8920a;margin:8px auto 10px}
+.pdp-why-diff::before,.pdp-why-diff::after{content:'';position:absolute;top:0;width:120px;height:120px;background-repeat:no-repeat;background-size:contain;opacity:.35;pointer-events:none;z-index:0}
+.pdp-why-diff::before{left:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23c8920a' stroke-width='1'%3E%3Cpath d='M10 100 Q20 60 15 20'/%3E%3Cpath d='M15 20 Q30 30 25 50'/%3E%3Cpath d='M15 40 Q35 45 30 65'/%3E%3Cpath d='M18 60 Q40 60 38 80'/%3E%3C/g%3E%3C/svg%3E")}
+.pdp-why-diff::after{right:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%231a3a1e' stroke-width='1'%3E%3Cpath d='M110 90 L85 50 70 70 50 30 20 90Z'/%3E%3C/g%3E%3C/svg%3E")}
+.pdp-why-diff-grid{position:relative;z-index:1}
 .pdp-why-diff-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:15px;color:#1a3a1e;margin-top:10px;font-weight:700}
 .pdp-why-diff-desc{font-size:12.5px;color:#5a5a5a;margin-top:6px;line-height:1.5}
 @media(max-width:760px){.pdp-why-diff-grid{grid-template-columns:1fr 1fr}}

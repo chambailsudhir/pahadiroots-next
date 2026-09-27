@@ -750,8 +750,16 @@ export default async function ProductPage({ params }: Props) {
             honey/. */}
         {isHoneyPdp && (
           <div className="pdp-why-diff">
-            <div className="pdp-journey-head">
-              <div className="pdp-journey-eyebrow">Why It's Different</div>
+            <div className="pdp-why-diff-head">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1a3a1e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2c-4 3-6 7-4 12 1.5 3.5 4 5 4 8 0-3 2.5-4.5 4-8 2-5 0-9-4-12z" />
+                <path d="M12 22V10" />
+              </svg>
+              <div className="pdp-why-diff-head-row">
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+                <div className="pdp-journey-eyebrow">Why It's Different</div>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+              </div>
             </div>
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card img-card">
@@ -759,6 +767,7 @@ export default async function ProductPage({ params }: Props) {
                   <Image src="/why-different/honey/raw-unfiltered.png" alt="Honeycomb dripping raw honey into a bowl" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Raw &amp; Unfiltered</div>
+                <span className="pdp-why-diff-underline" aria-hidden="true"></span>
                 <div className="pdp-why-diff-desc">Never heated or filtered — drained straight from the comb.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
@@ -766,6 +775,7 @@ export default async function ProductPage({ params }: Props) {
                   <Image src="/why-different/honey/high-altitude.png" alt="Beehives set high in the Himalayan mountains" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">High Altitude Origin</div>
+                <span className="pdp-why-diff-underline" aria-hidden="true"></span>
                 <div className="pdp-why-diff-desc">Harvested from wild hives set high in the Himalayas, above Manali and Spiti.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
@@ -773,6 +783,7 @@ export default async function ProductPage({ params }: Props) {
                   <Image src="/why-different/honey/small-batch.png" alt="Beekeeper hand-harvesting a honeycomb frame" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Small Batch</div>
+                <span className="pdp-why-diff-underline" aria-hidden="true"></span>
                 <div className="pdp-why-diff-desc">Small, seasonal harvests — not mass-produced.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
@@ -780,6 +791,7 @@ export default async function ProductPage({ params }: Props) {
                   <Image src="/why-different/honey/certified.png" alt="Honey jar beside an FSSAI certificate" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Fully Certified</div>
+                <span className="pdp-why-diff-underline" aria-hidden="true"></span>
                 <div className="pdp-why-diff-desc">FSSAI licensed and lab tested for purity, heavy metals, pesticides &amp; active ingredients.</div>
               </div>
             </div>
