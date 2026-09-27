@@ -743,26 +743,95 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* NEW — Journey section for Sea Buckthorn. Per direct instruction,
-            this does NOT follow the honey/ghee row-per-step pattern —
-            it renders the user's own single pre-composed story image
-            exactly as supplied, full width, no re-layout into separate
-            steps. Gated to this one product slug only, same pattern as
-            isHoneyPdp/isGheePdp above. Source: public/journey/
-            sea-buckthorn-story.jpg (converted from the original PNG,
-            3.0MB -> ~475KB, same visual quality, so Next/Image isn't
-            optimizing an unnecessarily large source on every request). */}
+        {/* NEW — Journey section for Sea Buckthorn, v2. v1 rendered the
+            user's single pre-composed infographic as one flat image —
+            per feedback (with a comparison to how honey/ghee's journeys
+            feel like part of the page, not a pasted-in card), rebuilt as
+            individual chapters in the honey/ghee spirit, but with an
+            editorial photo-bleed treatment instead of rectangular cards:
+            each photo has a feathered (mask-image) fade at its outer
+            edges plus an organic torn-paper clip-path, alternating
+            left/right, so the photo dissolves into the section's cream
+            background instead of sitting in a box. Photos are cropped
+            straight from the original infographic (public/journey/
+            sea-buckthorn/*.jpg) — same source images, just isolated from
+            the baked-in text so real HTML text can sit next to them.
+            Order/pairing (odd steps = text-left/image-right, even steps
+            = image-left/text-right) mirrors the original infographic's
+            own layout. Gated to this one product slug only, same pattern
+            as isHoneyPdp/isGheePdp above. */}
         {isSeaBuckthornPdp && (
-          <div className="pdp-journey">
-            <div className="pdp-journey-single">
-              <Image
-                src="/journey/sea-buckthorn-story.jpg"
-                alt="A Journey Rooted in Nature — from the Himalayas to your home: the land, the berry, the harvest, the extraction, the pulp, and the bottle"
-                width={724}
-                height={2172}
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-                sizes="(max-width: 760px) 100vw, 640px"
-              />
+          <div className="pdp-journey sbj-section">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">The Journey</div>
+              <h2 className="pdp-journey-title">A Journey Rooted in Nature</h2>
+              <p className="sbj-intro">From the Himalayas to your home — a story of pristine landscapes, pure ingredients, and people who keep traditions alive.</p>
+            </div>
+
+            <div className="sbj-row rev">
+              <div className="sbj-image-wrap sbj-right">
+                <Image src="/journey/sea-buckthorn/01-land.jpg" alt="Himalayan valley with a glacial river, snow peaks and pine forest" width={768} height={540} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">01 — The Land</div>
+                <h3 className="sbj-title">Pure Beginnings</h3>
+                <p className="sbj-desc">High in the untouched Himalayas, where clean air, pure water and abundant biodiversity create the perfect home for nature's treasures.</p>
+              </div>
+            </div>
+
+            <div className="sbj-row">
+              <div className="sbj-image-wrap sbj-left">
+                <Image src="/journey/sea-buckthorn/02-berry.jpg" alt="Wild Sea Buckthorn berries growing on the branch" width={820} height={470} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">02 — The Berry</div>
+                <h3 className="sbj-title">Nature's Superfood</h3>
+                <p className="sbj-desc">Wild Sea Buckthorn berries, rich in nutrients, grow naturally in harsh mountain conditions, developing a rare strength and purity.</p>
+              </div>
+            </div>
+
+            <div className="sbj-row rev">
+              <div className="sbj-image-wrap sbj-right">
+                <Image src="/journey/sea-buckthorn/03-harvest.jpg" alt="A harvester hand-picking Sea Buckthorn berries in the mountains" width={788} height={500} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">03 — The Harvest</div>
+                <h3 className="sbj-title">By Hand, With Care</h3>
+                <p className="sbj-desc">Local families and skilled harvesters collect the berries during the short season, following traditional and sustainable methods.</p>
+              </div>
+            </div>
+
+            <div className="sbj-row">
+              <div className="sbj-image-wrap sbj-left">
+                <Image src="/journey/sea-buckthorn/04-extraction.jpg" alt="Fresh Sea Buckthorn pulp being pressed and extracted" width={820} height={490} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">04 — The Extraction</div>
+                <h3 className="sbj-title">Gentle &amp; Natural</h3>
+                <p className="sbj-desc">Fresh berries are carefully processed to extract the rich, nutrient-dense pulp — without artificial additives, preserving its natural goodness.</p>
+              </div>
+            </div>
+
+            <div className="sbj-row rev">
+              <div className="sbj-image-wrap sbj-right">
+                <Image src="/journey/sea-buckthorn/05-pulp.jpg" alt="Vibrant Sea Buckthorn pulp being lifted with a wooden spoon" width={788} height={500} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">05 — The Pulp</div>
+                <h3 className="sbj-title">Rich by Nature</h3>
+                <p className="sbj-desc">The result is a vibrant, nutrient-packed Sea Buckthorn pulp, full of natural vitamins, omegas and antioxidants.</p>
+              </div>
+            </div>
+
+            <div className="sbj-row">
+              <div className="sbj-image-wrap sbj-left sbj-fit-full">
+                <Image src="/journey/sea-buckthorn/06-bottle.jpg" alt="HimVeda by Pahadi Roots Sea Buckthorn Pulp can and bottle" width={1000} height={944} className="sbj-image" />
+              </div>
+              <div className="sbj-text">
+                <div className="sbj-num">06 — The Bottle</div>
+                <h3 className="sbj-title">Purity Preserved</h3>
+                <p className="sbj-desc">Carefully packed to bring you the same Himalayan purity, so you can experience the goodness of Sea Buckthorn in your daily life.</p>
+              </div>
             </div>
           </div>
         )}

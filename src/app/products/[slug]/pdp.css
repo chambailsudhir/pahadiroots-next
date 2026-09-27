@@ -315,18 +315,38 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
 
-/* Sea Buckthorn — single pre-composed story image, not the row layout above.
-   v2: was previously boxed as a card (rounded corners, drop shadow) — per
-   feedback that made it look like a separate pasted-in image rather than
-   part of the page. Both removed entirely so it sits flush against the
-   section's own background, which is already a near-exact match to the
-   image's own cream tone (#faf6ee vs the image's own #f9f7f0), so the
-   edges blend rather than reading as a framed insert. Kept at the
-   image's native width (724px, no upscaling — going wider than that
-   would blur it) rather than stretched to the page's full content width.
-*/
-.pdp-journey-single{max-width:724px;margin:0 auto;padding:0}
-.pdp-journey-single img{display:block}
+/* ── Sea Buckthorn Journey (v2) — editorial photo-bleed chapters ──
+   Each photo fades into the section's cream background via a
+   mask-image feather (both outer edges) plus an organic torn-paper
+   clip-path (direction mirrored depending on which side the image
+   sits), instead of the rectangular-card treatment v1 used. */
+.sbj-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px}
+.sbj-row{display:flex;align-items:center;gap:12px;max-width:1180px;margin:0 auto;padding:36px 24px}
+.sbj-row.rev{flex-direction:row-reverse}
+.sbj-image-wrap{position:relative;flex:1.15 1 0;min-width:0;min-height:340px;overflow:hidden;background:transparent;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.35) 5%,#000 14%,#000 86%,rgba(0,0,0,.35) 95%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0%,rgba(0,0,0,.35) 5%,#000 14%,#000 86%,rgba(0,0,0,.35) 95%,transparent 100%);
+}
+.sbj-image{width:100%;height:100%;min-height:340px;object-fit:cover;display:block}
+.sbj-text{flex:1 1 0;min-width:0}
+.sbj-num{font-size:11.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#c8920a;font-family:'Josefin Sans',sans-serif}
+.sbj-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:26px;color:#1a3a1e;margin-top:12px;line-height:1.25}
+.sbj-desc{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px;max-width:420px}
+/* torn-paper edge, mirrored by which side the image sits on */
+.sbj-left{clip-path:polygon(2% 4%,96% 0,100% 22%,97% 46%,100% 70%,95% 97%,4% 100%,0 76%,4% 52%,0 26%)}
+.sbj-right{clip-path:polygon(4% 0,98% 4%,100% 26%,96% 52%,100% 76%,96% 100%,3% 97%,0 70%,5% 46%,1% 22%)}
+/* Bottle tile: real product shot (can + bottle) — same reasoning as the
+   ghee jar tile above, an organic crop risks cutting into the actual
+   product, so it keeps the feather mask but skips the clip-path cutout. */
+.sbj-fit-full{clip-path:none}
+@media(max-width:760px){
+  .sbj-row,.sbj-row.rev{flex-direction:column;gap:16px;padding:28px 20px}
+  .sbj-image-wrap{clip-path:none;min-height:220px;
+    -webkit-mask-image:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.35) 6%,#000 16%,#000 84%,rgba(0,0,0,.35) 94%,transparent 100%);
+    mask-image:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.35) 6%,#000 16%,#000 84%,rgba(0,0,0,.35) 94%,transparent 100%);
+  }
+  .sbj-image{min-height:220px}
+}
 
 /* ── Ghee Journey (editorial vertical timeline — own visual
    language: large rectangular photos on a center spine,
