@@ -785,30 +785,46 @@ export default async function ProductPage({ params }: Props) {
             no purity/testing/scale claims invented.
             FLAG: this whole section is a draft — you didn't hand me
             exact card copy for this one, so please read it before it
-            ships, same as the Origin-card text earlier. */}
+            ships, same as the Origin-card text earlier.
+            v11: replaced with your own illustration set, cropped from the
+            composite image you sent (public/why-different/ghee/) — this
+            is real branded artwork now, not a generic upgrade attempt on
+            my end. Each of the four is a straight crop of the matching
+            panel from your image, no edits beyond the crop itself. The
+            v10 SVG line-icon fallback is gone. Note honey's own Why It's
+            Different cards above still use emoji — out of scope here,
+            say the word if you want those updated too. */}
         {isGheePdp && (
           <div className="pdp-why-diff">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">Why It's Different</div>
             </div>
             <div className="pdp-why-diff-grid">
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🧈</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/ghee/bilona.png" alt="Traditional Bilona churn and freshly gathered butter" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Bilona Method</div>
                 <div className="pdp-why-diff-desc">Hand-churned from curd the traditional way — not machine-separated.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🐄</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/ghee/cow.png" alt="Himachali Pahari cow and calf" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Pahari Cow Milk</div>
                 <div className="pdp-why-diff-desc">Made only from the milk of local Himachali Pahari cows.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🏔️</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/ghee/village.png" alt="Mountain village in Himachal Pradesh" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Himachal Pradesh Origin</div>
                 <div className="pdp-why-diff-desc">Prepared in the traditional mountain villages of Himachal Pradesh.</div>
               </div>
-              <div className="pdp-why-diff-card">
-                <div className="pdp-why-diff-icon">🔥</div>
+              <div className="pdp-why-diff-card img-card">
+                <div className="pdp-why-diff-icon icon-img">
+                  <Image src="/why-different/ghee/fire.png" alt="Kadai simmering over a traditional wood fire" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div className="pdp-why-diff-title">Wood-Fire Simmered</div>
                 <div className="pdp-why-diff-desc">Slowly heated over a traditional wood fire until golden.</div>
               </div>
