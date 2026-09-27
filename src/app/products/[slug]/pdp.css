@@ -315,9 +315,18 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-journey-media.placeholder{background:#e9dcbb;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .pdp-journey-placeholder-text{font-size:13px;color:#8a7346;max-width:220px}
 
-/* Sea Buckthorn — single pre-composed story image, not the row layout above */
-.pdp-journey-single{max-width:640px;margin:0 auto;padding:0 24px 24px;border-radius:14px;overflow:hidden}
-.pdp-journey-single img{border-radius:14px;box-shadow:0 16px 40px -18px rgba(26,20,10,.35)}
+/* Sea Buckthorn — single pre-composed story image, not the row layout above.
+   v2: was previously boxed as a card (rounded corners, drop shadow) — per
+   feedback that made it look like a separate pasted-in image rather than
+   part of the page. Both removed entirely so it sits flush against the
+   section's own background, which is already a near-exact match to the
+   image's own cream tone (#faf6ee vs the image's own #f9f7f0), so the
+   edges blend rather than reading as a framed insert. Kept at the
+   image's native width (724px, no upscaling — going wider than that
+   would blur it) rather than stretched to the page's full content width.
+*/
+.pdp-journey-single{max-width:724px;margin:0 auto;padding:0}
+.pdp-journey-single img{display:block}
 
 /* ── Ghee Journey (editorial vertical timeline — own visual
    language: large rectangular photos on a center spine,
