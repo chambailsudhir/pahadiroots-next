@@ -102,6 +102,24 @@ export default async function ProductPage({ params }: Props) {
   ]
   const isHoneyPdp = HONEY_PDP_SLUGS.includes((product.slug || '').toLowerCase().trim())
 
+  // BUG FIX (found while checking the Manali page live): the Journey
+  // timeline below (photos + per-stage copy, e.g. "the high, arid valleys
+  // of Spiti...") was hardcoded to one photoset and shown for every slug in
+  // HONEY_PDP_SLUGS. That's fine for the shared sections above (stat trio,
+  // Why It's Different, Know Your Source, FAQ — all already written
+  // generically as "Manali & Spiti") but the Journey itself is a specific
+  // photo story, and Manali's page was showing Spiti's hives, Spiti's
+  // monastery, and copy that literally says "Spiti, Himachal Pradesh".
+  // Split into per-slug flags so each product's Journey only renders its
+  // own confirmed photoset. 'himalayan-wild-honey' has no photoset of its
+  // own yet, so it deliberately gets neither Journey below until one is
+  // provided — showing Spiti's or Manali's images on it would repeat the
+  // exact same bug.
+  const productSlugNorm = (product.slug || '').toLowerCase().trim()
+  const isSpitiHoneyPdp = productSlugNorm === 'himalayan-spiti-valley-multiflora-honey'
+  const isManaliHoneyPdp = productSlugNorm === 'himalayan-wild-manali-honey'
+  const hasHoneyJourney = isSpitiHoneyPdp || isManaliHoneyPdp
+
   // NEW — Ghee PDP detection, same defensive pattern as isHoneyPdp above
   // (normalized, array-based) rather than a second bare string-equality
   // check, so a future slug rename doesn't silently drop this section the
@@ -517,8 +535,14 @@ export default async function ProductPage({ params }: Props) {
                 just fix its copy — so the earlier ghee-specific text
                 branch is gone; this card no longer renders for ghee at
                 all, same treatment as honey. Left fully intact, text
-                unchanged, for every other product (turmeric, tea, etc). */}
-            {!isHoneyPdp && !isGheePdp && (
+                unchanged, for every other product (turmeric, tea, etc).
+
+                BUG FIX: was gated on the broad isHoneyPdp (all 3 honey
+                slugs), so 'himalayan-wild-honey' — which has no Journey
+                photoset yet — lost its Origin card with nothing put in
+                its place. Narrowed to hasHoneyJourney so the card only
+                disappears where a real Journey actually replaces it. */}
+            {!hasHoneyJourney && !isGheePdp && (
               <div className="pdp-origin-card">
                 <div className="pdp-origin-head">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2" strokeLinejoin="round">
@@ -551,8 +575,14 @@ export default async function ProductPage({ params }: Props) {
             /public/journey/honey/. Rolling this out to other products
             means either writing a per-product version of this block or
             moving this content into an admin-editable field + a generic
-            component that maps images/copy per product. */}
-        {isHoneyPdp && (
+            component that maps images/copy per product.
+
+            BUG FIX: was gated on isHoneyPdp, so this Spiti-specific
+            photoset + copy ("the high, arid valleys of Spiti...") was also
+            rendering on the Manali page. Narrowed to isSpitiHoneyPdp; see
+            the isManaliHoneyPdp block right after this one for Manali's
+            own version. */}
+        {isSpitiHoneyPdp && (
           <div className="pdp-journey">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">The Journey</div>
@@ -640,6 +670,98 @@ export default async function ProductPage({ params }: Props) {
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
                   <h3 className="pdp-honey-tl-title">Strained, jarred, and ready to travel.</h3>
                   <p className="pdp-honey-tl-desc">The raw honey is strained once for clarity and sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* NEW — Journey story section for Himalayan Wild Manali Honey.
+            Added as its own block (mirrors isSpitiHoneyPdp above) rather
+            than reusing that one, since the photoset and every line of
+            copy are specific to Manali — sharing the block was the exact
+            bug being fixed here. Photos are the real ones sent for this
+            product, saved to /public/journey/manali-honey/. */}
+        {isManaliHoneyPdp && (
+          <div className="pdp-journey">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">The Journey</div>
+              <h2 className="pdp-journey-title">From the Himalayas to Your Home</h2>
+              <p className="pdp-honey-journey-intro">From the wild slopes above Manali to the finished jar — a story of alpine blooms, working hives and the people who tend them.</p>
+            </div>
+
+            <div className="pdp-honey-tl">
+              <div className="pdp-honey-tl-spine" aria-hidden="true"></div>
+
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/01-origin.jpg" alt="Beehives on a forested Himalayan ridge above Manali at sunrise, with snow-capped peaks and a river valley below" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">01 — Origin</div>
+                  <h3 className="pdp-honey-tl-title">Where the pine line meets the snow.</h3>
+                  <p className="pdp-honey-tl-desc">Above Manali, Himachal Pradesh, hives sit on forested slopes between the valley and the high peaks — closer to the tree line than to any town.</p>
+                </div>
+              </div>
+
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/02-blooms.jpg" alt="A wide alpine meadow of white wildflowers below the snow-capped mountains near Manali" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">02 — The Blooms</div>
+                  <h3 className="pdp-honey-tl-title">Meadows that bloom on their own terms.</h3>
+                  <p className="pdp-honey-tl-desc">Wildflowers carpet the high meadows each summer, unplanted and unmanaged, exactly as they have for generations.</p>
+                </div>
+              </div>
+
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/03-bees.jpg" alt="Bees foraging on wild white blossoms with the Himalayan mountains and a river valley behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">03 — The Bees</div>
+                  <h3 className="pdp-honey-tl-title">A living relationship with the mountain.</h3>
+                  <p className="pdp-honey-tl-desc">Local beekeepers tend the hives through the season, working alongside bees that forage the wildflowers rising across the slopes.</p>
+                </div>
+              </div>
+
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/04-harvest.jpg" alt="A beekeeper holding up a honeycomb frame dripping with honey, mountains in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">04 — The Harvest</div>
+                  <h3 className="pdp-honey-tl-title">Lifted by hand, frame by frame.</h3>
+                  <p className="pdp-honey-tl-desc">Each honeycomb frame is checked and drawn out at the hive itself, the same unhurried way it has always been done here.</p>
+                </div>
+              </div>
+
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/05-extraction.jpg" alt="A honeycomb frame being uncapped by hand above a stainless steel extraction vessel" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">05 — The Extraction</div>
+                  <h3 className="pdp-honey-tl-title">Uncapped and drawn out, never heated.</h3>
+                  <p className="pdp-honey-tl-desc">The wax caps are sliced away and the comb is spun in a stainless steel extractor, letting the honey flow free without any cooking or pressing.</p>
+                </div>
+              </div>
+
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/manali-honey/06-jar.jpg" alt="A jar of HimVeda by Pahadi Roots Himalayan Multiflora Honey from Manali, set among wildflowers with hives and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
+                  <h3 className="pdp-honey-tl-title">Sealed close to where it was drawn.</h3>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained once for clarity and sealed into glass, carrying the mountain above Manali all the way to your table.</p>
                 </div>
               </div>
             </div>
