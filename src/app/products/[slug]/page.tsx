@@ -546,82 +546,90 @@ export default async function ProductPage({ params }: Props) {
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">The Journey</div>
               <h2 className="pdp-journey-title">From the Himalayas to Your Home</h2>
+              <p className="pdp-honey-journey-intro">From the high valleys of Spiti to the finished jar — a story of wild blooms, working hives and the people who tend them.</p>
             </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/01-origin.png" alt="Beehives on a Himalayan hillside at sunrise" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">01 — Origin</div>
-                <h3 className="pdp-journey-h3">Where it begins. <em>High above Manali.</em></h3>
-                <p className="pdp-journey-p">Sourced directly from farming families in Himachal Pradesh — hives set on the forested slopes above Manali, grown at altitude and harvested with traditional methods.</p>
-              </div>
-            </div>
+            {/* NEW — Honey journey, v2. Rebuilt on the same vertical-timeline
+                layout as the ghee and sea-buckthorn journeys further down
+                this page (center spine, alternating left/right rows), with
+                a fresh six-stage photoset shot specifically for Spiti Valley
+                Multiflora Honey. Replaces the old seven-stage stacked-row
+                layout (Origin/Landscape/Harvest/Handling/Testing/Bottling/
+                Your Home) — see pdp-honey-tl comment in pdp.css for what
+                happened to Testing and Your Home. */}
+            <div className="pdp-honey-tl">
+              <div className="pdp-honey-tl-spine" aria-hidden="true"></div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/02-landscape.png" alt="Bees foraging on wild Himalayan blossoms" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/01-origin-v2.jpg" alt="A high Spiti Valley monastery above the river, with beehives and wildflowers in the foreground" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">01 — Origin</div>
+                  <h3 className="pdp-honey-tl-title">Where the high valleys keep their secrets.</h3>
+                  <p className="pdp-honey-tl-desc">In the high, arid valleys of Spiti, Himachal Pradesh, hives sit above ten thousand feet, far from any city, farmed the way mountain families always have.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">02 — Landscape</div>
-                <h3 className="pdp-journey-h3">The flowers behind it. <em>Wild, not planted.</em></h3>
-                <p className="pdp-journey-p">Wildflowers, rhododendrons, and medicinal herbs growing at high altitude give this honey its distinct floral character.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/03-harvest.png" alt="Beekeeper lifting a honeycomb frame" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/02-blooms.jpg" alt="A bee foraging on wild Himalayan blossoms with the Spiti Valley in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">02 — The Blooms</div>
+                  <h3 className="pdp-honey-tl-title">Wild flowers, never planted.</h3>
+                  <p className="pdp-honey-tl-desc">Alpine blossoms grow scattered across the barren slopes each summer, drawing bees in for the short window nature allows.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">03 — Harvest</div>
-                <h3 className="pdp-journey-h3">Lifted by hand. <em>Frame by frame.</em></h3>
-                <p className="pdp-journey-p">Each frame is checked and lifted by hand at the hive, the way it has always been done here.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/04-handling.png" alt="Honeycomb being strained into raw honey" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/03-bees.jpg" alt="Bees swarming a wooden hive box among wildflowers, with the Spiti river and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">03 — The Bees</div>
+                  <h3 className="pdp-honey-tl-title">A living relationship with the mountain.</h3>
+                  <p className="pdp-honey-tl-desc">Local beekeepers tend the hives through the season, working alongside bees that forage the wildflowers rising between the rocks.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">04 — Handling</div>
-                <h3 className="pdp-journey-h3">From comb to jar. <em>Nothing added.</em></h3>
-                <p className="pdp-journey-p">Never heated, never filtered — just raw honey drained straight from the comb, preserving its natural enzymes and crystalline structure.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media placeholder">
-                <div className="pdp-journey-placeholder-text">Every batch is lab tested before it ships</div>
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/04-harvest-v2.jpg" alt="A beekeeper lifting a honeycomb frame from a hive, with a mountain monastery in the distance" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">04 — The Harvest</div>
+                  <h3 className="pdp-honey-tl-title">Lifted by hand, frame by frame.</h3>
+                  <p className="pdp-honey-tl-desc">Each honeycomb frame is checked and drawn out at the hive itself, the same unhurried way it has always been done here.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">05 — Testing</div>
-                <h3 className="pdp-journey-h3">Checked before it travels. <em>Lab verified.</em></h3>
-                <p className="pdp-journey-p">Tested for purity, heavy metals, pesticides, and active ingredients — the same certificate shown above, before any jar leaves for you.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row rev">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/06-bottling.png" alt="Himalayan Wild Honey jar, sealed and labelled" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div className="pdp-honey-tl-item">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/05-extraction.jpg" alt="A beekeeper lowering a dripping honeycomb frame into a stainless steel centrifugal extractor" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">05 — The Extraction</div>
+                  <h3 className="pdp-honey-tl-title">Spun gently, never heated.</h3>
+                  <p className="pdp-honey-tl-desc">The comb goes straight into a stainless steel centrifugal extractor, letting the honey flow free without any cooking or pressing.</p>
+                </div>
               </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">06 — Bottling</div>
-                <h3 className="pdp-journey-h3">Sealed with care. <em>Glass, not plastic.</em></h3>
-                <p className="pdp-journey-p">Packed in glass jars with recycled cardboard — zero single-use plastic, the same as every HimVeda product.</p>
-              </div>
-            </div>
 
-            <div className="pdp-journey-row">
-              <div className="pdp-journey-media">
-                <Image src="/journey/honey/07-your-home.png" alt="Himalayan Wild Honey jar ready for your home" width={800} height={640} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div className="pdp-journey-text">
-                <div className="pdp-journey-num">07 — Your Home</div>
-                <h3 className="pdp-journey-h3">From the mountains. <em>To your table.</em></h3>
-                <p className="pdp-journey-p">Dispatched within 1–2 business days, so the same jar that left the hive reaches your kitchen with nothing changed along the way.</p>
+              <div className="pdp-honey-tl-item right">
+                <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
+                <div className="pdp-honey-tl-media">
+                  <Image src="/journey/honey/06-bottle-v2.jpg" alt="Raw honey being strained into a pot beside a row of filled HimVeda Himalayan Multiflora Honey jars" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div className="pdp-honey-tl-content">
+                  <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
+                  <h3 className="pdp-honey-tl-title">Strained, jarred, and ready to travel.</h3>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained once for clarity and sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
+                </div>
               </div>
             </div>
           </div>
