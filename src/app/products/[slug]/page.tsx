@@ -584,42 +584,9 @@ export default async function ProductPage({ params }: Props) {
 
             {/* Certificate moved up near the top — see stat trio above */}
 
-            {/* Origin card — gated off for honey AND ghee now.
-                Was gated off just for honey (this exact text duplicated
-                Journey step 01 / Know Your Source for honey). For ghee,
-                you asked to remove it outright (image 1) rather than
-                just fix its copy — so the earlier ghee-specific text
-                branch is gone; this card no longer renders for ghee at
-                all, same treatment as honey. Left fully intact, text
-                unchanged, for every other product (turmeric, tea, etc).
-
-                BUG FIX: was gated on the broad isHoneyPdp (all 3 honey
-                slugs), so 'himalayan-wild-honey' — which has no Journey
-                photoset yet — lost its Origin card with nothing put in
-                its place. Narrowed to hasHoneyJourney so the card only
-                disappears where a real Journey actually replaces it. */}
-            {!hasHoneyJourney && !isGheePdp && (
-              <div className="pdp-origin-card">
-                <div className="pdp-origin-head">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="2" strokeLinejoin="round">
-                    <polygon points="3 20 9 8 13 14 16 10 21 20" /><circle cx="18.5" cy="5.5" r="1.5" fill="#f0c840" stroke="none" />
-                  </svg>
-                  Himalayan Origin Story
-                </div>
-                <div className="pdp-origin-body">
-                  <div className="pdp-origin-map">
-                    {stateImg
-                      ? <Image src={stateImg} alt={regionName} width={80} height={80} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                      : <span style={{ fontSize: '26px', lineHeight: '1' }}>{rEmoji}</span>}
-                  </div>
-
-                  <div className="pdp-origin-text">
-                    <div className="pdp-origin-region">{regionName}</div>
-                    <p>Sourced directly from farming families in {regionName}, nestled in the pristine Himalayas. Grown at altitude, harvested with traditional methods — pure as the mountains.</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* The old "Himalayan Origin Story" card that sat here was removed
+                from every product page; Know Your Source (below the main
+                layout) now covers origin for all products. */}
 
           </div>
         </div>
@@ -1164,59 +1131,6 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* NEW — Know Your Source (additive, brand redesign). Reuses the
-            same regionName/stateImg/rEmoji already fetched above for the
-            Origin card — no new data source, no invented geography. */}
-        {isHoneyPdp && (
-          <div className="pdp-source">
-            <div className="pdp-journey-head">
-              <div className="pdp-journey-eyebrow">Know Your Source</div>
-              <h2 className="pdp-journey-title">Know Where Your Food Comes From</h2>
-            </div>
-            <div className="pdp-source-card">
-              <div className="pdp-source-img">
-                {stateImg
-                  ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                  : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
-              </div>
-              <div>
-                <div className="pdp-source-region">{honeySourceLabel}, {regionName}</div>
-                <p className="pdp-source-text">The exact origin behind this jar — {regionName}.{hasHoneyJourney ? ' See the Journey above for the full account.' : ''}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* NEW — Know Your Source for ghee. Same component/structure as
-            honey's version above — no new data source. One deliberate
-            difference: honey hardcodes "Manali & Spiti" because that's
-            literally where those hives are. I don't have a confirmed
-            village/sub-region for the ghee cows beyond "Himachal
-            Pradesh" (that's as specific as the approved Journey copy
-            gets), so I left that hardcoded prefix out rather than guess
-            a place name — just {`{regionName}`} on its own. Fill in the
-            exact village/valley here if you have it. */}
-        {isGheePdp && (
-          <div className="pdp-source">
-            <div className="pdp-journey-head">
-              <div className="pdp-journey-eyebrow">Know Your Source</div>
-              <h2 className="pdp-journey-title">Know Where Your Food Comes From</h2>
-            </div>
-            <div className="pdp-source-card">
-              <div className="pdp-source-img">
-                {stateImg
-                  ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                  : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
-              </div>
-              <div>
-                <div className="pdp-source-region">{regionName}</div>
-                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Journey above for the full account.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-
         {/* Sea buckthorn — Why It's Different (same component as honey/ghee;
             illustrations cropped from the supplied reference design). */}
         {isSeaBuckthornPdp && (
@@ -1251,6 +1165,41 @@ export default async function ProductPage({ params }: Props) {
             </div>
           </div>
         )}
+
+        {/* Know Your Source — now on EVERY product page (it used to be
+            honey + ghee only, while every other product got the small
+            "Himalayan Origin Story" card in the buy box, which has been
+            removed). Placed after each product's own Journey / Why It's
+            Different sections, so honey, ghee and sea buckthorn keep their
+            existing order; products with no story sections simply get it
+            right under the main layout. Data is the same regionName /
+            stateImg / rEmoji used across the page, so nothing is invented.
+            Wording: only products that really have a Journey above point
+            to it, and only honey + ghee are sold in a "jar". */}
+        {(() => {
+          const sourceHasJourney = hasHoneyJourney || isGheePdp || isSeaBuckthornPdp
+          const sourceNoun = (isHoneyPdp || isGheePdp) ? 'jar' : 'product'
+          const sourceHeadline = isHoneyPdp ? `${honeySourceLabel}, ${regionName}` : regionName
+          return (
+            <div className="pdp-source">
+              <div className="pdp-journey-head">
+                <div className="pdp-journey-eyebrow">Know Your Source</div>
+                <h2 className="pdp-journey-title">Know Where Your Food Comes From</h2>
+              </div>
+              <div className="pdp-source-card">
+                <div className="pdp-source-img">
+                  {stateImg
+                    ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
+                </div>
+                <div>
+                  <div className="pdp-source-region">{sourceHeadline}</div>
+                  <p className="pdp-source-text">The exact origin behind this {sourceNoun} — {regionName}.{sourceHasJourney ? ' See the Journey above for the full account.' : ''}</p>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Ghee + sea buckthorn — illustrated How to Enjoy */}
         {ILLUSTRATED_ENJOY && (

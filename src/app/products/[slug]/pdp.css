@@ -154,12 +154,6 @@
 @media(max-width:480px){.pdp-certificate-card{padding:14px;gap:10px}.pdp-cert-icon{width:44px;height:44px}.pdp-cert-heading{font-size:15px}}
 
 /* ── Origin card ── */
-.pdp-origin-card{border:1px solid #e8e0d0;border-radius:16px;overflow:hidden;background:#fff;margin-top:18px}
-.pdp-origin-head{background:#1a3a1e;color:#fff;padding:10px 16px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px;letter-spacing:.3px}
-.pdp-origin-body{padding:14px 16px;display:flex;gap:14px;align-items:center}
-.pdp-origin-map{width:60px;height:60px;border-radius:50%;background:#f0f7f0;display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;border:2px solid rgba(26,58,30,.12);overflow:hidden}
-.pdp-origin-region{font-family: var(--font-playfair), 'Playfair Display', serif;font-size:14px;font-weight:700;color:#1a3a1e;margin-bottom:3px}
-.pdp-origin-text p{font-size:12px;color:#7a7a7a;line-height:1.6}
 
 /* ── Accordion section ── */
 .pdp-acc-section{max-width:1200px;margin:40px auto 0;padding:0 32px 40px}
@@ -468,6 +462,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-source-img{width:100px;height:100px;border-radius:50%;overflow:hidden;background:#f2eadc;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .pdp-source-region{font-family:var(--font-playfair),'Playfair Display',serif;font-size:18px;color:#1a3a1e;font-weight:700}
 .pdp-source-text{font-size:13.5px;color:#5a5a5a;line-height:1.6;margin-top:8px}
+@media(max-width:560px){.pdp-source{padding:16px 16px 40px}.pdp-source-card{gap:16px;padding:18px}.pdp-source-img{width:76px;height:76px}}
 
 /* ── How to Enjoy ── */
 .pdp-enjoy{background:#faf6ee;padding:56px 32px}
