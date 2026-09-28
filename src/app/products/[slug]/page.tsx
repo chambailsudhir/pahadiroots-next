@@ -155,15 +155,16 @@ export default async function ProductPage({ params }: Props) {
 
   // Illustrated How to Enjoy / Natural Variation copy for ghee and sea
   // buckthorn (copy taken verbatim from the supplied reference design).
+  type EnjoyStep = { title?: string; text: string }
   const ILLUSTRATED_ENJOY = isSeaBuckthornPdp ? {
     dir: 'sea-buckthorn',
     title: 'How to Enjoy Sea Buckthorn',
     steps: [
-      'Take 1–2 teaspoons sea buckthorn juice or oil directly, preferably in the morning.',
-      'Add to herbal tea, warm water or honey for a refreshing and nutritious drink.',
-      'Blend into smoothies, oatmeal or yogurt for natural nutrition.',
-      'Use in your skincare routine — mix a few drops with natural oils or yogurt for a nourishing face mask.',
-    ],
+      { title: 'Dilute & Drink', text: 'Mix the recommended serving of sea buckthorn pulp with water and enjoy a refreshing, naturally tangy drink.' },
+      { title: 'Mix Into Beverages', text: 'Add to herbal tea, warm water, honey, juice or coconut water for a refreshing and nutritious drink.' },
+      { title: 'Blend Into Smoothies', text: 'Add to smoothies, yoghurt, oatmeal or breakfast bowls for natural nutrition and a fruity Himalayan flavour.' },
+      { title: 'Make a Refreshing Cooler', text: 'Mix with chilled water and a little honey or lemon for a delicious and refreshing Himalayan cooler.' },
+    ] as EnjoyStep[],
     varTitle: 'No Two Harvests Are Exactly Alike',
     varLead: 'Because sea buckthorn is a natural and seasonal superberry, slight variations between batches are normal — not a flaw.',
     vars: [
@@ -176,11 +177,11 @@ export default async function ProductPage({ params }: Props) {
     dir: 'ghee',
     title: 'How to Enjoy Our A2 Cow Ghee',
     steps: [
-      'Take 1 teaspoon of ghee directly on an empty stomach in the morning.',
-      'Add to warm milk, herbal tea or golden milk for extra nutrition and better absorption.',
-      'Drizzle over rice, dal, roti, khichdi or vegetables to enhance taste and nutrition.',
-      'Use for cooking and traditional recipes for a rich flavour and natural goodness.',
-    ],
+      { text: 'Take 1 teaspoon of ghee directly on an empty stomach in the morning.' },
+      { text: 'Add to warm milk, herbal tea or golden milk for extra nutrition and better absorption.' },
+      { text: 'Drizzle over rice, dal, roti, khichdi or vegetables to enhance taste and nutrition.' },
+      { text: 'Use for cooking and traditional recipes for a rich flavour and natural goodness.' },
+    ] as EnjoyStep[],
     varTitle: 'No Two Batches Are Exactly Alike',
     varLead: 'Because this is a natural, handcrafted A2 cow ghee, slight variations between batches are normal — not a flaw.',
     vars: [
@@ -1255,17 +1256,27 @@ export default async function ProductPage({ params }: Props) {
         {ILLUSTRATED_ENJOY && (
           <div className="pdp-enjoy">
             <div className="pdp-journey-head">
-              <div className="pdp-journey-eyebrow">How to Enjoy</div>
+              <div className="pdp-why-diff-head-row" style={{ justifyContent: 'center' }}>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+                <div className="pdp-journey-eyebrow">How to Enjoy</div>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+              </div>
               <h2 className="pdp-journey-title">{ILLUSTRATED_ENJOY.title}</h2>
             </div>
             <div className="pdp-enjoy-grid">
               {ILLUSTRATED_ENJOY.steps.map((step, i) => (
-                <div key={i} className="pdp-enjoy-card img-card">
+                <div key={i} className={`pdp-enjoy-card img-card${step.title ? ' has-title' : ''}`}>
                   <div className="pdp-enjoy-img">
-                    <Image src={`/enjoy/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={420} height={268} />
+                    <Image src={`/enjoy/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={step.title ? 476 : 420} height={step.title ? 285 : 268} />
                   </div>
                   <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
-                  <div className="pdp-enjoy-text">{step}</div>
+                  {step.title && (
+                    <>
+                      <span className="pdp-why-diff-underline" aria-hidden="true"></span>
+                      <h3 className="pdp-enjoy-step-title">{step.title}</h3>
+                    </>
+                  )}
+                  <div className="pdp-enjoy-text">{step.text}</div>
                 </div>
               ))}
             </div>
