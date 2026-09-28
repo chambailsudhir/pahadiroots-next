@@ -55,13 +55,13 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 374px;
+  grid-template-columns: minmax(0, 1fr) 374px;
   align-items: start;
 }
 
 @media (max-width: 960px) {
   .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -180,7 +180,7 @@
 
 @media (max-width: 540px) {
   .upsellGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -53,14 +53,14 @@
 
 .certs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 18px;
 }
 
 @media (max-width: 540px) {
   .certs {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -162,4 +162,21 @@
   padding: 0 4px;
   margin-top: -18px;
   flex-shrink: 0;
+}
+
+/* Mobile: keep everything inside the card, no horizontal cropping */
+.card { max-width: 100%; min-width: 0; }
+.headline { min-width: 0; overflow-wrap: anywhere; }
+.body, .cert > div { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 540px) {
+  .card { padding: 18px 16px; }
+  .headline { font-size: 15px; }
+  /* steps fit the screen instead of scrolling off-edge */
+  .steps { overflow-x: visible; justify-content: space-between; }
+  .stepWrap { flex-shrink: 1; min-width: 0; }
+  .step { min-width: 0; }
+  .stepLabel { font-size: 10px; }
+  .stepDesc { font-size: 8.5px; }
+  .stepArrow { padding: 0 1px; font-size: 11px; }
 }

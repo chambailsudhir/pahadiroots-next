@@ -67,7 +67,7 @@
 /* ── Progress steps ─────────────────────────────────────────────────────────── */
 .cp-steps {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   padding: 14px 16px;
   background: var(--white);
@@ -142,7 +142,7 @@
 /* ── Page layout ─────────────────────────────────────────────────────────────── */
 .cp-layout {
   display: grid;
-  grid-template-columns: 1fr 395px;
+  grid-template-columns: minmax(0, 1fr) 395px;
   gap: 0;
   max-width: 1420px;
   margin: 0 auto;
@@ -156,7 +156,7 @@
 }
 
 @media (max-width: 960px) {
-  .cp-layout { grid-template-columns: 1fr; }
+  .cp-layout { grid-template-columns: minmax(0, 1fr); }
 }
 
 .cp-left { padding: 28px 32px; display: flex; flex-direction: column; gap: 20px; }
@@ -214,7 +214,7 @@
 /* ── Trust card ─────────────────────────────────────────────────────────────── */
 .cp-trust-card { padding: 0; }
 
-.cp-trust-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.cp-trust-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .cp-trust-item {
   padding: 20px 22px;
@@ -236,7 +236,7 @@
 /* ── Delivery card ──────────────────────────────────────────────────────────── */
 .cp-delivery-card { padding: 0; }
 
-.cp-delivery-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.cp-delivery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .cp-delivery-item {
   display: flex;
@@ -399,4 +399,22 @@
 
 .cs-hint-label {
   color: #5a4a3a;
+}
+
+/* ── Mobile overflow fixes ───────────────────────────────────────────────────
+   Root cause of the cropped cart on phones: `1fr` = minmax(auto, 1fr), so a
+   non-wrapping child (the sourcing-journey row, long product names, etc.)
+   stretched the grid column wider than the viewport. `.cp-layout` uses
+   overflow:clip, so everything past the screen edge was cut off.
+   minmax(0,1fr) + min-width:0 lets the column shrink to the viewport. */
+.cp-layout, .cp-left, .cp-left > *, .cp-card { min-width: 0; max-width: 100%; }
+
+@media (max-width: 640px) {
+  .cp-steps { grid-template-columns: auto 1fr; gap: 8px; padding: 12px; }
+  .cp-steps-list { grid-column: 2; justify-self: end; }
+  .cp-step { font-size: 11px; gap: 5px; }
+  .cp-step-line { width: 14px; margin: 0 4px; }
+  .cp-card-head { padding: 14px 16px 12px; }
+  .cp-trust-item { padding: 16px 12px; }
+  .cp-delivery-item { padding: 13px 14px; }
 }

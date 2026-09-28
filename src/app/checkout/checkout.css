@@ -53,9 +53,9 @@
 
 /* ── Page layout ───────────────────────────────────────── */
 .ck-page { background: #F7F2EB; min-height: calc(100vh - 100px); width: 100%; }
-.ck-grid { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 1fr 420px; min-height: calc(100vh - 100px); }
-@media (max-width: 1200px) { .ck-grid { grid-template-columns: 1fr 380px; } }
-@media (max-width: 960px)  { .ck-grid { grid-template-columns: 1fr; padding-bottom: 80px; } }
+.ck-grid { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: calc(100vh - 100px); }
+@media (max-width: 1200px) { .ck-grid { grid-template-columns: minmax(0, 1fr) 380px; } }
+@media (max-width: 960px)  { .ck-grid { grid-template-columns: minmax(0, 1fr); padding-bottom: 80px; } }
 
 /* ── Left column ───────────────────────────────────────── */
 .ck-left { padding: 40px 48px 60px 48px; display: flex; flex-direction: column; gap: 28px; }
@@ -103,8 +103,8 @@
 .ck-section-body { padding: 0; }
 
 /* ── Trust strip ───────────────────────────────────────── */
-.ck-trust { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 480px) { .ck-trust { grid-template-columns: 1fr; } }
+.ck-trust { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 480px) { .ck-trust { grid-template-columns: minmax(0, 1fr); } }
 
 .ck-trust-card {
   background: #FFFFFF; border: 1px solid rgba(220,210,195,.6); border-radius: 16px;
@@ -155,3 +155,6 @@
 }
 .ck-mob-cta:hover:not(:disabled) { background: #3A6040; box-shadow: 0 8px 24px rgba(44,74,46,.45); transform: translateY(-1px); }
 .ck-mob-cta:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Let grid children shrink below their content width on phones */
+.ck-grid > * { min-width: 0; }

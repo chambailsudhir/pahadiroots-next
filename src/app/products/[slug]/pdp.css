@@ -40,8 +40,8 @@
 .pdp-page-bg{background:#faf6ee}
 
 /* ── Two-column grid ── */
-.pdp-wrap{max-width:1320px;margin:0 auto;padding:0 32px 32px;display:grid;grid-template-columns:1fr 1.15fr;gap:44px;align-items:start}
-@media(max-width:900px){.pdp-wrap{grid-template-columns:1fr;gap:24px;padding:0 16px 16px}}
+.pdp-wrap{max-width:1320px;margin:0 auto;padding:0 32px 32px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:44px;align-items:start}
+@media(max-width:900px){.pdp-wrap{grid-template-columns:minmax(0,1fr);gap:24px;padding:0 16px 16px}}
 
 /* ── Image column ── */
 .pdp-img-col{position:sticky;top:80px;width:100%}

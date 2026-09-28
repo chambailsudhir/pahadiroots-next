@@ -485,10 +485,10 @@ function SuccessContent() {
         }
         @media (max-width: 480px) {
           .oc-title { font-size: 26px; }
-          .oc-del-grid { grid-template-columns: 1fr; }
+          .oc-del-grid { grid-template-columns: minmax(0, 1fr); }
           .oc-actions { flex-direction: column; }
           .oc-btn-primary, .oc-btn-secondary, .oc-btn-print { min-width: unset; }
-          .oc-f-main { grid-template-columns: 1fr; padding: 20px 20px 16px; }
+          .oc-f-main { grid-template-columns: minmax(0, 1fr); padding: 20px 20px 16px; }
           .oc-f-brand-row { padding: 20px; flex-direction: column; align-items: flex-start; }
           .oc-f-social-bar { padding: 20px 20px 24px; }
           .oc-nl-inner-wrap { padding: 24px 20px; }

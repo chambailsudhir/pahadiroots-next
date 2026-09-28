@@ -57,14 +57,14 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 11px;
   padding: 16px 22px;
 }
 
 @media (max-width: 540px) {
   .grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -285,4 +285,11 @@
   height: 34px;
   border-radius: 9px;
   flex-shrink: 0;
+}
+
+/* Mobile: card + Add button must never overflow the row */
+.card, .grid, .item { min-width: 0; max-width: 100%; }
+@media (max-width: 540px) {
+  .head { padding: 14px 16px 12px; }
+  .grid { padding: 14px 16px; }
 }

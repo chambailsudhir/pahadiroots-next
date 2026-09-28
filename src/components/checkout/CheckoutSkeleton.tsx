@@ -142,11 +142,11 @@ export default function CheckoutSkeleton() {
           max-width: 1440px;
           margin: 0 auto;
           display: grid;
-          grid-template-columns: 1fr 420px;
+          grid-template-columns: minmax(0, 1fr) 420px;
           min-height: calc(100vh - 90px);
         }
-        @media (max-width: 1200px) { .csk-grid { grid-template-columns: 1fr 380px; } }
-        @media (max-width: 960px)  { .csk-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 1200px) { .csk-grid { grid-template-columns: minmax(0, 1fr) 380px; } }
+        @media (max-width: 960px)  { .csk-grid { grid-template-columns: minmax(0, 1fr); } }
 
         .csk-left {
           padding: 40px 48px 60px;
