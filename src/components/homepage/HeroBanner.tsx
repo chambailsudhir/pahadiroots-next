@@ -174,6 +174,7 @@ export default function HeroBanner({ images, settings }: Props) {
           be exported nearer a 2.2–2.4:1 aspect ratio to begin with. */}
       <div
         id="home-hero-banner"
+        className={slides && (() => { const c: any = slides[current]; return Boolean(c && (c.eyebrow || c.title || c.subtitle || c.coupon_offer || c.coupon_code || c.cta_text || c.cta2_text)) })() ? 'hhero-ov-active' : undefined}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={handleTouchStart}
@@ -216,7 +217,7 @@ export default function HeroBanner({ images, settings }: Props) {
           )
           const srOnlyStyle = { position: 'absolute' as const, width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden' as const, clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' as const, border: 0 }
           return (
-          <div key={i} aria-hidden={!isVisible} style={{
+          <div key={i} aria-hidden={!isVisible} className={`hhero-slide${hasOverlayContent ? ' hhero-slide-ov' : ''}${isVisible ? ' hhero-slide-on' : ''}`} style={{
             position: 'absolute', inset: 0,
             opacity: isVisible ? 1 : 0,
             transition: 'opacity 0.9s cubic-bezier(0.4,0,0.2,1)',
@@ -258,6 +259,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 slide whose important content sits right at the very
                 bottom edge would now lose slightly more of that than
                 before. */}
+            <div className="hhero-media" style={{ position: 'absolute', inset: 0 }}>
             {img.video ? (
               <video
                 ref={el => { videoRefs.current[i] = el }}
@@ -307,12 +309,13 @@ export default function HeroBanner({ images, settings }: Props) {
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
             )}
+            </div>
             {hasOverlayContent ? (
               <>
                 {/* Dark-left gradient overlay */}
-                <div style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
+                <div className="hhero-grad" style={{ position:'absolute', inset:0, background:'linear-gradient(100deg,rgba(5,20,8,.82) 0%,rgba(5,20,8,.6) 45%,rgba(5,20,8,.15) 70%,rgba(5,20,8,.05) 100%)', zIndex:1 }} />
                 {/* Content */}
-                <div style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
+                <div className="hhero-content" style={{ position:'absolute', inset:0, zIndex:2, display:'flex', alignItems:'center' }}>
                   <div className="hslide-content-inner" style={{ maxWidth:600, display:'flex', flexDirection:'column', gap:0 }}>
                     {/* BUG FIX: the eyebrow tag, headline colour, subtext
                         colour, coupon badge, and per-slide button text/links
@@ -325,10 +328,10 @@ export default function HeroBanner({ images, settings }: Props) {
                     <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
                       {img.eyebrow || '🌿 Pure · Himalayan · Natural'}
                     </div>
-                    <HeadingTag style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
+                    <HeadingTag className="hhero-h" style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
                       {img.title ? renderHeadline(img.title) : <>{`Born in the`}<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>{`For Your Table`}</>}
                     </HeadingTag>
-                    <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color: img.sub_colour || 'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 20px', maxWidth:440 }}>
+                    <p className="hhero-sub" style={{ fontSize:'clamp(13px,1.5vw,16px)', color: img.sub_colour || 'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 20px', maxWidth:440 }}>
                       {img.subtitle || 'Handpicked from the purest altitudes — where clean air, ancient soil, and tradition create nature\'s finest.'}
                     </p>
                     {(img.coupon_offer || img.coupon_code) && (
@@ -559,6 +562,52 @@ export default function HeroBanner({ images, settings }: Props) {
         @media(max-width:768px){
           .hhero-arrow {
             display: none !important;
+          }
+        }
+        /* MOBILE FIX — slides that carry text/buttons over a photo (headline,
+           subtitle, CTA set in the admin). On a phone the container is only
+           ~1.9:1 tall (see rule above), so all that copy was painted over the
+           picture and the button fell off the bottom. For these slides only,
+           the layout now stacks: photo on top, copy on a solid dark-green
+           panel below it, and the container grows to fit. Banners with the
+           text baked into the image are untouched. Desktop is untouched. */
+        @media(max-width:768px){
+          #home-hero-banner.hhero-ov-active{
+            aspect-ratio: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            background: #0d2410;
+          }
+          #home-hero-banner.hhero-ov-active .hhero-slide-ov.hhero-slide-on{
+            position: relative !important;
+            inset: auto !important;
+            display: flex;
+            flex-direction: column;
+          }
+          .hhero-slide-ov .hhero-media{
+            position: relative !important;
+            inset: auto !important;
+            width: 100%;
+            aspect-ratio: 1.6 / 1;
+            flex-shrink: 0;
+          }
+          .hhero-slide-ov .hhero-grad{ display: none !important; }
+          .hhero-slide-ov .hhero-content{
+            position: relative !important;
+            inset: auto !important;
+            background: #0d2410;
+            align-items: flex-start !important;
+            padding: 22px 0 56px;
+          }
+          .hhero-slide-ov .hhero-h{
+            font-size: clamp(24px, 7vw, 30px) !important;
+            margin: 0 0 10px !important;
+            letter-spacing: -0.5px !important;
+          }
+          .hhero-slide-ov .hhero-sub{
+            font-size: 14px !important;
+            margin: 0 0 16px !important;
           }
         }
       `}</style>

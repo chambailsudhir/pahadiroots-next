@@ -511,3 +511,14 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 
 /* Source name shown in place of a number in the stat trio (Manali / Spiti Valley) */
 .pdp-stat-text{font-size:20px;line-height:1.1;white-space:nowrap}
+
+/* Mobile tidy-up for the new honey sections (Natural Variation heading row + source-name stat) */
+@media(max-width:560px){
+  .pdp-variation{padding:40px 16px}
+  .pdp-why-diff-head-row{gap:10px}
+  .pdp-why-diff-rule{width:24px;flex-shrink:0}
+  .pdp-journey-eyebrow{letter-spacing:2px;font-size:11px}
+  .pdp-stat-text{font-size:17px;white-space:normal}
+  .honey-var-card .pdp-why-diff-title{font-size:16px}
+  .honey-var-card .pdp-why-diff-desc{font-size:12.5px;padding:0 10px !important}
+}
