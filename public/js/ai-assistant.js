@@ -296,18 +296,18 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   }
   #pr-wa:hover .pr-wa-tip { opacity:1 }
 
-  /* AI fab: pinned just below the header/announcement bar on the right
-     edge, instead of dead-center of the viewport. Vertical-center (round 3)
-     fixed the bottom-nav/scroll-to-top overlap but created a new one: on
-     pahadiroots.com the hero banner's own carousel arrows sit right at
-     viewport-center too, so the fab was landing on top of them. Anchoring
-     to a fixed distance below the header sidesteps both the top hero
-     carousel AND the bottom nav/scroll-to-top, on every screen size.
-     If your exact header height differs, adjust --pr-fab-top below —
-     everything else (panel, WA button gap) is unaffected by that number. */
-  :root { --pr-fab-top: 130px; }
+  /* AI fab: stacked directly ABOVE the WhatsApp button, bottom right, so the
+     three floating buttons read as one tidy column (AI, WhatsApp, scroll to
+     top). Desktop: WhatsApp occupies bottom 78 to 130px, so the fab sits
+     12px above it at 142px. Mobile (900px and below): WhatsApp is hidden
+     (the bottom nav has its own Chat entry), so the fab sits 12px above the
+     site's scroll to top button instead (16 + 56 nav + 42 button + 12 gap =
+     126px, plus the iPhone safe area). The chat panel opens beside the fab
+     and grows upward from the same baseline. */
+  :root { --pr-fab-bottom: 142px; }
+  @media(max-width:900px) { :root { --pr-fab-bottom: calc(126px + env(safe-area-inset-bottom,0px)); } }
   #pr-ai-fab {
-    position:fixed; top:var(--pr-fab-top); right:16px;
+    position:fixed; bottom:var(--pr-fab-bottom); right:16px;
     width:56px; height:56px; border-radius:50%;
     border:none; cursor:pointer; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
@@ -315,7 +315,8 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     animation:pr-pulse 3s ease-out infinite;
     z-index:2147483645;
   }
-  #pr-ai-fab:hover { transform:scale(1.08) }
+  #pr-ai-fab:hover { transform:translateY(-6px) }
+  #pr-ai-fab:active { transform:translateY(-2px) }
   #pr-ai-fab.open  { animation:none }
   #pr-ai-fab img.pr-fi { width:100%; height:100%; object-fit:cover; border-radius:50% }
   #pr-ai-fab .pr-fc { display:none; font-size:20px; color:#fff; font-family:inherit }
@@ -334,21 +335,23 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
   }
 
   /* Opens beside the fab (86px = 16 right + 56 fab width + 14 gap),
-     top-aligned to match #pr-ai-fab's --pr-fab-top. */
+     bottom-aligned to #pr-ai-fab and growing upward. */
   #pr-panel {
-    position:fixed; top:var(--pr-fab-top); right:86px;
+    position:fixed; bottom:var(--pr-fab-bottom); right:86px;
     width:380px; height:560px;
     min-width:280px; min-height:380px;
-    max-width:min(700px,96vw); max-height:min(560px, calc(100vh - var(--pr-fab-top) - 16px));
+    max-width:min(700px,96vw); max-height:min(560px, calc(100vh - var(--pr-fab-bottom) - 16px));
     overflow:hidden; background:#ffffff; border-radius:18px;
     box-shadow:0 8px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     display:flex; flex-direction:column;
     z-index:2147483644;
-    transform:scale(.87) translateY(-10px); opacity:0; pointer-events:none;
+    transform:scale(.87) translateY(10px); opacity:0; pointer-events:none;
     transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
   }
   #pr-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all }
-  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px } }
+  /* Narrow phones: full width, sitting just above the fab (56px + 12px gap)
+     so it never covers the fab or the send button. */
+  @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px; bottom:calc(var(--pr-fab-bottom) + 68px); min-height:280px; max-height:calc(100vh - var(--pr-fab-bottom) - 68px - 16px) } }
 
   #pr-drag {
     height:20px; border-radius:18px 18px 0 0;
@@ -366,6 +369,9 @@ USE WEB SEARCH: You have Google Search available. Use it for current weather, te
     cursor:ns-resize; z-index:10;
   }
   #pr-bottom-edge:hover { background:rgba(200,146,10,.15) }
+  /* Panel is now anchored at the bottom (fab baseline) and grows upward, so the
+     bottom edge can no longer be dragged; the top handle and left edge resize it. */
+  #pr-bottom-edge { display:none }
 
   .pr-hd {
     padding:11px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0;

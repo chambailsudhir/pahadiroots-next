@@ -158,6 +158,7 @@ export default async function ProductPage({ params }: Props) {
   type EnjoyStep = { title?: string; text: string }
   const ILLUSTRATED_ENJOY = isSeaBuckthornPdp ? {
     dir: 'sea-buckthorn',
+    imgW: 476, imgH: 285,
     title: 'How to Enjoy Sea Buckthorn',
     steps: [
       { title: 'Dilute & Drink', text: 'Mix the recommended serving of sea buckthorn pulp with water and enjoy a refreshing, naturally tangy drink.' },
@@ -175,6 +176,7 @@ export default async function ProductPage({ params }: Props) {
     ],
   } : isGheePdp ? {
     dir: 'ghee',
+    imgW: 420, imgH: 268,
     title: 'How to Enjoy Our A2 Cow Ghee',
     steps: [
       { text: 'Take 1 teaspoon of ghee directly on an empty stomach in the morning.' },
@@ -191,6 +193,57 @@ export default async function ProductPage({ params }: Props) {
       ['Storage', 'Keep in a cool, dry place in an airtight glass or steel container. Avoid moisture and direct sunlight.'],
     ],
   } : null
+
+  // Illustrated How to Enjoy for the two honeys that have a supplied design
+  // (Manali + Spiti Valley). Same four steps, only the source name in the
+  // title and in step 1 differs. 'himalayan-wild-honey' has no artwork yet,
+  // so it keeps the plain four card version further down.
+  const HONEY_ENJOY_SHARED: EnjoyStep[] = [
+    { title: 'Mix in Beverages', text: 'Stir into herbal tea, warm milk, or lemon water for a naturally sweet and comforting drink.' },
+    { title: 'Drizzle Over Breakfast', text: 'Add to yoghurt, oatmeal, pancakes or fresh fruits for a naturally sweet and wholesome meal.' },
+    { title: 'Spread & Serve', text: 'Enjoy with toast, roti, paratha or your favourite breakfast for a naturally rich flavour.' },
+  ]
+  const HONEY_ENJOY = isManaliHoneyPdp ? {
+    dir: 'manali-honey', imgW: 463, imgH: 297, variant: 'honey',
+    title: 'How to Enjoy Manali Honey',
+    steps: [{ title: 'Enjoy as it is', text: 'Take a spoonful of raw Manali honey and savour its natural floral sweetness.' }, ...HONEY_ENJOY_SHARED],
+  } : isSpitiHoneyPdp ? {
+    dir: 'spiti-honey', imgW: 482, imgH: 282, variant: 'honey',
+    title: 'How to Enjoy Spiti Valley Honey',
+    steps: [{ title: 'Enjoy as it is', text: 'Take a spoonful of raw Spiti Valley honey and savour its rich, natural floral sweetness.' }, ...HONEY_ENJOY_SHARED],
+  } : null
+
+  // One renderer for every illustrated How to Enjoy (ghee, sea buckthorn,
+  // Manali honey, Spiti honey) so they can't drift apart.
+  const renderIllustratedEnjoy = (cfg: { dir: string; imgW: number; imgH: number; title: string; steps: EnjoyStep[]; variant?: string }) => (
+    <div className={`pdp-enjoy${cfg.variant ? ` ${cfg.variant}` : ''}`}>
+      <div className="pdp-journey-head">
+        <div className="pdp-why-diff-head-row" style={{ justifyContent: 'center' }}>
+          <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+          <div className="pdp-journey-eyebrow">How to Enjoy</div>
+          <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+        </div>
+        <h2 className="pdp-journey-title">{cfg.title}</h2>
+      </div>
+      <div className="pdp-enjoy-grid">
+        {cfg.steps.map((step, i) => (
+          <div key={i} className={`pdp-enjoy-card img-card${step.title ? ' has-title' : ''}`}>
+            <div className="pdp-enjoy-img" style={step.title ? { aspectRatio: `${cfg.imgW} / ${cfg.imgH}` } : undefined}>
+              <Image src={`/enjoy/${cfg.dir}/${i + 1}.png`} alt="" width={step.title ? cfg.imgW : 420} height={step.title ? cfg.imgH : 268} />
+            </div>
+            <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
+            {step.title && (
+              <>
+                <span className="pdp-why-diff-underline" aria-hidden="true"></span>
+                <h3 className="pdp-enjoy-step-title">{step.title}</h3>
+              </>
+            )}
+            <div className="pdp-enjoy-text">{step.text}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   const settings: SiteSettings = siteSettings as SiteSettings
 
@@ -1202,35 +1255,7 @@ export default async function ProductPage({ params }: Props) {
         })()}
 
         {/* Ghee + sea buckthorn — illustrated How to Enjoy */}
-        {ILLUSTRATED_ENJOY && (
-          <div className="pdp-enjoy">
-            <div className="pdp-journey-head">
-              <div className="pdp-why-diff-head-row" style={{ justifyContent: 'center' }}>
-                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
-                <div className="pdp-journey-eyebrow">How to Enjoy</div>
-                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
-              </div>
-              <h2 className="pdp-journey-title">{ILLUSTRATED_ENJOY.title}</h2>
-            </div>
-            <div className="pdp-enjoy-grid">
-              {ILLUSTRATED_ENJOY.steps.map((step, i) => (
-                <div key={i} className={`pdp-enjoy-card img-card${step.title ? ' has-title' : ''}`}>
-                  <div className="pdp-enjoy-img">
-                    <Image src={`/enjoy/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={step.title ? 476 : 420} height={step.title ? 285 : 268} />
-                  </div>
-                  <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
-                  {step.title && (
-                    <>
-                      <span className="pdp-why-diff-underline" aria-hidden="true"></span>
-                      <h3 className="pdp-enjoy-step-title">{step.title}</h3>
-                    </>
-                  )}
-                  <div className="pdp-enjoy-text">{step.text}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {ILLUSTRATED_ENJOY && renderIllustratedEnjoy(ILLUSTRATED_ENJOY)}
 
         {/* Ghee + sea buckthorn — illustrated Natural Variation */}
         {ILLUSTRATED_ENJOY && (
@@ -1329,7 +1354,8 @@ export default async function ProductPage({ params }: Props) {
             The original "How to Use" accordion item above is left in
             place untouched, per instruction not to remove anything
             without confirmation — flagging the duplication to Mishika. */}
-        {isHoneyPdp && (
+        {isHoneyPdp && HONEY_ENJOY && renderIllustratedEnjoy(HONEY_ENJOY)}
+        {isHoneyPdp && !HONEY_ENJOY && (
           <div className="pdp-enjoy">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">How to Enjoy</div>

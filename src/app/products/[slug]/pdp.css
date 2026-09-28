@@ -485,6 +485,17 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-enjoy-card.has-title .pdp-why-diff-underline{margin:8px auto 12px}
 .pdp-enjoy-step-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:16px;font-weight:500;color:#1a3a1e;line-height:1.3;padding:0 12px}
 .pdp-enjoy-card.has-title .pdp-enjoy-text{margin-top:8px;color:#4a4a4a}
+/* Honey variant: warm cream cards with a fine gold edge and bolder serif titles, as in the supplied honey designs */
+.pdp-enjoy.honey .pdp-enjoy-card{background:#fdf9f2;border:1px solid rgba(200,146,10,.25)}
+.pdp-enjoy.honey .pdp-enjoy-step-title{font-weight:700}
+
+/* Card lift on hover: same feel as the "You May Also Like" product cards (.pcard).
+   Applies to Why It's Different and How to Enjoy. Only on devices that really hover,
+   so phones never get a stuck lifted card after a tap, and not for reduced motion. */
+.pdp-why-diff-card,.pdp-enjoy-card{transition:transform .3s ease,box-shadow .3s ease}
+@media (hover:hover) and (prefers-reduced-motion:no-preference){
+  .pdp-why-diff-card:hover,.pdp-enjoy-card:hover{transform:translateY(-7px);box-shadow:0 20px 48px rgba(26,58,30,.13)}
+}
 .pdp-why-diff-card.var-card{padding:0 0 22px;overflow:hidden}
 .pdp-var-img{aspect-ratio:2.1/1;overflow:hidden;background:#fdf9f2}
 .pdp-var-img img{width:100%;height:100%;object-fit:cover;display:block}
