@@ -153,6 +153,44 @@ export default async function ProductPage({ params }: Props) {
   const SEA_BUCKTHORN_PDP_SLUGS = ['sea-buckthorn']
   const isSeaBuckthornPdp = SEA_BUCKTHORN_PDP_SLUGS.includes((product.slug || '').toLowerCase().trim())
 
+  // Illustrated How to Enjoy / Natural Variation copy for ghee and sea
+  // buckthorn (copy taken verbatim from the supplied reference design).
+  const ILLUSTRATED_ENJOY = isSeaBuckthornPdp ? {
+    dir: 'sea-buckthorn',
+    title: 'How to Enjoy Sea Buckthorn',
+    steps: [
+      'Take 1–2 teaspoons sea buckthorn juice or oil directly, preferably in the morning.',
+      'Add to herbal tea, warm water or honey for a refreshing and nutritious drink.',
+      'Blend into smoothies, oatmeal or yogurt for natural nutrition.',
+      'Use in your skincare routine — mix a few drops with natural oils or yogurt for a nourishing face mask.',
+    ],
+    varTitle: 'No Two Harvests Are Exactly Alike',
+    varLead: 'Because sea buckthorn is a natural and seasonal superberry, slight variations between batches are normal — not a flaw.',
+    vars: [
+      ['Colour', 'Can vary from bright orange to deep amber depending on the season and region of harvest.'],
+      ['Aroma & Taste', 'Naturally tangy with a unique earthy flavour that may vary with the harvest and altitude.'],
+      ['Consistency', 'May be slightly thick or thin depending on temperature and natural berry variation.'],
+      ['Storage', 'Keep in a cool, dark place in an airtight glass bottle. Avoid direct sunlight and plastic containers.'],
+    ],
+  } : isGheePdp ? {
+    dir: 'ghee',
+    title: 'How to Enjoy Our A2 Cow Ghee',
+    steps: [
+      'Take 1 teaspoon of ghee directly on an empty stomach in the morning.',
+      'Add to warm milk, herbal tea or golden milk for extra nutrition and better absorption.',
+      'Drizzle over rice, dal, roti, khichdi or vegetables to enhance taste and nutrition.',
+      'Use for cooking and traditional recipes for a rich flavour and natural goodness.',
+    ],
+    varTitle: 'No Two Batches Are Exactly Alike',
+    varLead: 'Because this is a natural, handcrafted A2 cow ghee, slight variations between batches are normal — not a flaw.',
+    vars: [
+      ['Colour', "Can range from light yellow to deep golden depending on the season, cow's diet and region."],
+      ['Aroma & Taste', 'Rich, nutty aroma and taste may vary slightly based on the natural grass and herbs consumed by the cows.'],
+      ['Texture & Grain', 'May be smooth or slightly grainy. Graininess is a natural sign of purity and traditional bilona preparation.'],
+      ['Storage', 'Keep in a cool, dry place in an airtight glass or steel container. Avoid moisture and direct sunlight.'],
+    ],
+  } : null
+
   const settings: SiteSettings = siteSettings as SiteSettings
 
   const freeShipMin    = parseInt(settings.free_shipping_min || '0')
@@ -1177,6 +1215,84 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
+
+        {/* Sea buckthorn — Why It's Different (same component as honey/ghee;
+            illustrations cropped from the supplied reference design). */}
+        {isSeaBuckthornPdp && (
+          <div className="pdp-why-diff">
+            <div className="pdp-why-diff-head">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1a3a1e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2c-4 3-6 7-4 12 1.5 3.5 4 5 4 8 0-3 2.5-4.5 4-8 2-5 0-9-4-12z" />
+                <path d="M12 22V10" />
+              </svg>
+              <div className="pdp-why-diff-head-row">
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+                <div className="pdp-journey-eyebrow">Why It's Different</div>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div className="pdp-why-diff-grid">
+              {[
+                ['berries', 'Wild sea buckthorn berries on the branch with Himalayan mountains behind', 'High Altitude Himalayan Berries', 'Wild sea buckthorn harvested from pristine high-altitude regions of the Himalayas, rich in natural nutrients.'],
+                ['handpicked', 'Woman hand-picking sea buckthorn berries into a woven basket', 'Handpicked with Care', 'Locally hand-harvested by mountain communities, ensuring only the best ripe berries are selected.'],
+                ['cold-pressed', 'Wooden press gently extracting sea buckthorn juice', 'Cold-Pressed Extraction', "Gently cold-pressed to retain the berry's natural vitamins, antioxidants and Himalayan goodness."],
+                ['pure-natural', 'Bottle of sea buckthorn juice beside fresh berries', 'Pure & Natural', 'No added chemicals or preservatives — just pure Himalayan sea buckthorn in its most natural form.'],
+              ].map(([img, alt, title, desc]) => (
+                <div key={img} className="pdp-why-diff-card img-card">
+                  <div className="pdp-why-diff-icon icon-img">
+                    <Image src={`/why-different/sea-buckthorn/${img}.png`} alt={alt} width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div className="pdp-why-diff-title">{title}</div>
+                  <span className="pdp-why-diff-underline" aria-hidden="true"></span>
+                  <div className="pdp-why-diff-desc">{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ghee + sea buckthorn — illustrated How to Enjoy */}
+        {ILLUSTRATED_ENJOY && (
+          <div className="pdp-enjoy">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">How to Enjoy</div>
+              <h2 className="pdp-journey-title">{ILLUSTRATED_ENJOY.title}</h2>
+            </div>
+            <div className="pdp-enjoy-grid">
+              {ILLUSTRATED_ENJOY.steps.map((step, i) => (
+                <div key={i} className="pdp-enjoy-card img-card">
+                  <div className="pdp-enjoy-img">
+                    <Image src={`/enjoy/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={420} height={268} />
+                  </div>
+                  <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
+                  <div className="pdp-enjoy-text">{step}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ghee + sea buckthorn — illustrated Natural Variation */}
+        {ILLUSTRATED_ENJOY && (
+          <div className="pdp-variation">
+            <div className="pdp-journey-head">
+              <div className="pdp-journey-eyebrow">Natural Variation</div>
+              <h2 className="pdp-journey-title">{ILLUSTRATED_ENJOY.varTitle}</h2>
+              <p className="pdp-source-text pdp-var-lead">{ILLUSTRATED_ENJOY.varLead}</p>
+            </div>
+            <div className="pdp-why-diff-grid">
+              {ILLUSTRATED_ENJOY.vars.map(([title, desc], i) => (
+                <div key={title} className="pdp-why-diff-card var-card">
+                  <div className="pdp-var-img">
+                    <Image src={`/variation/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={420} height={200} />
+                  </div>
+                  <div className="pdp-why-diff-title">{title}</div>
+                  <div className="pdp-why-diff-desc" style={{ padding: '0 14px' }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Accordion section ── */}
         {!isHoneyPdp && (

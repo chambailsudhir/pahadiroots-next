@@ -457,9 +457,6 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-why-diff-head-row{display:flex;align-items:center;gap:18px}
 .pdp-why-diff-rule{width:64px;height:1px;background:#c8920a}
 .pdp-why-diff-underline{display:block;width:34px;height:2px;background:#c8920a;margin:8px auto 10px}
-.pdp-why-diff::before,.pdp-why-diff::after{content:'';position:absolute;top:0;width:120px;height:120px;background-repeat:no-repeat;background-size:contain;opacity:.35;pointer-events:none;z-index:0}
-.pdp-why-diff::before{left:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23c8920a' stroke-width='1'%3E%3Cpath d='M10 100 Q20 60 15 20'/%3E%3Cpath d='M15 20 Q30 30 25 50'/%3E%3Cpath d='M15 40 Q35 45 30 65'/%3E%3Cpath d='M18 60 Q40 60 38 80'/%3E%3C/g%3E%3C/svg%3E")}
-.pdp-why-diff::after{right:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%231a3a1e' stroke-width='1'%3E%3Cpath d='M110 90 L85 50 70 70 50 30 20 90Z'/%3E%3C/g%3E%3C/svg%3E")}
 .pdp-why-diff-grid{position:relative;z-index:1}
 .pdp-why-diff-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:15px;color:#1a3a1e;margin-top:10px;font-weight:700}
 .pdp-why-diff-desc{font-size:12.5px;color:#5a5a5a;margin-top:6px;line-height:1.5}
@@ -482,3 +479,15 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 
 /* ── Natural Variation ── */
 .pdp-variation{padding:56px 32px;max-width:1180px;margin:0 auto}
+
+
+/* ── Illustrated How to Enjoy / Natural Variation cards (ghee, sea buckthorn) ── */
+.pdp-enjoy-card.img-card{padding:0 0 20px;overflow:hidden}
+.pdp-enjoy-img{aspect-ratio:1.57/1;overflow:hidden;background:#fdf9f2}
+.pdp-enjoy-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pdp-enjoy-card.img-card .pdp-enjoy-num{margin-top:14px}
+.pdp-enjoy-card.img-card .pdp-enjoy-text{padding:0 14px}
+.pdp-why-diff-card.var-card{padding:0 0 22px;overflow:hidden}
+.pdp-var-img{aspect-ratio:2.1/1;overflow:hidden;background:#fdf9f2}
+.pdp-var-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pdp-var-lead{margin-top:14px;font-size:13.5px;color:#5a5a5a}
