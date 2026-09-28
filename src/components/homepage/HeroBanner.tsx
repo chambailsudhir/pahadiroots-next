@@ -584,7 +584,7 @@ export default function HeroBanner({ images, settings }: Props) {
           .hhero-slide-ov .hhero-h{ font-weight: 600 !important; letter-spacing: -0.3px !important; }
 
           /* ── B: "stack" (default) — photo on top, fades into a dark panel ── */
-          .hhero-layout-stack.hhero-ov-active{
+          #home-hero-banner.hhero-layout-stack.hhero-ov-active{
             aspect-ratio: auto !important;
             height: auto !important;
             min-height: 0 !important;
@@ -636,7 +636,7 @@ export default function HeroBanner({ images, settings }: Props) {
           .hhero-layout-stack .hhero-slide-ov .hhero-cta2{ white-space: nowrap; }
 
           /* ── A: "full" — photo fills the screen, copy over a gradient ── */
-          .hhero-layout-full.hhero-ov-active{
+          #home-hero-banner.hhero-layout-full.hhero-ov-active{
             aspect-ratio: auto !important;
             height: min(600px, 86vh) !important;
             min-height: 480px !important;
