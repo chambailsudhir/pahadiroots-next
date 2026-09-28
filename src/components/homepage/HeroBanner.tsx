@@ -71,6 +71,15 @@ export default function HeroBanner({ images, settings }: Props) {
   }, [])
   const activeRatio = slideRatios[current] ?? 1.87
 
+  // Mobile layout for slides that carry text/buttons over a photo.
+  // Admin setting `hero_mobile_layout` (site_settings):
+  //   'stack' (default, "Option B") — photo on top, copy on a dark panel that
+  //           the photo fades into. Text never covers the picture.
+  //   'full'  ("Option A") — photo fills the screen, copy over a gradient.
+  // Only affects phones (<=768px) and only slides with overlay text.
+  const mobileLayout: 'stack' | 'full' =
+    String(settings?.hero_mobile_layout || '').toLowerCase().trim() === 'full' ? 'full' : 'stack'
+
   // Tap-to-unmute: browsers block unmuted autoplay outright, so every
   // video starts muted (required for autoplay to work at all). This lets
   // a visitor opt in to sound with one click — which browsers do allow,
@@ -174,7 +183,7 @@ export default function HeroBanner({ images, settings }: Props) {
           be exported nearer a 2.2–2.4:1 aspect ratio to begin with. */}
       <div
         id="home-hero-banner"
-        className={slides && (() => { const c: any = slides[current]; return Boolean(c && (c.eyebrow || c.title || c.subtitle || c.coupon_offer || c.coupon_code || c.cta_text || c.cta2_text)) })() ? 'hhero-ov-active' : undefined}
+        className={`hhero-layout-${mobileLayout}${slides && (() => { const c: any = slides[current]; return Boolean(c && (c.eyebrow || c.title || c.subtitle || c.coupon_offer || c.coupon_code || c.cta_text || c.cta2_text)) })() ? ' hhero-ov-active' : ''}`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={handleTouchStart}
@@ -325,7 +334,7 @@ export default function HeroBanner({ images, settings }: Props) {
                         were ignored, the coupon badge never rendered, and both
                         buttons always pointed at /products and /about no
                         matter what a slide's own CTA fields said. */}
-                    <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
+                    <div className="hhero-eyebrow" style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color: img.eyebrow_colour || 'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
                       {img.eyebrow || '🌿 Pure · Himalayan · Natural'}
                     </div>
                     <HeadingTag className="hhero-h" style={{ ...headingStyle, color: img.title_colour || headingStyle.color }}>
@@ -341,11 +350,11 @@ export default function HeroBanner({ images, settings }: Props) {
                         {img.coupon_code && <span style={{ fontSize:11, fontWeight:700, color:'#bc4749' }}>· {img.coupon_code}</span>}
                       </div>
                     )}
-                    <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-                      <Link href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
+                    <div className="hhero-ctas" style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+                      <Link className="hhero-cta1" href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
                         {img.cta_text || 'Explore Our Store'}
                       </Link>
-                      <Link href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
+                      <Link className="hhero-cta2" href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
                         {img.cta2_text || 'Our Story'} →
                       </Link>
                     </div>
@@ -564,50 +573,102 @@ export default function HeroBanner({ images, settings }: Props) {
             display: none !important;
           }
         }
-        /* MOBILE FIX — slides that carry text/buttons over a photo (headline,
-           subtitle, CTA set in the admin). On a phone the container is only
-           ~1.9:1 tall (see rule above), so all that copy was painted over the
-           picture and the button fell off the bottom. For these slides only,
-           the layout now stacks: photo on top, copy on a solid dark-green
-           panel below it, and the container grows to fit. Banners with the
-           text baked into the image are untouched. Desktop is untouched. */
+        /* MOBILE — slides that carry text/buttons over a photo (headline,
+           subtitle, CTA set in the admin). Two layouts, chosen by the admin
+           setting hero_mobile_layout (see mobileLayout above). Banners with
+           the text baked into the image, and all desktop layouts, are not
+           affected by anything below. */
         @media(max-width:768px){
-          #home-hero-banner.hhero-ov-active{
+          /* shared */
+          .hhero-slide-ov .hhero-sub{ font-size: 14px !important; margin: 0 0 16px !important; }
+          .hhero-slide-ov .hhero-h{ font-weight: 600 !important; letter-spacing: -0.3px !important; }
+
+          /* ── B: "stack" (default) — photo on top, fades into a dark panel ── */
+          .hhero-layout-stack.hhero-ov-active{
             aspect-ratio: auto !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
             background: #0d2410;
           }
-          #home-hero-banner.hhero-ov-active .hhero-slide-ov.hhero-slide-on{
+          .hhero-layout-stack.hhero-ov-active .hhero-slide-ov.hhero-slide-on{
             position: relative !important;
             inset: auto !important;
             display: flex;
             flex-direction: column;
           }
-          .hhero-slide-ov .hhero-media{
+          .hhero-layout-stack .hhero-slide-ov .hhero-media{
             position: relative !important;
             inset: auto !important;
             width: 100%;
-            aspect-ratio: 1.6 / 1;
+            aspect-ratio: 1.55 / 1;
             flex-shrink: 0;
           }
-          .hhero-slide-ov .hhero-grad{ display: none !important; }
-          .hhero-slide-ov .hhero-content{
+          .hhero-layout-stack .hhero-slide-ov .hhero-media::after{
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 60%;
+            background: linear-gradient(180deg, rgba(13,36,16,0), #0d2410);
+            pointer-events: none;
+          }
+          .hhero-layout-stack .hhero-slide-ov .hhero-grad{ display: none !important; }
+          .hhero-layout-stack .hhero-slide-ov .hhero-content{
             position: relative !important;
             inset: auto !important;
-            background: #0d2410;
+            margin-top: -34px;
             align-items: flex-start !important;
-            padding: 22px 0 56px;
+            padding: 0 0 52px;
           }
-          .hhero-slide-ov .hhero-h{
-            font-size: clamp(24px, 7vw, 30px) !important;
+          .hhero-layout-stack .hhero-slide-ov .hhero-h{
+            font-size: clamp(25px, 7.4vw, 30px) !important;
+            line-height: 1.12 !important;
             margin: 0 0 10px !important;
-            letter-spacing: -0.5px !important;
           }
-          .hhero-slide-ov .hhero-sub{
-            font-size: 14px !important;
-            margin: 0 0 16px !important;
+          .hhero-layout-stack .hhero-slide-ov .hhero-eyebrow{
+            background: none !important; border: none !important; padding: 0 !important;
+            backdrop-filter: none !important; margin-bottom: 10px !important;
+          }
+          .hhero-layout-stack .hhero-slide-ov .hhero-ctas{ flex-wrap: nowrap !important; gap: 14px !important; width: 100%; }
+          .hhero-layout-stack .hhero-slide-ov .hhero-cta1{
+            flex: 1; justify-content: center; text-align: center;
+            background: #e0b64a !important; color: #0d2410 !important;
+            padding: 13px 16px !important; font-size: 13px !important; border-radius: 6px !important;
+            text-transform: uppercase; letter-spacing: .5px !important; box-shadow: none !important;
+          }
+          .hhero-layout-stack .hhero-slide-ov .hhero-cta2{ white-space: nowrap; }
+
+          /* ── A: "full" — photo fills the screen, copy over a gradient ── */
+          .hhero-layout-full.hhero-ov-active{
+            aspect-ratio: auto !important;
+            height: min(600px, 86vh) !important;
+            min-height: 480px !important;
+            max-height: none !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-media img{ object-position: 62% center !important; }
+          .hhero-layout-full .hhero-slide-ov .hhero-grad{
+            background: linear-gradient(180deg, rgba(6,22,10,.82) 0%, rgba(6,22,10,.55) 38%, rgba(6,22,10,0) 62%, rgba(6,22,10,.55) 100%) !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-content{ align-items: stretch !important; }
+          .hhero-layout-full .hhero-slide-ov .hslide-content-inner{
+            height: 100%; max-width: none !important;
+            padding: 26px 22px 46px !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-h{
+            font-size: clamp(27px, 8vw, 32px) !important;
+            line-height: 1.1 !important; margin: 0 0 12px !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-sub{
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+            max-width: 300px !important; margin: 0 !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-ctas{
+            flex-direction: column; align-items: stretch !important; gap: 10px !important; margin-top: auto;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-cta1,
+          .hhero-layout-full .hhero-slide-ov .hhero-cta2{
+            justify-content: center; text-align: center; border-radius: 6px !important;
+            padding: 14px !important; font-size: 13px !important; text-transform: uppercase; letter-spacing: .6px !important;
+          }
+          .hhero-layout-full .hhero-slide-ov .hhero-cta2{
+            border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.12); color: #fff !important;
           }
         }
       `}</style>
