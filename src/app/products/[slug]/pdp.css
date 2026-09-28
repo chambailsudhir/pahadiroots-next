@@ -184,8 +184,6 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 @media(max-width:600px){.pdp-acc-body{padding:2px 16px 20px 16px}}
 
 /* ── Cert badges ── */
-.pdp-cert-badges{display:flex;gap:9px;flex-wrap:wrap}
-.pdp-cert-badge{display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(26,58,30,.05);border:1.5px solid rgba(26,58,30,.12);border-radius:10px;font-size:13px;font-weight:600;color:#1a3a1e}
 
 /* ── Reviews + related wrappers ── */
 .pdp-reviews-wrap{max-width:1200px;margin:0 auto;padding:0 28px 40px}

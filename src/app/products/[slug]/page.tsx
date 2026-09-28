@@ -1189,7 +1189,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-source-card">
                 <div className="pdp-source-img">
                   {stateImg
-                    ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', borderRadius: '50%' }} />
                     : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
                 </div>
                 <div>
@@ -1266,7 +1266,9 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {!isHoneyPdp && howToUse.length > 0 && (
+            {/* Hidden on ghee + sea buckthorn: their illustrated How to Enjoy
+                section below already covers the same ground. */}
+            {!isHoneyPdp && !ILLUSTRATED_ENJOY && howToUse.length > 0 && (
               <AccItem title="How to Use" icon="how">
                 <ul>
                   {howToUse.map((s: any, i: number) => (
@@ -1293,24 +1295,10 @@ export default async function ProductPage({ params }: Props) {
               </AccItem>
             )}
 
-            {/* Certifications — gated off for ghee too now. These badges
-                (Lab Tested, FSSAI Licensed, No Adulterants) are the exact
-                kind of unverified claim you flagged for the main
-                Benefits section — testing hasn't happened yet, so
-                showing them here would be actively false for this
-                product right now, not just a duplicate. Left unchanged
-                for every other product that already has this data
-                verified. */}
-            {!isHoneyPdp && !isGheePdp && (
-              <AccItem title="Certifications" icon="cert">
-                <div className="pdp-cert-badges">
-                  <div className="pdp-cert-badge">🔬 Lab Tested</div>
-                  <div className="pdp-cert-badge">🌿 100% Natural</div>
-                  <div className="pdp-cert-badge">🏛️ FSSAI Licensed</div>
-                  <div className="pdp-cert-badge">✅ No Adulterants</div>
-                </div>
-              </AccItem>
-            )}
+            {/* Certifications accordion removed from every product page: it was
+                a duplicate of the real certificate card (CertificateCard, shown
+                under the product when a certificate is linked) and its badges
+                were hardcoded claims rather than verified data. */}
 
             {!isHoneyPdp && (
               <AccItem title="Shipping" icon="ship">
