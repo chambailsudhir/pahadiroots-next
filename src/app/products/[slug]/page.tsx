@@ -120,6 +120,23 @@ export default async function ProductPage({ params }: Props) {
   const isManaliHoneyPdp = productSlugNorm === 'himalayan-wild-manali-honey'
   const hasHoneyJourney = isSpitiHoneyPdp || isManaliHoneyPdp
 
+  // Both honey pages share every section below (Why It's Different, Know
+  // Your Source, How to Enjoy, Natural Variation, FAQ) — same altitude, same
+  // Himalayas — and differ ONLY in the named source. Copy that is meant to
+  // be identical lives in constants here instead of per-product DB fields,
+  // so the two pages can't drift apart.
+  const honeySourceLabel = isSpitiHoneyPdp
+    ? 'Spiti Valley'
+    : isManaliHoneyPdp
+      ? 'Manali'
+      : 'Manali & Spiti'
+  const HONEY_ENJOY_STEPS = [
+    'Step 1: Take 1 teaspoon raw honey directly or dissolved in warm water each morning.',
+    'Step 2: Add to herbal tea, warm milk, or hot lemon water for throat comfort.',
+    'Step 3: Blend into smoothies, oatmeal, or drizzle over yogurt for natural sweetness.',
+    'Step 4: Use as a natural face mask by mixing with equal parts raw milk or yogurt.',
+  ]
+
   // NEW — Ghee PDP detection, same defensive pattern as isHoneyPdp above
   // (normalized, array-based) rather than a second bare string-equality
   // check, so a future slug rename doesn't silently drop this section the
@@ -1124,8 +1141,8 @@ export default async function ProductPage({ params }: Props) {
                   : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
               </div>
               <div>
-                <div className="pdp-source-region">Manali &amp; Spiti, {regionName}</div>
-                <p className="pdp-source-text">The exact origin behind this jar — {regionName}. See the Journey above for the full account.</p>
+                <div className="pdp-source-region">{honeySourceLabel}, {regionName}</div>
+                <p className="pdp-source-text">The exact origin behind this jar — {regionName}.{hasHoneyJourney ? ' See the Journey above for the full account.' : ''}</p>
               </div>
             </div>
           </div>
@@ -1248,17 +1265,17 @@ export default async function ProductPage({ params }: Props) {
             The original "How to Use" accordion item above is left in
             place untouched, per instruction not to remove anything
             without confirmation — flagging the duplication to Mishika. */}
-        {isHoneyPdp && howToUse.length > 0 && (
+        {isHoneyPdp && (
           <div className="pdp-enjoy">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">How to Enjoy</div>
               <h2 className="pdp-journey-title">How to Enjoy Your Honey</h2>
             </div>
             <div className="pdp-enjoy-grid">
-              {howToUse.map((s: any, i: number) => (
+              {HONEY_ENJOY_STEPS.map((step, i) => (
                 <div key={i} className="pdp-enjoy-card">
                   <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
-                  <div className="pdp-enjoy-text">{typeof s === 'string' ? s : s?.step || ''}</div>
+                  <div className="pdp-enjoy-text">{step}</div>
                 </div>
               ))}
             </div>
@@ -1299,10 +1316,10 @@ export default async function ProductPage({ params }: Props) {
             </div>
             <div className="pdp-acc-list">
               <AccItem title="Where is the honey sourced?" icon="who">
-                Manali &amp; Spiti, Himachal Pradesh — see the Journey above for the full account.
+                {honeySourceLabel}, Himachal Pradesh{hasHoneyJourney ? ' — see the Journey above for the full account.' : '.'}
               </AccItem>
               <AccItem title="Is it raw and unfiltered?" icon="desc">
-                Yes, always — see Description above for details.
+                Yes, always — never heated or filtered, drained straight from the comb.
               </AccItem>
               <AccItem title="How long does it last?" icon="desc">
                 [ADD VERIFIED SHELF LIFE]
