@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
 import './pdp.css'
 import { notFound } from 'next/navigation'
 import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeData'
@@ -244,6 +245,27 @@ export default async function ProductPage({ params }: Props) {
       </div>
     </div>
   )
+
+  // Natural Variation for the two illustrated honeys (Manali + Spiti Valley).
+  // Same supplied design for both; photos live in /variation/honey.
+  const HONEY_VARIATION = (isManaliHoneyPdp || isSpitiHoneyPdp) ? {
+    dir: 'honey',
+    varTitle: 'No Two Harvests Are Exactly Alike',
+    varLead: 'Because this honey is raw and unfiltered, small differences between jars are normal — not a flaw.',
+    vars: [
+      ['Colour', 'Can be lighter or darker between harvests depending on the season\u2019s bloom.', 'drop'],
+      ['Aroma & Taste', 'Floral character varies with whatever wildflowers were blooming at harvest time.', 'flower'],
+      ['Crystallisation', 'Raw honey naturally crystallises over time \u2014 a sign of purity, not spoilage.', 'comb'],
+      ['Storage', 'Keep it cool and dark in an airtight glass jar \u2014 avoid plastic and direct sunlight.', 'jar'],
+    ] as [string, string, string][],
+  } : null
+
+  const VAR_ICONS: Record<string, ReactNode> = {
+    drop: <path d="M12 3c3 4 6 7.2 6 11a6 6 0 0 1-12 0c0-3.8 3-7 6-11z" />,
+    flower: <g><circle cx="12" cy="12" r="2" /><circle cx="12" cy="6.5" r="2.6" /><circle cx="12" cy="17.5" r="2.6" /><circle cx="6.5" cy="12" r="2.6" /><circle cx="17.5" cy="12" r="2.6" /></g>,
+    comb: <g><circle cx="12" cy="7" r="2.6" /><circle cx="7.5" cy="14.5" r="2.6" /><circle cx="16.5" cy="14.5" r="2.6" /><circle cx="12" cy="12" r="0.1" /></g>,
+    jar: <g><rect x="7" y="4" width="10" height="3" rx="1" /><rect x="6" y="7" width="12" height="13" rx="3" /><rect x="9" y="12" width="6" height="3" rx="0.6" /></g>,
+  }
 
   const settings: SiteSettings = siteSettings as SiteSettings
 
@@ -1372,10 +1394,38 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* NEW — Natural Variation education (additive, brand redesign).
-            General true-for-raw-honey facts, not batch-specific claims —
-            safe without any product-specific data. */}
-        {isHoneyPdp && (
+        {/* Natural Variation — new illustrated design for Manali + Spiti Valley
+            honey. himalayan-wild-honey has no artwork, so it keeps the plain
+            text version below. */}
+        {isHoneyPdp && HONEY_VARIATION && (
+          <div className="pdp-variation honey-variation">
+            <div className="pdp-journey-head">
+              <div className="pdp-why-diff-head-row" style={{ justifyContent: 'center' }}>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+                <div className="pdp-journey-eyebrow">Natural Variation</div>
+                <span className="pdp-why-diff-rule" aria-hidden="true"></span>
+              </div>
+              <h2 className="pdp-journey-title">{HONEY_VARIATION.varTitle}</h2>
+              <p className="pdp-source-text pdp-var-lead">{HONEY_VARIATION.varLead}</p>
+            </div>
+            <div className="pdp-why-diff-grid">
+              {HONEY_VARIATION.vars.map(([title, desc, icon], i) => (
+                <div key={title} className="pdp-why-diff-card var-card honey-var-card">
+                  <div className="pdp-var-img">
+                    <Image src={`/variation/${HONEY_VARIATION.dir}/${i + 1}.png`} alt="" width={489} height={249} />
+                  </div>
+                  <span className="pdp-var-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c8920a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{VAR_ICONS[icon]}</svg>
+                  </span>
+                  <div className="pdp-why-diff-title">{title}</div>
+                  <span className="pdp-why-diff-underline" aria-hidden="true"></span>
+                  <div className="pdp-why-diff-desc" style={{ padding: '0 14px' }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {isHoneyPdp && !HONEY_VARIATION && (
           <div className="pdp-variation">
             <div className="pdp-journey-head">
               <div className="pdp-journey-eyebrow">Natural Variation</div>
@@ -1473,7 +1523,7 @@ export default async function ProductPage({ params }: Props) {
 
 // ─── Sub-components (Server) ──────────────────────────────────────────────────
 
-const ACC_ICONS: Record<string, React.ReactNode> = {
+const ACC_ICONS: Record<string, ReactNode> = {
   desc:    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   how:     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   storage: <svg viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,

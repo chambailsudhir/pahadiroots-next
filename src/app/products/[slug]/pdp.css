@@ -500,3 +500,11 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-var-img{aspect-ratio:2.1/1;overflow:hidden;background:#fdf9f2}
 .pdp-var-img img{width:100%;height:100%;object-fit:cover;display:block}
 .pdp-var-lead{margin-top:14px;font-size:13.5px;color:#5a5a5a}
+
+/* Honey Natural Variation (Manali + Spiti): photo on top, gold icon badge straddling the photo edge, serif title + gold rule + text */
+.honey-var-card{position:relative;background:#faf6ee;border:1px solid rgba(200,146,10,.18)}
+.honey-var-card .pdp-var-img{aspect-ratio:489/249}
+.pdp-var-icon{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:#faf6ee;border:1px solid rgba(200,146,10,.2);box-shadow:0 4px 12px -6px rgba(26,58,30,.25);margin:-24px auto 0;position:relative;z-index:2}
+.honey-var-card .pdp-why-diff-title{font-size:19px;font-weight:600;margin-top:10px}
+.honey-var-card .pdp-why-diff-underline{margin:8px auto 12px}
+.honey-var-card .pdp-why-diff-desc{font-size:13.5px;color:#4a4a4a;line-height:1.55}
