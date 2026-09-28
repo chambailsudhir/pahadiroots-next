@@ -508,3 +508,6 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .honey-var-card .pdp-why-diff-title{font-size:19px;font-weight:600;margin-top:10px}
 .honey-var-card .pdp-why-diff-underline{margin:8px auto 12px}
 .honey-var-card .pdp-why-diff-desc{font-size:13.5px;color:#4a4a4a;line-height:1.55}
+
+/* Source name shown in place of a number in the stat trio (Manali / Spiti Valley) */
+.pdp-stat-text{font-size:20px;line-height:1.1;white-space:nowrap}

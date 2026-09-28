@@ -489,7 +489,7 @@ export default async function ProductPage({ params }: Props) {
                 shown for any product with an active certificate linked. */}
             {isHoneyPdp && (
               <div className="pdp-stat-trio">
-                <div><div className="pdp-stat-num">2</div><div className="pdp-stat-label">Himalayan Origins</div></div>
+                <div><div className="pdp-stat-num pdp-stat-text">{honeySourceLabel}</div><div className="pdp-stat-label">Himalayan Origin{isManaliHoneyPdp || isSpitiHoneyPdp ? '' : 's'}</div></div>
                 <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Unfiltered</div></div>
                 <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
               </div>
