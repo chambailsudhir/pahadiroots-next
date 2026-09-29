@@ -184,7 +184,7 @@ section.sec { padding: 52px 40px; }
    .cc-box, .cc-emo, .cc-img). .coll-bg is kept since a background
    gradient class is cheap to keep and harmless either way, but the
    detailed tile-layout rules below it were pure dead weight. */
-.coll-bg { background: linear-gradient(180deg,#eef0e2 0%,#e2e8d0 100%); border-top: 1px solid rgba(200,146,10,.35); }
+.coll-bg { background: linear-gradient(180deg,#eef0e2 0%,#e2e8d0 100%); border-top: 1px solid rgba(200,146,10,.35); border-bottom: 1px solid rgba(200,146,10,.35); }
 
 /* ── PRODUCT CARDS ── */
 .pgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,340px)); justify-content: center; gap: 24px; max-width: 1400px; margin: 0 auto; }

@@ -47,6 +47,7 @@
 .rxIn{max-width:1240px;margin:0 auto}
 .rangeFig{margin:0 0 36px}
 .rangeScroll{overflow:visible;position:relative}
+.rangeTrack{position:relative}
 .rangeImg{display:block;width:100%;height:auto;
  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 4%,#000 96%,transparent 100%),linear-gradient(180deg,transparent 0,#000 5%,#000 95%,transparent 100%);
  -webkit-mask-composite:source-in;
@@ -96,7 +97,7 @@
  .tr{padding:64px 22px 24px}.trHead{grid-template-columns:1fr;gap:16px;margin-bottom:40px}.h2{font-size:36px}
  .ch,.chFlip{grid-template-columns:1fr;gap:26px;padding-bottom:64px}.chFlip .chVis{order:0}.chIn,.chFlip .chIn{right:12px;left:auto;width:36%}.ch h3{font-size:32px}
  .facts{grid-template-columns:1fr}.facts div{padding:12px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:96px 1fr;gap:8px}.facts dt{margin:2px 0 0}
- .rx{padding:32px 22px 64px}.rangeScroll{overflow-x:auto;margin:0 -22px;padding:0 22px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scroll-padding-left:22px}.rangeImg{min-width:1400px;scroll-snap-align:start}.rangeSnap{position:absolute;top:0;bottom:0;width:1px;scroll-snap-align:start}.rangeHint{display:block}
+ .rx{padding:32px 22px 64px}.rangeScroll{overflow-x:auto;margin:0 -22px;padding:0 22px 6px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scroll-padding-left:22px}.rangeTrack{min-width:1400px}.rangeSnap{position:absolute;top:0;bottom:0;width:1px;scroll-snap-align:start}.rangeHint{display:block}
  .rxHead{grid-template-columns:1fr;gap:16px;margin-bottom:30px}.tabs{margin-bottom:26px}.tab{padding:12px 12px 14px}
  .pn{grid-template-columns:1fr;gap:26px}.pn h3{font-size:34px}.pnDl div{grid-template-columns:1fr;gap:2px}
  .lm{padding:64px 22px}.lmGrid{grid-template-columns:1fr;grid-template-rows:none}.figA{grid-row:auto;min-height:300px}
