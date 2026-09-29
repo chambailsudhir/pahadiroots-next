@@ -329,6 +329,9 @@ export interface SiteSettings {
   show_best_sellers: string
   show_new_arrivals: string
   show_state_stories: string
+  show_brand_story: string
+  show_origin_stories: string
+  show_life_in_mountains: string
   show_reviews_section: string
   show_newsletter_bar: string
   show_blog_section: string

@@ -60,6 +60,9 @@ const DEFAULTS: Partial<SiteSettings> = {
   show_best_sellers:       'true',
   show_new_arrivals:       'true',
   show_state_stories:      'true',
+  show_brand_story:        'true',
+  show_origin_stories:     'true',
+  show_life_in_mountains:  'true',
   show_reviews_section:    'true',
   // Now unused on the main site — NewsletterBar.tsx (the only reader)
   // was deleted as a confirmed duplicate of Footer.tsx's own newsletter

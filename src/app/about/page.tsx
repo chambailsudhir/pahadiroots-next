@@ -3,9 +3,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { getSiteSettings } from '@/lib/getSiteSettings'
+import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getHeroStats } from '@/lib/heroStats'
 import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
+import MountainStories from '@/components/story/MountainStories'
 
 // SEO FIX: no canonical, no OG/Twitter override previously — page inherited
 // the layout's generic OG image/description, so sharing this page's link
@@ -166,6 +167,9 @@ export default async function AboutPage() {
           relationship to, any other company using a similar &ldquo;Pahadi&rdquo;-prefixed brand name.
         </p>
       </section>
+
+      {/* ── Stories from the mountains (additive; toggle: show_life_in_mountains) ── */}
+      {isEnabled(settings.show_life_in_mountains) && <MountainStories />}
 
       {/* ── Values ── */}
       {values.length > 0 && (

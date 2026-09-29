@@ -13,6 +13,10 @@ import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
 import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
+import BrandStory from '@/components/story/BrandStory'
+import WhereTheyBegin from '@/components/story/WhereTheyBegin'
+import HimalayanRange from '@/components/story/HimalayanRange'
+import LifeInMountains from '@/components/story/LifeInMountains'
 
 // BUG FIX (found while removing the duplicate NewsletterBar section):
 // this was a static `export const metadata` object. Next.js merges page
@@ -136,15 +140,25 @@ export default async function HomePage() {
   // uses.
   const showStateStories = isEnabled(settings.show_state_stories)
   const featuredSlug    = settings.featured_collection_slug?.trim()
+  // Brand storytelling sections (additive — each has its own admin on/off toggle,
+  // see pahadi-admin → Settings → Homepage Sections).
+  const showBrandStory    = isEnabled(settings.show_brand_story)
+  const showOriginStories  = isEnabled(settings.show_origin_stories)
+  const showLifeInMountains = isEnabled(settings.show_life_in_mountains)
 
   return (
     <>
       <HeroBanner images={heroImages} settings={settings} />
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
+      {showBrandStory && <BrandStory />}
       {showCategoryTiles && <CategoryTiles categories={categories} />}
       {showBestSellers && <BestSellers />}
+      {showOriginStories && <WhereTheyBegin />}
+      {/* The range illustration shares ExploreByRegion's background so they read as one section */}
+      {showStateStories && states.length > 0 && <HimalayanRange />}
       {showStateStories && states.length > 0 && <ExploreByRegion states={states} />}
+      {showLifeInMountains && <LifeInMountains />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />
