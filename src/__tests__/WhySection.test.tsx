@@ -2,10 +2,11 @@
 /**
  * WhySection.test.tsx
  *
- * Component-level coverage for WhySection.tsx — previously zero test
- * coverage. Mostly static, but the P3 audit fix made the "states
- * covered" figure shared with HeroBanner.tsx/AnnouncementBar.tsx instead
- * of an independently hardcoded, conflicting number.
+ * "Our Promise" section. The old version printed live farmer/state stats
+ * (stat_farmer_families / stat_himalayan_states) and hard claims such as
+ * "certificate with every order". The redesigned section intentionally makes
+ * only claims that are always true, so these tests lock in: the four
+ * promises render, copy stays conservative, and the stats are NOT printed.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -17,44 +18,44 @@ function settings(overrides: Record<string, string> = {}): SiteSettings {
   return { ...overrides } as unknown as SiteSettings
 }
 
-describe('WhySection', () => {
-  it('renders the section heading', () => {
+describe('WhySection (Our Promise)', () => {
+  it('renders the section heading and eyebrow chip', () => {
     render(<WhySection settings={settings()} />)
-    expect(screen.getByText('Why HimVeda by Pahadi Roots')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('From the Himalayas. With Nothing to Hide.')
+    expect(screen.getByText('Our Promise')).toBeTruthy()
   })
 
-  it('renders all 4 pillars with their numbers', () => {
-    render(<WhySection settings={settings()} />)
-    expect(screen.getByText('Lab Tested Purity')).toBeTruthy()
-    expect(screen.getByText('Direct from Farmers')).toBeTruthy()
-    expect(screen.getByText('Eco Packaging')).toBeTruthy()
-    expect(screen.getByText('Give-Back Program')).toBeTruthy()
-    expect(screen.getByText('01')).toBeTruthy()
-    expect(screen.getByText('02')).toBeTruthy()
-    expect(screen.getByText('03')).toBeTruthy()
-    expect(screen.getByText('04')).toBeTruthy()
+  it('renders all 4 promises as an ordered list with labels and numbers', () => {
+    const { container } = render(<WhySection settings={settings()} />)
+    expect(container.querySelectorAll('ol > li').length).toBe(4)
+    ;['Origin', 'Tradition', 'Transparency', 'People'].forEach(l => expect(screen.getByText(l)).toBeTruthy())
+    ;['01', '02', '03', '04'].forEach(n => expect(screen.getByText(n)).toBeTruthy())
+    expect(screen.getAllByRole('heading', { level: 3 }).length).toBe(4)
   })
 
-  it('uses the shared stat_himalayan_states setting instead of a hardcoded number', () => {
-    render(<WhySection settings={settings({ stat_himalayan_states: '15' })} />)
-    expect(screen.getByText(/15 Himalayan states/)).toBeTruthy()
+  it('renders one illustration per promise', () => {
+    const { container } = render(<WhySection settings={settings()} />)
+    expect(container.querySelectorAll('img').length).toBe(4)
   })
 
-  it('defaults to 10 states when unset, matching HeroBanner/AnnouncementBar', () => {
-    render(<WhySection settings={settings()} />)
-    expect(screen.getByText(/10 Himalayan states/)).toBeTruthy()
+  it('keeps the transparency claim conservative (no "every batch" guarantee)', () => {
+    const { container } = render(<WhySection settings={settings()} />)
+    const text = container.textContent || ''
+    expect(text).toContain('Where testing, sourcing or product information is available')
+    expect(text).not.toMatch(/every batch/i)
+    expect(text).not.toMatch(/certificate with every order/i)
   })
 
-  it('uses the real stat_farmer_families setting instead of the old hardcoded "200+"', () => {
-    // This is the actual bug: WhySection hardcoded "200+ farming
-    // families" while HeroBanner said "500+" — both wrong. A live
-    // screenshot of the admin panel confirmed the real value is 100.
-    render(<WhySection settings={settings({ stat_farmer_families: '750' })} />)
-    expect(screen.getByText(/750\+ farming families/)).toBeTruthy()
+  it('no longer prints farmer/state statistics, even when the settings exist', () => {
+    const { container } = render(
+      <WhySection settings={settings({ stat_himalayan_states: '15', stat_farmer_families: '750' })} />
+    )
+    expect(container.textContent).not.toMatch(/Himalayan states/)
+    expect(container.textContent).not.toMatch(/farming families/)
   })
 
-  it('defaults the farmer count to 100, matching the confirmed live admin value', () => {
-    render(<WhySection settings={settings()} />)
-    expect(screen.getByText(/100\+ farming families/)).toBeTruthy()
+  it('renders without a settings prop', () => {
+    render(<WhySection />)
+    expect(screen.getByText('Made the', { exact: false })).toBeTruthy()
   })
 })
