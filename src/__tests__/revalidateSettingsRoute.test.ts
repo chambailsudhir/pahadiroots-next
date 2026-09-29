@@ -19,7 +19,7 @@
  *
  * The same gap existed for every other cached route that reads
  * getSiteSettings() directly: /products/[slug] (free_shipping_min PDP copy,
- * revalidate=3600) and /about (its ~30 about_* fields, revalidate=3600) and
+ * revalidate=3600) and /our-stories (its ~30 about_* fields, revalidate=3600) and
  * /blog (show_blog gate, revalidate=3600).
  *
  * These tests lock in that a { settings: true } revalidation call now clears
@@ -91,15 +91,15 @@ describe('POST /api/v1/revalidate — { settings: true }', () => {
     expect(calledPaths).toContain('/checkout')
 
     // Same gap on the other cached routes that read getSiteSettings()
-    // directly: /products/[slug] (revalidate=3600), /about (revalidate=3600),
+    // directly: /products/[slug] (revalidate=3600), /our-stories (revalidate=3600),
     // /blog (revalidate=3600).
     expect(calledPaths).toContain('/products/[slug]')
-    expect(calledPaths).toContain('/about')
+    expect(calledPaths).toContain('/our-stories')
     expect(calledPaths).toContain('/blog')
 
     expect(json.success).toBe(true)
     expect(json.revalidated).toContain('/checkout')
-    expect(json.revalidated).toContain('/about')
+    expect(json.revalidated).toContain('/our-stories')
     expect(json.revalidated).toContain('/blog')
   })
 

@@ -956,7 +956,7 @@ function SuccessContent() {
           <div>
             <div className="oc-fh">Company</div>
             <ul className="oc-ful">
-              <li><Link href="/about">Our Story</Link></li>
+              <li><Link href="/our-stories">Our Story</Link></li>
               <li><Link href="/#states">By Region</Link></li>
               {/* BUG FIX (found via console 404s): these pointed to
                   /terms#<section>, which doesn't exist — policy pages are

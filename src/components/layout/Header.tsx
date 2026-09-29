@@ -94,7 +94,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         {/* Desktop nav links */}
         <ul className="old-nav-links">
           <li><Link href="/">Home</Link></li>
-          {showAbout && <li><Link href="/about">Our Story</Link></li>}
+          {showAbout && <li><Link href="/our-stories">Our Story</Link></li>}
           {showBlog && <li><Link href="/blog">Blog</Link></li>}
           <MegaMenu categories={categories} states={states} />
           {showTrack && <li><Link href="/track">Track Order</Link></li>}

@@ -76,7 +76,7 @@ describe('order-success page', () => {
     render(React.createElement(OrderSuccessPage))
 
     await waitFor(() => {
-      expect(screen.getByText('Our Story').closest('a')?.getAttribute('href')).toBe('/about')
+      expect(screen.getByText('Our Story').closest('a')?.getAttribute('href')).toBe('/our-stories')
     })
     expect(screen.getByText('Returns & Refunds').closest('a')?.getAttribute('href')).toBe('/policies/returns')
     expect(screen.getByText('Shipping Policy').closest('a')?.getAttribute('href')).toBe('/policies/shipping')

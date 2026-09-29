@@ -99,7 +99,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
     // desktop MegaMenu's CURATED list — added for parity.
     { href: '/new-arrivals',             label: 'New Arrivals', icon: '🆕' },
     { href: '/products',                 label: 'All Products', icon: '🌿' },
-    ...(showAbout    ? [{ href: '/about',    label: 'Our Story',   icon: '📖' }] : []),
+    ...(showAbout    ? [{ href: '/our-stories', label: 'Our Story',   icon: '📖' }] : []),
     ...(showBlog     ? [{ href: '/blog',     label: 'Blog',        icon: '✍️' }] : []),
     ...(showTrack    ? [{ href: '/track',    label: 'Track Order', icon: '📦' }] : []),
     ...(showWishlist ? [{ href: '/wishlist', label: 'Wishlist',    icon: '❤️' }] : []),

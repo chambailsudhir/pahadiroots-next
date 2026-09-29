@@ -60,6 +60,13 @@ const nextConfig = {
   // Function timeout for Vercel is configured per-route instead via vercel.json
   // { "functions": { "src/app/api/v1/orders/route.ts": { "maxDuration": 15 } } }
   // — already set up that way for the order/payment/webhook routes.
+  // /about was renamed to /our-stories. Permanent (301) redirect keeps old
+  // bookmarks, Google results, and any slide CTA saved in the admin as "/about" working.
+  async redirects() {
+    return [
+      { source: '/about', destination: '/our-stories', permanent: true },
+    ]
+  },
   async headers() {
     return [
       {

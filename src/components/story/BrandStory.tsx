@@ -38,7 +38,7 @@ export default function BrandStory() {
               </Reveal>
             ))}
           </ol>
-          <Reveal delay={0.7}><Link href="/about" className={s.cta}>Discover Our Story <span aria-hidden="true">→</span></Link></Reveal>
+          <Reveal delay={0.7}><Link href="/our-stories" className={s.cta}>Discover Our Story <span aria-hidden="true">→</span></Link></Reveal>
         </div>
       </div>
     </section>

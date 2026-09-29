@@ -234,7 +234,7 @@ export default function Footer({ settings }: Props) {
           </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '11px' }}>
             {[
-              ['Our Story',          '/about'],
+              ['Our Story',          '/our-stories'],
               ['By Region',          '/regions'],
               ['Returns & Refunds',  '/policies/returns'],
               ['Shipping Policy',    '/policies/shipping'],

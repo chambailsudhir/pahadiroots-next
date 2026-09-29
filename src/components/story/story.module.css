@@ -77,11 +77,15 @@
 .pn li a small{color:var(--mute);font-size:13px}
 .pn li a:hover span,.pn li a:focus-visible span{text-decoration:underline;text-decoration-color:var(--gd);text-underline-offset:4px}
 /* 4 · life in the mountains */
-.lm{background:var(--ivory);padding:104px 48px}.lmIn{max-width:1240px;margin:0 auto}.lmHead{max-width:720px;margin:0 0 44px}
+.lm{background:var(--ivory);padding:72px 48px 80px}.lmIn{max-width:1240px;margin:0 auto}
+/* heading left, lead + link right (same pattern as .rxHead) so the whole section fits one screen */
+.lmHead{display:grid;grid-template-columns:1.3fr 1fr;gap:56px;align-items:end;margin:0 0 32px}
 .lmHead p.lead{max-width:none}
-.lmGrid{display:grid;grid-template-columns:1.35fr 1fr;grid-template-rows:repeat(2,minmax(220px,1fr));gap:18px}
+/* photo grid height follows the screen height, capped, so heading + photos stay in one view even at 90% zoom */
+.lmGrid{display:grid;grid-template-columns:1.35fr 1fr;grid-template-rows:repeat(2,1fr);gap:18px;height:clamp(340px,52vh,440px)}
+.lmGrid>.fig{min-height:0}
 .fig{margin:0;position:relative;border-radius:24px;overflow:hidden;background:#d9e0d6;min-height:220px}
-.figA{grid-row:span 2;min-height:460px}.fig img{object-fit:cover}.figA img{object-position:68% 50%}
+.figA{grid-row:span 2}.fig img{object-fit:cover}.figA img{object-position:68% 50%}
 .figCap{position:absolute;left:0;right:0;bottom:0;padding:28px 16px 12px;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:#fff;background:linear-gradient(transparent,rgba(10,25,12,.65))}
 /* 5 · about: a day in the hills */
 .sl{background:var(--ivory2);padding:104px 48px}.slIn{max-width:1240px;margin:0 auto}
@@ -100,6 +104,6 @@
  .rx{padding:32px 22px 64px}.rangeScroll{overflow-x:auto;margin:0 -22px;padding:0 22px 6px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scroll-padding-left:22px}.rangeTrack{min-width:1400px}.rangeSnap{position:absolute;top:0;bottom:0;width:1px;scroll-snap-align:start}.rangeHint{display:block}
  .rxHead{grid-template-columns:1fr;gap:16px;margin-bottom:30px}.tabs{margin-bottom:26px}.tab{padding:12px 12px 14px}
  .pn{grid-template-columns:1fr;gap:26px}.pn h3{font-size:34px}.pnDl div{grid-template-columns:1fr;gap:2px}
- .lm{padding:64px 22px}.lmGrid{grid-template-columns:1fr;grid-template-rows:none}.figA{grid-row:auto;min-height:300px}
+ .lm{padding:64px 22px}.lmHead{grid-template-columns:1fr;gap:16px;margin-bottom:28px}.lmGrid{grid-template-columns:1fr;grid-template-rows:none;height:auto}.lmGrid>.fig{min-height:220px}.lmGrid>.figA{grid-row:auto;min-height:300px}
  .sl{padding:64px 22px}.slGrid{grid-template-columns:1fr;gap:36px}.slQ{margin-top:56px}
 }

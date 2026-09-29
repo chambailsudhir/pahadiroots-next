@@ -354,7 +354,7 @@ export default function HeroBanner({ images, settings }: Props) {
                       <Link className="hhero-cta1" href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
                         {img.cta_text || 'Explore Our Store'}
                       </Link>
-                      <Link className="hhero-cta2" href={img.cta2_link || '/about'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
+                      <Link className="hhero-cta2" href={img.cta2_link || '/our-stories'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>
                         {img.cta2_text || 'Our Story'} →
                       </Link>
                     </div>
@@ -383,7 +383,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 <Link href="/products" style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px' }}>
                   Explore Our Store
                 </Link>
-                <Link href="/about" style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6 }}>
+                <Link href="/our-stories" style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6 }}>
                   Our Story →
                 </Link>
               </div>

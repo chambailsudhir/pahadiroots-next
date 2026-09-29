@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
       // the identical gap, just with longer, more visible windows:
       //   - /products/[slug] (revalidate = 3600s): reads free_shipping_min
       //     for its own "free shipping above ₹X" PDP messaging.
-      //   - /about (revalidate = 3600s): reads ~30 about_* keys wholesale
+      //   - /our-stories (revalidate = 3600s): reads ~30 about_* keys wholesale
       //     (hero copy, story copy, values, video) — every field the
       //     admin's About Page editor manages. Without this, an About Page
       //     edit could sit unpublished for up to an hour despite the same
@@ -170,11 +170,11 @@ export async function POST(req: NextRequest) {
       //     take the route down for up to an hour.
       revalidatePath('/checkout')
       revalidatePath('/products/[slug]', 'page')
-      revalidatePath('/about')
+      revalidatePath('/our-stories')
       revalidatePath('/blog')
       revalidated.push(
         '/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings',
-        '/checkout', '/products/[slug] (all)', '/about', '/blog'
+        '/checkout', '/products/[slug] (all)', '/our-stories', '/blog'
       )
     }
 
