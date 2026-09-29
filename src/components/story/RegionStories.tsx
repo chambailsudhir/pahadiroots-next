@@ -68,12 +68,21 @@ export default function RegionStories() {
       <div className={s.rxIn}>
         <Reveal as="figure" className={s.rangeFig}>
           <div className={s.rangeScroll}>
-            <Image
-              className={s.rangeImg}
-              src="/story/himalayan-range.webp"
-              alt="Illustrated map of the Himalayan range from Jammu & Kashmir in the west to Arunachal Pradesh in the east, with a peak marked for each region"
-              width={1975} height={796} sizes="(max-width:900px) 900px, 1240px"
-            />
+            {/* the track is the full-width image box (min-width 1400px on mobile),
+               so the snap anchors are positioned as a % of the IMAGE, not the phone screen */}
+            <div className={s.rangeTrack}>
+              <Image
+                className={s.rangeImg}
+                src="/story/himalayan-range.webp"
+                alt="Illustrated map of the Himalayan range from Jammu & Kashmir in the west to Arunachal Pradesh in the east, with a peak marked for each region"
+                width={1975} height={796} sizes="(max-width:900px) 1400px, 1240px"
+              />
+              {/* invisible scroll snap anchors, just left of the real pins:
+                 J&K, Ladakh, Himachal pair, Uttarakhand, Sikkim + Assam, Arunachal */}
+              {[0, 16.5, 27.5, 47, 66, 73].map(pct => (
+                <span key={pct} className={s.rangeSnap} style={{ left: `${pct}%` }} aria-hidden="true" />
+              ))}
+            </div>
           </div>
           <p className={s.rangeHint}>Swipe to follow the range →</p>
         </Reveal>
