@@ -19,6 +19,13 @@ export default function HimalayanRange() {
             alt="Illustrated map of the Himalayan range from Jammu & Kashmir in the west to Arunachal Pradesh in the east, with a peak marked for each region"
             width={1975} height={796} sizes="(max-width:900px) 900px, 1240px"
           />
+          {/* invisible scroll-snap anchors, one per region, so a swipe always settles
+             on a full pin/label instead of stopping mid-card. Percentages are an
+             approximation of each region's position in the artwork — nudge them to
+             match the real pin positions if they land off. */}
+          {[5, 15, 27, 42, 58, 74, 90].map(pct => (
+            <span key={pct} className={s.rangeSnap} style={{ left: `${pct}%` }} aria-hidden="true" />
+          ))}
         </div>
         <p className={s.rangeHint}>Swipe to follow the range →</p>
       </Reveal>

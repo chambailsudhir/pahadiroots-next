@@ -150,14 +150,14 @@ export default function CategoryTiles({ categories }: Props) {
   const doubled = [...active, ...active]
 
   return (
-    <section style={{ background: 'linear-gradient(180deg,#f9f4ec,#ede8d5)', padding: '40px 0 52px', overflow: 'visible' }}>
+    <section className="coll-bg" style={{ padding: '40px 0 52px', overflow: 'visible' }}>
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '28px', padding: '0 40px' }}>
         <div style={{
-          display: 'inline-block', border: '1.5px solid #c9a84c', borderRadius: '20px',
+          display: 'inline-block', border: '1.5px solid #c8920a', borderRadius: '20px',
           padding: '5px 18px', fontFamily: 'var(--font-lato,Lato,sans-serif)',
-          fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: '#a07830',
+          fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: '#8a6508',
           textTransform: 'uppercase', marginBottom: '12px',
         }}>Browse Collections</div>
         <h2 style={{
@@ -218,7 +218,7 @@ export default function CategoryTiles({ categories }: Props) {
                 <Link href={`/collections/${cat.slug}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
                   <div className="cc-box" style={{
                     width: '100%', aspectRatio: '1/1', borderRadius: '16px',
-                    border: '2px solid #c9a84c', background: '#fafaf8',
+                    border: '2px solid #c8920a', background: '#fafaf8',
                     position: 'relative', overflow: 'hidden',
                     boxShadow: '0 2px 12px rgba(201,168,76,.18)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -299,7 +299,7 @@ export default function CategoryTiles({ categories }: Props) {
            Firefox. Fixed to target the real className instead. */
         .cgrid-track::-webkit-scrollbar { display: none; }
         .cc-cell:hover { transform: translateY(-4px) !important; }
-        .cc-cell:hover .cc-box { border-color: #a07830 !important; box-shadow: 0 6px 24px rgba(201,168,76,.32) !important; }
+        .cc-cell:hover .cc-box { border-color: #8a6508 !important; box-shadow: 0 6px 24px rgba(200,146,10,.32) !important; }
         .cc-cell:hover .cc-img { transform: scale(1.06) !important; }
         .cgrid-arrow:hover { background: #f5f5f5 !important; box-shadow: 0 4px 16px rgba(0,0,0,.18) !important; border-color: #ccc !important; }
         @media(max-width:640px) { .cgrid-arrow { display: none !important; } }

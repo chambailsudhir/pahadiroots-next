@@ -184,10 +184,25 @@ section.sec { padding: 52px 40px; }
    .cc-box, .cc-emo, .cc-img). .coll-bg is kept since a background
    gradient class is cheap to keep and harmless either way, but the
    detailed tile-layout rules below it were pure dead weight. */
-.coll-bg { background: linear-gradient(180deg,#f9f4ec,#f2e8d0); }
+.coll-bg { background: linear-gradient(180deg,#eef0e2 0%,#e2e8d0 100%); border-top: 1px solid rgba(200,146,10,.35); }
 
 /* ── PRODUCT CARDS ── */
 .pgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,340px)); justify-content: center; gap: 24px; max-width: 1400px; margin: 0 auto; }
+/* Bestsellers: fixed column counts (not auto-fit) so the row count is always
+   exactly 2, regardless of viewport width. BestSellersClient renders up to 8
+   cards; each tier below hides whatever exceeds 2 rows at that column count. */
+.pgrid.bsGrid { grid-template-columns: repeat(2,1fr); }
+.pgrid.bsGrid > *:nth-child(n+5) { display: none; }
+@media (min-width:700px) {
+  .pgrid.bsGrid { grid-template-columns: repeat(3,1fr); }
+  .pgrid.bsGrid > *:nth-child(n+5) { display: block; }
+  .pgrid.bsGrid > *:nth-child(n+7) { display: none; }
+}
+@media (min-width:1100px) {
+  .pgrid.bsGrid { grid-template-columns: repeat(4,1fr); }
+  .pgrid.bsGrid > *:nth-child(n+7) { display: block; }
+  .pgrid.bsGrid > *:nth-child(n+9) { display: none; }
+}
 /* BUG FIX (P3): .pgrid-new-arrivals removed — confirmed zero usages
    anywhere; NewArrivals.tsx only ever uses the plain .pgrid class. */
 /* ═══════════════════════════════════════════════════════

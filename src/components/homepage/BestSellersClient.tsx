@@ -163,7 +163,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
           No products found
         </div>
       ) : (
-        <div className="pgrid">
+        <div className="pgrid bsGrid">
           {shown.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
         </div>
       )}
