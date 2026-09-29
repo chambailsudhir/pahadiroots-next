@@ -330,6 +330,7 @@ export interface SiteSettings {
   show_new_arrivals: string
   show_state_stories: string
   show_brand_story: string
+  show_region_story: string
   show_origin_stories: string
   show_life_in_mountains: string
   show_reviews_section: string

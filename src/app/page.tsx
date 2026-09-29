@@ -15,7 +15,7 @@ import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 import BrandStory from '@/components/story/BrandStory'
 import WhereTheyBegin from '@/components/story/WhereTheyBegin'
-import HimalayanRange from '@/components/story/HimalayanRange'
+import RegionStories from '@/components/story/RegionStories'
 import LifeInMountains from '@/components/story/LifeInMountains'
 
 // BUG FIX (found while removing the duplicate NewsletterBar section):
@@ -145,6 +145,7 @@ export default async function HomePage() {
   const showBrandStory    = isEnabled(settings.show_brand_story)
   const showOriginStories  = isEnabled(settings.show_origin_stories)
   const showLifeInMountains = isEnabled(settings.show_life_in_mountains)
+  const showRegionStory   = isEnabled(settings.show_region_story)
 
   return (
     <>
@@ -155,10 +156,9 @@ export default async function HomePage() {
       {showCategoryTiles && <CategoryTiles categories={categories} />}
       {showBestSellers && <BestSellers />}
       {showOriginStories && <WhereTheyBegin />}
-      {/* The range illustration shares ExploreByRegion's background so they read as one section */}
-      {showStateStories && states.length > 0 && <HimalayanRange />}
-      {showStateStories && states.length > 0 && <ExploreByRegion states={states} />}
+      {showRegionStory && <RegionStories />}
       {showLifeInMountains && <LifeInMountains />}
+      {showStateStories && states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />

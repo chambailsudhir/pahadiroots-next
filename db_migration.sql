@@ -236,6 +236,7 @@ INSERT INTO site_settings (key, value) VALUES
   ('show_new_arrivals',       'true'),
   ('show_state_stories',      'true'),
   ('show_brand_story',        'true'),
+  ('show_region_story',       'true'),
   ('show_origin_stories',     'true'),
   ('show_life_in_mountains',  'true'),
   ('show_reviews_section',    'true'),
