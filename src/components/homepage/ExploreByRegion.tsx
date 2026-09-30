@@ -90,7 +90,7 @@ export default function ExploreByRegion({ states }: Props) {
               ) : <div className={styles.fallback}>🏔️</div>}
             </div>
 
-            <div className={styles.story} style={{ backgroundColor: meta.panelBg || '#0f3219' }}>
+            <div className={styles.story} style={{ background: meta.panelBg || '#0f3219' }}>
               <img className={styles.storyMountain} src="/explore-region-art/story-mountain.png" alt="" aria-hidden="true" />
               <img className={styles.storyPine} src="/explore-region-art/story-pine.png" alt="" aria-hidden="true" />
 
