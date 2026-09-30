@@ -57,7 +57,8 @@ describe('ExploreByRegion', () => {
       ] }),
     ]} />)
 
-    fireEvent.click(screen.getByText('Jammu & Kashmir'))
+    // The name also appears in the "Next Region" panel, so target the tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Jammu & Kashmir' }))
 
     expect(screen.getByText('Kashmiri Saffron')).toBeTruthy()
   })
@@ -80,7 +81,7 @@ describe('ExploreByRegion', () => {
       id: 'hp', name: 'Himachal Pradesh',
       products: [{ id: 1, name: 'Kangra Tea', slug: 'kangra-tea' } as never],
     })]} />)
-    const link = screen.getByText(/View all Himachal Pradesh products/i)
+    const link = screen.getByText(/View all Himachal products/i)
     expect(link.getAttribute('href')).toBe('/regions/hp')
   })
 })

@@ -69,16 +69,30 @@ describe('ExploreByRegion — region selector', () => {
     expect(panel?.getAttribute('role')).toBe('tabpanel')
   })
 
-  it('bug #19 — empty-state text is not the low-contrast rgba(255,255,255,.35)', async () => {
+  it('bug #19 — empty-state text meets WCAG AA (4.5:1) on the section background', async () => {
     const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
     const { container } = render(React.createElement(ExploreByRegion, { states: STATES as any }))
-
-    // Both states have zero products, so the empty-state branch renders.
     expect(container.innerHTML).toContain('Products coming soon')
-    // jsdom keeps rgba() as-is (only hex gets converted to rgb()), so we can
-    // match the literal alpha value directly here.
-    expect(container.innerHTML).not.toContain('rgba(255, 255, 255, 0.35)')
-    expect(container.innerHTML).toContain('rgba(255, 255, 255, 0.6)')
+
+    // The empty state now sits on the cream section background (styles live
+    // in a CSS module, so read the rule itself and compute the real ratio).
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/homepage/ExploreByRegion.module.css'), 'utf8')
+    const fg = /\.empty\s*\{[^}]*?color:\s*(#[0-9a-f]{3,6})/i.exec(css)?.[1]
+    const bg = /--cream:\s*(#[0-9a-f]{6})/i.exec(css)?.[1]
+    expect(fg).toBeTruthy()
+    expect(bg).toBeTruthy()
+
+    const lum = (hex: string) => {
+      const h = hex.length === 4 ? '#' + [...hex.slice(1)].map(c => c + c).join('') : hex
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const [hi, lo] = [lum(fg!), lum(bg!)].sort((x, y) => y - x)
+    expect((hi + 0.05) / (lo + 0.05)).toBeGreaterThanOrEqual(4.5)
   })
 
   it('wires the "Explore by Region / Discover the Himalayas" heading to /regions', async () => {
@@ -87,5 +101,64 @@ describe('ExploreByRegion — region selector', () => {
 
     const viewAllLink = screen.getByRole('link', { name: /view all regions/i })
     expect(viewAllLink.getAttribute('href')).toBe('/regions')
+  })
+})
+
+describe('ExploreByRegion — keyboard, artwork and next-region panel', () => {
+  it('arrow keys / Home / End move the selection between region tabs', async () => {
+    const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
+    render(React.createElement(ExploreByRegion, { states: STATES as any }))
+    const tablist = screen.getByRole('tablist')
+    const tabs = screen.getAllByRole('tab')
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' })
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+    expect(tabs[1].getAttribute('tabindex')).toBe('0')
+    expect(tabs[0].getAttribute('tabindex')).toBe('-1')
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' }) // wraps
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(tablist, { key: 'End' })
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(tablist, { key: 'Home' })
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('next-region panel shows the next state, its pills and position counter', async () => {
+    const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
+    const states = [
+      { id: 'hp', name: 'Himachal Pradesh', slug: 'hp', image_url: null, description: null, region: null, products: [] },
+      { id: 'jk', name: 'Jammu & Kashmir', slug: 'jk', image_url: null, description: null, region: null, products: [] },
+    ]
+    const { container } = render(React.createElement(ExploreByRegion, { states: states as any }))
+    expect(container.textContent).toContain('Paradise on Earth')
+    expect(container.textContent).toContain('Kashmiri Kesar')
+    expect(container.textContent).toContain('02 / 02')
+  })
+
+  it('"Explore <next region>" switches to that region and scrolls the widget back into view', async () => {
+    const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
+    const scrollSpy = vi.fn()
+    ;(window.HTMLElement.prototype as any).scrollIntoView = scrollSpy
+    const states = [
+      { id: 'hp', name: 'Himachal Pradesh', slug: 'hp', image_url: null, description: null, region: null, products: [] },
+      { id: 'jk', name: 'Jammu & Kashmir', slug: 'jk', image_url: null, description: null, region: null, products: [] },
+    ]
+    render(React.createElement(ExploreByRegion, { states: states as any }))
+    fireEvent.click(screen.getByRole('button', { name: /explore jammu & kashmir/i }))
+
+    expect(screen.getByRole('tab', { name: 'Jammu & Kashmir' }).getAttribute('aria-selected')).toBe('true')
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('artwork is never stretched: no scaleY distortion on the mountain engraving', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/homepage/ExploreByRegion.module.css'), 'utf8')
+    expect(css).not.toMatch(/scaleY/)
+    // Flavours-of-<region> mountains are anchored to the bottom of the column.
+    expect(css).toMatch(/\.productMountains\s*\{[^}]*bottom:\s*\d+px/)
   })
 })

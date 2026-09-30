@@ -1,8 +1,10 @@
 /**
  * regionsResponsiveCss.test.ts
  *
- * Covers the CSS-only fixes for bugs #22, #23, #24 in src/app/globals.css,
- * src/app/regions/page.tsx, and src/app/regions/[slug]/page.tsx.
+ * Covers the CSS-only fixes for bugs #23 and #24 in src/app/regions/page.tsx
+ * and src/app/regions/[slug]/page.tsx. (Bug #22 guarded the .pr-shdr split
+ * header, which no longer exists anywhere in the codebase, so its tests were
+ * removed.)
  *
  * IMPORTANT — what this test can and cannot prove:
  * jsdom does not evaluate @media queries at all (confirmed limitation — it
@@ -29,29 +31,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-const globalsCss = readFileSync(join(__dirname, '../app/globals.css'), 'utf-8')
 const regionsPageSrc = readFileSync(join(__dirname, '../app/regions/page.tsx'), 'utf-8')
 const regionDetailPageSrc = readFileSync(join(__dirname, '../app/regions/[slug]/page.tsx'), 'utf-8')
-
-describe('bug #22 — .pr-shdr responsive breakpoints', () => {
-  it('has a 640px breakpoint that stacks the split panel to a single column', () => {
-    const rule = globalsCss.match(/@media\(max-width:640px\)\s*{[^}]*\.pr-shdr[^}]*}/)
-    expect(rule, 'no 640px rule targeting .pr-shdr found').toBeTruthy()
-    expect(rule![0]).toMatch(/grid-template-columns:\s*1fr\s*!important/)
-    expect(rule![0]).toMatch(/height:\s*auto\s*!important/)
-  })
-
-  it('has a 900px (tablet) breakpoint that shrinks the fixed height instead of ' +
-     'leaving the 54/46 split at its full 450px height all the way down from desktop', () => {
-    const line = globalsCss.split('\n').find(l => l.includes('@media(max-width:900px)') && l.includes('.pr-shdr'))
-    expect(line, 'no 900px media query line targeting .pr-shdr found').toBeTruthy()
-    expect(line).toMatch(/height:\s*380px\s*!important/)
-  })
-
-  it('base .pr-shdr rule is unchanged (54/46 split, 450px) — the fix is additive breakpoints, not a rewrite', () => {
-    expect(globalsCss).toMatch(/\.pr-shdr\s*{\s*display:\s*grid;\s*grid-template-columns:\s*54%\s*46%;\s*height:\s*450px/)
-  })
-})
 
 describe('bug #23 — /regions listing hero + shell mobile padding', () => {
   it('hero and shell wrappers carry the classNames the mobile override targets', () => {

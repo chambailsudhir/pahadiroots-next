@@ -9,8 +9,13 @@
  * promises render, copy stays conservative, and the stats are NOT printed.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+import React from 'react'
 import { render, screen } from '@testing-library/react'
+vi.mock('next/image', () => ({
+  default: ({ fill, priority, ...props }: Record<string, unknown>) =>
+    React.createElement('img', { ...props, alt: (props.alt as string) ?? '' }),
+}))
 import WhySection from '@/components/homepage/WhySection'
 import type { SiteSettings } from '@/types'
 

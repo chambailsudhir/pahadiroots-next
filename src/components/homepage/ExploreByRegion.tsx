@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'
@@ -30,6 +30,8 @@ export default function ExploreByRegion({ states }: Props) {
   }, [states])
 
   const [activeId, setActiveId] = useState(initialId)
+  const sectionRef = useRef<HTMLElement>(null)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   if (!states.length) return null
 
   const activeIndex = Math.max(0, states.findIndex(s => s.id === activeId))
@@ -45,8 +47,35 @@ export default function ExploreByRegion({ states }: Props) {
   const nextMeta = getRegionMeta(nextState?.id)
   const displayRegion = activeState.name.replace(/\s+Pradesh$/i, '')
 
+  // "Next Region" CTA: switch tab AND bring the top of the widget back into
+  // view, otherwise the visitor stays parked at the bottom of the old panel.
+  const goToNext = () => {
+    if (!nextState) return
+    setActiveId(nextState.id)
+    sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
+  const domId = (id: string) => id.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+  const tabId = (id: string) => `region-tab-${domId(id)}`
+  const panelId = (id: string) => `region-panel-${domId(id)}`
+
+  // WAI-ARIA tabs pattern: arrow keys / Home / End move between regions.
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const last = states.length - 1
+    let target = -1
+    if (e.key === 'ArrowRight') target = activeIndex >= last ? 0 : activeIndex + 1
+    else if (e.key === 'ArrowLeft') target = activeIndex <= 0 ? last : activeIndex - 1
+    else if (e.key === 'Home') target = 0
+    else if (e.key === 'End') target = last
+    if (target < 0) return
+    e.preventDefault()
+    setActiveId(states[target].id)
+    tabRefs.current[target]?.focus()
+  }
+  const nextPosition = String(((activeIndex + 1) % states.length) + 1).padStart(2, '0')
+  const totalRegions = String(states.length).padStart(2, '0')
+
   return (
-    <section className={styles.section} id="regions">
+    <section ref={sectionRef} className={styles.section} id="regions">
       <div className={styles.inner}>
         <header className={styles.header}>
           <div>
@@ -57,24 +86,40 @@ export default function ExploreByRegion({ states }: Props) {
           <Link href="/regions" className={styles.viewAll}>View All Regions <span>→</span></Link>
         </header>
 
-        <nav className={styles.regionNav} aria-label="Explore by region">
-          {states.map(state => {
+        <div
+          className={styles.regionNav}
+          role="tablist"
+          aria-label="Explore by region"
+          onKeyDown={onTabKeyDown}
+        >
+          {states.map((state, index) => {
             const active = state.id === activeState.id
             return (
               <button
                 key={state.id}
+                ref={el => { tabRefs.current[index] = el }}
                 type="button"
+                role="tab"
+                id={tabId(state.id)}
+                aria-selected={active}
+                aria-controls={active ? panelId(state.id) : undefined}
+                tabIndex={active ? 0 : -1}
                 className={`${styles.regionTab} ${active ? styles.active : ''}`}
-                aria-pressed={active}
                 onClick={() => setActiveId(state.id)}
               >
                 {state.name}
               </button>
             )
           })}
-        </nav>
+        </div>
 
-        <div key={activeState.id} className={styles.content}>
+        <div
+          key={activeState.id}
+          className={styles.content}
+          role="tabpanel"
+          id={panelId(activeState.id)}
+          aria-labelledby={tabId(activeState.id)}
+        >
           {/* DEMO HERO: exact side-by-side image / green editorial panel composition. */}
           <div className={styles.hero}>
             <div className={styles.heroPhoto}>
@@ -140,27 +185,46 @@ export default function ExploreByRegion({ states }: Props) {
             )}
           </div>
 
-          {/* DEMO NEXT REGION: same 65/35 panoramic composition. */}
+          {/* NEXT REGION: blur-filled photo stage (never leaves empty space, whatever the photo's aspect ratio) + editorial copy panel. */}
           {nextState && nextState.id !== activeState.id && (
             <div className={styles.nextRegion}>
               <div className={styles.nextPhoto}>
                 {nextState.image_url ? (
-                  <Image
-                    src={nextState.image_url}
-                    alt={`${nextState.name} Himalayan region`}
-                    fill
-                    sizes="(max-width: 900px) 100vw, 65vw"
-                    style={{ objectFit: 'contain', objectPosition: 'left center' }}
-                  />
+                  <>
+                    <Image
+                      src={nextState.image_url}
+                      alt=""
+                      aria-hidden="true"
+                      fill
+                      sizes="(max-width: 1000px) 100vw, 40vw"
+                      className={styles.nextPhotoBackdrop}
+                    />
+                    <Image
+                      src={nextState.image_url}
+                      alt={`${nextState.name} Himalayan region`}
+                      fill
+                      sizes="(max-width: 1000px) 100vw, 65vw"
+                      className={styles.nextPhotoMain}
+                    />
+                  </>
                 ) : <div className={styles.fallback}>🏔️</div>}
+                <span className={styles.nextCounter}>{nextPosition} <i>/</i> {totalRegions}</span>
               </div>
+
               <div className={styles.nextCopy}>
                 <img className={styles.nextBotanical} src="/explore-region-art/next-botanical.png" alt="" aria-hidden="true" />
                 <div className={styles.eyebrow}>Next Region <span /></div>
                 <h3>{nextState.name}</h3>
                 <div className={styles.nextTagline}>{nextMeta?.tagline ?? 'The mountains continue'}</div>
                 <p>{nextMeta?.snippet ?? nextState.description ?? ''}</p>
-                <button type="button" className={styles.nextLink} onClick={() => setActiveId(nextState.id)}>
+
+                {nextMeta && nextMeta.pills.length > 0 && (
+                  <div className={styles.nextPills}>
+                    {nextMeta.pills.slice(0, 4).map(pill => <span key={pill}>{pill.replace(/^\S+\s/, '')}</span>)}
+                  </div>
+                )}
+
+                <button type="button" className={styles.nextLink} onClick={goToNext}>
                   Explore {nextState.name} <span>→</span>
                 </button>
               </div>

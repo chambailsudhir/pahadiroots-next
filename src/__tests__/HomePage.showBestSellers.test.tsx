@@ -54,6 +54,10 @@ vi.mock('@/components/homepage/WhySection',      () => ({ default: () => <div da
 vi.mock('@/components/homepage/ReviewsPreview',  () => ({ default: () => <div data-testid="reviews-preview" /> }))
 vi.mock('@/components/homepage/NewArrivals',     () => ({ default: () => <div data-testid="new-arrivals" /> }))
 vi.mock('@/components/homepage/FeaturedBanner',  () => ({ default: () => <div data-testid="featured-banner" /> }))
+vi.mock('@/components/story/BrandStory',      () => ({ default: () => <div data-testid="brand-story" /> }))
+vi.mock('@/components/story/WhereTheyBegin',  () => ({ default: () => <div data-testid="where-they-begin" /> }))
+vi.mock('@/components/story/RegionStories',   () => ({ default: () => <div data-testid="region-stories" /> }))
+vi.mock('@/components/story/LifeInMountains', () => ({ default: () => <div data-testid="life-in-mountains" /> }))
 
 function baseSettings(overrides: Record<string, string> = {}) {
   return {

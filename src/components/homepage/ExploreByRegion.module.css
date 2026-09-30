@@ -57,6 +57,7 @@
   text-transform:uppercase;
 }
 .regionTab:first-child { padding-left:0; }
+.regionTab:focus-visible { outline:2px solid #c89427; outline-offset:2px; }
 .regionTab.active { color:#a97812; border-bottom-color:#c89427; }
 
 .content { padding-top: 0; }
@@ -78,36 +79,48 @@
 .pills span { border:1px solid rgba(255,255,255,.34); color:#fff; padding:6px 10px; font:700 8px/1 var(--font-lato),Arial,sans-serif; letter-spacing:.35px; }
 .exploreButton { align-self:flex-start; background:#e4b956; color:#17371d; text-decoration:none; padding:11px 16px; font:800 9px/1 var(--font-lato),Arial,sans-serif; }
 .storyMountain,.storyPine,.productMountains,.nextBotanical { position:absolute; pointer-events:none; }
-.storyMountain { right:34px; top:58px; width:156px; height:auto; opacity:.92; z-index:2; }
+.storyMountain { right:4%; top:22px; width:42%; max-width:210px; height:auto; opacity:.92; z-index:1; -webkit-mask-image:linear-gradient(to right,transparent 0,#000 28%); mask-image:linear-gradient(to right,transparent 0,#000 28%); }
 .storyPine { right:0; bottom:-2px; width:112px; height:auto; opacity:.78; z-index:2; }
 
-.productsRow { display:grid; grid-template-columns: 300px minmax(0,1fr); gap:20px; align-items:start; padding:28px 52px 28px; }
-.productsCopy { position:relative; min-height:282px; overflow:hidden; padding-top:2px; }
+.productsRow { display:grid; grid-template-columns: 300px minmax(0,1fr); gap:20px; align-items:stretch; padding:28px 52px 28px; }
+.productsCopy { position:relative; overflow:hidden; padding-top:2px; padding-bottom:104px; }
 .productsCopy h3 { color:var(--ink); font-size:clamp(40px,4vw,55px); line-height:.91; }
 .productsCopy p { max-width:245px; margin:13px 0 15px; color:#565b54; font:400 11px/1.55 var(--font-lato),Arial,sans-serif; }
 .productsLink { position:relative; z-index:2; display:inline-block; border-bottom:1px solid var(--ink); padding-bottom:5px; color:var(--ink); text-decoration:none; font:800 9px/1.2 var(--font-lato),Arial,sans-serif; }
-.productMountains { left:-2px; bottom:0; width:100%; height:165px; opacity:.55; transform:scaleY(1.55); transform-origin:left bottom; }
-.productGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-items:stretch; }
+.productMountains { left:0; bottom:30px; width:100%; height:auto; opacity:.6; -webkit-mask-image:linear-gradient(to bottom,#000 70%,transparent 100%); mask-image:linear-gradient(to bottom,#000 70%,transparent 100%); }
+.productGrid { align-self:start; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-items:stretch; }
 .productGrid :global(.pcard) { width:100% !important; min-width:0 !important; max-width:none !important; border-radius:12px; }
 .empty { padding:50px 0; color:#666; }
 
-.nextRegion { display:grid; grid-template-columns:1.68fr .97fr; min-height:286px; margin:0 calc((100vw - min(1312px,100vw - 32px))/2 * -1); }
-.nextPhoto { position:relative; min-height:286px; overflow:hidden; background:#eee7d3; }
-.nextCopy { position:relative; overflow:hidden; background:#eee7d3; padding:45px 55px; display:flex; flex-direction:column; justify-content:center; }
+.nextRegion { display:grid; grid-template-columns:1.68fr .97fr; min-height:340px; margin:0 calc((100vw - min(1312px,100vw - 32px))/2 * -1); background:#eee7d3; }
+.nextPhoto { position:relative; min-height:340px; overflow:hidden; background:#1c2f20; isolation:isolate; }
+/* blurred, darkened copy of the photo fills the whole stage ... */
+.nextPhotoBackdrop { object-fit:cover; object-position:center; filter:blur(26px) saturate(1.1) brightness(.62); transform:scale(1.18); z-index:0; }
+/* ... and the sharp photo sits on top, uncropped, centred */
+.nextPhotoMain { object-fit:contain; object-position:center; z-index:1; filter:drop-shadow(0 10px 30px rgba(0,0,0,.35)); }
+.nextPhoto::after { content:""; position:absolute; inset:14px; border:1px solid rgba(232,184,75,.4); z-index:3; pointer-events:none; }
+.nextCounter { position:absolute; left:30px; bottom:26px; z-index:4; color:#f1d58a; font:800 11px/1 var(--font-lato),Arial,sans-serif; letter-spacing:2.4px; text-shadow:0 1px 8px rgba(0,0,0,.55); }
+.nextCounter i { font-style:normal; opacity:.6; margin:0 4px; }
+.nextCopy { position:relative; overflow:hidden; background:#eee7d3; padding:48px 56px 48px 40px; display:flex; flex-direction:column; justify-content:center; }
 .nextCopy h3 { position:relative; z-index:2; color:var(--ink); font-size:clamp(38px,4vw,54px); line-height:.92; }
-.nextTagline { position:relative; z-index:2; color:#a97812; font:italic 400 19px/1.2 var(--font-playfair),Georgia,serif; margin-top:5px; }
-.nextCopy p { position:relative; z-index:2; max-width:325px; margin:12px 0 17px; color:#5a5d55; font:400 10.5px/1.55 var(--font-lato),Arial,sans-serif; }
-.nextLink { position:relative; z-index:2; align-self:flex-start; border:0; background:transparent; border-bottom:1px solid var(--ink); padding:0 0 5px; color:var(--ink); cursor:pointer; font:800 9px/1.2 var(--font-lato),Arial,sans-serif; }
-.nextBotanical { right:18px; bottom:0; width:122px; height:92%; object-fit:contain; object-position:right bottom; opacity:.62; }
+.nextTagline { position:relative; z-index:2; color:#a97812; font:italic 400 20px/1.2 var(--font-playfair),Georgia,serif; margin-top:6px; }
+.nextCopy p { position:relative; z-index:2; max-width:340px; margin:14px 0 16px; color:#4f544c; font:400 11.5px/1.6 var(--font-lato),Arial,sans-serif; }
+.nextPills { position:relative; z-index:2; display:flex; flex-wrap:wrap; gap:6px; max-width:340px; margin-bottom:20px; }
+.nextPills span { border:1px solid rgba(23,55,29,.28); color:var(--ink); padding:6px 10px; font:700 8px/1 var(--font-lato),Arial,sans-serif; letter-spacing:.4px; text-transform:uppercase; }
+.nextLink { position:relative; z-index:2; align-self:flex-start; border:0; background:var(--green); color:#f5e2ad; padding:13px 20px; cursor:pointer; font:800 9.5px/1 var(--font-lato),Arial,sans-serif; letter-spacing:.4px; transition:background .2s ease, transform .2s ease; }
+.nextLink:hover { background:#17441f; transform:translateY(-1px); }
+.nextLink:focus-visible { outline:2px solid #c89427; outline-offset:3px; }
+.nextBotanical { right:18px; bottom:0; width:122px; height:92%; object-fit:contain; object-position:right bottom; opacity:.5; }
 
 @media (max-width: 1000px) {
   .header,.regionNav,.productsRow { padding-left:24px; padding-right:24px; }
   .hero,.nextRegion { grid-template-columns:1fr; }
   .story { min-height:370px; }
   .productsRow { grid-template-columns:1fr; }
-  .productsCopy { min-height:210px; }
-  .productMountains { width:100%; height:145px; transform:scaleY(1.35); }
-}
+  .productsCopy { padding-bottom:110px; }
+  .productMountains { bottom:12px; }
+  .nextPhoto { min-height:300px; }
+  }
 @media (max-width: 700px) {
   .section { padding-top:20px; }
   .inner { width:100%; }
@@ -118,11 +131,12 @@
   .heroPhoto { min-height:320px; }
   .story { min-height:390px; }
   .storyInner { padding:38px 30px 34px; }
-  .storyMountain { right:24px; top:42px; width:115px; }
+  .storyMountain { right:6%; top:20px; width:38%; }
   .storyPine { width:92px; }
   .productsRow { padding:25px 24px; }
   .productGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .nextCopy { padding:38px 30px 44px; }
+  .nextPhoto { min-height:260px; }
 }
 
 /* ARTWORK FIX: transparent editorial engraving, never a rectangular image block */
