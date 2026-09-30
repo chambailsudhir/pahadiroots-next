@@ -69,6 +69,12 @@ export default function HeroBanner({ images, settings }: Props) {
       setSlideRatios(prev => (prev[i] ? prev : { ...prev, [i]: w / h }))
     }
   }, [])
+  const handleVideoMeta = useCallback((i: number, e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const { videoWidth: w, videoHeight: h } = e.currentTarget
+    if (w > 0 && h > 0) {
+      setSlideRatios(prev => (prev[i] ? prev : { ...prev, [i]: w / h }))
+    }
+  }, [])
   const activeRatio = slideRatios[current] ?? 1.87
 
   // Mobile layout for slides that carry text/buttons over a photo.
@@ -268,7 +274,17 @@ export default function HeroBanner({ images, settings }: Props) {
                 slide whose important content sits right at the very
                 bottom edge would now lose slightly more of that than
                 before. */}
-            <div className="hhero-media" style={{ position: 'absolute', inset: 0 }}>
+            {/* BUG FIX (mobile "stack" layout cropped the photo — reported via
+                screenshot of the Cow Ghee banner, a correctly-sized 2:1 image
+                whose jar sat cut off at the right edge): slides that carry
+                overlay text use the stack layout, where this wrapper used to
+                be forced to a fixed 1.55:1 box with object-fit:cover. A 2:1
+                photo in a 1.55:1 box loses ~22% of its width (sides cropped),
+                which is exactly what sliced the jar. The box now takes THIS
+                slide's own measured ratio (--media-ratio, clamped to a sane
+                range, default 2 = the recommended 2400x1200 export), so cover
+                has nothing left to crop. */}
+            <div className="hhero-media" style={{ position: 'absolute', inset: 0, ['--media-ratio' as string]: Math.min(2.4, Math.max(1.3, slideRatios[i] ?? 2)) }}>
             {img.video ? (
               <video
                 ref={el => { videoRefs.current[i] = el }}
@@ -278,6 +294,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted={isMuted}
                 loop
                 playsInline
+                onLoadedMetadata={e => handleVideoMeta(i, e)}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
               />
             ) : img.url ? (
@@ -313,6 +330,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 </div>
               ) : (
                 <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                  onLoad={e => handleImgLoad(i, e)}
                   style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
               )
             ) : (
@@ -601,11 +619,11 @@ export default function HeroBanner({ images, settings }: Props) {
             position: relative !important;
             inset: auto !important;
             width: 100%;
-            aspect-ratio: 1.55 / 1;
+            aspect-ratio: var(--media-ratio, 2) / 1;
             flex-shrink: 0;
           }
           .hhero-layout-stack .hhero-slide-ov .hhero-media::after{
-            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 60%;
+            content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 42%;
             background: linear-gradient(180deg, rgba(13,36,16,0), #0d2410);
             pointer-events: none;
           }
