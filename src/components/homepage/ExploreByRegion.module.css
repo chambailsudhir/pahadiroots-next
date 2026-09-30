@@ -87,7 +87,16 @@
 .productsCopy h3 { color:var(--ink); font-size:clamp(40px,4vw,55px); line-height:.91; }
 .productsCopy p { max-width:245px; margin:13px 0 15px; color:#565b54; font:400 11px/1.55 var(--font-lato),Arial,sans-serif; }
 .productsLink { position:relative; z-index:2; display:inline-block; border-bottom:1px solid var(--ink); padding-bottom:5px; color:var(--ink); text-decoration:none; font:800 9px/1.2 var(--font-lato),Arial,sans-serif; }
-.productMountains { left:0; bottom:30px; width:100%; height:auto; opacity:.6; -webkit-mask-image:linear-gradient(to bottom,#000 70%,transparent 100%); mask-image:linear-gradient(to bottom,#000 70%,transparent 100%); }
+.productMountains {
+  left:0;
+  bottom:0;
+  width:310%;
+  max-width:none;
+  height:auto;
+  opacity:.6;
+  -webkit-mask-image:linear-gradient(to bottom,#000 70%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 70%,transparent 100%);
+}
 .productGrid { align-self:start; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-items:stretch; }
 .productGrid :global(.pcard) { width:100% !important; min-width:0 !important; max-width:none !important; border-radius:12px; }
 .empty { padding:50px 0; color:#666; }
@@ -146,7 +155,7 @@
   display:block;
   object-fit:contain;
   object-position:left bottom;
-  max-width:100%;
+  max-width:none;
 }
 .productsCopy > *:not(.productMountains){position:relative;z-index:2;}
 .nextBotanical{
