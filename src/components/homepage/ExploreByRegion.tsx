@@ -150,7 +150,7 @@ export default function ExploreByRegion({ states }: Props) {
                     alt={`${nextState.name} Himalayan region`}
                     fill
                     sizes="(max-width: 900px) 100vw, 65vw"
-                    style={{ objectFit: 'cover', objectPosition: 'center' }}
+                    style={{ objectFit: 'contain', objectPosition: 'left center' }}
                   />
                 ) : <div className={styles.fallback}>🏔️</div>}
               </div>

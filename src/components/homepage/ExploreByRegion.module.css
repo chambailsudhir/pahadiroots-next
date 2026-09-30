@@ -78,7 +78,7 @@
 .pills span { border:1px solid rgba(255,255,255,.34); color:#fff; padding:6px 10px; font:700 8px/1 var(--font-lato),Arial,sans-serif; letter-spacing:.35px; }
 .exploreButton { align-self:flex-start; background:#e4b956; color:#17371d; text-decoration:none; padding:11px 16px; font:800 9px/1 var(--font-lato),Arial,sans-serif; }
 .storyMountain,.storyPine,.productMountains,.nextBotanical { position:absolute; pointer-events:none; }
-.storyMountain { right:58px; top:72px; width:100px; height:auto; opacity:.92; z-index:2; }
+.storyMountain { right:34px; top:58px; width:156px; height:auto; opacity:.92; z-index:2; }
 .storyPine { right:0; bottom:-2px; width:112px; height:auto; opacity:.78; z-index:2; }
 
 .productsRow { display:grid; grid-template-columns: 300px minmax(0,1fr); gap:20px; align-items:start; padding:28px 52px 28px; }
@@ -86,19 +86,19 @@
 .productsCopy h3 { color:var(--ink); font-size:clamp(40px,4vw,55px); line-height:.91; }
 .productsCopy p { max-width:245px; margin:13px 0 15px; color:#565b54; font:400 11px/1.55 var(--font-lato),Arial,sans-serif; }
 .productsLink { position:relative; z-index:2; display:inline-block; border-bottom:1px solid var(--ink); padding-bottom:5px; color:var(--ink); text-decoration:none; font:800 9px/1.2 var(--font-lato),Arial,sans-serif; }
-.productMountains { left:-2px; bottom:-5px; width:300px; height:auto; opacity:.55; }
+.productMountains { left:-2px; bottom:0; width:100%; height:165px; opacity:.55; transform:scaleY(1.55); transform-origin:left bottom; }
 .productGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; align-items:stretch; }
 .productGrid :global(.pcard) { width:100% !important; min-width:0 !important; max-width:none !important; border-radius:12px; }
 .empty { padding:50px 0; color:#666; }
 
 .nextRegion { display:grid; grid-template-columns:1.68fr .97fr; min-height:286px; margin:0 calc((100vw - min(1312px,100vw - 32px))/2 * -1); }
-.nextPhoto { position:relative; min-height:286px; overflow:hidden; }
+.nextPhoto { position:relative; min-height:286px; overflow:hidden; background:#eee7d3; }
 .nextCopy { position:relative; overflow:hidden; background:#eee7d3; padding:45px 55px; display:flex; flex-direction:column; justify-content:center; }
 .nextCopy h3 { position:relative; z-index:2; color:var(--ink); font-size:clamp(38px,4vw,54px); line-height:.92; }
 .nextTagline { position:relative; z-index:2; color:#a97812; font:italic 400 19px/1.2 var(--font-playfair),Georgia,serif; margin-top:5px; }
 .nextCopy p { position:relative; z-index:2; max-width:325px; margin:12px 0 17px; color:#5a5d55; font:400 10.5px/1.55 var(--font-lato),Arial,sans-serif; }
 .nextLink { position:relative; z-index:2; align-self:flex-start; border:0; background:transparent; border-bottom:1px solid var(--ink); padding:0 0 5px; color:var(--ink); cursor:pointer; font:800 9px/1.2 var(--font-lato),Arial,sans-serif; }
-.nextBotanical { right:0; bottom:-4px; width:104px; height:auto; opacity:.62; }
+.nextBotanical { right:18px; bottom:0; width:122px; height:92%; object-fit:contain; object-position:right bottom; opacity:.62; }
 
 @media (max-width: 1000px) {
   .header,.regionNav,.productsRow { padding-left:24px; padding-right:24px; }
@@ -106,7 +106,7 @@
   .story { min-height:370px; }
   .productsRow { grid-template-columns:1fr; }
   .productsCopy { min-height:210px; }
-  .productMountains { width:260px; }
+  .productMountains { width:100%; height:145px; transform:scaleY(1.35); }
 }
 @media (max-width: 700px) {
   .section { padding-top:20px; }
@@ -118,7 +118,7 @@
   .heroPhoto { min-height:320px; }
   .story { min-height:390px; }
   .storyInner { padding:38px 30px 34px; }
-  .storyMountain { right:30px; top:45px; width:85px; }
+  .storyMountain { right:24px; top:42px; width:115px; }
   .storyPine { width:92px; }
   .productsRow { padding:25px 24px; }
   .productGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
