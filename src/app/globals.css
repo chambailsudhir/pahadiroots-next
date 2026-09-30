@@ -322,7 +322,7 @@ section.sec { padding: 52px 40px; }
 .filter-btn.active { background: var(--g); color: #fff; border-color: var(--g); }
 
 /* ── OUR PROMISE (WhySection) ── */
-.promise-bg { background: linear-gradient(180deg,#faf6ee,#f2eadc); padding: 36px 24px 48px; }
+.promise-bg { background: linear-gradient(180deg,#faf6ee,#f2eadc); padding: 30px 24px 38px; } /* was 36px 24px 48px — trimmed ~16px total */
 .promise-h2 { font-size: clamp(24px,3.6vw,42px); line-height: 1.15; letter-spacing: -.01em; max-width: 900px; margin-left: auto; margin-right: auto; }
 .promise-sub { font-size: clamp(14px,1.5vw,17px); max-width: 620px; }
 .promise-grid { list-style: none; margin: 8px auto 0; padding: 0; max-width: 1240px; display: grid; grid-template-columns: repeat(4,1fr); }
