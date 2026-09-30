@@ -1,18 +1,18 @@
-REPLACE THESE FILES
+Pahadi Roots – Explore Region artwork/layout fix
 
-1. src/components/homepage/ExploreByRegion.tsx
-2. src/components/homepage/ExploreByRegion.module.css
+Replace:
+src/components/homepage/ExploreByRegion.tsx
+src/components/homepage/ExploreByRegion.module.css
 
-ADD/REPLACE THESE ARTWORK FILES
+Add/replace:
+public/explore-region-art/story-mountain.png
+public/explore-region-art/story-pine.png
+public/explore-region-art/product-mountains.png
+public/explore-region-art/next-botanical.png
 
-3. public/explore-region-art/story-mountain.png
-4. public/explore-region-art/story-pine.png
-5. public/explore-region-art/product-mountains.png
-6. public/explore-region-art/next-botanical.png
+DO NOT replace globals.css.
 
-IMPORTANT FIXES IN THIS VERSION
-- Region panel uses `background`, not `backgroundColor`, so the existing gradient from regionMeta actually renders.
-- Himachal panel therefore returns to the dark-green demo appearance.
-- Product pills preserve their full labels (Apple & ACV, Pine Honey, etc.).
-- Decorative artwork uses transparent PNGs so no cream/green rectangular image boxes appear around the line art.
-- globals.css does NOT need to be replaced.
+This version fixes the rectangular artwork backgrounds:
+- Product mountain engraving has a transparent background and no blue photo strip.
+- Next Region botanical engraving has a transparent background.
+- Story mountain/pine engravings are transparent so the green panel background remains visible.
