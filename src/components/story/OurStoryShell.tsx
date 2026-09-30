@@ -21,6 +21,7 @@ export default function OurStoryShell({ children }: { children: ReactNode }) {
     const q = <T extends HTMLElement>(sel: string) => Array.from(root.querySelectorAll<T>(sel))
     const words = q('[data-w]'), steps = q('[data-step]'), frames = q('[data-f]')
     const man = root.querySelector<HTMLElement>('[data-man]')
+    const stick = root.querySelector<HTMLElement>('[data-stick]')
     const pano = root.querySelector<HTMLElement>('[data-pano]')
 
     let io: IntersectionObserver | undefined
@@ -39,6 +40,15 @@ export default function OurStoryShell({ children }: { children: ReactNode }) {
         const r = man.getBoundingClientRect()
         const p = Math.min(1, Math.max(0, (vh * 0.85 - r.top) / (r.height + vh * 0.35)))
         words.forEach((w, i) => w.classList.toggle(s.on, i / words.length < p * 1.05))
+      }
+      // Manual pin (CSS sticky is disabled site-wide by overflow-x on html+body).
+      if (stick && stick.parentElement) {
+        const hd = document.querySelector('.sticky.top-0')
+        const hb = hd ? hd.getBoundingClientRect().bottom : 0
+        const off = hb > 0 ? hb : 48
+        const r = stick.parentElement.getBoundingClientRect()
+        const max = Math.max(stick.parentElement.offsetHeight - stick.offsetHeight, 0)
+        stick.style.transform = `translateY(${Math.min(Math.max(off - r.top, 0), max)}px)`
       }
       let a = 0
       steps.forEach((st, i) => { if (st.getBoundingClientRect().top < vh * 0.55) a = i })

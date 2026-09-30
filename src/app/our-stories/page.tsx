@@ -147,7 +147,7 @@ export default async function AboutPage() {
               <p>Nothing here is staged for a camera. This is the rhythm of the people, animals and seasons behind every jar.</p>
             </div>
             <div className={s.sg}>
-              <div className={s.stick}>
+              <div className={s.stick} data-stick>
                 <div className={s.frame}>
                   {CHAPTERS.map((c, i) => (
                     <Image key={c.img} data-f src={`/our-story/day-${c.img}.webp`} alt={c.alt} fill sizes="(max-width: 820px) 92vw, 55vw" className={`${s.frameImg} ${i === 0 ? s.on : ''}`} />
@@ -281,13 +281,15 @@ export default async function AboutPage() {
 
         {/* ── 8. Closing image + CTA ── */}
         <section className={s.end} aria-labelledby="ab-end">
-          <div className={s.endImg}>
-            <Image src="/our-story/close.webp" alt="Late light on snowy Himalayan slopes above a clear mountain river" fill sizes="100vw" />
+          <div className={`${s.endPanel} ${s.r}`} data-r>
+            <div>
+              <span className={s.eb}>The story continues</span>
+              <h2 id="ab-end">Every jar, every ingredient and every product begins somewhere in the mountains.</h2>
+              <Link href="/products" className={s.btn}>EXPLORE THE PRODUCTS</Link>
+            </div>
           </div>
-          <div className={`${s.tx} ${s.r}`} data-r>
-            <span className={s.eb}>The story continues</span>
-            <h2 id="ab-end">Every jar, every ingredient and every product begins somewhere in the mountains.</h2>
-            <Link href="/products" className={s.btn}>EXPLORE THE PRODUCTS</Link>
+          <div className={s.endImg}>
+            <Image src="/our-story/close-2.webp" alt="Snow-covered Himalayan peak with dark conifers on the slope above a mountain river" fill sizes="(max-width: 820px) 100vw, 50vw" />
           </div>
         </section>
       </OurStoryShell>
