@@ -274,20 +274,6 @@ export default function CategoryTiles({ categories }: Props) {
         </div>
       </div>
 
-      {/* View All */}
-      <div style={{ textAlign: 'center', marginTop: '4px' }}>
-        <Link href="/products" style={{
-          display: 'inline-flex', alignItems: 'center', gap: '8px',
-          background: '#1a3a1e', color: '#fff',
-          fontFamily: 'var(--font-lato,Lato,sans-serif)',
-          fontSize: '13px', fontWeight: 800, letterSpacing: '.5px',
-          padding: '11px 24px', borderRadius: '24px', textDecoration: 'none',
-          transition: 'all .2s',
-        }}>
-          🌿 View All Products <span style={{ fontSize: '16px' }}>→</span>
-        </Link>
-      </div>
-
       <style>{`
         /* BUG FIX (P1): this selector previously read
            div[style*="overflowX: scroll"] — which can never match, since

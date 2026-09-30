@@ -107,7 +107,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
       filtered.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0))
   }
 
-  const shown = filtered.slice(0, 8)
+  const shown = filtered.slice(0, 6)
 
   return (
     <section className="sec" id="products" style={{ background: '#f5f0e8', padding: '36px 40px 48px' }}>
@@ -115,7 +115,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
         <div className="ct rv" style={{ marginBottom: 0, textAlign: 'left' }}>
           <div className="chip">Bestsellers</div>
           <h2 className="sh2">Our Finest Offerings</h2>
-          <p className="ssub">A fresh edit of eight Himalayan favorites, reshuffled every visit.</p>
+          <p className="ssub">A fresh edit of six Himalayan favorites, reshuffled every visit.</p>
         </div>
         <Link
           href="/products"
@@ -164,7 +164,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
         </div>
       ) : (
         <div className="pgrid bsGrid">
-          {shown.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
+          {shown.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 3} />)}
         </div>
       )}
     </section>

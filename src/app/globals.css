@@ -188,20 +188,17 @@ section.sec { padding: 52px 40px; }
 
 /* ── PRODUCT CARDS ── */
 .pgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(280px,340px)); justify-content: center; gap: 24px; max-width: 1400px; margin: 0 auto; }
-/* Bestsellers: fixed column counts (not auto-fit) so the row count is always
-   exactly 2, regardless of viewport width. BestSellersClient renders up to 8
-   cards; each tier below hides whatever exceeds 2 rows at that column count. */
+/* Bestsellers: exactly 2 rows. BestSellersClient renders 6 cards.
+   - Desktop / tablet (>=700px): 3 columns x 2 rows = all 6 cards.
+   - Mobile (<700px): 2 columns x 2 rows = first 4 cards (5th/6th hidden so
+     the grid never leaves a third row or an orphan card).
+   Anyone who wants more uses the "Show All Products" button. */
 .pgrid.bsGrid { grid-template-columns: repeat(2,1fr); }
 .pgrid.bsGrid > *:nth-child(n+5) { display: none; }
 @media (min-width:700px) {
-  .pgrid.bsGrid { grid-template-columns: repeat(3,1fr); }
+  .pgrid.bsGrid { grid-template-columns: repeat(3,1fr); max-width: 1120px; }
   .pgrid.bsGrid > *:nth-child(n+5) { display: block; }
   .pgrid.bsGrid > *:nth-child(n+7) { display: none; }
-}
-@media (min-width:1100px) {
-  .pgrid.bsGrid { grid-template-columns: repeat(4,1fr); }
-  .pgrid.bsGrid > *:nth-child(n+7) { display: block; }
-  .pgrid.bsGrid > *:nth-child(n+9) { display: none; }
 }
 /* BUG FIX (P3): .pgrid-new-arrivals removed — confirmed zero usages
    anywhere; NewArrivals.tsx only ever uses the plain .pgrid class. */

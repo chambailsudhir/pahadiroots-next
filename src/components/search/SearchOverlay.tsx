@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import { useUIStore } from '@/store/uiStore'
 import { supabase } from '@/lib/supabase'
 import { normalizeProducts, getEffectivePrice, getEffectiveStock } from '@/lib/normalizeProduct'
 import { formatPrice } from '@/lib/utils'
+import { searchProducts } from '@/lib/productSearch'
 import type { Product } from '@/types'
 
 const RECENT_KEY = 'pr-recent-searches'
@@ -88,29 +89,33 @@ export default function SearchOverlay() {
 
   const debouncedQ = useDebounce(query, 250)
 
-  const { data: results } = useSWR<Product[]>(
-    debouncedQ.length >= 2 ? `search-${debouncedQ}` : null,
+  // SEARCH FIX: this used to run `.ilike('name', '%query%')` in SQL — a literal
+  // substring match — so "seab" found nothing for "Sea Buckthorn" (the space
+  // breaks the substring), and any typo ("hunny") found nothing either. Now the
+  // active catalog is fetched ONCE (cached by SWR, shared across keystrokes)
+  // and ranked client-side by searchProducts() in lib/productSearch.ts, which
+  // ignores spaces/punctuation, matches partial words and forgives small typos.
+  // Typing no longer fires a network request per keystroke, either.
+  const { data: catalog } = useSWR<Product[]>(
+    isOpen ? 'search-overlay-catalog' : null,
     async () => {
-      // BUG FIX (P2): this select used to fetch only the raw top-level
-      // `price`/`available_stock` columns, with no product_variants join
-      // at all. ProductCard (and every other listing surface) shows the
-      // lowest active *variant's* price/stock when variants exist — for
-      // any product with variants, search results could show a price or
-      // stock status that visibly disagreed with the product page one
-      // click later. Joining product_variants here (same embed syntax as
-      // the shared PRODUCT_SELECT in normalizeProduct.ts — including the
-      // already-learned original_price-not-mrp column-name fix) lets
-      // getEffectivePrice/getEffectiveStock below compute the same values
-      // ProductCard does.
+      // Joins product_variants (same embed as the shared PRODUCT_SELECT in
+      // normalizeProduct.ts, incl. original_price-not-mrp) so the price/stock
+      // shown here matches ProductCard.
       const { data } = await supabase
         .from('products')
         .select('id, name, slug, emoji, price, mrp, image_url, available_stock, status, is_deleted, product_variants(id, price, original_price, variant_value, available_stock, is_active)')
         .eq('is_deleted', false)
         .eq('status', 'active')
-        .ilike('name', `%${debouncedQ}%`)
-        .limit(6)
+        .limit(500)
       return normalizeProducts(data ?? [])
-    }
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  )
+
+  const results = useMemo(
+    () => (catalog && debouncedQ.trim().length >= 2 ? searchProducts(catalog, debouncedQ, 6) : undefined),
+    [catalog, debouncedQ],
   )
 
   function handleSelect(q: string) {

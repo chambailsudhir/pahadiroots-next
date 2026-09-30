@@ -36,10 +36,10 @@ describe('BestSellersClient', () => {
     expect(screen.getByText('No products found')).toBeTruthy()
   })
 
-  it('renders up to 8 products, capping a larger catalog', () => {
+  it('renders up to 6 products (3 columns x 2 rows), capping a larger catalog', () => {
     const products = Array.from({ length: 12 }, (_, i) => product({ id: i, name: `Product ${i}` }))
     render(<BestSellersClient initialProducts={products} categories={[]} />)
-    expect(screen.getAllByTestId('product-card').length).toBe(8)
+    expect(screen.getAllByTestId('product-card').length).toBe(6)
   })
 
   it('filters to a category when its chip is clicked', () => {
@@ -106,5 +106,14 @@ describe('BestSellersClient', () => {
     render(<BestSellersClient initialProducts={[product()]} categories={[]} />)
     const link = screen.getByText(/Show All Products/).closest('a')
     expect(link?.getAttribute('href')).toBe('/products')
+  })
+})
+
+describe('BestSellersClient — 3 columns x 2 rows layout', () => {
+  it('shows exactly 6 cards and keeps the "Show All Products" link for the rest', () => {
+    const products = Array.from({ length: 10 }, (_, i) => product({ id: i, name: `P${i}` }))
+    const { container } = render(<BestSellersClient initialProducts={products} categories={[]} />)
+    expect(container.querySelectorAll('[data-testid="product-card"]').length).toBe(6)
+    expect(screen.getByText(/Show All Products/).closest('a')?.getAttribute('href')).toBe('/products')
   })
 })

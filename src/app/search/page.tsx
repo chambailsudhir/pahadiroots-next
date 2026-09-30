@@ -2,35 +2,30 @@
 
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Suspense } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import { trackSearch } from '@/lib/analytics/track'
+import { searchProducts } from '@/lib/productSearch'
 import type { Product } from '@/types'
 
 function SearchContent() {
   const searchParams = useSearchParams()
   const q = searchParams.get('q')?.trim() || ''
 
-  const { data: results, isLoading } = useSWR<Product[]>(
-    q ? `search-full-${q}` : null,
+  // SEARCH FIX: was a SQL `.ilike('name', '%q%')` — literal substring only, so
+  // "seab" missed "Sea Buckthorn" and any typo returned nothing. The active
+  // catalog is now fetched once (cached) and ranked by searchProducts()
+  // (lib/productSearch.ts): spaces ignored, partial words OK, small typos
+  // forgiven. (Earlier note kept: `tags` is a Postgres ARRAY column, so
+  // `ilike` on it is invalid and made the whole query fail silently — tag
+  // matching can come back later via an RPC using unnest(tags).)
+  const { data: catalog, isLoading, error } = useSWR<Product[]>(
+    q ? 'search-full-catalog' : null,
     async () => {
-      // BUG FIX: `tags` is a Postgres ARRAY column (see src/types/index.ts's
-      // stale `tags: string | null` typing — the code here was written as if
-      // it were plain text). PostgREST's `ilike` operator isn't valid on an
-      // array column, so `tags.ilike.%${q}%` made the whole `.or(...)` filter
-      // invalid. Supabase returned that as an error with `data: null`, and
-      // this call threw the error away (`data ?? []`), so EVERY search —
-      // any term, not just "Honey" — silently came back as "0 results"
-      // instead of surfacing the failure. Matching by name alone is what
-      // actually works today (no product currently has tags populated —
-      // confirmed live: 0 of 17 rows have a non-empty tags array); tag
-      // search can be reintroduced later via an RPC that does
-      // `EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ...)`, which is
-      // the correct way to substring-match inside an array column.
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -42,16 +37,27 @@ function SearchContent() {
         `)
         .eq('is_deleted', false)
         .eq('status', 'active')
-        .ilike('name', `%${q}%`)
-        .limit(48)
+        .limit(500)
       if (error) {
         console.error('[search] product search query failed', error)
+        throw error
       }
-      const normalized = normalizeProducts(data ?? [])
-      trackSearch(q, normalized.length)
-      return normalized
-    }
+      return normalizeProducts(data ?? [])
+    },
+    { revalidateOnFocus: false },
   )
+
+  const results = useMemo(
+    () => (catalog && q ? searchProducts(catalog, q, 48) : undefined),
+    [catalog, q],
+  )
+
+  // Analytics: once per (query, result-count) after the catalog has loaded —
+  // previously fired from inside the fetcher.
+  const resultCount = results?.length
+  useEffect(() => {
+    if (q && resultCount !== undefined) trackSearch(q, resultCount)
+  }, [q, resultCount])
 
   if (!q) {
     return (
@@ -67,11 +73,11 @@ function SearchContent() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-stone-900">
-          {isLoading ? 'Searching…' : `${results?.length || 0} results for "${q}"`}
+          {isLoading || (!results && !error) ? 'Searching…' : `${results?.length || 0} results for "${q}"`}
         </h1>
       </div>
 
-      {isLoading ? (
+      {isLoading || (!results && !error) ? (
         <ProductGridSkeleton count={8} />
       ) : results && results.length > 0 ? (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
