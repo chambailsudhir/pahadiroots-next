@@ -1,21 +1,15 @@
-PAHADI ROOTS — DISCOVER THE HIMALAYAS EXACT DEMO FIX
+EXACT REFERENCE DEMO — EXPLORE BY REGION
 
-Replace these two files in your existing GitHub project:
+Replace/add these files:
 
-1. src/components/homepage/ExploreByRegion.tsx
-2. src/app/globals.css
+src/components/homepage/ExploreByRegion.tsx
+src/components/homepage/ExploreByRegion.module.css
+public/explore-region-art/story-mountain.png
+public/explore-region-art/story-pine.png
+public/explore-region-art/product-mountains.png
+public/explore-region-art/next-botanical.png
 
-The new ExploreByRegion component now matches the supplied demo composition more closely:
-- full-width region photograph
-- overlapping green editorial panel
-- mountain engraving in the green panel
-- botanical/pine engraving in the green panel
-- editorial “From This Region” column
-- mountain engraving beneath the product intro
-- four product cards in one row on desktop
-- panoramic “Next Region” block
-- botanical engraving in the next-region copy area
+IMPORTANT:
+The decorative artwork is taken directly from the approved visual demo and used as local assets, rather than approximated with newly drawn SVGs.
 
-The artwork is implemented as inline SVG line art, so it is real page artwork rather than a screenshot/background image.
-
-No database/product data changes are required.
+No globals.css change is required for this version. The component uses a scoped CSS module to avoid conflicts with the existing site styles.
