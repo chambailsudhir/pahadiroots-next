@@ -171,10 +171,11 @@ export async function POST(req: NextRequest) {
       revalidatePath('/checkout')
       revalidatePath('/products/[slug]', 'page')
       revalidatePath('/our-stories')
+      revalidatePath('/mountain-stories') // gated by show_life_in_mountains, revalidate=3600
       revalidatePath('/blog')
       revalidated.push(
         '/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings',
-        '/checkout', '/products/[slug] (all)', '/our-stories', '/blog'
+        '/checkout', '/products/[slug] (all)', '/our-stories', '/mountain-stories', '/blog'
       )
     }
 

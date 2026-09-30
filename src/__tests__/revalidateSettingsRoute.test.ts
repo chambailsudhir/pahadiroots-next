@@ -95,6 +95,7 @@ describe('POST /api/v1/revalidate — { settings: true }', () => {
     // /blog (revalidate=3600).
     expect(calledPaths).toContain('/products/[slug]')
     expect(calledPaths).toContain('/our-stories')
+    expect(calledPaths).toContain('/mountain-stories')
     expect(calledPaths).toContain('/blog')
 
     expect(json.success).toBe(true)

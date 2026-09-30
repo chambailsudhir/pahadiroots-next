@@ -22,6 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/products`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE}/regions`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/our-stories`,  lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${BASE}/mountain-stories`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/contact`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     // SEO blog engine: the listing page itself, separate from the per-post
     // entries below, so Google always has an entry point into the section
