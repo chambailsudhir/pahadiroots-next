@@ -124,3 +124,16 @@
   .productGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .nextCopy { padding:38px 30px 44px; }
 }
+
+/* Reference-demo artwork: transparent linework, no baked background blocks. */
+.storyMountain,
+.storyPine,
+.productMountains,
+.nextBotanical {
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+.storyMountain { right: 56px; top: 68px; width: 100px; mix-blend-mode: normal; opacity: .95; }
+.storyPine { right: 0; bottom: -2px; width: 112px; mix-blend-mode: normal; opacity: .82; }
+.productMountains { left: 0; bottom: -3px; width: 300px; mix-blend-mode: normal; opacity: .72; }
+.nextBotanical { right: 0; bottom: -3px; width: 104px; mix-blend-mode: normal; opacity: .76; }
