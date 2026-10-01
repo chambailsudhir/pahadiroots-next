@@ -150,12 +150,18 @@
   .header, .regionNav, .productsRow { padding-left: 24px; padding-right: 24px; }
   .hero { height: auto; display: flex; flex-direction: column; }
   .heroPhoto { position: relative; inset: auto; height: 340px; }
-  .heroPhoto img { object-position: var(--fpm) !important; }
+  /* A 3:1 photo can't fit a phone width, so slowly pan across it: the whole scene is revealed
+     (people + landscape) instead of one fixed crop. */
+  .heroPhoto img { animation: heroPan 16s ease-in-out .6s infinite alternate; }
   .story { position: relative; top: auto; right: auto; bottom: auto; width: 100%; min-width: 0; padding: 38px 0; }
   .productsRow { grid-template-columns: 1fr; gap: 26px; padding-bottom: 150px; }
   .productsCopy { padding-bottom: 0; }
   .productGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .productMountains { width: 300px; }
+}
+@keyframes heroPan { from { object-position: 0% 50%; } to { object-position: 100% 50%; } }
+@media (max-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .heroPhoto img { animation: none; object-position: var(--fpm) !important; }
 }
 @media (max-width: 700px) {
   .heroPhoto { height: 280px; }
