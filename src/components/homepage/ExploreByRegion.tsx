@@ -117,14 +117,15 @@ export default function ExploreByRegion({ states }: Props) {
           {/* HERO: full-width photo with the green story panel laid over its right side. */}
           <div className={styles.hero}>
             <div className={styles.heroPhoto}>
-              {activeState.image_url ? (
+              {(meta.homeHeroImage || activeState.image_url) ? (
                 <Image
-                  src={activeState.image_url}
+                  src={(meta.homeHeroImage || activeState.image_url) as string}
                   alt={`${activeState.name} — Himalayan landscape and culture`}
                   fill
                   priority
                   sizes="(max-width: 1000px) 100vw, 1312px"
-                  style={{ objectFit: 'cover', objectPosition: 'center' }}
+                  quality={90}
+                  style={{ objectFit: 'cover', objectPosition: meta.heroFocus || 'center 25%' }}
                 />
               ) : <div className={styles.fallback}>🏔️</div>}
             </div>
