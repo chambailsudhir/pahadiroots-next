@@ -311,6 +311,8 @@ export interface SiteSettings {
   // the footer never claims a license number that was never actually
   // entered — see the conditional render in Footer.tsx.
   fssai_license: string
+  // Live footer design selected in Admin > Settings > Footer
+  footer_variant: 'A' | 'B' | 'C'
 
   // Social
   instagram_url: string

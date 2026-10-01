@@ -42,6 +42,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   whatsapp_number:         '919899984895',
   contact_phone:           '+919899984895',
   contact_address:         'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
+  // Footer design: A = existing, B = Mountain Edge, C = Himalayan Landscape
+  footer_variant:          'A',
   // New section toggle keys (added by migration)
   // MINOR CONSISTENCY FIX (sync audit): this key is genuinely read on the
   // homepage (isEnabled(settings.show_category_tiles) in page.tsx) and the
