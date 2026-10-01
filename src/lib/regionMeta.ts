@@ -29,6 +29,8 @@ export interface RegionMeta {
   homeHeroImage?: string
   /** CSS object-position for the wide homepage hero crop, so faces and the subject stay in frame. */
   heroFocus?: string
+  /** object-position used on phones/tablets, where the 3:1 photo is cropped much tighter. */
+  mobileFocus?: string
   /** Optional darker panel background used only by the homepage region widget. */
   homePanelBg?: string
   /** Optional homepage panel copy; falls back to `snippet` when absent. */
@@ -39,6 +41,7 @@ export const REGION_META: Record<string, RegionMeta> = {
   hp: {
     heroFocus: 'center',
     homeHeroImage: '/explore-region-art/himachal-hero.jpg',
+    mobileFocus: '60% 40%',
     emoji: '🏔️', tagline: 'Dev Bhoomi',
     subtitle: 'Land of Gods',
     homeCopy: 'Himachal Pradesh — Dev Bhoomi, the land of Gods. Ancient forests, sacred rivers, fertile valleys and hardworking mountain people make this region a source of some of the purest foods in the world.',
@@ -51,6 +54,7 @@ export const REGION_META: Record<string, RegionMeta> = {
   uk: {
     heroFocus: 'center',
     homeHeroImage: '/explore-region-art/uttarakhand-hero.jpg',
+    mobileFocus: '70% 50%',
     emoji: '🏔️', tagline: 'Dev Bhoomi',
     subtitle: 'Sacred Landscapes',
     homeCopy: 'Oxen turn the terraces in spring while blossom drifts over stone farmhouses. Mandua, jhangora, pahadi rajma, wild honey and Badri ghee, all grown slowly, at the pace of the mountain.',
@@ -62,6 +66,7 @@ export const REGION_META: Record<string, RegionMeta> = {
   jk: {
     heroFocus: 'center',
     homeHeroImage: '/explore-region-art/jammu-kashmir-hero.jpg',
+    mobileFocus: '20% 50%',
     emoji: '🌷', tagline: 'Paradise on Earth',
     subtitle: 'Saffron & Rajma',
     homeCopy: "Saffron gathered at dawn in Pampore. Red rajma ripening on Bhaderwah's terraces, GI tagged and sun dried by hand. One land, two harvests: crimson spice and creamy beans.",
@@ -73,6 +78,7 @@ export const REGION_META: Record<string, RegionMeta> = {
   la: {
     heroFocus: 'center',
     homeHeroImage: '/explore-region-art/ladakh-hero.jpg',
+    mobileFocus: '25% 50%',
     emoji: '❄️', tagline: 'Land of High Passes',
     subtitle: 'Roof of the World',
     homeCopy: 'Apricots ripen in thin bright light above the Indus. Seabuckthorn glows in baskets, white seeded Raktsey Karpo grows nowhere else on earth, and shilajit seeps from granite. Everything here is earned.',
