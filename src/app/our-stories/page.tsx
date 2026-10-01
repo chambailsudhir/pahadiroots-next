@@ -34,6 +34,14 @@ interface TeamMember { id: string; name: string; role: string; bio: string | nul
 
 const MANIFESTO = 'The Himalayas are not a backdrop for our products. They are the places, the people and the knowledge behind them.'
 
+// Founders. Add the fourth founder here when the photo is ready — the layout adapts.
+// Save the photo as /public/our-story/team-<name>.webp (4:5 portrait, ~520x650).
+const FOUNDERS = [
+  { name: 'Sudhir Chambail', role: 'Co-founder', img: 'sudhir', alt: 'Sudhir Chambail, co-founder of HimVeda, seated on a motorcycle with forested Himalayan peaks behind him' },
+  { name: 'Randhir',         role: 'Co-founder', img: 'randhir', alt: 'Randhir, co-founder of HimVeda, standing in front of a cloud-covered mountain valley' },
+  { name: 'Rahul',           role: 'Co-founder', img: 'rahul', alt: 'Rahul, co-founder of HimVeda, in a red printed shirt and sunglasses in front of a waterfall' },
+]
+
 const CHAPTERS = [
   { img: 'morning', tag: 'Morning', t: 'Before the light reaches the valley', d: 'Days begin with the animals. Cows are milked by hand, close to where they graze, while the mountains are still cold.', alt: 'A woman milking a cow beside a stone house in the mountains' },
   { img: 'hands',   tag: 'Hands',   t: 'Patience, turned by hand',            d: 'Curd is churned slowly until the butter comes. There is no shortcut, and we have not tried to hurry the method.', alt: 'A woman churning curd in a traditional mountain kitchen' },
@@ -135,6 +143,27 @@ export default async function AboutPage() {
             <div><b>Four</b><span>Founders</span></div>
             <div><b>Himachal</b><span>Where we’re based</span></div>
             <div><b>Direct</b><span>Sourced with the people who grow it</span></div>
+          </div>
+        </section>
+
+        {/* ── 3b. The founders ── */}
+        <section className={s.team} aria-labelledby="ab-founders">
+          <div className={`${s.teamHead} ${s.r}`} data-r>
+            <span className={s.eb}>The people behind it</span>
+            <h2 id="ab-founders">The founders of HimVeda.</h2>
+          </div>
+          <div className={s.teamGrid}>
+            {FOUNDERS.map((f, i) => (
+              <figure key={f.name} className={`${s.member} ${s.r}`} data-r style={{ transitionDelay: `${i * 120}ms` }}>
+                <div className={s.portrait}>
+                  <Image src={`/our-story/team-${f.img}.webp`} alt={f.alt} fill sizes="(max-width: 820px) 46vw, 26vw" />
+                </div>
+                <figcaption>
+                  <b>{f.name}</b>
+                  <span>{f.role}</span>
+                </figcaption>
+              </figure>
+            ))}
           </div>
         </section>
 

@@ -31,6 +31,16 @@
 .proof div{padding:1.6rem 1rem 0;border-left:1px solid rgba(230,207,146,.18)}.proof div:first-child{border:0;padding-left:0}
 .proof b{display:block;font:500 clamp(1.5rem,2.6vw,2.3rem)/1.1 var(--font-cormorant),'Cormorant Garamond',serif;color:#e6cf92}
 .proof span{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:#aeb5a4}
+.team{padding:clamp(5rem,10vw,9rem) 6vw 0}
+.teamHead{text-align:center;max-width:640px;margin:0 auto clamp(2.5rem,6vw,4.5rem)}
+.root .teamHead h2{font-size:clamp(2.1rem,4.2vw,3.6rem)}
+.teamGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,300px));justify-content:center;gap:clamp(1.5rem,4vw,3.5rem);max-width:1200px;margin:auto}
+.member{text-align:center}
+.portrait{position:relative;aspect-ratio:4/5;overflow:hidden;border-radius:44% 44% 4px 4px/26% 26% 4px 4px;margin-bottom:1.3rem}
+.member:nth-child(even) .portrait{border-radius:4px 4px 44% 44%/4px 4px 26% 26%}
+.portrait img{object-position:50% 30%;transition:transform 1.4s}.member:hover .portrait img{transform:scale(1.04)}
+.root .member figcaption b{display:block;font:500 1.7rem/1.15 var(--font-cormorant),'Cormorant Garamond',serif;color:var(--forest)}
+.member figcaption span{display:block;margin-top:.45rem;font:600 .68rem/1.4 var(--font-inter),Inter,sans-serif;letter-spacing:.28em;text-transform:uppercase;color:var(--gold)}
 .sc{padding:0 6vw}
 .scHead{text-align:center;max-width:680px;margin:0 auto;padding:clamp(5rem,10vw,9rem) 0 clamp(2rem,5vw,4rem)}
 .root .scHead h2{font-size:clamp(2.2rem,4.6vw,4rem);margin-bottom:1.2rem}.scHead p{color:var(--mut)}
@@ -77,5 +87,5 @@
 .fg,.stand{grid-template-columns:1fr}.ph{aspect-ratio:1/1.05}.ph img{object-position:34% 40%}.fp:before{inset:-8px 8px 8px -8px}
 .proof{grid-template-columns:1fr}.proof div{padding:1rem 0;border-left:0;border-top:1px solid rgba(230,207,146,.18)}.proof div:first-child{border-top:0}
 .sg{grid-template-columns:1fr}.stick{height:50svh;z-index:2;background:var(--bg);padding:.8rem 0}.frame{aspect-ratio:auto;height:100%;max-height:none;border-radius:36% 4px 36% 4px/20% 4px 20% 4px}
-.st{min-height:46svh;justify-content:flex-start;padding-top:2rem}.num{font-size:3.4rem}.root .stand h2{position:static}.end{grid-template-columns:1fr}.endImg{order:-1;min-height:52svh}}
+.st{min-height:46svh;justify-content:flex-start;padding-top:2rem}.num{font-size:3.4rem}.teamGrid{grid-template-columns:1fr 1fr;gap:1.2rem}.member:last-child:nth-child(odd){grid-column:1/-1;width:50%;justify-self:center}.root .member figcaption b{font-size:1.35rem}.root .stand h2{position:static}.end{grid-template-columns:1fr}.endImg{order:-1;min-height:52svh}}
 @media(prefers-reduced-motion:reduce){.heroImg,.cue{animation:none}.js .r{opacity:1;transform:none;transition:none}.js .w{opacity:1}.js .frameImg{transition:none}}
