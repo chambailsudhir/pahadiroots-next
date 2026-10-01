@@ -3,10 +3,15 @@
 import React, { useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import ProductCard from '@/components/product/ProductCard'
+import { Source_Serif_4, Montserrat } from 'next/font/google'
+import RegionProductCard from './RegionProductCard'
 import type { Product } from '@/types'
-import { getRegionMeta } from '@/lib/regionMeta'
+import { getRegionMeta, type RegionMeta } from '@/lib/regionMeta'
 import styles from './ExploreByRegion.module.css'
+
+// Section-scoped faces that match the approved design (serif headings + clean geometric sans).
+const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], weight: ['400', '500', '600', '700'], style: ['normal', 'italic'], display: 'swap' })
+const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' })
 
 export interface RichState {
   id: string
@@ -36,24 +41,15 @@ export default function ExploreByRegion({ states }: Props) {
 
   const activeIndex = Math.max(0, states.findIndex(s => s.id === activeId))
   const activeState = states[activeIndex] ?? states[0]
-  const meta = getRegionMeta(activeState.id) ?? {
+  const meta: Partial<RegionMeta> & Pick<RegionMeta, 'tagline' | 'panelBg' | 'pills' | 'snippet'> = getRegionMeta(activeState.id) ?? {
     tagline: activeState.name,
     panelBg: '#0f3219',
     pills: [],
     snippet: activeState.description ?? '',
   }
 
-  const nextState = states[(activeIndex + 1) % states.length]
-  const nextMeta = getRegionMeta(nextState?.id)
   const displayRegion = activeState.name.replace(/\s+Pradesh$/i, '')
 
-  // "Next Region" CTA: switch tab AND bring the top of the widget back into
-  // view, otherwise the visitor stays parked at the bottom of the old panel.
-  const goToNext = () => {
-    if (!nextState) return
-    setActiveId(nextState.id)
-    sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-  }
   const domId = (id: string) => id.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
   const tabId = (id: string) => `region-tab-${domId(id)}`
   const panelId = (id: string) => `region-panel-${domId(id)}`
@@ -71,15 +67,13 @@ export default function ExploreByRegion({ states }: Props) {
     setActiveId(states[target].id)
     tabRefs.current[target]?.focus()
   }
-  const nextPosition = String(((activeIndex + 1) % states.length) + 1).padStart(2, '0')
-  const totalRegions = String(states.length).padStart(2, '0')
 
   return (
-    <section ref={sectionRef} className={styles.section} id="regions">
+    <section ref={sectionRef} className={`${styles.section} ${regionSerif.variable} ${regionSans.variable}`} id="regions">
       <div className={styles.inner}>
         <header className={styles.header}>
           <div>
-            <div className={styles.eyebrow}>Explore by Region <span /></div>
+            <div className={styles.eyebrow}><b>Explore</b> By Region <span /></div>
             <h2>Discover the Himalayas</h2>
             <p>Every mountain region carries its own landscape, traditions and flavours — shaped by altitude, people and place.</p>
           </div>
@@ -107,7 +101,7 @@ export default function ExploreByRegion({ states }: Props) {
                 className={`${styles.regionTab} ${active ? styles.active : ''}`}
                 onClick={() => setActiveId(state.id)}
               >
-                {state.name}
+                <span>{state.name}</span>
               </button>
             )
           })}
@@ -120,7 +114,7 @@ export default function ExploreByRegion({ states }: Props) {
           id={panelId(activeState.id)}
           aria-labelledby={tabId(activeState.id)}
         >
-          {/* DEMO HERO: exact side-by-side image / green editorial panel composition. */}
+          {/* HERO: full-width photo with the green story panel laid over its right side. */}
           <div className={styles.hero}>
             <div className={styles.heroPhoto}>
               {activeState.image_url ? (
@@ -129,23 +123,23 @@ export default function ExploreByRegion({ states }: Props) {
                   alt={`${activeState.name} — Himalayan landscape and culture`}
                   fill
                   priority
-                  sizes="(max-width: 900px) 100vw, 65vw"
+                  sizes="(max-width: 1000px) 100vw, 1312px"
                   style={{ objectFit: 'cover', objectPosition: 'center' }}
                 />
               ) : <div className={styles.fallback}>🏔️</div>}
             </div>
 
-            <div className={styles.story} style={{ background: meta.panelBg || '#0f3219' }}>
+            <div className={styles.story} style={{ background: meta.homePanelBg || meta.panelBg || '#15281c' }}>
               <img className={styles.storyMountain} src="/explore-region-art/story-mountain.png" alt="" aria-hidden="true" />
               <img className={styles.storyPine} src="/explore-region-art/story-pine.png" alt="" aria-hidden="true" />
 
               <div className={styles.storyInner}>
-                <div className={styles.storyKicker}>{activeState.name}</div>
+                <div className={styles.storyKicker}>{activeState.name}<span /></div>
                 <h3>{meta.tagline || activeState.name}</h3>
-                {meta.tagline && meta.tagline !== activeState.name && (
-                  <div className={styles.storySubtitle}>{activeState.name}</div>
+                {(meta.subtitle || (meta.tagline && meta.tagline !== activeState.name)) && (
+                  <div className={styles.storySubtitle}>{meta.subtitle || activeState.name}</div>
                 )}
-                <p>{meta.snippet || activeState.description || ''}</p>
+                <p>{meta.homeCopy || meta.snippet || activeState.description || ''}</p>
 
                 {meta.pills?.length > 0 && (
                   <div className={styles.pills}>
@@ -154,30 +148,30 @@ export default function ExploreByRegion({ states }: Props) {
                 )}
 
                 <Link href={`/regions/${activeState.id}`} className={styles.exploreButton}>
-                  Explore {activeState.name} <span>→</span>
+                  Explore {displayRegion} <span>→</span>
                 </Link>
               </div>
             </div>
           </div>
 
-          {/* DEMO PRODUCT ROW: editorial copy + four equal cards. */}
+          {/* PRODUCT ROW: editorial copy + four equal cards, engraving anchored bottom left. */}
           <div className={styles.productsRow}>
+            <img className={styles.productMountains} src="/explore-region-art/product-mountains.png" alt="" aria-hidden="true" />
             <div className={styles.productsCopy}>
-              <div className={styles.eyebrow}>From This Region <span /></div>
+              <div className={styles.eyebrow}><b>F</b>rom This Region <span /></div>
               <h3>Flavours<br />of {displayRegion}</h3>
-              <p>Pure ingredients. Real people. Timeless traditions. Bring home the tastes of the mountains.</p>
+              <p>Pure ingredients. Real people. Timeless traditions. Bring home the tastes of {displayRegion}.</p>
               {activeState.products.length > 0 && (
                 <Link href={`/regions/${activeState.id}`} className={styles.productsLink}>
                   View All {displayRegion} Products <span>→</span>
                 </Link>
               )}
-              <img className={styles.productMountains} src="/explore-region-art/product-mountains.png" alt="" aria-hidden="true" />
             </div>
 
             {activeState.products.length > 0 ? (
               <div className={styles.productGrid}>
                 {activeState.products.slice(0, 4).map((product, index) => (
-                  <ProductCard key={product.id} product={product} priority={index < 2} />
+                  <RegionProductCard key={product.id} product={product} priority={index < 2} />
                 ))}
               </div>
             ) : (
@@ -185,51 +179,6 @@ export default function ExploreByRegion({ states }: Props) {
             )}
           </div>
 
-          {/* NEXT REGION: blur-filled photo stage (never leaves empty space, whatever the photo's aspect ratio) + editorial copy panel. */}
-          {nextState && nextState.id !== activeState.id && (
-            <div className={styles.nextRegion}>
-              <div className={styles.nextPhoto}>
-                {nextState.image_url ? (
-                  <>
-                    <Image
-                      src={nextState.image_url}
-                      alt=""
-                      aria-hidden="true"
-                      fill
-                      sizes="(max-width: 1000px) 100vw, 40vw"
-                      className={styles.nextPhotoBackdrop}
-                    />
-                    <Image
-                      src={nextState.image_url}
-                      alt={`${nextState.name} Himalayan region`}
-                      fill
-                      sizes="(max-width: 1000px) 100vw, 65vw"
-                      className={styles.nextPhotoMain}
-                    />
-                  </>
-                ) : <div className={styles.fallback}>🏔️</div>}
-                <span className={styles.nextCounter}>{nextPosition} <i>/</i> {totalRegions}</span>
-              </div>
-
-              <div className={styles.nextCopy}>
-                <img className={styles.nextBotanical} src="/explore-region-art/next-botanical.png" alt="" aria-hidden="true" />
-                <div className={styles.eyebrow}>Next Region <span /></div>
-                <h3>{nextState.name}</h3>
-                <div className={styles.nextTagline}>{nextMeta?.tagline ?? 'The mountains continue'}</div>
-                <p>{nextMeta?.snippet ?? nextState.description ?? ''}</p>
-
-                {nextMeta && nextMeta.pills.length > 0 && (
-                  <div className={styles.nextPills}>
-                    {nextMeta.pills.slice(0, 4).map(pill => <span key={pill}>{pill.replace(/^\S+\s/, '')}</span>)}
-                  </div>
-                )}
-
-                <button type="button" className={styles.nextLink} onClick={goToNext}>
-                  Explore {nextState.name} <span>→</span>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </section>

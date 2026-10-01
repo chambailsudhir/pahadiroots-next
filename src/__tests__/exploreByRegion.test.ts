@@ -24,7 +24,11 @@ vi.mock('next/link', () => ({
   default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) =>
     React.createElement('a', { href, ...rest }, children),
 }))
-vi.mock('@/components/product/ProductCard', () => ({
+vi.mock('next/font/google', () => ({
+  Source_Serif_4: () => ({ variable: '' }),
+  Montserrat: () => ({ variable: '' }),
+}))
+vi.mock('@/components/homepage/RegionProductCard', () => ({
   default: ({ product }: { product: { name: string } }) =>
     React.createElement('div', null, product.name),
 }))
@@ -125,31 +129,25 @@ describe('ExploreByRegion — keyboard, artwork and next-region panel', () => {
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
   })
 
-  it('next-region panel shows the next state, its pills and position counter', async () => {
+  it('the Next Region block is gone for good, whatever the region list looks like', async () => {
     const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
     const states = [
       { id: 'hp', name: 'Himachal Pradesh', slug: 'hp', image_url: null, description: null, region: null, products: [] },
       { id: 'jk', name: 'Jammu & Kashmir', slug: 'jk', image_url: null, description: null, region: null, products: [] },
     ]
     const { container } = render(React.createElement(ExploreByRegion, { states: states as any }))
-    expect(container.textContent).toContain('Paradise on Earth')
-    expect(container.textContent).toContain('Kashmiri Kesar')
-    expect(container.textContent).toContain('02 / 02')
+    expect(container.textContent).not.toMatch(/next region/i)
+    expect(container.textContent).not.toContain('Paradise on Earth')
+    expect(container.textContent).not.toContain('02 / 02')
+    expect(screen.queryByRole('button', { name: /explore jammu & kashmir/i })).toBeNull()
   })
 
-  it('"Explore <next region>" switches to that region and scrolls the widget back into view', async () => {
+  it('Himachal panel reads Dev Bhoomi / Land of Gods with an \"Explore Himachal\" button', async () => {
     const { default: ExploreByRegion } = await import('@/components/homepage/ExploreByRegion')
-    const scrollSpy = vi.fn()
-    ;(window.HTMLElement.prototype as any).scrollIntoView = scrollSpy
-    const states = [
-      { id: 'hp', name: 'Himachal Pradesh', slug: 'hp', image_url: null, description: null, region: null, products: [] },
-      { id: 'jk', name: 'Jammu & Kashmir', slug: 'jk', image_url: null, description: null, region: null, products: [] },
-    ]
-    render(React.createElement(ExploreByRegion, { states: states as any }))
-    fireEvent.click(screen.getByRole('button', { name: /explore jammu & kashmir/i }))
-
-    expect(screen.getByRole('tab', { name: 'Jammu & Kashmir' }).getAttribute('aria-selected')).toBe('true')
-    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    const { container } = render(React.createElement(ExploreByRegion, { states: STATES as any }))
+    expect(container.textContent).toContain('Dev Bhoomi')
+    expect(container.textContent).toContain('Land of Gods')
+    expect(screen.getByRole('link', { name: /^explore himachal/i }).getAttribute('href')).toBe('/regions/hp')
   })
 
   it('artwork is never stretched: no scaleY distortion on the mountain engraving', async () => {
@@ -158,7 +156,8 @@ describe('ExploreByRegion — keyboard, artwork and next-region panel', () => {
     const css = fs.readFileSync(
       path.resolve(process.cwd(), 'src/components/homepage/ExploreByRegion.module.css'), 'utf8')
     expect(css).not.toMatch(/scaleY/)
-    // Flavours-of-<region> mountains are anchored to the bottom of the column.
-    expect(css).toMatch(/\.productMountains\s*\{[^}]*bottom:\s*\d+px/)
+    // Flavours-of-<region> mountains are anchored to the bottom left of the row.
+    expect(css).toMatch(/\.productMountains\s*\{[^}]*bottom:\s*0/)
+    expect(css).toMatch(/\.productMountains\s*\{[^}]*left:\s*0/)
   })
 })

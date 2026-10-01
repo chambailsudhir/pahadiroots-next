@@ -18,7 +18,11 @@ vi.mock('next/link', () => ({
   default: ({ children, href }: { children?: React.ReactNode; href: string }) =>
     React.createElement('a', { href }, children),
 }))
-vi.mock('@/components/product/ProductCard', () => ({
+vi.mock('next/font/google', () => ({
+  Source_Serif_4: () => ({ variable: '' }),
+  Montserrat: () => ({ variable: '' }),
+}))
+vi.mock('@/components/homepage/RegionProductCard', () => ({
   default: ({ product }: { product: { id: number; name: string } }) =>
     React.createElement('div', { 'data-testid': 'product-card' }, product.name),
 }))
@@ -57,7 +61,6 @@ describe('ExploreByRegion', () => {
       ] }),
     ]} />)
 
-    // The name also appears in the "Next Region" panel, so target the tab.
     fireEvent.click(screen.getByRole('tab', { name: 'Jammu & Kashmir' }))
 
     expect(screen.getByText('Kashmiri Saffron')).toBeTruthy()

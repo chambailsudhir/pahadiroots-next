@@ -25,6 +25,10 @@ vi.mock('@/lib/supabase', () => ({
   supabase:         {},
   getServiceClient: () => ({}),
 }))
+vi.mock('next/font/google', () => ({
+  Source_Serif_4: () => ({ variable: '' }),
+  Montserrat: () => ({ variable: '' }),
+}))
 vi.mock('next/cache', () => ({
   unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
   revalidateTag:  vi.fn(),

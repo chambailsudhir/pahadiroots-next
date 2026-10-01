@@ -23,11 +23,20 @@ export interface RegionMeta {
   pills: string[]
   snippet: string
   description: string
+  /** Optional italic gold line under the tagline on the homepage region panel. */
+  subtitle?: string
+  /** Optional darker panel background used only by the homepage region widget. */
+  homePanelBg?: string
+  /** Optional homepage panel copy; falls back to `snippet` when absent. */
+  homeCopy?: string
 }
 
 export const REGION_META: Record<string, RegionMeta> = {
   hp: {
     emoji: '🏔️', tagline: 'Dev Bhoomi',
+    subtitle: 'Land of Gods',
+    homeCopy: 'Himachal Pradesh — Dev Bhoomi, the land of Gods. Ancient forests, sacred rivers, fertile valleys and hardworking mountain people make this region a source of some of the purest foods in the world.',
+    homePanelBg: 'linear-gradient(135deg,#1a3125,#13251a)',
     panelBg: 'linear-gradient(135deg,#1a3a1e,#2d5233)',
     pills: ['🍎 Apple & ACV', '🍯 Pine Honey', '🍵 Kangra Tea', '🥛 Bilona Ghee', '🌰 Chilgoza Nuts'],
     snippet: 'Dev Bhoomi — Deodar forests hide cliff-hive honey & Kangra tea perfumes alpine air.',
