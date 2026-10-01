@@ -102,7 +102,7 @@
 .story h3 { color: #fff; font-weight: 500; font-size: 41.3px; line-height: 1.05; letter-spacing: -.01em; }
 .storySubtitle { color: #d9a94f; font: italic 400 33.2px/1.1 var(--serif); margin-top: 2px; letter-spacing: -.005em; }
 .story p { max-width: 345px; margin: 16px 0 18px; color: rgba(255,255,255,.97); font: 400 12.9px/1.6 var(--sans); }
-.pills { display: flex; flex-wrap: wrap; gap: 9px 8px; max-width: 370px; margin-bottom: 17px; }
+.pills { display: flex; flex-wrap: wrap; gap: 9px 8px; max-width: none; margin-bottom: 17px; }
 .pills span { border: 1px solid rgba(255,255,255,.36); border-radius: 999px; color: #fff; padding: 9px 15px 8px; font: 500 9.4px/1 var(--sans); letter-spacing: .085em; text-transform: uppercase; }
 .exploreButton { align-self: flex-start; background: #d6a85c; color: #14261a; text-decoration: none; border-radius: 999px; padding: 11px 21px 12px; font: 500 13.5px/1.2 var(--serif); transition: background .2s ease; }
 .exploreButton:hover { background: #e2b86c; }
