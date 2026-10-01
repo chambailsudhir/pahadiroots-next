@@ -49,7 +49,7 @@ export default function FooterA({ settings }: Props) {
   // LinkedIn has no admin-panel counterpart at all (not managed there under
   // any key name) — kept as a plain settings-overridable constant since
   // there's nothing on the admin side to wire this to yet.
-  const linkedinUrl  = settings.linkedin_url  || 'https://www.linkedin.com/company/pahadiroots/about/?viewAsMember=true'
+  const linkedinUrl  = settings.social_linkedin || settings.linkedin_url || 'https://www.linkedin.com/company/pahadiroots/about/?viewAsMember=true'
   const phone        = settings.contact_phone  || '+919899984895'
   const email2       = settings.contact_email  || 'hello@pahadiroots.com'
   const address      = settings.contact_address || 'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082'

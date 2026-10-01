@@ -133,6 +133,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   social_youtube:          '',
   social_twitter:          '',
   social_pinterest:        '',
+  social_linkedin:         '',
 
   // SEO — BUG FIX: layout.tsx's metadata export was static, so none of
   // these ever reached the page regardless of what an admin configured
