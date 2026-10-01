@@ -34,12 +34,13 @@ interface TeamMember { id: string; name: string; role: string; bio: string | nul
 
 const MANIFESTO = 'The Himalayas are not a backdrop for our products. They are the places, the people and the knowledge behind them.'
 
-// Founders. Add the fourth founder here when the photo is ready — the layout adapts.
+// Founders. Reorder or add entries here; the layout adapts.
 // Save the photo as /public/our-story/team-<name>.webp (4:5 portrait, ~520x650).
 const FOUNDERS = [
   { name: 'Sudhir Chambail', role: 'Co-founder', img: 'sudhir', alt: 'Sudhir Chambail, co-founder of HimVeda, seated on a motorcycle with forested Himalayan peaks behind him' },
   { name: 'Randhir',         role: 'Co-founder', img: 'randhir', alt: 'Randhir, co-founder of HimVeda, standing in front of a cloud-covered mountain valley' },
   { name: 'Rahul',           role: 'Co-founder', img: 'rahul', alt: 'Rahul, co-founder of HimVeda, in a red printed shirt and sunglasses in front of a waterfall' },
+  { name: 'Kushal Chand Chambail', role: 'Co-founder', img: 'kushal', alt: 'Kushal Chand Chambail, co-founder of HimVeda, in a white patterned shirt' },
 ]
 
 const CHAPTERS = [
@@ -309,16 +310,15 @@ export default async function AboutPage() {
         </div>
 
         {/* ── 8. Closing image + CTA ── */}
+        {/* Closing bookend: same mountain as the opening, cropped lower to the valley. */}
         <section className={s.end} aria-labelledby="ab-end">
-          <div className={`${s.endPanel} ${s.r}`} data-r>
-            <div>
-              <span className={s.eb}>The story continues</span>
-              <h2 id="ab-end">Every jar, every ingredient and every product begins somewhere in the mountains.</h2>
-              <Link href="/products" className={s.btn}>EXPLORE THE PRODUCTS</Link>
-            </div>
-          </div>
           <div className={s.endImg}>
-            <Image src="/our-story/close-2.webp" alt="Snow-covered Himalayan peak with dark conifers on the slope above a mountain river" fill sizes="(max-width: 820px) 100vw, 50vw" />
+            <Image src="/our-story/hero.webp" alt="Snow-covered Himalayan peak above forested slopes and terraced fields in the valley below" fill sizes="100vw" />
+          </div>
+          <div className={`${s.tx} ${s.r}`} data-r>
+            <span className={s.eb}>The story continues</span>
+            <h2 id="ab-end">Every jar, every ingredient and every product begins somewhere in the mountains.</h2>
+            <Link href="/products" className={s.btn}>EXPLORE THE PRODUCTS</Link>
           </div>
         </section>
       </OurStoryShell>
