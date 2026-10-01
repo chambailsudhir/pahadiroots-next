@@ -1,5 +1,5 @@
 /* Our Story page — scoped to /our-stories only (CSS module; nothing here leaks). */
-.root{--bg:#f4eedf;--ink:#232b26;--mut:#5c655d;--forest:#17301f;--gold:#b08d45;--line:#d8cdb4;--hdr:104px;background:var(--bg);color:var(--ink);font:400 17px/1.75 var(--font-inter),Inter,system-ui,sans-serif;overflow-x:clip}
+.root{--bg:#f4eedf;--ink:#232b26;--mut:#5c655d;--forest:#17301f;--gold:#b08d45;--line:#d8cdb4;--hdr:124px;background:var(--bg);color:var(--ink);font:400 17px/1.75 var(--font-inter),Inter,system-ui,sans-serif;overflow-x:clip}
 .root h1,.root h2,.root h3,.root blockquote{font-family:var(--font-cormorant),'Cormorant Garamond',Georgia,serif;font-weight:500;line-height:1.05;color:var(--forest);margin:0}
 .root p,.root figure,.root ol{margin:0}
 .eb{display:block;font:600 .7rem/1.4 var(--font-inter),Inter,sans-serif;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:1.2rem}
@@ -83,7 +83,7 @@
 .btn:hover{background:#e6cf92;color:#17301f}
 .js .r{opacity:0;transform:translateY(28px);transition:1s cubic-bezier(.2,.7,.2,1)}.js .r.v{opacity:1;transform:none}
 @media(max-width:820px){
-.root{--hdr:96px;font-size:16px}
+.root{--hdr:104px;font-size:16px}
 .heroIn{grid-template-columns:1fr;padding-bottom:7vh}.meta{text-align:left;line-height:1.9}.hero{min-height:520px}
 .fg,.stand{grid-template-columns:1fr}.ph{aspect-ratio:1/1.05}.ph img{object-position:34% 40%}.fp:before{inset:-8px 8px 8px -8px}
 .proof{grid-template-columns:1fr}.proof div{padding:1rem 0;border-left:0;border-top:1px solid rgba(230,207,146,.18)}.proof div:first-child{border-top:0}
