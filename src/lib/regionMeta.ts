@@ -49,7 +49,8 @@ export const REGION_META: Record<string, RegionMeta> = {
     description: 'Himachal Pradesh — Dev Bhoomi, the Land of Gods. Ancient Shiva temples cling to cliff faces above apple orchards that bloom white every spring. High in the Kangra valley, the same families have hand-rolled orthodox tea for generations, leaf by leaf, the way their grandmothers taught them. From Kinnaur\'s snowbound heights, foragers climb past 2,500 metres each autumn to gather wild Chilgoza pine nuts — a harvest that happens once a year, by hand, or not at all.',
   },
   uk: {
-    heroFocus: 'center 42%',
+    heroFocus: 'center',
+    homeHeroImage: '/explore-region-art/uttarakhand-hero.jpg',
     emoji: '🏔️', tagline: 'Dev Bhoomi',
     panelBg: 'linear-gradient(135deg,#1a3a1e,#2d5233)',
     pills: ['🍯 Wild Honey', '🌾 Pahadi Rajma', '🌸 Buransh Juice', '🥛 Badri Ghee', '🌿 Jakhiya'],
@@ -57,7 +58,8 @@ export const REGION_META: Record<string, RegionMeta> = {
     description: 'Kumaon and Garhwal — sacred Himalayan land of ancient temples, dense oak forests, and glacial rivers cold enough to numb your hands. Beekeepers still follow their bees on foot through blooming Buransh forests for wild multifloral honey, while mountain households press ghee from Badri cows grazing meadows above 3,000 metres — the same slow, patient methods passed down through generations of hill families.',
   },
   jk: {
-    heroFocus: 'center 14%',
+    heroFocus: 'center',
+    homeHeroImage: '/explore-region-art/jammu-kashmir-hero.jpg',
     emoji: '🌷', tagline: 'Paradise on Earth',
     panelBg: 'linear-gradient(135deg,#1e3a8a,#2d4fa3)',
     pills: ['🌸 Kashmiri Kesar', '🌰 Kagzi Walnuts', '🍵 Kahwa Tea', '🌶️ Kashmiri Mirchi', '🥜 Almonds'],
@@ -65,7 +67,8 @@ export const REGION_META: Record<string, RegionMeta> = {
     description: 'Kashmir — Jannat, as the Mughals called it — where saffron fields turn the Pampore plains a deep violet every October. Entire families rise before dawn to pluck each crimson thread by hand before the sun can fade it; it takes hundreds of flowers to fill a single gram. This is Mongra saffron — Grade A, thread by thread — gathered the same painstaking way it has been for centuries.',
   },
   la: {
-    heroFocus: 'center 12%',
+    heroFocus: 'center',
+    homeHeroImage: '/explore-region-art/ladakh-hero.jpg',
     emoji: '❄️', tagline: 'Land of High Passes',
     panelBg: 'linear-gradient(135deg,#4a2c10,#6b3a18)',
     pills: ['🫐 Seabuckthorn', '🪨 Shilajit', '🍑 Wild Apricots', '⚡ Black Buckwheat', '🧂 Rock Salt'],
