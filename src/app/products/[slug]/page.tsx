@@ -230,7 +230,7 @@ export default async function ProductPage({ params }: Props) {
         {cfg.steps.map((step, i) => (
           <div key={i} className={`pdp-enjoy-card img-card${step.title ? ' has-title' : ''}`}>
             <div className="pdp-enjoy-img" style={step.title ? { aspectRatio: `${cfg.imgW} / ${cfg.imgH}` } : undefined}>
-              <Image src={`/enjoy/${cfg.dir}/${i + 1}.png`} alt="" width={step.title ? cfg.imgW : 420} height={step.title ? cfg.imgH : 268} />
+              <Image sizes="(max-width: 760px) 50vw, 270px" src={`/enjoy/${cfg.dir}/${i + 1}.webp`} alt="" width={step.title ? cfg.imgW : 420} height={step.title ? cfg.imgH : 268} />
             </div>
             <div className="pdp-enjoy-num">{String(i + 1).padStart(2, '0')}</div>
             {step.title && (
@@ -702,7 +702,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/01-origin-v2.jpg" alt="A high Spiti Valley monastery above the river, with beehives and wildflowers in the foreground" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/01-origin-v2.jpg" alt="A high Spiti Valley monastery above the river, with beehives and wildflowers in the foreground" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">01 — Origin</div>
@@ -714,7 +714,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/02-blooms.jpg" alt="A bee foraging on wild Himalayan blossoms with the Spiti Valley in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/02-blooms.jpg" alt="A bee foraging on wild Himalayan blossoms with the Spiti Valley in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">02 — The Blooms</div>
@@ -726,7 +726,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/03-bees.jpg" alt="Bees swarming a wooden hive box among wildflowers, with the Spiti river and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/03-bees.jpg" alt="Bees swarming a wooden hive box among wildflowers, with the Spiti river and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">03 — The Bees</div>
@@ -738,7 +738,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/04-harvest-v2.jpg" alt="A beekeeper lifting a honeycomb frame from a hive, with a mountain monastery in the distance" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/04-harvest-v2.jpg" alt="A beekeeper lifting a honeycomb frame from a hive, with a mountain monastery in the distance" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">04 — The Harvest</div>
@@ -750,7 +750,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/05-extraction.jpg" alt="A beekeeper lowering a dripping honeycomb frame into a stainless steel centrifugal extractor" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/05-extraction.jpg" alt="A beekeeper lowering a dripping honeycomb frame into a stainless steel centrifugal extractor" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">05 — The Extraction</div>
@@ -762,7 +762,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/honey/06-bottle-v2.jpg" alt="Raw honey being strained into a pot beside a row of filled HimVeda Himalayan Multiflora Honey jars" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/honey/06-bottle-v2.jpg" alt="Raw honey being strained into a pot beside a row of filled HimVeda Himalayan Multiflora Honey jars" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
@@ -794,7 +794,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/01-origin.jpg" alt="Beehives on a forested Himalayan ridge above Manali at sunrise, with snow-capped peaks and a river valley below" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/01-origin.jpg" alt="Beehives on a forested Himalayan ridge above Manali at sunrise, with snow-capped peaks and a river valley below" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">01 — Origin</div>
@@ -806,7 +806,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/02-blooms.jpg" alt="A wide alpine meadow of white wildflowers below the snow-capped mountains near Manali" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/02-blooms.jpg" alt="A wide alpine meadow of white wildflowers below the snow-capped mountains near Manali" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">02 — The Blooms</div>
@@ -818,7 +818,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/03-bees.jpg" alt="Bees foraging on wild white blossoms with the Himalayan mountains and a river valley behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/03-bees.jpg" alt="Bees foraging on wild white blossoms with the Himalayan mountains and a river valley behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">03 — The Bees</div>
@@ -830,7 +830,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/04-harvest.jpg" alt="A beekeeper holding up a honeycomb frame dripping with honey, mountains in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/04-harvest.jpg" alt="A beekeeper holding up a honeycomb frame dripping with honey, mountains in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">04 — The Harvest</div>
@@ -842,7 +842,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/05-extraction.jpg" alt="A honeycomb frame being uncapped by hand above a stainless steel extraction vessel" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/05-extraction.jpg" alt="A honeycomb frame being uncapped by hand above a stainless steel extraction vessel" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">05 — The Extraction</div>
@@ -854,7 +854,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-honey-tl-item right">
                 <div className="pdp-honey-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-honey-tl-media">
-                  <Image src="/journey/manali-honey/06-jar.jpg" alt="A jar of HimVeda by Pahadi Roots Himalayan Multiflora Honey from Manali, set among wildflowers with hives and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/manali-honey/06-jar.jpg" alt="A jar of HimVeda by Pahadi Roots Himalayan Multiflora Honey from Manali, set among wildflowers with hives and mountains behind" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
@@ -899,7 +899,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/01-origin.png" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/01-origin.webp" alt="Himachali Pahari cows grazing in a Himalayan mountain pasture" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">01 — Origin</div>
@@ -911,7 +911,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/02-milk.png" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/02-milk.webp" alt="Milking a Himachali Pahari cow by hand into a steel pail, mountain village in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">02 — The Milk</div>
@@ -923,7 +923,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/03-bilona.png" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/03-bilona.webp" alt="Traditional Bilona method — curd being churned by hand in a wooden pot" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">03 — Bilona</div>
@@ -935,7 +935,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item right">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/04-butter.png" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/04-butter.webp" alt="Freshly churned butter being gently heated in a traditional kadai over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">04 — The Butter</div>
@@ -947,7 +947,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-ghee-tl-item">
                 <div className="pdp-ghee-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-ghee-tl-media">
-                  <Image src="/journey/ghee/05-ghee.png" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/05-ghee.webp" alt="Golden ghee being slowly ladled, prepared the traditional way over a wood fire" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">05 — The Ghee</div>
@@ -970,7 +970,7 @@ export default async function ProductPage({ params }: Props) {
                     of a full-bleed crop — the trade-off that actually
                     matters for a product shot. */}
                 <div className="pdp-ghee-tl-media fit-full">
-                  <Image src="/journey/ghee/06-jar.png" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={640} height={640} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/ghee/06-jar.webp" alt="HimVeda by Pahadi Roots Himachali Pahari Cow Ghee jar" width={640} height={640} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div className="pdp-ghee-tl-content">
                   <div className="pdp-ghee-tl-eyebrow">06 — The Jar</div>
@@ -1010,7 +1010,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/01-land.jpg" alt="Himalayan valley with a glacial river and snow-capped peaks" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/01-land.jpg" alt="Himalayan valley with a glacial river and snow-capped peaks" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">01 — Origin</div>
@@ -1022,7 +1022,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item right">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/02-berry.jpg" alt="Close-up of wild Sea Buckthorn berries on the branch, mountains in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/02-berry.jpg" alt="Close-up of wild Sea Buckthorn berries on the branch, mountains in the background" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">02 — The Berry</div>
@@ -1034,7 +1034,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/03-harvest.jpg" alt="Women harvesters hand-picking Sea Buckthorn berries into woven baskets in the mountains" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/03-harvest.jpg" alt="Women harvesters hand-picking Sea Buckthorn berries into woven baskets in the mountains" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">03 — Harvest</div>
@@ -1046,7 +1046,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item right">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/04-extraction.jpg" alt="Workers pressing fresh Sea Buckthorn berries into pulp on a stainless steel extraction line" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/04-extraction.jpg" alt="Workers pressing fresh Sea Buckthorn berries into pulp on a stainless steel extraction line" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">04 — Extraction</div>
@@ -1058,7 +1058,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/05-pulp.jpg" alt="Vibrant Sea Buckthorn pulp being lifted with a wooden spoon" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/05-pulp.jpg" alt="Vibrant Sea Buckthorn pulp being lifted with a wooden spoon" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">05 — The Pulp</div>
@@ -1070,7 +1070,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-sb-tl-item right">
                 <div className="pdp-sb-tl-dot" aria-hidden="true"></div>
                 <div className="pdp-sb-tl-media">
-                  <Image src="/journey/sea-buckthorn/06-bottle.jpg" alt="HimVeda by Pahadi Roots Sea Buckthorn Pulp can and bottle beside fresh berries" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 100px, 560px" src="/journey/sea-buckthorn/06-bottle.jpg" alt="HimVeda by Pahadi Roots Sea Buckthorn Pulp can and bottle beside fresh berries" width={640} height={480} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">06 — The Bottle</div>
@@ -1111,7 +1111,7 @@ export default async function ProductPage({ params }: Props) {
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/honey/raw-unfiltered.png" alt="Honeycomb dripping raw honey into a bowl" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/raw-unfiltered.webp" alt="Honeycomb dripping raw honey into a bowl" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Raw &amp; Unfiltered</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
@@ -1119,7 +1119,7 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/honey/high-altitude.png" alt="Beehives set high in the Himalayan mountains" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/high-altitude.webp" alt="Beehives set high in the Himalayan mountains" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">High Altitude Origin</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
@@ -1127,7 +1127,7 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/honey/small-batch.png" alt="Beekeeper hand-harvesting a honeycomb frame" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/small-batch.webp" alt="Beekeeper hand-harvesting a honeycomb frame" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Small Batch</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
@@ -1135,7 +1135,7 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/honey/certified.png" alt="Honey jar beside an FSSAI certificate" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/certified.webp" alt="Honey jar beside an FSSAI certificate" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Fully Certified</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
@@ -1176,28 +1176,28 @@ export default async function ProductPage({ params }: Props) {
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/ghee/bilona.png" alt="Traditional Bilona churn and freshly gathered butter" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/ghee/bilona.webp" alt="Traditional Bilona churn and freshly gathered butter" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Bilona Method</div>
                 <div className="pdp-why-diff-desc">Hand-churned from curd the traditional way — not machine-separated.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/ghee/cow.png" alt="Himachali Pahari cow and calf" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/ghee/cow.webp" alt="Himachali Pahari cow and calf" width={461} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Pahari Cow Milk</div>
                 <div className="pdp-why-diff-desc">Made only from the milk of local Himachali Pahari cows.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/ghee/village.png" alt="Mountain village in Himachal Pradesh" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/ghee/village.webp" alt="Mountain village in Himachal Pradesh" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Himachal Pradesh Origin</div>
                 <div className="pdp-why-diff-desc">Prepared in the traditional mountain villages of Himachal Pradesh.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
-                  <Image src="/why-different/ghee/fire.png" alt="Kadai simmering over a traditional wood fire" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/ghee/fire.webp" alt="Kadai simmering over a traditional wood fire" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div className="pdp-why-diff-title">Wood-Fire Simmered</div>
                 <div className="pdp-why-diff-desc">Slowly heated over a traditional wood fire until golden.</div>
@@ -1230,7 +1230,7 @@ export default async function ProductPage({ params }: Props) {
               ].map(([img, alt, title, desc]) => (
                 <div key={img} className="pdp-why-diff-card img-card">
                   <div className="pdp-why-diff-icon icon-img">
-                    <Image src={`/why-different/sea-buckthorn/${img}.png`} alt={alt} width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <Image sizes="(max-width: 760px) 50vw, 270px" src={`/why-different/sea-buckthorn/${img}.webp`} alt={alt} width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <div className="pdp-why-diff-title">{title}</div>
                   <span className="pdp-why-diff-underline" aria-hidden="true"></span>
@@ -1264,7 +1264,7 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-source-card">
                 <div className="pdp-source-img">
                   {stateImg
-                    ? <Image src={stateImg} alt={regionName} width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', borderRadius: '50%' }} />
+                    ? <Image src={stateImg} alt={regionName} sizes="140px" width={140} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', borderRadius: '50%' }} />
                     : <span style={{ fontSize: '48px' }}>{rEmoji}</span>}
                 </div>
                 <div>
@@ -1291,7 +1291,7 @@ export default async function ProductPage({ params }: Props) {
               {ILLUSTRATED_ENJOY.vars.map(([title, desc], i) => (
                 <div key={title} className="pdp-why-diff-card var-card">
                   <div className="pdp-var-img">
-                    <Image src={`/variation/${ILLUSTRATED_ENJOY.dir}/${i + 1}.png`} alt="" width={420} height={200} />
+                    <Image sizes="(max-width: 760px) 50vw, 270px" src={`/variation/${ILLUSTRATED_ENJOY.dir}/${i + 1}.webp`} alt="" width={420} height={200} />
                   </div>
                   <div className="pdp-why-diff-title">{title}</div>
                   <div className="pdp-why-diff-desc" style={{ padding: '0 14px' }}>{desc}</div>
@@ -1412,7 +1412,7 @@ export default async function ProductPage({ params }: Props) {
               {HONEY_VARIATION.vars.map(([title, desc, icon], i) => (
                 <div key={title} className="pdp-why-diff-card var-card honey-var-card">
                   <div className="pdp-var-img">
-                    <Image src={`/variation/${HONEY_VARIATION.dir}/${i + 1}.png`} alt="" width={489} height={249} />
+                    <Image sizes="(max-width: 760px) 50vw, 270px" src={`/variation/${HONEY_VARIATION.dir}/${i + 1}.webp`} alt="" width={489} height={249} />
                   </div>
                   <span className="pdp-var-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#c8920a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{VAR_ICONS[icon]}</svg>
