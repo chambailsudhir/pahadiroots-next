@@ -151,6 +151,12 @@ describe('isEnabled', () => {
     expect(isEnabled('yes')).toBe(true)
   })
 
+  it('treats "False", " FALSE " and "0" as off (hand-edited / differently-cased DB values)', () => {
+    expect(isEnabled('False')).toBe(false)
+    expect(isEnabled(' FALSE ')).toBe(false)
+    expect(isEnabled('0')).toBe(false)
+  })
+
   it('returns the defaultValue when value is undefined — defaults to true', () => {
     expect(isEnabled(undefined)).toBe(true)
     expect(isEnabled(undefined, false)).toBe(false)

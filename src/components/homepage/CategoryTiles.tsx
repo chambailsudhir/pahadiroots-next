@@ -57,19 +57,26 @@ export default function CategoryTiles({ categories }: Props) {
     }
 
     const origCount = active.length
+    // BUG FIX (audit): the track always rendered [...active, ...active]. With
+    // 6 or fewer categories on a desktop (6 tiles visible) the clones were
+    // visible right next to the originals — "Honey, Ghee, Tea, Honey, Ghee,
+    // Tea" — and since the content never overflowed there was nothing to
+    // scroll, so the arrows and autoplay did nothing. The infinite-loop trick
+    // is now only used when there are more categories than fit on screen.
+    const loop = active.length > 6
 
     function goNext() {
       if (animRef.current) return
       const w = cellW()
       const from = cgrid.scrollLeft
       animScroll(from, from + w, () => {
-        if (cgrid.scrollLeft >= origCount * w) cgrid.scrollLeft = 0
+        if (loop && cgrid.scrollLeft >= origCount * w) cgrid.scrollLeft = 0
       })
     }
     function goPrev() {
       if (animRef.current) return
       const w = cellW()
-      if (cgrid.scrollLeft <= 0) cgrid.scrollLeft = origCount * w
+      if (loop && cgrid.scrollLeft <= 0) cgrid.scrollLeft = origCount * w
       const from = cgrid.scrollLeft
       animScroll(from, from - w)
     }
@@ -95,7 +102,7 @@ export default function CategoryTiles({ categories }: Props) {
     // so the two mechanisms don't conflict.
     let scrollEndTimer: ReturnType<typeof setTimeout> | null = null
     function onScroll() {
-      if (animRef.current) return
+      if (!loop || animRef.current) return
       if (scrollEndTimer) clearTimeout(scrollEndTimer)
       scrollEndTimer = setTimeout(() => {
         const w = cellW()
@@ -118,7 +125,7 @@ export default function CategoryTiles({ categories }: Props) {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const onVisibilityChange = () => { pausedRef.current = document.visibilityState !== 'visible' }
     document.addEventListener('visibilitychange', onVisibilityChange)
-    const timer = reducedMotion ? null : setInterval(() => { if (!pausedRef.current) goNext() }, 2500)
+    const timer = (reducedMotion || !loop) ? null : setInterval(() => { if (!pausedRef.current) goNext() }, 2500)
     const onEnter = () => { pausedRef.current = true }
     const onLeave = () => { pausedRef.current = false }
     const onTouchStart = () => { pausedRef.current = true }
@@ -146,8 +153,9 @@ export default function CategoryTiles({ categories }: Props) {
 
   if (!active.length) return null
 
-  // Duplicate for seamless infinite loop
-  const doubled = [...active, ...active]
+  // Duplicate for seamless infinite loop — only when there's more than fits.
+  const needsLoop = active.length > 6
+  const doubled = needsLoop ? [...active, ...active] : active
 
   return (
     <section className="coll-bg" style={{ padding: '40px 0 52px', overflow: 'visible' }}>
@@ -199,11 +207,12 @@ export default function CategoryTiles({ categories }: Props) {
             display: 'flex', overflowX: 'scroll', overflowY: 'hidden',
             scrollbarWidth: 'none', width: '100%', position: 'relative',
             padding: '8px 4px 16px',
+            justifyContent: needsLoop ? undefined : 'safe center',
           }}
         >
           {doubled.map((cat, idx) => {
             const emoji = emojiForCategory(cat)
-            const isClone = idx >= active.length
+            const isClone = needsLoop && idx >= active.length
             return (
               <div
                 key={`${cat.id}-${idx}`}
@@ -215,7 +224,7 @@ export default function CategoryTiles({ categories }: Props) {
                   transition: 'transform .25s',
                 }}
               >
-                <Link href={`/collections/${cat.slug}`} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
+                <Link href={`/collections/${cat.slug}`} tabIndex={isClone ? -1 : undefined} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
                   <div className="cc-box" style={{
                     width: '100%', aspectRatio: '1/1', borderRadius: '16px',
                     border: '2px solid #c8920a', background: '#fafaf8',
@@ -256,14 +265,14 @@ export default function CategoryTiles({ categories }: Props) {
                           const emo = img.previousElementSibling as HTMLElement | null
                           if (emo?.classList.contains('cc-emo')) emo.style.opacity = '0'
                         }}
-                        onError={e => { e.currentTarget.remove() }}
+                        onError={e => { e.currentTarget.style.display = 'none' }}
                       />
                     )}
                   </div>
                 </Link>
 
-                <Link href={`/collections/${cat.slug}`} style={{
-                  fontFamily: '"Playfair Display",serif',
+                <Link href={`/collections/${cat.slug}`} tabIndex={isClone ? -1 : undefined} style={{
+                  fontFamily: 'var(--font-playfair,"Playfair Display"),Georgia,serif',
                   fontSize: '14px', fontWeight: 700, color: '#1a3a1e',
                   textAlign: 'center', lineHeight: 1.3, width: '100%',
                   textDecoration: 'none', display: 'block',

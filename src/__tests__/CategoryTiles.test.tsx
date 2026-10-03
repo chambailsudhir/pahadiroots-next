@@ -70,13 +70,17 @@ describe('CategoryTiles', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('doubles a single category as an aria-hidden clone for the infinite-loop effect', () => {
+  it('does NOT clone categories when they all fit on screen (6 or fewer)', () => {
     render(<CategoryTiles categories={[cat({ name: 'Only One' })]} />)
-    // The component always renders [...active, ...active] for the
-    // seamless-loop carousel effect — the second copy is marked
-    // aria-hidden so it's invisible to assistive tech and the real
-    // count as far as the user is concerned is still 1.
-    const instances = screen.getAllByText('Only One')
+    // BUG FIX (audit): clones used to be rendered unconditionally, so a
+    // short list showed visible duplicates side by side.
+    expect(screen.getAllByText('Only One').length).toBe(1)
+  })
+
+  it('doubles the list as aria-hidden clones for the infinite-loop effect once there are more than 6', () => {
+    const many = Array.from({ length: 7 }, (_, i) => cat({ id: i + 1, slug: `c-${i + 1}`, name: `Cat ${i + 1}` }))
+    render(<CategoryTiles categories={many} />)
+    const instances = screen.getAllByText('Cat 1')
     expect(instances.length).toBe(2)
     const hiddenCount = instances.filter(el => el.closest('[aria-hidden="true"]')).length
     expect(hiddenCount).toBe(1)

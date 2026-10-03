@@ -24,7 +24,13 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const cartCount  = useCartStore(selectCartCount)
   const wishlist   = useUserStore(s => s.wishlist)
   const user       = useUserStore(s => s.user)
-  const { openCart, openSearch, openMobileMenu, openAuth } = useUIStore()
+  // BUG FIX (audit): destructuring the whole store subscribed the header to
+  // EVERY uiStore change (any drawer/modal toggling re-rendered it). Selectors
+  // only re-render when the specific action changes (never, they're stable).
+  const openCart       = useUIStore(s => s.openCart)
+  const openSearch     = useUIStore(s => s.openSearch)
+  const openMobileMenu = useUIStore(s => s.openMobileMenu)
+  const openAuth       = useUIStore(s => s.openAuth)
 
   const [scrolled, setScrolled] = useState(false)
   const [acctOpen, setAcctOpen] = useState(false)
@@ -62,16 +68,16 @@ export default function Header({ settings, categories = [], states = [] }: Props
   const showBlog     = isEnabled(settings.show_blog)
   const siteName     = settings.site_name || 'HimVeda by Pahadi Roots'
   const logoUrl      = settings.logo_url || ''
-  const freeShipMin  = settings.free_shipping_min || '0'
 
   const firstName = user?.name?.split(' ')[0] || ''
   const initials  = firstName ? firstName[0].toUpperCase() : ''
 
   return (
     <>
-      {/* Skip to main content — keyboard/screen-reader accessibility */}
-      <a href="#main-content" className="old-skip-link">Skip to main content</a>
-
+      {/* BUG FIX (audit): a second "Skip to main content" link used to live
+          here as well, on top of <SkipLink /> already rendered in layout.tsx —
+          keyboard and screen-reader users hit two identical skip links in a
+          row. The layout one is the single source now. */}
       <div className="sticky top-0 z-30">
       <AnnouncementBar settings={settings} />
       <TickerBar settings={settings} />
@@ -360,13 +366,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
           .old-cart-btn,
           .old-dark-btn{ display:none!important; }
         }
-        .old-skip-link{
-          position:absolute;left:-9999px;top:4px;z-index:9999;
-          background:#1a3a1e;color:#fff;padding:8px 16px;
-          font-size:13px;font-weight:700;border-radius:0 0 6px 0;
-          text-decoration:none;
-        }
-        .old-skip-link:focus{left:4px}
       `}</style>
     </div>
     </>

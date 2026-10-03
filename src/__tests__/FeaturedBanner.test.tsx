@@ -81,6 +81,15 @@ describe('FeaturedBanner', () => {
     expect(el).toBeNull()
   })
 
+  it('renders nothing for a deactivated category (its Shop Now link would 404)', async () => {
+    mockSingle.mockResolvedValueOnce({
+      data: { id: 1, name: 'Wild Honey', slug: 'wild-honey', description: null, image_url: null, is_active: false },
+      error: null,
+    })
+    const el = await FeaturedBanner({ slug: 'wild-honey' })
+    expect(el).toBeNull()
+  })
+
   it('renders nothing (fails safe) on a DB error', async () => {
     mockSingle.mockRejectedValueOnce(new Error('db down'))
 

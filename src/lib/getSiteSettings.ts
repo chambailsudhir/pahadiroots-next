@@ -241,16 +241,31 @@ async function fetchSiteSettingsFromDB(): Promise<SiteSettings> {
   // sbGet in orderService.ts).
   const timeoutMs = 8_000
   const queryPromise = client.from('site_settings').select('key, value')
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`getSiteSettings timed out after ${timeoutMs}ms`)), timeoutMs)
-  )
+  // BUG FIX (audit): this timer was never cleared, so every successful fetch
+  // left an 8s timer (and its rejected promise) hanging around.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`getSiteSettings timed out after ${timeoutMs}ms`)), timeoutMs)
+  })
 
-  const { data, error } = await Promise.race([queryPromise, timeoutPromise])
+  let result: Awaited<typeof queryPromise>
+  try {
+    result = await Promise.race([queryPromise, timeoutPromise])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+  const { data, error } = result
 
   if (error) throw error
 
+  // BUG FIX (audit): a row whose value is NULL used to overwrite the matching
+  // DEFAULTS entry with null (e.g. ticker/trust colours, stat labels), which
+  // then rendered as blank instead of the intended default. NULL rows are
+  // now skipped so the default stays in force.
   const fromDB = Object.fromEntries(
-    (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
+    (data || [])
+      .filter((r: { key: string; value: string | null }) => r.value !== null && r.value !== undefined)
+      .map((r: { key: string; value: string }) => [r.key, r.value])
   )
 
   // Merge: defaults first, then DB values override

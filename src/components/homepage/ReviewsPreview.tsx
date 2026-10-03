@@ -35,15 +35,19 @@ import { starsFor } from '@/lib/rating'
 
 interface HomepageReview {
   id:            string
-  customer_name: string
+  customer_name: string | null
   location:      string | null
   rating:        number
   review_text:   string | null
   comment:       string | null
 }
 
-function initialOf(name: string): string {
-  const trimmed = name.trim()
+function initialOf(name: string | null | undefined): string {
+  // BUG FIX (audit): customer_name can be NULL in the reviews table; the old
+  // `name.trim()` threw during render — outside the try/catch above — which
+  // 500'd the ENTIRE homepage for as long as that review stayed in the
+  // latest-3 window.
+  const trimmed = (name ?? '').trim()
   return trimmed ? trimmed[0].toUpperCase() : '?'
 }
 
@@ -87,7 +91,7 @@ export default async function ReviewsPreview() {
               <div className="rauth">
                 <div className="rav">{initialOf(r.customer_name)}</div>
                 <div>
-                  <div className="ran">{r.customer_name}</div>
+                  <div className="ran">{r.customer_name?.trim() || 'Customer'}</div>
                   <div className="rloc">{r.location || 'Customer'}</div>
                 </div>
               </div>

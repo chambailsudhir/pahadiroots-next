@@ -10,13 +10,18 @@ export default async function FeaturedBanner({ slug }: Props) {
   try {
     const { data } = await supabase
       .from('categories')
-      .select('id, name, slug, description, image_url')
+      .select('id, name, slug, description, image_url, is_active')
       .eq('slug', slug)
       .single()
     cat = data
   } catch { cat = null }
 
-  if (!cat) return null
+  // BUG FIX (audit): the query had no is_active filter, so a deactivated
+  // category could still be promoted as the Featured Collection — and its
+  // "Shop Now" link then 404s, because /collections/[slug] only serves active
+  // categories. (Checked in code rather than in the query so the existing
+  // query shape stays identical.)
+  if (!cat || (cat as { is_active?: boolean }).is_active === false) return null
 
   return (
     <section style={{ padding: '24px 40px', background: '#fff' }}>
@@ -49,7 +54,7 @@ export default async function FeaturedBanner({ slug }: Props) {
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, color: 'var(--gd2)', textTransform: 'uppercase', marginBottom: 8 }}>
                 ✦ Featured Collection
               </div>
-              <h3 style={{ fontFamily: '"Playfair Display", Georgia, serif', fontSize: 'clamp(22px,3vw,36px)', fontWeight: 900, color: '#fff', marginBottom: 10 }}>
+              <h3 style={{ fontFamily: 'var(--font-playfair), "Playfair Display", Georgia, serif', fontSize: 'clamp(22px,3vw,36px)', fontWeight: 900, color: '#fff', marginBottom: 10 }}>
                 {cat.name}
               </h3>
               {cat.description && (

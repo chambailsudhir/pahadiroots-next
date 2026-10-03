@@ -24,6 +24,17 @@ import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 // the canonical site origin instead of three independently hardcoded copies.
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
+// BUG FIX (audit): JSON.stringify() does NOT escape "</script>", so an admin
+// value (site name, address, description…) containing it would break out of
+// the JSON-LD <script> tag. Escaping "<" is the standard fix and is still
+// valid JSON.
+const safeJsonLd = (obj: unknown) => JSON.stringify(obj).replace(/</g, '\\u003c')
+
+// BUG FIX (audit): google_tag_id was interpolated straight into inline
+// <script> source. Only real GA4 / GTM ids are ever valid, so anything else
+// is dropped instead of being injected.
+const TAG_ID_RE = /^(G|GTM|AW|UA)-[A-Z0-9-]{3,20}$/i
+
 const playfair = Playfair_Display({
   variable: '--font-playfair',
   subsets: ['latin'],
@@ -141,12 +152,13 @@ export default async function RootLayout({
   // only route customers can reach anyway (proxy.ts redirects everything
   // else), so there is nothing for any of this chrome to usefully do.
   const isMaintenanceMode = settings.store_open === 'false'
+  const tagId = TAG_ID_RE.test((settings.google_tag_id || '').trim()) ? settings.google_tag_id.trim() : ''
+  const waNumber = (settings.whatsapp_number || '').replace(/\D/g, '') || '919899984895'
 
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#1a3a1e" />
-        <meta name="pahadiroots-fix" content="hydration-2026-05-07-v6" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
           rel="preconnect"
@@ -171,7 +183,7 @@ export default async function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLd({
               '@context': 'https://schema.org',
               '@type':    'Organization',
               name:       settings.site_name || 'HimVeda by Pahadi Roots',
@@ -249,7 +261,7 @@ export default async function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: safeJsonLd({
               '@context': 'https://schema.org',
               '@type':    'WebSite',
               name:       settings.site_name || 'HimVeda by Pahadi Roots',
@@ -277,19 +289,19 @@ export default async function RootLayout({
             GoogleTagManager component instead of raw scripts here — not
             adopted since it's a new dependency for a non-blocking lint
             suggestion; this is GTM's own documented integration method. */}
-        {settings.google_tag_id?.startsWith('GTM-') && (
+        {tagId.toUpperCase().startsWith('GTM-') && (
           <script
             dangerouslySetInnerHTML={{
-              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${settings.google_tag_id}');`,
+              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${tagId}');`,
             }}
           />
         )}
-        {settings.google_tag_id && !settings.google_tag_id.startsWith('GTM-') && (
+        {tagId && !tagId.toUpperCase().startsWith('GTM-') && (
           <>
-            <script async src={`https://www.googletagmanager.com/gtag/js?id=${settings.google_tag_id}`} />
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${tagId}`} />
             <script
               dangerouslySetInnerHTML={{
-                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${settings.google_tag_id}');`,
+                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${tagId}');`,
               }}
             />
           </>
@@ -297,10 +309,10 @@ export default async function RootLayout({
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
         {/* GTM requires a <noscript> iframe fallback immediately inside <body> */}
-        {settings.google_tag_id?.startsWith('GTM-') && (
+        {tagId.toUpperCase().startsWith('GTM-') && (
           <noscript>
             <iframe
-              src={`https://www.googletagmanager.com/ns.html?id=${settings.google_tag_id}`}
+              src={`https://www.googletagmanager.com/ns.html?id=${tagId}`}
               height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}
               title="Google Tag Manager"
             />
@@ -346,7 +358,7 @@ export default async function RootLayout({
             src="/js/ai-assistant.js"
             data-name="Pahadi_AI"
             data-tagline="Himalayan Shopping Guide · Online"
-            data-whatsapp="919899984895"
+            data-whatsapp={waNumber}
             strategy="afterInteractive"
           />
         )}

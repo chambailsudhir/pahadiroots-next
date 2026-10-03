@@ -17,6 +17,9 @@ import BrandStory from '@/components/story/BrandStory'
 import WhereTheyBegin from '@/components/story/WhereTheyBegin'
 import RegionStories from '@/components/story/RegionStories'
 import LifeInMountains from '@/components/story/LifeInMountains'
+import { logger } from '@/lib/logger'
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
 // BUG FIX (found while removing the duplicate NewsletterBar section):
 // this was a static `export const metadata` object. Next.js merges page
@@ -55,13 +58,18 @@ export async function generateMetadata(): Promise<Metadata> {
   // regions, blog, about) already sets these; the homepage was the one
   // gap.
   return {
-    title,
+    // BUG FIX (audit): layout.tsx sets `title.template = '%s | <siteName>'`,
+    // and a plain string title here gets run through that template — so the
+    // homepage <title> read "<title> | HimVeda by Pahadi Roots", repeating
+    // the brand (the default meta_title already contains it). `absolute`
+    // opts the homepage out of the template.
+    title: { absolute: title },
     description,
-    alternates: { canonical: 'https://www.pahadiroots.com' },
+    alternates: { canonical: SITE_URL },
     openGraph: {
       title,
       description,
-      url:  'https://www.pahadiroots.com',
+      url:  SITE_URL,
       type: 'website',
       images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },
@@ -216,11 +224,26 @@ export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreD
   // getProductsWithImages()+normalizeProducts() pass. Now shares the same
   // cached result used by /regions and /regions/[slug] (see
   // getNormalizedProducts() in storeData.ts) instead of recomputing it.
-  const normalized = await getNormalizedProducts() as (Product & { state_id: string })[]
+  // BUG FIX (audit): this was the one homepage data call with no fail-safe.
+  // Every sibling section (BestSellers, NewArrivals, Reviews…) catches its
+  // own errors so one failed query can't take the page down; a throw here
+  // used to 500 the ENTIRE homepage. Now the region section degrades to
+  // "no products under each region" and the page still renders.
+  let normalized: (Product & { state_id: string })[] = []
+  try {
+    normalized = (await getNormalizedProducts()) as (Product & { state_id: string })[]
+  } catch (err) {
+    logger.error('[Home] buildStates: failed to load products for regions', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 
   return states.map((s: any) => {
-    const imgs = (state_images as any[])
-      .filter(i => String(i.state_id) === String(s.id))
+    // BUG FIX (audit): `state_images` is guarded with `?? []` now (a missing
+    // array used to throw on .filter), and the id comparison is lowercased
+    // to match the product filter below — the two used to disagree on case.
+    const imgs = ((state_images ?? []) as any[])
+      .filter(i => String(i.state_id).toLowerCase() === String(s.id).toLowerCase())
       .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     return {
       id:          s.id,
@@ -240,7 +263,7 @@ export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreD
       // them. toCardProductData() strips those before the client boundary,
       // matching the fix already applied on /regions/[slug].
       products:    normalized
-        .filter(p => String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
+        .filter(p => p.state_id != null && String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
         .slice(0, 4)
         .map(toCardProductData),
     }

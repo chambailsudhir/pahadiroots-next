@@ -61,6 +61,12 @@ describe('generateMetadata() (homepage) — og:image regression', () => {
     expect((metadata.twitter as any)?.images).toEqual(['https://cdn.example.com/hero-banner.jpg'])
   })
 
+  it('opts the homepage title out of the layout "%s | siteName" template (no doubled brand name)', async () => {
+    mockGetSiteSettings.mockResolvedValue({ site_name: 'HimVeda', meta_title: 'HimVeda — Himalayan Foods' })
+    const metadata = await generateMetadata()
+    expect(metadata.title).toEqual({ absolute: 'HimVeda — Himalayan Foods' })
+  })
+
   it('falls back to /logo.png (never an empty/missing image) when og_image is blank', async () => {
     mockGetSiteSettings.mockResolvedValue({})
 

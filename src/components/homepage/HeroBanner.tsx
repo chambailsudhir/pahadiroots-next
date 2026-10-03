@@ -151,11 +151,20 @@ export default function HeroBanner({ images, settings }: Props) {
   // common carousel libraries (Swiper's default is 50px) — high enough
   // to ignore an accidental brush, low enough to feel responsive.
   const touchStartX = useRef<number | null>(null)
+  // BUG FIX (audit): phones fire an emulated mouseenter right AFTER touchend.
+  // That re-set isHovering=true after the 1.8s touch timer had already
+  // cleared it, and since a finger never produces a matching mouseleave, the
+  // autoplay stayed paused until the visitor tapped somewhere else on the
+  // page — i.e. on mobile the banner stopped rotating after the first tap or
+  // swipe. Mouse events that arrive within 800ms of a touch are now ignored.
+  const lastTouchAt = useRef(0)
   const handleTouchStart = (e: TouchEvent) => {
+    lastTouchAt.current = Date.now()
     touchStartX.current = e.touches[0].clientX
     setIsHovering(true)
   }
   const handleTouchEnd = (e: TouchEvent) => {
+    lastTouchAt.current = Date.now()
     if (touchStartX.current !== null && total > 1) {
       const delta = e.changedTouches[0].clientX - touchStartX.current
       if (delta < -40) next()
@@ -190,7 +199,7 @@ export default function HeroBanner({ images, settings }: Props) {
       <div
         id="home-hero-banner"
         className={`hhero-layout-${mobileLayout}${slides && (() => { const c: any = slides[current]; return Boolean(c && (c.eyebrow || c.title || c.subtitle || c.coupon_offer || c.coupon_code || c.cta_text || c.cta2_text)) })() ? ' hhero-ov-active' : ''}`}
-        onMouseEnter={() => setIsHovering(true)}
+        onMouseEnter={() => { if (Date.now() - lastTouchAt.current > 800) setIsHovering(true) }}
         onMouseLeave={() => setIsHovering(false)}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -209,8 +218,17 @@ export default function HeroBanner({ images, settings }: Props) {
           // a non-heading element, and the whole hidden slide is
           // aria-hidden so assistive tech skips it entirely.
           const isVisible = i === current
+          // PERF FIX (audit): every slide's full-width <Image> used to mount at
+          // once (5 slides = 5 hero-sized downloads competing with the LCP
+          // image on first paint, since absolutely-positioned opacity:0
+          // images still count as in-viewport and are never lazy-deferred).
+          // Now only slide 0 (LCP) plus the current slide and its two
+          // neighbours mount their image; the next one is always ready
+          // before it's shown.
+          const nearCurrent = i === 0 || i === current ||
+            i === (current + 1) % total || i === (current - 1 + total) % total
           const HeadingTag = isVisible ? 'h1' : 'p'
-          const headingStyle = { fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900 as const, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }
+          const headingStyle = { fontFamily:'var(--font-playfair),"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900 as const, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }
           // BUG FIX: a slide's Background Image can itself be a fully
           // designed banner graphic — its own headline, subtitle, and CTA
           // baked directly into the photo (this is exactly what happens
@@ -294,9 +312,12 @@ export default function HeroBanner({ images, settings }: Props) {
                 muted={isMuted}
                 loop
                 playsInline
+                preload={i === 0 ? 'auto' : 'metadata'}
                 onLoadedMetadata={e => handleVideoMeta(i, e)}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
               />
+            ) : img.url && !nearCurrent ? (
+              <div style={{ position: 'absolute', inset: 0, background: '#0d2410' }} />
             ) : img.url ? (
               !hasOverlayContent ? (
                 // BUG FIX (mobile hero letterbox bars — reported via
@@ -391,7 +412,7 @@ export default function HeroBanner({ images, settings }: Props) {
               <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase', color:'rgba(255,255,255,.75)', background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.18)', borderRadius:30, padding:'5px 14px', width:'fit-content', marginBottom:18, backdropFilter:'blur(4px)' }}>
                 🌿 Pure · Himalayan · Natural
               </div>
-              <h1 style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }}>
+              <h1 style={{ fontFamily:'var(--font-playfair),"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }}>
                 Born in the<br/><em style={{fontStyle:'italic',color:'var(--gd)'}}>Himalayas,</em><br/>For Your Table
               </h1>
               <p style={{ fontSize:'clamp(13px,1.5vw,16px)', color:'rgba(255,255,255,.8)', lineHeight:1.6, margin:'0 0 28px', maxWidth:440 }}>
@@ -485,7 +506,7 @@ export default function HeroBanner({ images, settings }: Props) {
           {heroStats.map((s, i) => (
             <div key={s.key} style={{ display:'flex', alignItems:'center', gap:0 }}>
               <div style={{ textAlign:'center', padding:'0 32px' }}>
-                <div style={{ fontFamily:'"Playfair Display",Georgia,serif', fontSize:'clamp(20px,2.2vw,28px)', fontWeight:900, color:statsNum, lineHeight:1.1 }}>{s.num}</div>
+                <div style={{ fontFamily:'var(--font-playfair),"Playfair Display",Georgia,serif', fontSize:'clamp(20px,2.2vw,28px)', fontWeight:900, color:statsNum, lineHeight:1.1 }}>{s.num}</div>
                 <div style={{ fontSize:10.5, color:statsNum, opacity:0.5, letterSpacing:1, marginTop:2, textTransform:'uppercase' }}>{s.lbl}</div>
               </div>
               {i < heroStats.length - 1 && <div style={{ width:1, height:36, background:'rgba(255,255,255,.15)', flexShrink:0 }} />}

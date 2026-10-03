@@ -245,15 +245,18 @@ const _getCachedStoreData = unstable_cache(
   { revalidate: 60, tags: ['store-data'] },
 )
 
-// Force-fetch bypasses the shared cache (used by admin/webhook invalidation).
-const _getFreshStoreData = unstable_cache(
-  _fetchStoreDataSingleFlight,
-  ['store-data-fresh'],
-  { revalidate: false },
-)
-
+// BUG FIX (audit, Oct 2026): this used to be a SECOND unstable_cache entry
+// ('store-data-fresh') with `revalidate: false`. In Next, `revalidate: false`
+// means "cache forever", not "don't cache" — so getStoreData(true) returned
+// the same frozen snapshot on every later call, and (because it had no tag)
+// nothing could ever clear it. Worse, it never touched the real 'store-data'
+// entry the homepage reads, so the admin's "revalidate" call did nothing for
+// product/price/stock edits until the 60s TTL lapsed by itself.
+// Force now calls the single-flight fetch directly (a true bypass); cache
+// invalidation for everyone else is done with revalidateTag('store-data')
+// in /api/v1/revalidate.
 export async function getStoreData(force = false): Promise<StoreData> {
-  return force ? _getFreshStoreData() : _getCachedStoreData()
+  return force ? _fetchStoreDataSingleFlight() : _getCachedStoreData()
 }
 
 // ── imgFor() — category card image resolution ────────────────────────────

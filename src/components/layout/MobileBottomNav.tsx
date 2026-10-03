@@ -30,7 +30,9 @@ interface Props {
 
 export default function MobileBottomNav({ settings }: Props) {
   const cartCount = useCartStore(selectCartCount)
-  const { openSearch, openCart, openMobileMenu } = useUIStore()
+  const openSearch     = useUIStore(s => s.openSearch)
+  const openCart       = useUIStore(s => s.openCart)
+  const openMobileMenu = useUIStore(s => s.openMobileMenu)
   const pathname = usePathname()
 
   // Mount guard for the same hydration-mismatch reason as Header.tsx —

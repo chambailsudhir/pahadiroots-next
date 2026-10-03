@@ -15,8 +15,12 @@
 
 // Helper: parse a boolean setting (handles 'true', 'false', missing)
 export function isEnabled(value: string | undefined, defaultValue = true): boolean {
-  if (value === undefined) return defaultValue
-  return value !== 'false'
+  if (value === undefined || value === null) return defaultValue
+  // BUG FIX (audit): the check was an exact 'false' match, so 'False', 'FALSE',
+  // ' false' or '0' (any hand-edited / differently-cased DB value) left a
+  // section switched ON even though it was meant to be off.
+  const v = String(value).trim().toLowerCase()
+  return !(v === 'false' || v === '0' || v === 'off' || v === 'no')
 }
 
 // Helper: parse a number setting

@@ -122,7 +122,6 @@ export default function ExploreByRegion({ states }: Props) {
                   src={(meta.homeHeroImage || activeState.image_url) as string}
                   alt={`${activeState.name} — Himalayan landscape and culture`}
                   fill
-                  priority
                   sizes="(max-width: 700px) 840px, (max-width: 1000px) 1020px, 1312px"
                   quality={90}
                   style={{ objectFit: 'cover', objectPosition: 'var(--fp)' }}
@@ -171,8 +170,8 @@ export default function ExploreByRegion({ states }: Props) {
 
             {activeState.products.length > 0 ? (
               <div className={styles.productGrid}>
-                {activeState.products.slice(0, 4).map((product, index) => (
-                  <RegionProductCard key={product.id} product={product} priority={index < 2} />
+                {activeState.products.slice(0, 4).map((product) => (
+                  <RegionProductCard key={product.id} product={product} />
                 ))}
               </div>
             ) : (

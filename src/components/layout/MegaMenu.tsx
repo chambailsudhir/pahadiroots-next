@@ -15,16 +15,12 @@ const CURATED = [
   // filterAndSortProducts.ts), so link there instead of a dead route.
   { label: 'Best Sellers',    href: '/products?sort=popular' },
   { label: 'New Arrivals',    href: '/new-arrivals' },
-  // NOTE (unverified — flagged, not changed): the four links below point at
-  // /collections/<slug> for slugs that may not exist as real categories
-  // ('gift-sets', 'wellness') or that we couldn't confirm against live data
-  // ('honey', 'spices'). Each will silently 404 if the slug doesn't match a
-  // row in storeData.categories. Worth a quick check against the admin
-  // category list — happy to wire up real destinations once confirmed.
-  { label: 'Gift Sets',       href: '/collections/gift-sets' },
-  { label: 'Pahadi Wellness', href: '/collections/wellness' },
-  { label: 'Natural Honey',   href: '/collections/honey' },
-  { label: 'Pure Spices',     href: '/collections/spices' },
+  // BUG FIX (audit): four hand-typed /collections/<slug> links used to sit
+  // here ('gift-sets', 'wellness', 'honey', 'spices'). /collections/[slug]
+  // 404s for any slug that isn't a real active category, and none of these
+  // could be confirmed — the real categories are already listed in the
+  // "All Collections" column from the database, so a dead link here was
+  // pure risk. Only routes that are guaranteed to exist remain.
 ]
 
 export default function MegaMenu({ categories, states }: Props) {
@@ -71,7 +67,7 @@ export default function MegaMenu({ categories, states }: Props) {
 
       {open && <div className="mega-menu-backdrop" style={{ position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500 }} onClick={() => setOpen(false)} />}
 
-      <div className={`mega-menu${open ? ' open' : ''}`} style={{ top: megaTop }} role="menu">
+      <div className={`mega-menu${open ? ' open' : ''}`} style={{ top: megaTop }}>
 
         {/* Column 1 — All Collections */}
         <div className="mega-col" id="megaColCollections">

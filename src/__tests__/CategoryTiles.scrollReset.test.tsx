@@ -39,7 +39,9 @@ describe('CategoryTiles — scroll-driven infinite-loop reset', () => {
   it('snaps scrollLeft back by one full set-width after a manual scroll crosses the clone boundary', () => {
     vi.useFakeTimers()
 
-    const categories = [cat({ id: 1, name: 'A' }), cat({ id: 2, name: 'B' }), cat({ id: 3, name: 'C' })]
+    // 7 categories: the loop (and its clones) only exists when more categories
+    // than the 6 visible desktop tiles are present — see CategoryTiles.tsx.
+    const categories = Array.from({ length: 7 }, (_, i) => cat({ id: i + 1, slug: `c-${i + 1}`, name: `Cat ${i + 1}` }))
     const { container } = render(<CategoryTiles categories={categories} />)
     const track = container.querySelector('.cgrid-track') as HTMLDivElement
     expect(track).toBeTruthy()

@@ -37,8 +37,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { logger, captureError } from '@/lib/logger'
-import { revalidatePath } from 'next/cache'
-import { getStoreData } from '@/lib/storeData'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { clearSiteSettingsCache } from '@/lib/getSiteSettings'
 
 export const dynamic = 'force-dynamic'
@@ -90,16 +89,20 @@ export async function POST(req: NextRequest) {
     const revalidated: string[] = []
 
     if (slug || all) {
-      // 1. Force the in-process storeData cache to refetch from Supabase
-      //    on the very next call (clears the 60s CACHE_TTL window).
-      await getStoreData(true)
+      // 1. Expire the shared 'store-data' Data Cache entries (raw catalog +
+      //    the normalized-products cache both carry this tag) so the very
+      //    next homepage / listing render refetches from Supabase.
+      //    BUG FIX: this used to call getStoreData(true), which only filled a
+      //    separate never-expiring cache and never cleared the real one.
+      revalidateTag('store-data', { expire: 0 })
 
       // 2. Invalidate Next's ISR cache so the next request rebuilds the page
       //    instead of serving the stale cached HTML.
       if (all) {
         revalidatePath('/products', 'page')
         revalidatePath('/products/[slug]', 'page')
-        revalidated.push('/products', '/products/[slug] (all)')
+        revalidatePath('/', 'page')
+        revalidated.push('/products', '/products/[slug] (all)', '/')
       } else if (slug) {
         revalidatePath(`/products/${slug}`)
         revalidatePath('/products', 'page') // listing card (price/stock) also changed

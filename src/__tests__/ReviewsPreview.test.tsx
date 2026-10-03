@@ -45,6 +45,16 @@ function review(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ReviewsPreview', () => {
+  it('does not crash when a review has a NULL customer_name (falls back to "Customer")', async () => {
+    mockLimit.mockResolvedValueOnce({
+      data: [review({ customer_name: null, location: null })],
+      error: null,
+    })
+    const el = await ReviewsPreview()
+    render(el as React.ReactElement)
+    expect(screen.getAllByText('Customer').length).toBeGreaterThan(0)
+  })
+
   it('renders real reviews from the reviews table', async () => {
     mockLimit.mockResolvedValueOnce({
       data: [review(), review({ id: 'r2', customer_name: 'Amit K.', rating: 5 })],

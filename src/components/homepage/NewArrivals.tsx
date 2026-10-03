@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts } from '@/lib/normalizeProduct'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { logger } from '@/lib/logger'
 import { filterNewArrivals } from '@/lib/newArrivals'
 import type { Product } from '@/types'
 
@@ -22,8 +23,20 @@ export default async function NewArrivals() {
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
     products = (newArrivals.length ? newArrivals : all.sort(
       (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    )).slice(0, 4)
-  } catch { return null }
+    )).slice(0, 4).map(toCardProductData) as Product[]
+    // BUG FIX (audit): these 4 products went into a Client Component
+    // (ProductCard) with every AI-content / long-description field still
+    // attached — the exact payload bloat already fixed in BestSellers.tsx
+    // and /regions via toCardProductData(). Stripped here too.
+  } catch (err) {
+    // BUG FIX (audit): bare `catch { return null }` — a failure here made the
+    // section vanish with no trace anywhere (same observability gap that was
+    // already fixed in BestSellers.tsx).
+    logger.error('[NewArrivals] failed to load — section hidden', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
 
   if (!products.length) return null
 
