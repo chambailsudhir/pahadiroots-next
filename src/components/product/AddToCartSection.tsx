@@ -28,9 +28,15 @@ export default function AddToCartSection({ product, variants, settings }: Props)
   const addToWishlist      = useUserStore(s => s.addToWishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
-    variants.length > 0 ? variants[0] : null
-  )
+  // D1 (Oct 2026 audit): start on the cheapest variant that is in stock, so the
+  // page doesn't open on a sold-out pack (Add to Cart disabled) while another
+  // pack is available. If every variant is sold out, keep the first one.
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(() => {
+    if (variants.length === 0) return null
+    const inStock = variants.filter(v => v.available_stock > 0)
+    const pool = inStock.length > 0 ? inStock : variants
+    return pool.reduce((min, v) => (v.price < min.price ? v : min), pool[0])
+  })
   const [qty, setQty]         = useState(1)
   const [added, setAdded]     = useState(false)
   const [buying, setBuying]   = useState(false)

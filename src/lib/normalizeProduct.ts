@@ -164,7 +164,16 @@ export function toCardProductData(p: Product): Product {
 export function getBaseVariant(p: Product) {
   const variants = (p.product_variants ?? []).filter(v => v.is_active)
   if (variants.length === 0) return null
-  return variants.reduce((min, v) => v.price < min.price ? v : min, variants[0])
+  const cheapest = (list: typeof variants) =>
+    list.reduce((min, v) => v.price < min.price ? v : min, list[0])
+  // BUG FIX (D1, Oct 2026 audit): this used to return the cheapest variant even
+  // when it was sold out, so a product whose small pack was finished showed
+  // "Out of Stock" (and was dropped by the in-stock filter) while a bigger pack
+  // was still buyable. Prefer the cheapest variant that has stock; only when
+  // EVERY active variant is sold out do we fall back to the cheapest overall,
+  // which is then correctly shown as Out of Stock.
+  const inStock = variants.filter(v => (v.available_stock ?? 0) > 0)
+  return cheapest(inStock.length > 0 ? inStock : variants)
 }
 
 /**

@@ -298,8 +298,12 @@ export default async function ProductPage({ params }: Props) {
     .sort((a: any, b: any) => a.price - b.price)
     .map((v: any) => ({ ...v, size: v.variant_value ?? v.size ?? v.variant_label ?? '' }))
 
+  // D1 (Oct 2026 audit): activeVariants is sorted by price ascending, so the
+  // first one with stock is the cheapest BUYABLE pack. The page (price, stock
+  // label, urgency bar) and AddToCartSection's default selection must agree;
+  // only when every variant is sold out do we show the cheapest as Out of Stock.
   const baseVariant = activeVariants.length > 0
-    ? activeVariants.reduce((min: any, v: any) => v.price < min.price ? v : min, activeVariants[0])
+    ? (activeVariants.find((v: any) => Number(v.available_stock ?? 0) > 0) ?? activeVariants[0])
     : null
 
   // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy

@@ -59,7 +59,10 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
     }
   }, [])
 
-  const baseVariant = p._variants?.[0] ?? null
+  // D1 (Oct 2026 audit): _variants is sorted by price ascending; default to the
+  // cheapest one that is in stock, falling back to the cheapest when all are sold out.
+  const baseVariant =
+    p._variants?.find(v => (v.available_stock ?? 0) > 0) ?? p._variants?.[0] ?? null
   // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
   // column the pricing engine no longer writes to — prefer selling_price.
   const price = baseVariant?.price ?? p.selling_price ?? p.price ?? 0

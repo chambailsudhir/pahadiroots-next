@@ -235,3 +235,46 @@ describe('cost_price never reaches client-bound product data', () => {
     expect(out.cost_price).toBeNull()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// D1: "Out of Stock" only when EVERY active variant is sold out
+// ─────────────────────────────────────────────────────────────────────────
+describe('base variant prefers the cheapest variant that is in stock (D1)', () => {
+  const v = (id: number, price: number, stock: number, active = true) =>
+    ({ id, price, available_stock: stock, is_active: active, original_price: null, variant_value: `${id}` })
+  const prod = (variants: any[], extra: Record<string, unknown> = {}) =>
+    ({ id: 1, name: 'Honey', price: 999, selling_price: 999, available_stock: 0, product_variants: variants, ...extra }) as any
+
+  it('cheapest pack sold out, bigger pack available → bigger pack is the base variant', () => {
+    const p = prod([v(1, 100, 0), v(2, 250, 8), v(3, 400, 3)])
+    expect(getBaseVariant(p)?.id).toBe(2)
+    expect(getEffectiveStock(p)).toBe(8)
+    expect(getEffectivePrice(p)).toBe(250)
+  })
+
+  it('cheapest pack in stock → still the cheapest (behaviour unchanged)', () => {
+    const p = prod([v(1, 100, 4), v(2, 250, 8)])
+    expect(getBaseVariant(p)?.id).toBe(1)
+  })
+
+  it('ALL active variants sold out → cheapest overall, stock 0 (Out of Stock is correct)', () => {
+    const p = prod([v(1, 100, 0), v(2, 250, 0)])
+    expect(getBaseVariant(p)?.id).toBe(1)
+    expect(getEffectiveStock(p)).toBe(0)
+  })
+
+  it('an inactive in-stock variant does not rescue a sold-out product', () => {
+    const p = prod([v(1, 100, 0), v(2, 250, 50, false)])
+    expect(getEffectiveStock(p)).toBe(0)
+  })
+
+  it('null stock on a variant counts as sold out, not as available', () => {
+    const p = prod([{ ...v(1, 100, 0), available_stock: null }, v(2, 250, 5)])
+    expect(getBaseVariant(p)?.id).toBe(2)
+  })
+
+  it('no variants → falls back to the product-level stock', () => {
+    expect(getBaseVariant(prod([]))).toBeNull()
+    expect(getEffectiveStock(prod([], { available_stock: 7 }))).toBe(7)
+  })
+})
