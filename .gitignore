@@ -1,2 +1,11 @@
 .vercel
 .env*.local
+
+# Local/generated artifacts
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+tsconfig.tsbuildinfo
