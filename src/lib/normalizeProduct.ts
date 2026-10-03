@@ -16,7 +16,7 @@ import type { Product } from '@/types'
  * fixed alongside this one.
  */
 export const PRODUCT_SELECT = `
-  id, name, slug, emoji, price, selling_price, mrp, cost_price, gst_rate, available_stock,
+  id, name, slug, emoji, price, selling_price, mrp, gst_rate, available_stock,
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
@@ -149,6 +149,8 @@ export function toCardProductData(p: Product): Product {
     ai_storage_tips: null,
     ai_who_should_buy: null,
     ai_generated_at: null,
+    // Margin figure — must never reach client components (see storeData.toListProduct).
+    cost_price: null,
   }
 }
 

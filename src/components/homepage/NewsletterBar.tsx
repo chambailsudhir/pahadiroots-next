@@ -49,7 +49,7 @@ export default function NewsletterBar() {
             style={{
               background: 'var(--gd)', color: '#1a0800', fontWeight: 800, fontSize: 14,
               border: 'none', borderRadius: 12, padding: '13px 24px', cursor: 'pointer',
-              fontFamily: 'Lato, sans-serif', transition: 'background .2s', whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-lato), Lato, sans-serif', transition: 'background .2s', whiteSpace: 'nowrap',
               opacity: status === 'loading' ? .7 : 1,
             }}
           >

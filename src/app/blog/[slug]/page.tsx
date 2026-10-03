@@ -4,7 +4,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { sanitizeHtml } from '@/lib/server/sanitize'
-import { PRODUCT_SELECT, normalizeProducts } from '@/lib/normalizeProduct'
+import { toCardProductData } from '@/lib/normalizeProduct'
+import { getNormalizedProducts } from '@/lib/storeData'
 import { formatDate, truncate } from '@/lib/utils'
 import ProductCard from '@/components/product/ProductCard'
 import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
@@ -107,15 +108,22 @@ export default async function BlogArticlePage({ params }: Props) {
     ...(post.related_product_id ? [post.related_product_id] : []),
   ])).slice(0, 3)
 
+  // BUG FIX (Oct 2026 audit follow-up): this used to query `products` with the
+  // anon client and PRODUCT_SELECT, which (1) selected `cost_price` — a margin
+  // figure storeData deliberately strips — and handed it to the client-side
+  // ProductCard, so it was serialized into the page payload; (2) had no
+  // status='active' filter, so a draft/archived product linked from a post
+  // still rendered; and (3) skipped product_images, so the card image could
+  // differ from Browse. It now picks from the same server-normalized,
+  // active-only catalogue every listing page uses (cost_price already null).
   let relatedProducts: Product[] = []
   if (productIds.length) {
     try {
-      const { data } = await supabase
-        .from('products')
-        .select(PRODUCT_SELECT)
-        .in('id', productIds)
-        .eq('is_deleted', false)
-      if (data) relatedProducts = normalizeProducts(data as any)
+      const wanted = new Set(productIds.map(String))
+      const all = await getNormalizedProducts()
+      relatedProducts = all
+        .filter(p => wanted.has(String(p.id)))
+        .map(toCardProductData)
     } catch (e) {
       console.error('[blog related products] fetch failed:', e)
     }

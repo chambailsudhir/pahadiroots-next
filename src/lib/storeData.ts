@@ -569,6 +569,16 @@ export async function getRelatedProducts(opts: {
   if (stateId)             filters.push(`state_id.eq.${stateId}`)
   if (filters.length === 0) return []
 
+  // BUG FIX (Issue C3, Oct 2026 audit): this used to be `.or(...).limit(4)`
+  // with NO ordering, so Postgres returned whichever 4 rows it liked — the
+  // related set could change between cache refreshes and routinely included
+  // sold-out items. We now pull a bounded, deterministically ordered pool,
+  // rank it in JS (in stock first → matches BOTH category and state →
+  // bestseller → lowest id as a stable tiebreak) and keep `limit`.
+  // Ranking only reorders; it never drops a product, so a category whose
+  // items are all sold out still shows related cards instead of an empty row.
+  const POOL_SIZE = Math.max(limit * 6, 24)
+
   const db = getServiceClient()
   const { data: rows, error: rowsErr } = await db
     .from('products')
@@ -577,22 +587,45 @@ export async function getRelatedProducts(opts: {
     .eq('is_deleted', false)
     .neq('id', productId)
     .or(filters.join(','))
-    .limit(limit)
+    .order('id', { ascending: true })
+    .limit(POOL_SIZE)
   if (rowsErr) {
     console.error('[getRelatedProducts] query failed:', rowsErr)
     return []
   }
 
-  const related = (rows as Product[]) || []
-  if (related.length === 0) return []
+  const pool = (rows as Product[]) || []
+  if (pool.length === 0) return []
 
-  const ids = related.map(p => p.id)
+  const ids = pool.map(p => p.id)
   const [{ data: imgs, error: imgsErr }, { data: vars, error: varsErr }] = await Promise.all([
     db.from('product_images').select('product_id, image_url, sort_order').in('product_id', ids),
     db.from('product_variants').select('*').in('product_id', ids).eq('is_active', true),
   ])
   if (imgsErr) console.error('[getRelatedProducts] images fetch failed:', imgsErr)
   if (varsErr) console.error('[getRelatedProducts] variants fetch failed:', varsErr)
+
+  const hasStock = (p: Product): boolean => {
+    const vs = ((vars as ProductVariant[]) || []).filter(v => v.product_id === p.id)
+    // Any active variant with stock makes the product buyable (the PDP lets the
+    // customer pick it), so don't judge on the cheapest variant alone.
+    if (vs.length > 0) return vs.some(v => (v.available_stock ?? 0) > 0)
+    return (p.available_stock ?? 0) > 0
+  }
+  const isBestseller = (p: Product): boolean => Array.isArray(p.badges) && p.badges.includes('bestseller')
+  const relevance = (p: Product): number =>
+    (categoryId != null && p.category_id === categoryId ? 1 : 0) +
+    (stateId && p.state_id === stateId ? 1 : 0)
+
+  const related = pool
+    .map(p => ({ p, stock: hasStock(p) ? 1 : 0, rel: relevance(p), best: isBestseller(p) ? 1 : 0 }))
+    .sort((a, b) =>
+      b.stock - a.stock ||
+      b.rel   - a.rel   ||
+      b.best  - a.best  ||
+      Number(a.p.id) - Number(b.p.id))
+    .slice(0, limit)
+    .map(x => x.p)
 
   return related.map(p => {
     const pImgs = ((imgs as ProductImage[]) || [])

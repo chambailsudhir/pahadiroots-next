@@ -22,7 +22,7 @@ export default function AccountError({
       justifyContent: 'center',
       padding: '40px 24px',
       textAlign: 'center',
-      fontFamily: 'Lato, sans-serif',
+      fontFamily: 'var(--font-lato), Lato, sans-serif',
     }}>
       <div style={{ fontSize: '48px', marginBottom: '16px' }}>👤</div>
       <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#1a1a1a', marginBottom: '10px' }}>

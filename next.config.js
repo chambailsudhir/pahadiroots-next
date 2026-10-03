@@ -34,6 +34,13 @@ const nextConfig = {
     // automatically falls back to serving the original format for the
     // remaining few browsers that accept neither.
     formats: ['image/avif'],
+    // BUG FIX (Issue C2, Oct 2026 audit): Next 16 defaults images.qualities to
+    // [75] and the image loader snaps any other `quality` prop to the nearest
+    // allowed value. FeaturedBanner (70) and ExploreByRegion (90) were
+    // therefore silently rendered at 75. List every quality the app actually
+    // requests so those props take effect. Keep this in sync with `quality=`
+    // usages under src/ — an unlisted value is snapped, not honoured.
+    qualities: [70, 75, 90],
   },
   experimental: {
     // Enable server actions

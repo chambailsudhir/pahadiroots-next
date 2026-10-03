@@ -219,3 +219,19 @@ describe('getBaseVariant — single source of truth shared by price/stock/Produc
     expect(getBaseVariant(product)?.id).toBe(6)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// cost_price must never reach client components (Oct 2026 audit follow-up)
+// ─────────────────────────────────────────────────────────────────────────
+describe('cost_price never reaches client-bound product data', () => {
+  it('PRODUCT_SELECT does not ask the database for cost_price', async () => {
+    const { PRODUCT_SELECT } = await import('@/lib/normalizeProduct')
+    expect(PRODUCT_SELECT).not.toMatch(/cost_price/)
+  })
+
+  it('toCardProductData nulls cost_price (defence in depth for any caller)', async () => {
+    const { toCardProductData } = await import('@/lib/normalizeProduct')
+    const out = toCardProductData({ id: 1, name: 'Honey', cost_price: 123.45 } as any)
+    expect(out.cost_price).toBeNull()
+  })
+})

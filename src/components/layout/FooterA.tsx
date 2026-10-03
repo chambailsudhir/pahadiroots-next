@@ -55,7 +55,7 @@ export default function FooterA({ settings }: Props) {
   const address      = settings.contact_address || 'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082'
 
   return (
-    <footer style={{ background: '#0f2a14', fontFamily: 'Lato,sans-serif' }}>
+    <footer style={{ background: '#0f2a14', fontFamily: 'var(--font-lato), Lato, sans-serif' }}>
 
       {/* ── Newsletter strip ─────────────────────────────── */}
       <div style={{
@@ -344,7 +344,7 @@ export default function FooterA({ settings }: Props) {
 
       {/* ── Copyright bar + diamond vine ─────────────────── */}
       <div className="ft-bottom-row" style={{ maxWidth: '100%', padding: '14px 60px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'relative', zIndex: 2, background: '#0f2a14' }}>
-        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'Lato,sans-serif' }}>
+        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.28)', fontFamily: 'var(--font-lato), Lato, sans-serif' }}>
           © {new Date().getFullYear()} <strong style={{ color: 'rgba(255,255,255,.8)', fontWeight: 700 }}>HimVeda by Pahadi Roots</strong> · Himachal Pradesh, India
         </div>
 

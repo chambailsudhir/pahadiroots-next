@@ -493,7 +493,6 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 {uploadedPhotos.length > 0 && (
                   <div className={styles.returnPhotoPreviewRow}>
                     {uploadedPhotos.map((p, idx) => (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <div key={p.url} className={styles.returnPhotoThumb}>
                         <img src={p.url} alt={p.name} />
                         <button

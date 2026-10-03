@@ -87,7 +87,7 @@ export default async function RegionsPage() {
   })
 
   const serif = 'var(--font-playfair),"Playfair Display",Georgia,serif'
-  const sans  = 'Lato,sans-serif'
+  const sans  = 'var(--font-lato),Lato,sans-serif'
 
   return (
     <div style={{ background: '#f4eed6', minHeight: '100vh' }}>

@@ -61,7 +61,7 @@ export default async function NewArrivals() {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             background: 'var(--g)', color: '#fff',
-            fontFamily: "'Lato',sans-serif", fontSize: 13, fontWeight: 800, letterSpacing: '.5px',
+            fontFamily: "var(--font-lato), 'Lato', sans-serif", fontSize: 13, fontWeight: 800, letterSpacing: '.5px',
             padding: '11px 22px', borderRadius: 24, textDecoration: 'none',
             transition: 'all .2s', whiteSpace: 'nowrap', flexShrink: 0,
           }}

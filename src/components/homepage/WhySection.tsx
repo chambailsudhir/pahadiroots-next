@@ -54,7 +54,6 @@ const PROMISES = [
   },
 ] as const
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function WhySection(_props: Props) {
   return (
     <section className="promise-bg" aria-labelledby="promise-heading">

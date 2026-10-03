@@ -188,7 +188,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
             {meta?.pills && meta.pills.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
                 {meta.pills.map(pill => (
-                  <span key={pill} style={{ background: '#f0f7f1', border: '1px solid #d4e8d8', color: '#2d5a35', fontSize: 11, fontWeight: 700, padding: '4px 11px', borderRadius: 20, fontFamily: 'Lato,sans-serif' }}>
+                  <span key={pill} style={{ background: '#f0f7f1', border: '1px solid #d4e8d8', color: '#2d5a35', fontSize: 11, fontWeight: 700, padding: '4px 11px', borderRadius: 20, fontFamily: 'var(--font-lato), Lato, sans-serif' }}>
                     {pill}
                   </span>
                 ))}
@@ -202,7 +202,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
             <h2 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
               Products from {state.name}
-              <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#666', fontStyle: 'normal' }}>
+              <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'var(--font-lato), Lato, sans-serif', color: '#666', fontStyle: 'normal' }}>
                 ({stateProducts.length})
               </span>
             </h2>
@@ -231,7 +231,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
                     color: sort === opt.value ? '#1a3a1e' : '#666',
                     background: sort === opt.value ? '#f0f7f1' : 'transparent',
                     border: sort === opt.value ? '1px solid #d4e8d8' : '1px solid transparent',
-                    borderRadius: '16px', padding: '5px 12px', textDecoration: 'none', fontFamily: 'Lato,sans-serif',
+                    borderRadius: '16px', padding: '5px 12px', textDecoration: 'none', fontFamily: 'var(--font-lato), Lato, sans-serif',
                   }}
                 >
                   {opt.icon} {opt.label}

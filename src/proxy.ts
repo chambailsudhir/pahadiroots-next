@@ -64,7 +64,22 @@ const WINDOW_SEC    = 60
 // Paths the maintenance gate must never touch, regardless of store_open.
 // Exported for direct unit testing (see src/__tests__/proxyMaintenanceGate.test.ts) —
 // getting this regex wrong either breaks webhooks/OAuth or creates a redirect loop.
-export const MAINTENANCE_EXEMPT_PATTERN = /^\/(api|auth|maintenance|_next|favicon\.ico|robots\.txt|sitemap\.xml)/
+//
+// BUG FIX (Issue C1, Oct 2026 audit):
+//  - The old pattern was only start-anchored, so any top-level path that
+//    merely BEGAN with an exempt word (/authentic-honey, /api-docs,
+//    /maintenance-tips) skipped the gate. Exempt words now need a path
+//    boundary (`/` or end of string).
+//  - Files served from /public (images, /js/*, fonts…) were gated too: with
+//    the store closed they redirected to /maintenance, breaking every asset
+//    the maintenance page itself could reference, and each one cost a
+//    Supabase round-trip. Static files are never "pages" — exempt anything
+//    that ends in a known asset extension.
+export const MAINTENANCE_EXEMPT_PATTERN = new RegExp(
+  '^/(?:(?:api|auth|maintenance|_next)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml)$)' +
+  '|\\.(?:png|jpe?g|webp|avif|gif|svg|ico|css|js|mjs|map|json|txt|xml|webmanifest|woff2?|ttf|otf|mp4|webm)$',
+  'i',
+)
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -72,24 +87,43 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 // Same key/value REST read already used by /api/v1/cart-settings and the
 // contact page (both anon-key reads of site_settings — RLS already allows
 // this), so no new access pattern is introduced here.
+//
+// BUG FIX (Issue C1): `next: { revalidate: 30 }` is a Data-Cache hint that is
+// not guaranteed to apply to fetches made inside proxy.ts, so the claim of a
+// "30s edge cache" could not be relied on and every page navigation could pay
+// a Supabase round-trip. Cache the answer in module memory instead (per
+// instance): 30s after a successful read, 5s after a failure so a transient
+// blip neither hammers Supabase nor sticks. Still fail-open.
+const STORE_OPEN_TTL_OK_MS   = 30_000
+const STORE_OPEN_TTL_FAIL_MS = 5_000
+let storeClosedCache: { closed: boolean; expiresAt: number } | null = null
+
 async function isStoreClosed(): Promise<boolean> {
   if (!SUPABASE_URL || !SUPABASE_ANON) return false // not configured → fail-open
+  const now = Date.now()
+  if (storeClosedCache && storeClosedCache.expiresAt > now) return storeClosedCache.closed
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/site_settings?key=eq.store_open&select=value`,
       {
         headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
         signal: AbortSignal.timeout(1_500),
-        // Cached for 30s at the edge — a maintenance toggle doesn't need to be
-        // instant, and this keeps the check cheap on every single page view.
-        next: { revalidate: 30 },
+        // Always hit Supabase when the in-memory cache above has expired.
+        cache: 'no-store',
       },
     )
-    if (!res.ok) return false
+    if (!res.ok) {
+      storeClosedCache = { closed: false, expiresAt: now + STORE_OPEN_TTL_FAIL_MS }
+      return false
+    }
     const rows: { value: string }[] = await res.json()
-    return rows[0]?.value === 'false'
+    const closed = rows[0]?.value === 'false'
+    storeClosedCache = { closed, expiresAt: now + STORE_OPEN_TTL_OK_MS }
+    return closed
   } catch {
-    return false // timeout/network error → fail-open, site stays up
+    // timeout/network error → fail-open, site stays up
+    storeClosedCache = { closed: false, expiresAt: now + STORE_OPEN_TTL_FAIL_MS }
+    return false
   }
 }
 

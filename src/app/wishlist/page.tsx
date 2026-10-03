@@ -1,36 +1,33 @@
 'use client'
 
 import Link from 'next/link'
-import useSWR from 'swr'
+import { useMemo } from 'react'
 import { useUserStore } from '@/store/userStore'
-import { supabase } from '@/lib/supabase'
-import { PRODUCT_SELECT, normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { useSearchCatalog } from '@/hooks/useSearchCatalog'
+import { toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
-import type { Product } from '@/types'
 
 export default function WishlistPublicPage() {
   const wishlist           = useUserStore(s => s.wishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
 
-  const { data: products, isLoading } = useSWR<Product[]>(
-    wishlist.length > 0 ? `wishlist-pub-${wishlist.join(',')}` : null,
-    async () => {
-      const { data } = await supabase
-        .from('products')
-        .select(`
-          id, name, slug, emoji, price, mrp, available_stock, gst_rate,
-          image_url, unit_label, badges, category_id,
-          is_deleted, status,
-          categories:categories(id, name, slug),
-          product_variants(id, price, original_price, variant_value, available_stock, is_active)
-        `)
-        .in('id', wishlist)
-        .eq('is_deleted', false)
-    .eq('status', 'active')
-      return normalizeProducts(data ?? [])
-    }
-  )
+  // BUG FIX (same class as Issue 7, Oct 2026 audit — found in this pass): this
+  // page queried `products` straight from the browser with the anon key and a
+  // hand-written column list. That list had no `product_images` (cards used the
+  // legacy products.image_url instead of the image Browse shows), no
+  // `state_id` (so items added to the cart from here always got
+  // isHimalayan:false), depended on anon RLS for product_variants, and a failed
+  // query was swallowed into an empty page. It now filters the SAME
+  // server-normalized catalogue Browse and Search render from, and surfaces a
+  // load failure instead of showing an empty wishlist.
+  const { data: catalog, isLoading, error } = useSearchCatalog(wishlist.length > 0)
+
+  const products = useMemo(() => {
+    if (!catalog) return undefined
+    const saved = new Set(wishlist.map(String))
+    return catalog.filter(p => saved.has(String(p.id)))
+  }, [catalog, wishlist])
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -57,11 +54,16 @@ export default function WishlistPublicPage() {
             Browse Products
           </Link>
         </div>
-      ) : isLoading ? (
+      ) : error ? (
+        <div className="text-center py-20" role="alert">
+          <h2 className="text-lg font-semibold text-stone-700 mb-2">We couldn&apos;t load your wishlist</h2>
+          <p className="text-stone-400 text-sm">Please check your connection and try again in a moment.</p>
+        </div>
+      ) : isLoading || !products ? (
         <ProductGridSkeleton count={4} />
       ) : (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
-          {(products || []).map(p => <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />)}
+          {products.map(p => <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />)}
         </div>
       )}
     </div>

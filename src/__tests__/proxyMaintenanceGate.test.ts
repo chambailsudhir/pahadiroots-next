@@ -57,4 +57,29 @@ describe('MAINTENANCE_EXEMPT_PATTERN', () => {
     expect(MAINTENANCE_EXEMPT_PATTERN.test('/products/api-guide')).toBe(false)
     expect(MAINTENANCE_EXEMPT_PATTERN.test('/collections/authentic-honey')).toBe(false)
   })
+  // Issue C1 (Oct 2026 audit)
+  it('exempts static files served from /public (never gated, never redirected)', () => {
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/logo.png')).toBe(true)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/images/hero/banner.WEBP')).toBe(true)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/js/ai-assistant.js')).toBe(true)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/footer-himalaya.jpg')).toBe(true)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/manifest.webmanifest')).toBe(true)
+  })
+
+  it('exempt words need a path boundary — look-alike top-level pages stay gated', () => {
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/authentic-honey')).toBe(false)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/api-docs')).toBe(false)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/maintenance-tips')).toBe(false)
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/robots.txt.html')).toBe(false)
+  })
+
+  it('exempts the bare /api, /auth, /maintenance and /_next roots too', () => {
+    for (const p of ['/api', '/auth', '/maintenance', '/_next']) {
+      expect(MAINTENANCE_EXEMPT_PATTERN.test(p)).toBe(true)
+    }
+  })
+
+  it('does not treat a dotted product slug as a static file', () => {
+    expect(MAINTENANCE_EXEMPT_PATTERN.test('/products/honey-1.5kg')).toBe(false)
+  })
 })

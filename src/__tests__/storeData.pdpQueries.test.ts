@@ -310,3 +310,59 @@ describe('getRelatedProducts (BUG FIX: no longer filters the full in-memory cata
     expect(p2.badges_bestseller).toBe(true)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// getRelatedProducts — deterministic, stock-aware ranking (Issue C3)
+// ─────────────────────────────────────────────────────────────────────────
+describe('getRelatedProducts ranking (Issue C3: arbitrary, sold-out-prone set)', () => {
+  const base = { status: 'active', is_deleted: false, badges: [] as string[] }
+  // Deliberately NOT in id order, to prove the result doesn't depend on row order.
+  const products = [
+    { ...base, id: 9, slug: 'p9', name: 'P9', category_id: 1, state_id: 'HP', available_stock: 0 },            // both, sold out
+    { ...base, id: 7, slug: 'p7', name: 'P7', category_id: 1, state_id: 'UK', available_stock: 5 },            // category only, in stock
+    { ...base, id: 5, slug: 'p5', name: 'P5', category_id: 1, state_id: 'HP', available_stock: 5 },            // both, in stock
+    { ...base, id: 3, slug: 'p3', name: 'P3', category_id: 9, state_id: 'HP', available_stock: 5, badges: ['bestseller'] }, // state only, bestseller
+    { ...base, id: 2, slug: 'p2', name: 'P2', category_id: 9, state_id: 'HP', available_stock: 5 },            // state only
+    { ...base, id: 1, slug: 'p1', name: 'P1', category_id: 1, state_id: 'HP', available_stock: 5 },            // self
+  ]
+
+  it('puts in-stock products first, then closest match, then bestseller, then lowest id', async () => {
+    mockGetServiceClient.mockReturnValue(makeDb({ products, product_images: [], product_variants: [] }))
+    const { getRelatedProducts } = await import('@/lib/storeData')
+    const related = await getRelatedProducts({ productId: 1, categoryId: 1, stateId: 'HP', limit: 4 })
+    // In stock: 5 matches BOTH category and state → first.
+    // 3, 2 and 7 each match one dimension; 3 is a bestseller → next; 2 and 7 tie → lowest id first.
+    // Sold-out 9 (matches both) drops out of the top 4.
+    expect(related.map(p => p.id)).toEqual([5, 3, 2, 7])
+  })
+
+  it('still returns sold-out items when nothing else matches (never an empty row)', async () => {
+    const onlySoldOut = [
+      { ...base, id: 4, slug: 'p4', name: 'P4', category_id: 1, state_id: 'HP', available_stock: 0 },
+      { ...base, id: 1, slug: 'p1', name: 'P1', category_id: 1, state_id: 'HP', available_stock: 5 },
+    ]
+    mockGetServiceClient.mockReturnValue(makeDb({ products: onlySoldOut, product_images: [], product_variants: [] }))
+    const { getRelatedProducts } = await import('@/lib/storeData')
+    const related = await getRelatedProducts({ productId: 1, categoryId: 1, stateId: 'HP', limit: 4 })
+    expect(related.map(p => p.id)).toEqual([4])
+  })
+
+  it('judges stock across ALL active variants, not just the cheapest', async () => {
+    const two = [
+      { ...base, id: 2, slug: 'p2', name: 'P2', category_id: 1, state_id: 'HP', available_stock: 0 },
+      { ...base, id: 3, slug: 'p3', name: 'P3', category_id: 1, state_id: 'HP', available_stock: 0 },
+      { ...base, id: 1, slug: 'p1', name: 'P1', category_id: 1, state_id: 'HP', available_stock: 0 },
+    ]
+    const variants = [
+      // P2: cheapest pack sold out, bigger pack available → buyable
+      { id: 21, product_id: 2, price: 100, available_stock: 0, is_active: true },
+      { id: 22, product_id: 2, price: 250, available_stock: 8, is_active: true },
+      // P3: every pack sold out
+      { id: 31, product_id: 3, price: 90,  available_stock: 0, is_active: true },
+    ]
+    mockGetServiceClient.mockReturnValue(makeDb({ products: two, product_images: [], product_variants: variants }))
+    const { getRelatedProducts } = await import('@/lib/storeData')
+    const related = await getRelatedProducts({ productId: 1, categoryId: 1, stateId: 'HP', limit: 4 })
+    expect(related.map(p => p.id)).toEqual([2, 3])
+  })
+})
