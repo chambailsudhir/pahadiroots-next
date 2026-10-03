@@ -80,6 +80,11 @@ describe('NewArrivals', () => {
     // most recent products overall) rather than requiring genuinely new
     // stock to exist before rendering anything at all.
     expect(screen.getByText('Old Product')).toBeTruthy()
+    // …but it must be labelled honestly, and "See All" must not point at the
+    // (empty) /new-arrivals page.
+    expect(screen.queryByText('Just In')).toBeNull()
+    expect(screen.getByText('Latest Additions')).toBeTruthy()
+    expect(screen.getByText('See All').closest('a')?.getAttribute('href')).toBe('/products?sort=newest')
   })
 
   it('renders nothing when there are no products at all', async () => {

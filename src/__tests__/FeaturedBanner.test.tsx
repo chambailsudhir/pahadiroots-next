@@ -19,25 +19,18 @@ vi.mock('next/link', () => ({
     React.createElement('a', { href }, children),
 }))
 
-const { mockFrom, mockSelect, mockEq, mockSingle } = vi.hoisted(() => {
-  const mockSingle = vi.fn()
-  const mockEq     = vi.fn(() => ({ single: mockSingle }))
-  const mockSelect = vi.fn(() => ({ eq: mockEq }))
-  const mockFrom   = vi.fn(() => ({ select: mockSelect }))
-  return { mockFrom, mockSelect, mockEq, mockSingle }
-})
-vi.mock('@/lib/supabase', () => ({
-  supabase: { from: mockFrom },
-}))
+// FeaturedBanner now reads the shared cached catalog meta (active categories
+// only) instead of running its own Supabase query.
+const { mockGetCatalogMeta } = vi.hoisted(() => ({ mockGetCatalogMeta: vi.fn() }))
+vi.mock('@/lib/storeData', () => ({ getCatalogMeta: mockGetCatalogMeta }))
+
+const metaWith = (...categories: Record<string, unknown>[]) => ({ categories, states: [], state_images: [], settings: {} })
 
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
 
 describe('FeaturedBanner', () => {
   it('renders the category image via next/image, not a raw CSS background', async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { id: 1, name: 'Wild Honey', slug: 'wild-honey', description: 'Pure and raw.', image_url: '/honey.jpg' },
-      error: null,
-    })
+    mockGetCatalogMeta.mockResolvedValueOnce(metaWith({ id: 1, name: 'Wild Honey', slug: 'wild-honey', description: 'Pure and raw.', image_url: '/honey.jpg' }))
 
     const el = await FeaturedBanner({ slug: 'wild-honey' })
     render(el as React.ReactElement)
@@ -50,10 +43,7 @@ describe('FeaturedBanner', () => {
   })
 
   it('renders category name, description, and links to the collection', async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { id: 1, name: 'Wild Honey', slug: 'wild-honey', description: 'Pure and raw.', image_url: '/honey.jpg' },
-      error: null,
-    })
+    mockGetCatalogMeta.mockResolvedValueOnce(metaWith({ id: 1, name: 'Wild Honey', slug: 'wild-honey', description: 'Pure and raw.', image_url: '/honey.jpg' }))
 
     const el = await FeaturedBanner({ slug: 'wild-honey' })
     render(el as React.ReactElement)
@@ -64,10 +54,7 @@ describe('FeaturedBanner', () => {
   })
 
   it('renders without a description when none is set', async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { id: 1, name: 'Wild Honey', slug: 'wild-honey', description: null, image_url: '/honey.jpg' },
-      error: null,
-    })
+    mockGetCatalogMeta.mockResolvedValueOnce(metaWith({ id: 1, name: 'Wild Honey', slug: 'wild-honey', description: null, image_url: '/honey.jpg' }))
 
     const el = await FeaturedBanner({ slug: 'wild-honey' })
     render(el as React.ReactElement)
@@ -75,23 +62,20 @@ describe('FeaturedBanner', () => {
   })
 
   it('renders nothing when the category is not found', async () => {
-    mockSingle.mockResolvedValueOnce({ data: null, error: null })
+    mockGetCatalogMeta.mockResolvedValueOnce(metaWith())
 
     const el = await FeaturedBanner({ slug: 'nonexistent' })
     expect(el).toBeNull()
   })
 
-  it('renders nothing for a deactivated category (its Shop Now link would 404)', async () => {
-    mockSingle.mockResolvedValueOnce({
-      data: { id: 1, name: 'Wild Honey', slug: 'wild-honey', description: null, image_url: null, is_active: false },
-      error: null,
-    })
+  it('renders nothing for a deactivated category (absent from the active-only catalog meta)', async () => {
+    mockGetCatalogMeta.mockResolvedValueOnce(metaWith({ id: 2, name: 'Other', slug: 'other', description: null, image_url: null }))
     const el = await FeaturedBanner({ slug: 'wild-honey' })
     expect(el).toBeNull()
   })
 
   it('renders nothing (fails safe) on a DB error', async () => {
-    mockSingle.mockRejectedValueOnce(new Error('db down'))
+    mockGetCatalogMeta.mockRejectedValueOnce(new Error('db down'))
 
     const el = await FeaturedBanner({ slug: 'wild-honey' })
     expect(el).toBeNull()

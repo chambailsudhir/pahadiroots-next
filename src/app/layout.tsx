@@ -3,7 +3,10 @@ import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { sanitizeHtml } from '@/lib/server/sanitize'
-import { supabase } from '@/lib/supabase'
+import { getCatalogMeta } from '@/lib/storeData'
+import { logger } from '@/lib/logger'
+import { withLiveStateCount } from '@/lib/heroStats'
+import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
@@ -125,19 +128,31 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [settings, catsResult, statesResult] = await Promise.all([
+  // PERF FIX (audit): categories and states used to be fetched straight from
+  // Supabase here, on EVERY request of EVERY page, just to fill the header menu.
+  // They now come from the shared Data Cache (getCatalogMeta, 5 min, tagged) —
+  // the same way large storefronts serve global navigation: one cached read,
+  // invalidated by tag when the admin changes something. A failure falls back
+  // to an empty menu instead of taking the whole site down.
+  const [baseSettings, meta] = await Promise.all([
     getSiteSettings(),
-    supabase.from('categories').select('id,name,slug,is_active,image_url,description').eq('is_active', true).order('sort_order'),
-    supabase.from('states').select('id,name,is_active').eq('is_active', true).order('name'),
+    getCatalogMeta().catch(err => {
+      logger.error('[RootLayout] failed to load catalog meta — header menu will be empty', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return { categories: [], states: [], state_images: [], settings: {} }
+    }),
   ])
+  // Himalayan-states figure follows the admin's active states automatically.
+  const settings = withLiveStateCount(baseSettings, meta.states.length)
   // BUG FIX (found via manual audit): AnnouncementBar renders ann_text via
   // dangerouslySetInnerHTML with zero sanitization. ann_text is admin-only
   // editable (lower risk than customer/public-facing content) but this
   // closes the gap for defense-in-depth, matching every other DB-sourced
   // HTML render in the codebase (blog content, PDP AI fields).
   if (settings.ann_text) settings.ann_text = sanitizeHtml(settings.ann_text)
-  const categories = (catsResult.data || []) as any[]
-  const states     = (statesResult.data || []).map((s: any) => ({
+  const categories = meta.categories as any[]
+  const states     = meta.states.map((s: any) => ({
     ...s,
     slug: s.id,  // In admin, the id IS the slug
   })) as any[]
@@ -158,6 +173,8 @@ export default async function RootLayout({
   return (
     <html lang="en-IN" suppressHydrationWarning>
       <head>
+        {/* Applies the saved Premium-mode theme before first paint (no flash). */}
+        <script dangerouslySetInnerHTML={{ __html: PREMIUM_BOOT_SCRIPT }} />
         <meta name="theme-color" content="#1a3a1e" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link
@@ -307,7 +324,7 @@ export default async function RootLayout({
           </>
         )}
       </head>
-      <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: '#fff', color: '#1a1a1a' }}>
+      <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
         {/* GTM requires a <noscript> iframe fallback immediately inside <body> */}
         {tagId.toUpperCase().startsWith('GTM-') && (
           <noscript>

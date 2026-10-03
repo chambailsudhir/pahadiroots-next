@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { getHeroStats, getStatesCovered } from '@/lib/heroStats'
+import { getHeroStats, getStatesCovered, withLiveStateCount } from '@/lib/heroStats'
 import type { SiteSettings } from '@/types'
 
 function settings(overrides: Record<string, string> = {}): SiteSettings {
@@ -67,5 +67,23 @@ describe('getHeroStats', () => {
   it('formats customer counts under 1000 without the "k" abbreviation', () => {
     const stats = getHeroStats(settings({ stat_happy_customers: '500' }))
     expect(stats.find(s => s.key === 'customers')?.num).toBe('500+')
+  })
+})
+
+describe('withLiveStateCount — "Himalayan States" follows the admin\'s active states', () => {
+  it('overrides the hand-typed admin number with the real active-state count, shown exactly (no "+")', () => {
+    const live = withLiveStateCount(settings({ stat_himalayan_states: '10' }), 4)
+    expect(getStatesCovered(live)).toBe('4')
+    expect(getHeroStats(live).find(s => s.key === 'states')?.num).toBe('4')
+  })
+
+  it('scales up automatically when more states are activated', () => {
+    expect(getStatesCovered(withLiveStateCount(settings(), 10))).toBe('10')
+  })
+
+  it('falls back to the manual admin value when no states could be loaded (count 0)', () => {
+    const s = settings({ stat_himalayan_states: '12' })
+    expect(withLiveStateCount(s, 0)).toBe(s)
+    expect(getHeroStats(s).find(x => x.key === 'states')?.num).toBe('12+')
   })
 })

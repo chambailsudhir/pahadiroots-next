@@ -18,6 +18,7 @@ import WhereTheyBegin from '@/components/story/WhereTheyBegin'
 import RegionStories from '@/components/story/RegionStories'
 import LifeInMountains from '@/components/story/LifeInMountains'
 import { logger } from '@/lib/logger'
+import { withLiveStateCount } from '@/lib/heroStats'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
@@ -124,10 +125,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const [settings, storeData] = await Promise.all([
+  const [baseSettings, storeData] = await Promise.all([
     getSiteSettings(),
     getStoreData(),
   ])
+  // "Himalayan States" in the hero stat / why-section follows the admin's
+  // active states automatically (see lib/heroStats.ts).
+  const settings = withLiveStateCount(baseSettings, storeData.states?.length ?? 0)
 
   const categories = buildCategories(storeData)
   const heroImages = buildHeroImages(settings)
@@ -164,7 +168,7 @@ export default async function HomePage() {
       {showCategoryTiles && <CategoryTiles categories={categories} />}
       {showBestSellers && <BestSellers />}
       {showOriginStories && <WhereTheyBegin />}
-      {showRegionStory && <RegionStories />}
+      {showRegionStory && <RegionStories regionNames={(storeData.states ?? []).map((s: any) => s.name)} />}
       {showLifeInMountains && <LifeInMountains />}
       {showStateStories && states.length > 0 && <ExploreByRegion states={states} />}
       {showNewArrivals && <NewArrivals />}

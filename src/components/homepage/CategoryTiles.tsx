@@ -165,15 +165,15 @@ export default function CategoryTiles({ categories }: Props) {
         <div style={{
           display: 'inline-block', border: '1.5px solid #c8920a', borderRadius: '20px',
           padding: '5px 18px', fontFamily: 'var(--font-lato,Lato,sans-serif)',
-          fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: '#8a6508',
+          fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: 'var(--pm-gold-text, #8a6508)',
           textTransform: 'uppercase', marginBottom: '12px',
         }}>Browse Collections</div>
         <h2 style={{
           fontFamily: 'var(--font-playfair,"Playfair Display",Georgia,serif)',
-          fontSize: 'clamp(28px,4vw,52px)', fontWeight: 700, color: '#1a3a1e',
+          fontSize: 'clamp(28px,4vw,52px)', fontWeight: 700, color: 'var(--pm-heading, #1a3a1e)',
           margin: '0 0 10px', lineHeight: 1.15, fontStyle: 'italic',
         }}>What the Mountains Offer</h2>
-        <p style={{ fontSize: '14px', color: '#7a7a7a', maxWidth: '440px', margin: '0 auto', lineHeight: 1.6 }}>
+        <p style={{ fontSize: '14px', color: 'var(--tx3, #7a7a7a)', maxWidth: '440px', margin: '0 auto', lineHeight: 1.6 }}>
           Every category tells a story of altitude, tradition, and purity.
         </p>
       </div>
@@ -227,7 +227,7 @@ export default function CategoryTiles({ categories }: Props) {
                 <Link href={`/collections/${cat.slug}`} tabIndex={isClone ? -1 : undefined} style={{ display: 'block', width: '100%', textDecoration: 'none' }}>
                   <div className="cc-box" style={{
                     width: '100%', aspectRatio: '1/1', borderRadius: '16px',
-                    border: '2px solid #c8920a', background: '#fafaf8',
+                    border: '2px solid #c8920a', background: 'var(--pm-surface2, #fafaf8)',
                     position: 'relative', overflow: 'hidden',
                     boxShadow: '0 2px 12px rgba(201,168,76,.18)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -273,7 +273,7 @@ export default function CategoryTiles({ categories }: Props) {
 
                 <Link href={`/collections/${cat.slug}`} tabIndex={isClone ? -1 : undefined} style={{
                   fontFamily: 'var(--font-playfair,"Playfair Display"),Georgia,serif',
-                  fontSize: '14px', fontWeight: 700, color: '#1a3a1e',
+                  fontSize: '14px', fontWeight: 700, color: 'var(--pm-heading, #1a3a1e)',
                   textAlign: 'center', lineHeight: 1.3, width: '100%',
                   textDecoration: 'none', display: 'block',
                 }}>{cat.name}</Link>

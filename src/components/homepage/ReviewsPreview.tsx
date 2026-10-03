@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { getLatestReviews, type HomepageReview } from '@/lib/homepageData'
 import { starsFor } from '@/lib/rating'
 
 // BUG FIX (P1 — trust/legal): this component previously rendered 3
@@ -33,15 +33,6 @@ import { starsFor } from '@/lib/rating'
 // completed order containing that product) would be a good follow-up if
 // wanted, but is a schema change + feature build, not a one-line fix.
 
-interface HomepageReview {
-  id:            string
-  customer_name: string | null
-  location:      string | null
-  rating:        number
-  review_text:   string | null
-  comment:       string | null
-}
-
 function initialOf(name: string | null | undefined): string {
   // BUG FIX (audit): customer_name can be NULL in the reviews table; the old
   // `name.trim()` threw during render — outside the try/catch above — which
@@ -55,15 +46,9 @@ export default async function ReviewsPreview() {
   let reviews: HomepageReview[] = []
 
   try {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select('id, customer_name, location, rating, review_text, comment')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(3)
-
-    if (error) throw error
-    reviews = (data ?? []).filter(r => (r.review_text || r.comment || '').trim().length > 0)
+    // PERF FIX (audit): this was a live Supabase query on every homepage hit.
+    // Now a shared 5-minute cached read (lib/homepageData.ts).
+    reviews = await getLatestReviews()
   } catch {
     // Non-fatal — homepage renders fine without this section, same
     // fail-safe pattern used by every other data-driven homepage section.

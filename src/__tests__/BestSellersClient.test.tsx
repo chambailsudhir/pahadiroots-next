@@ -58,6 +58,15 @@ describe('BestSellersClient', () => {
     expect(screen.queryByText('Ghee Product')).toBeNull()
   })
 
+  it('does not render a filter chip for a category that has no products in the list', () => {
+    render(<BestSellersClient initialProducts={[product({ id: 1, name: 'Honey Product', category_id: 1 })]} categories={[
+      { id: 1, name: 'Honey', slug: 'honey' },
+      { id: 2, name: 'EmptyCat', slug: 'empty' },
+    ]} />)
+    expect(screen.getByText(/Honey$/)).toBeTruthy()
+    expect(screen.queryByText(/EmptyCat/)).toBeNull()
+  })
+
   it('category chip shows a real emoji, never duplicated category-name text (P2 fix)', () => {
     render(<BestSellersClient initialProducts={[product()]} categories={[
       { id: 1, name: 'Wild Honey', slug: 'honey' },

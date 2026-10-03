@@ -95,6 +95,8 @@ export async function POST(req: NextRequest) {
       //    BUG FIX: this used to call getStoreData(true), which only filled a
       //    separate never-expiring cache and never cleared the real one.
       revalidateTag('store-data', { expire: 0 })
+      // Homepage "What Our Customers Say" is its own 5-minute cached read.
+      revalidateTag('reviews', { expire: 0 })
 
       // 2. Invalidate Next's ISR cache so the next request rebuilds the page
       //    instead of serving the stale cached HTML.

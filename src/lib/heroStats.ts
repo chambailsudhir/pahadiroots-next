@@ -52,6 +52,17 @@ function formatCustomers(raw: string): string {
  *  4-stat array. Kept as the single source both HeroBanner (via
  *  getHeroStats) and these two components read from, so they can't
  *  drift apart again the way HeroBanner/WhySection previously did. */
+/** Overlay the REAL number of active states (from the `states` table the
+ *  admin manages) onto the settings object, so every place that shows a
+ *  "Himalayan States" figure (hero stat, top announcement bar, Why section,
+ *  About page) follows the admin automatically: activate 4 states → "4",
+ *  activate 10 → "10". The manual `stat_himalayan_states` admin field is only
+ *  used as a fallback when no states can be loaded (count 0). */
+export function withLiveStateCount(settings: SiteSettings, activeStateCount: number): SiteSettings {
+  if (!Number.isFinite(activeStateCount) || activeStateCount <= 0) return settings
+  return { ...settings, stat_himalayan_states: String(activeStateCount), stat_states_live: 'true' }
+}
+
 export function getStatesCovered(settings: SiteSettings): string {
   return settings.stat_himalayan_states || '10'
 }
@@ -68,7 +79,9 @@ export function getHeroStats(settings: SiteSettings): HeroStat[] {
     },
     {
       key: 'states',
-      num: `${getStatesCovered(settings)}+`,
+      // A live count is exact ("4"), so no "+" — the "+" only made sense for
+      // the old hand-typed marketing number.
+      num: settings.stat_states_live === 'true' ? getStatesCovered(settings) : `${getStatesCovered(settings)}+`,
       lbl: settings.stat_states_label || 'Himalayan States',
       hidden: settings.stat_hide_stat_himalayan_states === 'true',
     },

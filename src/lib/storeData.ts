@@ -119,41 +119,61 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 400): P
   throw lastErr
 }
 
-async function _fetchStoreData(): Promise<StoreData> {
-  return withRetry(() => _fetchStoreDataOnce())
+// ── ENTERPRISE CACHE LAYOUT (Oct 2026) ─────────────────────────────────────
+// Next's Data Cache silently refuses to store any single entry over 2 MB
+// ("Failed to set Next.js data cache, items over 2MB can not be cached") —
+// no error, the page just re-queries Supabase on EVERY request. The old
+// design put the whole catalog (every product with its long_description and
+// five AI text blobs, + variants, images, categories, states) into ONE entry,
+// so a growing catalog would quietly stop caching. Large stores avoid this
+// with three rules, applied below:
+//   1. Cache only what list pages render. Heavy PDP-only text stays out of
+//      the shared entry; the PDP fetches it per product (getProductBySlug).
+//   2. Split by data domain: the big, fast-changing product bundle and the
+//      tiny, slow-changing catalog meta (categories/states/settings) are
+//      separate entries with their own tags, so neither can push the other
+//      over the limit and each can be invalidated independently.
+//   3. Measure: log a warning long before the ceiling is hit instead of
+//      discovering it from a Supabase bill.
+//
+// We can't narrow the SELECT itself (a hand-written column list already
+// broke a production build once — see the note above fetchAllActiveProducts),
+// so heavy columns are dropped from each row right after fetching, BEFORE the
+// result reaches unstable_cache. The cached payload is what the 2 MB limit
+// measures.
+const CACHE_WARN_BYTES = 1_500_000
+
+/** Columns no list/grid/search page reads. cost_price is also a margin figure
+ *  that should never be sitting in a payload that gets near client code. */
+function toListProduct(p: Product): Product {
+  return {
+    ...p,
+    long_description:   null,
+    ai_description:     null,
+    ai_health_benefits: null,
+    ai_how_to_use:      null,
+    ai_storage_tips:    null,
+    ai_who_should_buy:  null,
+    ai_generated_at:    null,
+    cost_price:         null,
+  }
 }
 
-// BUG FIX (Aug 23 2026 — "images/Bestsellers sometimes there, sometimes not,
-// no error anywhere" report): found by actually reading every line of this
-// function against the `error` field Supabase returns, not by guessing.
-// `fetchAllActiveProducts` above correctly does `if (error) throw error` —
-// but the other SIX queries in the `Promise.all` below only ever destructured
-// `{ data }`. Supabase-js does not reject the promise on a query failure; it
-// resolves successfully with `{ data: null, error: {...} }`. So a transient
-// failure on categories/product_images/product_variants/site_settings/
-// states/state_images — a timeout, a momentary connection-pool blip, exactly
-// the kind of thing the retry/single-flight machinery below exists to catch —
-// was silently becoming `[]` or `{}` instead. That doesn't just skip the
-// retry: `withRetry` only re-runs on a *thrown* error, and none of these six
-// were ever capable of throwing, retried or not. The result renders fine
-// (no 500, no crash) with quietly missing categories/images/variants, and
-// nothing anywhere logs it — which matches "sometimes coming, sometimes not,
-// I don't know what happened" exactly. Fixed by checking every one of these
-// for `error` and throwing, same as the products query already does, so a
-// real transient failure now actually engages the existing retry instead of
-// silently degrading to empty data.
-async function _fetchStoreDataOnce(): Promise<StoreData> {
-  const db = getServiceClient()
+function warnIfNearCacheLimit(name: string, value: unknown) {
+  try {
+    const bytes = JSON.stringify(value).length
+    if (bytes > CACHE_WARN_BYTES) {
+      logger.warn(`[storeData] "${name}" cache entry is ${(bytes / 1e6).toFixed(2)} MB — Next's Data Cache stops storing entries over 2 MB. Time to paginate or split further.`, { bytes })
+    }
+  } catch { /* measuring must never break a fetch */ }
+}
 
-  const [
-    products,
-    productImagesRes,
-    productVariantsRes,
-    categoriesRes,
-    siteSettingsRes,
-    statesRes,
-    stateImagesRes,
-  ] = await Promise.all([
+type CatalogProducts = Pick<StoreData, 'products' | 'product_images' | 'product_variants'>
+type CatalogMeta     = Pick<StoreData, 'categories' | 'settings' | 'states' | 'state_images'>
+
+async function _fetchCatalogProductsOnce(): Promise<CatalogProducts> {
+  const db = getServiceClient()
+  const [products, productImagesRes, productVariantsRes] = await Promise.all([
     fetchAllActiveProducts(db),
     db.from('product_images')
       .select('product_id, image_url, sort_order')
@@ -162,6 +182,24 @@ async function _fetchStoreDataOnce(): Promise<StoreData> {
       .select('*')
       .eq('is_active', true)
       .order('product_id').order('sort_order'),
+  ])
+  // supabase-js resolves (not rejects) on failure — surface it so withRetry
+  // actually retries instead of silently caching an empty list.
+  if (productImagesRes.error)   throw productImagesRes.error
+  if (productVariantsRes.error) throw productVariantsRes.error
+
+  const result: CatalogProducts = {
+    products:         (products || []).map(toListProduct),
+    product_images:   productImagesRes.data   || [],
+    product_variants: productVariantsRes.data || [],
+  }
+  warnIfNearCacheLimit('catalog-products', result)
+  return result
+}
+
+async function _fetchCatalogMetaOnce(): Promise<CatalogMeta> {
+  const db = getServiceClient()
+  const [categoriesRes, siteSettingsRes, statesRes, stateImagesRes] = await Promise.all([
     db.from('categories')
       .select('id, name, slug, emoji, description, image_url, sort_order, is_active, show_on_homepage')
       .eq('is_active', true)
@@ -171,48 +209,24 @@ async function _fetchStoreDataOnce(): Promise<StoreData> {
     db.from('state_images')
       .select('state_id, image_url, sort_order')
       .order('state_id').order('sort_order'),
-    // BUG FIX (low-severity — dead-weight query, verified during products-page
-    // audit): a `coupons` query used to run here on every single cache miss,
-    // but grepping the entire codebase confirms `storeData.coupons` has zero
-    // consumers anywhere — coupon validation happens via separate, direct
-    // queries in orderService.ts/pricingService.ts. Every page that calls
-    // getStoreData() (home, /products, /regions/*, /collections/*) was
-    // paying for this unused query. Removed entirely rather than left for
-    // just one page, since it's a single shared cache used by all of them.
   ])
-
-  // Any one of these failing (timeout, connection blip, etc.) previously
-  // degraded silently to an empty array/object — see comment above. Now it
-  // throws, so `withRetry` in `_fetchStoreData` actually retries it, and if
-  // both attempts fail, the error surfaces to whichever caller's try/catch
-  // (e.g. BestSellers.tsx logs it) instead of vanishing.
-  if (productImagesRes.error)  throw productImagesRes.error
-  if (productVariantsRes.error) throw productVariantsRes.error
-  if (categoriesRes.error)     throw categoriesRes.error
-  if (siteSettingsRes.error)   throw siteSettingsRes.error
-  if (statesRes.error)         throw statesRes.error
-  if (stateImagesRes.error)    throw stateImagesRes.error
-
-  const productImages   = productImagesRes.data
-  const productVariants = productVariantsRes.data
-  const categories       = categoriesRes.data
-  const siteSettings     = siteSettingsRes.data
-  const states           = statesRes.data
-  const stateImages      = stateImagesRes.data
+  if (categoriesRes.error)    throw categoriesRes.error
+  if (siteSettingsRes.error)  throw siteSettingsRes.error
+  if (statesRes.error)        throw statesRes.error
+  if (stateImagesRes.error)   throw stateImagesRes.error
 
   // Convert settings array → object (same as old site)
   const settings: Record<string, string> = {}
-  ;(siteSettings || []).forEach((s: SiteSettingRow) => { settings[s.key] = s.value })
+  ;(siteSettingsRes.data || []).forEach((r: SiteSettingRow) => { settings[r.key] = r.value })
 
-  return {
-    products:         products         || [],  // already an array (paginated fetch)
-    product_images:   productImages    || [],
-    product_variants: productVariants  || [],
-    categories:       categories       || [],
+  const result: CatalogMeta = {
+    categories:  categoriesRes.data  || [],
     settings,
-    states:           states           || [],
-    state_images:     stateImages      || [],
+    states:      statesRes.data      || [],
+    state_images: stateImagesRes.data || [],
   }
+  warnIfNearCacheLimit('catalog-meta', result)
+  return result
 }
 
 // BUG FIX (found via production log storm — Vercel logs showed dozens of
@@ -230,19 +244,33 @@ async function _fetchStoreDataOnce(): Promise<StoreData> {
 // progress, every other caller awaits that SAME promise instead of
 // starting a new one, regardless of which of the two unstable_cache
 // wrappers below they came in through.
-let _inFlightFetch: Promise<StoreData> | null = null
+// Single-flight per half: concurrent callers share one in-progress fetch.
+let _inFlightProducts: Promise<CatalogProducts> | null = null
+let _inFlightMeta:     Promise<CatalogMeta>     | null = null
 
-async function _fetchStoreDataSingleFlight(): Promise<StoreData> {
-  if (_inFlightFetch) return _inFlightFetch
-  _inFlightFetch = _fetchStoreData().finally(() => { _inFlightFetch = null })
-  return _inFlightFetch
+function _fetchCatalogProducts(): Promise<CatalogProducts> {
+  if (_inFlightProducts) return _inFlightProducts
+  _inFlightProducts = withRetry(() => _fetchCatalogProductsOnce()).finally(() => { _inFlightProducts = null })
+  return _inFlightProducts
+}
+function _fetchCatalogMeta(): Promise<CatalogMeta> {
+  if (_inFlightMeta) return _inFlightMeta
+  _inFlightMeta = withRetry(() => _fetchCatalogMetaOnce()).finally(() => { _inFlightMeta = null })
+  return _inFlightMeta
 }
 
-// Shared cross-Lambda cache via Next.js Data Cache (60 s TTL).
-const _getCachedStoreData = unstable_cache(
-  _fetchStoreDataSingleFlight,
-  ['store-data'],
-  { revalidate: 60, tags: ['store-data'] },
+// Shared cross-Lambda cache via Next.js Data Cache (60 s TTL), one entry per
+// data domain. Both carry the 'store-data' tag so existing
+// revalidateTag('store-data') calls still clear everything; each also has its
+// own tag for targeted invalidation.
+const _getCachedCatalogProducts = unstable_cache(
+  _fetchCatalogProducts, ['catalog-products'],
+  { revalidate: 60, tags: ['store-data', 'catalog-products'] },
+)
+// Categories/states/settings change rarely — a longer TTL cuts Supabase load.
+const _getCachedCatalogMeta = unstable_cache(
+  _fetchCatalogMeta, ['catalog-meta'],
+  { revalidate: 300, tags: ['store-data', 'catalog-meta'] },
 )
 
 // BUG FIX (audit, Oct 2026): this used to be a SECOND unstable_cache entry
@@ -256,7 +284,18 @@ const _getCachedStoreData = unstable_cache(
 // invalidation for everyone else is done with revalidateTag('store-data')
 // in /api/v1/revalidate.
 export async function getStoreData(force = false): Promise<StoreData> {
-  return force ? _fetchStoreDataSingleFlight() : _getCachedStoreData()
+  const [prod, meta] = force
+    ? await Promise.all([_fetchCatalogProducts(), _fetchCatalogMeta()])
+    : await Promise.all([_getCachedCatalogProducts(), _getCachedCatalogMeta()])
+  return { ...prod, ...meta }
+}
+
+/** Categories / states / state images / settings only — the small, slow-moving
+ *  half of the catalog. Layout, header and any page that doesn't need products
+ *  should call THIS instead of getStoreData() or querying Supabase directly:
+ *  it is served from the shared 5-minute Data Cache. */
+export async function getCatalogMeta(): Promise<CatalogMeta> {
+  return _getCachedCatalogMeta()
 }
 
 // ── imgFor() — category card image resolution ────────────────────────────

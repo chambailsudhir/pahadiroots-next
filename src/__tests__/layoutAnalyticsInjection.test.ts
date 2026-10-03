@@ -30,6 +30,11 @@ vi.mock('next/font/google', () => ({
 }))
 
 vi.mock('@/lib/server/sanitize', () => ({ sanitizeHtml: (s: string) => s }))
+// Layout reads categories/states via the cached getCatalogMeta() now (not
+// Supabase directly) — see app/layout.tsx.
+vi.mock('@/lib/storeData', () => ({
+  getCatalogMeta: async () => ({ categories: [], states: [], state_images: [], settings: {} }),
+}))
 vi.mock('@/lib/supabase', () => ({
   supabase: { from: () => ({ select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [] }) }) }) }) },
 }))

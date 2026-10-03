@@ -9,6 +9,7 @@ import { useUserStore } from '@/store/userStore'
 import type { SiteSettings, Category, State } from '@/types'
 import { isEnabled } from '@/lib/siteSettingsHelpers'
 import { performHeaderLogout } from '@/lib/clientLogout'
+import { readPremium, setPremium } from '@/lib/premiumMode'
 import MegaMenu from './MegaMenu'
 import AnnouncementBar from './AnnouncementBar'
 import TickerBar from './TickerBar'
@@ -56,7 +57,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
     // DOES apply).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
-    setIsDark(document.documentElement.classList.contains('dark'))
+    setIsDark(readPremium())
     const onScroll = () => setScrolled(window.scrollY > 60)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -197,18 +198,17 @@ export default function Header({ settings, categories = [], states = [] }: Props
             )}
           </div>
 
-          {/* Dark mode toggle — aria-pressed reflects current mode (WCAG 4.1.2) */}
+          {/* Premium mode toggle — aria-pressed reflects the current mode (WCAG 4.1.2).
+              Replaces the old dark-mode toggle, which only ever re-coloured the
+              mega menu because most sections have their own light colours. */}
           <button
             type="button"
             className="old-dark-btn"
-            title="Toggle dark mode"
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title="Premium mode"
+            aria-label={isDark ? 'Switch to standard mode' : 'Switch to premium mode'}
             aria-pressed={isDark}
-            onClick={() => {
-              document.documentElement.classList.toggle('dark')
-              setIsDark(d => !d)
-            }}
-          ><span aria-hidden="true">🌙</span></button>
+            onClick={() => setIsDark(setPremium(!readPremium()))}
+          ><span aria-hidden="true">✨</span></button>
 
           {/* Cart — aria-label includes count so SR announces "Open cart, 3 items" (WCAG 4.1.2) */}
           <button

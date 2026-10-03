@@ -8,6 +8,7 @@ import type { Product } from '@/types'
 
 export default async function NewArrivals() {
   let products: Product[] = []
+  let isFallback = false
   try {
     const storeData = await getStoreData()
     const withImgs  = getProductsWithImages(storeData)
@@ -21,6 +22,12 @@ export default async function NewArrivals() {
     // homepage strip and "See All" always agree on what "new" means.
     const newArrivals = filterNewArrivals(all)
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    // HONESTY FIX (audit): when nothing qualifies as new we still show the
+    // newest products (so the shelf isn't empty), but it must not be labelled
+    // "Just In / New Arrivals" — big retailers (Nykaa, Myntra) switch the
+    // label to something neutral instead, and "See All" can't point at
+    // /new-arrivals because that page would be empty.
+    isFallback = newArrivals.length === 0
     products = (newArrivals.length ? newArrivals : all.sort(
       (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     )).slice(0, 4).map(toCardProductData) as Product[]
@@ -41,15 +48,15 @@ export default async function NewArrivals() {
   if (!products.length) return null
 
   return (
-    <section className="sec" style={{ background: '#fff', padding: '36px 40px 48px' }}>
+    <section className="sec" style={{ background: 'var(--pm-surface, #fff)', padding: '36px 40px 48px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div className="ct rv" style={{ marginBottom: 0, textAlign: 'left' }}>
-          <div className="chip">Just In</div>
-          <h2 className="sh2">New Arrivals</h2>
+          <div className="chip">{isFallback ? 'Fresh Picks' : 'Just In'}</div>
+          <h2 className="sh2">{isFallback ? 'Latest Additions' : 'New Arrivals'}</h2>
           <p className="ssub">The latest additions from our Himalayan producers.</p>
         </div>
         <Link
-          href="/new-arrivals"
+          href={isFallback ? '/products?sort=newest' : '/new-arrivals'}
           className="show-all-btn"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,

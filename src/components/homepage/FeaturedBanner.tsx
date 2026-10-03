@@ -1,30 +1,28 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { catSlug } from '@/lib/utils'
-import { supabase } from '@/lib/supabase'
+import { getCatalogMeta } from '@/lib/storeData'
 
 interface Props { slug: string }
 
 export default async function FeaturedBanner({ slug }: Props) {
-  let cat = null
+  // PERF + CORRECTNESS FIX (audit): this used to run its own Supabase query on
+  // every homepage hit, with no is_active filter (so a deactivated category
+  // could still be promoted, and its "Shop Now" link 404'd). The shared,
+  // cached catalog meta already holds exactly the ACTIVE categories, so the
+  // featured category is simply looked up there — zero extra queries, and an
+  // inactive/missing slug naturally renders nothing.
+  let cat: { id: number; name: string; slug: string; description?: string | null; image_url?: string | null } | null = null
   try {
-    const { data } = await supabase
-      .from('categories')
-      .select('id, name, slug, description, image_url, is_active')
-      .eq('slug', slug)
-      .single()
-    cat = data
+    const wanted = slug.trim().toLowerCase()
+    const meta = await getCatalogMeta()
+    cat = (meta.categories as any[]).find(c => String(c.slug || '').toLowerCase() === wanted) ?? null
   } catch { cat = null }
 
-  // BUG FIX (audit): the query had no is_active filter, so a deactivated
-  // category could still be promoted as the Featured Collection — and its
-  // "Shop Now" link then 404s, because /collections/[slug] only serves active
-  // categories. (Checked in code rather than in the query so the existing
-  // query shape stays identical.)
-  if (!cat || (cat as { is_active?: boolean }).is_active === false) return null
+  if (!cat) return null
 
   return (
-    <section style={{ padding: '24px 40px', background: '#fff' }}>
+    <section style={{ padding: '24px 40px', background: 'var(--pm-surface, #fff)' }}>
       <div style={{ maxWidth: 1300, margin: '0 auto' }}>
         <Link href={`/collections/${catSlug(cat)}`} className="group" style={{ display: 'block' }}>
           <div style={{

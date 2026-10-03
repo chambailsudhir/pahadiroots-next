@@ -108,3 +108,7 @@
  .lm{padding:64px 22px}.lmHead{grid-template-columns:1fr;gap:16px;margin-bottom:28px}.lmGrid{grid-template-columns:1fr;grid-template-rows:none;height:auto}.lmGrid>.fig{min-height:220px}.lmGrid>.figA{grid-row:auto;min-height:300px}
  .sl{padding:64px 22px}.slGrid{grid-template-columns:1fr;gap:36px}.slQ{margin-top:56px}
 }
+
+/* Premium mode (html.premium) — these sections are fully token-driven, so
+   flipping the tokens re-themes every one of them. */
+:global(html.premium) .root{--g:#f1d98a;--g3:#d9c27a;--gd:#d4af37;--gdt:#e3c25f;--ivory:#0e1d14;--ivory2:#11231a;--cream:#0f2016;--tx:#efe7d2;--tx2:#cfc7ad;--mute:#a29b82;--line:rgba(212,175,55,.26)}

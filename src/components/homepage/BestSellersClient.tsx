@@ -78,6 +78,16 @@ export default function BestSellersClient({ initialProducts, categories }: Props
     [hydrated, initialProducts],
   )
 
+  // BUG FIX (audit): a chip was rendered for EVERY active category, even ones
+  // with no bestseller products — click it and you got an empty grid with no
+  // explanation. Large storefronts only offer a filter that returns results
+  // (a dead filter reads as "broken"). Chips are now limited to categories
+  // that actually have at least one product in this list.
+  const chipCategories = useMemo(() => {
+    const withProducts = new Set(initialProducts.map((p: any) => String(p.category_id)))
+    return categories.filter(c => withProducts.has(String(c.id)))
+  }, [categories, initialProducts])
+
   let filtered = [...allProducts]
   if (activeCat !== 'all') {
     const cat = categories.find(c => c.slug === activeCat)
@@ -110,7 +120,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
   const shown = filtered.slice(0, 6)
 
   return (
-    <section className="sec" id="products" style={{ background: '#f5f0e8', padding: '36px 40px 48px' }}>
+    <section className="sec" id="products" style={{ background: 'var(--pm-cream, #f5f0e8)', padding: '36px 40px 48px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 0 }}>
         <div className="ct rv" style={{ marginBottom: 0, textAlign: 'left' }}>
           <div className="chip">Bestsellers</div>
@@ -138,7 +148,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
           onClick={() => setActiveCat('all')}
         >All</button>
 
-        {categories.map(cat => (
+        {chipCategories.map(cat => (
           <button
             key={cat.id}
             className={`filter-btn${activeCat === cat.slug ? ' active' : ''}`}
@@ -159,7 +169,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
       </div>
 
       {shown.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#7a7a7a' }}>
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--tx3, #7a7a7a)' }}>
           No products found
         </div>
       ) : (

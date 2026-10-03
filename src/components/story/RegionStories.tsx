@@ -52,7 +52,21 @@ const PANELS: Panel[] = [
 ]
 
 /** Homepage · "Shop by region": range illustration + tabbed region stories. */
-export default function RegionStories() {
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+export default function RegionStories({ regionNames = [] }: { regionNames?: string[] }) {
+  // The intro line used to hard-code "Himachal Pradesh, Ladakh and Uttarakhand",
+  // which contradicted the live "Himalayan States" figure whenever the admin
+  // activated or deactivated a state. It now lists whatever states are active.
+  const names = regionNames.filter(Boolean)
+  const sourcing = names.length === 0
+    ? 'Himachal Pradesh, Ladakh and Uttarakhand'
+    : names.length > 6
+      ? `${names.length} Himalayan regions, including ${listNames(names.slice(0, 3))}`
+      : listNames(names)
   const [active, setActive] = useState(PANELS[0].id)
 
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
@@ -92,7 +106,7 @@ export default function RegionStories() {
             <p className={s.eyebrow}>Shop by region</p>
             <h2 className={s.h2} id="rs-h">The same range. Very different valleys.</h2>
           </div>
-          <p className={s.lead}>Altitude, soil and seasons change what grows in each valley. Today we source from Himachal Pradesh, Ladakh and Uttarakhand, and we add more regions one at a time, only when we can describe them honestly.</p>
+          <p className={s.lead}>Altitude, soil and seasons change what grows in each valley. Today we source from {sourcing}, and we add more regions one at a time, only when we can describe them honestly.</p>
         </Reveal>
 
         <div className={s.tabs} role="tablist" aria-label="Regions">

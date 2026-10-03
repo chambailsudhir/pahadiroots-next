@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getHeroStats } from '@/lib/heroStats'
+import { getHeroStats, withLiveStateCount } from '@/lib/heroStats'
+import { getCatalogMeta } from '@/lib/storeData'
 import { ContourLines, MountainMark } from '@/components/brand/BrandMotifs'
 import MountainStories from '@/components/story/MountainStories'
 
@@ -32,7 +33,10 @@ interface FounderImage { url: string; caption: string | null }
 interface TeamMember { id: string; name: string; role: string; bio: string | null; image_url: string | null }
 
 export default async function AboutPage() {
-  const settings = await getSiteSettings()
+  const baseSettings = await getSiteSettings()
+  // Live active-state count (cached) so About shows the same figure as Home.
+  const activeStateCount = await getCatalogMeta().then(m => m.states.length).catch(() => 0)
+  const settings = withLiveStateCount(baseSettings, activeStateCount)
 
   // Full kill-switch — admin's "Page is live at /about" toggle. Off means
   // the route itself 404s (not just an empty section), and Header/Footer/

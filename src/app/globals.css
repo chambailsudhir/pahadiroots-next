@@ -24,6 +24,9 @@
 @tailwind utilities;
 
 :root {
+  /* Premium-mode tokens — light values here, overridden under html.premium. */
+  --pm-bg: #fff; --pm-text: #1a1a1a; --pm-surface: #fff; --pm-surface2: #fafaf8; --pm-cream: #f5f0e8;
+  --pm-heading: #1a3a1e; --pm-gold-text: #8a6508;
   --g:   #1a3a1e;
   --g2:  #2d5233;
   --g3:  #3d6b42;
@@ -1364,3 +1367,65 @@ ul.mega-list.mega-list-2col {
   .bp-products-grid, .bp-more-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .bp-prose > *:first-child::first-letter { font-size: 44px; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PREMIUM MODE  (html.premium — toggled by the ✨ button, see lib/premiumMode.ts)
+   Deep forest surfaces, antique-gold accents, ivory text. It replaces the old
+   "dark mode", which could not work because sections hard-coded light colours.
+   Almost everything here flips tokens; only a few surfaces need explicit rules.
+   ═══════════════════════════════════════════════════════════════════════ */
+html.premium {
+  color-scheme: dark;
+  --pm-bg: #0b1710; --pm-text: #efe7d2; --pm-surface: #11231a; --pm-surface2: #163024; --pm-cream: #0e1d14;
+  --pm-heading: #f1d98a; --pm-gold-text: #e3c25f;
+  --tx: #efe7d2; --tx2: #cfc7ad; --tx3: #a29b82;
+  --bd: rgba(212,175,55,.24);
+}
+html.premium body { background: var(--pm-bg); color: var(--pm-text); }
+html.premium ::selection { background: #d4af37; color: #0b1710; }
+
+/* headings & eyebrows */
+html.premium .sh2, html.premium .pname, html.premium .pnow,
+html.premium .promise-title, html.premium .promise-h2, html.premium .ran { color: var(--pm-heading); }
+html.premium .ssub, html.premium .promise-body, html.premium .rtxt { color: var(--tx2); }
+html.premium .chip { color: #e3c25f; border-color: rgba(227,194,95,.45); }
+
+/* surfaces */
+html.premium .coll-bg  { background: linear-gradient(180deg,#0f2016 0%,#0b1710 100%); border-color: rgba(212,175,55,.25); }
+html.premium .promise-bg { background: linear-gradient(180deg,#0d1c13,#11231a); }
+html.premium .rev-bg   { background: linear-gradient(180deg,#0e1d14,#0b1710); }
+html.premium .rcard    { background: var(--pm-surface); border-color: rgba(212,175,55,.2); box-shadow: 0 2px 18px rgba(0,0,0,.35); }
+html.premium .pcard    { background: var(--pm-surface); border-color: rgba(212,175,55,.18); box-shadow: 0 2px 14px rgba(0,0,0,.4); }
+html.premium .pregion  { color: #e3c25f; }
+html.premium .filter-btn { background: var(--pm-surface); color: var(--tx2); border-color: rgba(212,175,55,.3); }
+html.premium .filter-btn.active { background: #d4af37; color: #0b1710; border-color: #d4af37; }
+html.premium .filter-sort { background: var(--pm-surface); color: var(--tx); border-color: rgba(212,175,55,.3); }
+html.premium .rcard .rav { background: #d4af37; color: #0b1710; }
+html.premium .cgrid-arrow { background: var(--pm-surface) !important; color: var(--tx) !important; border-color: rgba(212,175,55,.35) !important; }
+
+/* header */
+html.premium .old-nav { background: #0d1c13; border-bottom: 1px solid rgba(212,175,55,.35); }
+html.premium .old-nav.scrolled { box-shadow: 0 4px 24px rgba(0,0,0,.55); }
+/* the logo artwork is dark-on-transparent — give it a soft ivory plate so it stays legible */
+html.premium .old-logo { background: #f4eed6; border-radius: 10px; padding: 5px 10px; }
+html.premium .old-nav-links li a, html.premium .old-nav-links li button { color: #efe7d2; }
+html.premium .old-nav-links li a:hover, html.premium .old-nav-links li button:hover { color: #f1d98a; background: rgba(212,175,55,.08); }
+html.premium .old-nib, html.premium .old-dark-btn { color: #efe7d2; }
+html.premium .old-nib:hover, html.premium .old-dark-btn:hover { background: rgba(212,175,55,.12); color: #f1d98a; }
+html.premium .old-acct-dd { background: #11231a; border-color: rgba(212,175,55,.3); }
+html.premium .old-dd-name { color: #f1d98a; }
+html.premium .old-dd-item { color: #efe7d2; }
+html.premium .old-dd-item:hover { background: rgba(212,175,55,.1); }
+html.premium .old-dd-head, html.premium .old-dd-foot { border-color: rgba(212,175,55,.2); }
+html.premium .old-dd-btn { background: #d4af37; color: #0b1710; }
+html.premium .old-acct-dot, html.premium .old-wl-badge { border-color: #0d1c13; }
+html.premium .old-dark-btn { color: #f1d98a; }
+
+/* mobile bottom bar + drawers */
+html.premium .mbn { background: #0d1c13; border-top-color: rgba(212,175,55,.35); }
+html.premium .mbn-item { color: #cfc7ad; }
+html.premium .mbn-item.active { color: #f1d98a; }
+html.premium .mob-nav-panel { background: #0d1c13; color: #efe7d2; }
+html.premium .mob-nav-panel a { color: #efe7d2; }
+html.premium .mob-nav-logo { color: #f1d98a; }

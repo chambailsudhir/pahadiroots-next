@@ -1,5 +1,6 @@
 'use client'
 
+import { readPremium, setPremium } from '@/lib/premiumMode'
 import { useEffect, useRef, useState } from 'react'
 import { catSlug } from '@/lib/utils'
 import Link from 'next/link'
@@ -36,7 +37,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   const [isDark, setIsDark] = useState(false)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsDark(document.documentElement.classList.contains('dark'))
+    setIsDark(readPremium())
   }, [])
 
   // BUG FIX (P2): this declared role="dialog" aria-modal="true" but
@@ -120,15 +121,12 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
         <button
           type="button"
           className="mob-dark-toggle"
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={isDark ? 'Switch to standard mode' : 'Switch to premium mode'}
           aria-pressed={isDark}
-          onClick={() => {
-            document.documentElement.classList.toggle('dark')
-            setIsDark(d => !d)
-          }}
+          onClick={() => setIsDark(setPremium(!readPremium()))}
         >
-          <span aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
-          {isDark ? 'Light Mode' : 'Dark Mode'}
+          <span aria-hidden="true">{isDark ? '☀️' : '✨'}</span>
+          {isDark ? 'Standard Mode' : 'Premium Mode'}
         </button>
 
         {/* Primary links */}

@@ -19,6 +19,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+
+// getLatestReviews() is wrapped in unstable_cache — pass straight through in tests.
+vi.mock('next/cache', () => ({ unstable_cache: (fn: (...a: unknown[]) => unknown) => fn }))
 import { render, screen } from '@testing-library/react'
 
 const { mockFrom, mockSelect, mockEq, mockOrder, mockLimit } = vi.hoisted(() => {
