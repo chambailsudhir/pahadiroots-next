@@ -1,3 +1,4 @@
+import { scrubProduct } from './privateFields'
 import type { Product } from '@/types'
 
 /**
@@ -139,7 +140,7 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
  */
 export function toCardProductData(p: Product): Product {
   return {
-    ...p,
+    ...scrubProduct(p),
     short_description: null,
     long_description: null,
     tags: null,
@@ -149,8 +150,6 @@ export function toCardProductData(p: Product): Product {
     ai_storage_tips: null,
     ai_who_should_buy: null,
     ai_generated_at: null,
-    // Margin figure — must never reach client components (see storeData.toListProduct).
-    cost_price: null,
   }
 }
 

@@ -366,3 +366,34 @@ describe('getRelatedProducts ranking (Issue C3: arbitrary, sold-out-prone set)',
     expect(related.map(p => p.id)).toEqual([2, 3])
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────
+// Private columns never leave getProductBySlug (Oct 2026 audit)
+// ─────────────────────────────────────────────────────────────────────────
+describe('getProductBySlug scrubs internal columns before returning to the PDP', () => {
+  it('nulls cost/vendor/pricing-engine fields on the product and cost/margin/warehouse fields on variants', async () => {
+    mockGetServiceClient.mockReturnValue(makeDb({
+      products: [{
+        id: 1, slug: 'honey', name: 'Honey', status: 'active', is_deleted: false, price: 500,
+        cost_price: 210.5, vendor_id: 7, psy_sp_raw: 497.3, price_version: 12,
+      }],
+      product_variants: [{
+        id: 11, product_id: 1, is_active: true, price: 500, available_stock: 4, sort_order: 1,
+        cost_price: 200, margin_pct: 40, damaged_stock: 2, barcode: '890123',
+      }],
+      product_images: [],
+    }))
+    const { getProductBySlug } = await import('@/lib/storeData')
+    const { product, variants } = await getProductBySlug('honey')
+    expect((product as any).cost_price).toBeNull()
+    expect((product as any).vendor_id).toBeNull()
+    expect((product as any).psy_sp_raw).toBeNull()
+    expect((product as any).price_version).toBeNull()
+    expect(product).toMatchObject({ id: 1, name: 'Honey', price: 500 })
+    expect((variants[0] as any).cost_price).toBeNull()
+    expect((variants[0] as any).margin_pct).toBeNull()
+    expect((variants[0] as any).barcode).toBeNull()
+    expect(variants[0]).toMatchObject({ id: 11, price: 500, available_stock: 4 })
+    expect(JSON.stringify({ product, variants })).not.toMatch(/210\.5|890123/)
+  })
+})

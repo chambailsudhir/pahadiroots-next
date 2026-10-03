@@ -9,6 +9,7 @@ import { unstable_cache } from 'next/cache'
 import { getServiceClient } from './supabase'
 import { applyProductImages, normalizeProducts } from './normalizeProduct'
 import { logger } from './logger'
+import { scrubProduct, scrubVariant } from './privateFields'
 import type { Product, Category, State } from '@/types'
 
 // Minimal shapes for related tables (not full DB types)
@@ -147,7 +148,7 @@ const CACHE_WARN_BYTES = 1_500_000
  *  that should never be sitting in a payload that gets near client code. */
 function toListProduct(p: Product): Product {
   return {
-    ...p,
+    ...scrubProduct(p),
     long_description:   null,
     ai_description:     null,
     ai_health_benefits: null,
@@ -155,7 +156,6 @@ function toListProduct(p: Product): Product {
     ai_storage_tips:    null,
     ai_who_should_buy:  null,
     ai_generated_at:    null,
-    cost_price:         null,
   }
 }
 
@@ -191,7 +191,10 @@ async function _fetchCatalogProductsOnce(): Promise<CatalogProducts> {
   const result: CatalogProducts = {
     products:         (products || []).map(toListProduct),
     product_images:   productImagesRes.data   || [],
-    product_variants: productVariantsRes.data || [],
+    // Private columns (cost_price, margin_pct, warehouse counters…) never enter the
+    // cached catalogue — everything downstream (store-data API, search-catalog,
+    // listing pages) derives from this object and ends up in client payloads.
+    product_variants: (productVariantsRes.data || []).map(scrubVariant),
   }
   warnIfNearCacheLimit('catalog-products', result)
   return result
@@ -527,6 +530,7 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
   }
 
   if (!product) return { product: null, variants: [], images: [] }
+  product = scrubProduct(product)
 
   const [{ data: variants, error: variantsErr }, { data: images, error: imagesErr }] = await Promise.all([
     db.from('product_variants')
@@ -542,9 +546,12 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
   if (variantsErr) console.error('[getProductBySlug] variants fetch failed:', variantsErr)
   if (imagesErr)   console.error('[getProductBySlug] images fetch failed:', imagesErr)
 
+  // The PDP passes these rows straight into client components, which
+  // serializes every field into the page payload — scrub internal columns here,
+  // at the single server-side exit point (Oct 2026 audit).
   return {
     product,
-    variants: (variants as ProductVariant[]) || [],
+    variants: ((variants as ProductVariant[]) || []).map(scrubVariant),
     images:   (images as ProductImage[]) || [],
   }
 }
@@ -633,6 +640,7 @@ export async function getRelatedProducts(opts: {
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     const pVars = ((vars as ProductVariant[]) || [])
       .filter(v => v.product_id === p.id)
+      .map(scrubVariant)
       .map(v => ({
         ...v,
         // BUG FIX (found via manual line-by-line audit): product_variants has
@@ -645,7 +653,7 @@ export async function getRelatedProducts(opts: {
       .sort((a, b) => a.price - b.price)
     const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []
     return {
-      ...p,
+      ...scrubProduct(p),
       badges_bestseller: badgeArr.includes('bestseller'),
       badges_new:        badgeArr.includes('new'),
       badges_organic:    badgeArr.includes('organic'),
