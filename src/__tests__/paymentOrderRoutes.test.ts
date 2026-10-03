@@ -192,8 +192,10 @@ vi.mock('@/lib/server/loyalty', () => ({
 
 // ─── Mock: @/lib/getSiteSettings ─────────────────────────────────────────────
 
-vi.mock('@/lib/getSiteSettings', () => ({
-  getSiteSettings: vi.fn().mockResolvedValue({
+vi.mock('@/lib/getSiteSettings', () => {
+  // getFreshSiteSettings (used by the orders/payments routes) delegates to the
+  // same mock so existing per-test overrides keep working.
+  const getSiteSettings = vi.fn().mockResolvedValue({
     cod_enabled:              'true',
     order_email_enabled:      'false',   // disable email in tests
     loyalty_enabled:          'false',
@@ -201,8 +203,9 @@ vi.mock('@/lib/getSiteSettings', () => ({
     loyalty_points_value:     '0.25',
     loyalty_max_redeem_pct:   '20',
     admin_notify_email:       '',
-  }),
-}))
+  })
+  return { getSiteSettings, getFreshSiteSettings: (...a: unknown[]) => (getSiteSettings as (...x: unknown[]) => unknown)(...a) }
+})
 
 // ─── Mock: resend ─────────────────────────────────────────────────────────────
 

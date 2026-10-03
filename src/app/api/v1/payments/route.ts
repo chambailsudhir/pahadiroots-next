@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
 import { createOrder, logOrderEvent } from '@/lib/services/orderService'
-import { getSiteSettings } from '@/lib/getSiteSettings'
+import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
       }
 
-      const settings = await getSiteSettings()
+      const settings = await getFreshSiteSettings()
       const pd       = parsed.data
 
       // BUG FIX: same gap as /api/v1/orders/route.ts — this is a SEPARATE
@@ -383,7 +383,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 4. Site settings (single fetch, reused for loyalty + email)
-      const settings = await getSiteSettings()
+      const settings = await getFreshSiteSettings()
 
       // 5. Loyalty — read from DB-authoritative field, never from client body
       const loyalty_points_redeemed = Number(currentOrder.loyalty_points_redeemed ?? 0)

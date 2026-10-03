@@ -34,13 +34,16 @@ vi.mock('@/lib/server/loyalty', () => ({
   redeemLoyaltyPoints: vi.fn().mockResolvedValue(true),
 }))
 
-vi.mock('@/lib/getSiteSettings', () => ({
-  getSiteSettings: vi.fn().mockResolvedValue({
+vi.mock('@/lib/getSiteSettings', () => {
+  // getFreshSiteSettings (used by the orders/payments routes) delegates to the
+  // same mock so existing per-test overrides keep working.
+  const getSiteSettings = vi.fn().mockResolvedValue({
     cod_enabled: 'true', order_email_enabled: 'false', loyalty_enabled: 'false',
     loyalty_points_per_rupee: '1', loyalty_points_value: '0.25', loyalty_max_redeem_pct: '20',
     admin_notify_email: '', store_open: 'true',
-  }),
-}))
+  })
+  return { getSiteSettings, getFreshSiteSettings: (...a: unknown[]) => (getSiteSettings as (...x: unknown[]) => unknown)(...a) }
+})
 
 vi.mock('@/lib/api/rateLimitKv', () => ({
   checkRateLimitKv: vi.fn().mockResolvedValue(true), // always allow — not what this test covers

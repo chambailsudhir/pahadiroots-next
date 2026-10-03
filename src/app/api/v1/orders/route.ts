@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createOrder } from '@/lib/services/orderService'
 import { StockReservationError } from '@/lib/services/inventoryService'
-import { getSiteSettings } from '@/lib/getSiteSettings'
+import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     const city  = sanitize(a.city)
     const state = sanitize(a.state)
 
-    const settings = await getSiteSettings()
+    const settings = await getFreshSiteSettings()
 
     // BUG FIX: the storefront's maintenance gate (src/proxy.ts) redirects GET
     // page requests to /maintenance when store_open === 'false', but that

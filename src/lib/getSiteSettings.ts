@@ -9,7 +9,7 @@ import 'server-only'
 import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
 import { logger } from '@/lib/logger'
-import { unstable_cache, revalidateTag } from 'next/cache'
+import { unstable_cache, revalidateTag, unstable_noStore } from 'next/cache'
 
 // Default fallback values — site works even if settings are missing
 const DEFAULTS: Partial<SiteSettings> = {
@@ -315,6 +315,48 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   } catch (err) {
     logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
     return DEFAULTS as SiteSettings
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fresh read for payment/pricing-critical keys.
+//
+// Why: /checkout and the order/payment APIs used getSiteSettings(), which is
+// served from the Data Cache (tag + 5-min TTL) and only refreshed when the
+// admin's revalidate webhook succeeds. If that webhook fails (missing
+// REVALIDATE_SECRET / STOREFRONT_URL on the admin deployment, a timeout, etc.)
+// a payment-mode toggle in admin takes up to ~5 minutes to reach checkout.
+//
+// These ~10 keys decide which payment buttons show and how totals are
+// computed, so they are read straight from Supabase on every call (one tiny
+// indexed SELECT) and layered on top of the cached full settings object.
+// Falls back to the cached copy if the fresh read fails — never breaks checkout.
+// ─────────────────────────────────────────────────────────────────────────────
+const FRESH_KEYS = [
+  'cod_enabled', 'upi_enabled', 'cod_max_value', 'cod_surcharge_amount',
+  'cod_max_active_orders', 'prepaid_discount_pct', 'free_shipping_min',
+  'flat_shipping_charge', 'min_order_amount', 'whatsapp_number',
+] as const
+
+export async function getFreshSiteSettings(): Promise<SiteSettings> {
+  const base = await getSiteSettings()
+  try {
+    unstable_noStore() // opt this call out of every cache layer
+    const client = (() => { try { return getServiceClient() } catch { return supabase } })()
+    const { data, error } = await client
+      .from('site_settings')
+      .select('key, value')
+      .in('key', [...FRESH_KEYS])
+    if (error) throw error
+    const fresh = Object.fromEntries(
+      (data || [])
+        .filter((r: { key: string; value: string | null }) => r.value !== null && r.value !== undefined)
+        .map((r: { key: string; value: string }) => [r.key, r.value])
+    )
+    return { ...base, ...fresh } as SiteSettings
+  } catch (err) {
+    logger.error('getFreshSiteSettings: fresh read failed, using cached', { action: 'getFreshSiteSettings', error: err instanceof Error ? err.message : String(err) })
+    return base
   }
 }
 
