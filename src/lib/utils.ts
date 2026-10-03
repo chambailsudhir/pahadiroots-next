@@ -132,17 +132,12 @@ export function whatsappURL(number: string, message: string): string {
 }
 
 // ─── Settings helpers (used by pricingService) ────────────────────────────────
-
-export function asNumber(value: string | undefined, defaultValue: number): number {
-  if (!value) return defaultValue
-  const n = parseFloat(value)
-  return isNaN(n) ? defaultValue : n
-}
-
-export function isEnabled(value: string | undefined, defaultValue = true): boolean {
-  if (value === undefined) return defaultValue
-  return value !== 'false'
-}
+// BUG FIX (Issue 5, Oct 2026 audit): this file kept its own copy of isEnabled()
+// using the old exact `!== 'false'` match, which the corrected version in
+// siteSettingsHelpers.ts replaced (handles 'False', ' FALSE ', '0', 'off',
+// 'no'). Two copies meant a wrong import would silently bring back the
+// case-sensitivity bug. Re-export the single source of truth instead.
+export { isEnabled, asNumber } from './siteSettingsHelpers'
 
 // ─── Safe category slug (fallback: slugify name) ─────────────────────────────
 // Prevents /collections/Wild%20Honey — always returns a clean URL slug

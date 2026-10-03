@@ -72,7 +72,7 @@ export default async function RelatedProducts({ products, categoryId, excludeId 
         {items.map((p: any) => <RelatedCard key={p.id} product={p} />)}
       </div>
       <style>{`
-        .pdp-related-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;color:#1a3a1e;margin-bottom:4px}
+        .pdp-related-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:22px;font-weight:900;color:#1a3a1e;margin-bottom:4px}
         .pdp-related-sub{font-size:13px;color:#7a7a7a;margin-bottom:20px}
         .pdp-related-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
         @media(max-width:880px){.pdp-related-grid{grid-template-columns:repeat(2,1fr)}}

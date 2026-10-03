@@ -380,6 +380,23 @@ export function buildCategories(storeData: StoreData) {
     .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
 }
 
+// BUG FIX (Browse/New Arrivals category list coupled to the homepage flag):
+// buildCategories() above hides any category with show_on_homepage === false,
+// which is correct for the homepage strip but ALSO fed the /products sidebar,
+// the mobile filter drawer, /new-arrivals and ?category= resolution. Hiding a
+// collection from the homepage therefore made it vanish from Browse filters,
+// and its ?category= URL silently fell through to "All Products".
+// buildBrowseCategories() returns every ACTIVE category (the catalog meta
+// query already filters is_active) with the same image + ordering treatment,
+// and ignores show_on_homepage entirely. Only the homepage uses
+// buildCategories().
+export function buildBrowseCategories(storeData: StoreData) {
+  const { categories, settings } = storeData
+  return [...categories]
+    .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
+    .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
+}
+
 // ── Attach variants to products ──────────────────────────────────────────
 // BUG FIX (CRITICAL — data/pricing integrity): storeData.product_variants was
 // being fetched on every getStoreData() call but NEVER grouped and merged

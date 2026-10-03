@@ -271,7 +271,8 @@ describe('AddToCartSection — handleAdd', () => {
     expect(items[0]).toMatchObject({
       productId: '1',
       variantId: '11',
-      name:      'Himalayan Honey (500g)',
+      name:      'Himalayan Honey', // plain name — size lives in `size` (Issue 8)
+      size:      '500g',
       price:     250,
       mrp:       300,
       qty:       1,

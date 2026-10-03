@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function PaymentPage() {
   return (
     <main style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
-      <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '32px', color: '#1a3a1e', marginBottom: '8px' }}>
+      <h1 style={{ fontFamily: 'var(--font-playfair), Playfair Display, serif', fontSize: '32px', color: '#1a3a1e', marginBottom: '8px' }}>
         Payment Methods
       </h1>
       <p style={{ color: '#888', marginBottom: '40px', fontSize: '15px' }}>

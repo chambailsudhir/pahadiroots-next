@@ -654,3 +654,32 @@ describe('cartStore — _hasHydrated flag', () => {
     expect(persisted).not.toHaveProperty('setHasHydrated')
   })
 })
+
+// ─── persist migrate v4 → v5 (Issue 8: duplicated size in PDP-added names) ────
+describe('cartStore persist — migrate v4→v5', () => {
+  const getMigrate = () =>
+    useCartStore.persist?.getOptions?.()?.migrate as
+      | ((persisted: unknown, fromVersion: number) => { items: Array<{ name: string }> })
+      | undefined
+
+  it('strips a trailing " (size)" that matches the item size', () => {
+    const migrate = getMigrate()!
+    const out = migrate({ items: [{ productId: '1', variantId: '2', name: 'Himalayan Honey (500g)', size: '500g' }] }, 4)
+    expect(out.items[0].name).toBe('Himalayan Honey')
+  })
+
+  it('leaves names alone when the parenthetical is not the item size', () => {
+    const migrate = getMigrate()!
+    const out = migrate({ items: [{ productId: '1', variantId: '2', name: 'Spice Mix (Hot)', size: '250g' }] }, 4)
+    expect(out.items[0].name).toBe('Spice Mix (Hot)')
+  })
+
+  it('leaves already-plain names and size-less items alone', () => {
+    const migrate = getMigrate()!
+    const out = migrate({ items: [
+      { productId: '1', variantId: '2', name: 'Ghee', size: '500g' },
+      { productId: '3', variantId: '4', name: 'Tea (Loose)' },
+    ] }, 4)
+    expect(out.items.map(i => i.name)).toEqual(['Ghee', 'Tea (Loose)'])
+  })
+})

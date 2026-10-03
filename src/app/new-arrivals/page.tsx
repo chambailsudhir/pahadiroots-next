@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
+import { notFound, redirect } from 'next/navigation'
+import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, getEffectivePrice, toCardProductData } from '@/lib/normalizeProduct'
 import { filterProducts, sortProducts, paginateProducts, buildPaginationList } from '@/lib/filterAndSortProducts'
 import { filterNewArrivals, isJustAdded, NEW_ARRIVAL_WINDOW_DAYS } from '@/lib/newArrivals'
 import { buildProductsUrl } from '@/lib/buildProductsUrl'
+import { parseBrowseParams, type RawBrowseParams } from '@/lib/browseParams'
 import ProductCard from '@/components/product/ProductCard'
 import MobileFilterBar from '@/components/product/MobileFilterBar'
 import PriceRangeFilter from '@/components/product/PriceRangeFilter'
@@ -23,51 +25,47 @@ const SORT_OPTIONS = [
   { value: 'popular',    label: 'Best Sellers',       icon: '⭐' },
 ]
 
-interface SP { sort?: string; category?: string; page?: string; instock?: string; minPrice?: string; maxPrice?: string }
+type SP = RawBrowseParams
 interface Props { searchParams: Promise<SP> }
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const sp = await searchParams
+  const sp = parseBrowseParams(await searchParams)
   const storeData = await getStoreData()
   const withImgs = getProductsWithImages(storeData)
   const all = normalizeProducts(withImgs)
   const newCount = filterNewArrivals(all).length
-  const categories = buildCategories(storeData)
-  const activeCat = categories.find(c => c.slug === (sp.category || ''))
-  const page = Math.max(1, parseInt(sp.page || '1'))
+  const categories = buildBrowseCategories(storeData)
+  const activeCat = categories.find(c => c.slug === sp.category)
+  const page = sp.page
 
   const title = `New Arrivals${activeCat ? ` — ${activeCat.name}` : ''}${page > 1 ? ` — Page ${page}` : ''} | HimVeda by Pahadi Roots`
   const description = `${newCount} new Himalayan products just added — fresh honey, oils, spices and grains sourced directly from mountain families.`
 
   const params = new URLSearchParams()
   if (sp.category) params.set('category', sp.category)
-  if (sp.sort && sp.sort !== 'newest') params.set('sort', sp.sort)
+  if (sp.sort !== 'newest') params.set('sort', sp.sort)
   if (page > 1) params.set('page', String(page))
-  if (sp.minPrice) params.set('minPrice', sp.minPrice)
-  if (sp.maxPrice) params.set('maxPrice', sp.maxPrice)
+  if (sp.minPrice != null) params.set('minPrice', String(sp.minPrice))
+  if (sp.maxPrice != null) params.set('maxPrice', String(sp.maxPrice))
   const qs = params.toString()
 
   return {
     title,
     description,
     alternates: { canonical: `${BASE_PATH}${qs ? '?' + qs : ''}` },
-    robots: (sp.instock === 'true' || page > 1 || sp.minPrice || sp.maxPrice) ? { index: false, follow: true } : undefined,
+    robots: (sp.instock || page > 1 || sp.minPrice != null || sp.maxPrice != null) ? { index: false, follow: true } : undefined,
   }
 }
 
 export default async function NewArrivalsPage({ searchParams }: Props) {
-  const sp        = await searchParams
+  const sp        = parseBrowseParams(await searchParams)
   const storeData = await getStoreData()
 
-  const sort      = sp.sort     || 'newest'
-  const catSlug   = sp.category || ''
-  const page      = Math.max(1, parseInt(sp.page || '1'))
-  const instock   = sp.instock  === 'true'
-  const minPrice  = sp.minPrice ? Number(sp.minPrice) : undefined
-  const maxPrice  = sp.maxPrice ? Number(sp.maxPrice) : undefined
+  const { sort, category: catSlug, page, instock, minPrice, maxPrice } = sp
   const offset    = (page - 1) * PAGE_SIZE
 
-  const allCategories = buildCategories(storeData)
+  const allCategories = buildBrowseCategories(storeData)
+  if (catSlug && !allCategories.some(c => c.slug === catSlug)) notFound()
 
   const withImages = getProductsWithImages(storeData)
   const allProducts = normalizeProducts(withImages)
@@ -98,10 +96,13 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
   const { pageItems: paged, totalPages, totalCount: count } = paginateProducts(products, page, PAGE_SIZE)
   const paginationItems = buildPaginationList(page, totalPages)
 
-  const urlState = { sort, category: catSlug, state: '', instock, minPrice: sp.minPrice, maxPrice: sp.maxPrice }
+  const urlState = { sort, category: catSlug, state: '', instock, minPrice: minPrice != null ? String(minPrice) : undefined, maxPrice: maxPrice != null ? String(maxPrice) : undefined }
   function url(overrides: Parameters<typeof buildProductsUrl>[1]) {
     return buildProductsUrl(urlState, overrides, BASE_PATH)
   }
+
+  // Past-the-last-page → last real page (see Issue 6.3).
+  if (totalPages > 0 && page > totalPages) redirect(url({ page: String(totalPages) }))
 
   return (
     <div style={{ background: '#f9f4ec', minHeight: '100vh' }}>
@@ -123,7 +124,7 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
             }
           </nav>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
+            <h1 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
               fontWeight: 700, color: '#fff', margin: 0, fontStyle: 'italic' }}>
               {activeCat ? activeCat.name : 'New Arrivals'}
             </h1>
@@ -327,8 +328,8 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
         sortOptions={SORT_OPTIONS}
         priceBounds={priceBounds}
         priceCurrent={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
-        minPriceParam={sp.minPrice}
-        maxPriceParam={sp.maxPrice}
+        minPriceParam={minPrice != null ? String(minPrice) : undefined}
+        maxPriceParam={maxPrice != null ? String(maxPrice) : undefined}
         basePath={BASE_PATH}
         allLabel="🆕 All New Arrivals"
         clearAllHref={BASE_PATH}

@@ -36,6 +36,22 @@ export function buildProductsUrl(
     page:     '1',
     ...overrides,
   }
+  // BUG FIX (Issue 6.5): the price range is bounded by the category/state
+  // filtered set, so a range picked in an expensive category can be empty or
+  // inverted (₹500–₹300) in a cheaper one. When a link changes the category or
+  // state and doesn't say anything explicit about price, drop the price range.
+  const changesScope =
+    ('category' in overrides && (overrides.category || '') !== (current.category || '')) ||
+    ('state' in overrides && (overrides.state || '') !== (current.state || ''))
+  if (changesScope) {
+    if (!('minPrice' in overrides)) merged.minPrice = undefined
+    if (!('maxPrice' in overrides)) merged.maxPrice = undefined
+  }
+  // BUG FIX (Issue 6.4): toggle links pass the string 'false' to turn the
+  // in-stock filter off, which is truthy and was emitted as ?instock=false.
+  // Only 'true' is a real value.
+  if (merged.instock !== 'true') merged.instock = undefined
+
   // BUG FIX (URL hygiene): every generated link used to always stamp
   // `?sort=newest&page=1` even for the plain "All Products" link with no
   // active filters at all — functionally harmless (those are the defaults)

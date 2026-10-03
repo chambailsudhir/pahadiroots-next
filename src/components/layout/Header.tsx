@@ -271,7 +271,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-acct-av{
           width:28px;height:28px;border-radius:50%;
           background:#c8920a;color:#fff;font-size:12px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;
+          display:flex;align-items:center;justify-content:center;font-family:var(--font-playfair),'Playfair Display',serif;
         }
         .old-acct-dot{
           position:absolute;top:5px;right:4px;

@@ -358,15 +358,15 @@ export default function AuthModal() {
           .am-close{position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;z-index:2;transition:background .2s}
           .am-close:hover{background:rgba(255,255,255,.35)}
           .am-head{background:linear-gradient(135deg,#1a3a1e,#2d5233);padding:24px 24px 20px}
-          .am-logo{font-family:'Playfair Display',serif;font-size:18px;font-weight:900;color:#fff}
+          .am-logo{font-family:var(--font-playfair),'Playfair Display',serif;font-size:18px;font-weight:900;color:#fff}
           .am-logo-sub{font-size:10px;color:rgba(255,255,255,.6);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
           .am-tabs{display:flex;border-bottom:1px solid #eee}
           .am-tab{flex:1;padding:13px;border:none;background:#f9f9f9;font-size:13px;font-weight:700;color:#888;cursor:pointer;font-family:inherit;transition:all .2s;border-bottom:2.5px solid transparent}
           .am-tab.active{background:#fff;color:#1a3a1e;border-bottom-color:#1a3a1e}
           .am-body{padding:20px 24px 24px}
           .am-back{background:none;border:none;color:#1a3a1e;font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px;font-family:inherit}
-          .am-sec-title{font-family:'Playfair Display',serif;font-size:20px;color:#1a3a1e;margin-bottom:16px}
-          .am-greeting{font-family:'Playfair Display',serif;font-size:17px;color:#1a1a1a;font-weight:700;margin-bottom:3px}
+          .am-sec-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:20px;color:#1a3a1e;margin-bottom:16px}
+          .am-greeting{font-family:var(--font-playfair),'Playfair Display',serif;font-size:17px;color:#1a1a1a;font-weight:700;margin-bottom:3px}
           .am-greeting-sub{font-size:12px;color:#888;margin-bottom:16px}
           .am-google{width:100%;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit;transition:all .2s;color:#333;margin-bottom:0}
           .am-google:hover{border-color:#1a3a1e;background:#f9fdf9}

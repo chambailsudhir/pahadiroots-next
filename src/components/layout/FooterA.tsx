@@ -66,7 +66,7 @@ export default function FooterA({ settings }: Props) {
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
           <div>
-            <h4 style={{ fontFamily: '"Playfair Display",serif', fontSize: '18px', fontWeight: 900, color: '#fff', marginBottom: '4px', margin: '0 0 4px' }}>
+            <h4 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '18px', fontWeight: 900, color: '#fff', marginBottom: '4px', margin: '0 0 4px' }}>
               🌿 Join the Pahadi Family
             </h4>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.55)', margin: 0 }}>
@@ -170,7 +170,7 @@ export default function FooterA({ settings }: Props) {
 
         {/* Brand text */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: '"Playfair Display",serif', fontSize: '26px', fontWeight: 900, color: '#fff', lineHeight: 1.1, marginBottom: '4px' }}>
+          <div style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '26px', fontWeight: 900, color: '#fff', lineHeight: 1.1, marginBottom: '4px' }}>
             HimVeda by Pahadi Roots
           </div>
           <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', color: '#c8920a', textTransform: 'uppercase', marginBottom: '12px' }}>

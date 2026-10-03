@@ -163,7 +163,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
             <span>/</span>
             <span style={{ color: '#fff' }}>{state.name}</span>
           </div>
-          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)', fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
+          <h1 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)', fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
             {meta?.emoji ? `${meta.emoji} ` : ''}{state.name}
           </h1>
           {meta?.tagline && (
@@ -179,7 +179,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
         {/* State description */}
         {(meta?.description || state.description) && (
           <div style={{ maxWidth: '700px', marginBottom: '36px' }}>
-            <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '20px', fontWeight: 700, color: '#1a3a1e', marginBottom: '10px' }}>
+            <h2 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '20px', fontWeight: 700, color: '#1a3a1e', marginBottom: '10px' }}>
               About {state.name}
             </h2>
             <p style={{ color: '#555', lineHeight: 1.8, fontSize: '14px' }}>
@@ -200,7 +200,7 @@ export default async function RegionPage({ params, searchParams }: Props) {
         {/* Products section */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-            <h2 style={{ fontFamily: '"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
+            <h2 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '22px', fontWeight: 700, color: '#1a3a1e' }}>
               Products from {state.name}
               <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 400, fontFamily: 'Lato,sans-serif', color: '#666', fontStyle: 'normal' }}>
                 ({stateProducts.length})

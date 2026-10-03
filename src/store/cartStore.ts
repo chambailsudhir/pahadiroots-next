@@ -218,7 +218,7 @@ export const useCartStore = create<CartStore>()(
     }),
     {
       name:    'pr-cart',
-      version: 4,  // bumped: coerces productId/variantId to strings (see migrate below)
+      version: 5,  // v5: strips the legacy " (size)" suffix from PDP-added item names (see migrate below)
       skipHydration: true,
       // FIX: localStorage quota guard. On iOS Safari under storage pressure,
       // localStorage.setItem() throws a QuotaExceededError silently — Zustand's
@@ -272,7 +272,10 @@ export const useCartStore = create<CartStore>()(
       // v3: items persisted without maxQty.
       // v4: items persisted with productId/variantId possibly still numbers
       //     from before every add-to-cart call site wrapped them in
-      //     String(...) — coerce on load (current).
+      //     String(...) — coerce on load.
+      // v5: PDP-added items used to store name as "Product (500g)" while card/
+      //     quick-view adds stored the plain name — strip the " (size)" suffix
+      //     so the cart shows the size once (current).
       //
       // BUG FIX (live "Expected string, received number" 400 at checkout):
       // CartItem.productId/variantId are typed `string` at compile time, but
@@ -324,6 +327,26 @@ export const useCartStore = create<CartStore>()(
               productId: item.productId != null ? String(item.productId) : item.productId,
               variantId: item.variantId != null ? String(item.variantId) : item.variantId,
             })),
+          }
+        }
+
+        // v4 → v5: drop the " (size)" suffix the PDP used to append to `name`.
+        // Only strips when the suffix exactly matches the item's own `size`, so
+        // a product genuinely named e.g. "Mix (Hot)" is never touched.
+        if (fromVersion < 5) {
+          const items = (state.items as Array<Record<string, unknown>> | undefined) ?? []
+          state = {
+            ...state,
+            items: items.map(item => {
+              const { name, size } = item
+              if (typeof name === 'string' && typeof size === 'string' && size) {
+                const suffix = ` (${size})`
+                if (name.endsWith(suffix) && name.length > suffix.length) {
+                  return { ...item, name: name.slice(0, -suffix.length) }
+                }
+              }
+              return item
+            }),
           }
         }
 

@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
+import { notFound, redirect } from 'next/navigation'
+import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, getEffectivePrice, toCardProductData } from '@/lib/normalizeProduct'
 import { filterProducts, sortProducts, paginateProducts, buildPaginationList } from '@/lib/filterAndSortProducts'
 import { buildProductsUrl } from '@/lib/buildProductsUrl'
+import { parseBrowseParams, type RawBrowseParams } from '@/lib/browseParams'
 import ProductCard from '@/components/product/ProductCard'
 import MobileFilterBar from '@/components/product/MobileFilterBar'
 import PriceRangeFilter from '@/components/product/PriceRangeFilter'
@@ -21,7 +23,7 @@ const SORT_OPTIONS = [
   { value: 'popular',    label: 'Best Sellers',        icon: '⭐' },
 ]
 
-interface SP { sort?: string; category?: string; page?: string; instock?: string; state?: string; minPrice?: string; maxPrice?: string }
+type SP = RawBrowseParams
 
 // BUG FIX (Next.js 15+/16 migration — CRITICAL, newly found during this pass):
 // `searchParams` is a Promise in Next.js 15+/16 (every other dynamic page in
@@ -38,14 +40,14 @@ interface SP { sort?: string; category?: string; page?: string; instock?: string
 interface Props { searchParams: Promise<SP> }
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const sp = await searchParams
+  const sp = parseBrowseParams(await searchParams)
   const storeData = await getStoreData()
-  const categories = buildCategories(storeData)
-  const activeCat = categories.find(c => c.slug === (sp.category || ''))
+  const categories = buildBrowseCategories(storeData)
+  const activeCat = categories.find(c => c.slug === sp.category)
   const activeState = sp.state
     ? (storeData.states || []).find((s: any) => String(s.id) === String(sp.state))
     : null
-  const page = Math.max(1, parseInt(sp.page || '1'))
+  const page = sp.page
 
   // BUG FIX (SEO — newly found): metadata was a static export, so every
   // category, state, sort, and page URL served an identical title/description.
@@ -66,10 +68,10 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const params = new URLSearchParams()
   if (sp.category) params.set('category', sp.category)
   if (sp.state)    params.set('state', sp.state)
-  if (sp.sort && sp.sort !== 'newest') params.set('sort', sp.sort)
+  if (sp.sort !== 'newest') params.set('sort', sp.sort)
   if (page > 1)    params.set('page', String(page))
-  if (sp.minPrice) params.set('minPrice', sp.minPrice)
-  if (sp.maxPrice) params.set('maxPrice', sp.maxPrice)
+  if (sp.minPrice != null) params.set('minPrice', String(sp.minPrice))
+  if (sp.maxPrice != null) params.set('maxPrice', String(sp.maxPrice))
   const qs = params.toString()
 
   return {
@@ -78,25 +80,22 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     alternates: { canonical: `/products${qs ? '?' + qs : ''}` },
     // Filtered/paginated combinations are useful to users but shouldn't
     // compete with the canonical category page in search results.
-    robots: (sp.instock === 'true' || page > 1 || sp.minPrice || sp.maxPrice) ? { index: false, follow: true } : undefined,
+    robots: (sp.instock || page > 1 || sp.minPrice != null || sp.maxPrice != null) ? { index: false, follow: true } : undefined,
   }
 }
 
 export default async function ProductsPage({ searchParams }: Props) {
-  const sp        = await searchParams
+  const sp        = parseBrowseParams(await searchParams)
   const storeData = await getStoreData()
 
-  const sort      = sp.sort     || 'newest'
-  const catSlug   = sp.category || ''
-  const stateId   = sp.state    || ''
-  const page      = Math.max(1, parseInt(sp.page || '1'))
-  const instock   = sp.instock  === 'true'
-  const minPrice  = sp.minPrice ? Number(sp.minPrice) : undefined
-  const maxPrice  = sp.maxPrice ? Number(sp.maxPrice) : undefined
+  const { sort, category: catSlug, state: stateId, page, instock, minPrice, maxPrice } = sp
   const offset    = (page - 1) * PAGE_SIZE
 
-  const categories  = buildCategories(storeData)
+  const categories  = buildBrowseCategories(storeData)
   const activeCat   = categories.find(c => c.slug === catSlug)
+  // An unknown ?category= slug used to fall through to "All Products" with the
+  // wrong title; a bad slug is a 404, not the whole catalogue.
+  if (catSlug && !activeCat) notFound()
 
   // Resolve state name for display
   const activeState = stateId
@@ -133,10 +132,15 @@ export default async function ProductsPage({ searchParams }: Props) {
   const { pageItems: paged, totalPages, totalCount: count } = paginateProducts(products, page, PAGE_SIZE)
   const paginationItems = buildPaginationList(page, totalPages)
 
-  const urlState = { sort, category: catSlug, state: stateId, instock, minPrice: sp.minPrice, maxPrice: sp.maxPrice }
+  const urlState = { sort, category: catSlug, state: stateId, instock, minPrice: minPrice != null ? String(minPrice) : undefined, maxPrice: maxPrice != null ? String(maxPrice) : undefined }
   function url(overrides: Parameters<typeof buildProductsUrl>[1]) {
     return buildProductsUrl(urlState, overrides)
   }
+
+  // BUG FIX (Issue 6.3): a page number past the last page rendered "No
+  // products found" beside a "Showing 24-24 of 24" count. Send it to the
+  // last real page instead.
+  if (totalPages > 0 && page > totalPages) redirect(url({ page: String(totalPages) }))
 
   const pageTitle = activeState ? `${activeState.name} Products`
     : activeCat ? activeCat.name
@@ -161,7 +165,7 @@ export default async function ProductsPage({ searchParams }: Props) {
               : <span style={{ color: '#fff' }}>All Products</span>
             }
           </nav>
-          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
+          <h1 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
             fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>
             {pageTitle}
           </h1>
@@ -345,8 +349,8 @@ export default async function ProductsPage({ searchParams }: Props) {
         sortOptions={SORT_OPTIONS}
         priceBounds={priceBounds}
         priceCurrent={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
-        minPriceParam={sp.minPrice}
-        maxPriceParam={sp.maxPrice}
+        minPriceParam={minPrice != null ? String(minPrice) : undefined}
+        maxPriceParam={maxPrice != null ? String(maxPrice) : undefined}
       />
 
       <style>{`

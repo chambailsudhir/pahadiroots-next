@@ -3,49 +3,22 @@
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense, useEffect, useMemo } from 'react'
-import useSWR from 'swr'
-import { supabase } from '@/lib/supabase'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { useSearchCatalog } from '@/hooks/useSearchCatalog'
+import { toCardProductData } from '@/lib/normalizeProduct'
 import ProductCard from '@/components/product/ProductCard'
 import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import { trackSearch } from '@/lib/analytics/track'
 import { searchProducts } from '@/lib/productSearch'
-import type { Product } from '@/types'
 
 function SearchContent() {
   const searchParams = useSearchParams()
   const q = searchParams.get('q')?.trim() || ''
 
-  // SEARCH FIX: was a SQL `.ilike('name', '%q%')` — literal substring only, so
-  // "seab" missed "Sea Buckthorn" and any typo returned nothing. The active
-  // catalog is now fetched once (cached) and ranked by searchProducts()
-  // (lib/productSearch.ts): spaces ignored, partial words OK, small typos
-  // forgiven. (Earlier note kept: `tags` is a Postgres ARRAY column, so
-  // `ilike` on it is invalid and made the whole query fail silently — tag
-  // matching can come back later via an RPC using unnest(tags).)
-  const { data: catalog, isLoading, error } = useSWR<Product[]>(
-    q ? 'search-full-catalog' : null,
-    async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id, name, slug, emoji, price, selling_price, mrp, available_stock, gst_rate,
-          image_url, unit_label, badges,
-          category_id, is_deleted, status,
-          categories:categories(id, name, slug),
-          product_variants(id, price, original_price, variant_value, available_stock, is_active)
-        `)
-        .eq('is_deleted', false)
-        .eq('status', 'active')
-        .limit(500)
-      if (error) {
-        console.error('[search] product search query failed', error)
-        throw error
-      }
-      return normalizeProducts(data ?? [])
-    },
-    { revalidateOnFocus: false },
-  )
+  // Catalogue comes from /api/v1/search-catalog (the same server-normalized
+  // data Browse renders from — product_images, state_id, variants, no 500-row
+  // cap), then is ranked client-side by searchProducts() (lib/productSearch.ts:
+  // spaces ignored, partial words OK, small typos forgiven).
+  const { data: catalog, isLoading, error } = useSearchCatalog(!!q)
 
   const results = useMemo(
     () => (catalog && q ? searchProducts(catalog, q, 48) : undefined),
@@ -73,12 +46,21 @@ function SearchContent() {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-stone-900">
-          {isLoading || (!results && !error) ? 'Searching…' : `${results?.length || 0} results for "${q}"`}
+          {isLoading || (!results && !error) ? 'Searching…' : error ? 'Search unavailable' : `${results?.length || 0} results for "${q}"`}
         </h1>
       </div>
 
       {isLoading || (!results && !error) ? (
         <ProductGridSkeleton count={8} />
+      ) : error ? (
+        <div role="alert" className="text-center py-20">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h3 className="text-lg font-semibold text-stone-700 mb-2">Search is unavailable right now</h3>
+          <p className="text-stone-400 text-sm mb-5">Please try again in a moment.</p>
+          <Link href="/products" className="text-forest-700 font-semibold text-sm hover:underline">
+            Browse all products →
+          </Link>
+        </div>
       ) : results && results.length > 0 ? (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
           {results.map((p, i) => (

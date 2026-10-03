@@ -1015,7 +1015,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">01 — Origin</div>
                   <h3 className="pdp-sb-tl-title">Where the wild valleys begin the story.</h3>
-                  <p className="pdp-sb-tl-desc">High in the untouched Himalayas, where clean air, pure water and abundant biodiversity create the perfect home for nature's treasures.</p>
+                  <p className="pdp-sb-tl-desc">High in the untouched Himalayas, where clean air, pure water and abundant biodiversity create the perfect home for nature&apos;s treasures.</p>
                 </div>
               </div>
 
@@ -1104,7 +1104,7 @@ export default async function ProductPage({ params }: Props) {
               </svg>
               <div className="pdp-why-diff-head-row">
                 <span className="pdp-why-diff-rule" aria-hidden="true"></span>
-                <div className="pdp-journey-eyebrow">Why It's Different</div>
+                <div className="pdp-journey-eyebrow">Why It&apos;s Different</div>
                 <span className="pdp-why-diff-rule" aria-hidden="true"></span>
               </div>
             </div>
@@ -1171,7 +1171,7 @@ export default async function ProductPage({ params }: Props) {
         {isGheePdp && (
           <div className="pdp-why-diff">
             <div className="pdp-journey-head">
-              <div className="pdp-journey-eyebrow">Why It's Different</div>
+              <div className="pdp-journey-eyebrow">Why It&apos;s Different</div>
             </div>
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card img-card">
@@ -1217,7 +1217,7 @@ export default async function ProductPage({ params }: Props) {
               </svg>
               <div className="pdp-why-diff-head-row">
                 <span className="pdp-why-diff-rule" aria-hidden="true"></span>
-                <div className="pdp-journey-eyebrow">Why It's Different</div>
+                <div className="pdp-journey-eyebrow">Why It&apos;s Different</div>
                 <span className="pdp-why-diff-rule" aria-hidden="true"></span>
               </div>
             </div>
@@ -1435,7 +1435,7 @@ export default async function ProductPage({ params }: Props) {
               </p>
             </div>
             <div className="pdp-why-diff-grid">
-              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Colour</div><div className="pdp-why-diff-desc">Can shift lighter or darker between harvests depending on the season's bloom.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Colour</div><div className="pdp-why-diff-desc">Can shift lighter or darker between harvests depending on the season&apos;s bloom.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Aroma &amp; Taste</div><div className="pdp-why-diff-desc">Floral character varies with whatever was blooming at harvest time.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — a sign of purity, not spoilage. Warm the jar gently in lukewarm water if you prefer it liquid.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Storage</div><div className="pdp-why-diff-desc">Keep it cool and dark in an airtight glass jar — avoid plastic and direct sunlight.</div></div>
@@ -1470,7 +1470,7 @@ export default async function ProductPage({ params }: Props) {
                   : '[ADD VERIFIED SOURCE INFORMATION]'}
               </AccItem>
               <AccItem title="How can I verify my batch?" icon="cert">
-                [ADD VERIFIED SOURCE INFORMATION] — batch-level traceability isn't available yet.
+                [ADD VERIFIED SOURCE INFORMATION] — batch-level traceability isn&apos;t available yet.
               </AccItem>
 
               <AccItem title="Shipping" icon="ship">

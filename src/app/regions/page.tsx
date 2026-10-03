@@ -86,7 +86,7 @@ export default async function RegionsPage() {
     if (!stateImageMap[String(s.id)] && s.image_path) stateImageMap[String(s.id)] = s.image_path
   })
 
-  const serif = '"Playfair Display",Georgia,serif'
+  const serif = 'var(--font-playfair),"Playfair Display",Georgia,serif'
   const sans  = 'Lato,sans-serif'
 
   return (

@@ -819,7 +819,7 @@ ul.mega-list.mega-list-2col {
         .old-logo-icon{height:44px;width:auto;object-fit:contain;flex-shrink:0}
         .old-logo-text{display:flex;flex-direction:column;line-height:1.15}
         .old-logo-title{
-          font-family:'Playfair Display',serif;font-weight:800;font-size:19px;
+          font-family:var(--font-playfair),'Playfair Display',serif;font-weight:800;font-size:19px;
           color:#1a3a1e;letter-spacing:.2px;white-space:nowrap;
         }
         /* BUG FIX (P2): #c8920a on white computes to ~2.77:1 contrast —
@@ -849,7 +849,7 @@ ul.mega-list.mega-list-2col {
         .old-acct-av{
           width:28px;height:28px;border-radius:50%;
           background:#c8920a;color:#fff;font-size:12px;font-weight:900;
-          display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;
+          display:flex;align-items:center;justify-content:center;font-family:var(--font-playfair),'Playfair Display',serif;
         }
         .old-acct-dot{
           position:absolute;top:5px;right:4px;

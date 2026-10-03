@@ -5,7 +5,7 @@
 // doesn't spam the router with a full navigation per pixel. Local state
 // drives the visual thumb/track position while dragging for instant feedback.
 
-import { useState } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { buildProductsUrl, type ProductsUrlState } from '@/lib/buildProductsUrl'
 import { formatPrice } from '@/lib/utils'
@@ -33,7 +33,16 @@ export default function PriceRangeFilter({ bounds, current, urlState, basePath =
   const leftPct  = ((minVal - bounds.min) / span) * 100
   const rightPct = ((maxVal - bounds.min) / span) * 100
 
+  // BUG FIX (Issue 6.6): onKeyUp fired for EVERY key, so tabbing across the
+  // slider pushed a navigation with no change. Only commit on the keys that
+  // actually move a range input, and never when nothing changed.
+  const COMMIT_KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']
+  function commitOnKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (COMMIT_KEYS.includes(e.key)) commit(minVal, maxVal)
+  }
+
   function commit(nextMin: number, nextMax: number) {
+    if (nextMin === current.min && nextMax === current.max) return
     const url = buildProductsUrl(urlState, {
       minPrice: nextMin > bounds.min ? String(nextMin) : undefined,
       maxPrice: nextMax < bounds.max ? String(nextMax) : undefined,
@@ -61,7 +70,7 @@ export default function PriceRangeFilter({ bounds, current, urlState, basePath =
           onChange={e => setMinVal(Math.min(Number(e.target.value), maxVal - 1))}
           onMouseUp={() => commit(minVal, maxVal)}
           onTouchEnd={() => commit(minVal, maxVal)}
-          onKeyUp={() => commit(minVal, maxVal)}
+          onKeyUp={commitOnKey}
           className="prf-input prf-input-min"
         />
         <input
@@ -73,7 +82,7 @@ export default function PriceRangeFilter({ bounds, current, urlState, basePath =
           onChange={e => setMaxVal(Math.max(Number(e.target.value), minVal + 1))}
           onMouseUp={() => commit(minVal, maxVal)}
           onTouchEnd={() => commit(minVal, maxVal)}
-          onKeyUp={() => commit(minVal, maxVal)}
+          onKeyUp={commitOnKey}
           className="prf-input prf-input-max"
         />
       </div>

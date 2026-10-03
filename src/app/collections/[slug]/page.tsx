@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
-import { getStoreData, buildCategories, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData, getEffectivePrice } from '@/lib/normalizeProduct'
+import { notFound, redirect } from 'next/navigation'
+import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
+import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { filterProducts, sortProducts, paginateProducts } from '@/lib/filterAndSortProducts'
+import { parseBrowseParams } from '@/lib/browseParams'
 import ProductCard from '@/components/product/ProductCard'
 import CategoryMotif from '@/components/collections/CategoryMotif'
 import type { Product } from '@/types'
@@ -13,7 +15,7 @@ export const revalidate = 60
 // now Promises in Server Components — must be awaited before use.
 interface Props {
   params:       Promise<{ slug: string }>
-  searchParams: Promise<{ sort?: string; page?: string; instock?: string }>
+  searchParams: Promise<{ sort?: string | string[]; page?: string | string[]; instock?: string | string[] }>
 }
 
 const PAGE_SIZE = 24
@@ -43,8 +45,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   // with the real category page. Same fix already applied on /products —
   // canonical always points at the clean category URL, and any filtered/
   // paginated variant is explicitly noindexed so it never competes.
-  const page = Math.max(1, parseInt(sp.page || '1'))
-  const isFiltered = page > 1 || sp.instock === 'true' || (sp.sort && sp.sort !== 'newest')
+  const parsed = parseBrowseParams(sp)
+  const page = parsed.page
+  const isFiltered = page > 1 || parsed.instock || parsed.sort !== 'newest'
 
   return {
     title:       `${cat.name} — Himalayan ${cat.name} | HimVeda by Pahadi Roots`,
@@ -80,11 +83,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   if (!cat) notFound()
 
   // All categories for the nav bar (apply images same way)
-  const allCategories = buildCategories(storeData)
+  const allCategories = buildBrowseCategories(storeData)
 
-  const sort    = sp.sort    || 'newest'
-  const page    = Math.max(1, parseInt(sp.page || '1'))
-  const instock = sp.instock === 'true'
+  const { sort, page, instock } = parseBrowseParams(sp)
   const offset  = (page - 1) * PAGE_SIZE
 
   // BUG FIX (price mismatch — this page showed a different price than the
@@ -101,39 +102,35 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   const allProductsWithImages = getProductsWithImages(storeData)
   const allNormalized = normalizeProducts(allProductsWithImages)
 
-  // Filter by this category
-  let catProducts = allNormalized.filter((p: any) => String(p.category_id) === String(cat.id))
-  if (instock) catProducts = catProducts.filter((p: any) => (p.available_stock ?? 0) > 0)
+  // BUG FIX (Issue 4 of the Oct 2026 audit): this page had its own copy of
+  // the In Stock filter and sort. The filter used the raw top-level
+  // `available_stock`, which disagrees with the stock ProductCard shows (the
+  // base variant's), and the "popular" sort compared only the bestseller badge
+  // with no tie-breaker, so equal items had unstable order. /products and
+  // /new-arrivals already use the shared helpers; so does this page now.
+  const catProducts = sortProducts(
+    filterProducts(allNormalized, { categoryId: cat.id, inStockOnly: instock }),
+    sort,
+  )
 
-  // Sort
-  switch (sort) {
-    // BUG FIX (found during Aug 2026 catalogue-wide audit): was sorting by
-    // raw a.price/b.price — the top-level products.price column, which is
-    // legacy and no longer written by the pricing engine (confirmed
-    // disagreeing with the real price for nearly the whole catalogue).
-    // ProductCard actually displays getEffectivePrice() (the base variant's
-    // price), so "Price ↑/↓" could visibly disagree with the prices shown
-    // on the very cards it was sorting. Every other listing page
-    // (new-arrivals, /products, BestSellersClient) already sorts by
-    // getEffectivePrice/getEffectiveMrp for this exact reason — this page
-    // was the one outlier still comparing the raw column directly.
-    case 'price_asc':  catProducts.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));  break
-    case 'price_desc': catProducts.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a));  break
-    case 'popular':    catProducts.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0)); break
-    default:           catProducts.sort((a: any, b: any) => new Date(b.created_at||0).getTime() - new Date(a.created_at||0).getTime())
-  }
-
-  const count      = catProducts.length
-  const products   = catProducts.slice(offset, offset + PAGE_SIZE) as Product[]
-  const totalPages = Math.ceil(count / PAGE_SIZE)
+  const { pageItems, totalPages, totalCount: count } = paginateProducts(catProducts, page, PAGE_SIZE)
+  const products   = pageItems as Product[]
   const catSlug    = cat.slug
 
   function url(overrides: Record<string, string | undefined>) {
     const p = new URLSearchParams()
-    const vals = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
+    const vals: Record<string, string | undefined> = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
+    // 'false' is how the toggle link says "turn off" — never emit it (Issue 6.4).
+    if (vals.instock !== 'true') vals.instock = undefined
+    if (vals.sort === 'newest') vals.sort = undefined
+    if (vals.page === '1') vals.page = undefined
     Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v) })
-    return `/collections/${catSlug}?${p.toString()}`
+    const q = p.toString()
+    return `/collections/${catSlug}${q ? '?' + q : ''}`
   }
+
+  // Past-the-last-page → last real page (Issue 6.3).
+  if (totalPages > 0 && page > totalPages) redirect(url({ page: String(totalPages) }))
 
   // BUG FIX (Aug 23 2026 — user flagged the collection hero's product photo
   // as still looking wrong, circled on Himalayan Tea): the featured product
@@ -244,7 +241,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
             <span>/</span>
             <span style={{ color: '#fff' }}>{cat.name}</span>
           </div>
-          <h1 style={{ fontFamily: '"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
+          <h1 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: 'clamp(26px,4vw,44px)',
             fontWeight: 700, color: '#fff', margin: '0 0 8px', fontStyle: 'italic' }}>{cat.name}</h1>
           <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             {cat.description && (

@@ -31,7 +31,7 @@
 }
 
 .title {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
   font-size: 17px;
   font-weight: 700;
   color: #fff;

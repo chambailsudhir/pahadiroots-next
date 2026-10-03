@@ -150,7 +150,12 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     addItem({
       productId: String(product.id),
       variantId,
-      name:      product.name + (size ? ` (${size})` : ''),
+      // BUG FIX (Issue 8, Oct 2026 audit): the size used to be baked into the
+      // name here AND stored in `size`, while ProductCard/QuickViewModal add
+      // the plain product name. CartItemCard/CartDrawer render name + a size
+      // chip, so PDP-added items showed the size twice ("Honey (500g)" + a
+      // 500g chip). One convention everywhere: plain name, size in `size`.
+      name:      product.name,
       slug:      product.slug,
       image:     product.image_url,
       emoji:     product.emoji,

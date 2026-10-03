@@ -56,13 +56,23 @@ describe('buildProductsUrl', () => {
     expect(params.get('maxPrice')).toBe('800')
   })
 
-  it('preserves an existing price range when only the category changes', () => {
+  // Issue 6.5 (Oct 2026 audit): the price range is bounded by the category's
+  // own products, so it is reset when the category changes (it used to carry
+  // over, which could yield zero results or an inverted range).
+  it('resets the price range when the category changes', () => {
     const withPrice = { ...base, minPrice: '100', maxPrice: '500' }
     const url = buildProductsUrl(withPrice, { category: 'honey' })
     const params = new URLSearchParams(url.split('?')[1])
+    expect(params.get('minPrice')).toBeNull()
+    expect(params.get('maxPrice')).toBeNull()
+    expect(params.get('category')).toBe('honey')
+  })
+
+  it('keeps the price range when the category override equals the current category', () => {
+    const withPrice = { ...base, category: 'honey', minPrice: '100', maxPrice: '500' }
+    const params = new URLSearchParams(buildProductsUrl(withPrice, { category: 'honey' }).split('?')[1])
     expect(params.get('minPrice')).toBe('100')
     expect(params.get('maxPrice')).toBe('500')
-    expect(params.get('category')).toBe('honey')
   })
 
   it('explicitly clearing the price range removes both params', () => {

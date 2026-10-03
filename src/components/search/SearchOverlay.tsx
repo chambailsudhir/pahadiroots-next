@@ -4,13 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
 import { useUIStore } from '@/store/uiStore'
-import { supabase } from '@/lib/supabase'
-import { normalizeProducts, getEffectivePrice, getEffectiveStock } from '@/lib/normalizeProduct'
+import { useSearchCatalog } from '@/hooks/useSearchCatalog'
+import { getEffectivePrice, getEffectiveStock } from '@/lib/normalizeProduct'
 import { formatPrice } from '@/lib/utils'
 import { searchProducts } from '@/lib/productSearch'
-import type { Product } from '@/types'
 
 const RECENT_KEY = 'pr-recent-searches'
 
@@ -89,29 +87,12 @@ export default function SearchOverlay() {
 
   const debouncedQ = useDebounce(query, 250)
 
-  // SEARCH FIX: this used to run `.ilike('name', '%query%')` in SQL — a literal
-  // substring match — so "seab" found nothing for "Sea Buckthorn" (the space
-  // breaks the substring), and any typo ("hunny") found nothing either. Now the
-  // active catalog is fetched ONCE (cached by SWR, shared across keystrokes)
-  // and ranked client-side by searchProducts() in lib/productSearch.ts, which
-  // ignores spaces/punctuation, matches partial words and forgives small typos.
-  // Typing no longer fires a network request per keystroke, either.
-  const { data: catalog } = useSWR<Product[]>(
-    isOpen ? 'search-overlay-catalog' : null,
-    async () => {
-      // Joins product_variants (same embed as the shared PRODUCT_SELECT in
-      // normalizeProduct.ts, incl. original_price-not-mrp) so the price/stock
-      // shown here matches ProductCard.
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, slug, emoji, price, mrp, image_url, available_stock, status, is_deleted, product_variants(id, price, original_price, variant_value, available_stock, is_active)')
-        .eq('is_deleted', false)
-        .eq('status', 'active')
-        .limit(500)
-      return normalizeProducts(data ?? [])
-    },
-    { revalidateOnFocus: false, dedupingInterval: 60_000 },
-  )
+  // Catalogue comes from /api/v1/search-catalog — the same server-normalized
+  // data Browse renders from, so image/price/stock match the product cards —
+  // fetched once (shared SWR cache) and ranked client-side by searchProducts()
+  // in lib/productSearch.ts (ignores spaces/punctuation, partial words, small
+  // typos). No network request per keystroke.
+  const { data: catalog, error: catalogError } = useSearchCatalog(isOpen)
 
   const results = useMemo(
     () => (catalog && debouncedQ.trim().length >= 2 ? searchProducts(catalog, debouncedQ, 6) : undefined),
@@ -212,7 +193,13 @@ export default function SearchOverlay() {
 
           {/* Results */}
           <div className="max-h-80 overflow-y-auto">
-            {query.length >= 2 && results?.length === 0 && (
+            {query.length >= 2 && catalogError && (
+              <div role="alert" className="text-center py-8 text-sm text-stone-400">
+                Search is unavailable right now — please try again in a moment.
+              </div>
+            )}
+
+            {query.length >= 2 && !catalogError && results?.length === 0 && (
               <div className="text-center py-8 text-sm text-stone-400">
                 No products found for &quot;{query}&quot;
               </div>
