@@ -232,7 +232,10 @@ describe('createOrder — idempotency', () => {
   it('returns existing order immediately when idempotency_key already exists, without reserving stock or calling the RPC', async () => {
     mockDb.responses['orders'] = {
       id: 'order-existing-001', order_number: 'PREXIST01', total_amount: 500, order_status: 'confirmed',
+      payment_method: 'cod', loyalty_points_redeemed: 0,
     }
+    // P3: a reused key is only a retry when the stored order matches the request.
+    mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
     const { createOrder } = await import('@/lib/services/orderService')
     const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
 
@@ -242,6 +245,144 @@ describe('createOrder — idempotency', () => {
     // No order RPC call and no product/variant fetches — should short-circuit
     expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
     expect(fetchCalls.length).toBe(0)
+  })
+
+  // ── P3: the same key reused for a DIFFERENT request must never return the old order ──
+  describe('P3 — key reused with a different request throws IdempotencyConflictError', () => {
+    const existingOrder = {
+      id: 'order-existing-003', order_number: 'PREXIST03', total_amount: 500, order_status: 'pending',
+      payment_status: 'pending', payment_method: 'razorpay', loyalty_points_redeemed: 0,
+    }
+
+    const expectConflict = async (input: typeof BASE_INPUT | Record<string, unknown>) => {
+      const { createOrder, IdempotencyConflictError } = await import('@/lib/services/orderService')
+      await expect(createOrder(input as any, DEFAULT_SETTINGS)).rejects.toBeInstanceOf(IdempotencyConflictError)
+      // never reserved stock / created anything
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_stock_at_order')).toBeUndefined()
+    }
+
+    it('payment method switched (abandoned razorpay order must not be returned for a COD request)', async () => {
+      mockDb.responses['orders'] = { ...existingOrder, payment_method: 'razorpay' }
+      mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+      await expectConflict({ ...BASE_INPUT, paymentMethod: 'cod' })
+    })
+
+    it('quantity changed since the original order', async () => {
+      mockDb.responses['orders'] = { ...existingOrder, payment_method: 'cod' }
+      mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 1 }]
+      await expectConflict(BASE_INPUT) // BASE_INPUT asks for qty 2
+    })
+
+    it('redeemed loyalty points changed', async () => {
+      mockDb.responses['orders'] = { ...existingOrder, payment_method: 'cod', loyalty_points_redeemed: 100 }
+      mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+      await expectConflict(BASE_INPUT)
+    })
+
+    it('existing order is cancelled / payment_failed → start a new one', async () => {
+      mockDb.responses['orders'] = { ...existingOrder, payment_method: 'cod', order_status: 'payment_failed' }
+      mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+      await expectConflict(BASE_INPUT)
+    })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I3 / I2 — "no-variant" lines (variantId === productId) and variant ownership
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createOrder — I3: variantId === productId is only valid for products with NO active variants', () => {
+  const NV_ID = 'prod-nv-1'
+  const nvInput = { ...BASE_INPUT, items: [{ productId: NV_ID, variantId: NV_ID, qty: 1 }] }
+  const isPreflightLookup = (url: string, method: string) =>
+    method === 'GET' && url.includes('/product_variants') && url.includes(`product_id=in.(${NV_ID})`)
+  const nvProductRow = [{ id: NV_ID, name: 'Plain Salt', emoji: '🧂', gst_rate: 5, is_deleted: false, status: 'active', price: 100, selling_price: 100, mrp: 120, available_stock: 10 }]
+
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    mockDb.rpcResponses['reserve_product_stock_at_order'] = true
+    wireHappyPathFetch()
+  })
+
+  it('ATTACK: product that HAS active variants sent as variantId===productId → rejected BEFORE any stock is reserved', async () => {
+    routeFirst(isPreflightLookup, [{ id: 'var-expensive', product_id: NV_ID }])
+    const { createOrder } = await import('@/lib/services/orderService')
+
+    await expect(createOrder(nvInput, DEFAULT_SETTINGS)).rejects.toThrow(/multiple options/i)
+
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_product_stock_at_order')).toBeUndefined()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_stock_at_order')).toBeUndefined()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+    // and nothing needs restoring because nothing was reserved
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'restore_product_stock')).toBeUndefined()
+  })
+
+  it('fails CLOSED when the variants lookup itself fails (never prices from the products table on a guess)', async () => {
+    fetchRoutes.unshift({ match: isPreflightLookup, respond: () => ({ ok: false, status: 500, json: { message: 'db down' } }) })
+    const { createOrder } = await import('@/lib/services/orderService')
+
+    await expect(createOrder(nvInput, DEFAULT_SETTINGS)).rejects.toThrow()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_product_stock_at_order')).toBeUndefined()
+  })
+
+  it('genuine no-variant product (no active variants) is allowed and reserves from the PRODUCTS table', async () => {
+    routeFirst(isPreflightLookup, [])
+    routeFirst((url, method) => method === 'GET' && url.includes('/products') && url.includes(NV_ID), nvProductRow)
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(nvInput, DEFAULT_SETTINGS)
+
+    const reserve = mockDb.rpcCalls.find(c => c.rpcName === 'reserve_product_stock_at_order')
+    expect(reserve?.args).toEqual({ p_product_id: NV_ID, p_qty: 1 })
+  })
+
+  it('I2: a no-variant line is STORED with variant_id === product_id (no default-variant substitution), so every restore uses the product table', async () => {
+    routeFirst(isPreflightLookup, [])
+    routeFirst((url, method) => method === 'GET' && url.includes('/products') && url.includes(NV_ID), nvProductRow)
+    wireOrderRpcSuccess()
+
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(nvInput, DEFAULT_SETTINGS)
+
+    const rpc = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
+    const items = (rpc!.args as { p_items: Array<{ product_id: string; variant_id: string }> }).p_items
+    expect(items).toHaveLength(1)
+    expect(items[0].product_id).toBe(NV_ID)
+    expect(items[0].variant_id).toBe(NV_ID)
+    // …and the stored shape round-trips to the PRODUCT restore path
+    const { orderItemsToStockItems } = await import('@/lib/services/inventoryService')
+    expect(orderItemsToStockItems([{ product_id: NV_ID, variant_id: NV_ID, quantity: 1 }]))
+      .toEqual([{ variantId: NV_ID, productId: NV_ID, qty: 1 }])
+  })
+
+  it('a variant that belongs to a DIFFERENT product than the client named → rejected, and the reserved stock is restored', async () => {
+    // reservation succeeds for the variant, but the variant row says it belongs to another product
+    route(
+      (url, method) => method === 'GET' && url.includes('/product_variants') && url.includes('id=in.(var-uuid-9)'),
+      [{ id: 'var-uuid-9', price: 10, original_price: 20, is_active: true, available_stock: 5, product_id: 'some-other-product' }],
+    )
+    route((url, method) => method === 'GET' && url.includes('/products') && url.includes('some-other-product'),
+      [{ id: 'some-other-product', name: 'Other', emoji: '🌿', gst_rate: 5, is_deleted: false, status: 'active', price: 10, selling_price: 10, mrp: 20, available_stock: 5 }])
+    const { createOrder } = await import('@/lib/services/orderService')
+
+    await expect(
+      createOrder({ ...BASE_INPUT, items: [{ productId: PRODUCT_ID, variantId: 'var-uuid-9', qty: 1 }] }, DEFAULT_SETTINGS),
+    ).rejects.toThrow(/no longer available/i)
+
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'restore_stock')?.args).toEqual({ p_variant_id: 'var-uuid-9', p_qty: 1 })
+  })
+
+  it.each([
+    ['comma / filter injection in variantId', { productId: PRODUCT_ID, variantId: '1),or=(id.gt.0', qty: 1 }],
+    ['dots in productId',                       { productId: 'a.b',      variantId: VARIANT_ID,        qty: 1 }],
+    ['empty-ish whitespace id',                 { productId: ' ',        variantId: VARIANT_ID,        qty: 1 }],
+  ])('PS1: %s → rejected before any DB access', async (_label, item) => {
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, items: [item] }, DEFAULT_SETTINGS)).rejects.toThrow(/invalid cart item/i)
+    expect(mockDb.rpcCalls).toHaveLength(0)
   })
 })
 
@@ -767,7 +908,9 @@ describe('createOrder — confirmation_token generation (guest-safe order lookup
     mockDb.responses['orders'] = {
       id: 'order-existing-002', order_number: 'PREXIST02', total_amount: 500,
       order_status: 'confirmed', confirmation_token: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      payment_method: 'cod', loyalty_points_redeemed: 0,
     }
+    mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
     const { createOrder } = await import('@/lib/services/orderService')
     const result = await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
 

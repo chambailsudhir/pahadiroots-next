@@ -112,49 +112,9 @@ export async function reserveStockAtomicForOrder(
 // all restore errors are logged so ops can fix manually if needed.
 async function _restoreReserved(items: StockCheckItem[]): Promise<void> {
   if (items.length === 0) return
-  const db = getServiceClient()
-  for (const item of items) {
-    const isNoVariant = item.productId && item.variantId === item.productId
-    if (isNoVariant) {
-      // BUILD FIX: the Supabase RPC call returns a `PostgrestFilterBuilder`
-      // typed for the "restore_product_stock" RPC. It's PromiseLike (has
-      // `.then`) so `await` works, but its TS type does NOT extend `Promise`
-      // and has no `.catch` method — chaining `.catch(...)` directly on the
-      // builder fails type-checking ("Property 'catch' does not exist...").
-      // Fix: await inside try/catch, same error-swallowing behavior as before.
-      try {
-        await db.rpc('restore_product_stock', {
-          p_product_id: item.productId!,
-          p_qty:        item.qty,
-        })
-      } catch (err: unknown) {
-        // BUG FIX 22b: captureError with alert:true — stock locked permanently.
-        captureError(err, {
-          action:     'inventoryService._restoreReserved.product',
-          product_id: item.productId,
-          qty:        item.qty,
-          alert:      true,
-        })
-      }
-    } else {
-      try {
-        await db.rpc('restore_stock', {
-          p_variant_id: item.variantId,
-          p_qty:        item.qty,
-        })
-      } catch (err: unknown) {
-        // BUG FIX 22a: use captureError with alert:true — a failed stock restore
-        // after a partial reservation means inventory is permanently locked (stock
-        // decremented but never restored). Ops must correct manually via the DB.
-        captureError(err, {
-          action:     'inventoryService._restoreReserved.variant',
-          variant_id: item.variantId,
-          qty:        item.qty,
-          alert:      true,
-        })
-      }
-    }
-  }
+  // Shares the per-item error handling (including the RPC's returned `{ error }`)
+  // with the public restoreStock() — one implementation, one behaviour.
+  await restoreStockReporting(items)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,44 +219,63 @@ export async function deductStockAtomic(
 // Fix: per-item try/catch that logs and continues, mirroring _restoreReserved.
 // All restore errors are logged for ops; a single RPC failure no longer
 // prevents the remaining items from being restored.
-export async function restoreStock(
+export async function restoreStock(items: StockCheckItem[]): Promise<void> {
+  await restoreStockReporting(items)
+}
+
+/**
+ * Same as restoreStock() (never throws, every item attempted) but tells the caller WHICH
+ * items could not be restored — for callers that must record or react to a partial
+ * failure (e.g. the pending-order expiry sweep).
+ */
+export async function restoreStockReporting(
   items: StockCheckItem[]
-): Promise<void> {
+): Promise<{ failed: StockCheckItem[] }> {
   const db = getServiceClient()
+  const failed: StockCheckItem[] = []
 
   for (const item of items) {
-    const isNoVariant = item.productId && item.variantId === item.productId
-    if (isNoVariant) {
-      try {
-        await db.rpc('restore_product_stock', {
-          p_product_id: item.productId!,
-          p_qty: item.qty,
-        })
-      } catch (err) {
-        // BUG FIX 22c: captureError with alert:true — stock restore failure on
-        // cancellation/payment-failure means inventory stays permanently locked.
-        captureError(err, {
-          action:     'inventoryService.restoreStock.product',
-          product_id: item.productId,
-          qty:        item.qty,
-          alert:      true,
-        })
-      }
-    } else {
-      try {
-        await db.rpc('restore_stock', {
-          p_variant_id: item.variantId,
-          p_qty: item.qty,
-        })
-      } catch (err) {
-        // BUG FIX 22d: captureError with alert:true — see above.
-        captureError(err, {
-          action:     'inventoryService.restoreStock.variant',
-          variant_id: item.variantId,
-          qty:        item.qty,
-          alert:      true,
-        })
-      }
+    const isNoVariant = !!item.productId && item.variantId === item.productId
+    const rpcName = isNoVariant ? 'restore_product_stock' : 'restore_stock'
+    const params  = isNoVariant
+      ? { p_product_id: item.productId!, p_qty: item.qty }
+      : { p_variant_id: item.variantId,  p_qty: item.qty }
+
+    try {
+      // BUG FIX (silent stock leak): supabase-js RPCs do NOT throw on failure — they
+      // RESOLVE with `{ error }`. The previous code only had a try/catch, so a failed
+      // restore (bad type, missing function, permission, deleted row) was never seen:
+      // no log, no alert, stock stayed locked forever. Check the returned error.
+      const { error } = await db.rpc(rpcName, params)
+      if (error) throw error
+    } catch (err) {
+      failed.push(item)
+      // alert:true — inventory stays locked until ops correct it by hand.
+      captureError(err, {
+        action:     `inventoryService.restoreStock.${isNoVariant ? 'product' : 'variant'}`,
+        product_id: item.productId,
+        variant_id: item.variantId,
+        qty:        item.qty,
+        alert:      true,
+      })
     }
   }
+
+  return { failed }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// orderItemsToStockItems
+// ─────────────────────────────────────────────────────────────────────────────
+// Maps persisted `order_items` rows back to the StockCheckItem shape used by
+// reserve/restore. Single place for this mapping so the webhook, the payment
+// confirmation recovery path and the pending-order expiry job all agree.
+export function orderItemsToStockItems(
+  rows: Array<{ product_id: unknown; variant_id: unknown; quantity: unknown }> | null | undefined,
+): StockCheckItem[] {
+  return (rows ?? []).map(r => ({
+    variantId: String(r.variant_id),
+    productId: String(r.product_id),
+    qty:       Number(r.quantity),
+  }))
 }

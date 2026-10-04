@@ -18,6 +18,8 @@
  *   • All effects already had AbortController cleanup — preserved as-is.
  */
 
+import { useCartRevalidation } from '@/hooks/useCartRevalidation'
+import { revalidateCart } from '@/lib/cartRevalidate'
 import {
   useState, useEffect, useCallback, useMemo, useRef,
 } from 'react'
@@ -129,6 +131,7 @@ async function safeJsonParse<T extends object = Record<string, unknown>>(
 // actions share one endpoint/response envelope — only the populated fields differ).
 interface PaymentApiResponse {
   already_confirmed?: boolean
+  pending?:            boolean   // verify_payment: money taken, confirmation still in flight (202/503)
   order_number?:       string
   order_id?:            string
   amount?:              number
@@ -185,6 +188,9 @@ function applyProfileData(
 export interface CheckoutPageState {
   // hydration
   storeReady: boolean
+  /** C1: live price/stock changes found when checkout loaded */
+  cartNotices: string[]
+  dismissCartNotices: () => void
 
   // cart store (read-only slices needed by JSX)
   items:    ReturnType<typeof useCartStore.getState>['items']
@@ -262,6 +268,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const coupon              = useCartStore(s => s.coupon)
   const idempotencyKey      = useCartStore(s => s.idempotencyKey)
   const ensureIdempotencyKey = useCartStore(s => s.ensureIdempotencyKey)
+  const resetIdempotencyKey  = useCartStore(s => s.resetIdempotencyKey)
   const clearCart           = useCartStore(s => s.clearCart)
   const applyCoupon         = useCartStore(s => s.applyCoupon)
   const removeCouponFromStore = useCartStore(s => s.removeCoupon)
@@ -521,6 +528,34 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   })
 
   // ── Effects ────────────────────────────────────────────────────────────────
+
+  // C1: refresh prices / stock from the server when checkout loads.
+  const { notices: cartNotices, dismiss: dismissCartNotices } =
+    useCartRevalidation(storeReady && items.length > 0)
+
+  // P3 FIX: an idempotency key identifies ONE specific order request. If anything that
+  // defines the order changes (cart lines/quantities, coupon, redeemed coins, payment
+  // method) the next submit is a DIFFERENT order and must carry a fresh key — otherwise
+  // the server would hand back the earlier (abandoned) order. A dismiss with nothing
+  // changed deliberately keeps the key, so pressing Pay again resumes the SAME order
+  // instead of stranding a second reservation of stock.
+  const orderSignature = useMemo(
+    () => JSON.stringify([
+      // price included: a refreshed price is a different order total, so it needs a fresh key
+      items.map(i => [String(i.variantId), i.qty, i.price]),
+      payMethod,
+      coupon?.code ?? null,
+      loyaltyRedemption?.points ?? 0,
+    ]),
+    [items, payMethod, coupon?.code, loyaltyRedemption?.points],
+  )
+  const lastOrderSignatureRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!storeReady || items.length === 0) return   // hydrating / cart just cleared after success
+    const prev = lastOrderSignatureRef.current
+    lastOrderSignatureRef.current = orderSignature
+    if (prev !== null && prev !== orderSignature) resetIdempotencyKey()
+  }, [orderSignature, storeReady, items.length, resetIdempotencyKey])
 
   useEffect(() => {
     if (items.length === 0 && storeReady && !orderPlacedRef.current) {
@@ -968,6 +1003,20 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { placingRef.current = false; setError('Enter a valid email address'); return }
     setError(''); setPlacing(true)
     try {
+      // C1: confirm against the server's CURRENT prices and stock before any order or payment
+      // exists. The customer must confirm the amount that will actually be charged — COD has no
+      // payment modal showing it, and createOrder() always charges the database price. If
+      // anything changed, apply it to the cart and stop so they can review; the next click
+      // proceeds. A check that cannot complete (offline / 5xx) fails open — createOrder is
+      // still the authority.
+      const live = await revalidateCart()
+      if (live.changes.length > 0) {
+        setError(`${live.messages.join(' ')} Please review your order and place it again.`)
+        placingRef.current = false
+        setPlacing(false)
+        return
+      }
+
       const orderKey = idempotencyKey || ensureIdempotencyKey()
       const payload  = {
         address: {
@@ -1017,10 +1066,13 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           body: JSON.stringify(payload),
         })
         const dbData = await safeJsonParse<{
-          order_number: string; confirmation_token?: string
+          order_number: string; confirmation_token?: string; code?: string
           details?: Record<string, string[] | undefined>
         }>(dbRes)
         if (!dbRes.ok) {
+          // P3: key reused for a different request — mint a fresh one so the next
+          // press places the order the customer is actually looking at.
+          if (dbData.code === 'IDEMPOTENCY_CONFLICT') resetIdempotencyKey()
           // BUG FIX: dbData.error is now only populated when the body genuinely
           // parsed as JSON with that field. When the server/platform returned
           // something else entirely (HTML error page, empty body, etc.),
@@ -1056,7 +1108,10 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           body: JSON.stringify({ ...payload, action: 'create_payment' }),
         })
         const data = await safeJsonParse<PaymentApiResponse>(res)
-        if (!res.ok) throw new Error(data.error || `Payment initiation failed (${res.status}). Please try again.`)
+        if (!res.ok) {
+          if ((data as { code?: string }).code === 'IDEMPOTENCY_CONFLICT') resetIdempotencyKey()
+          throw new Error(data.error || `Payment initiation failed (${res.status}). Please try again.`)
+        }
 
         if (data.already_confirmed) {
           orderPlacedRef.current = true
@@ -1100,6 +1155,19 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
                 }),
               })
               const verData = await safeJsonParse<PaymentApiResponse>(verRes)
+
+              // Money has been taken but the server could not finish confirming yet
+              // (payment authorized-not-captured → 202, or Razorpay lookup outage → 503).
+              // This is NOT a failure: do not show an error or invite a second payment.
+              // Send the customer to the order page, which shows "Confirming your payment…"
+              // and polls until the webhook confirms. Cart is cleared — the order exists.
+              if ((verRes.status === 202 || verRes.status === 503) && verData.pending && verData.order_number) {
+                orderPlacedRef.current = true
+                clearCart()
+                router.replace(buildOrderSuccessUrl(verData.order_number, verData.confirmation_token, 'razorpay', pricingTotal))
+                return
+              }
+
               if (!verRes.ok) throw new Error(verData.error || `Verification failed (${verRes.status}). Please contact support.`)
               // BUG FIX: same class of guard as create_payment above — a 200
               // response with a malformed/non-JSON body would otherwise slip
@@ -1135,7 +1203,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
             }
           },
           modal: {
-            ondismiss: () => { placingRef.current = false; setPlacing(false); ensureIdempotencyKey() },
+            // Key intentionally kept: nothing changed, so a re-click resumes the same order (P3).
+            ondismiss: () => { placingRef.current = false; setPlacing(false) },
           },
         })
         trackPaymentInitiated(pricingTotal)
@@ -1149,7 +1218,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }
   }, [
     addr, email, items, coupon, loyaltyRedemption,
-    idempotencyKey, ensureIdempotencyKey,
+    idempotencyKey, ensureIdempotencyKey, resetIdempotencyKey,
     payMethod, user, clearCart, router, razorpayKeyId,
     trackOrderPlaced, trackPaymentInitiated, trackPaymentVerified,
     pricingShipping, pricingTotal, waNumber,
@@ -1158,6 +1227,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
     storeReady,
+    cartNotices, dismissCartNotices,
     items, coupon, removeCoupon,
     payMethod, setPayMethod,
     placing,

@@ -152,6 +152,7 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
 // ─────────────────────────────────────────────────────────────
 import type { SiteSettings } from '@/types'
 import { getServiceClient } from '@/lib/supabase'
+import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } from '@/lib/server/cartValidation'
 import { reserveStockAtomicForOrder } from './inventoryService'
 import { calcPriceSummary } from './pricingService'
 
@@ -273,6 +274,71 @@ export interface CreatedOrder {
   confirmationToken: string | null
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Idempotency-key reuse guard (P3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Thrown when an idempotency key is reused for a request that differs from the stored order. */
+export class IdempotencyConflictError extends Error {
+  readonly code = 'IDEMPOTENCY_CONFLICT'
+  constructor(public readonly reason: string) {
+    super('Your cart or payment details changed since this order was started. Please review your order and place it again.')
+    this.name = 'IdempotencyConflictError'
+  }
+}
+
+export interface StoredOrderItem { product_id: unknown; variant_id: unknown; quantity: unknown }
+
+/**
+ * Compare a stored order with an incoming request that reuses its idempotency key.
+ * Returns null when it is the same request (a genuine retry), else a short reason.
+ *
+ * Items: the client may send a product id as variantId for products with no variants
+ * (the server resolves the real variant), so an input line matches a stored row when
+ * the variant ids are equal OR the input variantId is just the productId.
+ * Coupons are not compared here (the discount is already baked into total_amount and
+ * the client resets its key when the coupon changes) — see useCheckoutPage.
+ */
+export function describeIdempotencyMismatch(
+  stored: { orderStatus: string; paymentMethod: string; loyaltyPoints: number; items: StoredOrderItem[] },
+  req:    { paymentMethod: string; loyaltyPoints: number; items: Array<{ productId: string; variantId: string; qty: number }> },
+): string | null {
+  // A dead order can never be "resumed" — start a fresh one.
+  if (stored.orderStatus === 'cancelled' || stored.orderStatus === 'payment_failed') {
+    return `existing order is ${stored.orderStatus}`
+  }
+  if (stored.paymentMethod !== req.paymentMethod) {
+    return `payment method changed (${stored.paymentMethod} → ${req.paymentMethod})`
+  }
+  if (Number(stored.loyaltyPoints) !== Number(req.loyaltyPoints)) {
+    return 'loyalty points changed'
+  }
+
+  const remaining = stored.items.map(r => ({
+    product: String(r.product_id), variant: String(r.variant_id), qty: Number(r.quantity), used: false,
+  }))
+  if (remaining.length !== req.items.length) return 'item count changed'
+  for (const it of req.items) {
+    const hit = remaining.find(r =>
+      !r.used && r.qty === Number(it.qty) &&
+      (r.variant === String(it.variantId) || (String(it.variantId) === String(it.productId) && r.product === String(it.productId))),
+    )
+    if (!hit) return 'items or quantities changed'
+    hit.used = true
+  }
+  return null
+}
+
+const SAFE_ITEM_ID = /^[A-Za-z0-9_-]{1,64}$/
+/** Defence in depth for PS1 — the HTTP schema already enforces this; createOrder must not rely on that. */
+function assertSafeItemIds(items: Array<{ productId: string; variantId: string }>): void {
+  for (const i of items) {
+    if (!SAFE_ITEM_ID.test(String(i.productId)) || !SAFE_ITEM_ID.test(String(i.variantId))) {
+      throw new Error('Invalid cart item — please refresh your cart')
+    }
+  }
+}
+
 export async function createOrder(
   input: CreateOrderInput,
   settings: SiteSettings,
@@ -282,12 +348,41 @@ export async function createOrder(
   // 1. Idempotency check — return existing order if same key
   const { data: existing } = await withTimeout(
     db.from('orders')
-      .select('id, order_number, total_amount, order_status, confirmation_token')
+      .select('id, order_number, total_amount, order_status, payment_status, payment_method, loyalty_points_redeemed, confirmation_token')
       .eq('idempotency_key', input.idempotencyKey)
       .maybeSingle(),
     8_000,
     'orders idempotency check',
   )
+
+  // P3 FIX: the key used to be trusted blindly — ANY request carrying a known key got
+  // the stored order back, whatever it asked for. A customer who dismissed the Razorpay
+  // modal, edited the cart (or coupon / coins) and paid again was silently charged for
+  // the OLD order; and switching Razorpay→COD "placed" the abandoned online order.
+  // A reused key is only a retry if the request is actually the same request.
+  if (existing) {
+    const { data: existingItems } = await withTimeout(
+      db.from('order_items')
+        .select('product_id, variant_id, quantity')
+        .eq('order_id', existing.id),
+      8_000,
+      'orders idempotency items check',
+    )
+    const mismatch = describeIdempotencyMismatch(
+      {
+        orderStatus:   String(existing.order_status),
+        paymentMethod: String(existing.payment_method),
+        loyaltyPoints: Number(existing.loyalty_points_redeemed ?? 0),
+        items:         (existingItems ?? []) as StoredOrderItem[],
+      },
+      {
+        paymentMethod: input.paymentMethod,
+        loyaltyPoints: Number(input.loyaltyPointsRedeemed ?? 0),
+        items:         input.items,
+      },
+    )
+    if (mismatch) throw new IdempotencyConflictError(mismatch)
+  }
 
   if (existing) {
     return {
@@ -309,6 +404,25 @@ export async function createOrder(
       },
       alreadyExists: true,
       customerId:    null,
+    }
+  }
+
+  // 1b. I3 PRE-FLIGHT (before ANY stock is touched): a line whose variantId equals its
+  //     productId means "this product has no variants" and is priced from the products
+  //     table. The server used to take the client's word for it. A client could therefore
+  //     send productId as variantId for a product that DOES have variants and buy any of
+  //     them at the (lower) base-product price. The storefront only ever sends this shape
+  //     when a product has no ACTIVE variants (see getBaseVariant), so a no-variant line for
+  //     a product that has active variants is always stale or tampered — reject it.
+  //     Fails CLOSED: if the variants cannot be looked up, the order is not created.
+  assertSafeItemIds(input.items)
+  const noVariantLines = input.items.filter(i => i.variantId === i.productId)
+  if (noVariantLines.length > 0) {
+    const ids  = Array.from(new Set(noVariantLines.map(i => i.productId))).join(',')
+    const rows = await sbGet('product_variants', `select=id,product_id&product_id=in.(${ids})&is_active=eq.true`)
+    const hasVariants = new Set((rows ?? []).map((r: { product_id: unknown }) => String(r.product_id)))
+    if (noVariantLines.some(i => hasVariants.has(String(i.productId)))) {
+      throw new Error('An item in your cart has multiple options — please remove it and add it again with the size you want')
     }
   }
 
@@ -373,6 +487,17 @@ export async function createOrder(
     )
     variantRows.push(...(data || []))
     if (variantRows.length === 0) throw new Error('Could not fetch product details — variant IDs not found in DB')
+
+    // I3: every variant line must resolve to a real variant that BELONGS to the product the
+    // client named. Previously a missing variant silently fell back to the product's price,
+    // and a variant of product A could be stored under product B (rpcItems wrote the client's
+    // productId beside the real variantId), corrupting product-level stock/GST/reporting.
+    for (const item of itemsWithVariant) {
+      const v = variantRows.find((vv: any) => String(vv.id) === String(item.variantId))
+      if (!v || String(v.product_id) !== String(item.productId)) {
+        throw new Error('Product no longer available')
+      }
+    }
   }
 
   // Collect all product IDs (from variants + direct product-only items)
@@ -464,8 +589,8 @@ export async function createOrder(
         // deletion away from silently undercharging a customer at
         // checkout. Prefer selling_price; keep price as a last-resort
         // fallback only for rows that somehow have neither set.
-        price:        Number(p?.selling_price ?? p?.price) || 0,
-        mrp:          Number(p?.mrp) || Number(p?.selling_price ?? p?.price) || 0,
+        price:        productLinePrice(p),
+        mrp:          productLineMrp(p),
         gstRate:      Number(p?.gst_rate ?? 0),
         qty:          i.qty,
         maxQty:       Number(p?.available_stock) || 999,
@@ -491,8 +616,8 @@ export async function createOrder(
         // selling_price. Also protects against a failed variant lookup
         // ever pricing this line at ₹0 (confirmed live risk, see orderService
         // audit notes for order 124/Aug 10).
-        price:        Number(v?.price) || Number(p?.selling_price ?? p?.price) || 0,
-        mrp:          Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0,
+        price:        variantLinePrice(v, p),
+        mrp:          variantLineMrp(v, p),
         gstRate:      Number(p?.gst_rate ?? 0),
         qty:          i.qty,
         maxQty:       Number(v?.available_stock) || 999,
@@ -845,27 +970,18 @@ export async function createOrder(
   // This fixes the P2 security issue where an inflated client value could
   // pass if the DB RPC lacked a sufficient balance check.
 
-  // Resolve canonical variant UUIDs for no-variant products before the RPC call
-  const noVariantProductIds = itemsNoVariant.map(i => i.productId)
-  const defaultVariantMap = new Map<string, string>() // productId → variantId (UUID)
-  if (noVariantProductIds.length > 0) {
-    const productIdList2 = noVariantProductIds.join(',')
-    const defaultVariants: any[] = await sbGet('product_variants',
-      `select=id,product_id,price&product_id=in.(${productIdList2})&is_active=eq.true&order=id.asc&limit=${noVariantProductIds.length * 2}`
-    ).catch(() => [])
-    for (const v of (defaultVariants || [])) {
-      const pid = String(v.product_id)
-      if (!defaultVariantMap.has(pid)) defaultVariantMap.set(pid, String(v.id))
-    }
-  }
+  // I2: variant_id is stored EXACTLY as reserved. A no-variant line (variantId === productId)
+  // reserved stock in the PRODUCTS table, so it is stored with variant_id === product_id and
+  // every restore path (orderItemsToStockItems → restoreStock) sends it back to the products
+  // table. This used to substitute the product's first active variant here, so order_items
+  // pointed at a variant whose stock was never decremented while the restore later credited
+  // THAT variant — creating stock out of nothing. The I3 pre-flight above guarantees a
+  // no-variant line never coexists with active variants, so no substitution is needed.
 
   const rpcItems = input.items.map((i, idx) => {
-    const resolvedVariantId = i.variantId === i.productId
-      ? (defaultVariantMap.get(String(i.productId)) ?? i.variantId)
-      : i.variantId
     return {
       product_id:    i.productId,
-      variant_id:    resolvedVariantId,
+      variant_id:    i.variantId,
       quantity:      i.qty,
       // ARCHITECTURAL FIX (found investigating a live production
       // reconciliation gap, Aug 2026): this used to independently

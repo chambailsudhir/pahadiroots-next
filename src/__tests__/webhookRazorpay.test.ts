@@ -33,8 +33,12 @@
  *  10. Webhook log lifecycle — inserted as 'received' before processing,
  *      updated to 'processed' on success, updated to 'failed' when the
  *      handler throws.
- *  11. Always returns 200 even when internal processing throws — Razorpay
- *      retries on non-2xx, which could replay into the same broken state.
+ *  11. (P4) Returns 500 when internal processing throws, so Razorpay RETRIES
+ *      the event — handlers are idempotent, so retries are safe.
+ *
+ * P2/O2/P1 rewrite: payment.failed is a single failed ATTEMPT (order stays
+ * pending); payment.captured binds to the stored Razorpay order id + exact
+ * amount, recovers failed/expired orders, and the winner runs loyalty/e-mail.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -56,10 +60,27 @@ vi.mock('@/lib/services/orderService', async (importOriginal) => {
   }
 })
 
+const mockReserveStock = vi.fn()
 vi.mock('@/lib/services/inventoryService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/inventoryService')>()
-  return { ...actual, restoreStock: mockRestoreStock }
+  return { ...actual, restoreStock: mockRestoreStock, reserveStockAtomicForOrder: mockReserveStock }
 })
+
+// The webhook now runs the shared paid-order side effects (loyalty + e-mail).
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual<typeof import('next/server')>('next/server')
+  return { ...actual, after: (cb: () => void | Promise<void>) => { void cb() } }
+})
+const mockAward  = vi.fn()
+const mockRedeem = vi.fn()
+vi.mock('@/lib/server/loyalty', () => ({
+  awardLoyaltyPoints:  (...a: unknown[]) => mockAward(...a),
+  redeemLoyaltyPoints: (...a: unknown[]) => mockRedeem(...a),
+}))
+vi.mock('@/lib/server/email', () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/lib/getSiteSettings', () => ({
+  getFreshSiteSettings: vi.fn().mockResolvedValue({ loyalty_enabled: 'true', loyalty_points_per_rupee: '1' }),
+}))
 
 // ─── Minimal Supabase mock — table-keyed responses, tracks update calls ──────
 
@@ -159,6 +180,7 @@ function makeEvent(overrides: Partial<{
   amount: number
   dbOrderId: string | undefined
   errorReason: string
+  razorpayOrderId: string
 }> = {}) {
   const {
     event = 'payment.captured',
@@ -166,6 +188,7 @@ function makeEvent(overrides: Partial<{
     amount = 50000,
     dbOrderId = 'order-db-uuid-001',
     errorReason = 'card_declined',
+    razorpayOrderId = 'order_rzp_1',
   } = overrides
   return {
     event,
@@ -173,6 +196,7 @@ function makeEvent(overrides: Partial<{
       payment: {
         entity: {
           id: paymentId,
+          order_id: razorpayOrderId,
           amount,
           error_reason: errorReason,
           notes: dbOrderId !== undefined ? { db_order_id: dbOrderId } : {},
@@ -199,8 +223,11 @@ beforeEach(() => {
   process.env.RAZORPAY_WEBHOOK_SECRET = WEBHOOK_SECRET
   resetMockDb()
   mockUpdateOrderStatus.mockClear()
-  mockLogOrderEvent.mockClear()
+  mockLogOrderEvent.mockClear().mockResolvedValue(undefined)
   mockRestoreStock.mockClear().mockResolvedValue(undefined)
+  mockReserveStock.mockReset().mockResolvedValue({ ok: true })
+  mockAward.mockReset().mockResolvedValue(undefined)
+  mockRedeem.mockReset().mockResolvedValue(true)
   vi.resetModules()
 })
 
@@ -298,13 +325,18 @@ describe('POST /webhook/razorpay — security gates', () => {
 // payment.captured
 // ─────────────────────────────────────────────────────────────────────────────
 
+// A normal, payable Razorpay order: ₹500, bound to Razorpay order `order_rzp_1`.
+const PAYABLE = {
+  id: 'order-db-uuid-001', order_number: 'PR1A2B3C4D',
+  order_status: 'pending', payment_status: 'pending', payment_method: 'razorpay',
+  payment_id: 'order_rzp_1', total_amount: 500, customer_id: 'cust-1', loyalty_points_redeemed: 0,
+}
+
 describe('POST /webhook/razorpay — payment.captured', () => {
   it('confirms a pending order: sets order_status=confirmed, payment_status=paid, payment_id', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-001', order_status: 'pending', order_number: 'PR1A2B3C4D' }
+    mockDb.responses['orders'] = { ...PAYABLE }
 
-    const event = makeEvent({ event: 'payment.captured', paymentId: 'pay_abc', amount: 50000, dbOrderId: 'order-db-uuid-001' })
-    const req = makeReq(event)
-
+    const req = makeReq(makeEvent({ paymentId: 'pay_abc', amount: 50000, dbOrderId: PAYABLE.id }))
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     const res = await POST(req)
     expect(res.status).toBe(200)
@@ -316,88 +348,119 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     })
   })
 
-  // TOCTOU FIX regression: the UPDATE must include the atomic guard
-  // .eq('order_status','pending') so two concurrent webhook deliveries can't
-  // both "win" and double-log the capture event.
-  it('includes the atomic order_status=pending guard on the UPDATE (TOCTOU FIX)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-001', order_status: 'pending' }
-    const event = makeEvent({ dbOrderId: 'order-db-uuid-001' })
-    const req = makeReq(event)
-
+  // TOCTOU: the UPDATE is keyed on the exact state that was read, so two concurrent
+  // deliveries can't both win.
+  it('guards the UPDATE on the exact pending/pending state that was read (TOCTOU)', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
 
     const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
-    const hasGuard = orderUpdate!.eqCalls.some(args => args[0] === 'order_status' && args[1] === 'pending')
-    expect(hasGuard).toBe(true)
+    expect(orderUpdate!.eqCalls).toContainEqual(['payment_status', 'pending'])
+    expect(orderUpdate!.eqCalls).toContainEqual(['order_status', 'pending'])
   })
 
-  it('logs the payment_captured_webhook event when the order was successfully confirmed', async () => {
-    // The select().single() lookup AND the update().select('id') chain both
-    // read from mockDb.responses['orders'] in this simplified mock — give it
-    // a shape that satisfies both: a single object for .single(), which also
-    // works truthy for the "did we win the race" check via .then().
-    mockDb.responses['orders'] = { id: 'order-db-uuid-001', order_status: 'pending' }
-
-    const event = makeEvent({ dbOrderId: 'order-db-uuid-001', paymentId: 'pay_xyz', amount: 30000 })
-    const req = makeReq(event)
+  it('logs payment_captured_webhook, records the payment, and (O2) awards loyalty as the race winner', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
 
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_xyz', amount: 50000 })))
 
     expect(mockLogOrderEvent).toHaveBeenCalledWith(
-      'order-db-uuid-001',
-      'payment_captured_webhook',
-      'razorpay',
-      expect.objectContaining({ razorpay_payment_id: 'pay_xyz', amount: 300 }), // 30000 paise -> 300 rupees
+      PAYABLE.id, 'payment_captured_webhook', 'razorpay',
+      expect.objectContaining({ razorpay_payment_id: 'pay_xyz', amount: 500 }),
     )
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeDefined()
+    // O2: the webhook used to leave this to verify_payment only.
+    expect(mockAward).toHaveBeenCalledTimes(1)
   })
 
   it('does not touch the orders table when notes.db_order_id is missing', async () => {
-    const event = makeEvent({ dbOrderId: undefined })
-    const req = makeReq(event)
-
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
+    const res = await POST(makeReq(makeEvent({ dbOrderId: undefined })))
 
-    expect(res.status).toBe(200) // Razorpay must not retry-storm
+    expect(res.status).toBe(200) // permanently-unprocessable → don't ask Razorpay to retry
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
   })
 
-  it('does not double-process an order that is already confirmed (order_status != pending)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-001', order_status: 'confirmed' }
-    const event = makeEvent({ dbOrderId: 'order-db-uuid-001' })
-    const req = makeReq(event)
-
+  it('does not double-process an order that is already paid', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc' }
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
 
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
     expect(mockLogOrderEvent).not.toHaveBeenCalled()
+    expect(mockAward).not.toHaveBeenCalled()
   })
 
-  // TOCTOU FIX regression: simulates genuinely losing the race — the SELECT
-  // sees order_status='pending' (so the route attempts the UPDATE), but by
-  // the time the UPDATE's WHERE clause evaluates, a concurrent webhook
-  // delivery has already flipped it to 'confirmed' elsewhere. The atomic
-  // .eq('order_status','pending') guard means 0 rows match this request's
-  // UPDATE, and the route must skip the event log rather than logging a
-  // duplicate capture for an order it didn't actually win the race on.
-  it('skips the event log when the optimistic-lock UPDATE matches 0 rows (lost the race to a concurrent delivery)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-006', order_status: 'pending' } // SELECT sees pending
-    mockDb.updateResultOverride['orders'] = [] // but the UPDATE's WHERE clause matches 0 rows
-
-    const event = makeEvent({ dbOrderId: 'order-db-uuid-006', paymentId: 'pay_lost_race' })
-    const req = makeReq(event)
+  it('lost the race (UPDATE matches 0 rows): no duplicate event log and NO second loyalty award', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    mockDb.updateResultOverride['orders'] = []
 
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_lost_race' })))
 
     expect(res.status).toBe(200)
-    // The UPDATE was attempted (order looked pending at SELECT time)...
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeDefined()
-    // ...but since 0 rows matched, no duplicate event log for this delivery.
     expect(mockLogOrderEvent).not.toHaveBeenCalled()
+    expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // ── P1/P2 binding: notes.db_order_id is only a hint ────────────────────────
+  it.each([
+    ['amount differs from DB total',            { total_amount: 5000 },          {}],
+    ['payment belongs to another Razorpay order', {},                            { razorpayOrderId: 'order_someone_else' }],
+    ['order has no stored Razorpay order id',   { payment_id: null },            {}],
+    ['order is not a Razorpay order (COD)',     { payment_method: 'cod' },       {}],
+  ])('does NOT confirm when %s → held for review, order untouched', async (_label, orderOverride, eventOverride) => {
+    mockDb.responses['orders'] = { ...PAYABLE, ...orderOverride }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, amount: 50000, ...eventOverride })))
+
+    expect(res.status).toBe(200)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_captured_unbound', 'razorpay', expect.anything())
+    expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // ── P2 recovery ────────────────────────────────────────────────────────────
+  it('RECOVERS an order that was failed/released: payment_failed → paid and stock is re-reserved', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'payment_failed', payment_status: 'failed' }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 2 }]
+
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_retry_ok' })))
+    expect(res.status).toBe(200)
+
+    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
+    expect(orderUpdate!.payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_retry_ok' })
+    expect(orderUpdate!.eqCalls).toContainEqual(['payment_status', 'failed'])
+    expect(orderUpdate!.eqCalls).toContainEqual(['order_status', 'payment_failed'])
+    expect(mockReserveStock).toHaveBeenCalledWith([{ variantId: 'v1', productId: 'p1', qty: 2 }])
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_recovered_after_failure', 'razorpay', expect.objectContaining({ stock_re_reserved: true }))
+    expect(mockAward).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovered order whose stock is gone STAYS confirmed (customer paid) and ops are alerted via an event', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'payment_failed', payment_status: 'failed' }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 2 }]
+    mockReserveStock.mockResolvedValue({ ok: false, failedVariantId: 'v1' })
+
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
+
+    expect(res.status).toBe(200)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')!.payload).toMatchObject({ payment_status: 'paid' })
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'paid_after_release_stock_unavailable', 'system', expect.anything())
+  })
+
+  it('an order in any other state (e.g. cancelled by admin) is NOT flipped to paid; ops alerted via event', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'cancelled', payment_status: 'pending' }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
+
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_received_for_unconfirmable_order', 'razorpay', expect.anything())
   })
 })
 
@@ -405,137 +468,56 @@ describe('POST /webhook/razorpay — payment.captured', () => {
 // payment.failed
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('POST /webhook/razorpay — payment.failed', () => {
-  it('restores stock and sets order_status=payment_failed (not left at pending)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-002', order_status: 'pending' }
-    mockDb.responses['order_items'] = [
-      { product_id: 'p1', variant_id: 'v1', quantity: 2 },
-    ]
-
-    const event = makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-002', errorReason: 'insufficient_funds' })
-    const req = makeReq(event)
+describe('POST /webhook/razorpay — payment.failed (P2: one failed attempt is NOT terminal)', () => {
+  it('records the attempt but leaves the order PENDING and does NOT restore stock', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 2 }]
 
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
+    const res = await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id, errorReason: 'insufficient_funds' })))
 
-    expect(mockRestoreStock).toHaveBeenCalledWith([
-      { variantId: 'v1', productId: 'p1', qty: 2 },
-    ])
-
-    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
-    expect(orderUpdate!.payload).toMatchObject({ order_status: 'payment_failed', payment_status: 'failed' })
-
+    expect(res.status).toBe(200)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockRestoreStock).not.toHaveBeenCalled()
     expect(mockLogOrderEvent).toHaveBeenCalledWith(
-      'order-db-uuid-002', 'payment_failed_webhook', 'razorpay',
+      PAYABLE.id, 'payment_attempt_failed', 'razorpay',
       expect.objectContaining({ reason: 'insufficient_funds' }),
     )
+    const failedRow = mockDb.insertCalls.find(c => c.table === 'payments')
+    expect(failedRow!.payload).toMatchObject({ status: 'failed', payment_reference: 'pay_test123' })
   })
 
-  it('does NOT restore stock or modify the order when order_status is not pending (already confirmed)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-003', order_status: 'confirmed' }
-    const event = makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-003' })
-    const req = makeReq(event)
-
+  it('REGRESSION (the audited bug): fail once, then succeed on retry → order ends CONFIRMED, never dead', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
 
+    // attempt 1 fails
+    await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id, paymentId: 'pay_try1' })))
+    expect(mockDb.updateCalls.filter(c => c.table === 'orders')).toHaveLength(0)
+
+    // attempt 2 (same Razorpay order) is captured
+    await POST(makeReq(makeEvent({ event: 'payment.captured', dbOrderId: PAYABLE.id, paymentId: 'pay_try2' })))
+    const upd = mockDb.updateCalls.filter(c => c.table === 'orders')
+    expect(upd).toHaveLength(1)
+    expect(upd[0].payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_try2' })
     expect(mockRestoreStock).not.toHaveBeenCalled()
+  })
+
+  it('ignores a late/duplicate failure for an order that is already paid', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid' }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id })))
+
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockLogOrderEvent).not.toHaveBeenCalled()
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
   })
 
-  it('does not crash when order_items is empty (no stock to restore)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-004', order_status: 'pending' }
-    mockDb.responses['order_items'] = []
-
-    const event = makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-004' })
-    const req = makeReq(event)
-
+  it('payment.failed with missing notes.db_order_id → 200, nothing touched', async () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
-
+    const res = await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: undefined })))
     expect(res.status).toBe(200)
-    expect(mockRestoreStock).not.toHaveBeenCalled()
-  })
-
-  // ── Sept 2026 regression suite ────────────────────────────────────────────
-  // Context: 'payment_failed' was never a member of the live order_status_enum,
-  // so this UPDATE failed with Postgres 22P02 on every call. The route did not
-  // destructure the error, so the failure was invisible: the order stayed
-  // 'pending', which meant the `order_status === 'pending'` guard at the top of
-  // this branch stayed true forever — and a SECOND payment.failed event for the
-  // same order (a customer retrying and failing again on the same order row,
-  // which the idempotency key makes the normal case) restored the same reserved
-  // stock a second time, silently inflating inventory.
-  //
-  // Fixed by (a) DB migration 048 adding the enum value, and (b) reordering
-  // this branch so the guarded transition runs FIRST and stock is restored only
-  // if this process actually won pending → payment_failed. The three tests
-  // below pin the reordering; the enum value itself is a DB-side fact.
-
-  it('applies the transition with an atomic order_status=pending guard on the UPDATE', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-006', order_status: 'pending' }
-    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }]
-
-    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-006' }))
-    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(req)
-
-    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
-    // Without this WHERE clause two concurrent deliveries of the same event
-    // could both pass the earlier SELECT-based check and both restore stock.
-    expect(orderUpdate!.eqCalls).toContainEqual(['order_status', 'pending'])
-  })
-
-  it('does NOT restore stock when the UPDATE matched 0 rows (duplicate/replayed event)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-007', order_status: 'pending' }
-    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 3 }]
-    // The SELECT still sees 'pending', but the guarded UPDATE affects no rows:
-    // another delivery of this same event already made the transition and
-    // already restored this stock.
-    mockDb.updateResultOverride['orders'] = []
-
-    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-007' }))
-    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
-
-    expect(res.status).toBe(200)
-    expect(mockRestoreStock).not.toHaveBeenCalled()
-    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(
-      'order-db-uuid-007', 'payment_failed_webhook', 'razorpay', expect.anything(),
-    )
-  })
-
-  it('does NOT restore stock when the UPDATE itself errors (the exact silent-failure path)', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-008', order_status: 'pending' }
-    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }]
-    mockDb.updateErrorOverride['orders'] = new Error(
-      'invalid input value for enum order_status_enum: "payment_failed"',
-    )
-
-    const req = makeReq(makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-008' }))
-    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
-
-    // Still 200 — Razorpay must not retry-storm — but the order is untouched,
-    // so nothing may act as though the transition succeeded.
-    expect(res.status).toBe(200)
-    expect(mockRestoreStock).not.toHaveBeenCalled()
-  })
-
-  it('continues processing (sets payment_failed) even if restoreStock itself throws', async () => {
-    mockDb.responses['orders'] = { id: 'order-db-uuid-005', order_status: 'pending' }
-    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }]
-    mockRestoreStock.mockRejectedValueOnce(new Error('DB deadlock'))
-
-    const event = makeEvent({ event: 'payment.failed', dbOrderId: 'order-db-uuid-005' })
-    const req = makeReq(event)
-
-    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
-
-    expect(res.status).toBe(200)
-    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
-    expect(orderUpdate!.payload).toMatchObject({ order_status: 'payment_failed' })
+    expect(mockDb.updateCalls).toHaveLength(0)
   })
 })
 
@@ -557,14 +539,23 @@ describe('POST /webhook/razorpay — webhook_logs lifecycle', () => {
     expect((insertCall!.payload as { status: string }).status).toBe('received')
   })
 
-  it('always returns 200 even when internal processing throws (avoids Razorpay retry storms)', async () => {
-    mockDb.responses['orders'] = new Error('connection refused') // forces a throw deep in processing
-    const event = makeEvent()
-    const req = makeReq(event)
+  it('P4: returns 500 when processing fails so Razorpay RETRIES, and marks the log failed', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    mockDb.responses['webhook_logs'] = { id: 'log-1' }
+    mockDb.updateErrorOverride['orders'] = new Error('connection refused') // confirm UPDATE fails
 
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(req)
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
 
+    expect(res.status).toBe(500)
+    const failedLog = mockDb.updateCalls.find(c => c.table === 'webhook_logs')
+    expect(failedLog!.payload).toMatchObject({ status: 'failed' })
+  })
+
+  it('payment.captured for an unknown order → 200 (permanent failure, alert only, no retry storm)', async () => {
+    mockDb.responses['orders'] = new Error('no rows')
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent()))
     expect(res.status).toBe(200)
   })
 })

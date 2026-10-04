@@ -55,6 +55,8 @@ import CartItemCard                     from '@/components/cart/CartItemCard'
 import CartSummary                      from '@/components/cart/CartSummary'
 import { StickyCartCTA, EmptyCart }     from '@/components/cart/CartUIComponents'
 import ErrorBoundary                    from '@/components/ui/ErrorBoundary'
+import CartNoticeBanner                 from '@/components/cart/CartNoticeBanner'
+import CheckoutStepper                  from '@/components/checkout/CheckoutStepper'
 
 const UpsellSection   = lazy(() => import('@/components/cart/UpsellSection'))
 const ReviewSection   = lazy(() => import('@/components/cart/ReviewSection'))
@@ -97,6 +99,7 @@ export default function CartPage() {
     handleQtyChange, handleRemove, handleUndoRemove, flushPendingRemovals,
     handleUpsellAdd, handleCoupon, handleApplyHint,
     couponHints,
+    cartNotices, dismissCartNotices,
   } = useCartPage()
 
   if (!hasHydrated)  return <CartSkeleton />
@@ -116,6 +119,9 @@ export default function CartPage() {
     <main id="main-content">
 
       <h1 className="sr-only">Your Cart</h1>
+
+      {/* C1: live price / stock changes found when the cart loaded */}
+      <CartNoticeBanner messages={cartNotices} onDismiss={dismissCartNotices} />
 
       {/* ── Shipping progress bar ──────────────────────────────────────────── */}
       <div className="cp-ship-bar">
@@ -147,16 +153,10 @@ export default function CartPage() {
       </div>
 
       {/* ── Checkout progress steps ────────────────────────────────────────── */}
-      <nav className="cp-steps" aria-label="Checkout progress">
+      {/* S2: shared stepper — state derived from `current`, not hand-written classes */}
+      <CheckoutStepper current="cart" skin="cart">
         <Link href="/" className="cp-steps-back">← Continue Shopping</Link>
-        <ol className="cp-steps-list">
-          <li className="cp-step cp-step-active" aria-current="step"><span aria-hidden="true">1</span> Cart</li>
-          <li className="cp-step-line" aria-hidden="true" />
-          <li className="cp-step"><span aria-hidden="true">2</span> Checkout</li>
-          <li className="cp-step-line" aria-hidden="true" />
-          <li className="cp-step"><span aria-hidden="true">3</span> Confirmation</li>
-        </ol>
-      </nav>
+      </CheckoutStepper>
 
       <div className="cp-layout">
 

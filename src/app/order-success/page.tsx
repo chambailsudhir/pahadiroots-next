@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import CheckoutStepper from '@/components/checkout/CheckoutStepper'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals, COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
@@ -68,12 +69,56 @@ function getDeliveryEstimate(createdAt?: string) {
   return `${fmt(lo)} – ${fmt(hi)}, ${hi.getFullYear()}`
 }
 
+/* ─── Verification helpers (CF1 / CF2) ──────────────────────── */
+type View = 'loading' | 'unverified' | 'confirmed' | 'payment_pending' | 'payment_failed' | 'cancelled'
+
+const SAFE_REF = /^[A-Za-z0-9-]{4,32}$/
+const MAX_PAYMENT_POLLS = 8
+const PAYMENT_POLL_MS   = 4000
+
+const HERO: Record<View, { icon: string; title: string; sub: string; tone: 'ok' | 'warn' }> = {
+  loading:         { icon: '⏳', title: 'Confirming your order…',        sub: 'Just a moment while we look up your order.', tone: 'ok' },
+  unverified:      { icon: '🔍', title: "We couldn't verify this order", sub: 'Nothing has been confirmed on this page.',   tone: 'warn' },
+  confirmed:       { icon: '✅', title: 'Order Confirmed!',              sub: 'Thank you! Your mountain goodness is on its way 🌿', tone: 'ok' },
+  payment_pending: { icon: '⏳', title: 'Confirming your payment…',      sub: "Please don't pay again — we'll confirm as soon as your bank responds.", tone: 'ok' },
+  payment_failed:  { icon: '⚠️', title: 'Payment not completed',         sub: 'If any amount was debited, please contact us with your order number.', tone: 'warn' },
+  cancelled:       { icon: '❌', title: 'Order cancelled',               sub: 'This order was cancelled.',                   tone: 'warn' },
+}
+
+/** What the page may claim, derived ONLY from the server's lookup result. */
+function deriveView(s: { loading: boolean; error: boolean; order: Order | null }): View {
+  if (s.loading) return 'loading'
+  const o = s.order
+  if (s.error || !o) return 'unverified'
+  if (o.order_status === 'cancelled') return 'cancelled'
+  if (o.order_status === 'payment_failed' || o.payment_status === 'failed') return 'payment_failed'
+  if (o.payment_method === 'razorpay' && o.payment_status !== 'paid') return 'payment_pending'
+  return 'confirmed'
+}
+
+/** COD orders have not been paid yet — never label their total "Total Paid" (CF3). */
+function totalLabel(o: Order): string {
+  if (o.payment_status === 'paid') return 'Total Paid'
+  return o.payment_method === 'cod' ? 'Total (pay on delivery)' : 'Order Total'
+}
+
+// Purchase-event de-duplication across refreshes (localStorage; falls back to a per-page-load Set).
+const memoryTracked = new Set<string>()
+const trackedKey = (n: string) => `pr_purchase_tracked_${n}`
+function alreadyTracked(orderNumber: string): boolean {
+  if (memoryTracked.has(orderNumber)) return true
+  try { return window.localStorage.getItem(trackedKey(orderNumber)) === '1' } catch { return false }
+}
+function markTracked(orderNumber: string): void {
+  memoryTracked.add(orderNumber)
+  try { window.localStorage.setItem(trackedKey(orderNumber), '1') } catch { /* private mode — memory set still guards this load */ }
+}
+
 /* ─── Main component ────────────────────────────────────────── */
 function SuccessContent() {
   const params      = useSearchParams()
   const orderId     = params.get('id')    || ''
   const orderNum    = params.get('num')   || ''
-  const totalParam  = params.get('total') || ''
   // Guest-safe capability token — see db_migration_v6_order_confirmation_token.sql
   // and /api/v1/orders/lookup/route.ts for the full auth model.
   const token       = params.get('token') || ''
@@ -103,20 +148,6 @@ function SuccessContent() {
     }
   }
 
-  // In-house funnel tracking — reaching this page WITH an order identifier
-  // means checkout genuinely succeeded, regardless of whether the richer
-  // order-lookup fetch below succeeds. Fires once, using whatever total we
-  // have at mount time (the ?total= URL param, same value the redirect from
-  // checkout always sets).
-  const purchaseFired = useRef(false)
-  useEffect(() => {
-    if (purchaseFired.current || !hasOrderIdentifier) return
-    purchaseFired.current = true
-    trackPurchase(orderNum || orderId, Number(totalParam) || 0)
-    markCartConverted()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasOrderIdentifier])
-
   /* fetch order */
   // BUG FIX (found via production console 404s): this used to POST to
   // /api/admin-api — the OLD vanilla-site's API path, never ported to this
@@ -128,7 +159,7 @@ function SuccessContent() {
   // `credentials: 'include'` lets a logged-in customer's order resolve even
   // without a token (e.g. if they navigated here directly rather than via
   // the checkout redirect).
-  const loadOrder = useCallback(async () => {
+  const loadOrder = useCallback(async (silent = false) => {
     const orderNumber = orderId || orderNum
     if (!orderNumber) { setLoading(false); return }
 
@@ -145,12 +176,12 @@ function SuccessContent() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.order) throw new Error('not found')
       setOrder(data.order)
+      setError(false)
     } catch {
       clearTimeout(timer)
-      // Non-fatal — the hero section above already shows the real order
-      // number from the URL regardless, and this fallback message is
-      // honest ("check your email/WhatsApp") rather than broken.
-      setError(true)
+      // CF1: a failed lookup means this page could NOT verify the order — it must never
+      // claim "confirmed". A silent background poll that fails keeps the last good state.
+      if (!silent) setError(true)
     } finally {
       setLoading(false)
     }
@@ -169,6 +200,33 @@ function SuccessContent() {
   // pattern, just written with async/await instead of .then() chaining.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadOrder() }, [loadOrder])
+
+  /* ── what the page is allowed to claim ── */
+  // CF1: everything below derives from the SERVER's answer (/api/v1/orders/lookup), never
+  // from the URL. /order-success?id=ANYTHING&total=99999 used to render "Order Confirmed!
+  // Total Paid: ₹99999". Now an unverified page says so, and the total comes from the order.
+  const view = deriveView({ loading, error, order })
+
+  // Online order whose payment hasn't landed yet (verify returned 202 / webhook still in
+  // flight): poll briefly so the page flips to Confirmed by itself. Bounded — never loops.
+  const pollsRef = useRef(0)
+  useEffect(() => {
+    if (view !== 'payment_pending' || pollsRef.current >= MAX_PAYMENT_POLLS) return
+    const t = setTimeout(() => { pollsRef.current += 1; loadOrder(true) }, PAYMENT_POLL_MS)
+    return () => clearTimeout(t)
+  }, [view, order, loadOrder])
+
+  // CF2: purchase analytics fire ONLY for a verified, genuinely confirmed order, with the
+  // server's total, and at most once per order per browser (a refresh used to re-fire it,
+  // and any URL with an id fired it before any verification).
+  useEffect(() => {
+    if (view !== 'confirmed' || !order?.order_number) return
+    const num = order.order_number
+    if (alreadyTracked(num)) return
+    markTracked(num)
+    trackPurchase(num, Number(order.total_amount) || 0)
+    markCartConverted()
+  }, [view, order])
 
   /* rate order */
   // BUG FIX (found via comprehensive final audit): this POSTed to
@@ -210,7 +268,10 @@ function SuccessContent() {
 
   const curStatus  = order?.order_status || 'confirmed'
   const curIdx     = STATUS_ORDER.indexOf(curStatus)
-  const displayNum = order?.order_number || (orderId ? `Order #${orderId.slice(0,8)}` : '')
+  const displayNum = order?.order_number || ''
+  // Only echo the URL's reference when it has the real order-number shape (support aid).
+  const urlRef = SAFE_REF.test(orderNum || orderId) ? (orderNum || orderId) : ''
+  const hero = HERO[view]
 
   return (
     <>
@@ -270,6 +331,7 @@ function SuccessContent() {
           position: absolute; inset: 0;
           background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
+        .oc-hero-warn { background: linear-gradient(135deg, #6b4a1f 0%, #8a5a1a 100%); }
         .oc-check-circle {
           width: 80px; height: 80px;
           background: rgba(255,255,255,.15);
@@ -543,14 +605,21 @@ function SuccessContent() {
         <Link href="/" className="oc-nav-back">← Continue Shopping</Link>
       </nav>
 
-      {/* ── HERO ── */}
-      <div className="oc-hero">
-        <div className="oc-check-circle">✅</div>
-        <div className="oc-title">Order Confirmed!</div>
-        <div className="oc-sub">Thank you! Your mountain goodness is on its way 🌿</div>
-        <div className="oc-badge">
-          {loading ? 'Loading…' : displayNum ? `📋 ${displayNum}` : (totalParam ? `Total Paid: ₹${totalParam}` : '✅ Order Placed')}
-        </div>
+      {/* S1: the Cart ✓ → Checkout ✓ → Confirmation progress bar. Shown only while the page is
+          making (or has verified) a success claim — never for an unverified, failed or cancelled
+          order, where "Confirmation" as the active step would be false. */}
+      {(view === 'loading' || view === 'confirmed' || view === 'payment_pending') && (
+        <CheckoutStepper current="confirmation" skin="checkout" />
+      )}
+
+      {/* ── HERO ── (driven by the verified order, never by the URL — CF1) */}
+      <div className={`oc-hero${hero.tone === 'warn' ? ' oc-hero-warn' : ''}`} data-view={view}>
+        <div className="oc-check-circle">{hero.icon}</div>
+        <div className="oc-title">{hero.title}</div>
+        <div className="oc-sub">{hero.sub}</div>
+        {displayNum
+          ? <div className="oc-badge">📋 {displayNum}</div>
+          : (view === 'unverified' && urlRef ? <div className="oc-badge">Ref: {urlRef}</div> : null)}
       </div>
 
       {/* ── MAIN ── */}
@@ -577,13 +646,25 @@ function SuccessContent() {
           </div>
         )}
 
-        {/* Error / fallback */}
+        {/* Unverified — the lookup failed or this is not an order the visitor can see (CF1) */}
         {!loading && error && (
           <div className="oc-error">
-            <div className="oc-error-icon">📦</div>
-            <h2>Order placed!</h2>
-            <p>We couldn&#39;t load your order details right now.<br />Check your email or WhatsApp for confirmation.</p>
-            <Link href="/" className="oc-btn-primary" style={{maxWidth:220,margin:'0 auto'}}>← Back to Store</Link>
+            <div className="oc-error-icon">🔍</div>
+            <h2>We couldn&#39;t verify this order</h2>
+            <p>
+              If you just placed an order, it may take a moment to appear — check your email or WhatsApp for the
+              confirmation, or try again. If you&#39;re signed in, open it from your account.
+            </p>
+            <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
+              <button
+                type="button"
+                className="oc-btn-primary"
+                style={{maxWidth:180,margin:0}}
+                onClick={() => { pollsRef.current = 0; setLoading(true); setError(false); void loadOrder() }}
+              >Try again</button>
+              <Link href="/account?tab=orders" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>My Orders</Link>
+              <Link href="/" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>← Back to Store</Link>
+            </div>
           </div>
         )}
 
@@ -604,8 +685,8 @@ function SuccessContent() {
 
           return (
             <>
-              {/* Status stepper */}
-              <div className="oc-card">
+              {/* Status stepper — fulfilment progress only makes sense for a confirmed order */}
+              {view === 'confirmed' && <div className="oc-card">
                 <div className="oc-card-title">📊 Order Status</div>
                 <div className="oc-stepper">
                   {STEPS.map(s => {
@@ -619,7 +700,7 @@ function SuccessContent() {
                     )
                   })}
                 </div>
-              </div>
+              </div>}
 
               {/* Order items */}
               <div className="oc-card">
@@ -660,7 +741,7 @@ function SuccessContent() {
                   <span className={`oc-sum-val${ship === 0 ? ' oc-free-ship' : ''}`}>{ship === 0 ? '🎉 FREE' : `₹${ship}`}</span>
                 </div>
                 {codCharge > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl">COD Charges</span><span className="oc-sum-val">₹{codCharge.toLocaleString('en-IN')}</span></div>}
-                <div className="oc-sum-row total"><span>Total Paid</span><span>₹{total.toLocaleString('en-IN')}</span></div>
+                <div className="oc-sum-row total"><span>{totalLabel(order)}</span><span>₹{total.toLocaleString('en-IN')}</span></div>
               </div>
 
               {/* Delivery details */}

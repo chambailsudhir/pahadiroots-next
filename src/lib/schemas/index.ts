@@ -15,9 +15,13 @@ export const addressSchema = z.object({
 
 // ─── Order Schema ──────────────────────────────────────────────────────────────
 
+// PS1: product/variant ids are interpolated into PostgREST filters (id=in.(...)) by
+// createOrder, so they must be plain identifiers (numeric ids or UUIDs). Anything with
+// commas, parentheses, dots or quotes could change the meaning of that filter.
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
 export const orderItemSchema = z.object({
-  productId:  z.string().min(1),
-  variantId:  z.string().min(1),
+  productId:  z.string().regex(SAFE_ID, 'Invalid product id'),
+  variantId:  z.string().regex(SAFE_ID, 'Invalid variant id'),
   qty:        z.number().int().min(1).max(50),
 })
 

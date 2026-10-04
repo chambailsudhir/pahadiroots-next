@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createOrder } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError } from '@/lib/services/orderService'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
@@ -111,6 +111,22 @@ export async function POST(req: NextRequest) {
 
     const d = parsed.data
     const a = d.address
+
+    // P1 SECURITY FIX: this endpoint is the COD path. Online payments go through
+    // /api/v1/payments (create_payment), which creates the Razorpay order and binds
+    // it to the DB order. The shared schema also accepts 'razorpay', and honouring
+    // it here created a pending order with payment_id = NULL and NO Razorpay order —
+    // exactly the unbound order an attacker needs to confirm with someone else's
+    // (cheap) payment signature, and a free way to lock stock with pending orders.
+    if (d.payment_method !== 'cod') {
+      logger.warn('orders: non-COD payment_method rejected on /api/v1/orders', {
+        action: 'orders.post.non_cod', payment_method: d.payment_method,
+      })
+      return NextResponse.json(
+        { error: 'Online payments must be started from the payment flow. Please use Pay Online at checkout.' },
+        { status: 400 },
+      )
+    }
 
     // ── Phone-level rate limit (after parse, so we have the phone number) ──
     if (!await checkRateLimitKv(`mw:rl:orders_phone:${a.phone}`, 3)) {
@@ -385,6 +401,13 @@ export async function POST(req: NextRequest) {
     return successRes
   } catch (err: unknown) {
     logger.error('orders POST error', { action: 'orders.post', error: err instanceof Error ? err.message : String(err) })
+
+    // P3: a reused idempotency key for a different request. 409 + a stable `code` lets the
+    // client mint a fresh key and ask the customer to re-confirm, instead of looping.
+    if (err instanceof IdempotencyConflictError) {
+      logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+    }
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
 
     // BUG FIX (live 504 mitigation — see OrderCreateTimeoutError/withTimeout
@@ -435,6 +458,8 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('already in progress')         // active-COD-order count cap (cod_max_active_orders)
       || lowerMessage.includes('coupon')
       || lowerMessage.includes('no longer available')
+      || lowerMessage.includes('multiple options')
+      || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
     )
     const status  = isUserFacing ? 409 : 500

@@ -133,6 +133,7 @@
  *      useMemo was moved above `addedUpsell` to support this.
  */
 
+import { useCartRevalidation } from '@/hooks/useCartRevalidation'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useCartStore }       from '@/store/cartStore'
 import { calcPriceSummary }   from '@/lib/services/pricingService'
@@ -217,6 +218,7 @@ export function useCartPage() {
 
   // ── Cart store ─────────────────────────────────────────────────────────────
   const items               = useCartStore(s => s.items)
+  const cartHydrated        = useCartStore(s => s._hasHydrated)
   const coupon              = useCartStore(s => s.coupon)
   const applyCoupon         = useCartStore(s => s.applyCoupon)
   const removeCoupon        = useCartStore(s => s.removeCoupon)
@@ -891,8 +893,16 @@ export function useCartPage() {
     setCouponError('')
   }, [removeCoupon])
 
+  // C1: refresh prices / stock from the server once the persisted cart has hydrated.
+  const { notices: cartNotices, dismiss: dismissCartNotices } =
+    useCartRevalidation(cartHydrated && items.length > 0)
+
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
+    // C1: "your cart was updated" messages from the load-time revalidation
+    cartNotices,
+    dismissCartNotices,
+
     // cart store slices
     items,
     visibleItems,

@@ -62,13 +62,16 @@ describe('order-success page', () => {
     expect(adminApiCalls).toHaveLength(0)
   })
 
-  it('shows the order number from URL params without needing any fetch to succeed', async () => {
+  it('CF1: with no verified order it does NOT show the URL order number as a confirmation', async () => {
+    // (previously: "shows the order number from URL params without needing any fetch to
+    // succeed" — exactly the behaviour that let any URL render a confirmed order.)
     const { default: OrderSuccessPage } = await import('@/app/order-success/page')
     render(React.createElement(OrderSuccessPage))
 
     await waitFor(() => {
-      expect(screen.getByText(/PRMR4OEQ/)).toBeTruthy()
+      expect(screen.getAllByText(/couldn.t verify this order/i).length).toBeGreaterThan(0)
     })
+    expect(screen.queryByText(/Order Confirmed/i)).toBeNull()
   })
 
   it('footer links point to real routes, not the dead /our-story or /terms#section paths', async () => {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 // BUG FIX: updateOrderStatus was imported but never called in this file —
@@ -11,10 +11,14 @@ import { logOrderEvent } from '@/lib/services/orderService'
 // webhook events emit consistent JSON log lines filterable by aggregators.
 // alert:true on security events and processing failures means ops get paged.
 import { logger, captureError } from '@/lib/logger'
+import { getFreshSiteSettings } from '@/lib/getSiteSettings'
+import { safeEqual, isRazorpayOrderId } from '@/lib/server/razorpay'
+import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects } from '@/lib/server/orderPayments'
 
 // Minimal typed shape for Razorpay webhook events we handle
 interface RazorpayPaymentEntity {
   id: string
+  order_id?: string | null
   amount: number
   error_reason?: string
   notes?: { db_order_id?: string }
@@ -72,7 +76,7 @@ export async function POST(req: Request) {
     .update(rawBody)
     .digest('hex')
 
-  if (expectedSig !== signature) {
+  if (!safeEqual(expectedSig, signature)) {
     // BUG FIX: signature mismatch is a security event (forged webhook or wrong
     // RAZORPAY_WEBHOOK_SECRET) — captureError with alert:true pages ops so this
     // doesn't silently appear as a 400 in access logs.
@@ -119,9 +123,9 @@ export async function POST(req: Request) {
     })
   }
 
-  // Return 200 IMMEDIATELY — process async (Audit #6)
-  // Using a background-style approach (Vercel doesn't support true async after response,
-  // so we process synchronously but return 200 regardless of outcome)
+  // Success response is built up-front; a processing failure below replaces it with a
+  // 500 so Razorpay RETRIES the event (P4). Every handler below is idempotent (atomic
+  // conditional updates, unique payments rows), so a retry can never double-apply.
   const responsePromise = NextResponse.json({ received: true })
 
   try {
@@ -146,75 +150,92 @@ export async function POST(req: Request) {
 
       const { data: order } = await db
         .from('orders')
-        .select('id, order_status, order_number')
+        .select('id, order_number, payment_status, payment_method, payment_id, total_amount, customer_id, loyalty_points_redeemed')
         .eq('id', dbOrderId)
         .single()
 
-      if (order && order.order_status === 'pending') {
-        // TOCTOU RACE FIX: two concurrent webhook deliveries can BOTH read
-        // order_status='pending' before either commits. Adding the WHERE guard
-        // here means only one UPDATE wins the Postgres row lock; the other
-        // sees updatedRows.length === 0 and skips the event log.
-        // This prevents duplicate order_events rows on replayed webhooks.
-        const { data: updatedRows } = await db
-          .from('orders')
-          .update({
-            order_status:   'confirmed',
-            payment_status: 'paid',
-            payment_id:     paymentId,
-            updated_at:     new Date().toISOString(),
-          })
-          .eq('id', order.id)
-          .eq('order_status', 'pending') // atomic guard — mirrors verify_payment fix
-          .select('id')
+      if (!order) {
+        captureError(new Error('payment.captured for unknown order'), {
+          action: 'webhook.razorpay.payment_captured.unknown_order', payment_id: paymentId, db_order_id: dbOrderId, alert: true,
+        })
+      } else if (order.payment_status === 'paid') {
+        logger.info('webhook: payment.captured order already confirmed', { paymentId, dbOrderId })
+      } else {
+        // notes.db_order_id is only a hint — it is NOT proof this payment belongs to this
+        // order. Bind on facts we control: the order must be a Razorpay order, the payment
+        // must belong to the Razorpay order id we stored for it, and the captured amount
+        // must equal the DB total. Anything else is held for manual review, never confirmed.
+        const expectedPaise = Math.round(Number(order.total_amount) * 100)
+        const problem =
+          order.payment_method !== 'razorpay'                               ? 'order_is_not_razorpay'
+          : !isRazorpayOrderId(order.payment_id)                            ? 'no_stored_razorpay_order_id'
+          : !payment.order_id || !safeEqual(order.payment_id, payment.order_id) ? 'razorpay_order_id_mismatch'
+          : payment.amount !== expectedPaise                                ? 'amount_mismatch'
+          : null
 
-        if (updatedRows && updatedRows.length > 0) {
-          // We won the race — log the capture event once
-          await logOrderEvent(order.id, 'payment_captured_webhook', 'razorpay', {
-            razorpay_payment_id: paymentId,
-            amount: payment.amount / 100,
+        if (problem) {
+          captureError(new Error('payment.captured could not be bound to order: ' + problem), {
+            action: 'webhook.razorpay.payment_captured.unbound', payment_id: paymentId, order_id: order.id,
+            paid_paise: payment.amount, expected_paise: expectedPaise, alert: true,
           })
-
-          // FEATURE: record the actual captured amount in `payments` — this is
-          // the independent source validate_waterfall() (admin) reconciles
-          // against. Previously nothing ever wrote to this table at all, so
-          // that reconciliation had zero real data to check against. Runs only
-          // in this race-winner branch (at most once per real capture), plus
-          // ON CONFLICT as a DB-level backstop against a redelivered webhook.
-          const { error: paymentInsertErr } = await db
-            .from('payments')
-            .insert({
-              order_id:          order.id,
-              payment_provider:  'razorpay',
-              payment_reference: paymentId,
-              amount:            payment.amount / 100,
-              status:            'captured',
-              paid_at:           new Date().toISOString(),
-            })
-            .select('id')
-          if (paymentInsertErr && !String(paymentInsertErr.message).includes('duplicate')) {
-            // Non-fatal: the order is already confirmed at this point, and
-            // failing the whole webhook over an audit-trail insert would risk
-            // Razorpay retrying and re-triggering the (already-guarded) capture
-            // logic unnecessarily. Surface it so ops can backfill manually.
-            captureError(new Error('payments insert failed: ' + paymentInsertErr.message), {
-              action:     'webhook.razorpay.payments_insert',
-              payment_id: paymentId,
-              order_id:   order.id,
-              alert:      true,
-            })
-          }
+          await logOrderEvent(order.id, 'payment_captured_unbound', 'razorpay', {
+            razorpay_payment_id: paymentId, reason: problem, paid_paise: payment.amount, expected_paise: expectedPaise,
+          })
         } else {
-          // Lost the race or replayed event — another process already confirmed this order
-          logger.info('webhook: payment.captured order already confirmed by concurrent process', {
-            paymentId,
-            dbOrderId,
+          const confirm = await confirmOrderPayment(db, {
+            orderId: order.id, razorpayPaymentId: paymentId, source: 'webhook',
           })
+
+          if (confirm.outcome === 'error') {
+            // Throw → outer catch → 500 → Razorpay retries this event.
+            throw new Error('payment.captured order update failed: ' + confirm.message)
+          } else if (confirm.outcome === 'not_confirmable') {
+            captureError(new Error('payment.captured for an order that cannot be confirmed'), {
+              action: 'webhook.razorpay.payment_captured.not_confirmable', payment_id: paymentId, order_id: order.id,
+              order_status: confirm.orderStatus, payment_status: confirm.paymentStatus, alert: true,
+            })
+            await logOrderEvent(order.id, 'payment_received_for_unconfirmable_order', 'razorpay', {
+              razorpay_payment_id: paymentId, order_status: confirm.orderStatus, payment_status: confirm.paymentStatus,
+            })
+          } else if (confirm.outcome === 'confirmed' || confirm.outcome === 'recovered') {
+            // We won the transition — we own the one-time side effects (O2: previously only
+            // verify_payment ran them, so a webhook win meant no loyalty and no e-mail).
+            await logOrderEvent(order.id, 'payment_captured_webhook', 'razorpay', {
+              razorpay_payment_id: paymentId,
+              amount: payment.amount / 100,
+              recovered: confirm.outcome === 'recovered',
+            })
+            await recordCapturedPayment(db, {
+              orderId: order.id, razorpayPaymentId: paymentId, amountInr: payment.amount / 100,
+              alertAction: 'webhook.razorpay.payments_insert',
+            })
+            const settings = await getFreshSiteSettings()
+            await runPaidSideEffects(db, {
+              order: {
+                id: order.id, order_number: order.order_number, total_amount: order.total_amount,
+                customer_id: order.customer_id, loyalty_points_redeemed: order.loyalty_points_redeemed,
+              },
+              razorpayOrderId: String(payment.order_id), razorpayPaymentId: paymentId,
+              settings, defer: (fn) => after(fn),
+            })
+          } else {
+            // already_paid (lost the race to verify_payment, which runs the side effects) / not_found
+            logger.info('webhook: payment.captured order already confirmed by concurrent process', { paymentId, dbOrderId })
+          }
         }
       }
     }
 
     if (eventType === 'payment.failed') {
+      // P2 FIX: a payment.failed is ONE failed ATTEMPT, not the end of the order.
+      // Razorpay emits it for every failed try, and the customer can retry inside the same
+      // checkout modal against the same Razorpay order. The previous code treated the first
+      // failure as terminal (→ payment_failed + stock released), so a successful retry was
+      // then charged, "verified" against a dead order and never confirmed.
+      //
+      // We now only RECORD the attempt. The order stays pending (stock stays reserved) until
+      // it is either paid, or the pending-order expiry job releases it. If a payment still
+      // lands after expiry, confirmOrderPayment() recovers the order.
       const payment   = event.payload.payment.entity
       const dbOrderId = payment.notes?.db_order_id
 
@@ -228,118 +249,17 @@ export async function POST(req: Request) {
 
       const { data: order } = await db
         .from('orders')
-        .select('id, order_status')
+        .select('id, order_status, payment_status')
         .eq('id', dbOrderId)
         .single()
 
-      if (order && order.order_status === 'pending') {
-        // ── BUG FIX (Sept 2026, live-verified) — two real defects here ────────
-        //
-        // 1. 'payment_failed' was NOT a member of the live order_status_enum
-        //    (verified against pg_enum: 16 values, none of them this one), so
-        //    this UPDATE failed every time with Postgres 22P02
-        //    "invalid input value for enum order_status_enum". The result was
-        //    never checked, so the failure was swallowed silently: the order
-        //    stayed 'pending' with payment_status 'pending'. Fixed on the DB
-        //    side by migration 048 (ALTER TYPE ... ADD VALUE 'payment_failed'
-        //    AFTER 'cancelled'), and here by destructuring and checking the
-        //    error instead of discarding it.
-        //
-        // 2. Ordering: stock was restored BEFORE the status transition. With
-        //    the silently-failing UPDATE above, the guard on the next line
-        //    (order_status === 'pending') stayed true forever — so a SECOND
-        //    payment.failed event for the same DB order (a customer retrying
-        //    and failing again on the same order, which is the common case,
-        //    since the idempotency key makes the retry reuse this same order
-        //    row rather than reserving stock again) restored the same stock a
-        //    second time. Net effect: inventory silently inflates on every
-        //    repeated failure.
-        //
-        //    Now the guarded transition runs FIRST and stock is restored only
-        //    if this process actually won the pending → payment_failed
-        //    transition (rowsUpdated.length > 0). The .eq('order_status',
-        //    'pending') clause makes that atomic at the row level, so two
-        //    concurrent deliveries of the same event can never both restore.
-        //    Trade-off, stated explicitly: if the process dies between the
-        //    UPDATE and restoreStock(), the reservation stays locked until an
-        //    ops fix. That is the strictly safer failure direction —
-        //    under-counted stock is a missed sale, over-counted stock is an
-        //    oversell we cannot fulfil.
-        //
-        // Note on triggers (verified live): handle_order_status_change()'s
-        // CASE maps pending→RESERVE, confirmed/shipped→OUT, cancelled→RELEASE,
-        // returned→RETURN and NULL for anything else. 'payment_failed' hits
-        // the NULL branch, so NO stock_movements row is written and this
-        // application-level restoreStock() remains the single restore path.
-        // (This is exactly why 'payment_failed' was added as its own enum
-        // value rather than reusing 'cancelled', which WOULD have fired a
-        // RELEASE movement on top of this call — a double restore.)
-        const { data: rowsUpdated, error: statusUpdateErr } = await db
-          .from('orders')
-          .update({
-            order_status:   'payment_failed',
-            payment_status: 'failed',
-            updated_at:     new Date().toISOString(),
-          })
-          .eq('id', order.id)
-          .eq('order_status', 'pending')   // atomic guard — single-winner transition
-          .select('id')
-
-        // Deliberately NOT an early `return` on either failure path below:
-        // the block at the end of this try marks this webhook_logs row as
-        // 'processed', and returning here would leave it stuck at 'received'
-        // forever — invisible to any ops query that looks for unprocessed
-        // events. We skip the side-effects instead and fall through.
-        const ownsTransition = !statusUpdateErr && !!rowsUpdated && rowsUpdated.length > 0
-
-        if (statusUpdateErr) {
-          // Do NOT restore stock when we cannot prove we own the transition —
-          // that is precisely the path that produced the double restore above.
-          captureError(new Error('payment.failed order update failed: ' + statusUpdateErr.message), {
-            action:     'webhook.razorpay.payment_failed.order_update',
-            order_id:   order.id,
-            payment_id: payment.id,
-            alert:      true,
-          })
-        } else if (!ownsTransition) {
-          // Lost the race, or a replayed/duplicate payment.failed delivery —
-          // another process already transitioned this order and restored its
-          // stock. Nothing further to do.
-          logger.info('webhook: payment.failed already handled for this order', {
-            action:     'webhook.razorpay.payment_failed.duplicate',
-            order_id:   order.id,
-            payment_id: payment.id,
-          })
-        }
-
-        if (ownsTransition) {
-          // We own the transition — release the stock reserved at order creation.
-          const { data: orderItems } = await db
-            .from('order_items')
-            .select('product_id, variant_id, quantity')
-            .eq('order_id', order.id)
-
-          if (orderItems && orderItems.length > 0) {
-            const { restoreStock } = await import('@/lib/services/inventoryService')
-            await restoreStock(
-              orderItems.map((i: { product_id: unknown; variant_id: unknown; quantity: unknown }) => ({
-                variantId: String(i.variant_id),
-                productId: String(i.product_id),
-                qty:       Number(i.quantity),
-              }))
-            ).catch(err =>
-              captureError(err, {
-                action:   'webhook.razorpay.restoreStock',
-                order_id: order.id,
-                alert:    true,
-              })
-            )
-          }
-
-          await logOrderEvent(order.id, 'payment_failed_webhook', 'razorpay', {
-            reason: payment.error_reason,
-          })
-        }
+      // A late/duplicate failure for an order that has since been paid is noise — ignore it.
+      if (order && order.payment_status !== 'paid') {
+        await logOrderEvent(order.id, 'payment_attempt_failed', 'razorpay', {
+          razorpay_payment_id: payment.id,
+          reason: payment.error_reason,
+          note: 'Single failed attempt — order left pending so the customer can retry.',
+        })
 
         const { error: failedPaymentInsertErr } = await db
           .from('payments')
@@ -399,8 +319,10 @@ export async function POST(req: Request) {
         logger.error('webhook: failed to mark webhook_log as failed', { log_id: webhookLog.id, err: logUpdateErr })
       }
     }
-    // Still return 200 — Razorpay will retry on non-2xx, which could replay
-    // the event into the same broken state. Log the failure and investigate.
+    // P4 FIX: this used to return 200 even when processing failed, so Razorpay never
+    // retried and a real capture could be lost forever. Handlers are idempotent now, so
+    // a non-2xx (Razorpay retries with backoff for ~24h) is the safe, correct response.
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 
   return responsePromise

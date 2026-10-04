@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
-import { createOrder, logOrderEvent } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError, logOrderEvent } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
-import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
-import { esc } from '@/lib/server/htmlEscape'
-import { sendTransactionalEmail } from '@/lib/server/email'
 // REFACTOR: replaced inline checkPaymentRateLimit() (~40 lines of duplicated
 // Upstash boilerplate) with the shared helper. Key is unchanged.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
@@ -16,6 +13,9 @@ import { logger, captureError } from '@/lib/logger'
 // REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
 // Was duplicated in orders/route.ts — single source of truth now.
 import { sanitize } from '@/lib/server/sanitize'
+// P1/P6: constant-time compare + server-to-server payment verification.
+import { safeEqual, isRazorpayOrderId, fetchRazorpayPayment, checkPaymentAgainstOrder } from '@/lib/server/razorpay'
+import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects } from '@/lib/server/orderPayments'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
         .digest('hex')
 
-      if (expectedSignature !== razorpay_signature) {
+      if (!safeEqual(expectedSignature, razorpay_signature)) {
         // BUG FIX 13b: HMAC mismatch is a security event (tampered payment response).
         // Use captureError with alert:true so ops are paged — this is not just a
         // user error, it may indicate a man-in-the-middle attack or integration breach.
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
       const db = getServiceClient()
       const { data: currentOrder, error: fetchErr } = await db
         .from('orders')
-        .select('id, payment_id, payment_status, order_number, total_amount, customer_id, loyalty_points_redeemed, confirmation_token')
+        .select('id, payment_id, payment_status, payment_method, order_number, total_amount, customer_id, loyalty_points_redeemed, confirmation_token')
         .eq('id', order_id)
         .single()
 
@@ -265,9 +265,33 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Order not found' }, { status: 404 })
       }
 
-      // 2a. Idempotency: order already confirmed — no side-effects, just return success.
+      // 2a. P1 SECURITY: only Razorpay-method orders can ever be confirmed here.
+      //     A COD order (or anything else) has no Razorpay order to bind to, so a
+      //     valid signature from an unrelated payment must never flip it to "paid".
+      if (currentOrder.payment_method !== 'razorpay') {
+        captureError(new Error('verify_payment attempted on non-razorpay order'), {
+          action: 'payments.verify.wrong_method', order_id, payment_method: currentOrder.payment_method, alert: true,
+        })
+        await logOrderEvent(order_id, 'payment_verify_rejected', 'system', {
+          reason: 'not_a_razorpay_order', razorpay_order_id, razorpay_payment_id,
+        }).catch(() => null)
+        return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+      }
+
+      // 2b. Idempotency: order already confirmed — no side-effects, just return success.
       //     Covers: webhook fired first, or a duplicate verify_payment call on retry.
+      //
+      //     P1 SECURITY: once paid, payment_id holds the Razorpay PAYMENT id (pay_xxx).
+      //     The previous version returned success (and the order's confirmation_token)
+      //     to ANY caller holding a valid signature for ANY payment. Now the supplied
+      //     payment id must be the one that actually paid this order.
       if (currentOrder.payment_status === 'paid') {
+        if (currentOrder.payment_id !== razorpay_payment_id) {
+          captureError(new Error('verify_payment on paid order with mismatched payment id'), {
+            action: 'payments.verify.paid_mismatch', order_id, razorpay_payment_id, alert: true,
+          })
+          return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+        }
         await logOrderEvent(order_id, 'payment_verify_duplicate', 'razorpay', {
           razorpay_payment_id, razorpay_order_id,
           note: 'Order already confirmed — idempotency guard (pre-update check)',
@@ -279,21 +303,22 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // 2b. Cross-verify: razorpay_order_id from the callback MUST match the Razorpay
-      //     order ID we stored on this DB order at create_payment time.
+      // 2c. Cross-verify: razorpay_order_id from the callback MUST exactly match the
+      //     Razorpay order ID we stored on this DB order at create_payment time.
       //
-      // BUG A FIX — SECURITY: the HMAC only proves a real Razorpay payment happened;
-      // it does NOT bind that payment to a specific DB order. Without this check, an
-      // attacker who paid for a cheap order A (has valid razorpay_order_id_A,
-      // razorpay_payment_id_A, valid HMAC_A) could submit those credentials with
-      // order_id = B (an expensive order they haven't paid for) and confirm order B
-      // for free. The cross-check closes this by binding the Razorpay order ID to the
-      // exact DB order it was created for.
+      // P1 SECURITY FIX: the HMAC only proves a real Razorpay payment happened; it does
+      // NOT bind that payment to a specific DB order. The previous code skipped this
+      // check when the stored payment_id was NULL ("HMAC is sufficient") — and
+      // /api/v1/orders could create exactly such an order (razorpay method, no
+      // Razorpay order). An attacker paid ₹1 for their own order, then submitted that
+      // valid signature against an unpaid ₹5,000 order and got it confirmed.
       //
-      // Skip when payment_id is null: create_payment failed to persist the Razorpay
-      // order ID (rare infra fault). HMAC is sufficient in that edge case.
-      if (currentOrder.payment_id && currentOrder.payment_id !== razorpay_order_id) {
-        captureError(new Error('razorpay_order_id mismatch in verify_payment'), { action: 'payments.verify.order_id_mismatch', alert: true })
+      // Now: the stored value MUST be a real `order_…` id and MUST equal the callback's.
+      // A NULL / non-order_ value is rejected (fail closed). A genuine infra fault that
+      // left payment_id unset is recovered by the payment.captured webhook, which binds
+      // on notes.db_order_id and the real captured amount.
+      if (!isRazorpayOrderId(currentOrder.payment_id) || !safeEqual(currentOrder.payment_id, razorpay_order_id)) {
+        captureError(new Error('razorpay_order_id mismatch in verify_payment'), { action: 'payments.verify.order_id_mismatch', order_id, alert: true })
         await logOrderEvent(order_id, 'payment_order_id_mismatch', 'system', {
           razorpay_order_id, razorpay_payment_id,
           stored_payment_id: currentOrder.payment_id,
@@ -301,35 +326,99 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
       }
 
-      // 3. Atomic conditional update — only update if order is still 'pending'.
-      //    TOCTOU guard for concurrent verify_payment calls: both pass step 2a, both
-      //    reach here, but only one wins the Postgres row lock.
-      const { data: updatedRows, error: updateErr } = await db
-        .from('orders')
-        .update({
-          order_status:   'confirmed',
-          payment_status: 'paid',
-          payment_id:     razorpay_payment_id,
+      // 2d. P1: independent server-to-server check with Razorpay — the HMAC says nothing
+      //     about AMOUNT or CAPTURE state. Fail closed if we cannot verify.
+      let verifiedPaymentAmountInr: number
+      try {
+        const rzpPayment = await fetchRazorpayPayment(razorpay_payment_id)
+        const check = checkPaymentAgainstOrder(rzpPayment, {
+          razorpayOrderId: razorpay_order_id,
+          totalAmountInr:  Number(currentOrder.total_amount),
         })
-        .eq('id', order_id)
-        .eq('payment_status', 'pending')
-        .select('id')
+        if (!check.ok) {
+          const isNotYetCaptured = check.reason === 'not_captured' && rzpPayment.status === 'authorized'
+          if (isNotYetCaptured) {
+            // Authorized but not yet captured (auto-capture lag). Not fraud — the
+            // payment.captured webhook confirms the order. Tell the client to wait.
+            await logOrderEvent(order_id, 'payment_verify_pending_capture', 'razorpay', {
+              razorpay_order_id, razorpay_payment_id, status: rzpPayment.status,
+            }).catch(() => null)
+            // order_number + token let the client land on the order-success page, which
+            // polls until the webhook confirms (the HMAC + order binding already passed).
+            return NextResponse.json(
+              {
+                error: 'Your payment is being confirmed. Please do not pay again — your order will be confirmed shortly.',
+                pending: true,
+                order_number: currentOrder.order_number || order_id,
+                confirmation_token: currentOrder.confirmation_token ?? undefined,
+              },
+              { status: 202 },
+            )
+          }
+          captureError(new Error(`verify_payment Razorpay check failed: ${check.reason}`), {
+            action: 'payments.verify.rzp_check_failed', order_id, razorpay_payment_id, detail: check.detail, alert: true,
+          })
+          await logOrderEvent(order_id, 'payment_verify_rejected', 'system', {
+            reason: check.reason, detail: check.detail, razorpay_order_id, razorpay_payment_id,
+          }).catch(() => null)
+          return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+        }
+        verifiedPaymentAmountInr = rzpPayment.amount / 100
+      } catch (e) {
+        // Network / Razorpay outage. Do NOT confirm unverified money; the customer's
+        // payment (if real) is confirmed by the payment.captured webhook.
+        logger.error('payments: could not verify payment with Razorpay', {
+          action: 'payments.verify.rzp_fetch_failed', order_id, razorpay_payment_id,
+          error: e instanceof Error ? e.message : String(e),
+        })
+        return NextResponse.json(
+          {
+            error: 'We could not confirm your payment right now. Please do not pay again — it will be confirmed automatically, or contact support with payment ID: ' + razorpay_payment_id,
+            pending: true,
+            order_number: currentOrder.order_number || order_id,
+            confirmation_token: currentOrder.confirmation_token ?? undefined,
+          },
+          { status: 503, headers: { 'Retry-After': '5' } },
+        )
+      }
 
-      // BUG B FIX: distinguish a genuine DB error from a 0-row idempotency hit.
-      // Previously both paths were handled by `if (!updatedRows || ...)`, which
-      // returned { success: true } even when updateErr was set (updatedRows is null
-      // on error) — silently confirming nothing while telling the client it succeeded.
-      if (updateErr) {
-        // BUG FIX 13c: money taken, DB update failed — critical financial gap.
-        // Use captureError with alert:true so ops are paged immediately.
-        // We still throw so the outer catch returns 500; the client sees a
-        // support-contact message; the webhook will retry confirmation independently.
-        captureError(new Error('Order update failed after verified payment: ' + updateErr.message), { action: 'payments.verify.order_update_failed', order_id, razorpay_payment_id, razorpay_order_id, alert: true })
+      // 3. Atomic pending|failed → paid transition (shared with the webhook).
+      //    P2: a previously-failed order (payment.failed on an earlier attempt, or
+      //    released by the expiry job) is recovered here instead of silently
+      //    returning "success" while the order stays dead.
+      const confirm = await confirmOrderPayment(db, {
+        orderId: order_id, razorpayPaymentId: razorpay_payment_id, source: 'verify_payment',
+      })
+
+      if (confirm.outcome === 'error') {
+        // Money taken, DB update failed — critical. Page ops; the webhook retries independently.
+        captureError(new Error('Order update failed after verified payment: ' + confirm.message), { action: 'payments.verify.order_update_failed', order_id, razorpay_payment_id, razorpay_order_id, alert: true })
         throw new Error('Order confirmation failed — please contact support with payment ID: ' + razorpay_payment_id)
       }
 
-      // 3a. 0 rows updated: a concurrent process confirmed the order between steps 2a and 3.
-      if (!updatedRows || updatedRows.length === 0) {
+      if (confirm.outcome === 'not_found') {
+        return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+      }
+
+      if (confirm.outcome === 'not_confirmable') {
+        // e.g. an admin cancelled the order while the customer was paying. Never flip it
+        // silently — page ops with the payment id so they can refund / reinstate.
+        captureError(new Error('Verified payment for an order that cannot be confirmed'), {
+          action: 'payments.verify.not_confirmable', order_id, razorpay_payment_id,
+          order_status: confirm.orderStatus, payment_status: confirm.paymentStatus, alert: true,
+        })
+        await logOrderEvent(order_id, 'payment_received_for_unconfirmable_order', 'razorpay', {
+          razorpay_payment_id, order_status: confirm.orderStatus, payment_status: confirm.paymentStatus,
+        }).catch(() => null)
+        return NextResponse.json(
+          { error: 'Your payment was received but this order could not be confirmed automatically. Please contact support with payment ID: ' + razorpay_payment_id },
+          { status: 409 },
+        )
+      }
+
+      // already_paid: a concurrent verify/webhook won the transition and ran the side
+      // effects (loyalty, e-mail) — nothing more to do but report success.
+      if (confirm.outcome === 'already_paid') {
         await logOrderEvent(order_id, 'payment_verify_duplicate', 'razorpay', {
           razorpay_payment_id, razorpay_order_id,
           note: 'Concurrent race — order confirmed by another process between read and update',
@@ -341,134 +430,20 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // BUG FIX (root cause of an empty `payments` table / broken admin
-      // reconciliation — found via live DB inspection, not just code
-      // review): this is the PRIMARY payment-confirmation path — it fires
-      // synchronously right after Razorpay checkout succeeds, and in
-      // practice wins the race against the async webhook almost every
-      // time. The webhook's own `payments` insert (added specifically for
-      // validate_waterfall() reconciliation — see its comment) only runs
-      // inside its `order_status === 'pending'` guard, which is false by
-      // the time the webhook arrives here, because THIS route already
-      // flipped it to 'confirmed' a moment earlier. Net effect: the
-      // webhook's insert essentially never fired, and `payments` stayed
-      // empty regardless of how many real online orders were placed —
-      // confirmed live: 0 rows in `payments` despite real captured
-      // razorpay orders. Mirrors the webhook's own insert exactly,
-      // including using the same (payment_provider, payment_reference)
-      // unique constraint (migration 033) as a race-safe backstop in case
-      // the webhook DOES win occasionally.
-      const { error: paymentInsertErr } = await db
-        .from('payments')
-        .insert({
-          order_id:          order_id,
-          payment_provider:  'razorpay',
-          payment_reference: razorpay_payment_id,
-          amount:            Number(currentOrder.total_amount),
-          status:            'captured',
-          paid_at:           new Date().toISOString(),
-        })
-        .select('id')
-      if (paymentInsertErr && !String(paymentInsertErr.message).includes('duplicate')) {
-        // Non-fatal — matches the webhook's own handling. The order is
-        // already confirmed at this point; failing the whole request over
-        // an audit-trail insert would tell the customer their payment
-        // failed when it didn't. Surface it so ops can backfill manually.
-        captureError(new Error('payments insert failed: ' + paymentInsertErr.message), {
-          action:             'payments.verify.payments_insert',
-          order_id,
-          razorpay_payment_id,
-          alert:              true,
-        })
-      }
-
-      // 4. Site settings (single fetch, reused for loyalty + email)
+      // We won (confirmed | recovered): audit row + loyalty + e-mail, exactly once.
+      await recordCapturedPayment(db, {
+        orderId: order_id, razorpayPaymentId: razorpay_payment_id,
+        amountInr: verifiedPaymentAmountInr, alertAction: 'payments.verify.payments_insert',
+      })
       const settings = await getFreshSiteSettings()
-
-      // 5. Loyalty — read from DB-authoritative field, never from client body
-      const loyalty_points_redeemed = Number(currentOrder.loyalty_points_redeemed ?? 0)
-      const custId = currentOrder.customer_id
-      if (custId) {
-        if (loyalty_points_redeemed > 0) {
-          const redeemed = await redeemLoyaltyPoints(custId, order_id, loyalty_points_redeemed)
-          if (!redeemed) {
-            logger.warn('loyalty: redemption skipped — insufficient balance', { order_id })
-          }
-        }
-        await awardLoyaltyPoints(custId, order_id, currentOrder.total_amount ?? 0, settings, 'Earned from online payment')
-      }
-
-      // 6. Log verified event
-      await logOrderEvent(order_id, 'payment_verified', 'razorpay', {
-        razorpay_payment_id, razorpay_order_id,
-      }).catch(() => null)
-
-      // BUG FIX (same class as the orders-route 504 fix): this email send was
-      // awaited directly in the response path, with its own internal
-      // timeout+retry (up to ~10.4s worst case, see lib/server/email.ts) that
-      // could push this whole request past Vercel's default function timeout
-      // even though payment verification and order confirmation were already
-      // fully committed by this point. Deferred to after() so the response
-      // below returns immediately; delivery guarantee (incl. failed_emails
-      // dead-letter) is unchanged.
-      after(async () => {
-        try {
-          const { data: customer } = await db
-            .from('customers').select('first_name, email').eq('id', currentOrder.customer_id).single()
-
-          if (customer?.email && currentOrder) {
-            const coinsEarned = Math.floor(currentOrder.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
-            const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
-              ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
-                   <span style="font-size:18px">🪙</span>
-                   <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins!</strong>
-                   <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them on your next order.</p>
-                 </div>`
-              : ''
-
-            // AUDIT FIX [ERROR HANDLING]: previously imported Resend directly
-            // and called resend.emails.send() here. The Resend SDK resolves
-            // (never rejects) on API-level failures — neither this nor the
-            // surrounding try/catch ever caught a real send failure (bad API
-            // key, unverified domain, bounce, quota/rate-limit). See
-            // lib/server/email.ts for the full explanation. sendTransactionalEmail()
-            // checks the resolved `error` explicitly and dead-letters into
-            // `failed_emails` for retry via the cron sweep instead of the
-            // payment-confirmation email simply vanishing.
-            await sendTransactionalEmail({
-              type:    'payment_confirmation',
-              to:      customer.email,
-              subject: `Payment Confirmed #${currentOrder.order_number} — HimVeda by Pahadi Roots 🌿`,
-              html: `
-                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
-                  <div style="background:#2C4A2E;padding:24px;text-align:center">
-                    <h1 style="color:#fff;margin:0;font-size:22px">🌿 HimVeda by Pahadi Roots</h1>
-                    <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
-                  </div>
-                  <div style="padding:24px">
-                    <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
-                    <p>Hi <strong>${esc(customer.first_name)}</strong>, your payment was successful.</p>
-                    <p><strong>Order #:</strong> ${esc(currentOrder.order_number)}<br>
-                       <strong>Payment ID:</strong> ${esc(razorpay_payment_id)}<br>
-                       <strong>Amount Paid:</strong> ₹${currentOrder.total_amount}<br>
-                       <strong>Delivery:</strong> 3–5 business days</p>
-                    ${coinsHtml}
-                    <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
-                    <a href="https://www.pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
-                  </div>
-                  <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
-                    HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
-                  </div>
-                </div>`,
-              context: { order_id: currentOrder.id, order_number: currentOrder.order_number },
-            })
-          }
-        } catch (e) {
-          // Catches errors from BUILDING the email (the customer lookup
-          // query, template interpolation) — sendTransactionalEmail() itself
-          // never throws.
-          logger.error('payments: email failed after payment confirmation', { action: 'payments.email', error: e instanceof Error ? e.message : String(e) })
-        }
+      await runPaidSideEffects(db, {
+        order: {
+          id: currentOrder.id, order_number: currentOrder.order_number,
+          total_amount: currentOrder.total_amount, customer_id: currentOrder.customer_id,
+          loyalty_points_redeemed: currentOrder.loyalty_points_redeemed,
+        },
+        razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id,
+        settings, defer: (fn) => after(fn),
       })
 
       return NextResponse.json({
@@ -482,6 +457,13 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Payment error'
     logger.error('payments POST error', { action: 'payments.post', error: internalMessage })
+
+    // P3: a reused idempotency key for a different request. 409 + a stable `code` lets the
+    // client mint a fresh key and ask the customer to re-confirm, instead of looping.
+    if (err instanceof IdempotencyConflictError) {
+      logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+    }
     // BUG FIX [ERROR HANDLING]: this previously had NO user-facing carve-out at
     // all in production — every error, including the exact same user-actionable
     // messages createOrder() throws in the COD path (insufficient stock, expired/
@@ -503,6 +485,8 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('already in progress')
       || lowerMessage.includes('coupon')
       || lowerMessage.includes('no longer available')
+      || lowerMessage.includes('multiple options')
+      || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
     // Never leak Razorpay / Supabase internals to the client in production
     const status = isUserFacing ? 409 : 500

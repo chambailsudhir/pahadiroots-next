@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { CartItem, AppliedCoupon } from '@/types'
 import { generateUUID } from '@/lib/utils'
+import { reconcileCartLines, type CartChange, type LiveLineDTO } from '@/lib/cartReconcile'
 
 interface CartStore {
   items:             CartItem[]
@@ -28,6 +29,8 @@ interface CartStore {
   clearCart:         () => void
   resetIdempotencyKey: () => void
   ensureIdempotencyKey: () => string
+  /** C1: apply the server's live price/stock/availability to the cart; returns what changed. */
+  applyLiveLines:    (lines: LiveLineDTO[]) => CartChange[]
 
   // Pending-removal registry — written by useCartPage (undo-toast pattern),
   // read by CartDrawer on checkout so ghost items are flushed regardless of
@@ -174,6 +177,16 @@ export const useCartStore = create<CartStore>()(
         // non-existent variantIds. Belt-and-suspenders: clear it here.
         pendingVariantIds: new Set(),
       }),
+
+      applyLiveLines: (lines) => {
+        const { items, changes } = reconcileCartLines(get().items, lines)
+        // Always write (maxQty is refreshed even when nothing visible changed), but an
+        // emptied cart resets key + coupon exactly like removeItem/clearCart do.
+        set(items.length === 0
+          ? { items, idempotencyKey: '', coupon: null, lastAppliedCouponCode: '' }
+          : { items })
+        return changes
+      },
 
       resetIdempotencyKey: () => set({ idempotencyKey: generateUUID() }),
       ensureIdempotencyKey: () => {

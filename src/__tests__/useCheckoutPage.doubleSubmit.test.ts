@@ -102,7 +102,14 @@ describe('useCheckoutPage — double-submission guard on handlePlace', () => {
   it('[BUG FIX] two handlePlace() calls in the same tick only fire one /api/v1/orders request', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>
     const { promise, resolve } = deferred<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<unknown> }>()
-    fetchMock.mockReturnValue(promise)
+    // C1: handlePlace now validates the cart against the server BEFORE creating the order.
+    // Let that check resolve immediately (fail-open 500) so only the ORDER request stays
+    // in flight; everything else resolves normally.
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/v1/orders') return promise
+      if (url === '/api/v1/cart/validate') return Promise.resolve({ ok: false, status: 500, text: async () => '', json: async () => ({}) })
+      return Promise.resolve({ ok: true, status: 200, text: async () => '', json: async () => ({}) })
+    })
 
     const { result } = renderHook(() => useCheckoutPage(settings))
     fillValidAddress(result)
@@ -117,6 +124,10 @@ describe('useCheckoutPage — double-submission guard on handlePlace', () => {
       p2 = result.current.handlePlace()
     })
 
+    // The order request leaves a moment later (after the cart validation); wait for it…
+    await vi.waitFor(() => expect(ordersCallCount(fetchMock)).toBe(1))
+    // …and make sure the second click did not produce another one once everything settles.
+    await act(async () => { await new Promise(r => setTimeout(r, 20)) })
     expect(ordersCallCount(fetchMock)).toBe(1)
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/orders', expect.any(Object))
 

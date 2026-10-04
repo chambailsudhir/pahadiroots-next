@@ -64,16 +64,8 @@
   box-shadow: 0 0 10px rgba(201,162,64,.55);
 }
 
-/* ── Progress steps ─────────────────────────────────────────────────────────── */
-.cp-steps {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  padding: 14px 16px;
-  background: var(--white);
-  border-bottom: 1px solid var(--border-lt);
-}
-
+/* ── Progress steps ─ the stepper itself lives in components/checkout/checkout-stepper.css;
+   only the page's own back link stays here. */
 .cp-steps-back {
   grid-column: 1;
   justify-self: start;
@@ -87,57 +79,6 @@
   white-space: nowrap;
 }
 .cp-steps-back:hover { text-decoration: underline; }
-
-/* ol/li used for accessibility semantics — reset list styling */
-.cp-steps-list {
-  grid-column: 2;
-  display: flex;
-  align-items: center;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.cp-step {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #c0b8ae;
-  letter-spacing: .25px;
-  text-transform: uppercase;
-}
-
-.cp-step span {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #f2ece4;
-  border: 1.5px solid #e0d5c5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.cp-step-active { color: var(--forest); }
-
-.cp-step-active span {
-  background: var(--forest);
-  color: #fff;
-  border-color: var(--forest);
-  box-shadow: 0 2px 8px rgba(26,58,30,.28);
-}
-
-.cp-step-line {
-  width: 52px;
-  height: 1px;
-  background: linear-gradient(90deg, #e0d5c5, #ece4d8);
-  margin: 0 8px;
-  flex-shrink: 0;
-}
 
 /* ── Page layout ─────────────────────────────────────────────────────────────── */
 .cp-layout {
@@ -410,10 +351,6 @@
 .cp-layout, .cp-left, .cp-left > *, .cp-card { min-width: 0; max-width: 100%; }
 
 @media (max-width: 640px) {
-  .cp-steps { grid-template-columns: auto 1fr; gap: 8px; padding: 12px; }
-  .cp-steps-list { grid-column: 2; justify-self: end; }
-  .cp-step { font-size: 11px; gap: 5px; }
-  .cp-step-line { width: 14px; margin: 0 4px; }
   .cp-card-head { padding: 14px 16px 12px; }
   .cp-trust-item { padding: 16px 12px; }
   .cp-delivery-item { padding: 13px 14px; }

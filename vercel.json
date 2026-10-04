@@ -18,8 +18,17 @@
     },
     "src/app/api/health/route.ts": {
       "maxDuration": 10
+    },
+    "src/app/api/v1/cron/expire-pending-orders/route.ts": {
+      "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/v1/cron/expire-pending-orders",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/v1/(.*)",

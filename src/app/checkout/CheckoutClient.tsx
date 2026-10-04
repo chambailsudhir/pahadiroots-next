@@ -31,6 +31,8 @@
  *   • applyCoupon / handleApplyCouponHint: mountedRef guards (see useCheckoutPage).
  */
 
+import CartNoticeBanner from '@/components/cart/CartNoticeBanner'
+import CheckoutStepper from '@/components/checkout/CheckoutStepper'
 import './checkout.css'
 
 import Script from 'next/script'
@@ -61,6 +63,7 @@ const CHECKOUT_TRUST_ITEMS = [
 export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const {
     storeReady,
+    cartNotices, dismissCartNotices,
     items, coupon, removeCoupon,
     payMethod, setPayMethod,
     placing, razorpayLoaded, setRazorpayLoaded,
@@ -116,6 +119,7 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
       })
     }, 2500)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeReady, items, addr.phone, addr.name, email, pricing.total])
 
   // PERF FIX: stable callbacks for JSX props that were previously inline arrow
@@ -206,40 +210,13 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
         remainingForFreeShip={pricing.remainingForFreeShip}
       />
 
-      {/* Breadcrumb */}
-      <nav className="ck-nav">
-        <div className="ck-nav-inner">
-          {/* Explicit, unmistakable back link — the "Cart" breadcrumb step
-              below is also a real link, but as a checkmark bubble it reads
-              as a status indicator first and a link second. This makes the
-              way back obvious at a glance, not just on hover. */}
-          <Link href="/cart" className="ck-nav-back">← Back<span className="ck-nav-back-full"> to Cart</span></Link>
-          <div className="ck-nav-crumbs">
-          {/* BUG FIX (navigation dead-end): the completed "Cart" step was a
-              plain <div>, not a link — checkout had no way back to the cart
-              or anywhere else in the store short of the header logo (easy to
-              miss once scrolled), which is especially bad on any screen that
-              blocks Place Order (e.g. the bothPayOff alert below), since the
-              customer was otherwise stuck. Completed steps in a checkout
-              breadcrumb are conventionally clickable to go back; only "Cart"
-              qualifies (Confirmation is ahead, not reachable early). */}
-          <Link href="/cart" className="ck-crumb ck-crumb--done ck-crumb--link">
-            <div className="ck-crumb-dot ck-crumb-dot--done">✓</div>
-            <span>Cart</span>
-          </Link>
-          <div className="ck-crumb-line ck-crumb-line--done" />
-          <div className="ck-crumb ck-crumb--active">
-            <div className="ck-crumb-dot ck-crumb-dot--active">2</div>
-            <span>Checkout</span>
-          </div>
-          <div className="ck-crumb-line" />
-          <div className="ck-crumb">
-            <div className="ck-crumb-dot">3</div>
-            <span>Confirmation</span>
-          </div>
-          </div>
-        </div>
-      </nav>
+      {/* S2: shared stepper. Only "Cart" is a link, and only here (S3): completed steps in a
+          checkout breadcrumb are conventionally clickable to go back; Confirmation is ahead and
+          is never reachable early. The explicit "← Back to Cart" link stays too — the Cart step
+          is a checkmark bubble that reads as a status indicator first and a link second. */}
+      <CheckoutStepper current="checkout" skin="checkout">
+        <Link href="/cart" className="ck-nav-back">← Back<span className="ck-nav-back-full"> to Cart</span></Link>
+      </CheckoutStepper>
 
       {bothPayOff && (
         <div className="ck-alert">
@@ -247,6 +224,9 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
           <Link href="/cart" className="ck-alert-link">← Back to Cart</Link>
         </div>
       )}
+
+      {/* C1: live price / stock changes found when checkout loaded */}
+      <CartNoticeBanner messages={cartNotices} onDismiss={dismissCartNotices} />
 
       <div className="ck-page">
         <div className="ck-grid">

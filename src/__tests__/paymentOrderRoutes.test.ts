@@ -242,6 +242,24 @@ function mockRazorpayCreate(override?: Partial<{ ok: boolean; body: object }>) {
   })
 }
 
+/**
+ * Mock Razorpay's GET /v1/payments/:id (used by verify_payment since the P1 fix
+ * to confirm amount + capture state server-to-server).
+ * Pass an Error to simulate a network/API outage.
+ */
+function mockRazorpayPaymentFetch(payment: Record<string, unknown> | Error) {
+  fetchMock.mockImplementation(async (url: string, init?: { method?: string }) => {
+    if (String(url).includes('razorpay.com/v1/payments/')) {
+      if (payment instanceof Error) throw payment
+      return { ok: true, status: 200, json: async () => payment, text: async () => JSON.stringify(payment) }
+    }
+    if (String(url).includes('razorpay.com')) {
+      return { ok: true, json: async () => ({ id: RAZORPAY_ORDER_ID, amount: 100000, currency: 'INR' }), text: async () => '' }
+    }
+    return { ok: true, json: async () => [[' ', 1], [' ', 1]] }
+  })
+}
+
 // ─── Set up default mocks ─────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -456,6 +474,8 @@ describe('POST /api/v1/payments — verify_payment', () => {
     razorpay_payment_id: string
     razorpay_signature:  string
     order_id:            string
+    orderRow:            Record<string, unknown>
+    rzpPayment:          Record<string, unknown> | Error
   }>) {
     const sig = override?.razorpay_signature
       ?? makeSignature(
@@ -471,14 +491,26 @@ describe('POST /api/v1/payments — verify_payment', () => {
       order_id:            override?.order_id ?? DB_ORDER_ID,
     }
 
-    // Provide full order row for the DB .single() after update
-    mockDb.responses['orders'] = {
+    // Provide full order row for the DB .single() after update.
+    // P1: a genuine Razorpay order is bound to its Razorpay order id via
+    // payment_id and has payment_method 'razorpay'; verify rejects anything else.
+    mockDb.responses['orders'] = override?.orderRow ?? {
       id:                      DB_ORDER_ID,
       order_number:            'PR1A2B3C4D',
+      payment_id:              RZP_ORDER_ID,
+      order_status:            'pending',
+      payment_status:          'pending',
+      payment_method:          'razorpay',
       total_amount:            1000,
       customer_id:             'cust-uuid-001',
       loyalty_points_redeemed: 0,
     }
+    // P1: verify_payment confirms amount + capture state with Razorpay directly.
+    mockRazorpayPaymentFetch(override?.rzpPayment ?? {
+      id: override?.razorpay_payment_id ?? RZP_PAYMENT_ID,
+      order_id: override?.razorpay_order_id ?? RZP_ORDER_ID,
+      amount: 100000, currency: 'INR', status: 'captured',
+    })
 
     process.env.RAZORPAY_KEY_SECRET = KEY_SECRET
 
@@ -511,32 +543,21 @@ describe('POST /api/v1/payments — verify_payment', () => {
   })
 
   it('idempotency — already-confirmed order returns success without re-awarding loyalty', async () => {
-    // Simulate: order is already 'confirmed' (payment_status = 'paid').
-    // The conditional update returns 0 rows → we should short-circuit.
-    // The Supabase mock returns `data: []` for the .select('id') on update when
-    // we override responses to simulate 0 rows updated.
-    mockDb.responses['orders'] = []  // update().select('id') → [] means 0 rows updated
-
-    // We also need the subsequent .single() for order_number to return something
-    // Override: after the first [] response the builder returns the full order on next call
-    let callCount = 0
-    const origBuilder = (table: string) => {
-      const b = buildQueryBuilder(table)
-      const origThen = b.then
-      b.single = () => {
-        callCount++
-        if (callCount === 1) return Promise.resolve({ data: [], error: null }) // update → 0 rows
-        return Promise.resolve({ data: { id: DB_ORDER_ID, order_number: 'PR1A2B3C4D', total_amount: 1000, customer_id: 'cust-uuid-001', loyalty_points_redeemed: 0 }, error: null })
-      }
-      return b
-    }
-
-    const res  = await callVerify()
+    // Order already paid (webhook / earlier verify won). After confirmation
+    // payment_id holds the Razorpay PAYMENT id, which must match the one supplied.
+    const res  = await callVerify({
+      orderRow: {
+        id: DB_ORDER_ID, order_number: 'PR1A2B3C4D', payment_id: RZP_PAYMENT_ID,
+        payment_status: 'paid', payment_method: 'razorpay', total_amount: 1000,
+        customer_id: 'cust-uuid-001', loyalty_points_redeemed: 0,
+      },
+    })
     const json = await res.json()
 
-    // Should succeed — not a 500 or 400
     expect(res.status).toBe(200)
     expect(json.success).toBe(true)
+    const { awardLoyaltyPoints } = await import('@/lib/server/loyalty')
+    expect(awardLoyaltyPoints).not.toHaveBeenCalled()
   })
 
   it('HMAC mismatch → 400, order NOT updated', async () => {
@@ -989,6 +1010,7 @@ describe('POST /api/v1/payments — verify_payment security (BUG A FIX)', () => 
       id:                      DB_ORDER_ID,
       payment_id:              'order_rzp_for_THIS_order',  // stored on target order
       payment_status:          'pending',
+      payment_method:          'razorpay',
       order_number:            'PR1A2B3C4D',
       total_amount:            5000,  // expensive order
       customer_id:             'cust-uuid-001',
@@ -1020,8 +1042,9 @@ describe('POST /api/v1/payments — verify_payment security (BUG A FIX)', () => 
 
     mockDb.responses['orders'] = {
       id:                      DB_ORDER_ID,
-      payment_id:              RZP_ORDER_ID,
+      payment_id:              RZP_PAYMENT_ID,   // after confirmation payment_id holds the pay_ id
       payment_status:          'paid',   // ← already confirmed
+      payment_method:          'razorpay',
       order_number:            'PR1A2B3C4D',
       total_amount:            1000,
       customer_id:             'cust-uuid-001',
@@ -1048,5 +1071,172 @@ describe('POST /api/v1/payments — verify_payment security (BUG A FIX)', () => 
     // Loyalty must NOT be re-awarded for an already-confirmed order
     const { awardLoyaltyPoints } = await import('@/lib/server/loyalty')
     expect(awardLoyaltyPoints).not.toHaveBeenCalled()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P1 — verify_payment must bind the payment to THIS order, amount and capture
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/v1/payments — verify_payment P1 (cheap payment must not confirm an expensive order)', () => {
+  const RZP_ORDER_ID   = 'order_rzp_verify_001'
+  const RZP_PAYMENT_ID = 'pay_verify_001'
+  const DB_ORDER_ID    = 'order-db-uuid-001'
+  const KEY_SECRET     = 'test_razorpay_secret'
+
+  const sign = (o: string, p: string) =>
+    crypto.createHmac('sha256', KEY_SECRET).update(`${o}|${p}`).digest('hex')
+
+  const baseRow = {
+    id: DB_ORDER_ID, order_number: 'PR1A2B3C4D', payment_id: RZP_ORDER_ID,
+    order_status: 'pending', payment_status: 'pending', payment_method: 'razorpay', total_amount: 1000,
+    customer_id: 'cust-uuid-001', loyalty_points_redeemed: 0,
+  }
+  const goodPayment = { id: RZP_PAYMENT_ID, order_id: RZP_ORDER_ID, amount: 100000, currency: 'INR', status: 'captured' }
+
+  async function verify(row: Record<string, unknown>, payment: Record<string, unknown> | Error, ids?: { o?: string; p?: string }) {
+    const o = ids?.o ?? RZP_ORDER_ID
+    const p = ids?.p ?? RZP_PAYMENT_ID
+    mockDb.responses['orders'] = row
+    mockRazorpayPaymentFetch(payment)
+    process.env.RAZORPAY_KEY_SECRET = KEY_SECRET
+    const { POST } = await import('@/app/api/v1/payments/route')
+    return POST(makeReq({
+      action: 'verify_payment', razorpay_order_id: o, razorpay_payment_id: p,
+      razorpay_signature: sign(o, p), order_id: DB_ORDER_ID,
+    }) as any)
+  }
+  const orderUpdates = () => mockDb.calls.filter(c => c.table === 'orders' && c.op === 'update')
+
+  it('happy path: bound order + captured + exact amount → 200 and order updated', async () => {
+    const res = await verify(baseRow, goodPayment)
+    expect(res.status).toBe(200)
+    expect(orderUpdates().length).toBeGreaterThan(0)
+  })
+
+  it('ATTACK: order with NULL payment_id (created via /orders) is NOT confirmable with someone else\'s valid signature → 400', async () => {
+    const res = await verify({ ...baseRow, payment_id: null, total_amount: 5000 }, { ...goodPayment, amount: 100 })
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('ATTACK: COD order cannot be flipped to paid → 400', async () => {
+    const res = await verify({ ...baseRow, payment_method: 'cod', payment_id: null, payment_status: 'cod_pending' }, goodPayment)
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('stored payment_id that is not an order_ id (e.g. a pay_ id) is rejected → 400', async () => {
+    const res = await verify({ ...baseRow, payment_id: 'pay_something' }, goodPayment, { o: 'pay_something' })
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('amount captured by Razorpay differs from DB total → 400, order NOT confirmed', async () => {
+    const res = await verify({ ...baseRow, total_amount: 5000 }, { ...goodPayment, amount: 100 })
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('Razorpay payment belongs to a different Razorpay order → 400', async () => {
+    const res = await verify(baseRow, { ...goodPayment, order_id: 'order_someone_else' })
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('payment failed on Razorpay → 400, order NOT confirmed', async () => {
+    const res = await verify(baseRow, { ...goodPayment, status: 'failed' })
+    expect(res.status).toBe(400)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('payment authorized but not yet captured → 202 "being confirmed", order NOT confirmed (webhook finishes it)', async () => {
+    const res  = await verify(baseRow, { ...goodPayment, status: 'authorized' })
+    const json = await res.json()
+    expect(res.status).toBe(202)
+    expect(json.pending).toBe(true)
+    // the client needs these to land on the order page, which polls until confirmed
+    expect(json.order_number).toBe('PR1A2B3C4D')
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('Razorpay lookup outage → fails CLOSED with 503, order NOT confirmed', async () => {
+    const res  = await verify(baseRow, new Error('network down'))
+    const json = await res.json()
+    expect(res.status).toBe(503)
+    expect(json.pending).toBe(true)
+    expect(json.order_number).toBe('PR1A2B3C4D')
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  // ── P2: a failed/released order must be recoverable by a verified payment ──
+  it('P2: order previously failed/released + verified capture → confirmed (recovered) and stock re-reserved', async () => {
+    mockDb.responses['order_items'] = [{ product_id: 'p1', variant_id: 'v1', quantity: 2 }]
+    const res = await verify({ ...baseRow, order_status: 'payment_failed', payment_status: 'failed' }, goodPayment)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
+    expect(orderUpdates()[0].args[0]).toMatchObject({ order_status: 'confirmed', payment_status: 'paid' })
+    expect(mockDb.rpcCalls.some(c => c.rpcName === 'reserve_stock_at_order')).toBe(true)
+  })
+
+  it('P2: verified payment for an order that cannot be confirmed (cancelled) → 409, order NOT flipped', async () => {
+    const res = await verify({ ...baseRow, order_status: 'cancelled', payment_status: 'pending' }, goodPayment)
+    expect(res.status).toBe(409)
+    expect(orderUpdates()).toHaveLength(0)
+  })
+
+  it('already-paid order but a DIFFERENT payment id supplied → 400 (no token leak)', async () => {
+    const res  = await verify(
+      { ...baseRow, payment_status: 'paid', payment_id: 'pay_the_real_one', confirmation_token: 'secret-token' },
+      goodPayment,
+    )
+    const json = await res.json()
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(json)).not.toContain('secret-token')
+  })
+})
+
+describe('POST /api/v1/orders — P1: online payments cannot be created via the COD endpoint', () => {
+  it('payment_method "razorpay" → 400 and createOrder is never called', async () => {
+    const { POST } = await import('@/app/api/v1/orders/route')
+    const res = await POST(makeReq(BASE_ORDER_BODY) as any)
+    expect(res.status).toBe(400)
+    expect(mockCreateOrder).not.toHaveBeenCalled()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P3 — reused idempotency key with a different request → 409 + stable code
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('P3 — idempotency key reused for a different request', () => {
+  it('POST /api/v1/orders → 409 with code IDEMPOTENCY_CONFLICT (no order placed, no side effects)', async () => {
+    const { IdempotencyConflictError } = await import('@/lib/services/orderService')
+    mockCreateOrder.mockRejectedValueOnce(new IdempotencyConflictError('payment method changed (razorpay → cod)'))
+
+    const { POST } = await import('@/app/api/v1/orders/route')
+    const res  = await POST(makeReq(COD_ORDER_BODY) as any)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.code).toBe('IDEMPOTENCY_CONFLICT')
+    expect(json.error).not.toMatch(/razorpay → cod/) // internal reason never leaks
+  })
+
+  it('POST /api/v1/payments create_payment → 409 with code IDEMPOTENCY_CONFLICT and NO Razorpay order is created', async () => {
+    const { IdempotencyConflictError } = await import('@/lib/services/orderService')
+    mockCreateOrder.mockRejectedValueOnce(new IdempotencyConflictError('items or quantities changed'))
+
+    const { POST } = await import('@/app/api/v1/payments/route')
+    const res  = await POST(makeReq({ action: 'create_payment', ...BASE_ORDER_BODY }) as any)
+    const json = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(json.code).toBe('IDEMPOTENCY_CONFLICT')
+    expect(fetchMock.mock.calls.some(c => String(c[0]).includes('razorpay.com'))).toBe(false)
   })
 })

@@ -1,0 +1,115 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   checkout-stepper.css — styles for <CheckoutStepper /> (S1/S2).
+   Moved verbatim from cart-page.css (.cp-step*) and checkout.css (.ck-nav / .ck-crumb*)
+   so the cart, checkout AND confirmation pages share one definition. Look unchanged.
+   Additions: list resets (the markup is now a real <ol>), .cp-step-done, .ck-nav-inner--solo.
+   The checkout skin deliberately uses hard-coded colours (no CSS variables) so it renders
+   identically on the confirmation page, which defines its own palette.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Cart skin ──────────────────────────────────────────────────────────────── */
+.cp-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border-lt);
+}
+
+
+/* ol/li used for accessibility semantics — reset list styling */
+.cp-steps-list {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cp-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c0b8ae;
+  letter-spacing: .25px;
+  text-transform: uppercase;
+}
+
+.cp-step span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f2ece4;
+  border: 1.5px solid #e0d5c5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cp-step-active { color: var(--forest); }
+
+.cp-step-active span {
+  background: var(--forest);
+  color: #fff;
+  border-color: var(--forest);
+  box-shadow: 0 2px 8px rgba(26,58,30,.28);
+}
+
+.cp-step-line {
+  width: 52px;
+  height: 1px;
+  background: linear-gradient(90deg, #e0d5c5, #ece4d8);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+
+.cp-step-done { color: var(--forest); }
+.cp-step-done span { background: #e8f0e4; color: var(--forest); border-color: #b8d4a8; }
+
+@media (max-width: 640px) {
+  .cp-steps { grid-template-columns: auto 1fr; gap: 8px; padding: 12px; }
+  .cp-steps-list { grid-column: 2; justify-self: end; }
+  .cp-step { font-size: 11px; gap: 5px; }
+  .cp-step-line { width: 14px; margin: 0 4px; }
+}
+
+/* ── Checkout / confirmation skin ───────────────────────────────────────────── */
+.ck-nav { background: #FDFAF5; border-bottom: 1px solid #E8E0D5; }
+.ck-nav-inner { max-width: 1440px; margin: 0 auto; padding: 12px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ck-nav-inner--solo { justify-content: center; }
+@media (max-width: 640px) { .ck-nav-inner { padding: 12px 16px; } }
+@media (max-width: 480px) {
+  .ck-crumb-line { flex-basis: 20px; margin: 0 4px; }
+  .ck-crumb span { display: none; }
+}
+
+/* ol/li for accessibility semantics — reset list styling */
+.ck-nav-crumbs { display: flex; align-items: center; gap: 0; list-style: none; margin: 0; padding: 0; }
+.ck-step-item { list-style: none; margin: 0; padding: 0; }
+
+.ck-crumb { display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
+.ck-crumb--done   { color: #7A9A6A; }
+.ck-crumb--active { color: #2C4A2E; font-weight: 600; }
+
+.ck-crumb-dot { width: 24px; height: 24px; border-radius: 50%; background: #E8E0D5; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.ck-crumb-dot--done   { background: #D4E8C8; color: #4A7A3A; font-size: 11px; }
+.ck-crumb-dot--active { background: #2C4A2E; color: #F5F0E8; box-shadow: 0 0 0 3px rgba(44,74,46,.15); }
+
+.ck-crumb-line       { flex: 0 0 40px; height: 1px; background: #E0D8CE; margin: 0 8px; }
+.ck-crumb-line--done { background: #B8D4A8; }
+
+/* BUG FIX (navigation dead-end): the "Cart" breadcrumb step is now a real
+   link (see CheckoutClient.tsx); style it so it still reads as a completed
+   step at rest, with an obvious link affordance on hover/focus rather than
+   looking clickable only via cursor. */
+.ck-crumb--link { text-decoration: none; cursor: pointer; }
+.ck-crumb--link:hover, .ck-crumb--link:focus-visible { color: #4A7A3A; }
+.ck-crumb--link:focus-visible { outline: 2px solid #4A7A3A; outline-offset: 3px; border-radius: 4px; }
+

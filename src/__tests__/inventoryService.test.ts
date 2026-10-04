@@ -64,7 +64,7 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {},
 }))
 
-import { restoreStock, reserveStockAtomicForOrder, StockReservationError } from '@/lib/services/inventoryService'
+import { restoreStock, restoreStockReporting, reserveStockAtomicForOrder, StockReservationError } from '@/lib/services/inventoryService'
 
 beforeEach(() => {
   rpcCalls = []
@@ -265,5 +265,57 @@ describe('reserveStockAtomicForOrder — infra error vs. real stock shortfall', 
     expect(rpcCalls).toHaveLength(3)
     expect(rpcCalls[2].name).toBe('restore_stock')
     expect(rpcCalls[2].args.p_variant_id).toBe('v1')
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUG FIX — supabase-js RPCs RESOLVE with { error } instead of throwing
+// ─────────────────────────────────────────────────────────────────────────────
+// The old restoreStock only had a try/catch, which never fires for a resolved
+// { error } — a failed restore was completely silent and stock stayed locked.
+describe('inventoryService.restoreStock — RPC resolving with { error } is detected (silent-leak fix)', () => {
+  function wireResolvedErrors(failOnIndices: number[]) {
+    rpcCalls = []
+    let i = 0
+    mockGetServiceClient.mockReturnValue({
+      from: () => ({}),
+      rpc: (name: string, args: Record<string, unknown>) => {
+        const idx = i++
+        rpcCalls.push({ name, args })
+        return Promise.resolve(failOnIndices.includes(idx)
+          ? { data: null, error: { code: '22P02', message: 'invalid input syntax' } }
+          : { data: true, error: null })
+      },
+    })
+  }
+
+  it('restoreStockReporting reports the items whose RPC returned an error, and still attempts all of them', async () => {
+    wireResolvedErrors([1])
+    const { failed } = await restoreStockReporting([
+      { variantId: 'v1', qty: 1 },
+      { variantId: 'v2', qty: 1 },
+      { variantId: 'v3', qty: 1 },
+    ])
+    expect(rpcCalls).toHaveLength(3)
+    expect(failed).toEqual([{ variantId: 'v2', qty: 1 }])
+  })
+
+  it('reports nothing when every restore succeeds', async () => {
+    wireResolvedErrors([])
+    const { failed } = await restoreStockReporting([{ variantId: 'v1', qty: 1 }, { variantId: 'p1', productId: 'p1', qty: 2 }])
+    expect(failed).toEqual([])
+    expect(rpcCalls[1]).toEqual({ name: 'restore_product_stock', args: { p_product_id: 'p1', p_qty: 2 } })
+  })
+
+  it('a thrown rejection is also reported (not only resolved errors)', async () => {
+    wireSupabaseMock({ failAll: true })
+    const { failed } = await restoreStockReporting([{ variantId: 'v1', qty: 1 }])
+    expect(failed).toHaveLength(1)
+  })
+
+  it('restoreStock itself still resolves to undefined and never throws on a resolved error', async () => {
+    wireResolvedErrors([0])
+    await expect(restoreStock([{ variantId: 'v1', qty: 1 }])).resolves.toBeUndefined()
   })
 })
