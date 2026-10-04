@@ -16,6 +16,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
 import type { getServiceClient } from '@/lib/supabase'
+import {
+  variantLinePrice, variantLineMrp, productLinePrice, productLineMrp,
+  type VariantRow, type ProductRow,
+} from '@/lib/pricing/linePricing'
+
+// Re-exported so existing importers keep working. The implementations live in
+// lib/pricing/linePricing.ts, which is safe to bundle into client code.
+export { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp }
 
 type Db = ReturnType<typeof getServiceClient>
 
@@ -29,30 +37,6 @@ export interface LiveLine {
   price:     number            // current ₹ per unit (0 when unavailable)
   mrp:       number
   available: number            // units that can be ordered right now
-}
-
-interface VariantRow { id: unknown; product_id: unknown; price?: unknown; original_price?: unknown; is_active?: unknown; available_stock?: unknown }
-interface ProductRow {
-  id: unknown; name?: unknown; is_deleted?: unknown; status?: unknown
-  selling_price?: unknown; price?: unknown; mrp?: unknown; available_stock?: unknown
-}
-
-// ── Pricing rules shared with createOrder() ─────────────────────────────────
-// products.price is a legacy column nothing writes to; selling_price is the real one.
-
-/** Unit price for a line backed by a real variant. */
-export function variantLinePrice(v: VariantRow | undefined, p: ProductRow | undefined): number {
-  return Number(v?.price) || Number(p?.selling_price ?? p?.price) || 0
-}
-export function variantLineMrp(v: VariantRow | undefined, p: ProductRow | undefined): number {
-  return Number(v?.original_price) || Number(p?.mrp) || Number(v?.price) || 0
-}
-/** Unit price for a no-variant line (priced from the products table). */
-export function productLinePrice(p: ProductRow | undefined): number {
-  return Number(p?.selling_price ?? p?.price) || 0
-}
-export function productLineMrp(p: ProductRow | undefined): number {
-  return Number(p?.mrp) || Number(p?.selling_price ?? p?.price) || 0
 }
 
 const asDbId = (id: string): string | number => (Number.isNaN(Number(id)) ? id : Number(id))

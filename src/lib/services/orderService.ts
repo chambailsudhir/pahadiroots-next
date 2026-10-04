@@ -152,7 +152,7 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
 // ─────────────────────────────────────────────────────────────
 import type { SiteSettings } from '@/types'
 import { getServiceClient } from '@/lib/supabase'
-import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } from '@/lib/server/cartValidation'
+import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } from '@/lib/pricing/linePricing'
 import { reserveStockAtomicForOrder } from './inventoryService'
 import { calcPriceSummary } from './pricingService'
 
