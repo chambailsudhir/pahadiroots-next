@@ -4,7 +4,8 @@
 // Background sweep for the email dead-letter queue (see db_migration_v5_email_dlq.sql
 // and lib/server/email.ts). Wired to a Vercel Cron job in vercel.json. Retries
 // 'pending' rows whose backoff window has elapsed, with exponential backoff
-// between attempts, until MAX_DLQ_ATTEMPTS is reached and a row is marked
+// between attempts, until MAX_DLQ_ATTEMPTS is reached (or the row is older than
+// MAX_EMAIL_AGE_HOURS) and a row is marked
 // 'dead' for manual ops investigation.
 //
 // AUTH: Vercel Cron automatically sends `Authorization: Bearer ${CRON_SECRET}`
@@ -24,6 +25,13 @@ import { logger, captureError } from '@/lib/logger'
 // timeout even if a large backlog accumulates during an extended Resend outage.
 const BATCH_SIZE = 25
 const SEND_TIMEOUT_MS = 5000
+
+// A transactional email that is still undelivered after this long is no longer useful and can
+// be actively misleading ("Payment Confirmed" arriving days after the fact; a contact-form
+// notification nobody is waiting for). Rows older than this are closed as 'dead' WITHOUT
+// sending — this is what makes it safe to switch the sweep on over an existing backlog
+// (no flood of stale e-mails to customers). Ops can still replay a row by hand from its html.
+export const MAX_EMAIL_AGE_HOURS = 72
 
 // Exponential backoff between dead-letter retries: 5, 15, 45, 135 minutes
 // (attempts 1–4; attempt 5 hitting MAX_DLQ_ATTEMPTS marks the row 'dead'
@@ -47,6 +55,7 @@ interface FailedEmailRow {
   subject:      string
   html:         string
   attempts:     number
+  created_at?:  string
 }
 
 export async function GET(req: NextRequest) {
@@ -80,7 +89,7 @@ export async function GET(req: NextRequest) {
 
   const { data: candidates, error: fetchErr } = await db
     .from('failed_emails')
-    .select('id, type, to_email, from_address, subject, html, attempts')
+    .select('id, type, to_email, from_address, subject, html, attempts, created_at')
     .eq('status', 'pending')
     .lte('next_retry_at', new Date().toISOString())
     .order('created_at', { ascending: true })
@@ -96,7 +105,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Fetch failed' }, { status: 500 })
   }
 
-  let claimed = 0, sent = 0, stillFailing = 0, dead = 0
+  let claimed = 0, sent = 0, stillFailing = 0, dead = 0, expired = 0
+  const staleBefore = Date.now() - MAX_EMAIL_AGE_HOURS * 3_600_000
 
   for (const row of (candidates ?? []) as FailedEmailRow[]) {
     // Atomic claim — mirrors the TOCTOU guard in webhook/razorpay/route.ts.
@@ -112,6 +122,18 @@ export async function GET(req: NextRequest) {
 
     if (!claimedRows || claimedRows.length === 0) continue
     claimed++
+
+    // Too old to be worth sending → close it out instead (see MAX_EMAIL_AGE_HOURS).
+    const createdMs = row.created_at ? Date.parse(row.created_at) : NaN
+    if (Number.isFinite(createdMs) && createdMs < staleBefore) {
+      await db.from('failed_emails').update({
+        status:          'dead',
+        last_error:      `expired: not delivered within ${MAX_EMAIL_AGE_HOURS}h — closed without sending`,
+        last_attempt_at: new Date().toISOString(),
+      }).eq('id', row.id)
+      expired++
+      continue
+    }
 
     const resend = new Resend(process.env.RESEND_API_KEY)
     let errMessage: string | null = null
@@ -181,6 +203,7 @@ export async function GET(req: NextRequest) {
   logger.metric('email.dlq.sent',          sent,         'count')
   logger.metric('email.dlq.still_failing', stillFailing, 'count')
   logger.metric('email.dlq.dead',          dead,         'count')
+  logger.metric('email.dlq.expired',       expired,      'count')
 
   return NextResponse.json({
     candidates: candidates?.length ?? 0,
@@ -188,5 +211,6 @@ export async function GET(req: NextRequest) {
     sent,
     stillFailing,
     dead,
+    expired,
   })
 }

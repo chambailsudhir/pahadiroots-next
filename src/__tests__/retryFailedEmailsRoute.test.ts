@@ -49,6 +49,7 @@ interface CandidateRow {
   subject: string
   html: string
   attempts: number
+  created_at?: string
 }
 
 interface MockDb {
@@ -190,7 +191,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0 })
+    expect(json).toEqual({ candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0 })
   })
 
   it('happy path: a pending row sends successfully and is marked sent', async () => {
@@ -201,7 +202,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0, expired: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('sent')
   })
@@ -226,7 +227,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0, expired: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('pending')
     expect(finalUpdate.payload.attempts).toBe(2)
@@ -244,7 +245,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1, expired: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('dead')
     expect(finalUpdate.payload.attempts).toBe(MAX_DLQ_ATTEMPTS)
@@ -259,7 +260,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0 })
     expect(mockSend).not.toHaveBeenCalled()
   })
 
@@ -292,5 +293,52 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     expect(json.claimed).toBe(2)
     expect(json.sent).toBe(1)
     expect(json.stillFailing).toBe(1)
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stale cutoff — makes it safe to switch the sweep on over an existing backlog
+// ─────────────────────────────────────────────────────────────────────────────
+describe('GET /api/v1/cron/retry-failed-emails — stale e-mails are closed, not sent', () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+  const auth = () => { process.env.CRON_SECRET = 'test-cron-secret'; return makeReq('Bearer test-cron-secret') }
+
+  it('a row older than MAX_EMAIL_AGE_HOURS is marked dead WITHOUT sending (no flood of stale "Payment Confirmed" mails)', async () => {
+    mockDb.candidates = [row({ id: 'old-1', created_at: hoursAgo(24 * 20) })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const res  = await GET(auth())
+    const json = await res.json()
+
+    expect(mockSend).not.toHaveBeenCalled()
+    expect(json).toMatchObject({ claimed: 1, sent: 0, expired: 1, dead: 0 })
+    const closed = mockDb.updateCalls.find(c => (c.payload as { status?: string }).status === 'dead')
+    expect(closed).toBeDefined()
+    expect(String((closed!.payload as { last_error?: string }).last_error)).toMatch(/expired/i)
+  })
+
+  it('a recent row is still sent normally', async () => {
+    mockSend.mockResolvedValue({ error: null })
+    mockDb.candidates = [row({ id: 'new-1', created_at: hoursAgo(2) })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(auth())).json()
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    expect(json).toMatchObject({ sent: 1, expired: 0 })
+  })
+
+  it('exactly at the boundary side: 71h is sent, 73h is closed', async () => {
+    mockSend.mockResolvedValue({ error: null })
+    mockDb.candidates = [row({ id: 'a', created_at: hoursAgo(71) }), row({ id: 'b', created_at: hoursAgo(73) })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(auth())).json()
+    expect(json).toMatchObject({ sent: 1, expired: 1 })
+  })
+
+  it('a row with no created_at is treated as fresh (never silently dropped)', async () => {
+    mockSend.mockResolvedValue({ error: null })
+    mockDb.candidates = [row({ id: 'no-date' })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(auth())).json()
+    expect(json).toMatchObject({ sent: 1, expired: 0 })
   })
 })
