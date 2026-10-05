@@ -148,11 +148,18 @@ export async function POST(req: Request) {
         return responsePromise
       }
 
-      const { data: order } = await db
+      const { data: order, error: orderLookupErr } = await db
         .from('orders')
         .select('id, order_number, payment_status, payment_method, payment_id, total_amount, customer_id, loyalty_points_redeemed')
         .eq('id', dbOrderId)
         .single()
+      // BUG FIX (Oct 2026 audit): a database ERROR here used to look identical to "no such
+      // order": `order` was null, we alerted "unknown order" and still returned 200, so Razorpay
+      // never retried and a real capture was lost to a transient blip. PGRST116 is PostgREST's
+      // genuine "no rows" code; anything else is a fault → throw → 500 → Razorpay retries.
+      if (orderLookupErr && (orderLookupErr as { code?: string }).code !== 'PGRST116') {
+        throw new Error('payment.captured order lookup failed: ' + orderLookupErr.message)
+      }
 
       if (!order) {
         captureError(new Error('payment.captured for unknown order'), {
@@ -247,11 +254,15 @@ export async function POST(req: Request) {
         return responsePromise
       }
 
-      const { data: order } = await db
+      const { data: order, error: failedLookupErr } = await db
         .from('orders')
         .select('id, order_status, payment_status')
         .eq('id', dbOrderId)
         .single()
+      // Same rule as payment.captured above: a read fault is retryable, only "no rows" is final.
+      if (failedLookupErr && (failedLookupErr as { code?: string }).code !== 'PGRST116') {
+        throw new Error('payment.failed order lookup failed: ' + failedLookupErr.message)
+      }
 
       // A late/duplicate failure for an order that has since been paid is noise — ignore it.
       if (order && order.payment_status !== 'paid') {

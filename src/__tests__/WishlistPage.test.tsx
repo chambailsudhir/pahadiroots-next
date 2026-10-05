@@ -141,3 +141,16 @@ describe('Wishlist page — loading and failure', () => {
     expect(screen.queryAllByTestId('product-card')).toHaveLength(0)
   })
 })
+
+
+describe('Wishlist page — every saved product has since been removed (Oct 2026 audit)', () => {
+  it('explains it instead of rendering an empty grid, with a way forward', () => {
+    useUserStore.setState({ wishlist: [101, 102] } as any)
+    catalog([product({ id: 1, name: 'Some Other Product' })])   // none of the saved ids exist any more
+    render(<WishlistPublicPage />)
+
+    expect(screen.getByText('Your saved items are no longer available')).toBeTruthy()
+    expect(screen.queryAllByTestId('product-card')).toHaveLength(0)
+    expect(screen.getByText('Browse Products').closest('a')?.getAttribute('href')).toBe('/products')
+  })
+})

@@ -20,6 +20,9 @@
 //     so overlapping runs can never restore twice.
 //   • A payment that lands AFTER release is still honoured — confirmOrderPayment()
 //     recovers payment_failed orders and re-reserves stock.
+//   • The coupon the order consumed is released with it (release_coupon_for_order, migration
+//     053) so the customer can retry; the sweep pages through every stale order within a
+//     time budget instead of one page of 50.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
 import { logOrderEvent } from '@/lib/services/orderService'
@@ -40,6 +43,12 @@ export const MAX_EXPIRY_MINUTES = 24 * 60
 /** An order whose payment sits `authorized` this long is released anyway. */
 export const AUTHORIZED_GRACE_HOURS = 24
 export const DEFAULT_BATCH = 50
+/**
+ * Wall clock budget for one run. The cron route is allowed 30 s (vercel.json); every order costs
+ * a Razorpay round trip, so stop starting new orders at 22 s and let the next run continue
+ * (oldest first, so nothing is starved).
+ */
+export const DEFAULT_TIME_BUDGET_MS = 22_000
 
 /** admin setting `pending_order_expiry_minutes`, clamped to a safe range. */
 export function resolveExpiryMinutes(raw: string | undefined | null): number {
@@ -54,6 +63,8 @@ export interface ExpiryStats {
   recovered: number   // found paid at Razorpay → confirmed
   skipped:   number   // could not be verified / payment in flight → left for next run
   errors:    number
+  /** True when the time budget ran out before every stale order was looked at (next run continues). */
+  timeBudgetHit?: boolean
 }
 
 interface PendingRow {
@@ -68,43 +79,62 @@ interface PendingRow {
 
 export async function expireStalePendingOrders(
   db: Db,
-  opts: { now?: Date; olderThanMinutes?: number; batch?: number } = {},
+  opts: { now?: Date; olderThanMinutes?: number; batch?: number; timeBudgetMs?: number } = {},
 ): Promise<ExpiryStats> {
   const now      = opts.now ?? new Date()
   const batch    = opts.batch ?? DEFAULT_BATCH
+  const budget   = opts.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS
+  const startedAt = Date.now()
   const settings = await getFreshSiteSettings().catch(() => ({} as Record<string, string>))
   const minutes  = opts.olderThanMinutes ?? resolveExpiryMinutes(settings.pending_order_expiry_minutes)
   const cutoff   = new Date(now.getTime() - minutes * 60_000).toISOString()
 
   const stats: ExpiryStats = { scanned: 0, expired: 0, recovered: 0, skipped: 0, errors: 0 }
 
-  const { data: candidates, error: fetchErr } = await db
-    .from('orders')
-    .select('id, order_number, payment_id, total_amount, customer_id, loyalty_points_redeemed, created_at')
-    .eq('payment_method', 'razorpay')
-    .eq('payment_status', 'pending')
-    .eq('order_status',   'pending')
-    .lt('created_at', cutoff)
-    .order('created_at', { ascending: true })
-    .limit(batch)
+  // BUG FIX (Oct 2026 audit): a run used to look at ONE page of 50 orders. With the cron on a
+  // daily schedule (Vercel Hobby) that was a hard cap of 50 releases a day: any backlog beyond
+  // it never cleared and stock stayed locked. Now it pages through ALL stale orders until the
+  // time budget is spent. Paging is by created_at (oldest first) so an order that was skipped
+  // (payment in flight / Razorpay unreachable) is not fetched again within the same run.
+  let after: string | null = null
+  paging: for (;;) {
+    let query = db
+      .from('orders')
+      .select('id, order_number, payment_id, total_amount, customer_id, loyalty_points_redeemed, created_at')
+      .eq('payment_method', 'razorpay')
+      .eq('payment_status', 'pending')
+      .eq('order_status',   'pending')
+      .lt('created_at', cutoff)
+    if (after) query = query.gt('created_at', after)
+    const { data: candidates, error: fetchErr } = await query
+      .order('created_at', { ascending: true })
+      .limit(batch)
 
-  if (fetchErr) {
-    captureError(new Error('pending-order sweep fetch failed: ' + fetchErr.message), {
-      action: 'cron.expire_pending_orders.fetch', alert: true,
-    })
-    stats.errors++
-    return stats
-  }
-
-  for (const order of (candidates ?? []) as PendingRow[]) {
-    stats.scanned++
-    try {
-      const outcome = await processOne(db, order, now, settings)
-      stats[outcome]++
-    } catch (e) {
+    if (fetchErr) {
+      captureError(new Error('pending-order sweep fetch failed: ' + fetchErr.message), {
+        action: 'cron.expire_pending_orders.fetch', alert: true,
+      })
       stats.errors++
-      captureError(e, { action: 'cron.expire_pending_orders.order', order_id: order.id, alert: true })
+      break
     }
+
+    const page = (candidates ?? []) as PendingRow[]
+    if (page.length === 0) break
+
+    for (const order of page) {
+      if (Date.now() - startedAt > budget) { stats.timeBudgetHit = true; break paging }
+      stats.scanned++
+      after = order.created_at
+      try {
+        const outcome = await processOne(db, order, now, settings)
+        stats[outcome]++
+      } catch (e) {
+        stats.errors++
+        captureError(e, { action: 'cron.expire_pending_orders.order', order_id: order.id, alert: true })
+      }
+    }
+
+    if (page.length < batch) break   // that was the last page
   }
 
   logger.info('cron: pending-order sweep finished', { action: 'cron.expire_pending_orders', ...stats, minutes })
@@ -187,10 +217,24 @@ async function processOne(
     .eq('order_id', order.id)
   const { failed } = await restoreStockReporting(orderItemsToStockItems(items))
 
+  // BUG FIX (Oct 2026 audit): the coupon this unpaid order consumed stayed consumed, so the
+  // customer's retry was refused ("You have already used this coupon"). Release it, once (the
+  // function is idempotent). What was released is recorded on the event so ops can reinstate it
+  // in the rare case a payment still lands after expiry. Never fatal.
+  let couponReleased: unknown = null
+  try {
+    const { data: rel, error: relErr } = await db.rpc('release_coupon_for_order', { p_order_id: order.id })
+    if (relErr) throw relErr
+    if (rel && (rel as { released?: boolean }).released) couponReleased = rel
+  } catch (e) {
+    captureError(e, { action: 'cron.expire_pending_orders.coupon_release', order_id: order.id, alert: false })
+  }
+
   await logOrderEvent(order.id, 'pending_order_expired', 'system', {
     age_hours: Number(ageHours.toFixed(2)),
     stock_restore_failed_items: failed.length,
-    note: 'Unpaid online order released by the expiry sweep; stock returned. A late payment is still honoured.',
+    ...(couponReleased ? { coupon_released: couponReleased } : {}),
+    note: 'Unpaid online order released by the expiry sweep; stock (and any coupon) returned. A late payment is still honoured, but a released coupon is NOT automatically re-applied.',
   }).catch(() => null)
   return 'expired'
 }

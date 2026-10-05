@@ -297,12 +297,17 @@ describe('createOrder — I3: variantId === productId is only valid for products
   const isPreflightLookup = (url: string, method: string) =>
     method === 'GET' && url.includes('/product_variants') && url.includes(`product_id=in.(${NV_ID})`)
   const nvProductRow = [{ id: NV_ID, name: 'Plain Salt', emoji: '🧂', gst_rate: 5, is_deleted: false, status: 'active', price: 100, selling_price: 100, mrp: 120, available_stock: 10 }]
+  // Line-kind lookup: "does a variant with THIS id exist, and whose is it?" (see lib/lineKinds.ts).
+  // Default for these tests: no variant has the product's id → genuinely a bare product.
+  const isOwnerLookup = (url: string, method: string, id = NV_ID) =>
+    method === 'GET' && url.includes('/product_variants') && url.includes(`select=id,product_id&id=in.(${id})`)
 
   beforeEach(() => {
     mockDb.responses['orders'] = null
     mockDb.rpcResponses['reserve_stock_at_order'] = true
     mockDb.rpcResponses['reserve_product_stock_at_order'] = true
     wireHappyPathFetch()
+    route((url, method) => isOwnerLookup(url, method), [])
   })
 
   it('ATTACK: product that HAS active variants sent as variantId===productId → rejected BEFORE any stock is reserved', async () => {
@@ -338,23 +343,67 @@ describe('createOrder — I3: variantId === productId is only valid for products
     expect(reserve?.args).toEqual({ p_product_id: NV_ID, p_qty: 1 })
   })
 
-  it('I2: a no-variant line is STORED with variant_id === product_id (no default-variant substitution), so every restore uses the product table', async () => {
-    routeFirst(isPreflightLookup, [])
-    routeFirst((url, method) => method === 'GET' && url.includes('/products') && url.includes(NV_ID), nvProductRow)
-    wireOrderRpcSuccess()
-
-    const { createOrder } = await import('@/lib/services/orderService')
-    await createOrder(nvInput, DEFAULT_SETTINGS)
-
-    const rpc = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
-    const items = (rpc!.args as { p_items: Array<{ product_id: string; variant_id: string }> }).p_items
-    expect(items).toHaveLength(1)
-    expect(items[0].product_id).toBe(NV_ID)
-    expect(items[0].variant_id).toBe(NV_ID)
-    // …and the stored shape round-trips to the PRODUCT restore path
+  it('I2: a stored order_items row always round-trips to the VARIANT restore path (variant_id is a foreign key to product_variants)', async () => {
+    // Whatever was stored, order_items.variant_id references a real product_variants row, so
+    // stock for a stored line is always restored to a variant — never guessed from equal ids.
     const { orderItemsToStockItems } = await import('@/lib/services/inventoryService')
     expect(orderItemsToStockItems([{ product_id: NV_ID, variant_id: NV_ID, quantity: 1 }]))
-      .toEqual([{ variantId: NV_ID, productId: NV_ID, qty: 1 }])
+      .toEqual([{ variantId: NV_ID, productId: NV_ID, qty: 1, kind: 'variant' }])
+    expect(orderItemsToStockItems([{ product_id: 14, variant_id: 11, quantity: 2 }]))
+      .toEqual([{ variantId: '11', productId: '14', qty: 2, kind: 'variant' }])
+  })
+
+  // ── Line-kind classification (Oct 2026 audit; live product 1 / variant 1) ─────────────
+  describe('variantId === productId when a REAL variant shares its product id', () => {
+    const HONEY = '1'
+    const honeyVariantRow = [{ id: HONEY, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: HONEY }]
+    const honeyProductRow = [{ id: HONEY, name: 'Himalayan Wild Manali Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 150, selling_price: 150, mrp: 180, available_stock: 0 }]
+    const honeyInput = { ...BASE_INPUT, items: [{ productId: HONEY, variantId: HONEY, qty: 1 }] }
+
+    it('is a normal variant purchase: NOT rejected as "multiple options", reserved and priced from the VARIANT', async () => {
+      routeFirst((url, method) => isOwnerLookup(url, method, HONEY), [{ id: HONEY, product_id: HONEY }])
+      routeFirst((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(`id=in.(${HONEY})`) && url.includes('price'), honeyVariantRow)
+      routeFirst((url, method) => method === 'GET' && url.includes('/rest/v1/products?') && url.includes(`id=in.(${HONEY})`), honeyProductRow)
+      wireOrderRpcSuccess()
+
+      const { createOrder } = await import('@/lib/services/orderService')
+      await createOrder(honeyInput, DEFAULT_SETTINGS)
+
+      // stock is taken from the variant row, NOT from the products row
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_stock_at_order')?.args).toEqual({ p_variant_id: HONEY, p_qty: 1 })
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_product_stock_at_order')).toBeUndefined()
+      // priced from the variant (200), not the products row (150)
+      const rpc = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
+      const items = (rpc!.args as { p_items: Array<{ price_at_time: number; variant_id: string }> }).p_items
+      expect(items[0].price_at_time).toBe(200)
+      expect(items[0].variant_id).toBe(HONEY)
+    })
+
+    it('a failed order restores the VARIANT stock, not the products row', async () => {
+      routeFirst((url, method) => isOwnerLookup(url, method, HONEY), [{ id: HONEY, product_id: HONEY }])
+      routeFirst((url, method) => method === 'GET' && url.includes('/product_variants') && url.includes(`id=in.(${HONEY})`) && url.includes('price'),
+        [{ ...honeyVariantRow[0], is_active: false }])   // deactivated between reserve and price lookup → throws after reservation
+      routeFirst((url, method) => method === 'GET' && url.includes('/rest/v1/products?') && url.includes(`id=in.(${HONEY})`), honeyProductRow)
+
+      const { createOrder } = await import('@/lib/services/orderService')
+      await expect(createOrder(honeyInput, DEFAULT_SETTINGS)).rejects.toThrow(/no longer available/i)
+
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'restore_stock')?.args).toEqual({ p_variant_id: HONEY, p_qty: 1 })
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'restore_product_stock')).toBeUndefined()
+    })
+
+    it('LEGACY line: variantId === productId but that id is ANOTHER product\'s variant → rejected, nothing reserved', async () => {
+      // old clients stored the product id in the variant slot: product 14 / "variant 14", and
+      // variant 14 actually belongs to product 16.
+      routeFirst((url, method) => isOwnerLookup(url, method, '14'), [{ id: '14', product_id: '16' }])
+      const { createOrder } = await import('@/lib/services/orderService')
+
+      await expect(createOrder({ ...BASE_INPUT, items: [{ productId: '14', variantId: '14', qty: 1 }] }, DEFAULT_SETTINGS))
+        .rejects.toThrow(/no longer available/i)
+
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_stock_at_order')).toBeUndefined()
+      expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_product_stock_at_order')).toBeUndefined()
+    })
   })
 
   it('a variant that belongs to a DIFFERENT product than the client named → rejected, and the reserved stock is restored', async () => {

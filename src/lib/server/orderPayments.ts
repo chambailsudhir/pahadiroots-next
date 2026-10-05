@@ -122,6 +122,43 @@ export async function confirmOrderPayment(
   return { outcome: 'recovered', stockReReserved }
 }
 
+/**
+ * Persist the Razorpay order id on OUR order, and refuse to continue if that fails.
+ *
+ * BUG FIX (Oct 2026 audit): create_payment ran this UPDATE without looking at the result.
+ * supabase-js never throws on a failed write, it resolves with `{ error }`, so a failure was
+ * invisible. The customer was then handed a payable Razorpay order that our database did not
+ * know about, and the whole safety design failed closed against them:
+ *   • verify_payment rejects an order whose stored payment_id is not an `order_…` id,
+ *   • the payment.captured webhook holds it as "unbound" for manual review,
+ *   • and the expiry sweep treats a null payment_id as "nothing was ever paid" and RELEASES it.
+ * Net effect: money taken, order dead. (verify_payment's comment claimed the webhook would
+ * recover it; the webhook deliberately does not.)
+ *
+ * Fix the root cause instead: retry once, then fail BEFORE the customer can pay. The order
+ * stays pending with its stock reserved; the customer's retry reuses the same idempotency key
+ * (alreadyExists path) and a fresh Razorpay order is created and stored then. An orphan
+ * Razorpay order that nobody pays costs nothing.
+ */
+export async function storeRazorpayOrderId(db: Db, orderId: string, razorpayOrderId: string): Promise<void> {
+  let lastMessage = 'unknown error'
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { error } = await db.from('orders').update({ payment_id: razorpayOrderId }).eq('id', orderId)
+      if (!error) return
+      lastMessage = error.message
+    } catch (e) {
+      lastMessage = e instanceof Error ? e.message : String(e)
+    }
+  }
+  captureError(new Error('Could not store the Razorpay order id on the order: ' + lastMessage), {
+    action: 'payments.create.store_payment_id', order_id: orderId, razorpay_order_id: razorpayOrderId, alert: true,
+  })
+  // Deliberately free of the keywords the route treats as customer facing (stock, coupon, …):
+  // this is an internal fault, shown as the generic payment error in production.
+  throw new Error('We could not start your payment. Please try again.')
+}
+
 /** Audit-trail row in `payments` (unique on provider+reference, so replays are harmless). */
 export async function recordCapturedPayment(
   db: Db,

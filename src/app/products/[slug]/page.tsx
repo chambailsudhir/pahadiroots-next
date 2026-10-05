@@ -1,3 +1,4 @@
+import { computeReviewStats } from '@/lib/reviewStats'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import './pdp.css'
@@ -1760,7 +1761,7 @@ async function fetchProductDataInner(slug: string) {
     // shift (skeleton → content). Now we fetch the full review rows here in the
     // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
     // becomes a pure display component that accepts pre-fetched rows as props.
-    const [stateData, categoryRow, related, reviewResult, certResult] = await Promise.all([
+    const [stateData, categoryRow, related, reviewResult, ratingResult, certResult] = await Promise.all([
       // State data — direct lookup instead of scanning the full states list
       product.state_id
         ? anonClient.from('states').select('*').eq('id', product.state_id).maybeSingle()
@@ -1799,6 +1800,22 @@ async function fetchProductDataInner(slug: string) {
           (error) => ({ data: null, error }),
         ),
 
+      // BUG FIX (Oct 2026 audit): the star average and the review COUNT were computed from the
+      // 10 rows above, so a product with 40 approved reviews showed "(10 reviews)" and an average
+      // of only the latest 10 — in the page AND in the Product JSON-LD aggregateRating that search
+      // engines read. The list stays capped at 10 for payload size; the aggregate needs every
+      // approved rating, so it comes from its own tiny query (one integer column per row).
+      anonClient
+        .from('reviews')
+        .select('rating')
+        .eq('product_id', product.id)
+        .eq('status', 'approved')
+        .limit(5000)
+        .then(
+          ({ data }) => ({ data, error: null as unknown }),
+          (error) => ({ data: null, error }),
+        ),
+
       // Certificate ("Lab Tested & Verified" card) — per Sudhir (Sept 2026):
       // certificates cover a harvest/source, not a single pack, so this is
       // an active-certificate lookup via the product_certificates junction,
@@ -1830,11 +1847,11 @@ async function fetchProductDataInner(slug: string) {
     } else if (reviewResult.data && reviewResult.data.length > 0) {
       const reviewRows = reviewResult.data
       reviews = reviewRows as import('@/types').Review[]
-      const sum = reviewRows.reduce((acc: number, r: any) => acc + (r.rating || 0), 0)
-      reviewStats = {
-        avg:   sum / reviewRows.length,
-        count: reviewRows.length,
-      }
+      // Aggregate over ALL approved ratings; falls back to the visible rows only if that query failed.
+      reviewStats = computeReviewStats(
+        ratingResult.error ? null : (ratingResult.data as Array<{ rating: number | null }> | null),
+        reviewRows as Array<{ rating: number | null }>,
+      )
     }
 
     let certificate: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean } | null = null

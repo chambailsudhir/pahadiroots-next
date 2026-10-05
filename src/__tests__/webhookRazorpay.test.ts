@@ -436,7 +436,8 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     expect(orderUpdate!.payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_retry_ok' })
     expect(orderUpdate!.eqCalls).toContainEqual(['payment_status', 'failed'])
     expect(orderUpdate!.eqCalls).toContainEqual(['order_status', 'payment_failed'])
-    expect(mockReserveStock).toHaveBeenCalledWith([{ variantId: 'v1', productId: 'p1', qty: 2 }])
+    // a stored row is always a REAL variant (order_items.variant_id is a foreign key) → explicit kind
+    expect(mockReserveStock).toHaveBeenCalledWith([{ variantId: 'v1', productId: 'p1', qty: 2, kind: 'variant' }])
     expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_recovered_after_failure', 'razorpay', expect.objectContaining({ stock_re_reserved: true }))
     expect(mockAward).toHaveBeenCalledTimes(1)
   })
@@ -553,10 +554,22 @@ describe('POST /webhook/razorpay — webhook_logs lifecycle', () => {
   })
 
   it('payment.captured for an unknown order → 200 (permanent failure, alert only, no retry storm)', async () => {
-    mockDb.responses['orders'] = new Error('no rows')
+    // PostgREST reports a genuine "no rows" from .single() with code PGRST116
+    mockDb.responses['orders'] = Object.assign(new Error('no rows'), { code: 'PGRST116' })
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     const res = await POST(makeReq(makeEvent()))
     expect(res.status).toBe(200)
+  })
+
+  it('payment.captured when the order LOOKUP itself fails (DB blip) → 500 so Razorpay retries, webhook log marked failed (Oct 2026 audit)', async () => {
+    // Previously a read error looked like "unknown order": alert + 200, and the capture was lost for good.
+    mockDb.responses['webhook_logs'] = { id: 'log-1' }
+    mockDb.responses['orders'] = Object.assign(new Error('connection reset'), { code: '08006' })
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent()))
+    expect(res.status).toBe(500)
+    const failedLog = mockDb.updateCalls.find(c => c.table === 'webhook_logs')
+    expect(failedLog!.payload).toMatchObject({ status: 'failed' })
   })
 })
 

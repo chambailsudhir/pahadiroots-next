@@ -315,6 +315,21 @@ describe('POST /api/v1/payments — create_payment', () => {
     expect(json.order_id).toBe('order-db-uuid-001')
   })
 
+  it('FAILS CLOSED when our DB cannot store the Razorpay order id: no payable order is returned (Oct 2026 audit)', async () => {
+    // Previously the UPDATE result was ignored, so the customer could pay a Razorpay order our
+    // DB never linked — verify_payment, the webhook and the expiry sweep would then all refuse
+    // or release it, leaving money taken and the order dead.
+    mockDb.responses['orders'] = new Error('db write failed')
+    const res  = await callPayments({ action: 'create_payment', ...BASE_ORDER_BODY })
+    const json = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(json.razorpay_order_id).toBeUndefined()
+    expect(json.success).toBeUndefined()
+    // one retry before giving up
+    expect(mockDb.calls.filter(c => c.table === 'orders' && c.op === 'update')).toHaveLength(2)
+  })
+
   it('rejects disallowed origin (CSRF) with 403', async () => {
     const body    = { action: 'create_payment', ...BASE_ORDER_BODY }
     // Send a cross-origin request from an untrusted domain

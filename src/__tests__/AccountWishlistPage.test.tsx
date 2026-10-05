@@ -59,3 +59,18 @@ describe('Account wishlist page', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })
+
+
+describe('Account wishlist — every saved product has since been removed (Oct 2026 audit)', () => {
+  it('shows an explanation instead of a blank page', () => {
+    useUserStore.setState({ wishlist: [101, 102] } as any)
+    mockUseSearchCatalog.mockReturnValue({
+      data: [{ id: 1, name: 'Some Other Product', slug: 'x', price: 10, mrp: 12, available_stock: 1, gst_rate: 5, image_url: null, badges: [], category_id: 1, state_id: 'HP' }],
+      isLoading: false, error: undefined,
+    })
+    render(<AccountWishlistPage />)
+
+    expect(screen.getByText('Your saved items are no longer available')).toBeTruthy()
+    expect(screen.getByText(/Browse Products/).closest('a')?.getAttribute('href')).toBe('/products')
+  })
+})

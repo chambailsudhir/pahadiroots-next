@@ -80,7 +80,12 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
   const categoriesInNew = allCategories.filter(cat =>
     newArrivals.some(p => String(p.category_id) === String(cat.id))
   )
-  const activeCat = categoriesInNew.find(c => c.slug === catSlug)
+  // BUG FIX (Oct 2026 audit): this searched only the chips that have a new arrival. A valid
+  // category with none (e.g. ?category=ghee) therefore left activeCat undefined, so the page
+  // silently showed EVERY new arrival with no filter, no breadcrumb and a canonical URL pointing
+  // at the filtered address (duplicate content). Resolve it against ALL categories so the filter
+  // applies and the empty state ("no products match") is shown honestly.
+  const activeCat = allCategories.find(c => c.slug === catSlug)
 
   const baseFilters = { categoryId: activeCat?.id, inStockOnly: instock }
   const preRangeProducts = filterProducts(newArrivals, baseFilters)
@@ -309,7 +314,7 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
                 </nav>
               )}
               <p style={{ fontSize: '11px', color: '#b0b0b0', marginTop: '28px', textAlign: 'center' }}>
-                &ldquo;New Arrival&rdquo; = added or restocked in the last {NEW_ARRIVAL_WINDOW_DAYS} days, or hand-picked by our team.
+                &ldquo;New Arrival&rdquo; = added in the last {NEW_ARRIVAL_WINDOW_DAYS} days, or hand-picked by our team.
               </p>
             </>
           )}

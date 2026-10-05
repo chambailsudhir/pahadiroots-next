@@ -108,3 +108,31 @@ describe('shared pricing helpers (createOrder uses the same ones)', () => {
     expect(variantLinePrice({ id: 1, product_id: 1, price: 0 },   { id: 1, selling_price: 100 })).toBe(100)
   })
 })
+
+
+describe('validateCartLines — variant that shares its product id (live: product 1 / variant 1)', () => {
+  it('is a normal variant line: priced and stocked from the VARIANT, never flagged as "multiple options"', async () => {
+    const tables = {
+      product_variants: [variant({ id: 1, product_id: 1, price: 500, original_price: 650, available_stock: 8 })],
+      products: [product({ id: 1, available_stock: 0 })],
+    }
+    const [l] = await validateCartLines(fakeDb(tables), [L('1', '1', 2)])
+    expect(l).toEqual({ productId: '1', variantId: '1', status: 'ok', name: 'Wild Honey', price: 500, mrp: 650, available: 8 })
+  })
+
+  it('an inactive variant with that id is unavailable (not silently repriced from the product row)', async () => {
+    const tables = { product_variants: [variant({ id: 1, product_id: 1, is_active: false })], products: [product({ id: 1 })] }
+    const [l] = await validateCartLines(fakeDb(tables), [L('1', '1')])
+    expect(l.status).toBe('unavailable')
+  })
+
+  it('LEGACY: equal ids but that variant belongs to ANOTHER product → unavailable', async () => {
+    const tables = {
+      product_variants: [variant({ id: 14, product_id: 16 })],
+      products: [product({ id: 14 }), product({ id: 16 })],
+    }
+    const [l] = await validateCartLines(fakeDb(tables), [L('14', '14')])
+    expect(l.status).toBe('unavailable')
+    expect(l.price).toBe(0)
+  })
+})

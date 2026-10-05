@@ -73,7 +73,17 @@ export default function WishlistPage() {
             <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />
           ))}
         </div>
-      ) : null}
+      ) : (
+        // BUG FIX (Oct 2026 audit): this branch used to render `null`, leaving a blank page under a
+        // "(N)" count when every saved product had since been archived or removed.
+        <div className={styles.wlEmpty}>
+          <div className={styles.wlEmptyIcon}>❤️</div>
+          <p className={styles.wlEmptyMsg}>Your saved items are no longer available</p>
+          <Link href="/products" className={styles.wlEmptyLink}>
+            Browse Products →
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

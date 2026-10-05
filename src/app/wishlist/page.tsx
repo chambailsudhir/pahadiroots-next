@@ -61,6 +61,17 @@ export default function WishlistPublicPage() {
         </div>
       ) : isLoading || !products ? (
         <ProductGridSkeleton count={4} />
+      ) : products.length === 0 ? (
+        // BUG FIX (Oct 2026 audit): when every saved product has since been archived/removed, the
+        // catalogue loaded fine but matched nothing, and the page showed a heading with a count
+        // and then an empty grid. Say what happened.
+        <div className="text-center py-20">
+          <h2 className="text-lg font-semibold text-stone-700 mb-2">Your saved items are no longer available</h2>
+          <p className="text-stone-400 text-sm mb-5">They may have been removed from our catalogue. Clear them above, or find something new.</p>
+          <Link href="/products" className="inline-flex items-center gap-2 bg-forest-700 hover:bg-forest-800 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors">
+            Browse Products
+          </Link>
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:[grid-template-columns:repeat(auto-fit,minmax(220px,300px))] sm:justify-center gap-4 sm:gap-6">
           {products.map(p => <ProductCard key={p.id} product={toCardProductData(p)} showWishlist />)}

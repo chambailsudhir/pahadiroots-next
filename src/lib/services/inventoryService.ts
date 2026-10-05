@@ -2,9 +2,26 @@ import { getServiceClient } from '@/lib/supabase'
 import { captureError } from '@/lib/logger'
 
 export interface StockCheckItem {
-  variantId: string   // if variantId === productId → no-variant product (use products table)
+  variantId: string   // real variant id, or (no-variant convention) the product id
   productId?: string  // needed to detect no-variant products
   qty: number
+  /**
+   * Explicit line kind (see lib/lineKinds.ts). 'product' = the "no variant" convention
+   * (stock lives on the products row); 'variant' = a real product_variants row.
+   *
+   * BUG FIX (Oct 2026 audit): this used to be inferred ONLY from `variantId === productId`,
+   * which is wrong when a real variant happens to share its product's id (live: product 1 /
+   * variant 1 — that honey's stock was reserved and restored against the wrong table).
+   * Callers that know the kind MUST pass it. When omitted we fall back to the old equality
+   * so legacy callers and tests keep their behaviour.
+   */
+  kind?: 'variant' | 'product'
+}
+
+/** Does this item's stock live on the products row (true) or on a variant row (false)? */
+export function isNoVariantItem(item: Pick<StockCheckItem, 'variantId' | 'productId' | 'kind'>): boolean {
+  if (item.kind) return item.kind === 'product'
+  return !!item.productId && item.variantId === item.productId
 }
 
 export interface StockCheckResult {
@@ -68,7 +85,7 @@ export async function reserveStockAtomicForOrder(
   const reserved: StockCheckItem[] = []
 
   for (const item of items) {
-    const isNoVariant = item.productId && item.variantId === item.productId
+    const isNoVariant = isNoVariantItem(item)
     const rpcName = isNoVariant ? 'reserve_product_stock_at_order' : 'reserve_stock_at_order'
     const params = isNoVariant
       ? { p_product_id: item.productId!, p_qty: item.qty }
@@ -130,8 +147,8 @@ export async function checkStockAvailability(
   const failedItems: StockCheckResult['failedItems'] = []
 
   // Split: items with a real variant vs no-variant products (variantId === productId)
-  const variantItems = items.filter(i => !i.productId || i.variantId !== i.productId)
-  const productItems = items.filter(i =>  i.productId && i.variantId === i.productId)
+  const variantItems = items.filter(i => !isNoVariantItem(i))
+  const productItems = items.filter(i =>  isNoVariantItem(i))
 
   // --- Check variant stock ---
   const variantStockMap = new Map<string, { available_stock: number; is_active: boolean }>()
@@ -158,7 +175,7 @@ export async function checkStockAvailability(
   }
 
   for (const item of items) {
-    if (item.productId && item.variantId === item.productId) {
+    if (isNoVariantItem(item)) {
       const prod = productStockMap.get(String(item.productId))
       if (!prod || prod.is_deleted || prod.status !== 'active') {
         failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
@@ -235,7 +252,7 @@ export async function restoreStockReporting(
   const failed: StockCheckItem[] = []
 
   for (const item of items) {
-    const isNoVariant = !!item.productId && item.variantId === item.productId
+    const isNoVariant = isNoVariantItem(item)
     const rpcName = isNoVariant ? 'restore_product_stock' : 'restore_stock'
     const params  = isNoVariant
       ? { p_product_id: item.productId!, p_qty: item.qty }
@@ -270,6 +287,13 @@ export async function restoreStockReporting(
 // Maps persisted `order_items` rows back to the StockCheckItem shape used by
 // reserve/restore. Single place for this mapping so the webhook, the payment
 // confirmation recovery path and the pending-order expiry job all agree.
+//
+// BUG FIX (Oct 2026 audit): a stored row is ALWAYS a real variant. order_items.variant_id
+// is NOT NULL with a foreign key to product_variants(id), so it can never hold a bare
+// product id. The old mapping re-guessed "no variant" from `variant_id === product_id`,
+// which sent product 1 / variant 1 (a real variant) to restore_product_stock and
+// reserve_product_stock_at_order — crediting/debiting the products row and leaking the
+// variant's stock on every expiry, recovery and failed-order restore.
 export function orderItemsToStockItems(
   rows: Array<{ product_id: unknown; variant_id: unknown; quantity: unknown }> | null | undefined,
 ): StockCheckItem[] {
@@ -277,5 +301,6 @@ export function orderItemsToStockItems(
     variantId: String(r.variant_id),
     productId: String(r.product_id),
     qty:       Number(r.quantity),
+    kind:      'variant' as const,
   }))
 }

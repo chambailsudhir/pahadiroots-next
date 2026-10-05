@@ -154,6 +154,7 @@ import type { SiteSettings } from '@/types'
 import { getServiceClient } from '@/lib/supabase'
 import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } from '@/lib/pricing/linePricing'
 import { reserveStockAtomicForOrder } from './inventoryService'
+import { isAmbiguousLine, buildOwnerMap, resolveLine, type LineKind } from '@/lib/lineKinds'
 import { calcPriceSummary } from './pricingService'
 
 // ── Module-level Supabase REST helpers ───────────────────────
@@ -416,7 +417,27 @@ export async function createOrder(
   //     a product that has active variants is always stale or tampered — reject it.
   //     Fails CLOSED: if the variants cannot be looked up, the order is not created.
   assertSafeItemIds(input.items)
-  const noVariantLines = input.items.filter(i => i.variantId === i.productId)
+
+  // 1a. LINE KINDS — decide, from the DATABASE, which lines are real variants and which are
+  //     the "no variant" convention. `variantId === productId` alone is ambiguous: variant
+  //     and product ids are separate sequences, and live product 1 (Manali Honey) owns a
+  //     variant whose id is also 1. Reading that as "no variant" made the honey impossible
+  //     to buy (I3 below rejected it every time) and pointed its stock at the wrong table.
+  //     Only ambiguous lines need a lookup; fails CLOSED if the lookup errors (sbGet throws).
+  const ambiguousVariantIds = Array.from(new Set(input.items.filter(isAmbiguousLine).map(i => i.variantId)))
+  const ownerRows = ambiguousVariantIds.length > 0
+    ? await sbGet('product_variants', `select=id,product_id&id=in.(${ambiguousVariantIds.join(',')})`)
+    : []
+  const ownerByVariantId = buildOwnerMap(ownerRows)
+  const resolutions = input.items.map(i => resolveLine(i, ownerByVariantId))
+  if (resolutions.some(r => r.kind === 'foreign_variant')) {
+    // A legacy/stale line whose variant slot holds the product id of ANOTHER product's variant.
+    // Never attach it to that variant.
+    throw new Error('Product no longer available — please remove it from your cart and add it again')
+  }
+  const lineKinds: LineKind[] = resolutions.map(r => r.kind as LineKind)
+
+  const noVariantLines = input.items.filter((_, idx) => lineKinds[idx] === 'product')
   if (noVariantLines.length > 0) {
     const ids  = Array.from(new Set(noVariantLines.map(i => i.productId))).join(',')
     const rows = await sbGet('product_variants', `select=id,product_id&product_id=in.(${ids})&is_active=eq.true`)
@@ -449,7 +470,7 @@ export async function createOrder(
   // shortfalls — infra failures surface as a 500 via StockReservationError
   // instead of masquerading as a customer-actionable stock message.
   const stockReservation = await reserveStockAtomicForOrder(
-    input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
+    input.items.map((i, idx) => ({ variantId: i.variantId, productId: i.productId, qty: i.qty, kind: lineKinds[idx] }))
   )
   if (!stockReservation.ok) {
     throw new Error(`Insufficient stock for item ${stockReservation.failedVariantId ?? 'unknown'} — please reduce quantity or remove the item`)
@@ -470,13 +491,13 @@ export async function createOrder(
 
   // 3. Fetch prices via direct REST API (same pattern as store-data route — proven working)
   // Split items: those with a real variant ID vs those using product ID as fallback
-  // (variantId === productId means the product has no variants)
+  // (kind 'product' = the product has no variants; see lib/lineKinds.ts for how that is decided)
   const itemsWithVariant: typeof input.items = []
   const itemsNoVariant:   typeof input.items = []
-  for (const item of input.items) {
-    if (item.variantId === item.productId) { itemsNoVariant.push(item) }
-    else                                   { itemsWithVariant.push(item) }
-  }
+  input.items.forEach((item, idx) => {
+    if (lineKinds[idx] === 'product') { itemsNoVariant.push(item) }
+    else                              { itemsWithVariant.push(item) }
+  })
 
   // Fetch variant rows (only for items that have a real variant ID)
   const variantRows: any[] = []
@@ -567,8 +588,8 @@ export async function createOrder(
   }
 
   // Build CartItem array for pricing — handles both variant and non-variant products
-  const cartItems: import('@/types').CartItem[] = input.items.map(i => {
-    if (i.variantId === i.productId) {
+  const cartItems: import('@/types').CartItem[] = input.items.map((i, idx) => {
+    if (lineKinds[idx] === 'product') {
       // No-variant product — price comes from products table
       const p = productMap.get(String(i.productId))
       return {
@@ -970,13 +991,15 @@ export async function createOrder(
   // This fixes the P2 security issue where an inflated client value could
   // pass if the DB RPC lacked a sufficient balance check.
 
-  // I2: variant_id is stored EXACTLY as reserved. A no-variant line (variantId === productId)
-  // reserved stock in the PRODUCTS table, so it is stored with variant_id === product_id and
-  // every restore path (orderItemsToStockItems → restoreStock) sends it back to the products
-  // table. This used to substitute the product's first active variant here, so order_items
-  // pointed at a variant whose stock was never decremented while the restore later credited
-  // THAT variant — creating stock out of nothing. The I3 pre-flight above guarantees a
-  // no-variant line never coexists with active variants, so no substitution is needed.
+  // I2: variant_id is stored EXACTLY as reserved — a real variant line keeps its variant id, and
+  // every restore path (orderItemsToStockItems → restoreStock) sends it back to that variant.
+  //
+  // NOTE (Oct 2026 audit): order_items.variant_id is NOT NULL with a foreign key to
+  // product_variants(id), so a true "no variant" line (kind 'product', stock on the products
+  // row) cannot be persisted: the insert fails the FK and the stock reserved above is restored
+  // by the finally block. No live product lacks variants, so nothing is affected today. The
+  // classification step (1a) additionally rejects a line whose id belongs to ANOTHER product's
+  // variant, so such a line can never be silently attached to the wrong variant.
 
   const rpcItems = input.items.map((i, idx) => {
     return {
@@ -1212,7 +1235,7 @@ export async function createOrder(
     if (newOrder === null) {
       const { restoreStock } = await import('./inventoryService')
       await restoreStock(
-        input.items.map(i => ({ variantId: i.variantId, productId: i.productId, qty: i.qty }))
+        input.items.map((i, idx) => ({ variantId: i.variantId, productId: i.productId, qty: i.qty, kind: lineKinds[idx] }))
       ).catch(async restoreErr => {
         // BUG FIX 20b: use captureError with alert:true — a failed stock restore
         // on an aborted order means inventory is permanently locked. Ops must fix.

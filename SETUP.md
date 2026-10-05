@@ -57,7 +57,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here        # Supabase → Settings 
 SUPABASE_SERVICE_KEY=your_service_key_here              # Supabase → Settings → API → service_role
 
 # ── Razorpay ─────────────────────────────────────────────────────────────────
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx       # Razorpay dashboard → Settings → API Keys
+RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx                    # SERVER side key id (payments API + health check)
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx       # same key id, used by the browser checkout. BOTH are required.
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret_here
 # BUG FIX 23a: RAZORPAY_WEBHOOK_SECRET is a DIFFERENT value from RAZORPAY_KEY_SECRET.
 # Set this in Razorpay dashboard → Settings → Webhooks → Secret (generate separately).
@@ -132,7 +133,7 @@ vercel --prod
 # Follow prompts, add env vars when asked
 ```
 
-**Important:** In Vercel project settings → **Environment Variables**, add all 7 variables from `.env.example`. The `SUPABASE_SERVICE_KEY` must be Server-only (not `NEXT_PUBLIC_`).
+**Important:** In Vercel project settings → **Environment Variables**, add every REQUIRED variable from `.env.example`. The `SUPABASE_SERVICE_KEY` must be Server-only (not `NEXT_PUBLIC_`).
 
 ---
 

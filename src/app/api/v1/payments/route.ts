@@ -15,7 +15,7 @@ import { logger, captureError } from '@/lib/logger'
 import { sanitize } from '@/lib/server/sanitize'
 // P1/P6: constant-time compare + server-to-server payment verification.
 import { safeEqual, isRazorpayOrderId, fetchRazorpayPayment, checkPaymentAgainstOrder } from '@/lib/server/razorpay'
-import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects } from '@/lib/server/orderPayments'
+import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects, storeRazorpayOrderId } from '@/lib/server/orderPayments'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -193,7 +193,8 @@ export async function POST(req: NextRequest) {
       const receiptId = order.order_number || `ORD-${order.id}`
       const rzpOrder  = await createRazorpayOrder(amountPaise, receiptId, order.id)
 
-      await db.from('orders').update({ payment_id: rzpOrder.id }).eq('id', order.id)
+      // Never hand out a payable Razorpay order we failed to link to our order (see helper).
+      await storeRazorpayOrderId(db, order.id, rzpOrder.id)
 
       return NextResponse.json({
         success:           true,
@@ -314,9 +315,10 @@ export async function POST(req: NextRequest) {
       // valid signature against an unpaid ₹5,000 order and got it confirmed.
       //
       // Now: the stored value MUST be a real `order_…` id and MUST equal the callback's.
-      // A NULL / non-order_ value is rejected (fail closed). A genuine infra fault that
-      // left payment_id unset is recovered by the payment.captured webhook, which binds
-      // on notes.db_order_id and the real captured amount.
+      // A NULL / non-order_ value is rejected (fail closed). The webhook ALSO refuses to
+      // confirm such an order (it holds it for manual review), so the only safe way to never
+      // reach this state is create_payment: storeRazorpayOrderId() retries the write and
+      // refuses to return a payable Razorpay order if it cannot be saved.
       if (!isRazorpayOrderId(currentOrder.payment_id) || !safeEqual(currentOrder.payment_id, razorpay_order_id)) {
         captureError(new Error('razorpay_order_id mismatch in verify_payment'), { action: 'payments.verify.order_id_mismatch', order_id, alert: true })
         await logOrderEvent(order_id, 'payment_order_id_mismatch', 'system', {
