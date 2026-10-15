@@ -55,6 +55,12 @@ describe('reconcileShippingCopy — rewrites stale hand-typed claims to the live
     expect(reconcileShippingCopy('Free shipping above ₹500', threshold)).toBe('Free shipping on orders above ₹799')
   })
 
+  it('hand-typed "on all orders" follows the setting too (e.g. the SEO meta description)', () => {
+    const seo = 'Direct from mountain farmers. Free shipping on all orders.'
+    expect(reconcileShippingCopy(seo, live)).toBe(seo)   // rule is "all orders" → unchanged
+    expect(reconcileShippingCopy(seo, threshold)).toBe('Direct from mountain farmers. Free shipping on orders above ₹799.')
+  })
+
   it('leaves unrelated text alone', () => {
     for (const t of ['Use WELCOME50 ₹50 off above ₹500', 'Free shipping, no minimum', 'Free shipping on all orders', 'Honey ₹799']) {
       expect(reconcileShippingCopy(t, live)).toBe(t)

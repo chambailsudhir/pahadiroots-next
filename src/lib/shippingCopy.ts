@@ -66,6 +66,11 @@ const CLAIM_RE = new RegExp(
   'gi',
 )
 
+// "Free shipping on all orders" typed by hand is ALSO a claim about the rule: it becomes false the
+// day free_shipping_min is raised above 0. Rewritten to the live rule too, so admin text such as the
+// SEO meta description always follows the setting (and is unchanged while the rule is "all orders").
+const ALL_ORDERS_RE = /(free\s+(?:shipping|delivery))\s+on\s+all\s+orders/gi
+
 /**
  * Rewrites any "free shipping above ₹N" claim in admin-authored copy to the live rule, and expands
  * the {{free_shipping_min}} / {{free_shipping}} tokens. Text with no claim is returned unchanged.
@@ -80,12 +85,14 @@ export function reconcileShippingCopy(text: string, settings: Partial<SiteSettin
       .replace(/\{\{\s*flat_shipping_charge\s*\}\}/gi, inr(p.flat))
       .replace(/\{\{\s*free_shipping\s*\}\}/gi, freeShippingPhrase(settings))
   }
-  out = out.replace(CLAIM_RE, (_m, claim: string) => {
+  const restyle = (_m: string, claim: string) => {
     // Preserve the author's casing: "FREE SHIPPING…", "Free shipping…" or mid-sentence "free shipping…".
     const phrase = freeShippingPhrase(settings)
     if (claim === claim.toUpperCase()) return phrase.toUpperCase()
     if (claim[0] === claim[0].toLowerCase()) return phrase[0].toLowerCase() + phrase.slice(1)
     return phrase
-  })
+  }
+  out = out.replace(CLAIM_RE, restyle)
+  out = out.replace(ALL_ORDERS_RE, restyle)
   return out
 }
