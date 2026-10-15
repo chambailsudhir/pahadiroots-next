@@ -32,6 +32,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { RawVariant, RawProduct, RawImage } from '@/types/store-data'
 import type { UpsellItem } from '@/types'
 import { logger }                from '@/lib/logger'
+import { rememberGood, recallGood } from '@/lib/api/lastGood'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // Use anon key for this read-only GET endpoint — service key is reserved for
@@ -84,6 +85,13 @@ export async function GET(req: NextRequest) {
 
   const excludedVariantIds = parseIdParam(searchParams.get('variantIds'))
   const excludedProductIds = parseIdParam(searchParams.get('productIds'))
+
+  // Last-good fallback (see lib/api/lastGood.ts) — keyed by the exact cart
+  // contents, because the result excludes items already in the cart. Upsells
+  // are cosmetic suggestions; add-to-cart re-validates stock and price.
+  const lastGoodKey = 'cart-upsells:'
+    + [...excludedVariantIds].sort().join(',') + '|' + [...excludedProductIds].sort().join(',')
+  const fallback = recallGood<UpsellItem[]>(lastGoodKey, 30 * 60_000)
 
   try {
     // ── Step 1: fetch top-80 in-stock variants ─────────────────────────────
@@ -207,12 +215,24 @@ export async function GET(req: NextRequest) {
         }
       })
 
+    rememberGood(lastGoodKey, upsells)
     return NextResponse.json(
       { upsells },
       { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
     )
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
+    if (fallback) {
+      logger.warn('cart_upsells_served_stale', {
+        action: 'cart_upsells.stale',
+        error:  message,
+        ageSec: Math.round(fallback.ageMs / 1000),
+      })
+      return NextResponse.json(
+        { upsells: fallback.value },
+        { headers: { 'Cache-Control': 'no-store', 'X-Data-Stale': '1' } },
+      )
+    }
     logger.error('cart_upsells_fetch_failed', { error: message })
     return NextResponse.json({ upsells: [] }, { status: 500 })
   }

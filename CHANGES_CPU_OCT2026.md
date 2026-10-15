@@ -24,3 +24,15 @@ pahadiroots-next = 92.7% of CPU; middleware = 42.3%, functions = 57.7%.
 
 ## Verify after deploy
 Vercel → Usage → Fluid Active CPU → "Type" tab: middleware share should collapse; daily bars should drop well below the current 3–5 min/day.
+
+## Follow-up: stability when Supabase stalls (Oct 15, 2026)
+Functions moved to bom1 (vercel.json `regions`). The free-tier Supabase compute still stalls for 5–12 s even
+under tiny load, which made the cart read-endpoints time out (4 s) and return 500.
+
+- `src/lib/api/lastGood.ts` (new): bounded, per-instance "last good value" store.
+- `cart-settings`, `coupon-hints`, `cart-upsells`: on failure, serve the last good value (200, `X-Data-Stale: 1`,
+  logged as a `*_served_stale` warning) instead of 500. Max age: 15 min / 60 min / 30 min. When a last-good copy
+  exists the DB timeout drops from 4 s to 2 s so customers don't wait for a stalled DB. A cold instance with nothing
+  remembered still returns 500 exactly as before, so uptime monitors still see real outages.
+- Display data only: `/api/v1/orders`, `/payments` and the Razorpay webhook re-read settings fresh and recompute totals.
+- Tests: `src/__tests__/lastGoodFallback.test.ts`.

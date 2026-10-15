@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
+import { rememberGood, recallGood } from '@/lib/api/lastGood'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 // Use the anon key for this public GET endpoint — the service key would grant
@@ -37,7 +38,15 @@ interface RawHint {
   expires_at: string | null
 }
 
+// Last-good fallback (see lib/api/lastGood.ts). Hints are purely cosmetic —
+// /api/v1/coupons re-validates and re-computes every code when it is applied —
+// so a stale list is harmless; an expired code just fails validation on apply.
+const LAST_GOOD_KEY    = 'coupon-hints'
+const LAST_GOOD_MAX_MS = 60 * 60_000 // 1 h
+const FAST_TIMEOUT_MS  = 2_000
+
 export async function GET() {
+  const fallback = recallGood<{ code: string; label: string }[]>(LAST_GOOD_KEY, LAST_GOOD_MAX_MS)
   try {
     // BUG FIX 28: expired coupons were fetched from DB then filtered in JS.
     // The now() comparison should happen in the DB (pushes work to Postgres,
@@ -55,7 +64,7 @@ export async function GET() {
       // SEC-FIX: add a timeout so a slow/unresponsive Supabase doesn't hang the
       // serverless function until Vercel's hard 15-second timeout fires.
       // 4 s is generous for a simple SELECT on an indexed table.
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(fallback ? FAST_TIMEOUT_MS : 4000),
       next: { revalidate: 120 }, // cache 2 min — hints don't need to be real-time
     })
 
@@ -78,6 +87,8 @@ export async function GET() {
           : `₹${c.value} off${c.min_order ? ` on ₹${c.min_order}+` : ''}`,
       }))
 
+    rememberGood(LAST_GOOD_KEY, hints)
+
     // BUG FIX: the previous header was `s-maxage=120, stale-while-revalidate=240`.
     // s-maxage is a CDN/edge directive — it tells Vercel's edge cache to hold the
     // response for 120 s.  It has NO effect on the browser.  Every page mount
@@ -90,6 +101,17 @@ export async function GET() {
     })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
+    if (fallback) {
+      logger.warn('coupon_hints_served_stale', {
+        action: 'coupon_hints.stale',
+        error:  message,
+        ageSec: Math.round(fallback.ageMs / 1000),
+      })
+      return NextResponse.json({ hints: fallback.value }, {
+        // short browser cache so the next page mount retries the live read soon
+        headers: { 'Cache-Control': 'no-store', 'X-Data-Stale': '1' },
+      })
+    }
     logger.error('coupon-hints fetch error', { action: 'coupon_hints.fetch', error: message })
     // BUG FIX 10: previously returned HTTP 200 on all errors.
     // A 200 with empty hints is indistinguishable from "no active coupons"

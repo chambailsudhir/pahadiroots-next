@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server'
 import { logger }        from '@/lib/logger'
+import { rememberGood, recallGood } from '@/lib/api/lastGood'
 
 // Use anon key for this read-only GET endpoint — the service key grants full DB
 // write access and should be reserved for mutations and admin operations.
@@ -55,7 +56,7 @@ export type CartSettingKey = (typeof CART_SETTING_KEYS)[number]
 const _CART_SETTINGS_FILTER = CART_SETTING_KEYS.map(k => `key.eq.${k}`).join(',')
 const _CART_SETTINGS_URL    = `${process.env.NEXT_PUBLIC_SUPABASE_URL!}/rest/v1/site_settings?or=(${_CART_SETTINGS_FILTER})&select=key,value`
 
-async function fetchCartSettings(): Promise<Record<string, string>> {
+async function fetchCartSettings(timeoutMs = 4_000): Promise<Record<string, string>> {
   // Use the module-level pre-built URL (hoisted from per-request rebuild)
   const res = await fetch(_CART_SETTINGS_URL, {
     headers: {
@@ -66,7 +67,7 @@ async function fetchCartSettings(): Promise<Record<string, string>> {
     // hangs this serverless function until Vercel's hard 15-second limit fires,
     // blocking the entire cart page render. 4 s is generous for a simple indexed
     // SELECT on ~15 rows.
-    signal: AbortSignal.timeout(4_000),
+    signal: AbortSignal.timeout(timeoutMs),
     // BUG FIX (live report — COD Charges saved as ₹0 in admin, checkout still
     // charged ₹50): this used `next: { revalidate: 60 }`, and the response
     // below also set `Cache-Control: s-maxage=60` (a CDN-edge directive —
@@ -89,9 +90,20 @@ async function fetchCartSettings(): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map(r => [r.key, r.value]))
 }
 
+// Last-good fallback (see lib/api/lastGood.ts for the rationale and safety
+// notes). Display data only — /api/v1/orders, /payments and the Razorpay
+// webhook always re-read settings fresh and recompute totals themselves.
+const LAST_GOOD_KEY    = 'cart-settings'
+const LAST_GOOD_MAX_MS = 15 * 60_000 // never show settings older than 15 min
+// When a last-good copy exists there is no point making the customer wait the
+// full 4 s for a stalled database before falling back.
+const FAST_TIMEOUT_MS  = 2_000
+
 export async function GET() {
+  const fallback = recallGood<Record<string, string>>(LAST_GOOD_KEY, LAST_GOOD_MAX_MS)
   try {
-    const settings = await fetchCartSettings()
+    const settings = await fetchCartSettings(fallback ? FAST_TIMEOUT_MS : 4_000)
+    rememberGood(LAST_GOOD_KEY, settings)
     return NextResponse.json(
       { settings },
       // BUG FIX: was `public, max-age=60, s-maxage=60, stale-while-revalidate=120`
@@ -106,8 +118,22 @@ export async function GET() {
     )
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error'
+    if (fallback) {
+      // Still logged (as a warning) so a database problem stays visible in
+      // Vercel logs even though the customer no longer sees an error.
+      logger.warn('cart_settings_served_stale', {
+        action: 'cart_settings.stale',
+        error:  message,
+        ageSec: Math.round(fallback.ageMs / 1000),
+      })
+      return NextResponse.json(
+        { settings: fallback.value },
+        { headers: { 'Cache-Control': 'no-store', 'X-Data-Stale': '1' } },
+      )
+    }
     logger.error('cart_settings_fetch_failed', { error: message })
-    // Return empty settings so the cart renders with safe defaults
+    // Nothing remembered (cold instance) → empty settings so the cart renders
+    // with safe defaults, exactly as before.
     return NextResponse.json({ settings: {} }, { status: 500 })
   }
 }
