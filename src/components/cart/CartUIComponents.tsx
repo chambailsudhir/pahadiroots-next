@@ -95,7 +95,7 @@ export const StickyCartCTA = memo(function StickyCartCTA({
           </button>
         </>
       ) : (
-        <Link href="/checkout" className={styles.sccBtn} onClick={onCheckout}>
+        <Link prefetch={false} href="/checkout" className={styles.sccBtn} onClick={onCheckout}>
           <span aria-hidden="true">🔒</span> Checkout
         </Link>
       )}

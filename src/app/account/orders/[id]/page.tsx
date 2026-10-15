@@ -99,7 +99,7 @@ export default function OrderDetailPage() {
     <div className={styles.odError}>
       <div className={styles.odErrorIcon}>⚠️</div>
       <p className={styles.odErrorMsg}>{error}</p>
-      <Link href="/account" className={styles.odBackLink}>← Back to Account</Link>
+      <Link prefetch={false} href="/account" className={styles.odBackLink}>← Back to Account</Link>
     </div>
   )
 
@@ -117,7 +117,7 @@ export default function OrderDetailPage() {
       {/* ── Header ─────────────────────────────────────────── */}
       <div className={styles.odHeader}>
         <div>
-          <Link href="/account" className={styles.odBackLink}>← Back to Account</Link>
+          <Link prefetch={false} href="/account" className={styles.odBackLink}>← Back to Account</Link>
           <div className={styles.odOrderNum}>{order.order_number}</div>
           <div className={styles.odOrderDate}>Placed on {formatDate(order.created_at)}</div>
         </div>

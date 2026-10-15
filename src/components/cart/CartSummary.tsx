@@ -282,7 +282,7 @@ const CartSummary = memo(function CartSummary({
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </button>
       ) : (
-        <Link href="/checkout" className={styles.cta} onClick={onCheckout}>
+        <Link prefetch={false} href="/checkout" className={styles.cta} onClick={onCheckout}>
           <span aria-hidden="true">🔒</span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>

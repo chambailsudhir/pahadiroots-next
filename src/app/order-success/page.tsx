@@ -662,7 +662,7 @@ function SuccessContent() {
                 style={{maxWidth:180,margin:0}}
                 onClick={() => { pollsRef.current = 0; setLoading(true); setError(false); void loadOrder() }}
               >Try again</button>
-              <Link href="/account?tab=orders" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>My Orders</Link>
+              <Link prefetch={false} href="/account?tab=orders" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>My Orders</Link>
               <Link href="/" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>← Back to Store</Link>
             </div>
           </div>
@@ -792,7 +792,7 @@ function SuccessContent() {
 
               {/* Actions */}
               <div className="oc-actions">
-                <Link href="/account" className="oc-btn-primary">📦 View All Orders</Link>
+                <Link prefetch={false} href="/account" className="oc-btn-primary">📦 View All Orders</Link>
                 <button onClick={() => window.print()} className="oc-btn-print">🧾 Print Invoice</button>
                 <Link href="/" className="oc-btn-secondary">🌿 Continue Shopping</Link>
               </div>

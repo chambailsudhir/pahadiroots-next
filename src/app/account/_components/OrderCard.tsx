@@ -161,7 +161,7 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
         {/* Actions */}
         <div className={styles.ocActions}>
           <div className={styles.ocActionsLeft}>
-            <Link href={`/account/orders/${o.id}`} className={`${styles.actionBtn} ${styles.actionView}`}>
+            <Link prefetch={false} href={`/account/orders/${o.id}`} className={`${styles.actionBtn} ${styles.actionView}`}>
               View Details
             </Link>
             <Link href={`/api/orders/${o.id}/invoice`} target="_blank" rel="noopener noreferrer" className={`${styles.actionBtn} ${styles.actionInvoice}`}>

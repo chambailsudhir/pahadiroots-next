@@ -33,21 +33,34 @@
 
 import { useEffect } from 'react'
 import { isProfileCacheStale, prefetchProfileToCache } from '@/lib/profileCache'
+import { useUserStore } from '@/store/userStore'
 
 export default function ProfilePrefetcher() {
   useEffect(() => {
+    // PERF FIX (Oct 2026 CPU audit): this used to call GET /api/auth/session on
+    // EVERY page load for EVERY visitor — including anonymous visitors and
+    // crawlers that execute JS — and each call is a billed serverless
+    // invocation (plus a proxy invocation). Most visitors have no session, so
+    // nearly all of those calls returned { loggedIn: false } and did nothing.
+    //
+    // Two free, local checks now come first and short-circuit before any
+    // network request:
+    //   1. No persisted user in the client store → nobody to prefetch for.
+    //      (login always sets the store user — AuthModal / GoogleAuthHandler /
+    //      useAuth — so a real logged-in customer always passes this.)
+    //   2. Profile cache still fresh → nothing to refresh.
+    // Only a returning customer with a stale cache reaches the session call,
+    // which is exactly the case this component exists for.
+    if (!useUserStore.getState().user) return
+    if (!isProfileCacheStale()) return
+
     // SEC-FIX: use the session API to check auth state instead of reading
     // localStorage. Tokens live in httpOnly cookies — not accessible to JS.
-    // The session endpoint is a cheap HEAD-equivalent GET that reads the cookie
-    // server-side and returns { loggedIn: boolean } without touching the DB.
     fetch('/api/auth/session', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : null)
       .then((data: { loggedIn?: boolean } | null) => {
         if (!data?.loggedIn) return
-        // Only fetch if cache is missing or stale — not on every page visit
-        if (isProfileCacheStale()) {
-          prefetchProfileToCache() // fire-and-forget
-        }
+        prefetchProfileToCache() // fire-and-forget
       })
       .catch(() => { /* non-fatal — prefetch is best-effort */ })
   }, []) // run once on mount

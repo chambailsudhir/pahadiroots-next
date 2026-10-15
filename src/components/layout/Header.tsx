@@ -104,8 +104,8 @@ export default function Header({ settings, categories = [], states = [] }: Props
           {showAbout && <li><Link href="/our-stories">Our Story</Link></li>}
           {showBlog && <li><Link href="/blog">Blog</Link></li>}
           <MegaMenu categories={categories} states={states} />
-          {showTrack && <li><Link href="/track">Track Order</Link></li>}
-          <li><Link href="/payment">Payment</Link></li>
+          {showTrack && <li><Link prefetch={false} href="/track">Track Order</Link></li>}
+          <li><Link prefetch={false} href="/payment">Payment</Link></li>
           <li><Link href="/contact">Contact</Link></li>
         </ul>
 
@@ -116,7 +116,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
 
           {/* Wishlist */}
           {showWishlist && (
-            <Link href="/wishlist" aria-label="Wishlist" className="old-nib" style={{ position: 'relative' }}>
+            <Link prefetch={false} href="/wishlist" aria-label="Wishlist" className="old-nib" style={{ position: 'relative' }}>
               <span aria-hidden="true">❤️</span>
               {mounted && wishlist.length > 0 && (
                 // aria-hidden: count already in link aria-label isn't practical here, but the
@@ -139,7 +139,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
               }
             }}
           >
-            <Link href="/account" className="old-nib" style={{ position: 'relative' }}
+            <Link prefetch={false} href="/account" className="old-nib" style={{ position: 'relative' }}
               aria-label={mounted && user ? `My Account, ${firstName}` : 'My Account'}
               aria-haspopup="true"
               aria-expanded={acctOpen}
@@ -157,13 +157,13 @@ export default function Header({ settings, categories = [], states = [] }: Props
                     ? <><div className="old-dd-name">Hi, {firstName}!</div><div className="old-dd-sub">{user.email || ''}</div></>
                     : <><div className="old-dd-name">Welcome!</div><div className="old-dd-sub">Login to manage your account</div></>}
                 </div>
-                <Link href="/account" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                <Link prefetch={false} href="/account" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
                   <span aria-hidden="true">📦</span> My Orders
                 </Link>
-                <Link href="/wishlist" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                <Link prefetch={false} href="/wishlist" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
                   <span aria-hidden="true">🤍</span> Wishlist
                 </Link>
-                <Link href="/account/addresses" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
+                <Link prefetch={false} href="/account/addresses" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
                   <span aria-hidden="true">👤</span> Profile &amp; Address
                 </Link>
                 <div className="old-dd-foot">

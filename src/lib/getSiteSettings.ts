@@ -305,7 +305,13 @@ const getCachedSiteSettings = unstable_cache(
   { tags: [SITE_SETTINGS_TAG], revalidate: CACHE_TTL_SECONDS }
 )
 
-export async function getSiteSettings(): Promise<SiteSettings> {
+// `strict: true` rethrows instead of falling back to DEFAULTS. Pages that are
+// statically cached (ISR) pass it so a transient Supabase failure makes the
+// render THROW — Next keeps serving the last good HTML — rather than freezing
+// a default-settings page (no hero slides, wrong toggles) into the full-route
+// cache for the whole revalidate window. Request-time callers keep the
+// forgiving default behaviour.
+export async function getSiteSettings(opts: { strict?: boolean } = {}): Promise<SiteSettings> {
   try {
     // A thrown/rejected call is never cached by unstable_cache (same
     // self-healing behavior already relied on for getStoreData() in
@@ -313,6 +319,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     // locked in as "the" cached value for the next 5 minutes.
     return await getCachedSiteSettings()
   } catch (err) {
+    if (opts.strict) throw err
     logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
     return DEFAULTS as SiteSettings
   }

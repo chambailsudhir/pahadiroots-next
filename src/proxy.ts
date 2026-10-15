@@ -208,12 +208,46 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   return NextResponse.next()
 }
 
+// ── Matcher ────────────────────────────────────────────────────────────────
+// PERF FIX (Oct 2026 — Vercel "75% of Fluid Active CPU" warning; the Usage
+// page showed ~42% of all CPU burned in *middleware* on a low-traffic store):
+// the old matcher, '/((?!_next/static|_next/image).*)', ran this file for
+// EVERY request that wasn't a Next static chunk — every /public asset
+// (/logo.png, /js/ai-assistant.js, fonts, icons, sitemap, robots), every
+// router prefetch, every analytics beacon, every GET to a read-only API.
+// Each of those is a billed invocation even though proxy() immediately
+// returned NextResponse.next() for nearly all of them (the in-function
+// MAINTENANCE_EXEMPT_PATTERN check could skip the Supabase read, but not the
+// invocation itself). Bots and crawlers multiply this: one HTML page pulls
+// 10-40 assets, and scanners hammer random paths.
+//
+// The matcher now selects ONLY what proxy() actually acts on, so everything
+// else never invokes it at all:
+//   1. Page navigations (for the maintenance gate) — minus /api, /auth,
+//      /maintenance, /_next, anything ending in a static-asset extension,
+//      and router PREFETCH requests (a prefetch only warms the client cache;
+//      the real navigation that follows is still gated).
+//   2. Mutating /api/v1/* routes (for the global IP rate limit) — minus the
+//      GET-only / self-limited routes listed below, which the limiter always
+//      skipped anyway (GET is exempt). New /api/v1 routes stay covered by
+//      default; only routes named here opt out.
+//
+// Keep STATIC_EXT in sync with the extension list in MAINTENANCE_EXEMPT_PATTERN.
+// NOTE: Next requires `config` to be statically analysable, so the pieces are
+// written out literally rather than built from variables.
 export const config = {
-  // Widened from '/api/v1/:path*' so the maintenance gate can run on page
-  // routes too. Excludes Next's own static/image pipeline (never needs
-  // gating) — everything else is filtered inside proxy() via
-  // MAINTENANCE_EXEMPT_PATTERN / API_V1_PATTERN so the two concerns stay
-  // independently readable instead of fighting over one matcher regex.
-  matcher: ['/((?!_next/static|_next/image).*)'],
+  matcher: [
+    {
+      source:
+        '/((?!api/|auth/|_next/|maintenance$|maintenance/|.*\\.(?:png|jpe?g|webp|avif|gif|svg|ico|css|js|mjs|map|json|txt|xml|webmanifest|woff2?|ttf|otf|mp4|webm)$).*)',
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' },
+      ],
+    },
+    // analytics/track has its own bot filter + per-IP limiter and is the
+    // single hottest POST on the site (one per page view) — an extra Upstash
+    // round-trip per beacon bought almost no protection.
+    '/api/v1/((?!analytics/track|cart-settings|cart-upsells|coupon-hints|search-catalog|store-data|cron/|orders/lookup|orders/track|loyalty/history).*)',
+  ],
 }
-

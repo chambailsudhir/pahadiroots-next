@@ -227,7 +227,7 @@ function AccountPageInner() {
               {it.label}
             </button>
           ))}
-          <Link href="/wishlist" aria-label="My Wishlist" className={styles.mobTab}>
+          <Link prefetch={false} href="/wishlist" aria-label="My Wishlist" className={styles.mobTab}>
             <span className={styles.mtIcon}>{NAV_ICONS.wishlist}</span>
             Wishlist
           </Link>

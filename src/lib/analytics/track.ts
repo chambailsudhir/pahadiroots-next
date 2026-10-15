@@ -96,8 +96,26 @@ interface TrackPayload {
   metadata?:     Record<string, unknown>
 }
 
+// PERF FIX (Oct 2026 CPU audit): crawlers that execute JavaScript (Googlebot's
+// renderer, headless Chrome scanners, uptime/monitoring browsers) used to fire
+// a beacon for every page they rendered. The server discards bot UAs, but only
+// AFTER a proxy invocation and a serverless invocation have already been
+// billed. Dropping them at the source costs nothing. Mirrors the server-side
+// BOT_UA_PATTERN in /api/v1/analytics/track (which stays as the backstop).
+const BOT_UA_PATTERN = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|gtmetrix|curl|wget|python-requests|scrapy|facebookexternalhit|pingdom|uptimerobot|ahrefs|semrush|bytespider/i
+
+function isAutomatedClient(): boolean {
+  try {
+    if (navigator.webdriver) return true
+    return BOT_UA_PATTERN.test(navigator.userAgent || '')
+  } catch {
+    return false
+  }
+}
+
 export function track(payload: TrackPayload): void {
   if (typeof window === 'undefined') return
+  if (isAutomatedClient()) return
 
   try {
     const visitor_id = getVisitorId()

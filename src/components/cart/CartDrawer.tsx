@@ -468,7 +468,7 @@ export default function CartDrawer({ settings }: Props) {
                 variantIds into via markPendingRemoval — so ghost items are
                 always physically removed regardless of which checkout surface
                 the user uses. */}
-            <Link
+            <Link prefetch={false}
               href="/checkout"
               onClick={() => {
                 useCartStore.getState().flushPendingRemovals()
@@ -479,7 +479,7 @@ export default function CartDrawer({ settings }: Props) {
               Proceed to Checkout
             </Link>
             {/* A12: focus-visible ring on View Full Cart link */}
-            <Link
+            <Link prefetch={false}
               href="/cart"
               onClick={closeCart}
               className="block w-full text-center text-stone-500 hover:text-stone-700 text-sm font-medium py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 focus-visible:rounded"

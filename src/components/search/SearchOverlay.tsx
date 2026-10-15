@@ -232,7 +232,7 @@ export default function SearchOverlay() {
                   </li>
                 ))}
                 <li className="border-t border-stone-100">
-                  <Link
+                  <Link prefetch={false}
                     href={`/search?q=${encodeURIComponent(query)}`}
                     onClick={() => handleSelect(query)}
                     className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold text-forest-700 transition-colors ${activeIndex === results.length ? 'bg-stone-100' : 'hover:bg-stone-50'}`}

@@ -122,11 +122,35 @@ export async function generateMetadata(): Promise<Metadata> {
 // out a second, redundant cache window. The underlying product/category
 // data is still cached for 60s either way (that cost doesn't change) —
 // this only removes the *extra*, redundant page-level freeze on top of it.
-export const dynamic = 'force-dynamic'
+//
+// PERF FIX (Oct 2026 — Vercel Fluid Active CPU at 75% of the free tier, with
+// this page as the biggest single contributor): `force-dynamic` meant EVERY
+// request — customers, Googlebot, AI crawlers, uptime pings, scanners — ran
+// the full server render (settings + catalog normalisation + buildStates +
+// React render of ~12 sections) on a serverless function, with no page-level
+// caching at all. That is exactly the cost the Layer-A data cache cannot
+// remove: it saves the Supabase round-trips, not the CPU spent rendering.
+//
+// The degraded-HTML problem described above is solved at its root instead:
+//   • getStoreData() is awaited at the TOP of HomePage. Its unstable_cache
+//     layer never caches a failed (thrown) fetch, so when Supabase blips the
+//     whole page render THROWS. Next.js never stores a thrown render as ISR
+//     output — during background regeneration it keeps serving the last good
+//     HTML, and a cold first render returns an error instead of freezing a
+//     Bestsellers-less page. (BestSellers/NewArrivals then re-read the same
+//     already-populated cache within that render, so their fail-safe catch
+//     blocks cannot fire on a transient blip.)
+//   • Admin saves still go live immediately: /api/v1/revalidate calls
+//     revalidateTag('store-data') and revalidatePath('/', 'page').
+// 300s matches the root layout window (the effective floor anyway) — it is
+// only the safety net for a missed revalidate call.
+export const revalidate = 300
 
 export default async function HomePage() {
   const [baseSettings, storeData] = await Promise.all([
-    getSiteSettings(),
+    // strict: this page is ISR-cached — throw on a failed read (Next keeps the
+    // last good HTML) instead of freezing DEFAULTS into the cache.
+    getSiteSettings({ strict: true }),
     getStoreData(),
   ])
   // "Himalayan States" in the hero stat / why-section follows the admin's
