@@ -170,7 +170,7 @@ export default async function ProductsPage({ searchParams }: Props) {
             {pageTitle}
           </h1>
           <p style={{ color: 'rgba(255,255,255,.75)', fontSize: '14px', margin: 0 }}>
-            {count} natural Himalayan products{activeCat ? ` in ${activeCat.name}` : activeState ? ` from ${activeState.name}` : ''} • Sourced from 200+ mountain families
+            {count} natural Himalayan products{activeCat ? ` in ${activeCat.name}` : activeState ? ` from ${activeState.name}` : ''} • Sourced directly from mountain families
           </p>
         </div>
       </div>

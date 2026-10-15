@@ -140,7 +140,7 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
           </div>
           <p style={{ color: 'rgba(255,255,255,.75)', fontSize: '14px', margin: 0 }}>
             {count} new Himalayan product{count === 1 ? '' : 's'}{activeCat ? ` in ${activeCat.name}` : ''}
-            {justAddedCount > 0 ? ` • ${justAddedCount} added this week` : ''} • Sourced from 200+ mountain families
+            {justAddedCount > 0 ? ` • ${justAddedCount} added this week` : ''} • Sourced directly from mountain families
           </p>
         </div>
       </div>

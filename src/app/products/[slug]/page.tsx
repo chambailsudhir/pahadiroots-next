@@ -1655,7 +1655,7 @@ function WhySection() {
             <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
           </svg>
           <div className="pdp-why-pt">Direct from Farmers</div>
-          <p className="pdp-why-pd">Zero middlemen. 200+ farming families across the Himalayan states — fair wages, always.</p>
+          <p className="pdp-why-pd">Zero middlemen. Direct from farming families across the Himalayan states — fair wages, always.</p>
         </div>
         {/* PILLAR 3: Eco Packaging */}
         <div className="pdp-why-pillar">
