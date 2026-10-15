@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createOrder, IdempotencyConflictError } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError, logOrderEvent } from '@/lib/services/orderService'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
@@ -219,7 +219,11 @@ export async function POST(req: NextRequest) {
             // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
             // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
             // appears as a filterable JSON line in log aggregators, not a plain string.
-            logger.warn('loyalty: COD redemption skipped — insufficient balance', { order_id: order.id })
+            // F-06: discount already granted → alert (not a quiet warn) + order event audit trail.
+            captureError(new Error('Loyalty redemption failed on COD order — discount granted without deduction'), {
+              action: 'orders.cod_loyalty_redeem_failed', order_id: order.id, points: d.loyalty_points_redeemed, alert: true,
+            })
+            await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: d.loyalty_points_redeemed }).catch(() => null)
           }
         }
         await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
@@ -461,6 +465,7 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('multiple options')
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
+      || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
     )
     const status  = isUserFacing ? 409 : 500
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'

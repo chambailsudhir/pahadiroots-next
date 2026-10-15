@@ -215,7 +215,13 @@ export async function runPaidSideEffects(
     if (pointsRedeemed > 0) {
       const redeemed = await redeemLoyaltyPoints(custId, order.id, pointsRedeemed)
       if (!redeemed) {
-        logger.warn('loyalty: redemption skipped — insufficient balance', { order_id: order.id })
+        // F-06: the discount was already granted at order creation. createOrder now excludes points
+        // held by other unpaid orders, so this only happens on a sub-second race — but when it does
+        // it is money given away, so it is an ALERT with the order event as the audit trail.
+        captureError(new Error('Loyalty redemption failed after payment — discount granted without deduction'), {
+          action: 'orderPayments.loyalty_redeem_failed', order_id: order.id, points: pointsRedeemed, alert: true,
+        })
+        await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: pointsRedeemed }).catch(() => null)
       }
     }
     await awardLoyaltyPoints(custId, order.id, order.total_amount ?? 0, settings, 'Earned from online payment')

@@ -10,6 +10,8 @@ import { supabase, getServiceClient } from './supabase'
 import type { SiteSettings } from '@/types'
 import { logger } from '@/lib/logger'
 import { unstable_cache, revalidateTag, unstable_noStore } from 'next/cache'
+import { reconcileShippingCopy, freeShippingSub } from '@/lib/shippingCopy'
+import { FALLBACK_FREE_SHIPPING_MIN, FALLBACK_FLAT_SHIPPING } from '@/lib/siteSettingsHelpers'
 
 // Default fallback values — site works even if settings are missing
 const DEFAULTS: Partial<SiteSettings> = {
@@ -24,7 +26,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   // Ticker — real keys confirmed
   ticker_hide:             'false',
   ticker_1_text:           '🎁 Use code WELCOME50 · ₹50 off your first order',
-  ticker_2_text:           '🚚 Free shipping · On orders above ₹500 — Pan India',
+  // F-02: no hard-coded amount — expanded from the live free_shipping_min by reconcileShippingCopy().
+  ticker_2_text:           '🚚 {{free_shipping}} — Pan India',
   ticker_3_text:           '🌿 100% Natural · No preservatives, no additives',
   ticker_4_text:           '🏔️ Direct from mountain farmers',
   ticker_5_text:           '⭐ Rated 4.9/5 · Happy customers across India',
@@ -36,8 +39,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   ticker_bg_color:         '#c8920a',
   ticker_text_color:       '#1a1a1a',
   // Shipping — real keys confirmed (currently 0 in your DB)
-  free_shipping_min:       '0',
-  flat_shipping_charge:    '0',
+  free_shipping_min:       String(FALLBACK_FREE_SHIPPING_MIN),
+  flat_shipping_charge:    String(FALLBACK_FLAT_SHIPPING),
   // Contact — real keys confirmed
   whatsapp_number:         '919899984895',
   contact_phone:           '+919899984895',
@@ -269,7 +272,78 @@ async function fetchSiteSettingsFromDB(): Promise<SiteSettings> {
   )
 
   // Merge: defaults first, then DB values override
-  return { ...DEFAULTS, ...fromDB } as SiteSettings
+  return withCouponTokens(withReconciledShippingCopy({ ...DEFAULTS, ...fromDB } as SiteSettings), client)
+}
+
+// F-05 (Oct 2026 audit): the promo ticker said "WELCOME50 · ₹50 off your first order" while the real
+// coupon needs a ₹500 minimum and is not first-order-only. Promo copy can now say {{coupon:CODE}}
+// and gets the coupon's REAL terms from the coupons table ("WELCOME50 · ₹50 off on orders above
+// ₹500"). Unknown/inactive/expired codes degrade to the bare code text, never to a false promise.
+async function withCouponTokens(
+  settings: SiteSettings,
+  client: ReturnType<typeof getServiceClient>,
+): Promise<SiteSettings> {
+  const TOKEN = /\{\{\s*coupon:([A-Za-z0-9_-]{2,40})\s*\}\}/g
+  const entries = Object.entries(settings as unknown as Record<string, unknown>)
+  const codes = new Set<string>()
+  for (const [, v] of entries) {
+    if (typeof v === 'string') for (const m of v.matchAll(TOKEN)) codes.add(m[1].toUpperCase())
+  }
+  if (codes.size === 0) return settings
+
+  const terms = new Map<string, string>()
+  try {
+    const { data } = await client
+      .from('coupons')
+      .select('code, type, value, min_order, max_discount, is_active, expires_at, first_order_only')
+      .in('code', [...codes])
+    for (const c of data ?? []) {
+      const expired = c.expires_at && new Date(c.expires_at) < new Date()
+      if (!c.is_active || expired) continue
+      const val   = Number(c.value)
+      const off   = c.type === 'percent' ? `${val}% off` : `₹${val} off`
+      const cap   = c.type === 'percent' && c.max_discount != null ? ` (up to ₹${Number(c.max_discount)})` : ''
+      const min   = Number(c.min_order) > 0 ? ` on orders above ₹${Number(c.min_order)}` : ''
+      const first = c.first_order_only ? ' — first order only' : ''
+      terms.set(String(c.code).toUpperCase(), `${c.code} · ${off}${cap}${min}${first}`)
+    }
+  } catch {
+    // coupons unreadable → every token falls back to the bare code below
+  }
+
+  const out: Record<string, unknown> = { ...settings }
+  for (const [k, v] of entries) {
+    if (typeof v === 'string' && v.includes('{{')) {
+      out[k] = v.replace(TOKEN, (_m, code: string) => terms.get(code.toUpperCase()) ?? code.toUpperCase())
+    }
+  }
+  return out as unknown as SiteSettings
+}
+
+// F-02 (Oct 2026 audit): admin-authored copy (announcement bar, ticker, trust bar, meta/OG
+// descriptions…) is free text, so it could — and did — state a free-shipping threshold (₹500,
+// ₹799) that disagreed with the real `free_shipping_min` setting checkout enforces. Every string
+// setting is passed through reconcileShippingCopy(), which rewrites any "free shipping above ₹N"
+// claim to the live rule (and expands {{free_shipping_min}} / {{free_shipping}} tokens). Strings
+// without such a claim are untouched, so this is safe to run over the whole table.
+function withReconciledShippingCopy(settings: SiteSettings): SiteSettings {
+  const out: Record<string, unknown> = { ...settings }
+  for (const [k, v] of Object.entries(out)) {
+    if (typeof v === 'string' && /free|\{\{/i.test(v)) out[k] = reconcileShippingCopy(v, settings)
+  }
+  // A trust badge titled "Free Shipping" carries its threshold in a separate `_sub` line
+  // ("On orders above ₹500") that never says "free shipping" itself, so the sentence rewrite above
+  // cannot see it. Rewrite that sub-line to the live rule.
+  for (let n = 1; n <= 8; n++) {
+    const title = out[`trust_${n}_title`]
+    const sub   = out[`trust_${n}_sub`]
+    if (typeof title === 'string' && typeof sub === 'string'
+        && /free\s+(shipping|delivery)/i.test(title)
+        && /(above|over)\s*(₹|rs\.?|inr)\s*\d/i.test(sub)) {
+      out[`trust_${n}_sub`] = freeShippingSub(settings)
+    }
+  }
+  return out as unknown as SiteSettings
 }
 
 // BUG FIX (cross-instance staleness — "hero banner change takes minutes to
@@ -321,7 +395,7 @@ export async function getSiteSettings(opts: { strict?: boolean } = {}): Promise<
   } catch (err) {
     if (opts.strict) throw err
     logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
-    return DEFAULTS as SiteSettings
+    return withReconciledShippingCopy(DEFAULTS as SiteSettings)
   }
 }
 

@@ -9,7 +9,7 @@ import type { Metadata } from 'next'
 // that array changes, update this one too.
 const FAQ = [
   { q: 'How long does delivery take?',           a: '3–5 business days across India. We ship via trusted courier partners.' },
-  { q: 'Do you offer Cash on Delivery?',         a: 'Yes! COD is available on orders up to ₹3000. For higher amounts, please pay online.' },
+  { q: 'Do you offer Cash on Delivery?',         a: 'We accept UPI, cards and net banking via Razorpay. Cash on Delivery is offered only when it is switched on for the store — see our Payment Methods page for what is available right now.' },
   { q: 'Are your products certified organic?',   a: 'Our products are 100% natural — no preservatives, no additives. We work directly with farmers but do not carry formal organic certifications as these are expensive and inaccessible to small mountain farmers.' },
   { q: 'What if my product arrives damaged?',    a: 'Please WhatsApp us a photo within 48 hours of delivery. We will send a replacement or full refund — no questions asked.' },
   { q: 'Can I return a product?',                a: 'For non-edible items, yes — within 48 hours of delivery, unopened and in original condition. Edible/food items (honey, ghee, shilajit, spices, tea, etc.) are generally not returnable once opened, per food-safety norms — but we do consider damage or quality-defect claims raised within 48 hours with photo/video proof. See our Return & Refund Policy for full details.' },

@@ -156,6 +156,9 @@ import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } fr
 import { reserveStockAtomicForOrder } from './inventoryService'
 import { isAmbiguousLine, buildOwnerMap, resolveLine, type LineKind } from '@/lib/lineKinds'
 import { calcPriceSummary } from './pricingService'
+import { isCodEnabled } from '@/lib/siteSettingsHelpers'
+import { checkServiceability } from '@/lib/serviceability'
+import { claimCouponUse, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
 
 // ── Module-level Supabase REST helpers ───────────────────────
 // Declared once here so createOrder() doesn't re-create closures
@@ -447,6 +450,12 @@ export async function createOrder(
     }
   }
 
+  // 1d. F-09 (Oct 2026 audit): server-side PIN/state serviceability. Owner-defined through the
+  //     optional `serviceable_states` / `blocked_pincodes` settings; with neither set this is a no-op
+  //     (all of India). Runs BEFORE stock is reserved so a refusal has nothing to undo.
+  const serviceable = checkServiceability({ state: input.state, pincode: input.pincode }, settings as unknown as Record<string, string | undefined>)
+  if (!serviceable.ok) throw new Error(serviceable.reason)
+
   // 2. Atomic stock reservation — replaces the old read-only checkStockAvailability.
   //
   // RACE CONDITION FIX: the previous pattern did SELECT available_stock, then checked
@@ -486,6 +495,9 @@ export async function createOrder(
   // safe to restore.  Once newOrder is set the order owns those units and we
   // must not touch stock again.
   let newOrder: { id: string; order_number: string; total_amount: number; order_status: string } | null = null
+  // F-07: id of the atomic coupon claim (coupon_usage row, order_id NULL) taken in step 4. Hoisted so
+  // the finally block can release it if the order never commits.
+  let couponClaimUsageId: number | null = null
 
   try {
 
@@ -537,7 +549,7 @@ export async function createOrder(
   // show a generic emoji, never the real product photo.
   //
   const products: any[] = await sbGet('products',
-    `select=id,name,emoji,image_url,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock&id=in.(${productIdList})`
+    `select=id,name,emoji,image_url,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock,category_id&id=in.(${productIdList})`
   )
   if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
 
@@ -661,93 +673,110 @@ export async function createOrder(
   // The pre-check endpoint is still useful (fast UX feedback) but no longer
   // the only line of defence.
   let appliedCoupon: import('@/types').AppliedCoupon | null = null
-  // Retain the raw DB row so we can atomically increment uses_count after order creation.
-  let couponDbRow: { id: number; code: string; uses_count: number; max_uses: number | null } | null = null
+  // Retained so step 10 can attach the order to the claim and the report can name the coupon.
+  let couponDbRow: { id: number; code: string } | null = null
+
+  // Read-only identity lookup — mirrors the real customer upsert in step 7b without creating
+  // anything. A brand-new customer naturally has no match. Memoised: used by first_order_only, the
+  // per-customer limit and the atomic claim.
+  let candidateCustMemo: string | number | null | undefined
+  const resolveCandidateCustomerId = async (): Promise<string | number | null> => {
+    if (candidateCustMemo !== undefined) return candidateCustMemo
+    let cand: string | number | null = input.authenticatedCustomerId ?? null
+    if (cand == null) {
+      const normalizedPhoneForCheck = input.customerPhone.replace(/\D/g, '').slice(-10)
+      const custByPhone = normalizedPhoneForCheck
+        ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhoneForCheck}&select=id&limit=1`)
+        : null
+      cand = custByPhone?.id ?? null
+      if (cand == null && input.customerEmail?.trim()) {
+        const custByEmail = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+        cand = custByEmail?.id ?? null
+      }
+    }
+    candidateCustMemo = cand
+    return cand
+  }
+
   if (input.couponCode) {
     const { data: coupon } = await withTimeout(
       db.from('coupons')
         .select('*')
-        .eq('code', input.couponCode.toUpperCase())
+        .eq('code', input.couponCode.trim().toUpperCase())
         .eq('is_active', true)
         .maybeSingle(),
       8_000,
       'coupon fetch',
     )
 
-    if (coupon) {
-      // ── Server-side coupon guards (mirrors validateCouponServer) ──────────
-      // max_uses check
-      if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
-        throw new Error('Coupon usage limit reached')
-      }
-      // Expiry check
-      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
-        throw new Error('Coupon has expired')
-      }
-      // Min order check (against live server-computed subtotal)
-      const subtotalForCheck = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
-      if (coupon.min_order && subtotalForCheck < coupon.min_order) {
-        throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
-      }
+    // BUG FIX (Oct 2026 audit): an unknown/inactive code used to be IGNORED silently, so the
+    // customer saw a discounted total in the UI while the server charged the full price. Say so.
+    if (!coupon) throw new Error('Invalid or inactive coupon code')
 
-      // FEATURE FIX (Sep 2026): coupons.user_limit ("uses per customer") was
-      // never enforced anywhere — only the store-wide max_uses/uses_count
-      // check above ran. A coupon configured as "once per customer" behaved
-      // as "once ever, for the whole store": the first redemption exhausted
-      // it for every future customer too (see WELCOME50/MYPAHADI, both
-      // configured with user_limit=1).
-      //
-      // This is the authoritative gate — /api/v1/coupons (pricingService.ts)
-      // does the same check for fast UX feedback, but only when a phone has
-      // already been typed in; a direct call to this endpoint could
-      // otherwise skip it entirely, so it must also live here.
-      //
-      // Read-only identity lookup — mirrors the real customer upsert later
-      // in this function (step 7b) but doesn't create anything. A brand-new
-      // customer naturally has no match, so priorUses is correctly 0.
-      if (coupon.user_limit != null) {
-        let candidateCustId: string | number | null = input.authenticatedCustomerId ?? null
-        if (candidateCustId == null) {
-          const normalizedPhoneForCheck = input.customerPhone.replace(/\D/g, '').slice(-10)
-          const custByPhone = normalizedPhoneForCheck
-            ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhoneForCheck}&select=id&limit=1`)
-            : null
-          candidateCustId = custByPhone?.id ?? null
-          if (candidateCustId == null && input.customerEmail?.trim()) {
-            const custByEmail = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
-            candidateCustId = custByEmail?.id ?? null
-          }
-        }
-        if (candidateCustId != null) {
-          const { count: priorUses } = await withTimeout(
-            db.from('coupon_usage')
-              .select('id', { count: 'exact', head: true })
-              .eq('coupon_id', coupon.id)
-              .eq('customer_id', candidateCustId),
-            8_000,
-            'coupon per-customer usage check',
-          )
-          if ((priorUses ?? 0) >= coupon.user_limit) {
-            throw new Error('You have already used this coupon')
-          }
-        }
-      }
+    // ── Fast-fail guards (the authoritative, race-free versions run inside claim_coupon_use) ──
+    if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
+      throw new Error('Coupon usage limit reached')
+    }
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+      throw new Error('This coupon has expired')
+    }
+    // Min order check (against the live server-computed subtotal)
+    const subtotalForCheck = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0)
+    if (coupon.min_order && subtotalForCheck < coupon.min_order) {
+      throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
+    }
 
-      couponDbRow = { id: coupon.id, code: coupon.code, uses_count: coupon.uses_count ?? 0, max_uses: coupon.max_uses ?? null }
-      const discountAmt = coupon.type === 'percent'
-        ? Math.min(
-            Math.round(subtotalForCheck * coupon.value / 100),
-            // BUG FIX (pricingService mirror): use ?? not || so max_discount=0 is
-            // respected rather than treated as "no cap".
-            coupon.max_discount ?? Infinity
-          )
-        : coupon.value
-      appliedCoupon = {
-        code:     coupon.code,
-        discount: Math.round(discountAmt),
-        type:     coupon.type,
-        percent:  coupon.type === 'percent' ? coupon.value : undefined,
-      }
+    // F-08 (Oct 2026 audit): restrictions that were configurable but never enforced.
+    //  • category_ids      → coupon applies only to lines whose product is in those categories.
+    //  • first_order_only  → customer must have no earlier paid / COD-placed, non-cancelled order.
+    //  • excluded_skus     → the catalogue has no SKU column on products/variants, so there is nothing
+    //                        to match against; it is flagged loudly rather than silently ignored.
+    //  • min_margin_floor / is_seller_funded are admin-side accounting metadata, not customer rules.
+    const allowedCategories = toIdList(coupon.category_ids)
+    let eligibleSubtotal = subtotalForCheck
+    if (allowedCategories.length > 0) {
+      eligibleSubtotal = cartItems.reduce((sum, i) => {
+        const cat = productMap.get(String(i.productId))?.category_id
+        return allowedCategories.includes(String(cat)) ? sum + i.price * i.qty : sum
+      }, 0)
+      if (eligibleSubtotal <= 0) throw new Error('This coupon does not apply to the items in your cart')
+    }
+    if (toIdList(coupon.excluded_skus).length > 0) {
+      logger.warn('[createOrder] coupon has excluded_skus but products carry no SKU — restriction NOT enforced', {
+        action: 'createOrder.coupon_excluded_skus', code: coupon.code,
+      })
+    }
+
+    const candidateCustId = await resolveCandidateCustomerId()
+    if (coupon.first_order_only && candidateCustId != null) {
+      const prior = await sbGetOne(
+        'orders',
+        `customer_id=eq.${candidateCustId}&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=id&limit=1`,
+      )
+      if (prior) throw new Error('This coupon is valid on your first order only')
+    }
+
+    // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a
+    // customer-readable message on refusal; the claim is released in `finally` if the order fails.
+    const claim = await claimCouponUse(db, coupon.id, candidateCustId)
+    if (!claim.ok) throw new Error(claim.error)
+    couponClaimUsageId = claim.usageId
+    couponDbRow = { id: coupon.id, code: coupon.code }
+
+    const rawDiscount = coupon.type === 'percent'
+      ? Math.min(
+          Math.round(eligibleSubtotal * coupon.value / 100),
+          // use ?? not || so max_discount=0 is respected rather than treated as "no cap"
+          coupon.max_discount ?? Infinity,
+        )
+      : coupon.value
+    appliedCoupon = {
+      code:     coupon.code,
+      // BUG FIX (Oct 2026 audit): a flat coupon larger than the eligible subtotal used to be
+      // recorded at its full face value; a discount can never exceed what it applies to.
+      discount: Math.max(0, Math.min(Math.round(rawDiscount), Math.round(eligibleSubtotal))),
+      type:     coupon.type,
+      percent:  coupon.type === 'percent' ? coupon.value : undefined,
     }
   }
 
@@ -808,7 +837,7 @@ export async function createOrder(
   const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, input.paymentMethod, loyaltyDiscountInr)
 
   // 6. COD availability check
-  if (input.paymentMethod === 'cod' && settings.cod_enabled === 'false') {
+  if (input.paymentMethod === 'cod' && !isCodEnabled(settings)) {
     throw new Error('COD is not available at this time')
   }
 
@@ -967,10 +996,32 @@ export async function createOrder(
     if (balanceErr) throw new Error('Could not verify loyalty balance')
 
     const liveBalance = Number(customerRow?.loyalty_points ?? 0)
-    if (input.loyaltyPointsRedeemed! > liveBalance) {
+
+    // F-06 (Oct 2026 audit): the discount is granted here but the points are only deducted when the
+    // order is paid (online) — so the same balance could back several unpaid carts at once and all
+    // of them would get the discount. Points already promised to this customer's OTHER open,
+    // unpaid online orders (still inside the pending-order window) are therefore not available.
+    const holdWindowMs = resolveExpiryMinutes((settings as unknown as Record<string, string | undefined>).pending_order_expiry_minutes) * 60_000
+    const holdSince    = new Date(Date.now() - holdWindowMs).toISOString()
+    const { data: heldRows } = await withTimeout(
+      db.from('orders')
+        .select('loyalty_points_redeemed')
+        .eq('customer_id', custId)
+        .eq('payment_status', 'pending')
+        .eq('order_status', 'pending')
+        .gt('loyalty_points_redeemed', 0)
+        .gte('created_at', holdSince),
+      8_000,
+      'loyalty held-points check',
+    )
+    const heldPoints = (heldRows ?? []).reduce((sum: number, r: { loyalty_points_redeemed: number | null }) => sum + Number(r.loyalty_points_redeemed ?? 0), 0)
+    const availablePoints = Math.max(0, liveBalance - heldPoints)
+
+    if (input.loyaltyPointsRedeemed! > availablePoints) {
       throw new Error(
-        `Insufficient loyalty balance — available: ${liveBalance} pts, ` +
-        `requested: ${input.loyaltyPointsRedeemed} pts`
+        `Insufficient loyalty balance — available: ${availablePoints} pts, ` +
+        `requested: ${input.loyaltyPointsRedeemed} pts` +
+        (heldPoints > 0 ? ` (${heldPoints} pts are held by another unpaid order)` : '')
       )
     }
   }
@@ -1130,61 +1181,30 @@ export async function createOrder(
     confirmationToken = null
   }
 
-  // 10. Atomically increment coupon uses_count now that the order is committed.
-  //
-  // BUG FIX: the previous implementation used a stale client-read value:
-  //   .update({ uses_count: couponDbRow.uses_count + 1 })
-  //
-  // Two concurrent orders that both read uses_count=5 at step 4 would both
-  // write 6 — the coupon gets used one extra time per concurrent pair.
-  //
-  // Fix: add an optimistic-lock condition .eq('uses_count', snapshot).
-  // PostgREST only updates the row if uses_count still matches the snapshot
-  // we read at step 4.  If another order already incremented it, this update
-  // silently matches 0 rows — the coupon has already been correctly counted.
-  // Non-fatal: at worst one concurrent over-use is missed; the order is committed.
-  if (couponDbRow) {
-    const { error: couponIncrErr } = await withTimeout(
-      db.from('coupons')
-        .update({ uses_count: couponDbRow.uses_count + 1 })
-        .eq('code', couponDbRow.code)
-        .eq('uses_count', couponDbRow.uses_count), // optimistic lock — prevents stale write
+  // 10. Attach the order to the coupon claim taken in step 4 (F-07).
+  //     uses_count was already incremented, race-free, inside claim_coupon_use(); here the claim row
+  //     (coupon_usage, order_id NULL) gets its order, customer and discount so the admin Coupons
+  //     report (which sums coupon_usage) sees it. Guarded with order_id IS NULL so a retry is harmless.
+  if (couponClaimUsageId != null && couponDbRow) {
+    const { error: attachErr } = await withTimeout(
+      db.from('coupon_usage')
+        .update({
+          order_id:        newOrder!.id,
+          customer_id:     custId,
+          discount_amount: appliedCoupon?.discount ?? 0,
+        })
+        .eq('id', couponClaimUsageId)
+        .is('order_id', null),
       8_000,
-      'coupon uses_count increment',
+      'coupon usage attach',
     )
-    if (couponIncrErr) {
-      // BUG FIX 20a: use structured logger (not raw console.error) so this is
-      // parseable by log aggregators and shows up in dashboards.
-      logger.error('[createOrder] coupon uses_count increment failed', {
-        action:  'createOrder.coupon_increment',
-        code:    couponDbRow.code,
-        error:   couponIncrErr.message,
-      })
-    }
-
-    // BUG FIX (found live via ORD-2026-00119): the block above only bumps
-    // coupons.uses_count. It never wrote a coupon_usage row — but the admin
-    // Coupons page computes both "Uses" and "Discount Given" entirely from
-    // coupon_usage (grouped/summed client-side), not from uses_count. Every
-    // real coupon order was invisible in that reporting. Insert it here too.
-    // coupon_usage.order_id now has a unique constraint (added alongside this
-    // fix) so an idempotency-key retry just hits a harmless conflict.
-    const { error: couponUsageErr } = await withTimeout(
-      db.from('coupon_usage').insert({
-        coupon_id:       couponDbRow.id,
-        order_id:        newOrder!.id,
-        customer_id:     custId,
-        discount_amount: appliedCoupon?.discount ?? 0,
-      }),
-      8_000,
-      'coupon usage record',
-    )
-    if (couponUsageErr && couponUsageErr.code !== '23505') { // 23505 = unique_violation (retry), not a real failure
-      logger.error('[createOrder] coupon_usage insert failed', {
-        action:  'createOrder.coupon_usage_insert',
+    if (attachErr) {
+      // The order is committed and the use is counted; only the reporting link is missing.
+      captureError(new Error(attachErr.message), {
+        action:  'createOrder.coupon_usage_attach',
         code:    couponDbRow.code,
         orderId: newOrder!.id,
-        error:   couponUsageErr.message,
+        alert:   true,
       })
     }
   }
@@ -1232,6 +1252,12 @@ export async function createOrder(
     // This covers ALL throw paths after the atomic reservation:
     // bad product ID, coupon expired, COD disabled, loyalty shortfall,
     // customer creation failure, RPC error — every possible exit.
+    if (newOrder === null && couponClaimUsageId != null) {
+      // F-07: the order never committed — give the coupon use back.
+      await releaseCouponClaim(db, couponClaimUsageId).catch(releaseErr => {
+        captureError(releaseErr, { action: 'createOrder.coupon_claim_release_failed', alert: true })
+      })
+    }
     if (newOrder === null) {
       const { restoreStock } = await import('./inventoryService')
       await restoreStock(
@@ -1246,6 +1272,14 @@ export async function createOrder(
       })
     }
   }
+}
+
+// Same clamp as pendingOrders.resolveExpiryMinutes (default 30, 20–1440). Duplicated on purpose:
+// importing pendingOrders here would create a cycle (it imports this module).
+function resolveExpiryMinutes(raw: string | undefined | null): number {
+  const n = Number.parseInt(String(raw ?? ''), 10)
+  if (!Number.isFinite(n)) return 30
+  return Math.min(24 * 60, Math.max(20, n))
 }
 
 export async function updateOrderStatus(

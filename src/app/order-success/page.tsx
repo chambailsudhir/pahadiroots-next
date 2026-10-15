@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
 import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals, COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
 import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
+import { resolveConfirmationToken } from '@/lib/confirmationToken'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -119,9 +120,10 @@ function SuccessContent() {
   const params      = useSearchParams()
   const orderId     = params.get('id')    || ''
   const orderNum    = params.get('num')   || ''
-  // Guest-safe capability token — see db_migration_v6_order_confirmation_token.sql
-  // and /api/v1/orders/lookup/route.ts for the full auth model.
-  const token       = params.get('token') || ''
+  // F-01: the guest capability token is NOT read from the URL any more (it leaked to Google
+  // Tag Manager / GA4 via the page URL). It lives in sessionStorage; a legacy ?token= link is
+  // absorbed once and scrubbed from the address bar inside resolveConfirmationToken().
+  // See lib/confirmationToken.ts and /api/v1/orders/lookup/route.ts for the full auth model.
 
   const [order,   setOrder]   = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -167,6 +169,7 @@ function SuccessContent() {
     const timer = setTimeout(() => ctrl.abort(), 8000)
     try {
       const qs  = new URLSearchParams({ order_number: orderNumber })
+      const token = resolveConfirmationToken(orderNumber)
       if (token) qs.set('token', token)
       const res  = await fetch(`/api/v1/orders/lookup?${qs.toString()}`, {
         credentials: 'include',
@@ -185,7 +188,7 @@ function SuccessContent() {
     } finally {
       setLoading(false)
     }
-  }, [orderId, orderNum, token])
+  }, [orderId, orderNum])
 
   // Standard effect-based data-fetching pattern: loadOrder is an async
   // function with all its setState calls properly guarded by the
@@ -483,6 +486,11 @@ function SuccessContent() {
         .oc-btn-print:hover { border-color: var(--g); color: var(--g); background: var(--bg2); }
 
         /* ── SKELETON ── */
+        /* F-14: honour the OS "reduce motion" setting — no pop/fade/shimmer for those users. */
+        @media (prefers-reduced-motion: reduce) {
+          .oc-check-circle, .oc-title, .oc-sub, .oc-badge, .oc-card, .oc-skel,
+          .oc-hero, .oc-hero * { animation: none !important; transition: none !important; }
+        }
         .oc-skel { background: linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%); background-size: 200% 100%; animation: oc-shimmer 1.2s infinite; border-radius: 8px; }
         @keyframes oc-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
@@ -613,7 +621,9 @@ function SuccessContent() {
       )}
 
       {/* ── HERO ── (driven by the verified order, never by the URL — CF1) */}
-      <div className={`oc-hero${hero.tone === 'warn' ? ' oc-hero-warn' : ''}`} data-view={view}>
+      {/* F-14: role=status + aria-live so screen readers hear "Confirming your payment…" turn into
+          "Order Confirmed!" without the customer having to hunt for the change. */}
+      <div className={`oc-hero${hero.tone === 'warn' ? ' oc-hero-warn' : ''}`} data-view={view} role="status" aria-live="polite" aria-atomic="true">
         <div className="oc-check-circle">{hero.icon}</div>
         <div className="oc-title">{hero.title}</div>
         <div className="oc-sub">{hero.sub}</div>
@@ -1012,7 +1022,7 @@ function SuccessContent() {
           <div className="oc-f-brand-col">
             <div className="oc-f-brand-name">HimVeda by Pahadi Roots</div>
             <div className="oc-f-brand-sub">Himalayan Natural Store</div>
-            <p className="oc-f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
+            <p className="oc-f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across the Himalayan states.</p>
           </div>
           <div className="oc-f-vine">
             <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg">

@@ -58,7 +58,8 @@ const SAMPLE_ORDER_ROW = {
   coupon_discount: 0,
   shipping_charge: 0,
   tax: 27,
-  created_at: '2026-07-01T10:00:00Z',
+  // Recent on purpose: guest confirmation tokens now expire 30 days after the order (F-10).
+  created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
   tracking_number: null,
   courier: null,
   customer_id: 'cust-1',
@@ -158,6 +159,48 @@ describe('GET /api/v1/orders/lookup — guest token auth', () => {
     const [, path] = mocks.sbAdmin.mock.calls[0]
     expect(path).toContain('order_number=eq.SOMEOTHERORD')
     expect(path).toContain(`confirmation_token=eq.${VALID_TOKEN}`)
+  })
+})
+
+describe('GET /api/v1/orders/lookup — F-10 guest token expiry', () => {
+  const DAY = 24 * 60 * 60 * 1000
+
+  it('404s when the token matches but the order is older than the 30-day token lifetime', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, created_at: new Date(Date.now() - 31 * DAY).toISOString() }])
+
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const res = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
+    expect(res.status).toBe(404)
+  })
+
+  it('still serves a token that is inside its lifetime (29 days)', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, created_at: new Date(Date.now() - 29 * DAY).toISOString() }])
+    mocks.sbAdmin.mockResolvedValueOnce([])
+
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const res = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
+    expect(res.status).toBe(200)
+  })
+
+  it('an EXPIRED token never blocks the logged-in owner: the session path still serves the order', async () => {
+    mocks.getToken.mockReturnValue('valid-access-token')
+    mocks.sbAuth.mockResolvedValue({ id: 'auth-user-1' })
+    mocks.syncCustomerProfile.mockResolvedValue({ id: 'cust-1' })
+    const old = { ...SAMPLE_ORDER_ROW, created_at: new Date(Date.now() - 90 * DAY).toISOString() }
+    mocks.sbAdmin.mockResolvedValueOnce([old]) // token query (expired → rejected)
+    mocks.sbAdmin.mockResolvedValueOnce([old]) // session query
+    mocks.sbAdmin.mockResolvedValueOnce([])    // customer sub-fetch
+
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const res = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
+    expect(res.status).toBe(200)
+  })
+
+  it('fails CLOSED when created_at is missing or unparseable', async () => {
+    const { isConfirmationTokenExpired } = await import('@/lib/confirmationToken')
+    expect(isConfirmationTokenExpired(undefined)).toBe(true)
+    expect(isConfirmationTokenExpired('not-a-date')).toBe(true)
+    expect(isConfirmationTokenExpired(new Date().toISOString())).toBe(false)
   })
 })
 

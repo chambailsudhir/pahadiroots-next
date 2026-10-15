@@ -101,17 +101,42 @@ export async function POST(req: Request) {
   // .order().limit() are SELECT-only modifiers and are silently ignored on UPDATE
   // in Supabase REST API, so using the row ID is the only safe way to update
   // the specific log entry rather than all rows with the same event type.
-  const { data: webhookLog, error: logErr } = await db
+  //
+  // F-15 (Oct 2026 audit): the event id was never stored, so the unique index
+  // uidx_webhook_logs_provider_event_id was unused. Razorpay sends a stable `x-razorpay-event-id`
+  // (the SAME id on every retry of an event). Stored now:
+  //   • a duplicate of an event already marked 'processed' is acknowledged and skipped;
+  //   • a duplicate of one that is still 'received' or 'failed' is a Razorpay RETRY of a failure —
+  //     it is re-processed (handlers are idempotent) against the existing log row.
+  const eventId = (req.headers.get('x-razorpay-event-id') || '').trim().slice(0, 128) || null
+  let { data: webhookLog, error: logErr } = await db
     .from('webhook_logs')
     .insert({
       provider:    'razorpay',
       event:       event.event,
+      event_id:    eventId,
       payload:     event,
       status:      'received',
       created_at:  new Date().toISOString(),
     })
     .select('id')
     .single()
+  if (logErr && eventId && (logErr as { code?: string }).code === '23505') {
+    const { data: existing } = await db
+      .from('webhook_logs')
+      .select('id, status')
+      .eq('provider', 'razorpay')
+      .eq('event_id', eventId)
+      .maybeSingle()
+    if (existing?.status === 'processed') {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    if (existing?.id) {
+      webhookLog = { id: existing.id } as typeof webhookLog
+      logErr = null
+      await db.from('webhook_logs').update({ status: 'received' }).eq('id', existing.id)
+    }
+  }
   // BUG FIX: webhook log failure was silent in the previous version — if the
   // webhook_logs insert fails (table missing, schema mismatch, DB overload) and
   // webhookLog.id is null, the entire catch block at the bottom silently

@@ -130,3 +130,13 @@
 
 /* Let grid children shrink below their content width on phones */
 .ck-grid > * { min-width: 0; }
+
+/* F-14 (Oct 2026 audit): honour the OS "reduce motion" setting on checkout. Decorative transitions
+   are removed; the loading spinners (os-spin / pin-spin) are functional progress indicators and
+   stay. */
+@media (prefers-reduced-motion: reduce) {
+  .ck-page, .ck-page *, .ck-mob-bar, .ck-mob-bar * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

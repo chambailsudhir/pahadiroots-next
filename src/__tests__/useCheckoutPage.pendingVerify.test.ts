@@ -89,7 +89,10 @@ describe('useCheckoutPage — verify_payment pending (202 / 503) routes to the o
     const url = String(h.replace.mock.calls[0][0])
     expect(url).toContain('/order-success?')
     expect(url).toContain('id=PR1A2B3C4D')
-    expect(url).toContain('token=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+    // F-01: the capability token must NOT be in the URL (Google Tag Manager reports the full page
+    // URL); it is handed to the confirmation page through sessionStorage instead.
+    expect(url).not.toContain('token')
+    expect(window.sessionStorage.getItem('pr_ct:PR1A2B3C4D')).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
     expect(result.current.error).toBe('')
     expect(useCartStore.getState().items).toHaveLength(0)
   })

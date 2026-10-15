@@ -7,6 +7,7 @@ import { getCatalogMeta } from '@/lib/storeData'
 import { logger } from '@/lib/logger'
 import { withLiveStateCount } from '@/lib/heroStats'
 import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
+import { ANALYTICS_URL_GUARD_SCRIPT } from '@/lib/analyticsGuard'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileMenu from '@/components/layout/MobileMenu'
@@ -175,6 +176,9 @@ export default async function RootLayout({
       <head>
         {/* Applies the saved Premium-mode theme before first paint (no flash). */}
         <script dangerouslySetInnerHTML={{ __html: PREMIUM_BOOT_SCRIPT }} />
+        {/* F-01: scrub a legacy ?token= from /order-success BEFORE any analytics tag below can
+            read the URL (GA4/GTM report the full page URL on their default page_view). */}
+        <script dangerouslySetInnerHTML={{ __html: ANALYTICS_URL_GUARD_SCRIPT }} />
         <meta name="theme-color" content="#1a3a1e" />
         {/* Preconnect to Supabase Storage for faster image loads */}
         <link

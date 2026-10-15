@@ -29,3 +29,21 @@ export function asNumber(value: string | undefined, defaultValue: number): numbe
   const n = parseFloat(value)
   return isNaN(n) ? defaultValue : n
 }
+
+// ── Shipping fallbacks — ONE source of truth (F-02, Oct 2026 audit) ─────────
+// pricingService (client AND server), getSiteSettings DEFAULTS, the announcement bar, the trust
+// bar, the PDP and the policy pages all used their own hard-coded fallbacks (₹500 here, 0 there,
+// ₹799 in marketing copy). These apply ONLY when the admin setting row is missing/blank; the
+// live `free_shipping_min` / `flat_shipping_charge` settings always win.
+export const FALLBACK_FREE_SHIPPING_MIN = 0   // 0 = every order ships free (matches the live DB row)
+export const FALLBACK_FLAT_SHIPPING     = 99
+
+// ── COD switch — ONE definition (F-05, Oct 2026 audit) ───────────────────────
+// The checkout UI used `!== 'false'`, the order service `=== 'false'` — so 'False', '0', 'off' or a
+// missing row meant different things on the client and the server, and customer-facing copy (the
+// /payment page, the PDP, the announcement bar) advertised COD while it was switched off. Unset →
+// DISABLED, matching getSiteSettings DEFAULTS (cod_enabled: 'false'). Anything isEnabled() reads as
+// off (false/0/off/no, any case) is off.
+export function isCodEnabled(settings: { cod_enabled?: string | null } | Record<string, string | undefined>): boolean {
+  return isEnabled((settings as { cod_enabled?: string }).cod_enabled ?? undefined, false)
+}

@@ -32,11 +32,11 @@ export function getFooterData(settings: SiteSettings) {
 }
 
 export const PRODUCTS = [
-  ['honey',  'Wild Honey',       '/products?category=wild-honey'],
-  ['ghee',   'A2 Bilona Ghee',   '/products?category=ghee'],
-  ['saffron','Kashmiri Saffron', '/products?category=saffron'],
+  ['honey',  'Wild Honey',       '/collections/himalayan-honey'],
+  ['ghee',   'A2 Bilona Ghee',   '/collections/himalayan-ghee'],
+  ['saffron','Himalayan Spices', '/collections/herbs-and-spices'],
   ['stone',  'Ladakhi Shilajit', '/collections/shilajit'],
-  ['tea',    'Himalayan Teas',   '/collections/himalayan-teas'],
+  ['tea',    'Himalayan Teas',   '/collections/himalayan-tea'],
   ['grain',  'Ancient Grains',   '/collections/heritage-rice'],
 ] as const
 

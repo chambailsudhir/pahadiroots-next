@@ -39,7 +39,7 @@ export default function FooterC({ settings }: Props) {
               <h2 className="hvc-title">HimVeda by Pahadi Roots</h2>
               <div className="hvc-tag"><i /><span>HIMALAYAN NATURAL STORE</span><i /></div>
             </div>
-            <p className="hvc-lead">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across 10 Himalayan states.</p>
+            <p className="hvc-lead">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across the Himalayan states.</p>
           </div>
         </div>
       </section>

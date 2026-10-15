@@ -7,6 +7,8 @@ import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeD
 import { buildOffersList, offersListToJsonLdValue } from '@/lib/jsonLdOffers'
 import { pdpFetchLimiter } from '@/lib/concurrencyLimit'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
+import { getShippingPolicy } from '@/lib/shippingCopy'
+import { isCodEnabled } from '@/lib/siteSettingsHelpers'
 import { supabase as anonClient } from '@/lib/supabase'
 import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
 import { sanitizeHtml } from '@/lib/server/sanitize'
@@ -270,8 +272,12 @@ export default async function ProductPage({ params }: Props) {
 
   const settings: SiteSettings = siteSettings as SiteSettings
 
-  const freeShipMin    = parseInt(settings.free_shipping_min || '0')
-  const flatShipCharge = parseInt(settings.flat_shipping_charge || '0')
+  // F-02 / F-05: shipping + COD wording derives from the live admin settings (one shared helper),
+  // never from hard-coded text. `codNote` is empty when COD is switched off.
+  const shipPolicy     = getShippingPolicy(settings)
+  const freeShipMin    = shipPolicy.freeForAll ? 0 : shipPolicy.freeMin
+  const flatShipCharge = shipPolicy.flat
+  const codNote        = isCodEnabled(settings) ? 'COD available. ' : ''
   const showReviews     = isEnabled(settings.show_reviews_on_pdp)
   const showRelated     = isEnabled(settings.show_related_products)
   const showCertificate = isEnabled(settings.show_certificates)
@@ -1356,8 +1362,8 @@ export default async function ProductPage({ params }: Props) {
               <AccItem title="Shipping" icon="ship">
                 <strong>Pan India Shipping</strong><br /><br />
                 {freeShipMin === 0
-                  ? 'Free shipping on all orders · COD available. '
-                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. COD available. `}
+                  ? `Free shipping on all orders. ${codNote}`
+                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}
                 Dispatched within <strong>1–2 business days</strong>.<br />
                 Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
               </AccItem>
@@ -1481,8 +1487,8 @@ export default async function ProductPage({ params }: Props) {
               <AccItem title="Shipping" icon="ship">
                 <strong>Pan India Shipping</strong><br /><br />
                 {freeShipMin === 0
-                  ? 'Free shipping on all orders · COD available. '
-                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. COD available. `}
+                  ? `Free shipping on all orders. ${codNote}`
+                  : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}
                 Dispatched within <strong>1–2 business days</strong>.<br />
                 Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
               </AccItem>
@@ -1649,7 +1655,7 @@ function WhySection() {
             <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
           </svg>
           <div className="pdp-why-pt">Direct from Farmers</div>
-          <p className="pdp-why-pd">Zero middlemen. 200+ farming families across 12 Himalayan states — fair wages, always.</p>
+          <p className="pdp-why-pd">Zero middlemen. 200+ farming families across the Himalayan states — fair wages, always.</p>
         </div>
         {/* PILLAR 3: Eco Packaging */}
         <div className="pdp-why-pillar">

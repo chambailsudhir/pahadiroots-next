@@ -25,7 +25,7 @@
  *   7. paymentMethod passed through to calcPriceSummary — razorpay orders get the
  *      prepaid discount baked into total_amount; cod orders do not
  *   8. order_status / payment_status — cod → 'confirmed'/'cod_pending'; razorpay → 'pending'/'pending'
- *   9. Coupon uses_count optimistic-lock increment — update includes the snapshot guard
+ *   9. Coupon claimed atomically (claim_coupon_use) before the order, attached after, released on failure (F-07)
  *  10. Finally-block stock restore — any throw after reservation triggers restoreStock
  */
 
@@ -47,8 +47,11 @@ function resetMockDb() {
 }
 
 function buildQueryBuilder(table: string) {
-  const response = () => {
-    const val = mockDb.responses[table]
+  const response = (terminal: 'maybeSingle' | 'single' | 'then' = 'then') => {
+    // A canned response may be a function of the terminal call, so one table can answer a
+    // single-row lookup (maybeSingle) differently from a list read (awaited builder).
+    const raw = mockDb.responses[table]
+    const val = typeof raw === 'function' ? (raw as (t: string) => unknown)(terminal) : raw
     if (val instanceof Error) return { data: null, error: val }
     // Count-style queries (.select('id', { count: 'exact', head: true })) —
     // used by the per-customer coupon usage check — resolve to
@@ -78,11 +81,16 @@ function buildQueryBuilder(table: string) {
       return builder
     },
     neq:         () => builder,
+    is:          () => builder,
+    gt:          () => builder,
+    gte:         () => builder,
+    lt:          () => builder,
+    lte:         () => builder,
     in:          () => builder,
     limit:       () => builder,
     order:       () => builder,
-    maybeSingle: () => Promise.resolve(response()),
-    single:      () => Promise.resolve(response()),
+    maybeSingle: () => Promise.resolve(response('maybeSingle')),
+    single:      () => Promise.resolve(response('single')),
     then:        (...a: unknown[]) => Promise.resolve(response()).then(a[0] as (v: unknown) => unknown),
   }
   return builder
@@ -95,6 +103,8 @@ vi.mock('@/lib/supabase', () => ({
       mockDb.rpcCalls.push({ rpcName: name, args })
       const val = mockDb.rpcResponses[name]
       if (val instanceof Error) return Promise.resolve({ data: null, error: val })
+      // F-07: claim_coupon_use returns a JSON verdict, not a bare boolean.
+      if (val === undefined && name === 'claim_coupon_use') return Promise.resolve({ data: { ok: true, usage_id: 1 }, error: null })
       return Promise.resolve({ data: val ?? true, error: null })
     },
   }),
@@ -522,22 +532,109 @@ describe('createOrder — coupon server-side re-validation (defence in depth)', 
     expect((rpcCall!.args as any).p_coupon_discount).toBe(0)
   })
 
-  it('increments coupon uses_count with an optimistic-lock eq guard on the snapshot value', async () => {
+  it('F-07: claims the coupon use atomically via claim_coupon_use BEFORE the order, then attaches the order to the claim', async () => {
     mockDb.responses['coupons'] = {
-      code: 'TRACK5', value: 10, type: 'percent', max_uses: 100, uses_count: 5,
+      id: 3, code: 'TRACK5', value: 10, type: 'percent', max_uses: 100, uses_count: 5,
       is_active: true, expires_at: null, min_order: null, max_discount: null,
     }
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: true, usage_id: 42 }
     const { createOrder } = await import('@/lib/services/orderService')
     await createOrder({ ...BASE_INPUT, couponCode: 'TRACK5' }, DEFAULT_SETTINGS)
 
-    const couponUpdate = mockDb.updateCalls.find(c => c.table === 'coupons')
-    expect(couponUpdate).toBeDefined()
-    expect((couponUpdate!.payload as any).uses_count).toBe(6)
-    // Optimistic lock: .eq('uses_count', 5) must be present so a concurrent
-    // order that already incremented it causes this update to match 0 rows
-    // instead of double-incrementing.
-    const eqOnUsesCount = couponUpdate!.eqCalls.some(args => args[0] === 'uses_count' && args[1] === 5)
-    expect(eqOnUsesCount).toBe(true)
+    const names = mockDb.rpcCalls.map(c => c.rpcName)
+    expect(names.indexOf('claim_coupon_use')).toBeGreaterThanOrEqual(0)
+    expect(names.indexOf('claim_coupon_use')).toBeLessThan(names.indexOf('create_order_with_items'))
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')!.args).toMatchObject({ p_coupon_id: 3 })
+
+    // No more racy read-then-write of coupons.uses_count from the app…
+    expect(mockDb.updateCalls.find(c => c.table === 'coupons')).toBeUndefined()
+    // …the claim row is simply given its order id.
+    const attach = mockDb.updateCalls.find(c => c.table === 'coupon_usage')
+    expect(attach).toBeDefined()
+    expect(attach!.eqCalls.some(a => a[0] === 'id' && a[1] === 42)).toBe(true)
+    expect((attach!.payload as any).order_id).toBeDefined()
+    // A successful order must NOT release the claim.
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'release_coupon_claim')).toBeUndefined()
+  })
+
+  it('F-07: releases the claim when the order fails after it was taken', async () => {
+    mockDb.responses['coupons'] = {
+      id: 4, code: 'REL', value: 10, type: 'percent', max_uses: 100, uses_count: 5,
+      is_active: true, expires_at: null, min_order: null, max_discount: null,
+    }
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: true, usage_id: 77 }
+    mockDb.rpcResponses['create_order_with_items'] = new Error('db down')
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'REL' }, DEFAULT_SETTINGS)).rejects.toThrow()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'release_coupon_claim')?.args).toEqual({ p_usage_id: 77 })
+  })
+
+  it('an unknown or inactive coupon code is REJECTED, not silently ignored (customer saw a discount the server never applied)', async () => {
+    mockDb.responses['coupons'] = null
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'NOPE' }, DEFAULT_SETTINGS)).rejects.toThrow(/invalid or inactive coupon/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeUndefined()
+  })
+
+  it('a flat coupon larger than the subtotal can never discount more than the subtotal', async () => {
+    // subtotal = 2 * 200 = 400 → a ₹5000 flat coupon is capped at ₹400
+    mockDb.responses['coupons'] = {
+      id: 5, code: 'HUGE', value: 5000, type: 'flat', max_uses: null, uses_count: 0,
+      is_active: true, expires_at: null, min_order: null, max_discount: null,
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, couponCode: 'HUGE' }, DEFAULT_SETTINGS)
+    const rpcCall = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
+    expect((rpcCall!.args as any).p_coupon_discount).toBe(400)
+  })
+
+  it('F-08: first_order_only coupon is rejected for a customer with an earlier paid/COD order', async () => {
+    mockDb.responses['coupons'] = {
+      id: 6, code: 'FIRSTONLY', value: 5, type: 'percent', max_uses: 100, uses_count: 1,
+      is_active: true, expires_at: null, min_order: null, max_discount: null, first_order_only: true,
+    }
+    routeFirst(
+      (url, method) => method === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'),
+      [{ id: 'cust-uuid-existing' }],
+    )
+    routeFirst(
+      (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_status=in.'),
+      [{ id: 'earlier-order' }],
+    )
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'FIRSTONLY' }, DEFAULT_SETTINGS))
+      .rejects.toThrow(/first order only/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeUndefined()
+  })
+})
+
+describe('createOrder — F-09 serviceability (optional, settings-driven)', () => {
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+  })
+
+  it('refuses a state outside serviceable_states BEFORE any stock is reserved', async () => {
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(
+      createOrder({ ...BASE_INPUT, state: 'Kerala' }, { ...DEFAULT_SETTINGS, serviceable_states: 'Uttarakhand, Himachal Pradesh' } as any),
+    ).rejects.toThrow(/we do not deliver to Kerala/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'reserve_stock_at_order')).toBeUndefined()
+  })
+
+  it('refuses a blocked PIN prefix', async () => {
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(
+      createOrder({ ...BASE_INPUT, pincode: '193101' }, { ...DEFAULT_SETTINGS, blocked_pincodes: '193' } as any),
+    ).rejects.toThrow(/we do not deliver to PIN code 193101/i)
+  })
+
+  it('with neither setting configured every destination is served (no behaviour change)', async () => {
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, state: 'Kerala' }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(false)
   })
 })
 
@@ -569,11 +666,13 @@ describe('createOrder — per-customer coupon usage limit (user_limit, authorita
       (url, method) => method === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'),
       [{ id: 'cust-uuid-existing' }],
     )
-    mockDb.responses['coupon_usage'] = { count: 1 }
+    // F-07: the per-customer limit is now enforced INSIDE claim_coupon_use (atomic, row-locked).
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: false, code: 'user_limit', error: 'You have already used this coupon' }
 
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS))
       .rejects.toThrow(/already used this coupon/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
   })
 
   it('allows a brand-new customer to use a user_limit=1 coupon (no existing customer row to match)', async () => {
@@ -610,12 +709,13 @@ describe('createOrder — per-customer coupon usage limit (user_limit, authorita
       id: 10, code: 'MEMBER1', value: 50, type: 'flat', max_uses: 100, uses_count: 1,
       is_active: true, expires_at: null, min_order: null, max_discount: null, user_limit: 1,
     }
-    mockDb.responses['coupon_usage'] = { count: 1 }
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: false, code: 'user_limit', error: 'You have already used this coupon' }
 
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(
       createOrder({ ...BASE_INPUT, couponCode: 'MEMBER1', authenticatedCustomerId: 'auth-cust-1' }, DEFAULT_SETTINGS),
     ).rejects.toThrow(/already used this coupon/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeDefined()
 
     expect(fetchCalls.some(c => c.url.includes('normalized_phone=eq.'))).toBe(false)
   })
@@ -639,6 +739,24 @@ describe('createOrder — loyalty enforcement', () => {
     const rpcCall = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
     // subtotal=2000, shipping=0 (>=799 free ship), loyaltyDiscount=400 → afterDiscount=1600, total cod=1600+0=1600
     expect((rpcCall!.args as any).p_total_amount).toBe(1600)
+  })
+
+  it('F-06: points already held by the customer\'s OTHER unpaid orders are not available again', async () => {
+    mockDb.responses['customers'] = { loyalty_points: 500 }
+    // list read (held points) → 400 pts promised elsewhere; single-row reads (idempotency) → none
+    mockDb.responses['orders'] = (terminal: string) => (terminal === 'then' ? [{ loyalty_points_redeemed: 400 }] : null)
+    const { createOrder } = await import('@/lib/services/orderService')
+    // balance 500 − held 400 = 100 available; asking for 200 must fail
+    await expect(createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS))
+      .rejects.toThrow(/insufficient loyalty balance.*held by another unpaid order/i)
+  })
+
+  it('F-06: with no points held elsewhere the full balance is available', async () => {
+    mockDb.responses['customers'] = { loyalty_points: 500 }
+    mockDb.responses['orders'] = (terminal: string) => (terminal === 'then' ? [] : null)
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(false)
   })
 
   it('throws when requested loyalty points exceed the live DB balance (race-condition guard)', async () => {

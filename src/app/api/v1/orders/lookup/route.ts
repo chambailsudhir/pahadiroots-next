@@ -40,6 +40,7 @@ import {
   applyNewCookies,
 } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { isConfirmationTokenExpired } from '@/lib/confirmationToken'
 
 // Same join shape as /api/orders/[id]/route.ts — proven, already in
 // production use for the logged-in "my orders" detail view. hsn_code and
@@ -149,14 +150,14 @@ export async function GET(req: NextRequest) {
         `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&confirmation_token=eq.${encodeURIComponent(token)}&select=${ORDER_SELECT}&limit=1`,
       ).catch(() => null)
 
-      if (Array.isArray(rows) && rows.length > 0) {
+      if (Array.isArray(rows) && rows.length > 0 && !isConfirmationTokenExpired((rows[0] as Record<string, unknown>).created_at)) {
         const raw = rows[0] as Record<string, unknown>
         const customer = await fetchCustomer(raw.customer_id)
         const res = ok({ success: true, order: mapOrder(raw, customer) })
         ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
         return res
       }
-      // Token present but didn't match — fall through to try session auth
+      // Token present but didn't match (or has expired — F-10) — fall through to try session auth
       // (e.g. a logged-in customer whose token expired/was omitted from a
       // shared link) before giving up. Does NOT reveal whether the order
       // exists at this point.

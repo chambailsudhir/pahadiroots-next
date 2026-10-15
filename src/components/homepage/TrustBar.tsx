@@ -1,4 +1,5 @@
 import type { SiteSettings } from '@/types'
+import { freeShippingSub } from '@/lib/shippingCopy'
 
 interface Props { settings: SiteSettings }
 
@@ -25,7 +26,7 @@ export default function TrustBar({ settings }: Props) {
     { icon: '🌿', title: '100% Natural',      sub: 'No chemicals, no preservatives' },
     { icon: '🏔️', title: 'Himalayan Sourced', sub: 'Directly from mountain farms'  },
     { icon: '🤝', title: 'Fair Trade',         sub: 'Supporting local farmers'       },
-    { icon: '🚚', title: 'Free Shipping',      sub: `On orders above ₹${settings.free_shipping_min || '500'}` },
+    { icon: '🚚', title: 'Free Shipping',      sub: freeShippingSub(settings) },
   ]
 
   const display = configured ? items : fallback

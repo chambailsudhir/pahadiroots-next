@@ -157,6 +157,16 @@ const nextConfig = {
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
+              // F-12 (Oct 2026 audit): modern equivalents of X-Frame-Options and HSTS, so the policy
+              // itself forbids framing and mixed content.
+              //
+              // NOT changed, deliberately: 'unsafe-inline' / 'unsafe-eval' in script-src.
+              //  • 'unsafe-eval' is required by Razorpay checkout.js.
+              //  • Replacing 'unsafe-inline' needs per-request nonces; Next then renders EVERY page
+              //    dynamically (no static/ISR caching), a large performance and cost regression for a
+              //    catalogue site. Revisit if the payment page ever moves to Razorpay's hosted flow.
+              "frame-ancestors 'none'",
+              "upgrade-insecure-requests",
             ].join('; '),
           },
         ],

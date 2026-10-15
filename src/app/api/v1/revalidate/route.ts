@@ -178,9 +178,13 @@ export async function POST(req: NextRequest) {
       revalidatePath('/our-stories')
       revalidatePath('/mountain-stories') // gated by show_life_in_mountains, revalidate=3600
       revalidatePath('/blog')
+      // F-02 / F-05: both pages now render shipping + COD wording from these settings.
+      revalidatePath('/payment')
+      revalidatePath('/policies/[type]', 'page')
       revalidated.push(
         '/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings',
-        '/checkout', '/products/[slug] (all)', '/our-stories', '/mountain-stories', '/blog'
+        '/checkout', '/products/[slug] (all)', '/our-stories', '/mountain-stories', '/blog',
+        '/payment', '/policies/[type] (all)'
       )
     }
 

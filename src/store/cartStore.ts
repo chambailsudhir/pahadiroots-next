@@ -381,6 +381,24 @@ export const useCartStore = create<CartStore>()(
   )
 )
 
+// ─── Cross-tab sync (F-13, Oct 2026 audit) ────────────────────────────────────
+// There was no listener for changes made by ANOTHER tab, so a stale tab kept showing items that
+// had already been ordered or removed. The browser fires `storage` only in the tabs that did NOT
+// make the write (and only when the value really changed), so re-reading on it cannot loop.
+// Guarded: browser only, installed once (HMR-safe), and only after the first hydration so it can
+// never race StoreHydrator's deferred initial rehydrate().
+const CART_STORAGE_KEY = 'pr-cart'
+declare global { interface Window { __prCartStorageSync?: boolean } }
+if (typeof window !== 'undefined' && !window.__prCartStorageSync) {
+  window.__prCartStorageSync = true
+  window.addEventListener('storage', (e: StorageEvent) => {
+    // key === null means storage.clear() in another tab — the cart is gone there too.
+    if (e.key !== null && e.key !== CART_STORAGE_KEY) return
+    if (!useCartStore.getState()._hasHydrated) return
+    void useCartStore.persist.rehydrate()
+  })
+}
+
 // ─── Stable selector ──────────────────────────────────────────────────────────
 // Use this in components instead of `useCartStore(s => s.cartCount())`.
 // `cartCount` is a plain function inside the store; calling it via a selector

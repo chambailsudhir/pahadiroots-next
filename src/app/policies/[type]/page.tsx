@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { getSiteSettings } from '@/lib/getSiteSettings'
+import { shippingPolicySentence } from '@/lib/shippingCopy'
+import { isCodEnabled } from '@/lib/siteSettingsHelpers'
 
 export const revalidate = 86400 // 24hr
 
@@ -29,6 +32,30 @@ function Callout({ tone, children }: { tone: 'green' | 'amber' | 'red' | 'blue';
     blue:  'bg-sky-50 border-sky-200 text-sky-900',
   }
   return <div className={`border rounded-xl px-4 py-3 text-sm ${styles[tone]}`}>{children}</div>
+}
+
+// F-02: the shipping sentence is rendered from the live admin settings (free_shipping_min /
+// flat_shipping_charge), so this page can never contradict what checkout actually charges.
+// An async Server Component — the page is ISR (24h) and /api/v1/revalidate refreshes it when
+// settings are saved.
+async function ShippingCallout() {
+  const settings = await getSiteSettings({ strict: true }) // ISR page: see /payment for why
+  return <Callout tone="green">🎉 {shippingPolicySentence(settings)}</Callout>
+}
+
+// F-05: the terms promised COD unconditionally while it was switched off. Rendered from the live
+// cod_enabled setting (ISR page → strict, see /payment).
+async function PaymentTermsItems() {
+  const settings = await getSiteSettings({ strict: true })
+  const cod = isCodEnabled(settings)
+  return (
+    <>
+      <li>{cod
+        ? 'Orders are confirmed upon successful payment or WhatsApp acknowledgement (COD)'
+        : 'Orders are confirmed upon successful payment'}</li>
+      <li>We accept <strong>UPI, credit/debit cards, net banking</strong> (via Razorpay){cod && <> and <strong>Cash on Delivery</strong></>}</li>
+    </>
+  )
 }
 
 function PolicyTable({ head, rows }: { head: string[]; rows: string[][] }) {
@@ -198,7 +225,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Shipping Policy',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <Callout tone="green">🎉 <strong>Free shipping</strong> on all orders above ₹500 · Flat ₹99 on orders below ₹500 · Pan-India delivery</Callout>
+        <ShippingCallout />
         <p className="text-stone-500 text-xs">Shipping charges and free-shipping thresholds may change temporarily during festive or promotional periods — the amount shown at checkout always applies.</p>
 
         <section>
@@ -386,8 +413,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">3. Orders, Payments &amp; Pricing</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
-            <li>Orders are confirmed upon successful payment or WhatsApp acknowledgement (COD)</li>
-            <li>We accept <strong>UPI, credit/debit cards, net banking</strong> (via Razorpay) and <strong>Cash on Delivery</strong></li>
+            <PaymentTermsItems />
             <li>Prices may change without notice — changes do not apply to already-confirmed orders</li>
             <li>We reserve the right to cancel orders due to pricing errors, stock unavailability, or suspected fraud — a full refund will be issued</li>
             <li>We may limit quantities per person or household at our discretion</li>

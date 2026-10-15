@@ -165,7 +165,9 @@ export function CheckoutClient({ settings }: { settings: SiteSettings }) {
   const mobCtaStatus = placing
     ? 'Placing your order…'
     : payMethod === 'razorpay' && razorpayLoadFailed
-      ? 'Payment gateway unavailable — tap to retry, or switch to Cash on Delivery'
+      ? (codEnabled
+          ? 'Payment gateway unavailable — tap to retry, or switch to Cash on Delivery'
+          : 'Payment gateway unavailable — tap to retry')   // F-05: never suggest COD while it is switched off
       : payMethod === 'razorpay' && !razorpayLoaded
         ? 'Loading payment gateway…'
         : error

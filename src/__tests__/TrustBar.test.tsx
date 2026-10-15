@@ -30,9 +30,10 @@ describe('TrustBar', () => {
     expect(screen.getByText('On orders above ₹499')).toBeTruthy()
   })
 
-  it('defaults free shipping text to ₹500 when unset (confirmed via admin panel — supersedes an earlier ₹0 reading)', () => {
+  it('F-02: with no free_shipping_min the badge says "On all orders" — the live admin value is 0 (free on every order); the old hard-coded ₹500 contradicted checkout', () => {
     render(<TrustBar settings={settings()} />)
-    expect(screen.getByText('On orders above ₹500')).toBeTruthy()
+    expect(screen.getByText('On all orders')).toBeTruthy()
+    expect(screen.queryByText(/₹500/)).toBeNull()
   })
 
   it('renders configured trust items instead of the fallback when any are set', () => {

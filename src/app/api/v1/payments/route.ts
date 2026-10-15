@@ -490,6 +490,7 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('multiple options')
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
+      || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
     // Never leak Razorpay / Supabase internals to the client in production
     const status = isUserFacing ? 409 : 500
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'

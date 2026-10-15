@@ -1,5 +1,6 @@
 import type { CartItem, AppliedCoupon, SiteSettings } from '@/types'
 import { calcGST, asNumber } from '@/lib/utils'
+import { FALLBACK_FREE_SHIPPING_MIN, FALLBACK_FLAT_SHIPPING } from '@/lib/siteSettingsHelpers'
 import { getServiceClient } from '@/lib/supabase'
 
 export interface PriceSummary {
@@ -29,17 +30,23 @@ export function calcPriceSummary(
   paymentMethod: 'razorpay' | 'cod' = 'cod',
   loyaltyDiscount = 0,           // ₹ coins redemption — passed from checkout state
 ): PriceSummary {
-  // NOTE: freeShippingMin fallback — an earlier direct DB query showed
-  // '0'; a later admin-panel screenshot showed the real current value is
-  // '500'. Both numbers only matter if this setting is ever missing
-  // entirely (the live DB row already exists), but kept accurate to
-  // avoid the same drift happening a third time. flat_shipping_charge's
-  // 99 fallback already matches the confirmed real admin value.
-  const freeShippingMin  = asNumber(settings.free_shipping_min, 500)
-  const flatShipping     = asNumber(settings.flat_shipping_charge, 99)
+  // F-02: ONE fallback source (siteSettingsHelpers) shared with getSiteSettings DEFAULTS, the
+  // cart hooks and every piece of shipping copy — they previously disagreed (₹500 here, 0 in
+  // DEFAULTS, ₹799 in marketing text). Fallbacks only apply when the admin row is missing/blank.
+  const freeShippingMin  = Math.max(0, asNumber(settings.free_shipping_min, FALLBACK_FREE_SHIPPING_MIN))
+  const flatShipping     = Math.max(0, asNumber(settings.flat_shipping_charge, FALLBACK_FLAT_SHIPPING))
   const prepaidPct       = asNumber(settings.prepaid_discount_pct, 5)
   const codSurchargeAmt  = asNumber(settings.cod_surcharge_amount, 0)
 
+  // F-16 (Oct 2026 audit) — ROUNDING POLICY, deliberate and shared by client and server:
+  //   • Line prices may carry paise (e.g. ₹209.52). The order is priced in WHOLE RUPEES: the subtotal
+  //     is the sum of exact line amounts rounded once. Coupons, loyalty, shipping and the prepaid
+  //     discount are all whole-rupee amounts, so `total` is always an integer and the Razorpay amount
+  //     (total × 100) is exact — no paise drift between what is shown, charged and stored.
+  //   • Free shipping is tested AFTER coupon and loyalty discounts (`afterDiscount`): the customer's
+  //     payable goods value, not the pre-discount cart, decides the threshold.
+  // Changing either rule alters what customers pay — it is a business/accounting decision, not a
+  // code fix. The invariant below is locked by pricingInvariants.test.ts.
   const subtotal = Math.round(items.reduce((sum, item) => sum + item.price * item.qty, 0))
 
   // MRP Total / Discount on MRP — the product-level "was ₹X, now ₹Y" discount,
@@ -161,6 +168,33 @@ export async function validateCouponServer(
     }
   }
 
+  // F-08 (Oct 2026 audit): first_order_only was configurable but never enforced. Same rule as
+  // orderService.createOrder (the authoritative gate): a customer with an earlier paid / COD-placed,
+  // non-cancelled order cannot use it. Needs a phone to identify the customer, so this is a
+  // fast-feedback pre-check; a brand-new customer simply has no history.
+  if (data.first_order_only && customerPhone) {
+    const normalizedPhone = customerPhone.replace(/\D/g, '').slice(-10)
+    if (normalizedPhone) {
+      const { data: existingCust } = await db
+        .from('customers')
+        .select('id')
+        .eq('normalized_phone', normalizedPhone)
+        .maybeSingle()
+      if (existingCust?.id) {
+        const { data: priorOrders } = await db
+          .from('orders')
+          .select('id')
+          .eq('customer_id', existingCust.id)
+          .in('payment_status', ['paid', 'cod_pending', 'refund_pending', 'refunded'])
+          .neq('order_status', 'cancelled')
+          .limit(1)
+        if (priorOrders && priorOrders.length > 0) {
+          return { valid: false, error: 'This coupon is valid on your first order only' }
+        }
+      }
+    }
+  }
+
   // Check min order value
   if (data.min_order && subtotal < data.min_order) {
     return {
@@ -181,7 +215,8 @@ export async function validateCouponServer(
   const MAX_DISCOUNT_FALLBACK = subtotal
   const discount = data.type === 'percent'
     ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? MAX_DISCOUNT_FALLBACK)
-    : Math.round(data.value)  // round flat values — DB may store non-integer (e.g. 49.99)
+    // round flat values — DB may store non-integer (e.g. 49.99); never more than the order value
+    : Math.min(Math.round(data.value), subtotal)
 
   return {
     valid: true,

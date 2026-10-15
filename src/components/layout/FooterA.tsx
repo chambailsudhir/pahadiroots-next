@@ -178,7 +178,7 @@ export default function FooterA({ settings }: Props) {
           </div>
           <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.48)', lineHeight: 1.8, margin: 0, maxWidth: '480px' }}>
             Born in the mountains, delivered to your doorstep. Pure Himalayan natural products,
-            sourced with love from farming communities across 10 Himalayan states.
+            sourced with love from farming communities across the Himalayan states.
           </p>
         </div>
 
@@ -208,11 +208,11 @@ export default function FooterA({ settings }: Props) {
           </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '11px' }}>
             {[
-              ['🍯', 'Wild Honey',       '/products?category=wild-honey'],
-              ['🧈', 'A2 Bilona Ghee',   '/products?category=ghee'],
-              ['🌸', 'Kashmiri Saffron', '/products?category=saffron'],
+              ['🍯', 'Wild Honey',       '/collections/himalayan-honey'],
+              ['🧈', 'A2 Bilona Ghee',   '/collections/himalayan-ghee'],
+              ['🌶️', 'Himalayan Spices', '/collections/herbs-and-spices'],
               ['🪨', 'Ladakhi Shilajit', '/collections/shilajit'],
-              ['🍃', 'Himalayan Teas',   '/collections/himalayan-teas'],
+              ['🍃', 'Himalayan Teas',   '/collections/himalayan-tea'],
               ['🌾', 'Ancient Grains',   '/collections/heritage-rice'],
             ].map(([emoji, label, href]) => (
               <li key={label}>

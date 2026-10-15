@@ -28,6 +28,9 @@ import { useCartStore, selectHasHydrated } from '@/store/cartStore'
 import { useUserStore }         from '@/store/userStore'
 import { calcPriceSummary }     from '@/lib/services/pricingService'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
+import { stashConfirmationToken } from '@/lib/confirmationToken'
+import { getShippingPolicy } from '@/lib/shippingCopy'
+import { isCodEnabled } from '@/lib/siteSettingsHelpers'
 import {
   readProfileCache  as _readProfileCache,
   writeProfileCache as _writeProfileCache,
@@ -66,18 +69,18 @@ interface RazorpayOptions {
 // (causing them to be recreated on every render). Moving them here gives them
 // stable identities and removes them from the component render cycle.
 
-// Builds the order-success redirect URL. Always includes the confirmation
-// token when available — see db_migration_v6_order_confirmation_token.sql —
-// so the confirmation page can look up real order data via the new
-// /api/v1/orders/lookup endpoint instead of the dead /api/admin-api call it
-// used to make. Falls back to a token-less URL if, for some rare reason
-// (see the non-fatal catch in orderService.ts), no token came back — the
-// confirmation page still degrades gracefully to its existing
-// "check your email/WhatsApp" fallback state in that case, exactly as it did
-// before this feature existed, so this is never a regression.
+// Builds the order-success redirect URL.
+//
+// F-01 (Oct 2026 audit): the guest confirmation token is NO LONGER put in the URL. It used to
+// ride along as ?token=…, which Google Tag Manager / GA4 report as part of the page URL (and
+// which lands in browser history, referrers and screenshots) — the token unlocks the guest's
+// name, phone and address. It is now stashed in sessionStorage (per-tab) and the confirmation
+// page reads it from there; the URL carries only the non-secret order number. If no token came
+// back (rare — see the non-fatal catch in orderService.ts) the page still works for logged-in
+// customers via their session and otherwise degrades to its "check your email / track" state.
 function buildOrderSuccessUrl(orderNumber: string, token: string | undefined, method: 'cod' | 'razorpay', total: number): string {
+  stashConfirmationToken(orderNumber, token)
   const params = new URLSearchParams({ id: orderNumber, method, total: String(total) })
-  if (token) params.set('token', token)
   return `/order-success?${params.toString()}`
 }
 
@@ -281,14 +284,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // the parent fetches settings on every render) doesn't force recomputation
   // and new primitive values that could invalidate downstream useMemo/useCallback
   // deps unnecessarily. Each constant depends only on its specific setting key.
-  const codEnabled = useMemo(() => s.cod_enabled !== 'false', [s.cod_enabled])
+  const codEnabled = useMemo(() => isCodEnabled(s), [s])
   const upiAdminOn = useMemo(() => s.upi_enabled !== 'false', [s.upi_enabled])
   // razorpayKeyId is a compile-time constant — no need to memoize
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
   const razorpayEnabled = useMemo(() => !!razorpayKeyId && upiAdminOn, [razorpayKeyId, upiAdminOn])
   const codMax      = useMemo(() => parseFloat(s.cod_max_value      || '3000'), [s.cod_max_value])
   const prepaidPct  = useMemo(() => parseInt(s.prepaid_discount_pct || '5'),    [s.prepaid_discount_pct])
-  const freeShipMin = useMemo(() => parseFloat(s.free_shipping_min  || '0'),    [s.free_shipping_min])
+  const freeShipMin = useMemo(() => getShippingPolicy(s).freeMin,                [s])
   const minOrderAmt = useMemo(() => parseFloat(s.min_order_amount   || '0'),    [s.min_order_amount])
   const waNumber    = useMemo(() => {
     const raw = (s.whatsapp_number || '919899984895').replace(/\D/g, '')
