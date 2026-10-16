@@ -21,6 +21,8 @@ import SearchOverlay from '@/components/search/SearchOverlay'
 import AuthModal from '@/components/auth/AuthModal'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
+import CookieConsent from '@/components/consent/CookieConsent'
+import { consentBootstrapScript } from '@/lib/consent'
 
 // SEO FIX: matches the same env-var-with-fallback pattern already used in
 // sitemap.ts and robots.ts, so the Organization/WebSite JSON-LD below (and
@@ -310,35 +312,15 @@ export default async function RootLayout({
             GoogleTagManager component instead of raw scripts here — not
             adopted since it's a new dependency for a non-blocking lint
             suggestion; this is GTM's own documented integration method. */}
-        {tagId.toUpperCase().startsWith('GTM-') && (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${tagId}');`,
-            }}
-          />
-        )}
-        {tagId && !tagId.toUpperCase().startsWith('GTM-') && (
-          <>
-            <script async src={`https://www.googletagmanager.com/gtag/js?id=${tagId}`} />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${tagId}');`,
-              }}
-            />
-          </>
+        {/* Launch-readiness (DPDP / GDPR): the Google tag is NOT loaded until the visitor opts in to
+            analytics. This inline script sets Consent Mode v2 defaults to "denied" and, only for a
+            returning visitor who already said yes, restores that choice and loads the tag. See
+            lib/consent.ts. Renders nothing when no (valid) tag id is configured. */}
+        {tagId && (
+          <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId) }} />
         )}
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
-        {/* GTM requires a <noscript> iframe fallback immediately inside <body> */}
-        {tagId.toUpperCase().startsWith('GTM-') && (
-          <noscript>
-            <iframe
-              src={`https://www.googletagmanager.com/ns.html?id=${tagId}`}
-              height="0" width="0" style={{ display: 'none', visibility: 'hidden' }}
-              title="Google Tag Manager"
-            />
-          </noscript>
-        )}
         {/* Sentinel for MobileBottomNav's scroll-to-top button — observed
             via IntersectionObserver instead of a scroll listener so the
             button's show/hide never runs on the scroll thread. Sits at
@@ -386,6 +368,8 @@ export default async function RootLayout({
             strategy="afterInteractive"
           />
         )}
+        {/* Consent banner / preferences. Client-only, fixed position (no layout shift). */}
+        <CookieConsent tagId={tagId} />
       </body>
     </html>
   )

@@ -5,7 +5,7 @@ import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 // BUG FIX: this file used to define its own local copy of REGION_META,
 // duplicated (and already drifted) from the copy in ExploreByRegion.tsx.
 // Now both — plus the region detail page — import the single shared copy.
-import { getRegionMeta } from '@/lib/regionMeta'
+import { getRegionMeta, regionProductPills } from '@/lib/regionMeta'
 
 // BUG FIX: uses NEXT_PUBLIC_SITE_URL like sitemap.ts, rather than hardcoding
 // "https://www.pahadiroots.com" (as /products/[slug] currently does) — a
@@ -208,9 +208,10 @@ export default async function RegionsPage() {
                 {/* Body */}
                 <div style={{ padding: '16px 18px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {/* Pills */}
-                  {meta?.pills && (
+                  {/* Only real, active products of this state (see regionProductPills). */}
+                  {regionProductPills(allProducts.filter((p: any) => String(p.state_id ?? '').toLowerCase() === String(sid).toLowerCase()), 3).length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {meta.pills.slice(0, 3).map(pill => (
+                      {regionProductPills(allProducts.filter((p: any) => String(p.state_id ?? '').toLowerCase() === String(sid).toLowerCase()), 3).map(pill => (
                         <span key={pill} style={{ background: '#f0f7f1', border: '1px solid #d4e8d8', color: '#2d5a35', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20, fontFamily: sans }}>
                           {pill}
                         </span>

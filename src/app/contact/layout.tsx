@@ -13,7 +13,7 @@ const FAQ = [
   { q: 'Are your products certified organic?',   a: 'Our products are 100% natural — no preservatives, no additives. We work directly with farmers but do not carry formal organic certifications as these are expensive and inaccessible to small mountain farmers.' },
   { q: 'What if my product arrives damaged?',    a: 'Please WhatsApp us a photo within 48 hours of delivery. We will send a replacement or full refund — no questions asked.' },
   { q: 'Can I return a product?',                a: 'For non-edible items, yes — within 48 hours of delivery, unopened and in original condition. Edible/food items (honey, ghee, shilajit, spices, tea, etc.) are generally not returnable once opened, per food-safety norms — but we do consider damage or quality-defect claims raised within 48 hours with photo/video proof. See our Return & Refund Policy for full details.' },
-  { q: 'Where are your products sourced from?',  a: 'Directly from farming communities across Uttarakhand, Himachal Pradesh, Assam, Manipur, Sikkim, and other Himalayan states. Every product has a source story.' },
+  { q: 'Where are your products sourced from?',  a: 'Directly from farming communities across the Himalayas. Every product page names its state of origin.' },
   { q: 'Do you ship internationally?',           a: 'Currently we ship only within India. International shipping is on our roadmap.' },
   { q: 'How do I track my order?',               a: 'Visit our Track Order page and enter your order number and phone number. We also send WhatsApp updates when your order ships.' },
 ]

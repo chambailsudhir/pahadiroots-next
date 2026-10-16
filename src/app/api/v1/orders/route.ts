@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createOrder, IdempotencyConflictError, logOrderEvent } from '@/lib/services/orderService'
+import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
@@ -396,6 +397,14 @@ export async function POST(req: NextRequest) {
         }
       }
     })
+
+    // Homepage/listing cards are ISR-cached: if this order just sold a variant out, regenerate
+    // them now instead of waiting for the 5-minute window (see lib/server/catalogFreshness.ts).
+    // Deferred so the customer's response is never delayed; skipped for idempotent replays.
+    if (!alreadyExists) {
+      const orderedVariantIds = (d.items ?? []).map((i: { variantId: string }) => i.variantId)
+      try { after(() => { void refreshCatalogIfSoldOut(orderedVariantIds) }) } catch { /* outside a request scope (unit tests) */ }
+    }
 
     const successRes = NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },

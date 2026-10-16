@@ -108,7 +108,11 @@ export async function POST(req: NextRequest) {
       } else if (slug) {
         revalidatePath(`/products/${slug}`)
         revalidatePath('/products', 'page') // listing card (price/stock) also changed
-        revalidated.push(`/products/${slug}`, '/products')
+        // The homepage (Bestsellers / New Arrivals cards) is ISR-cached for 300 s. A single
+        // product save used to leave it stale for up to 5 minutes; one regeneration per admin
+        // save is the cost of making "saved in admin" mean "live on the homepage".
+        revalidatePath('/', 'page')
+        revalidated.push(`/products/${slug}`, '/products', '/')
       }
     }
 

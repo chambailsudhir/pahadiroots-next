@@ -7,6 +7,7 @@
 //
 // Scheduled by vercel.json `crons`. AUTH: Bearer ${CRON_SECRET} (fails closed).
 // ─────────────────────────────────────────────────────────────────────────────
+import { refreshCatalogPages } from '@/lib/server/catalogFreshness'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
 import { rejectUnlessCron } from '@/lib/server/cronAuth'
@@ -32,6 +33,12 @@ export async function GET(req: NextRequest) {
       staleCouponClaimsReleased = Number(data ?? 0)
     } catch (e) {
       captureError(e, { action: 'cron.release_stale_coupon_claims', alert: true })
+    }
+
+    // Released stock can turn a "sold out" card buyable again — refresh the cached cards.
+    // (One regeneration per sweep that actually released something, never per visitor.)
+    if (stats.expired > 0) {
+      try { refreshCatalogPages() } catch { /* best-effort */ }
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.

@@ -94,11 +94,11 @@ function mockFetchByTable(tables: RouteTable, opts: { failOn?: keyof RouteTable 
 
 function variant(overrides: Partial<{
   id: string; product_id: string; is_active: boolean; available_stock: number
-  price: number; original_price: number; variant_value?: string
+  price: number; original_price: number; compare_at_price?: number; variant_value?: string
 }> = {}) {
   return {
     id: 'aaaa1111', product_id: 'bbbb1111', is_active: true, available_stock: 10,
-    price: 250, original_price: 300, variant_value: '500g',
+    price: 250, original_price: 300, compare_at_price: 300, variant_value: '500g',
     ...overrides,
   }
 }
@@ -212,9 +212,9 @@ describe('GET /api/v1/cart-upsells — happy path', () => {
     expect(json.upsells[0].size).toBe('')
   })
 
-  it('falls back mrp to price when original_price is absent', async () => {
+  it('falls back mrp to price when no MRP (compare_at_price) is set', async () => {
     mockFetchByTable({
-      variants: [variant({ original_price: undefined as unknown as number, price: 199 })],
+      variants: [variant({ original_price: undefined as unknown as number, compare_at_price: undefined as unknown as number, price: 199 })],
       products: [product()],
     })
 

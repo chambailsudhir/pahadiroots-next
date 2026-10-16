@@ -42,6 +42,11 @@ function renderHeadline(text: string) {
   )
 }
 
+/** Admin-entered alt text sometimes carries markdown emphasis (*Himalayan*); screen readers would read the asterisks. */
+function plainAlt(t?: string | null): string {
+  return (t ?? '').replace(/[*_`~]+/g, '').replace(/\s+/g, ' ').trim()
+}
+
 export default function HeroBanner({ images, settings }: Props) {
   const [current, setCurrent] = useState(0)
   const slides = images.length > 0 ? images : null
@@ -134,13 +139,16 @@ export default function HeroBanner({ images, settings }: Props) {
   // while someone was actively reading the hero text or about to click
   // an arrow/dot. Matching the same hover/touch-pause pattern here.
   const [isHovering, setIsHovering] = useState(false)
+  // WCAG 2.2.2: auto-advancing content that lasts > 5 s needs a visible pause control that works
+  // for keyboard/touch users too (hover-pause alone does not satisfy it).
+  const [userPaused, setUserPaused] = useState(false)
 
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
   const prev = useCallback(() => setCurrent(c => (c - 1 + total) % total), [total])
   // BUG FIX (P2): previously a raw setInterval with no
   // prefers-reduced-motion check and no pause when the tab is
   // backgrounded — see hooks/useAutoplayInterval.ts.
-  useAutoplayInterval(next, 4500, total > 1 && !isHovering)
+  useAutoplayInterval(next, 4500, total > 1 && !isHovering && !userPaused)
 
   // MISSING FEATURE (found during mobile audit): touch users had no way
   // to change slides except tapping the tiny arrow buttons — swiping the
@@ -344,13 +352,13 @@ export default function HeroBanner({ images, settings }: Props) {
                   <Image src={img.url} alt="" aria-hidden="true" fill sizes="100vw"
                     className="hhero-baked-backdrop"
                     style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
-                  <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                  <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                     className="hhero-baked-img"
                     onLoad={e => handleImgLoad(i, e)}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }} priority={i === 0} />
                 </div>
               ) : (
-                <Image src={img.url} alt={img.alt_text || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                   onLoad={e => handleImgLoad(i, e)}
                   style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
               )
@@ -441,6 +449,19 @@ export default function HeroBanner({ images, settings }: Props) {
             ›
           </button>
         </>)}
+
+        {/* Pause / play the auto-advance (WCAG 2.2.2). Only shown when there is something to pause. */}
+        {total > 1 && (
+          <button type="button" onClick={() => setUserPaused(p => !p)}
+            aria-label={userPaused ? 'Play slideshow' : 'Pause slideshow'} aria-pressed={userPaused}
+            style={{ position:'absolute', left:20, bottom:66, zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:44, height:44, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            {userPaused ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4" /></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1" /><rect x="14" y="4" width="5" height="16" rx="1" /></svg>
+            )}
+          </button>
+        )}
 
         {/* Mute / unmute — only relevant when the current slide has a
             video, and only rendered once here (not per-slide) since only

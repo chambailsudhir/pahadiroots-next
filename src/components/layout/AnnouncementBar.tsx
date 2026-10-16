@@ -34,7 +34,9 @@ export default function AnnouncementBar({ settings }: Props) {
           {/* BUG FIX: was settings.states_covered, a key the admin panel
               never actually writes to. The real key it manages is
               stat_himalayan_states (see lib/heroStats.ts). */}
-          {getStatesCovered(settings)} Himalayan States Covered
+          {getStatesCovered(settings) && settings.stat_hide_stat_himalayan_states !== 'true'
+            ? <>&nbsp;|&nbsp;{' '}{getStatesCovered(settings)} Himalayan States Covered</>
+            : null}
         </span>
       )}
     </div>

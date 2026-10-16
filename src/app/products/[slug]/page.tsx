@@ -1,4 +1,5 @@
 import { computeReviewStats } from '@/lib/reviewStats'
+import { variantDisplayMrp } from '@/lib/pricing/linePricing'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import './pdp.css'
@@ -1752,7 +1753,7 @@ async function fetchProductDataInner(slug: string) {
       // mrp for every single product page view, regardless of which size
       // variant was selected — meaning a product with different discount
       // percentages per size would show the wrong strikethrough price.
-      mrp: v.original_price ?? v.mrp ?? v.price,
+      mrp: variantDisplayMrp(v, rawProduct as any),
     }))
 
     // Product images already sorted by sort_order via getProductBySlug()

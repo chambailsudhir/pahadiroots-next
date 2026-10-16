@@ -18,6 +18,7 @@
  *   • All effects already had AbortController cleanup — preserved as-is.
  */
 
+import { cartItemsToGa4 } from '@/lib/analytics/ga4'
 import { useCartRevalidation } from '@/hooks/useCartRevalidation'
 import { revalidateCart } from '@/lib/cartRevalidate'
 import {
@@ -528,6 +529,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   } = useCheckoutAnalytics({
     itemCount: items.length, subtotal: pricing.subtotal,
     payMethod, isFreeShipping: pricing.isFreeShipping,
+    gaItems: cartItemsToGa4(items),
   })
 
   // ── Effects ────────────────────────────────────────────────────────────────

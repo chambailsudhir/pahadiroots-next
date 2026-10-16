@@ -1,5 +1,6 @@
 'use client'
 
+import { ga4Purchase } from '@/lib/analytics/ga4'
 import Link from 'next/link'
 import CheckoutStepper from '@/components/checkout/CheckoutStepper'
 import { useSearchParams } from 'next/navigation'
@@ -10,6 +11,7 @@ import { resolveConfirmationToken } from '@/lib/confirmationToken'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
+  product_id?: number | string
   name?: string
   image_url?: string
   emoji?: string
@@ -228,6 +230,17 @@ function SuccessContent() {
     if (alreadyTracked(num)) return
     markTracked(num)
     trackPurchase(num, Number(order.total_amount) || 0)
+    // GA4 `purchase`: server total, tax-inclusive; once per order (also guarded inside ga4Purchase).
+    ga4Purchase({
+      transactionId: num,
+      value:    Number(order.total_amount) || 0,
+      tax:      Number(order.tax) || 0,
+      shipping: (Number(order.shipping_charge) || 0) + (Number(order.cod_surcharge) || 0),
+      items: (order.items ?? []).map(i => ({
+        productId: i.product_id, name: i.name ?? 'Product', variant: i.variant_value,
+        price: Number(i.price_at_time ?? i.price) || 0, quantity: Number(i.quantity ?? i.qty) || 1,
+      })),
+    })
     markCartConverted()
   }, [view, order])
 

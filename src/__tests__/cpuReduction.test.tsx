@@ -4,6 +4,7 @@
  * who can't benefit from them.
  * @vitest-environment jsdom
  */
+import { writeConsent } from '@/lib/consent'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import React from 'react'
 import { render, cleanup } from '@testing-library/react'
@@ -73,7 +74,17 @@ describe('analytics track() — automated clients send no beacon', () => {
     expect(beacon).not.toHaveBeenCalled()
   })
 
-  it('still beacons for a normal browser', () => {
+  it('sends NOTHING for a normal browser until the visitor opts in to analytics', () => {
+    const beacon = vi.fn().mockReturnValue(true)
+    Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1')
+    track({ event_type: 'page_view', path: '/' })
+    expect(beacon).not.toHaveBeenCalled()
+    expect(localStorage.getItem('pr_vid')).toBeNull()   // no visitor id is even created
+  })
+
+  it('still beacons for a normal browser that opted in to analytics', () => {
+    writeConsent(true)
     const beacon = vi.fn().mockReturnValue(true)
     Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1')

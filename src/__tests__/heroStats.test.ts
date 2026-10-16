@@ -22,8 +22,8 @@ describe('getStatesCovered', () => {
     expect(getStatesCovered(settings({ stat_himalayan_states: '15' }))).toBe('15')
   })
 
-  it('defaults to 10, matching the admin panel default', () => {
-    expect(getStatesCovered(settings())).toBe('10')
+  it('has NO invented default — a count that cannot be backed by the states table is blank', () => {
+    expect(getStatesCovered(settings({ stat_himalayan_states: '' }))).toBe('')
   })
 })
 
@@ -38,9 +38,10 @@ describe('getHeroStats', () => {
     expect(stats.map(s => s.num)).toEqual(['600+', '12+', '25k+', '24hr'])
   })
 
-  it('defaults to the same values as the admin panel', () => {
-    const stats = getHeroStats(settings())
-    expect(stats.map(s => s.num)).toEqual(['50+', '10+', '10k+', '48hr'])
+  it('defaults to the admin panel values, and omits the states stat until a real count exists', () => {
+    expect(getHeroStats(settings()).map(s => s.num)).toEqual(['50+', '10k+', '48hr'])
+    // with a live count (withLiveStateCount) it appears, exact and without "+"
+    expect(getHeroStats(withLiveStateCount(settings(), 4)).map(s => s.num)).toEqual(['50+', '4', '10k+', '48hr'])
   })
 
   it('uses custom labels when the admin has set them', () => {
@@ -49,7 +50,7 @@ describe('getHeroStats', () => {
   })
 
   it('respects each stat\'s hide toggle — this is the actual bug: previously none were ever checked', () => {
-    const stats = getHeroStats(settings({ stat_hide_stat_farmer_families: 'true' }))
+    const stats = getHeroStats(settings({ stat_hide_stat_farmer_families: 'true', stat_himalayan_states: '4' }))
     expect(stats.find(s => s.key === 'farmers')).toBeUndefined()
     expect(stats.length).toBe(3)
   })
@@ -81,9 +82,10 @@ describe('withLiveStateCount — "Himalayan States" follows the admin\'s active 
     expect(getStatesCovered(withLiveStateCount(settings(), 10))).toBe('10')
   })
 
-  it('falls back to the manual admin value when no states could be loaded (count 0)', () => {
+  it('never shows a hand-typed number when no states could be loaded (count 0) — the stat is hidden', () => {
     const s = settings({ stat_himalayan_states: '12' })
-    expect(withLiveStateCount(s, 0)).toBe(s)
-    expect(getHeroStats(s).find(x => x.key === 'states')?.num).toBe('12+')
+    const out = withLiveStateCount(s, 0)
+    expect(getStatesCovered(out)).toBe('')
+    expect(getHeroStats(out).find(x => x.key === 'states')).toBeUndefined()
   })
 })

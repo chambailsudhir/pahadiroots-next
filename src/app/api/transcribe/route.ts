@@ -25,6 +25,7 @@
 // ~35 languages the widget supports.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { guardAiRequest, readCappedJson, isAllowedAudioMime, TRANSCRIBE_MAX_BODY_BYTES } from '@/lib/api/aiGuard'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -32,13 +33,15 @@ export const runtime = 'nodejs'
 const GEMINI_KEY = process.env.GEMINI_API_KEY
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+const UPSTREAM_TIMEOUT_MS = 25_000
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 
 // Hard cap on the base64 payload we'll accept. A 60-second clip at any of
 // the mime types the client uses comes in well under this; this just stops
 // a stray/huge request from reaching Gemini.
-const MAX_BASE64_LEN = 11_000_000
+// Vercel rejects bodies above 4.5 MB anyway; keep our own cap just under it.
+const MAX_BASE64_LEN = 4_400_000
 
 // Mirrors the language codes already used in ai-assistant.js's LANG_NAMES.
 // Used both to hint Gemini toward the expected language (it still
@@ -72,6 +75,7 @@ async function claudeFallbackMessage(langName: string | null): Promise<string | 
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
       },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 100,
@@ -89,12 +93,16 @@ async function claudeFallbackMessage(langName: string | null): Promise<string | 
 }
 
 export async function POST(req: NextRequest) {
-  let body: any
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+  // Oct 2026 audit (P0): same open-proxy exposure as /api/chat (and it accepts audio
+  // uploads, the most expensive input). Gated before anything is parsed or sent upstream.
+  const blocked = await guardAiRequest(req, {
+    name: 'transcribe', maxBodyBytes: TRANSCRIBE_MAX_BODY_BYTES, perMinute: 4, perHour: 30, perDayGlobal: 600,
+  })
+  if (blocked) return blocked
+
+  const parsed = await readCappedJson(req, TRANSCRIBE_MAX_BODY_BYTES)
+  if (!parsed.ok) return parsed.res
+  const body: any = parsed.body
 
   const { audio, mimeType, lang } = body || {}
   const langName = typeof lang === 'string' ? LANG_HINTS[lang] || null : null
@@ -107,6 +115,9 @@ export async function POST(req: NextRequest) {
   }
   if (!mimeType || typeof mimeType !== 'string') {
     return NextResponse.json({ error: 'Missing mimeType' }, { status: 400 })
+  }
+  if (!isAllowedAudioMime(mimeType)) {
+    return NextResponse.json({ error: 'Unsupported audio type' }, { status: 415 })
   }
 
   // ── If Gemini isn't even configured, go straight to the Claude fallback ──
@@ -122,7 +133,8 @@ export async function POST(req: NextRequest) {
   try {
     const geminiRes = await fetch(GEMINI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       body: JSON.stringify({
         contents: [
           {

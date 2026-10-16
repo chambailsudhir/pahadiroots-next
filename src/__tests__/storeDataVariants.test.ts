@@ -63,11 +63,11 @@ describe('attachVariants', () => {
     expect(result[0].product_variants![0].price).toBe(90)
   })
 
-  it('maps mrp from original_price the same way normalizeProduct does elsewhere', async () => {
+  it('maps mrp from compare_at_price the same way normalizeProduct does elsewhere', async () => {
     const { attachVariants } = await import('@/lib/storeData')
     const products = [{ id: 1, name: 'X', slug: 'x', price: 100 }] as any
     const variants = [
-      { id: 1, product_id: 1, price: 250, original_price: 300, is_active: true, available_stock: 1 } as any,
+      { id: 1, product_id: 1, price: 250, original_price: 300, compare_at_price: 300, is_active: true, available_stock: 1 } as any,
     ]
     const result = attachVariants(products, variants)
     expect((result[0].product_variants![0] as any).mrp).toBe(300)

@@ -312,8 +312,10 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">2. Cookies</h2>
-          <p className="text-stone-600 mb-2">We use <strong>session cookies</strong> (cleared when the browser closes) and <strong>persistent cookies</strong> (stored until expiry) to keep you logged in, remember your cart across visits, and recognise you on return visits.</p>
-          <p className="text-stone-600">You may reject cookies via browser settings, though this may affect site functionality. Our payment provider Razorpay may also set cookies — see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a>.</p>
+          <p className="text-stone-600 mb-2"><strong>Essential storage (always on).</strong> We store a login session, your cart and checkout progress in your browser. The shop cannot work without these, so they do not need your consent.</p>
+          <p className="text-stone-600 mb-2"><strong>Analytics (only if you say yes).</strong> If you click &ldquo;Accept analytics&rdquo; we use Google Analytics and our own anonymous visitor ID to understand which pages, products and searches are used and where shoppers drop off. This includes pages viewed, products viewed or added to cart, checkout steps and completed orders (order value and items &mdash; never your name, phone, email or address). Nothing of this kind is loaded or stored until you accept. We do not use advertising or retargeting cookies.</p>
+          <p className="text-stone-600 mb-2"><strong>Your choice.</strong> You can change or withdraw your choice at any time using &ldquo;Cookie Settings&rdquo; in the footer. Withdrawing stops analytics and removes the analytics cookies and visitor ID from your browser. Your choice is remembered for up to 12 months.</p>
+          <p className="text-stone-600">Our payment provider Razorpay may also set its own cookies &mdash; see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a>. You can also block cookies in your browser settings, though parts of the shop may stop working.</p>
         </section>
 
         <section>

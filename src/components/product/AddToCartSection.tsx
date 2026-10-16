@@ -1,5 +1,6 @@
 'use client'
 
+import { ga4AddToWishlist } from '@/lib/analytics/ga4'
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
@@ -177,7 +178,7 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     })
 
     // GA4/Meta remarketing pixel (usePDPAnalytics above).
-    trackAddToCart({ itemId: variantId, itemName: product.name, price }, qty)
+    trackAddToCart({ itemId: String(product.id), itemName: product.name, price }, qty)
 
     // BUG FIX: the in-house analytics add_to_cart event (imported as
     // trackInHouseAddToCart to avoid the name collision with the GA4
@@ -311,10 +312,10 @@ export default function AddToCartSection({ product, variants, settings }: Props)
           <button
             type="button"
             className={`pdp-wl-btn${inWishlist ? ' active' : ''}`}
-            onClick={() => inWishlist
-              ? removeFromWishlist(String(product.id))
-              : addToWishlist(String(product.id))
-            }
+            onClick={() => {
+              if (inWishlist) removeFromWishlist(String(product.id))
+              else { addToWishlist(String(product.id)); ga4AddToWishlist({ productId: product.id, name: product.name, price }) }
+            }}
             aria-pressed={inWishlist}
             aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >

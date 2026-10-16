@@ -63,7 +63,8 @@ describe('ExploreByRegion', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Jammu & Kashmir' }))
 
-    expect(screen.getByText('Kashmiri Saffron')).toBeTruthy()
+    // shown both as a product card and (now) as a real-product pill
+    expect(screen.getAllByText(/Kashmiri Saffron/).length).toBeGreaterThan(0)
   })
 
   it('shows a "coming soon" message when the active state has no products', () => {

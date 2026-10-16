@@ -516,7 +516,7 @@ export async function createOrder(
   if (itemsWithVariant.length > 0) {
     const variantIdList = itemsWithVariant.map(i => i.variantId).join(',')
     const data = await sbGet('product_variants',
-      `select=id,price,original_price,is_active,available_stock,product_id&id=in.(${variantIdList})`
+      `select=id,price,original_price,compare_at_price,is_active,available_stock,product_id&id=in.(${variantIdList})`
     )
     variantRows.push(...(data || []))
     if (variantRows.length === 0) throw new Error('Could not fetch product details — variant IDs not found in DB')

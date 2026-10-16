@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Source_Serif_4, Montserrat } from 'next/font/google'
 import RegionProductCard from './RegionProductCard'
 import type { Product } from '@/types'
-import { getRegionMeta, type RegionMeta } from '@/lib/regionMeta'
+import { getRegionMeta, regionProductPills, type RegionMeta } from '@/lib/regionMeta'
 import styles from './ExploreByRegion.module.css'
 
 // Section-scoped faces that match the approved design (serif headings + clean geometric sans).
@@ -48,6 +48,7 @@ export default function ExploreByRegion({ states }: Props) {
     snippet: activeState.description ?? '',
   }
 
+  const regionPills = regionProductPills(activeState.products)
   const displayRegion = activeState.name.replace(/\s+Pradesh$/i, '')
 
   const domId = (id: string) => id.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
@@ -141,9 +142,9 @@ export default function ExploreByRegion({ states }: Props) {
                 )}
                 <p>{meta.homeCopy || meta.snippet || activeState.description || ''}</p>
 
-                {meta.pills?.length > 0 && (
+                {regionPills.length > 0 && (
                   <div className={styles.pills}>
-                    {meta.pills.map(pill => <span key={pill}>{pill.replace(/^\S+\s/, '')}</span>)}
+                    {regionPills.map(pill => <span key={pill}>{pill.replace(/^\S+\s/, '')}</span>)}
                   </div>
                 )}
 

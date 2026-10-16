@@ -23,7 +23,8 @@ export interface RawVariant {
   // "mrp from original_price column") and variant_value (the size/weight
   // label, e.g. "500ml", "1kg"). Querying the old non-existent column names
   // caused every single /api/v1/cart-upsells request to fail.
-  original_price: number
+  original_price: number          // EX-GST base price (not an MRP)
+  compare_at_price?: number | null // tax-inclusive MRP, when the admin set one
   variant_value?: string
 }
 

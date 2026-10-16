@@ -27,7 +27,7 @@ function fakeDb(tables: Record<string, Row[] | Error>) {
 }
 
 const product = (over: Row = {}) => ({ id: 1, name: 'Wild Honey', is_deleted: false, status: 'active', selling_price: 450, price: 999, mrp: 600, available_stock: 20, ...over })
-const variant = (over: Row = {}) => ({ id: 11, product_id: 1, price: 500, original_price: 650, is_active: true, available_stock: 8, ...over })
+const variant = (over: Row = {}) => ({ id: 11, product_id: 1, price: 500, original_price: 650, compare_at_price: 650, is_active: true, available_stock: 8, ...over })
 const L = (productId: string, variantId: string, qty = 1) => ({ productId, variantId, qty })
 
 describe('validateCartLines — variant lines', () => {
@@ -113,7 +113,7 @@ describe('shared pricing helpers (createOrder uses the same ones)', () => {
 describe('validateCartLines — variant that shares its product id (live: product 1 / variant 1)', () => {
   it('is a normal variant line: priced and stocked from the VARIANT, never flagged as "multiple options"', async () => {
     const tables = {
-      product_variants: [variant({ id: 1, product_id: 1, price: 500, original_price: 650, available_stock: 8 })],
+      product_variants: [variant({ id: 1, product_id: 1, price: 500, original_price: 650, compare_at_price: 650, available_stock: 8 })],
       products: [product({ id: 1, available_stock: 0 })],
     }
     const [l] = await validateCartLines(fakeDb(tables), [L('1', '1', 2)])

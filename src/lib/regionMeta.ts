@@ -156,3 +156,29 @@ export function getRegionMeta(id: string | null | undefined): RegionMeta | undef
   if (!id) return undefined
   return REGION_META[String(id).toLowerCase()]
 }
+
+
+/**
+ * Product "pills" for a region, built from the products actually on sale in that state.
+ *
+ * Oct 2026 audit (P2): the curated `pills` arrays in REGION_META named products the store does
+ * not sell (Kashmiri Kesar, Pine Honey, Chilgoza Nuts, Kagzi Walnuts, ...), so a region panel
+ * advertised stock that did not exist. A pill is now only ever a real, active product; with no
+ * products the row is simply omitted. Names are shortened by dropping the generic "Himalayan"
+ * prefix so they fit a chip. Format is "<emoji> <name>" to match the existing pill renderers.
+ */
+export function regionProductPills(products: ReadonlyArray<{ name?: string | null; emoji?: string | null }> | null | undefined, max = 6): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const p of products ?? []) {
+    const raw = String(p?.name ?? '').trim()
+    if (!raw) continue
+    const name = raw.replace(/^Himalayan\s+/i, '').replace(/^Himachali\s+/i, '')
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(`${(p?.emoji && String(p.emoji).trim()) || '🌿'} ${name}`)
+    if (out.length >= max) break
+  }
+  return out
+}

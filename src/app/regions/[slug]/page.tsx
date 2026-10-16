@@ -10,7 +10,7 @@ import type { Product } from '@/types'
 // homepage widget — it only showed the raw DB `state.description` (which
 // can be null) against a hardcoded dark-green hero regardless of which
 // state you were viewing. Now shares the same single source of truth.
-import { getRegionMeta } from '@/lib/regionMeta'
+import { getRegionMeta, regionProductPills } from '@/lib/regionMeta'
 import { truncate } from '@/lib/utils'
 // BUG FIX (feature gap — no sort/filter parity with /products): reuses the
 // same extracted, unit-tested sortProducts() /products already uses, rather
@@ -186,9 +186,9 @@ export default async function RegionPage({ params, searchParams }: Props) {
             <p style={{ color: '#555', lineHeight: 1.8, fontSize: '14px' }}>
               {meta?.description || state.description}
             </p>
-            {meta?.pills && meta.pills.length > 0 && (
+            {regionProductPills(stateProducts).length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-                {meta.pills.map(pill => (
+                {regionProductPills(stateProducts).map(pill => (
                   <span key={pill} style={{ background: '#f0f7f1', border: '1px solid #d4e8d8', color: '#2d5a35', fontSize: 11, fontWeight: 700, padding: '4px 11px', borderRadius: 20, fontFamily: 'var(--font-lato), Lato, sans-serif' }}>
                     {pill}
                   </span>

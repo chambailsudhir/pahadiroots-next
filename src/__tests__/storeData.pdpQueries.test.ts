@@ -232,8 +232,8 @@ describe('getProductBySlug (BUG FIX: full-catalog scan replaced with indexed loo
 
   it('fetches variants and images scoped to the matched product only', async () => {
     setup(baseProducts, [
-      { id: 100, product_id: 1, price: 199, original_price: 249, is_active: true, sort_order: 1 },
-      { id: 101, product_id: 1, price: 349, original_price: 399, is_active: true, sort_order: 2 },
+      { id: 100, product_id: 1, price: 199, original_price: 249, compare_at_price: 249, is_active: true, sort_order: 1 },
+      { id: 101, product_id: 1, price: 349, original_price: 399, compare_at_price: 399, is_active: true, sort_order: 2 },
       { id: 102, product_id: 2, price: 500, original_price: 500, is_active: true, sort_order: 1 }, // different product
     ], [
       { product_id: 1, image_url: 'img1.jpg', sort_order: 1 },
@@ -283,7 +283,7 @@ describe('getRelatedProducts (BUG FIX: no longer filters the full in-memory cata
     expect(related).toEqual([])
   })
 
-  it('attaches sorted images and active variants per related product, mapping mrp from original_price', async () => {
+  it('attaches sorted images and active variants per related product, mapping mrp from compare_at_price', async () => {
     mockGetServiceClient.mockReturnValue(makeDb({
       products,
       product_images: [
@@ -296,8 +296,8 @@ describe('getRelatedProducts (BUG FIX: no longer filters the full in-memory cata
       // caught the bug where RelatedCard's `baseVariant?.mrp` was always
       // undefined in production.
       product_variants: [
-        { id: 1, product_id: 2, price: 500, original_price: 600, is_active: true, sort_order: 1 },
-        { id: 2, product_id: 2, price: 300, original_price: 400, is_active: true, sort_order: 2 },
+        { id: 1, product_id: 2, price: 500, original_price: 600, compare_at_price: 600, is_active: true, sort_order: 1 },
+        { id: 2, product_id: 2, price: 300, original_price: 400, compare_at_price: 400, is_active: true, sort_order: 2 },
         { id: 3, product_id: 2, price: 100, original_price: 100, is_active: false, sort_order: 3 }, // inactive — excluded
       ],
     }))

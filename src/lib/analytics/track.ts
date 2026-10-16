@@ -15,6 +15,8 @@
 // site must be inside a 'use client' component that has already mounted.
 // ─────────────────────────────────────────────────────────────
 
+import { hasAnalyticsConsent } from '@/lib/consent'
+
 const VISITOR_KEY  = 'pr_vid'
 const SESSION_KEY  = 'pr_sid'
 const SESSION_META = 'pr_sid_meta'
@@ -116,6 +118,9 @@ function isAutomatedClient(): boolean {
 export function track(payload: TrackPayload): void {
   if (typeof window === 'undefined') return
   if (isAutomatedClient()) return
+  // Launch-readiness (DPDP/GDPR): the persistent visitor id makes this personal-data processing,
+  // so nothing is stored or sent until the visitor has opted in to analytics (lib/consent.ts).
+  if (!hasAnalyticsConsent()) return
 
   try {
     const visitor_id = getVisitorId()

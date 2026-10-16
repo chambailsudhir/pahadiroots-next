@@ -54,7 +54,7 @@ export async function validateCartLines(
   if (items.length > 0) {
     const { data, error } = await db
       .from('product_variants')
-      .select('id, product_id, price, original_price, is_active, available_stock')
+      .select('id, product_id, price, original_price, compare_at_price, is_active, available_stock')
       .in('id', Array.from(new Set(items.map(i => i.variantId))).map(asDbId))
     if (error) throw new Error('cart validation: variants lookup failed: ' + error.message)
     for (const v of (data ?? []) as VariantRow[]) variantMap.set(String(v.id), v)

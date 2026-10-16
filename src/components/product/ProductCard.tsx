@@ -1,5 +1,6 @@
 'use client'
 
+import { ga4AddToWishlist } from '@/lib/analytics/ga4'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -151,7 +152,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   function handleWishlist(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    inWishlist ? removeFromWishlist(String(product.id)) : addToWishlist(String(product.id))
+    if (inWishlist) removeFromWishlist(String(product.id))
+    else { addToWishlist(String(product.id)); ga4AddToWishlist({ productId: product.id, name: product.name, price }) }
   }
 
   const href = `/products/${product.slug}`

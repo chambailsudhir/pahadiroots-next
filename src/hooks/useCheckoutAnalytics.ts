@@ -38,6 +38,8 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { hasAnalyticsConsent } from '@/lib/consent'
+import { ga4AddPaymentInfo, ga4BeginCheckout, ga4RemoveFromCart, ga4ViewCart, type ItemInput } from '@/lib/analytics/ga4'
 
 type AnalyticsEvent =
   | 'checkout_started'
@@ -88,8 +90,8 @@ function dispatch(event: AnalyticsEvent, payload: EventPayload = {}) {
     console.groupEnd()
   }
 
-  // Google Analytics 4
-  if (typeof window !== 'undefined') {
+  // Launch-readiness (DPDP/GDPR): no event leaves the browser without analytics consent.
+  if (typeof window !== 'undefined' && hasAnalyticsConsent()) {
     const win = window as AnalyticsWindow
     if (typeof win.gtag === 'function') {
       win.gtag('event', event, payload)
@@ -115,11 +117,18 @@ interface CheckoutAnalyticsOptions {
   subtotal:     number
   payMethod:    'cod' | 'razorpay'
   isFreeShipping: boolean
+  /** Cart lines for GA4 begin_checkout / add_payment_info (optional; events are skipped without them). */
+  gaItems?:     ItemInput[]
 }
 
 export function useCheckoutAnalytics({
-  itemCount, subtotal, payMethod, isFreeShipping,
+  itemCount, subtotal, payMethod, isFreeShipping, gaItems,
 }: CheckoutAnalyticsOptions) {
+  // Latest lines without re-running the "fire once" effects below when quantities change.
+  const gaItemsRef = useRef<ItemInput[] | undefined>(gaItems)
+  // Updated in an effect (not during render). Declared before the "fire once" effects below, so
+  // React runs it first and they always see the latest lines.
+  useEffect(() => { gaItemsRef.current = gaItems })
   const startedRef     = useRef(false)
   const prevPayMethod  = useRef(payMethod)
   const prevFreeShip   = useRef(isFreeShipping)
@@ -139,6 +148,7 @@ export function useCheckoutAnalytics({
     if (startedRef.current || itemCount === 0) return
     startedRef.current = true
     dispatch('checkout_started', { item_count: itemCount, subtotal, currency: 'INR' })
+    if (gaItemsRef.current?.length) ga4BeginCheckout(gaItemsRef.current)
     startTime.current = Date.now()
   }, [itemCount, subtotal])
 
@@ -147,6 +157,7 @@ export function useCheckoutAnalytics({
     if (!startedRef.current) return
     if (prevPayMethod.current !== payMethod) {
       dispatch('payment_method_changed', { from: prevPayMethod.current, to: payMethod })
+      if (gaItemsRef.current?.length) ga4AddPaymentInfo(gaItemsRef.current, payMethod)
       prevPayMethod.current = payMethod
     }
   }, [payMethod])
@@ -213,24 +224,32 @@ export function useCheckoutAnalytics({
 interface CartAnalyticsOptions {
   itemCount: number
   subtotal:  number
+  /** Cart lines for GA4 view_cart (optional). */
+  gaItems?:  ItemInput[]
 }
 
-export function useCartAnalytics({ itemCount, subtotal }: CartAnalyticsOptions) {
+export function useCartAnalytics({ itemCount, subtotal, gaItems }: CartAnalyticsOptions) {
   const viewedRef = useRef(false)
+  const gaItemsRef = useRef<ItemInput[] | undefined>(gaItems)
+  // Updated in an effect (not during render). Declared before the "fire once" effects below, so
+  // React runs it first and they always see the latest lines.
+  useEffect(() => { gaItemsRef.current = gaItems })
 
   // Fire cart_viewed once
   useEffect(() => {
     if (viewedRef.current || itemCount === 0) return
     viewedRef.current = true
     dispatch('cart_viewed', { item_count: itemCount, subtotal, currency: 'INR' })
+    if (gaItemsRef.current?.length) ga4ViewCart(gaItemsRef.current)
   }, [itemCount, subtotal])
 
   const trackUpsellAdded = useCallback((productName: string, price: number) => {
     dispatch('upsell_added', { product_name: productName, price, currency: 'INR' })
   }, [])
 
-  const trackItemRemoved = useCallback((productName: string, price: number) => {
+  const trackItemRemoved = useCallback((productName: string, price: number, item?: ItemInput) => {
     dispatch('item_removed', { product_name: productName, price, currency: 'INR' })
+    if (item) ga4RemoveFromCart(item)
   }, [])
 
   const trackQuantityChanged = useCallback((productName: string, oldQty: number, newQty: number) => {

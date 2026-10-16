@@ -1,5 +1,6 @@
 'use client'
 
+import { ga4Search } from '@/lib/analytics/ga4'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense, useEffect, useMemo } from 'react'
@@ -29,7 +30,7 @@ function SearchContent() {
   // previously fired from inside the fetcher.
   const resultCount = results?.length
   useEffect(() => {
-    if (q && resultCount !== undefined) trackSearch(q, resultCount)
+    if (q && resultCount !== undefined) { trackSearch(q, resultCount); ga4Search(q) }
   }, [q, resultCount])
 
   if (!q) {

@@ -28,6 +28,7 @@
  * Consumed by: useCartPage hook
  */
 
+import { variantDisplayMrp } from '@/lib/pricing/linePricing'
 import { NextRequest, NextResponse } from 'next/server'
 import type { RawVariant, RawProduct, RawImage } from '@/types/store-data'
 import type { UpsellItem } from '@/types'
@@ -110,7 +111,7 @@ export async function GET(req: NextRequest) {
       'product_variants',
       'is_active=eq.true&available_stock=gt.0'
       + '&order=available_stock.desc&limit=80'
-      + '&select=id,product_id,is_active,available_stock,price,original_price,variant_value',
+      + '&select=id,product_id,is_active,available_stock,price,original_price,compare_at_price,variant_value',
       5000,
     )
 
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest) {
       sbGet<RawProduct[]>(
         'products',
         `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false`
-        + '&select=id,name,slug,emoji,gst_rate,state_id,badges',
+        + '&select=id,name,slug,emoji,gst_rate,state_id,badges,selling_price,mrp',
         5000,
       ),
       sbGet<RawImage[]>(
@@ -203,7 +204,7 @@ export async function GET(req: NextRequest) {
           slug:        p.slug    ?? '',
           size:        v.variant_value ?? '',
           price:       v.price,
-          mrp:         v.original_price ?? v.price,
+          mrp:         variantDisplayMrp(v as any, p as any),
           emoji:       p.emoji   ?? null,
           image:       imgMap[v.product_id] ?? null,
           gstRate:     p.gst_rate    ?? 5,

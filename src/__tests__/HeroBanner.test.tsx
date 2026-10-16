@@ -63,11 +63,28 @@ describe('HeroBanner — single <h1> across multiple slides (P1 fix)', () => {
 
   it('non-visible slides are aria-hidden so screen readers skip them', () => {
     const { container } = render(<HeroBanner images={slides} settings={settings} />)
-    const slideWrappers = container.querySelectorAll('[aria-hidden]')
+    // slide wrappers only — decorative <svg> icons (e.g. the pause button glyph) are aria-hidden too
+    const slideWrappers = Array.from(container.querySelectorAll('[aria-hidden]')).filter(el => el.tagName.toLowerCase() !== 'svg' && el.tagName.toLowerCase() !== 'img')
     // 2 of the 3 slides (everything but the currently-visible one) should
     // be aria-hidden.
-    const hiddenCount = Array.from(slideWrappers).filter(el => el.getAttribute('aria-hidden') === 'true').length
+    const hiddenCount = slideWrappers.filter(el => el.getAttribute('aria-hidden') === 'true').length
     expect(hiddenCount).toBe(2)
+  })
+
+  it('has a keyboard-reachable pause control that toggles (WCAG 2.2.2)', () => {
+    const { getByRole } = render(<HeroBanner images={slides} settings={settings} />)
+    const btn = getByRole('button', { name: /pause slideshow/i })
+    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(btn)
+    expect(getByRole('button', { name: /play slideshow/i }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('strips markdown emphasis from slide alt text', () => {
+    const withMd = [{ ...slides[0], alt_text: 'The *Himalayan* honey' }, ...slides.slice(1)]
+    const { container } = render(<HeroBanner images={withMd as any} settings={settings} />)
+    const alts = Array.from(container.querySelectorAll('img')).map(i => i.getAttribute('alt'))
+    expect(alts.some(a => a === 'The Himalayan honey')).toBe(true)
+    expect(alts.some(a => a?.includes('*'))).toBe(false)
   })
 
   it('the visible slide is not aria-hidden', () => {

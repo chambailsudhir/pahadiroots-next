@@ -51,6 +51,7 @@ export const COMPANY = [
   ['Returns & Refunds',  '/policies/returns'],
   ['Shipping Policy',    '/policies/shipping'],
   ['Privacy Policy',     '/policies/privacy'],
+  ['Cookie Settings',    '#cookie-settings'],   // opens the consent dialog (components/consent/CookieConsent.tsx)
   ['Terms & Conditions', '/policies/terms'],
 ] as const
 

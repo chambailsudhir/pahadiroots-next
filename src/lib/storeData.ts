@@ -5,6 +5,7 @@
 // Call from Server Components and API routes — never from client.
 // ═══════════════════════════════════════════════════════════════
 
+import { variantDisplayMrp } from '@/lib/pricing/linePricing'
 import { unstable_cache } from 'next/cache'
 import { getServiceClient } from './supabase'
 import { applyProductImages, normalizeProducts } from './normalizeProduct'
@@ -434,7 +435,7 @@ export function attachVariants(
     const mapped = vs
       .map(v => ({
         ...v,
-        mrp: (v as any).original_price ?? v.mrp ?? v.price,
+        mrp: variantDisplayMrp(v as any, p as any),
       }))
       .sort((a, b) => a.price - b.price)
     return { ...p, product_variants: mapped } as Product
@@ -648,7 +649,7 @@ export async function getRelatedProducts(opts: {
         // column), same as every other fix in this pass. Without this,
         // RelatedCard's `baseVariant?.mrp` was always undefined and silently
         // fell back to the product-level mrp for every related-product card.
-        mrp: (v as any).original_price ?? v.mrp ?? v.price,
+        mrp: variantDisplayMrp(v as any, p as any),
       }))
       .sort((a, b) => a.price - b.price)
     const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []

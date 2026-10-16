@@ -59,12 +59,18 @@ function formatCustomers(raw: string): string {
  *  activate 10 → "10". The manual `stat_himalayan_states` admin field is only
  *  used as a fallback when no states can be loaded (count 0). */
 export function withLiveStateCount(settings: SiteSettings, activeStateCount: number): SiteSettings {
-  if (!Number.isFinite(activeStateCount) || activeStateCount <= 0) return settings
+  if (!Number.isFinite(activeStateCount) || activeStateCount <= 0) {
+    // Oct 2026 audit: with no loadable states we used to fall back to a hand-typed "10". A
+    // number that cannot be backed by the states table must not be shown at all, so the stat
+    // is blanked and hidden until the real count is available again.
+    return { ...settings, stat_himalayan_states: '', stat_hide_stat_himalayan_states: 'true' }
+  }
   return { ...settings, stat_himalayan_states: String(activeStateCount), stat_states_live: 'true' }
 }
 
+/** Real active-state count as a string, or '' when it cannot be established (callers hide the stat). */
 export function getStatesCovered(settings: SiteSettings): string {
-  return settings.stat_himalayan_states || '10'
+  return settings.stat_himalayan_states || ''
 }
 
 /** Full hero stats bar: 4 stats in display order, already filtered to
@@ -83,7 +89,7 @@ export function getHeroStats(settings: SiteSettings): HeroStat[] {
       // the old hand-typed marketing number.
       num: settings.stat_states_live === 'true' ? getStatesCovered(settings) : `${getStatesCovered(settings)}+`,
       lbl: settings.stat_states_label || 'Himalayan States',
-      hidden: settings.stat_hide_stat_himalayan_states === 'true',
+      hidden: settings.stat_hide_stat_himalayan_states === 'true' || !getStatesCovered(settings),
     },
     {
       key: 'customers',

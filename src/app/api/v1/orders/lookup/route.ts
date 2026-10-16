@@ -62,6 +62,7 @@ interface RawOrderItem {
 function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string; last_name?: string; phone?: string } | null) {
   const rawItems = (raw.order_items as RawOrderItem[]) || []
   const items = rawItems.map(i => ({
+    product_id:     i.product_id ?? undefined,
     name:           i.product_name_snapshot || i.products?.name || 'Product',
     variant_value:  i.variant_value_snapshot || undefined,
     emoji:          i.products?.emoji     || '🌿',

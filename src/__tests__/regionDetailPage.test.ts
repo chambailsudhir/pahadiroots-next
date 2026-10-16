@@ -113,7 +113,7 @@ describe('RegionPage (default export)', () => {
     expect(screen.queryByText('Rajma')).toBeNull()
   })
 
-  it('bug #3 — hero uses the per-region panelBg color, and shows curated description + pills', async () => {
+  it('bug #3 — hero uses the per-region panelBg color, and shows curated description (pills only for real products)', async () => {
     vi.doMock('@/lib/storeData', () => ({
       getStoreData: vi.fn(async () => ({ states: [HP_STATE], state_images: [] })),
       getNormalizedProducts: vi.fn(async () => ([])),
@@ -127,8 +127,9 @@ describe('RegionPage (default export)', () => {
 
     // Curated copy, not the raw "Raw DB description." fallback.
     expect(screen.getByText(/Dev Bhoomi, the Land of Gods/)).toBeTruthy()
-    // At least one of the curated pills renders.
-    expect(screen.getByText(/Kangra Tea/)).toBeTruthy()
+    // Oct 2026: pills come from products actually on sale. This state has none, so no pill is
+    // invented (the old curated list advertised products that are not sold).
+    expect(screen.queryByText(/Kangra Tea/)).toBeNull()
     // Hero background is the HP-specific gradient, not the old hardcoded
     // '#1a3a1e,#2d5a35' default used for every state pre-fix. jsdom
     // normalizes hex colors to rgb() when serializing the style attribute
@@ -212,3 +213,14 @@ describe('RegionPage (default export)', () => {
   })
 })
 
+
+describe('regionProductPills — only real products become pills', () => {
+  it('maps real products, strips the generic prefix, dedupes and caps', async () => {
+    const { regionProductPills } = await import('@/lib/regionMeta')
+    expect(regionProductPills([
+      { name: 'Himalayan Wild Honey', emoji: '🍯' }, { name: 'Himalayan wild honey' }, { name: 'Sea Buckthorn Juice' }, { name: '' },
+    ])).toEqual(['🍯 Wild Honey', '🌿 Sea Buckthorn Juice'])
+    expect(regionProductPills(null)).toEqual([])
+    expect(regionProductPills(Array.from({ length: 9 }, (_, i) => ({ name: `P${i}` })), 3)).toHaveLength(3)
+  })
+})

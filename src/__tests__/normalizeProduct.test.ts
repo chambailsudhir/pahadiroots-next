@@ -21,11 +21,21 @@ import { describe, it, expect } from 'vitest'
 import { normalizeProduct, normalizeProducts, applyProductImages, getEffectivePrice, getEffectiveMrp, getEffectiveStock, getBaseVariant } from '@/lib/normalizeProduct'
 
 describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
-  it('maps variant.mrp from original_price (the real column), not a literal mrp field', () => {
+  it('REGRESSION (Oct 2026): the ex-GST original_price is never shown as an MRP', () => {
+    // variant.price is GST-inclusive (388.54); original_price is the ex-GST base (370.04).
+    const [p] = normalizeProducts([
+      { id: 1, name: 'Honey', slug: 'honey', badges: [], product_variants: [
+        { id: 1, price: 388.54, original_price: 370.04, variant_value: '250g', available_stock: 5, is_active: true },
+      ] },
+    ] as any)
+    expect(p.product_variants![0].mrp).toBe(388.54)   // equals price => no strike-through, no fake discount
+  })
+
+  it('maps variant.mrp from the tax-inclusive MRP (compare_at_price), never from the ex-GST original_price', () => {
     const raw = {
       id: 1, name: 'Wild Honey', slug: 'wild-honey', badges: [],
       product_variants: [
-        { id: 10, price: 250, original_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
+        { id: 10, price: 250, original_price: 300, compare_at_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
       ],
     }
     const result = normalizeProduct(raw as any)
@@ -47,7 +57,7 @@ describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
     const raw = {
       id: 1, name: 'Wild Honey', slug: 'wild-honey', badges: [],
       product_variants: [
-        { id: 10, price: 250, original_price: 300, variant_value: '1kg', available_stock: 5, is_active: true },
+        { id: 10, price: 250, original_price: 300, compare_at_price: 300, variant_value: '1kg', available_stock: 5, is_active: true },
       ],
     }
     const result = normalizeProduct(raw as any)
@@ -62,8 +72,8 @@ describe('normalizeProduct — variant mrp mapping (the actual bug)', () => {
 
   it('normalizeProducts maps every product in a list correctly', () => {
     const raw = [
-      { id: 1, name: 'A', slug: 'a', badges: [], product_variants: [{ id: 1, price: 100, original_price: 150, available_stock: 1, is_active: true }] },
-      { id: 2, name: 'B', slug: 'b', badges: [], product_variants: [{ id: 2, price: 200, original_price: 250, available_stock: 1, is_active: true }] },
+      { id: 1, name: 'A', slug: 'a', badges: [], product_variants: [{ id: 1, price: 100, original_price: 150, compare_at_price: 150, available_stock: 1, is_active: true }] },
+      { id: 2, name: 'B', slug: 'b', badges: [], product_variants: [{ id: 2, price: 200, original_price: 250, compare_at_price: 250, available_stock: 1, is_active: true }] },
     ]
     const result = normalizeProducts(raw as any)
     expect(result.map(p => p.product_variants![0].mrp)).toEqual([150, 250])
@@ -119,8 +129,8 @@ describe('getEffectivePrice — the products-listing-page pricing bug', () => {
     const product = normalizeProduct({
       id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999, mrp: 999,
       product_variants: [
-        { id: 1, price: 450, original_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
-        { id: 2, price: 250, original_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
+        { id: 1, price: 450, original_price: 500, compare_at_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
+        { id: 2, price: 250, original_price: 300, compare_at_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
       ],
     } as any)
     expect(getEffectivePrice(product)).toBe(250)
@@ -156,8 +166,8 @@ describe('getEffectiveMrp — fixes BestSellersClient.tsx "Best Discount" sort',
     const product = normalizeProduct({
       id: 1, name: 'Honey', slug: 'honey', badges: [], price: 999, mrp: 999,
       product_variants: [
-        { id: 1, price: 450, original_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
-        { id: 2, price: 250, original_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
+        { id: 1, price: 450, original_price: 500, compare_at_price: 500, variant_value: '1kg', available_stock: 3, is_active: true },
+        { id: 2, price: 250, original_price: 300, compare_at_price: 300, variant_value: '500g', available_stock: 5, is_active: true },
       ],
     } as any)
     // Base variant is the 250-price one (lowest), whose mrp is 300 —

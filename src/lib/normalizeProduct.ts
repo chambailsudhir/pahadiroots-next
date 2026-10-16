@@ -1,4 +1,5 @@
 import { scrubProduct } from './privateFields'
+import { variantDisplayMrp, type VariantRow, type ProductRow } from '@/lib/pricing/linePricing'
 import type { Product } from '@/types'
 
 /**
@@ -21,7 +22,7 @@ export const PRODUCT_SELECT = `
   image_url, unit_label, badges, short_description, tags,
   category_id, state_id, is_deleted, status, created_at,
   categories:categories(id, name, slug),
-  product_variants(id, price, original_price, variant_value, available_stock, is_active)
+  product_variants(id, price, original_price, compare_at_price, variant_value, available_stock, is_active)
 `
 
 /**
@@ -78,7 +79,7 @@ type RawProductRow = {
   badges_bestseller?: boolean
   badges_new?: boolean
   badges_organic?: boolean
-  product_variants?: Array<{ id: number; price: number; original_price?: number; mrp?: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
+  product_variants?: Array<{ id: number; price: number; original_price?: number; compare_at_price?: number | null; mrp?: number; variant_value?: string | null; size?: string | null; available_stock: number; is_active: boolean }>
   [key: string]: unknown
 }
 
@@ -106,7 +107,7 @@ export function normalizeProduct(p: NormalizableRow): Product {
       // otherwise every consumer that reads variant.mrp (e.g. ProductCard's
       // `baseVariant?.mrp`) would silently see undefined for every wishlist/
       // blog-page product.
-      mrp: v.original_price ?? v.mrp ?? v.price,
+      mrp: variantDisplayMrp(v as VariantRow, p as unknown as ProductRow),
     })),
   } as Product
 }

@@ -27,6 +27,7 @@
 
 // @vitest-environment jsdom
 
+import { FALLBACK_FREE_SHIPPING_MIN } from '@/lib/siteSettingsHelpers'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useCartStore } from '@/store/cartStore'
@@ -183,7 +184,8 @@ describe('useCartPage — handleRemove / handleUndoRemove', () => {
 
     act(() => { result.current.handleRemove('v1', 'Test Ghee', 100) })
 
-    expect(trackItemRemoved).toHaveBeenCalledWith('Test Ghee', 100)
+    // third arg = the full cart line mapped for GA4 remove_from_cart
+    expect(trackItemRemoved).toHaveBeenCalledWith('Test Ghee', 100, expect.objectContaining({ variantId: 'v1', price: expect.any(Number) }))
   })
 
   it('actually removes the item from the store after the 4s undo window elapses', () => {
@@ -748,7 +750,7 @@ describe('useCartPage — fetchWithRetry retry behavior (BUG FIX: network errors
     await act(async () => { await vi.runAllTimersAsync() })
 
     expect(callCount).toBe(1) // no retry attempts for a 4xx
-    expect(result.current.freeShipMin).toBe(500) // falls back to default (corrected 0 -> 500, see useCartPage.ts)
+    expect(result.current.freeShipMin).toBe(FALLBACK_FREE_SHIPPING_MIN) // single shared fallback (shippingCopy / pricingService), not a hard-coded 500
   })
 
   it('gives up after maxRetries consecutive network failures and falls back to defaults', async () => {
@@ -765,7 +767,7 @@ describe('useCartPage — fetchWithRetry retry behavior (BUG FIX: network errors
 
     // maxRetries=2 -> 1 initial attempt + 2 retries = 3 total calls, then give up
     expect(callCount).toBe(3)
-    expect(result.current.freeShipMin).toBe(500) // corrected 0 -> 500, see useCartPage.ts
+    expect(result.current.freeShipMin).toBe(FALLBACK_FREE_SHIPPING_MIN) // corrected 0 -> 500, see useCartPage.ts
     expect(result.current.reviews[0].name).toBe('Priya M.') // fallback reviews used
   })
 })

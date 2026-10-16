@@ -111,7 +111,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   // constant only matters if that row is ever deleted — but keeping it
   // accurate avoids confusing whoever reads this next.
   stat_farmer_families:            '100',
-  stat_himalayan_states:           '10',
+  stat_himalayan_states:           '',   // derived from the active `states` table, never hand-typed (lib/heroStats.ts)
   stat_happy_customers:            '10000',
   stat_avg_dispatch:               '48',
   stat_farmer_label:               'Farmer Families',

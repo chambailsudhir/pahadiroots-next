@@ -86,36 +86,37 @@ describe('RootLayout — Google Analytics / GTM injection reads google_tag_id fr
     expect(findAll(tree, 'noscript')).toHaveLength(0)
   })
 
-  it('injects the GTM container script + <noscript> iframe fallback for a GTM- ID', async () => {
+  // Launch-readiness (DPDP/GDPR): the Google tag is no longer injected as a plain <script src>. The layout
+  // renders ONE inline consent bootstrap (Consent Mode v2 = denied) that only loads gtag.js / gtm.js for a
+  // visitor who already opted in, and the <noscript> GTM iframe (which would load GTM for everyone) is gone.
+  // The load-on-consent behaviour itself is covered in consent.test.ts / CookieConsent.test.tsx.
+  const bootstrapOf = (tree: any) =>
+    findAll(tree, 'script').find(s => s.props.dangerouslySetInnerHTML?.__html?.includes("'consent','default'"))
+
+  it('GTM- ID: renders only the consent bootstrap — no direct GTM script, no <noscript> iframe', async () => {
     mockGetSiteSettings.mockResolvedValue({ google_tag_id: 'GTM-ABC1234' })
     const tree = await RootLayout({ children: null })
-
     const scripts = findAll(tree, 'script')
-    const gtmScript = scripts.find(s => s.props.dangerouslySetInnerHTML?.__html?.includes('gtm.js'))
-    expect(gtmScript?.props.dangerouslySetInnerHTML.__html).toContain('GTM-ABC1234')
-
-    const noscripts = findAll(tree, 'noscript')
-    expect(noscripts).toHaveLength(1)
-    const iframe = findAll(noscripts[0], 'iframe')[0]
-    expect(iframe.props.src).toBe('https://www.googletagmanager.com/ns.html?id=GTM-ABC1234')
-
-    // A GTM- ID should NOT also trigger the separate gtag.js/GA4 path.
-    expect(scripts.some(s => s.props.src?.includes('gtag/js'))).toBe(false)
+    const html = bootstrapOf(tree)?.props.dangerouslySetInnerHTML.__html as string
+    expect(html).toContain('GTM-ABC1234')
+    expect(html).toContain('analytics_storage":"denied')
+    expect(scripts.some(s => s.props.src?.includes('googletagmanager.com'))).toBe(false)
+    expect(findAll(tree, 'noscript')).toHaveLength(0)
   })
 
-  it('injects the gtag.js script + inline config for a GA4 (G-) measurement ID', async () => {
+  it('GA4 (G-) ID: renders only the consent bootstrap — gtag.js is not requested before opt-in', async () => {
     mockGetSiteSettings.mockResolvedValue({ google_tag_id: 'G-XYZ987654' })
     const tree = await RootLayout({ children: null })
-
     const scripts = findAll(tree, 'script')
-    const loaderScript = scripts.find(s => s.props.src?.includes('gtag/js'))
-    expect(loaderScript?.props.src).toBe('https://www.googletagmanager.com/gtag/js?id=G-XYZ987654')
-
-    const configScript = scripts.find(s => s.props.dangerouslySetInnerHTML?.__html?.includes("gtag('config'"))
-    expect(configScript?.props.dangerouslySetInnerHTML.__html).toContain("gtag('config','G-XYZ987654')")
-
-    // A GA4 ID should NOT also trigger the GTM container / noscript path.
-    expect(scripts.some(s => s.props.dangerouslySetInnerHTML?.__html?.includes('gtm.js'))).toBe(false)
+    const html = bootstrapOf(tree)?.props.dangerouslySetInnerHTML.__html as string
+    expect(html).toContain('G-XYZ987654')
+    expect(scripts.some(s => s.props.src?.includes('gtag/js'))).toBe(false)
     expect(findAll(tree, 'noscript')).toHaveLength(0)
+  })
+
+  it('an unsafe tag id renders no bootstrap at all', async () => {
+    mockGetSiteSettings.mockResolvedValue({ google_tag_id: "x');alert(1);//" })
+    const tree = await RootLayout({ children: null })
+    expect(bootstrapOf(tree)).toBeUndefined()
   })
 })

@@ -133,6 +133,7 @@
  *      useMemo was moved above `addedUpsell` to support this.
  */
 
+import { cartItemsToGa4 } from '@/lib/analytics/ga4'
 import { useCartRevalidation } from '@/hooks/useCartRevalidation'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useCartStore }       from '@/store/cartStore'
@@ -361,7 +362,7 @@ export function useCartPage() {
     trackQuantityChanged,
     trackCouponApplied,
     trackCouponError,
-  } = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal })
+  } = useCartAnalytics({ itemCount: items.length, subtotal: pricing.subtotal, gaItems: cartItemsToGa4(items) })
 
   // F-02: single source of truth. The old `parseFloat(x ?? '500') || 500` turned the REAL setting
   // value '0' (free shipping on every order) into 500, so the cart showed a ₹500 target that
@@ -542,7 +543,9 @@ export function useCartPage() {
   }, [updateQty, trackQuantityChanged])
 
   const handleRemove = useCallback((variantId: string, name: string, price: number) => {
-    trackItemRemoved(name, price)
+    // GA4 remove_from_cart needs the full line; read it from the store (not a dep, keeps this callback stable).
+    const gaLine = useCartStore.getState().items.find(i => i.variantId === variantId)
+    trackItemRemoved(name, price, gaLine ? cartItemsToGa4([gaLine])[0] : undefined)
     // FIX: also register in cartStore.pendingVariantIds so CartDrawer's
     // checkout CTA (which has no access to this component's state) can flush
     // ghost items before navigating to /checkout. cartStore.flushPendingRemovals

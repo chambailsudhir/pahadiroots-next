@@ -235,6 +235,7 @@ export default function FooterA({ settings, categories }: Props) {
               ['Returns & Refunds',  '/policies/returns'],
               ['Shipping Policy',    '/policies/shipping'],
               ['Privacy Policy',     '/policies/privacy'],
+              ['Cookie Settings',    '#cookie-settings'],
               ['Terms & Conditions', '/policies/terms'],
             ].filter(([label]) => label !== 'Our Story' || settings.about_page_enabled !== 'false')
               .map(([label, href]) => (
