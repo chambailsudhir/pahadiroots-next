@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import type { SiteSettings } from '@/types'
+import type { FooterCategory } from '@/lib/footerQuickSelects'
 import {
-  GOLD, CREAM, COMPANY, PRODUCTS, getFooterData,
+  GOLD, CREAM, COMPANY, quickSelects, getFooterData,
   ProductIcon, ContactIcon, SocialRow, FssaiCard, LeafMark, Botanical, Sprig,
 } from './FooterShared'
 
@@ -21,9 +22,11 @@ const REF = 1672
 const u = (n: number) => `${+(n / (REF / 100)).toFixed(3)}cqw`
 const BG = '#072314'
 
-interface Props { settings: SiteSettings }
+interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
-export default function FooterC({ settings }: Props) {
+export default function FooterC({ settings, categories }: Props) {
+  // Quick Selects come from the admin categories (active, in admin order), not a hard-coded list.
+  const quick = quickSelects(categories, settings as unknown as Record<string, string | undefined>)
   const d = getFooterData(settings)
   const company = COMPANY.filter(([label]) => label !== 'Our Story' || d.showOurStory)
   // Default address wraps after "PO Sakoh," exactly like the design.
@@ -54,8 +57,8 @@ export default function FooterC({ settings }: Props) {
             <div className="hvc-col hvc-c1">
               <div className="hvc-h">Quick Selects</div>
               <ul>
-                {PRODUCTS.map(([icon, label, href]) => (
-                  <li key={label}><Link href={href} className="hvc-link hvc-prod"><ProductIcon kind={icon} /><span>{label}</span></Link></li>
+                {quick.map(q => (
+                  <li key={q.href}><Link href={q.href} className="hvc-link hvc-prod"><ProductIcon kind={q.kind} /><span>{q.label}</span></Link></li>
                 ))}
               </ul>
             </div>

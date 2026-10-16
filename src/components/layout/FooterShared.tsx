@@ -31,6 +31,11 @@ export function getFooterData(settings: SiteSettings) {
   }
 }
 
+// Footer 'Quick Selects' now come from the admin categories — see lib/footerQuickSelects.ts.
+export { quickSelects } from '@/lib/footerQuickSelects'
+export type { FooterCategory } from '@/lib/footerQuickSelects'
+
+// Legacy static list — no longer rendered by the footers (kept for ProductIcon's kind type).
 export const PRODUCTS = [
   ['honey',  'Wild Honey',       '/collections/himalayan-honey'],
   ['ghee',   'A2 Bilona Ghee',   '/collections/himalayan-ghee'],

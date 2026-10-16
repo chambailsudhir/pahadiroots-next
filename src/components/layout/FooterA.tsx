@@ -4,10 +4,13 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useState } from 'react'
 import type { SiteSettings } from '@/types'
+import { quickSelects, type FooterCategory } from '@/lib/footerQuickSelects'
 
-interface Props { settings: SiteSettings }
+interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
-export default function FooterA({ settings }: Props) {
+export default function FooterA({ settings, categories }: Props) {
+  // Quick Selects come from the admin categories (active, in admin order), not a hard-coded list.
+  const quick = quickSelects(categories, settings as unknown as Record<string, string | undefined>)
   const [email, setEmail] = useState('')
   const [subDone, setSubDone] = useState(false)
   const [subLoading, setSubLoading] = useState(false)
@@ -207,20 +210,13 @@ export default function FooterA({ settings }: Props) {
             Quick Selects
           </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '11px' }}>
-            {[
-              ['🍯', 'Wild Honey',       '/collections/himalayan-honey'],
-              ['🧈', 'A2 Bilona Ghee',   '/collections/himalayan-ghee'],
-              ['🌶️', 'Himalayan Spices', '/collections/herbs-and-spices'],
-              ['🪨', 'Ladakhi Shilajit', '/collections/shilajit'],
-              ['🍃', 'Himalayan Teas',   '/collections/himalayan-tea'],
-              ['🌾', 'Ancient Grains',   '/collections/heritage-rice'],
-            ].map(([emoji, label, href]) => (
-              <li key={label}>
-                <Link href={href} style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px', transition: 'all .2s' }}
+            {quick.map(q => (
+              <li key={q.href}>
+                <Link href={q.href} style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px', transition: 'all .2s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.paddingLeft = '5px' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.55)'; (e.currentTarget as HTMLElement).style.paddingLeft = '0' }}
                 >
-                  {emoji} {label}
+                  {q.emoji} {q.label}
                 </Link>
               </li>
             ))}

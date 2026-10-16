@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { SiteSettings } from '@/types'
+import type { FooterCategory } from '@/lib/footerQuickSelects'
 import {
-  GOLD, CREAM, COMPANY, PRODUCTS, getFooterData,
+  GOLD, CREAM, COMPANY, quickSelects, getFooterData,
   ProductIcon, ContactIcon, SocialRow, FssaiCard, LeafMark, Botanical, TrustIcon,
 } from './FooterShared'
 
@@ -23,9 +24,11 @@ const u = (n: number) => `${+(n / (REF / 100)).toFixed(3)}cqw`
 const uf = (n: number, min: number) => `max(${min}px,${u(n)})`
 const BG = '#042211'
 
-interface Props { settings: SiteSettings }
+interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
-export default function FooterB({ settings }: Props) {
+export default function FooterB({ settings, categories }: Props) {
+  // Quick Selects come from the admin categories (active, in admin order), not a hard-coded list.
+  const quick = quickSelects(categories, settings as unknown as Record<string, string | undefined>)
   const d = getFooterData(settings)
   const company = COMPANY.filter(([label]) => label !== 'Our Story' || d.showOurStory)
   const addrParts = d.address.split(/,\s*(?=Distt)/)
@@ -54,8 +57,8 @@ export default function FooterB({ settings }: Props) {
           <div className="hvb-col hvb-c1">
             <div className="hvb-h">Quick Selects</div>
             <ul>
-              {PRODUCTS.map(([icon, label, href]) => (
-                <li key={label}><Link href={href} className="hvb-link hvb-prod"><ProductIcon kind={icon} /><span>{label}</span></Link></li>
+              {quick.map(q => (
+                <li key={q.href}><Link href={q.href} className="hvb-link hvb-prod"><ProductIcon kind={q.kind} /><span>{q.label}</span></Link></li>
               ))}
             </ul>
           </div>

@@ -354,7 +354,10 @@ export default async function RootLayout({
           </main>
           {!isMaintenanceMode && (
             <>
-              <Footer settings={settings} />
+              <Footer
+                settings={settings}
+                categories={categories.map((c: any) => ({ name: c.name, slug: c.slug, emoji: c.emoji ?? null }))}
+              />
               <CartDrawer settings={settings} />
               <SearchOverlay />
               <MobileMenu settings={settings} categories={categories} states={states} />

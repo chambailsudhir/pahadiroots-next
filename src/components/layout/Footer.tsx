@@ -4,8 +4,9 @@ import type { SiteSettings } from '@/types'
 import FooterA from './FooterA'
 import FooterB from './FooterB'
 import FooterC from './FooterC'
+import type { FooterCategory } from '@/lib/footerQuickSelects'
 
-interface Props { settings: SiteSettings }
+interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
 /**
  * Footer switcher.
@@ -19,14 +20,14 @@ interface Props { settings: SiteSettings }
  * the live variant can be verified in DevTools (Elements → search
  * "data-footer-variant").
  */
-export default function Footer({ settings }: Props) {
+export default function Footer({ settings, categories }: Props) {
   const raw = String(settings.footer_variant ?? '').replace(/["'\s]/g, '').toUpperCase()
   const variant: 'A' | 'B' | 'C' = raw === 'C' ? 'C' : raw === 'B' ? 'B' : 'A'
   return (
     <div data-footer-variant={variant} style={{ display: 'contents' }}>
-      {variant === 'C' ? <FooterC settings={settings} />
-        : variant === 'B' ? <FooterB settings={settings} />
-        : <FooterA settings={settings} />}
+      {variant === 'C' ? <FooterC settings={settings} categories={categories} />
+        : variant === 'B' ? <FooterB settings={settings} categories={categories} />
+        : <FooterA settings={settings} categories={categories} />}
     </div>
   )
 }
