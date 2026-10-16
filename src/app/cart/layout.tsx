@@ -5,7 +5,9 @@ import type { Metadata } from 'next'
  * and sets a canonical tag so crawlers have an authoritative URL if they do land here.
  */
 export const metadata: Metadata = {
-  title: 'Your Cart | HimVeda by Pahadi Roots',
+  // layout.tsx appends ` | ${siteName}` via title.template, so page titles must NOT repeat the brand
+  // (it rendered "… | HimVeda by Pahadi Roots | HimVeda by Pahadi Roots"). openGraph/twitter titles are not templated and keep it.
+  title: 'Your Cart',
   description: 'Review your HimVeda by Pahadi Roots order before checkout.',
   robots: {
     index: false,

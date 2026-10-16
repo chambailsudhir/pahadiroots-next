@@ -14,7 +14,9 @@ import { freeShippingPhrase } from '@/lib/shippingCopy'
 // serviceable_states, free_shipping_min) and is refreshed when settings are saved
 // (/api/v1/revalidate → '/payment'). The static metadata promises nothing that can change.
 export const metadata: Metadata = {
-  title: 'Payment Methods | HimVeda by Pahadi Roots',
+  // layout.tsx appends ` | ${siteName}` via title.template, so page titles must NOT repeat the brand
+  // (it rendered "… | HimVeda by Pahadi Roots | HimVeda by Pahadi Roots"). openGraph/twitter titles are not templated and keep it.
+  title: 'Payment Methods',
   description: 'Secure online payment options — UPI, Cards and Net Banking',
   alternates: { canonical: '/payment' },
 }

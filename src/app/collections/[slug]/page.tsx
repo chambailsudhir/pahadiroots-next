@@ -50,7 +50,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const isFiltered = page > 1 || parsed.instock || parsed.sort !== 'newest'
 
   return {
-    title:       `${cat.name} — Himalayan ${cat.name} | HimVeda by Pahadi Roots`,
+    // Brand suffix comes from layout.tsx's title.template — do not repeat it here.
+    title:       `${cat.name} — Himalayan ${cat.name}`,
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
     alternates:  { canonical: canonicalUrl },
     robots:      isFiltered ? { index: false, follow: true } : undefined,

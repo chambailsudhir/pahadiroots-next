@@ -61,7 +61,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const stateImageUrl = stateImages[0]?.image_url ?? state.image_path ?? null
 
   return {
-    title:       `${state.name} Products — Shop Authentic Himalayan Products | HimVeda by Pahadi Roots`,
+    // Brand suffix comes from layout.tsx's title.template — do not repeat it here.
+    title:       `${state.name} Products — Shop Authentic Himalayan Products`,
     description: desc,
     // BUG FIX (#13): no canonical previously — added so the /regions/{id}
     // URL is always declared authoritative.
