@@ -21,27 +21,28 @@ real overlap (PDP "Zero middlemen" line) keeps YOUR session's wording.
 - States stat derived from ACTIVE states only (hidden if unknown). Removed invented family count; contact FAQ no longer lists states.
 - Region pills built from real products.
 
-## 5. COOKIE CONSENT + GA4 E-COMMERCE (new)
-Consent (DPDP Act 2023 / GDPR):
-- First visit: bottom banner "Reject non-essential | Accept analytics | Choose" (Reject and Accept identical size/weight). Nothing optional runs before a choice.
-- Analytics OFF by default; choice stored first-party (`hv_consent`, versioned, expires after 12 months, re-asked if CONSENT_VERSION in lib/consent.ts is bumped).
-- Google Consent Mode v2: all signals "denied" by default; ad_* always denied (no ads used). The Google tag (GA4 `G-` or GTM `GTM-`) is NOT downloaded
-  until the visitor accepts. The GTM <noscript> iframe was removed (it would load GTM for everyone).
-- Withdrawing consent: stops events, deletes _ga*/_gid cookies, deletes the in-house visitor id (`pr_vid`).
-- Footer "Cookie Settings" (all footers) reopens the dialog. Privacy Policy cookie section rewritten to match — HAVE IT REVIEWED by your adviser.
-- The in-house analytics (admin dashboard) now also needs consent, so it only counts visitors who accepted.
-GA4 events (recommended names, currency INR, value = what the customer pays incl. GST, no personal data ever):
-- view_item, add_to_cart, remove_from_cart, add_to_wishlist, view_cart, begin_checkout, add_payment_info, search, purchase.
-- purchase: sent from the verified order-success page only, once per order (transaction_id + sessionStorage guard), with tax, shipping, items.
-- item_id = catalogue product id everywhere; pack size in item_variant.
-NOT done on purpose: view_item_list / select_item / view_promotion (need list-impression tracking; say if you want them), Google Ads/Meta pixels.
+## 5. COOKIE CONSENT + GA4 E-COMMERCE (region-aware)
+Why region-aware: India's DPDP notice-and-consent rules start on 14 May 2027 and an India-only shop is outside GDPR, which is why amazon.in /
+myntra.com show no banner to Indian visitors. Global sites show it only where the law requires. Same here, and the owner can override it:
+- Admin -> Settings -> "Cookie consent banner":  (a) EU/UK/Switzerland only [default; analytics ON by default in India]  (b) Everyone [analytics off until accepted]
+  (c) Nobody [analytics always on; visitors can still opt out from the footer]. SWITCH TO (b) BEFORE 14 MAY 2027 (get your adviser's view).
+- Country comes from Vercel's x-vercel-ip-country header, set by proxy.ts as the `hv_geo` cookie (eu|row|unk) — the page HTML stays identical and cacheable
+  (ISR/CPU saving unaffected). Unknown country is treated as "ask" (safe side).
+Where consent is required: banner (compact corner card on desktop, bottom sheet on phones) with "Reject non-essential | Accept analytics | Choose" — Reject and Accept
+identical in size/weight; analytics OFF until accepted; Google tag not even downloaded; Consent Mode v2 denied by default; ad_* always denied.
+Where it is not required (India by default): no banner, analytics on, Google tag loads normally; footer "Cookie Settings" lets any visitor opt out (respected everywhere).
+Withdrawing: stops events, deletes _ga*/_gid cookies and the in-house visitor id. Choice stored 12 months (`hv_consent`, versioned).
+The in-house analytics (admin dashboard) follows the same rule. Privacy Policy cookie section rewritten accordingly — HAVE IT REVIEWED by your adviser.
+GA4 events (recommended names, INR, value = what the customer pays incl. GST, never personal data): view_item, add_to_cart, remove_from_cart, add_to_wishlist,
+view_cart, begin_checkout, add_payment_info, search, purchase (order-success page only, once per order). item_id = catalogue product id; pack size in item_variant.
+NOT done: view_item_list / select_item / view_promotion, Google Ads / Meta pixels.
 
-## Verify after deploy (needs a real GA4 id set in Admin -> SEO -> Google Tag ID)
-1. Fresh/private window: banner shows; DevTools Network has NO request to googletagmanager.com; no `_ga` cookie.
-2. Click Reject: banner gone, still no GA request. Footer -> Cookie Settings -> accept: gtag.js loads, `_ga` cookie appears.
-3. GA4 -> Admin -> DebugView (or Realtime): add a product to cart -> `add_to_cart`; place a test order -> exactly one `purchase` with transaction_id.
-4. Cookie Settings -> untick analytics -> Save: `_ga*` cookies and `pr_vid` are gone.
-5. Reload after accepting: no banner, tag loads automatically.
+## Verify after deploy (needs a real GA4 id in Admin -> SEO -> Google Tag ID)
+1. From India (default mode): NO banner; gtag.js loads; GA4 Realtime shows you. Footer -> Cookie Settings -> untick analytics -> Save: `_ga*` cookies gone, no more events.
+2. Admin -> Settings -> Cookie consent banner = "Everyone", save, hard-reload (cache ~1 min): banner appears; before clicking, Network has NO googletagmanager.com request.
+3. Reject: still none. Accept: gtag.js loads, `_ga` appears. Reload: no banner, tag loads.
+4. EU test: use a VPN/Vercel preview with header x-vercel-ip-country: DE -> banner shows in default mode.
+5. GA4 DebugView: add to cart -> `add_to_cart`; place a test order -> exactly one `purchase` with transaction_id.
 
 ## Tests (merged tree, my sandbox)
-tsc clean · ESLint 0 errors · vitest 1787 passed / 7 skipped, 0 failed. `next build` not run here (no Google Fonts access) — first Vercel build is the proof.
+tsc clean · ESLint 0 errors · vitest 1801 passed / 7 skipped, 0 failed. `next build` not run here (no Google Fonts access) — first Vercel build is the proof.

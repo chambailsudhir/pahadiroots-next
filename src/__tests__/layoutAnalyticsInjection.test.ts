@@ -75,14 +75,13 @@ beforeEach(() => {
 })
 
 describe('RootLayout — Google Analytics / GTM injection reads google_tag_id from settings', () => {
-  it('injects nothing when google_tag_id is unset (no-op, matches the fallback-free default)', async () => {
+  it('loads no Google tag when google_tag_id is unset (the consent bootstrap still runs, with an empty id)', async () => {
     mockGetSiteSettings.mockResolvedValue({})
     const tree = await RootLayout({ children: null })
     const scripts = findAll(tree, 'script')
-    const analyticsScripts = scripts.filter(s =>
-      s.props.src?.includes('googletagmanager.com') || s.props.dangerouslySetInnerHTML?.__html?.includes('gtag')
-    )
-    expect(analyticsScripts).toHaveLength(0)
+    expect(scripts.some(s => s.props.src?.includes('googletagmanager.com'))).toBe(false)
+    const html = scripts.find(s => s.props.dangerouslySetInnerHTML?.__html?.includes("'consent','default'"))?.props.dangerouslySetInnerHTML.__html as string
+    expect(html).toContain('var ID=""')
     expect(findAll(tree, 'noscript')).toHaveLength(0)
   })
 
@@ -114,9 +113,10 @@ describe('RootLayout — Google Analytics / GTM injection reads google_tag_id fr
     expect(findAll(tree, 'noscript')).toHaveLength(0)
   })
 
-  it('an unsafe tag id renders no bootstrap at all', async () => {
-    mockGetSiteSettings.mockResolvedValue({ google_tag_id: "x');alert(1);//" })
+  it('an unsafe tag id never reaches the page; the owner\'s consent mode does', async () => {
+    mockGetSiteSettings.mockResolvedValue({ google_tag_id: "x');alert(1);//", cookie_consent_mode: 'always' })
     const tree = await RootLayout({ children: null })
-    expect(bootstrapOf(tree)).toBeUndefined()
+    const html = bootstrapOf(tree)?.props.dangerouslySetInnerHTML.__html as string
+    expect(html).not.toContain('alert(1)'); expect(html).toContain('var ID=""'); expect(html).toContain('var MODE="always"')
   })
 })

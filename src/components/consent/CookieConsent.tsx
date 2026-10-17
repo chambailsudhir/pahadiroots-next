@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
-  CONSENT_CHANGE_EVENT, COOKIE_SETTINGS_HASH, OPEN_PREFS_EVENT, loadGoogleTag, readConsent, writeConsent,
+  CONSENT_CHANGE_EVENT, COOKIE_SETTINGS_HASH, OPEN_PREFS_EVENT, hasAnalyticsConsent, isConsentRequired, loadGoogleTag, readConsent, writeConsent,
 } from '@/lib/consent'
 
 // Has the visitor already made a current choice? Read through useSyncExternalStore so the server and
@@ -25,7 +25,8 @@ function subscribeDecision(cb: () => void) {
   window.addEventListener('storage', cb)
   return () => { window.removeEventListener(CONSENT_CHANGE_EVENT, cb); window.removeEventListener('storage', cb) }
 }
-const getDecided = () => (readConsent() !== null ? 'y' : 'n')
+// "Decided" also covers visitors for whom no choice is required (e.g. India before DPDP starts): no banner.
+const getDecided = () => (readConsent() !== null || !isConsentRequired() ? 'y' : 'n')
 const getDecidedServer = () => 'y'
 
 const PALETTE = { bg: '#ffffff', text: '#1f2a24', muted: '#55625a', line: '#d9d4c7', accent: '#2d5a35', accentText: '#ffffff' }
@@ -54,12 +55,12 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
 
   // Returning visitor who already said yes: make sure the tag is loaded (no-op if the inline bootstrap did it).
   useEffect(() => {
-    if (readConsent()?.analytics) loadGoogleTag(tagId)
+    if (hasAnalyticsConsent()) loadGoogleTag(tagId)
   }, [tagId])
 
   const openPrefs = useCallback(() => {
     openerRef.current = (document.activeElement as HTMLElement) ?? null
-    setAnalytics(readConsent()?.analytics ?? false)
+    setAnalytics(readConsent()?.analytics ?? !isConsentRequired())
     setPrefsOpen(true)
   }, [])
 
@@ -105,12 +106,13 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
 
   if (view === 'hidden') return null
 
+  const required = isConsentRequired()
   const wrap: React.CSSProperties = {
     position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 100000,
     padding: '12px 12px calc(12px + env(safe-area-inset-bottom, 0px))', pointerEvents: 'none',
   }
   const card: React.CSSProperties = {
-    pointerEvents: 'auto', maxWidth: 720, margin: '0 auto', background: PALETTE.bg, color: PALETTE.text,
+    pointerEvents: 'auto', maxWidth: 440, margin: '0 auto', background: PALETTE.bg, color: PALETTE.text,
     border: `1px solid ${PALETTE.line}`, borderRadius: 14, boxShadow: '0 8px 30px rgba(0,0,0,.18)', padding: '16px 18px',
     fontFamily: 'var(--font-lato, Lato, system-ui, sans-serif)', fontSize: 14, lineHeight: 1.5,
   }
@@ -118,12 +120,13 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
   if (view === 'banner') {
     return (
       <div style={wrap}>
-        <div role="dialog" aria-modal="false" aria-labelledby="hv-cc-title" aria-describedby="hv-cc-desc" style={card}>
+        {/* Compact corner card on wide screens (does not cover the middle of the page); full-width sheet on phones. */}
+        <style>{'@media (min-width: 640px){.hv-cc-card{margin:0 !important}}'}</style>
+        <div className="hv-cc-card" role="dialog" aria-modal="false" aria-labelledby="hv-cc-title" aria-describedby="hv-cc-desc" style={card}>
           <h2 id="hv-cc-title" style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 800 }}>Your privacy, your choice</h2>
           <p id="hv-cc-desc" style={{ margin: '0 0 12px', color: PALETTE.muted }}>
-            Essential cookies keep your cart, login and checkout working — they are always on. With your permission we also use
-            analytics (Google Analytics and a visitor ID) to learn which pages and products people like, so we can improve the shop.
-            We do not use advertising cookies. See our{' '}
+            Essential cookies keep your cart and checkout working. With your permission we also use analytics (Google Analytics and a
+            visitor ID) to see which products people like. No advertising cookies. See our{' '}
             <a href="/policies/privacy" style={{ color: PALETTE.accent, fontWeight: 600 }}>Privacy Policy</a>.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -156,7 +159,7 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
           </label>
           <p style={{ margin: '4px 0 0', color: PALETTE.muted }}>
             Google Analytics and our own visitor ID show us which pages, products and searches are used, and where shoppers drop off.
-            Off by default. You can change this any time from &ldquo;Cookie Settings&rdquo; in the footer.
+            {required ? 'Off by default.' : 'On by default where you are; untick to opt out.'} You can change this any time from &ldquo;Cookie Settings&rdquo; in the footer.
           </p>
         </div>
 

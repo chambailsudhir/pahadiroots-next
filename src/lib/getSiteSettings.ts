@@ -151,6 +151,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   // GA4 loads automatically" — it didn't; no script ever read this
   // setting anywhere on the main site.
   google_tag_id:           '',
+  cookie_consent_mode:     'region',   // 'region' | 'always' | 'off' — see lib/consentRegion.ts
 
   // SEO FIX: Google Search Console verification — needed pre-launch to
   // submit the sitemap for priority crawling and get indexing/Core Web

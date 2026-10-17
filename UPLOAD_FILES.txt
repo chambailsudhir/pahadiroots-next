@@ -8,11 +8,13 @@ src/__tests__/cartUpsellsRoute.test.ts
 src/__tests__/cartValidation.test.ts
 src/__tests__/catalogFreshness.test.ts
 src/__tests__/consent.test.ts
+src/__tests__/consentRegion.test.ts
 src/__tests__/cpuReduction.test.tsx
 src/__tests__/ga4.test.ts
 src/__tests__/heroStats.test.ts
 src/__tests__/layoutAnalyticsInjection.test.ts
 src/__tests__/normalizeProduct.test.ts
+src/__tests__/proxyGeoCookie.test.ts
 src/__tests__/regionDetailPage.test.ts
 src/__tests__/storeData.pdpQueries.test.ts
 src/__tests__/storeDataVariants.test.ts
@@ -49,6 +51,7 @@ src/lib/analytics/ga4.ts
 src/lib/analytics/track.ts
 src/lib/api/aiGuard.ts
 src/lib/consent.ts
+src/lib/consentRegion.ts
 src/lib/getSiteSettings.ts
 src/lib/heroStats.ts
 src/lib/normalizeProduct.ts
@@ -58,6 +61,7 @@ src/lib/server/cartValidation.ts
 src/lib/server/catalogFreshness.ts
 src/lib/services/orderService.ts
 src/lib/storeData.ts
+src/proxy.ts
 src/types/store-data.ts
 vercel.json
 AUDIT_FIXES_OCT16_2026.md

@@ -7,7 +7,9 @@
 // affirmative choice BEFORE non-essential tracking starts. This module is the single source
 // of truth for that choice:
 //
-//   • default = NO analytics (opt-in, never pre-ticked)
+//   • where consent is required (EEA/UK/CH, or everyone if the owner chose so): default = NO analytics
+//     (opt-in, never pre-ticked). Elsewhere (e.g. India until DPDP starts 14 May 2027): analytics runs
+//     by default and the visitor can opt out any time. See lib/consentRegion.ts
 //   • choice is stored first-party (localStorage `hv_consent`) with a version + timestamp,
 //     expires after 12 months, and is re-asked when CONSENT_VERSION changes
 //   • Google Consent Mode v2: every ad/analytics signal is "denied" until granted. We run NO
@@ -27,6 +29,8 @@ export const CONSENT_CHANGE_EVENT = 'hv:consent-change'
 /** Anchor used by footer links; CookieConsent turns a click on it into "open preferences". */
 export const COOKIE_SETTINGS_HASH = '#cookie-settings'
 
+import { GEO_COOKIE, normalizeConsentMode, type ConsentMode } from '@/lib/consentRegion'
+
 export interface ConsentState {
   v: number
   ts: number
@@ -38,6 +42,7 @@ interface ConsentWindow extends Window {
   gtag?: GtagFn
   dataLayer?: unknown[]
   __hvTagLoaded?: boolean
+  __hvConsentRequired?: boolean
 }
 
 /** Same ids layout.tsx already accepts: GA4 (G-), Google tag (GT-), GTM (GTM-). */
@@ -68,10 +73,25 @@ export function readConsent(now: number = Date.now()): ConsentState | null {
   }
 }
 
-/** True only after an explicit, current "yes" to analytics. Safe on the server (returns false). */
+/**
+ * Must this visitor choose before analytics starts? Decided once by the inline bootstrap script from the
+ * owner's setting + the visitor's country. Defaults to TRUE (ask) whenever that is unknown.
+ */
+export function isConsentRequired(): boolean {
+  if (typeof window === 'undefined') return true
+  const v = (window as ConsentWindow).__hvConsentRequired
+  return typeof v === 'boolean' ? v : true
+}
+
+/**
+ * Is analytics allowed right now? An explicit stored choice always wins. With no choice: allowed only where
+ * consent is not required (e.g. India before DPDP starts), never where it is. Safe on the server (false).
+ */
 export function hasAnalyticsConsent(): boolean {
   if (typeof window === 'undefined') return false
-  return readConsent()?.analytics === true
+  const c = readConsent()
+  if (c) return c.analytics
+  return !isConsentRequired()
 }
 
 function ensureGtag(w: ConsentWindow): GtagFn {
@@ -151,19 +171,25 @@ export function openConsentPreferences(): void {
 /**
  * Inline <head> script, runs before any other script:
  *  1. defines gtag and sets Consent Mode v2 defaults to DENIED
- *  2. if the visitor already said yes (current version, < 12 months) re-applies it and loads the tag
- * Anything else loads nothing. ES5 on purpose; keep in sync with loadGoogleTag above.
+ *  2. works out whether consent is required here (owner setting `mode` + `hv_geo` cookie from proxy.ts)
+ *  3. analytics is "on" when the visitor chose yes, or has not chosen and consent is not required
+ *  4. only then: grants analytics_storage and loads the tag
+ * ES5 on purpose; keep the logic in sync with consentRegion.ts / loadGoogleTag above. Runs even without a
+ * tag id (the in-house tracker and the banner also need `__hvConsentRequired`).
  */
-export function consentBootstrapScript(tagId: string): string {
+export function consentBootstrapScript(tagId: string, mode: ConsentMode | string = 'region'): string {
   const id = (tagId || '').trim()
   const safeId = TAG_ID_RE.test(id) ? id : ''
   const denied = JSON.stringify(googleConsentSignals(false))
   const granted = JSON.stringify(googleConsentSignals(true))
   return `(function(){try{var w=window;w.dataLayer=w.dataLayer||[];function gtag(){w.dataLayer.push(arguments)}w.gtag=w.gtag||gtag;gtag('consent','default',${denied});`
+    + `var MODE=${JSON.stringify(normalizeConsentMode(mode))};var g=(document.cookie.match(/(?:^|;\s*)${GEO_COOKIE}=([a-z]+)/)||[])[1]||'unk';`
+    + `var req=MODE==='always'?true:(MODE==='off'?false:g!=='row');w.__hvConsentRequired=req;`
     + `var ID=${JSON.stringify(safeId)};var c=null;try{c=JSON.parse(w.localStorage.getItem(${JSON.stringify(CONSENT_STORAGE_KEY)}))}catch(e){}`
-    + `if(ID&&c&&c.v===${CONSENT_VERSION}&&typeof c.ts==='number'&&c.analytics===true&&Date.now()-c.ts<${CONSENT_MAX_AGE_MS}&&c.ts<=Date.now()+60000){`
-    + `gtag('consent','update',${granted});w.__hvTagLoaded=true;var s=document.createElement('script');s.async=true;`
+    + `var ok=c&&c.v===${CONSENT_VERSION}&&typeof c.ts==='number'&&typeof c.analytics==='boolean'&&Date.now()-c.ts<${CONSENT_MAX_AGE_MS}&&c.ts<=Date.now()+60000;`
+    + `var on=ok?c.analytics===true:!req;`
+    + `if(on){gtag('consent','update',${granted});if(ID){w.__hvTagLoaded=true;var s=document.createElement('script');s.async=true;`
     + `if(/^GTM-/i.test(ID)){w.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});s.src='https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(ID)}`
     + `else{s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(ID);gtag('js',new Date());gtag('config',ID)}`
-    + `document.head.appendChild(s)}}catch(e){}})();`
+    + `document.head.appendChild(s)}}}catch(e){}})();`
 }

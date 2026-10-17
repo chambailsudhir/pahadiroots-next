@@ -7,7 +7,7 @@ import { CONSENT_STORAGE_KEY, CONSENT_VERSION, readConsent, openConsentPreferenc
 const w = window as any
 beforeEach(() => {
   cleanup(); localStorage.clear(); sessionStorage.clear()
-  delete w.gtag; delete w.dataLayer; delete w.__hvTagLoaded
+  delete w.gtag; delete w.dataLayer; delete w.__hvTagLoaded; delete w.__hvConsentRequired
   document.head.querySelectorAll('script').forEach(s => s.remove())
 })
 
@@ -45,6 +45,22 @@ describe('CookieConsent banner', () => {
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION - 1, ts: Date.now(), analytics: true }))
     render(<CookieConsent tagId="G-ABC123XYZ" />)
     expect(screen.getByRole('dialog', { name: /your privacy/i })).toBeTruthy()
+  })
+})
+
+describe('CookieConsent where consent is NOT required (e.g. India before 14 May 2027)', () => {
+  beforeEach(() => { w.__hvConsentRequired = false })
+  it('shows no banner and does not force a choice', () => {
+    render(<CookieConsent tagId="G-ABC123XYZ" />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+  it('Cookie Settings opens with analytics ticked (on by default) and lets the visitor opt out', () => {
+    const { container } = render(<><a href="#cookie-settings">Cookie Settings</a><CookieConsent tagId="G-ABC123XYZ" /></>)
+    fireEvent.click(container.querySelector('a')!)
+    const box = screen.getByRole('checkbox', { name: /analytics/i }) as HTMLInputElement
+    expect(box.checked).toBe(true)
+    fireEvent.click(box); fireEvent.click(screen.getByRole('button', { name: /save my choices/i }))
+    expect(readConsent()?.analytics).toBe(false)
   })
 })
 

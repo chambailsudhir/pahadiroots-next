@@ -1,3 +1,4 @@
+import { GEO_COOKIE, geoValueFor } from '@/lib/consentRegion'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
@@ -127,6 +128,22 @@ async function isStoreClosed(): Promise<boolean> {
   }
 }
 
+/**
+ * Hands the visitor's country class to the browser (`hv_geo` = eu | row | unk) so the cookie-consent
+ * banner can be region-aware WITHOUT making the page dynamic: the HTML stays identical (and cacheable)
+ * for everyone and the decision is made client-side. Only rewritten when the value changes.
+ * See lib/consentRegion.ts.
+ */
+function withGeoCookie(req: NextRequest, res: NextResponse): NextResponse {
+  try {
+    if (req.method !== 'GET') return res
+    const value = geoValueFor(req.headers.get('x-vercel-ip-country'))
+    if (req.cookies.get(GEO_COOKIE)?.value === value) return res
+    res.cookies.set(GEO_COOKIE, value, { path: '/', maxAge: 60 * 60 * 24, sameSite: 'lax', httpOnly: false, secure: process.env.NODE_ENV === 'production' })
+  } catch { /* never let a cookie break a page */ }
+  return res
+}
+
 export async function proxy(req: NextRequest): Promise<NextResponse> {
   const pathname = req.nextUrl.pathname
 
@@ -140,7 +157,7 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   // ── 2. /api/v1/* rate limiting ─────────────────────────────────────────
   // Only apply to /api/v1/* — Next.js internals, /api/auth, static files, etc. pass through.
   if (!API_V1_PATTERN.test(pathname)) {
-    return NextResponse.next()
+    return withGeoCookie(req, NextResponse.next())
   }
 
   // GET requests are idempotent — only rate-limit state-mutating methods.

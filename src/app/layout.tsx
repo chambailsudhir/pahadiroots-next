@@ -315,10 +315,9 @@ export default async function RootLayout({
         {/* Launch-readiness (DPDP / GDPR): the Google tag is NOT loaded until the visitor opts in to
             analytics. This inline script sets Consent Mode v2 defaults to "denied" and, only for a
             returning visitor who already said yes, restores that choice and loads the tag. See
-            lib/consent.ts. Renders nothing when no (valid) tag id is configured. */}
-        {tagId && (
-          <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId) }} />
-        )}
+            lib/consent.ts and lib/consentRegion.ts (banner only where required: EU/UK/CH by default,
+            owner-switchable in Admin -> Settings). Always rendered: it also decides whether consent is required. */}
+        <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId, settings.cookie_consent_mode) }} />
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
         {/* Sentinel for MobileBottomNav's scroll-to-top button — observed
