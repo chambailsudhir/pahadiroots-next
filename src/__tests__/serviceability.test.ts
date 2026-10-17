@@ -36,3 +36,21 @@ describe('checkServiceability', () => {
     expect(parseServiceableStates(' A ,B;C\nD ')).toEqual(['a', 'b', 'c', 'd'])
   })
 })
+
+import { isPincodeBlocked, formatServiceableStates } from '@/lib/serviceability'
+describe('PDP PIN checker helpers (PDP audit P2-3)', () => {
+  it('blocks by prefix exactly like checkout does', () => {
+    expect(isPincodeBlocked('194101', '1941, 7900')).toBe(true)
+    expect(isPincodeBlocked('110001', '1941 7900')).toBe(false)
+    expect(isPincodeBlocked('790001', '7900;1941')).toBe(true)
+  })
+  it('never blocks when the list is empty/unset or the PIN is empty', () => {
+    expect(isPincodeBlocked('110001', '')).toBe(false)
+    expect(isPincodeBlocked('110001', null)).toBe(false)
+    expect(isPincodeBlocked('', '1941')).toBe(false)
+  })
+  it('formats the serviceable-state list for display', () => {
+    expect(formatServiceableStates('himachal pradesh, assam')).toEqual(['Himachal Pradesh', 'Assam'])
+    expect(formatServiceableStates('')).toEqual([])
+  })
+})

@@ -1,6 +1,7 @@
 import { computeReviewStats } from '@/lib/reviewStats'
 import { variantDisplayMrp } from '@/lib/pricing/linePricing'
 import type { Metadata } from 'next'
+import { cache } from 'react'
 import type { ReactNode } from 'react'
 import './pdp.css'
 import { notFound } from 'next/navigation'
@@ -8,9 +9,10 @@ import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeD
 import { buildOffersList, offersListToJsonLdValue } from '@/lib/jsonLdOffers'
 import { pdpFetchLimiter } from '@/lib/concurrencyLimit'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getShippingPolicy } from '@/lib/shippingCopy'
+import { getShippingPolicy, SHIPPING_TIMING, DELIVERY_WINDOWS_TEXT } from '@/lib/shippingCopy'
 import { isCodEnabled } from '@/lib/siteSettingsHelpers'
-import { supabase as anonClient } from '@/lib/supabase'
+import { supabase as anonClient, getServiceClient } from '@/lib/supabase'
+import { buildAttributeMap, formatShelfLife, type ProductAttributeMap } from '@/lib/productAttributes'
 import { savingsPercent, parseJsonArray, truncate } from '@/lib/utils'
 import { sanitizeHtml } from '@/lib/server/sanitize'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
@@ -20,6 +22,10 @@ import CertificateCard from '@/components/product/CertificateCard'
 import ReviewsSection from '@/components/product/ReviewsSection'
 import RelatedProducts from '@/components/product/RelatedProducts'
 import PincodeRow from '@/components/product/PincodeRow'
+import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
+import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
+import { certifiedParameters, joinParameters } from '@/lib/certificateCopy'
+import { MANUFACTURER_AND_PACKER } from '@/lib/legalEntity'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -75,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews, certificate }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews, certificate, attributes }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
@@ -194,7 +200,7 @@ export default async function ProductPage({ params }: Props) {
     vars: [
       ['Colour', "Can range from light yellow to deep golden depending on the season, cow's diet and region."],
       ['Aroma & Taste', 'Rich, nutty aroma and taste may vary slightly based on the natural grass and herbs consumed by the cows.'],
-      ['Texture & Grain', 'May be smooth or slightly grainy. Graininess is a natural sign of purity and traditional bilona preparation.'],
+      ['Texture & Grain', 'May be smooth or slightly grainy. Graininess is natural and comes from traditional bilona preparation.'],
       ['Storage', 'Keep in a cool, dry place in an airtight glass or steel container. Avoid moisture and direct sunlight.'],
     ],
   } : null
@@ -255,11 +261,11 @@ export default async function ProductPage({ params }: Props) {
   const HONEY_VARIATION = (isManaliHoneyPdp || isSpitiHoneyPdp) ? {
     dir: 'honey',
     varTitle: 'No Two Harvests Are Exactly Alike',
-    varLead: 'Because this honey is raw and unfiltered, small differences between jars are normal — not a flaw.',
+    varLead: 'Because this honey is raw and only hand-strained, small differences between jars are normal — not a flaw.',
     vars: [
       ['Colour', 'Can be lighter or darker between harvests depending on the season\u2019s bloom.', 'drop'],
       ['Aroma & Taste', 'Floral character varies with whatever wildflowers were blooming at harvest time.', 'flower'],
-      ['Crystallisation', 'Raw honey naturally crystallises over time \u2014 a sign of purity, not spoilage.', 'comb'],
+      ['Crystallisation', 'Raw honey naturally crystallises over time \u2014 it is normal, not spoilage.', 'comb'],
       ['Storage', 'Keep it cool and dark in an airtight glass jar \u2014 avoid plastic and direct sunlight.', 'jar'],
     ] as [string, string, string][],
   } : null
@@ -282,6 +288,28 @@ export default async function ProductPage({ params }: Props) {
   const showReviews     = isEnabled(settings.show_reviews_on_pdp)
   const showRelated     = isEnabled(settings.show_related_products)
   const showCertificate = isEnabled(settings.show_certificates)
+
+  // PDP audit P2-8 (+ security): the buy box is a client component, so whatever it receives is serialised into the
+  // page for every visitor. It used to get the ENTIRE product row (all AI text, every column) and the entire site
+  // settings object. Send only the fields it actually reads (verified by reading the component).
+  const clientProduct = {
+    id: product.id, name: product.name, slug: product.slug, image_url: product.image_url, emoji: product.emoji,
+    unit_label: product.unit_label, state_id: product.state_id, gst_rate: product.gst_rate,
+    price: product.price, selling_price: product.selling_price, mrp: product.mrp, available_stock: product.available_stock,
+    badges_bestseller: product.badges_bestseller, badges_organic: product.badges_organic,
+  } as unknown as Product
+
+  // ── Data-driven trust copy (PDP audit P0-1 / P1-3 / P0-2) ───────────────────────────────────────
+  // A lab-test claim is only ever rendered from the certificate that is actually linked to THIS product
+  // (and only when the admin's "show certificates" switch is on); it lists only the parameters that
+  // certificate ticks. No certificate → no lab-test claim (e.g. ghee, which the code notes is untested).
+  const labParams    = showCertificate ? certifiedParameters(certificate) : []
+  const hasLabClaim  = labParams.length > 0
+  const labList      = joinParameters(labParams)
+  // Same rule the footer uses: never claim a licence number that was never entered in Admin → Settings.
+  const fssaiLicense = String((settings as any).fssai_license ?? '').trim()
+  // Shelf life comes from the admin's "Shelf Life" product attribute. Absent → the line is hidden, never guessed.
+  const shelfLife    = formatShelfLife(attributes?.shelf_life)
 
   // Images: product_images table (full res, sorted) → fallback image_url
   // SEO/A11y FIX: every gallery photo previously got the exact same alt
@@ -310,6 +338,14 @@ export default async function ProductPage({ params }: Props) {
   // first one with stock is the cheapest BUYABLE pack. The page (price, stock
   // label, urgency bar) and AddToCartSection's default selection must agree;
   // only when every variant is sold out do we show the cheapest as Out of Stock.
+  // Public variant columns only (mirrors the admin's column-level grant in migration 050: no cost_price, margin,
+  // reserved/damaged/blocked stock, barcode). The buy box reads id, price, mrp, size and available_stock.
+  const clientVariants = activeVariants.map((v: any) => ({
+    id: v.id, product_id: v.product_id, size: v.size, variant_type: v.variant_type, variant_value: v.variant_value,
+    price: v.price, mrp: v.mrp, original_price: v.original_price ?? null, available_stock: v.available_stock,
+    initial_stock: v.initial_stock ?? null, sku: v.sku ?? null, is_active: v.is_active, sort_order: v.sort_order ?? 0,
+  })) as unknown as ProductVariant[]
+
   const baseVariant = activeVariants.length > 0
     ? (activeVariants.find((v: any) => Number(v.available_stock ?? 0) > 0) ?? activeVariants[0])
     : null
@@ -372,7 +408,7 @@ export default async function ProductPage({ params }: Props) {
   const reviewsForJsonLd = (reviews || []).slice(0, 5).map((r: any) => ({
     '@type': 'Review',
     reviewRating: { '@type': 'Rating', ratingValue: String(r.rating) },
-    author: { '@type': 'Person', name: r.customer_name || 'Verified Buyer' },
+    author: { '@type': 'Person', name: r.customer_name || 'Customer' },
     ...(r.created_at ? { datePublished: new Date(r.created_at).toISOString().slice(0, 10) } : {}),
     ...(r.review_text ? { reviewBody: r.review_text } : {}),
   }))
@@ -393,7 +429,8 @@ export default async function ProductPage({ params }: Props) {
     '@context': 'https://schema.org/',
     '@type':    'Product',
     name:        product.name,
-    description: (product.short_description || ''),
+    // PDP audit (SEO): same source as <meta name="description"> so structured data matches what search/social show.
+          description: truncate(String(product.ai_description || product.short_description || '').replace(/<[^>]+>/g, '').trim(), 500),
     image:       allImages.map((i: any) => i.url),
     url:         `https://www.pahadiroots.com/products/${product.slug}`,
     brand:       { '@type': 'Brand', name: settings.site_name || 'HimVeda by Pahadi Roots' },
@@ -490,6 +527,16 @@ export default async function ProductPage({ params }: Props) {
 
         {/* ── Main two-column layout ── */}
         <div className="pdp-wrap">
+          {/* PDP audit P1-2: shares the selected pack between the buy box, the price/stock blocks and the
+              gallery badge. Renders no DOM, so layout is unchanged. */}
+          <PdpVariantProvider
+            variants={activeVariants.map((v: any) => ({
+              id: v.id, price: Number(v.price), mrp: Number(v.mrp ?? v.price), available_stock: Number(v.available_stock ?? 0),
+              initial_stock: v.initial_stock ?? null, size: v.size,
+            }))}
+            initialVariantId={baseVariant?.id ?? null}
+            fallback={{ price: Number(displayPrice) || 0, mrp: Number(displayMRP ?? displayPrice) || 0, stock: stockCount, initialStock: (product as any).initial_stock ?? null }}
+          >
 
           {/* LEFT: Gallery */}
           <div className="pdp-img-col">
@@ -502,7 +549,7 @@ export default async function ProductPage({ params }: Props) {
             {isHoneyPdp && (
               <div className="pdp-stat-trio">
                 <div><div className="pdp-stat-num pdp-stat-text">{honeySourceLabel}</div><div className="pdp-stat-label">Himalayan Origin{isManaliHoneyPdp || isSpitiHoneyPdp ? '' : 's'}</div></div>
-                <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Unfiltered</div></div>
+                <div><div className="pdp-stat-num">100%</div><div className="pdp-stat-label">Raw &amp; Hand-Strained</div></div>
                 <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
               </div>
             )}
@@ -568,47 +615,8 @@ export default async function ProductPage({ params }: Props) {
               </div>
             )}
 
-            {/* Price block */}
-            <div className="pdp-price-block">
-              <div className="pdp-price-row">
-                <span className="pdp-price">₹{displayPrice}</span>
-                {displayMRP && displayMRP > displayPrice && (
-                  <>
-                    <span className="pdp-mrp">₹{displayMRP}</span>
-                    <span className="pdp-save-badge">SAVE {savings}%</span>
-                  </>
-                )}
-              </div>
-              <p className="pdp-tax-note">
-                MRP inclusive of all taxes{activeVariants.length > 0 && baseVariant ? ` · ${baseVariant.size}` : ''}
-              </p>
-              {/* BUG FIX (3.4): urgency bar was always capped at 95% because
-                  (100 - x) * 2 >= 95 for any x <= 52, and the bar only renders
-                  when stockCount < 50. Now uses initial_stock when available for
-                  a real sold-percentage; falls back to a proportional formula. */}
-              {stockCount > 0 && stockCount < 50 && (
-                <div className="pdp-urgency">
-                  <div className="pdp-urgency-label">🔥 Only {stockCount} left — selling fast!</div>
-                  <div className="pdp-urgency-track">
-                    <div
-                      className="pdp-urgency-fill"
-                      style={{
-                        width: (() => {
-                          const initial = (product as any).initial_stock
-                          if (initial && initial > 0) {
-                            // Real sold-percentage based on initial stock
-                            return `${Math.min(Math.round((1 - stockCount / initial) * 100), 95)}%`
-                          }
-                          // Fallback: proportional within the 1–49 visible range
-                          // 1 unit → ~95%, 49 units → ~2%
-                          return `${Math.round(((50 - stockCount) / 49) * 93 + 2)}%`
-                        })(),
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Price block — follows the selected pack size (PDP audit P1-2) */}
+            <PdpPriceBlock hasVariants={activeVariants.length > 0} />
 
             {/* Key Benefits card */}
             {benefits.length > 0 && (
@@ -629,23 +637,20 @@ export default async function ProductPage({ params }: Props) {
             )}
 
             {/* Variant + Qty + Buttons — Client Component */}
-            <AddToCartSection product={product} variants={activeVariants} settings={settings} />
+            <AddToCartSection product={clientProduct} variants={clientVariants} />
 
-            {/* Stock indicator */}
-            <div className="pdp-stock-row">
-              <div className={`pdp-stock-dot${stockCount <= 0 ? ' oos' : stockCount <= 5 ? ' low' : ''}`} />
-              <span>
-                {stockCount <= 0 ? 'Out of Stock'
-                  : stockCount <= 5 ? `Only ${stockCount} left!`
-                  : stockCount <= 20 ? `${stockCount} in stock`
-                  : 'In Stock'}
-              </span>
-            </div>
+            {/* Stock indicator — follows the selected pack size (PDP audit P1-2) */}
+            <PdpStockRow />
 
             {/* BUG FIX (3.5): PincodeRow is now a real client component with
                 state, validation, and a WhatsApp-based delivery-check handler.
                 waNumber is actually used. */}
-            <PincodeRow waNumber={waNumber} />
+            <PincodeRow
+              waNumber={waNumber}
+              blockedPincodes={String((settings as any).blocked_pincodes ?? '')}
+              serviceableStates={String((settings as any).serviceable_states ?? '')}
+              deliveryWindows={DELIVERY_WINDOWS_TEXT}
+            />
 
             {/* Share row */}
             <ShareRow
@@ -665,9 +670,22 @@ export default async function ProductPage({ params }: Props) {
                 <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
               </svg>
               {freeShipMin === 0
-                ? '🚚 Free delivery on all orders · Pan India · Metro 3–5 days · Others 7–12 days'
-                : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro 3–5 days · Others 7–12 days`}
+                ? `🚚 Free delivery on all orders · Pan India · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`
+                : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
             </div>
+
+            {/* Product facts that come from real data only: the admin's Shelf Life / Packaging Type attributes and the
+                FSSAI licence number from Admin → Settings (same source the footer uses). Hidden when not entered. */}
+            {(
+              <p className="pdp-fine-print">
+                {[
+                  `Manufactured & packed by ${MANUFACTURER_AND_PACKER}`,
+                  shelfLife ? `Shelf life: ${shelfLife}` : '',
+                  attributes?.packaging_type ? `Packaging: ${attributes.packaging_type}` : '',
+                  fssaiLicense ? `FSSAI Lic. No. ${fssaiLicense}` : '',
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
 
             {/* Certificate moved up near the top — see stat trio above */}
 
@@ -676,6 +694,7 @@ export default async function ProductPage({ params }: Props) {
                 layout) now covers origin for all products. */}
 
           </div>
+          </PdpVariantProvider>
         </div>
 
         {/* NEW — Journey story section (additive, brand redesign).
@@ -719,7 +738,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">01 — Origin</div>
                   <h3 className="pdp-honey-tl-title">Where the high valleys keep their secrets.</h3>
-                  <p className="pdp-honey-tl-desc">In the high, arid valleys of Spiti, Himachal Pradesh, hives sit above ten thousand feet, far from any city, farmed the way mountain families always have.</p>
+                  <p className="pdp-honey-tl-desc">In the high, arid valleys of Spiti, Himachal Pradesh, hives sit far from any city, farmed the way mountain families always have.</p>
                 </div>
               </div>
 
@@ -779,7 +798,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
                   <h3 className="pdp-honey-tl-title">Strained, jarred, and ready to travel.</h3>
-                  <p className="pdp-honey-tl-desc">The raw honey is strained once for clarity and sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through cloth and a simple sieve, then sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
                 </div>
               </div>
             </div>
@@ -871,7 +890,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
                   <h3 className="pdp-honey-tl-title">Sealed close to where it was drawn.</h3>
-                  <p className="pdp-honey-tl-desc">The raw honey is strained once for clarity and sealed into glass, carrying the mountain above Manali all the way to your table.</p>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through cloth and a simple sieve, then sealed into glass, carrying the mountain above Manali all the way to your table.</p>
                 </div>
               </div>
             </div>
@@ -1120,14 +1139,14 @@ export default async function ProductPage({ params }: Props) {
                 <span className="pdp-why-diff-rule" aria-hidden="true"></span>
               </div>
             </div>
-            <div className="pdp-why-diff-grid">
+            <div className={`pdp-why-diff-grid${hasLabClaim || fssaiLicense ? '' : ' pdp-why-diff-grid--3'}`}>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
                   <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/raw-unfiltered.webp" alt="Honeycomb dripping raw honey into a bowl" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-                <div className="pdp-why-diff-title">Raw &amp; Unfiltered</div>
+                <div className="pdp-why-diff-title">Raw &amp; Hand-Strained</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
-                <div className="pdp-why-diff-desc">Never heated or filtered — drained straight from the comb.</div>
+                <div className="pdp-why-diff-desc">Never heated. Spun from the comb and strained by hand through cloth and a simple sieve — no machine filtering.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
@@ -1135,7 +1154,7 @@ export default async function ProductPage({ params }: Props) {
                 </div>
                 <div className="pdp-why-diff-title">High Altitude Origin</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
-                <div className="pdp-why-diff-desc">Harvested from wild hives set high in the Himalayas, above Manali and Spiti.</div>
+                <div className="pdp-why-diff-desc">Harvested from hives set high in the Himalayas, above Manali and Spiti.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
@@ -1145,14 +1164,22 @@ export default async function ProductPage({ params }: Props) {
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
                 <div className="pdp-why-diff-desc">Small, seasonal harvests — not mass-produced.</div>
               </div>
+              {(hasLabClaim || fssaiLicense) && (
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
                   <Image sizes="(max-width: 760px) 50vw, 270px" src="/why-different/honey/certified.webp" alt="Honey jar beside an FSSAI certificate" width={466} height={276} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
-                <div className="pdp-why-diff-title">Fully Certified</div>
+                <div className="pdp-why-diff-title">{hasLabClaim && fssaiLicense ? 'Fully Certified' : hasLabClaim ? 'Lab Tested' : 'FSSAI Licensed'}</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
-                <div className="pdp-why-diff-desc">FSSAI licensed and lab tested for purity, heavy metals, pesticides &amp; active ingredients.</div>
+                <div className="pdp-why-diff-desc">
+                  {hasLabClaim && fssaiLicense
+                    ? `FSSAI licensed and lab tested for ${labList}.`
+                    : hasLabClaim
+                      ? `Lab tested for ${labList}.`
+                      : 'FSSAI licensed.'}
+                </div>
               </div>
+              )}
             </div>
           </div>
         )}
@@ -1365,8 +1392,8 @@ export default async function ProductPage({ params }: Props) {
                 {freeShipMin === 0
                   ? `Free shipping on all orders. ${codNote}`
                   : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}
-                Dispatched within <strong>1–2 business days</strong>.<br />
-                Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
+                Dispatched within <strong>{SHIPPING_TIMING.dispatch}</strong>.<br />
+                Metro cities: <strong>{SHIPPING_TIMING.metro}</strong> · Non-metro / remote: <strong>{SHIPPING_TIMING.remote}</strong> after dispatch.
               </AccItem>
             )}
 
@@ -1443,13 +1470,13 @@ export default async function ProductPage({ params }: Props) {
               <div className="pdp-journey-eyebrow">Natural Variation</div>
               <h2 className="pdp-journey-title">No Two Harvests Are Exactly Alike</h2>
               <p className="pdp-source-text" style={{ marginTop: '14px' }}>
-                Because this honey is raw and unfiltered, small differences between jars are normal — not a flaw.
+                Because this honey is raw and only hand-strained, small differences between jars are normal — not a flaw.
               </p>
             </div>
             <div className="pdp-why-diff-grid">
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Colour</div><div className="pdp-why-diff-desc">Can shift lighter or darker between harvests depending on the season&apos;s bloom.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Aroma &amp; Taste</div><div className="pdp-why-diff-desc">Floral character varies with whatever was blooming at harvest time.</div></div>
-              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — a sign of purity, not spoilage. Warm the jar gently in lukewarm water if you prefer it liquid.</div></div>
+              <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Crystallisation</div><div className="pdp-why-diff-desc">Raw honey crystallises naturally over time — it is normal, not spoilage. Warm the jar gently in lukewarm water if you prefer it liquid.</div></div>
               <div className="pdp-why-diff-card"><div className="pdp-why-diff-title">Storage</div><div className="pdp-why-diff-desc">Keep it cool and dark in an airtight glass jar — avoid plastic and direct sunlight.</div></div>
             </div>
           </div>
@@ -1470,28 +1497,29 @@ export default async function ProductPage({ params }: Props) {
               <AccItem title="Where is the honey sourced?" icon="who">
                 {honeySourceLabel}, Himachal Pradesh{hasHoneyJourney ? ' — see the Journey above for the full account.' : '.'}
               </AccItem>
-              <AccItem title="Is it raw and unfiltered?" icon="desc">
-                Yes, always — never heated or filtered, drained straight from the comb.
+              <AccItem title="Is it raw?" icon="desc">
+                Yes — never heated. It is spun from the comb and strained by hand through cloth and a simple sieve. No machine filtering is used.
               </AccItem>
-              <AccItem title="How long does it last?" icon="desc">
-                [ADD VERIFIED SHELF LIFE]
-              </AccItem>
-              <AccItem title="Can I see the lab report?" icon="cert">
-                {showCertificate && certificate
-                  ? <>Yes — <a href={certificate.reportUrl} target="_blank" rel="noopener noreferrer">view the Authenticity Report here</a>.</>
-                  : '[ADD VERIFIED SOURCE INFORMATION]'}
-              </AccItem>
-              <AccItem title="How can I verify my batch?" icon="cert">
-                [ADD VERIFIED SOURCE INFORMATION] — batch-level traceability isn&apos;t available yet.
-              </AccItem>
+              {/* PDP audit P0-2: no placeholder text on a live page. Shelf life is the admin's "Shelf Life"
+                  product attribute; when it isn't set the question is simply not shown (never guessed). */}
+              {shelfLife && (
+                <AccItem title="How long does it last?" icon="desc">
+                  Shelf life: <strong>{shelfLife}</strong>. Keep it cool and dark in an airtight glass jar, away from direct sunlight.
+                </AccItem>
+              )}
+              {showCertificate && certificate && (
+                <AccItem title="Can I see the lab report?" icon="cert">
+                  Yes — <a href={certificate.reportUrl} target="_blank" rel="noopener noreferrer">view the Authenticity Report here</a>.
+                </AccItem>
+              )}
 
               <AccItem title="Shipping" icon="ship">
                 <strong>Pan India Shipping</strong><br /><br />
                 {freeShipMin === 0
                   ? `Free shipping on all orders. ${codNote}`
                   : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}
-                Dispatched within <strong>1–2 business days</strong>.<br />
-                Metro cities: <strong>3–5 days</strong> · Non-metro / remote: <strong>7–12 days</strong>.
+                Dispatched within <strong>{SHIPPING_TIMING.dispatch}</strong>.<br />
+                Metro cities: <strong>{SHIPPING_TIMING.metro}</strong> · Non-metro / remote: <strong>{SHIPPING_TIMING.remote}</strong> after dispatch.
               </AccItem>
 
               <AccItem title="Returns & Refunds" icon="returns">
@@ -1509,7 +1537,7 @@ export default async function ProductPage({ params }: Props) {
             {/* BUG FIX (MEDIUM – ReviewsSection client-side SWR): reviews are now
                 pre-fetched server-side and passed as a prop. No SWR, no layout shift,
                 reviews are in the initial SSR HTML. */}
-            <ReviewsSection reviews={reviews} />
+            <ReviewsSection reviews={reviews} stats={reviewStats} />
           </div>
         )}
 
@@ -1526,7 +1554,7 @@ export default async function ProductPage({ params }: Props) {
         )}
 
         {/* ── Why HimVeda by Pahadi Roots ── */}
-        <WhySection />
+        <WhySection hasLab={hasLabClaim} labList={labList} />
 
       </div>
     </>
@@ -1608,18 +1636,25 @@ function ShareRow({ productName, productSlug, productImage, productPrice, facebo
   )
 }
 
-function WhySection() {
+// PDP audit P0-1: pillar 01 ("Lab Tested Purity") is rendered only when THIS product has a linked certificate,
+// and its text lists only what that certificate ticks. Before, every product (including untested ghee) showed
+// "Every batch tested … Certificate with every order" — a claim the certificate model (per product, not per
+// batch or order) cannot back. Remaining pillars are renumbered and the grid adapts to the count.
+function WhySection({ hasLab, labList }: { hasLab: boolean; labList: string }) {
+  const pillars = hasLab ? 2 : 1
+  const num = (k: number) => String(hasLab ? k : k - 1).padStart(2, '0')
   return (
     <section className="pdp-why-bg">
       <div className="pdp-why-inner">
         <div className="pdp-why-chip">Our Promise</div>
         <h2 className="pdp-why-title">Why HimVeda by Pahadi Roots</h2>
-        <p className="pdp-why-sub">Four pillars that define everything we do — mountain to doorstep.</p>
+        <p className="pdp-why-sub">{hasLab ? 'Two pillars that define' : 'The promise behind'} everything we do — mountain to doorstep.</p>
       </div>
-      <div className="pdp-why-grid">
-        {/* PILLAR 1: Lab Tested */}
+      <div className={`pdp-why-grid pdp-why-grid--${pillars}`}>
+        {/* PILLAR 1: Lab Tested — only with a linked certificate */}
+        {hasLab && (
         <div className="pdp-why-pillar">
-          <div className="pdp-why-num">01</div>
+          <div className="pdp-why-num">{num(1)}</div>
           <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
             <defs><radialGradient id="lt1" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#f0f8e8"/><stop offset="100%" stopColor="#4a9858"/></radialGradient></defs>
             <circle cx="74" cy="74" r="74" fill="url(#lt1)"/>
@@ -1641,11 +1676,12 @@ function WhySection() {
             <text x="22" y="35" fontSize="9" fontWeight="700" fill="#7a6000">LAB</text>
           </svg>
           <div className="pdp-why-pt">Lab Tested Purity</div>
-          <p className="pdp-why-pd">Every batch tested for heavy metals, pesticides &amp; adulterants. Certificate with every order.</p>
+          <p className="pdp-why-pd">Lab tested for {labList}. The full report is on this page.</p>
         </div>
+        )}
         {/* PILLAR 2: Direct from Farmers */}
         <div className="pdp-why-pillar">
-          <div className="pdp-why-num">02</div>
+          <div className="pdp-why-num">{num(2)}</div>
           <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
             <defs><radialGradient id="fd2" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#d8f0d8"/><stop offset="100%" stopColor="#4a9858"/></radialGradient></defs>
             <circle cx="74" cy="74" r="74" fill="url(#fd2)"/>
@@ -1656,37 +1692,10 @@ function WhySection() {
             <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
           </svg>
           <div className="pdp-why-pt">Direct from Farmers</div>
-          <p className="pdp-why-pd">Zero middlemen. Direct from farming families across the Himalayan states — fair wages, always.</p>
+          <p className="pdp-why-pd">Zero middlemen. Direct from farming families across the Himalayan states.</p>
         </div>
-        {/* PILLAR 3: Eco Packaging */}
-        <div className="pdp-why-pillar">
-          <div className="pdp-why-num">03</div>
-          <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
-            <defs><radialGradient id="ed3" cx="45%" cy="42%" r="65%"><stop offset="0%" stopColor="#c8e8f8"/><stop offset="100%" stopColor="#5890c0"/></radialGradient></defs>
-            <circle cx="74" cy="74" r="74" fill="url(#ed3)"/>
-            <circle cx="74" cy="80" r="46" fill="#2878b8" opacity=".7"/>
-            <line x1="74" y1="34" x2="74" y2="18" stroke="#38b040" strokeWidth="3.5" strokeLinecap="round"/>
-            <path d="M74,28 Q58,20 60,8 Q70,16 74,28Z" fill="#50c850"/>
-            <path d="M74,24 Q90,16 88,4 Q78,12 74,24Z" fill="#60d860"/>
-            <circle cx="116" cy="30" r="13" fill="#f0c840" opacity=".9"/>
-            <text x="110" y="35" fontSize="9" fontWeight="700" fill="#7a6000">ECO</text>
-          </svg>
-          <div className="pdp-why-pt">Eco Packaging</div>
-          <p className="pdp-why-pd">Glass jars, recycled cardboard, zero single-use plastic. Packaging as clean as our products.</p>
-        </div>
-        {/* PILLAR 4: Give-Back Program */}
-        <div className="pdp-why-pillar">
-          <div className="pdp-why-num">04</div>
-          <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
-            <defs><radialGradient id="gb3" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#c8e8f8"/><stop offset="100%" stopColor="#5888b8"/></radialGradient></defs>
-            <circle cx="74" cy="74" r="74" fill="url(#gb3)"/>
-            <polygon points="0,106 20,72 46,88 74,58 102,84 128,66 148,96 148,148 0,148" fill="#2a5838"/>
-            <circle cx="30" cy="38" r="13" fill="#f0c840" opacity=".88"/>
-            <text x="24" y="43" fontSize="10" fontWeight="700" fill="#7a6000">5%</text>
-          </svg>
-          <div className="pdp-why-pt">Give-Back Program</div>
-          <p className="pdp-why-pd">5% of every order funds Himalayan forest restoration and village school programs.</p>
-        </div>
+        {/* Pillars 3 (Eco Packaging — "zero single-use plastic") and 4 (Give-Back — "5% of every order funds…") were
+            REMOVED: the owner confirmed neither is true (PDP audit, owner answer). Do not re-add without evidence. */}
       </div>
     </section>
   )
@@ -1699,7 +1708,9 @@ function WhySection() {
 // fetch to render a single PDP on every cache miss, plus a silent 500-row cutoff that
 // could 404 real, active products. Now uses getProductBySlug() (direct indexed lookup)
 // and getRelatedProducts() (targeted category/state query) instead.
-async function fetchProductData(slug: string) {
+// PDP audit P2-9: wrapped in React cache() so generateMetadata() and the page component share ONE
+// fetch pipeline per request instead of each running the whole thing (≈6 queries) separately.
+const fetchProductData = cache(async function fetchProductData(slug: string) {
   // BUG FIX (CRITICAL — regression found post-deploy via Vercel logs): see
   // lib/concurrencyLimit.ts for the full incident writeup. Every product page
   // now does its own targeted (uncached) Supabase queries instead of sharing
@@ -1709,7 +1720,7 @@ async function fetchProductData(slug: string) {
   // timeouts on unrelated routes across the whole app. This limiter caps how
   // many products' data-fetch pipelines run at once; the rest queue.
   return pdpFetchLimiter.run(() => fetchProductDataInner(slug))
-}
+})
 
 async function fetchProductDataInner(slug: string) {
   try {
@@ -1768,7 +1779,7 @@ async function fetchProductDataInner(slug: string) {
     // shift (skeleton → content). Now we fetch the full review rows here in the
     // server data-fetcher so they are part of the initial SSR HTML. ReviewsSection
     // becomes a pure display component that accepts pre-fetched rows as props.
-    const [stateData, categoryRow, related, reviewResult, ratingResult, certResult] = await Promise.all([
+    const [stateData, categoryRow, related, reviewResult, ratingResult, certResult, attrResult] = await Promise.all([
       // State data — direct lookup instead of scanning the full states list
       product.state_id
         ? anonClient.from('states').select('*').eq('id', product.state_id).maybeSingle()
@@ -1844,6 +1855,19 @@ async function fetchProductDataInner(slug: string) {
           ({ data }) => ({ data, error: null as unknown }),
           (error) => ({ data: null, error }),
         ),
+
+      // Product attributes (Shelf Life, Packaging Type, Processing Type, Harvest Season, …) — entered in
+      // the admin's product form (product_attribute_values) and previously never read by the storefront,
+      // which is why the FAQ shipped with a "[ADD VERIFIED SHELF LIFE]" placeholder. Service client (server
+      // only); a failure just means "no attribute data" — never a broken page.
+      (async () => {
+        const db = getServiceClient()
+        const [vals, defs] = await Promise.all([
+          db.from('product_attribute_values').select('attribute_id, value').eq('product_id', product.id),
+          db.from('product_attributes').select('id, name'),
+        ])
+        return { values: vals.data, defs: defs.data, error: (vals.error || defs.error || null) as unknown }
+      })().catch((error) => ({ values: null, defs: null, error: error as unknown })),
     ])
 
     let reviewStats: { avg: number; count: number } | null = null
@@ -1861,6 +1885,13 @@ async function fetchProductDataInner(slug: string) {
       )
     }
 
+    let attributes: ProductAttributeMap = {}
+    if (attrResult.error) {
+      console.warn('[fetchProductData] attribute fetch failed:', attrResult.error)
+    } else {
+      attributes = buildAttributeMap(attrResult.defs as any, attrResult.values as any)
+    }
+
     let certificate: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean } | null = null
     if (certResult.error) {
       // Non-fatal — PDP renders fine without the certificate card, same as reviews above.
@@ -1876,10 +1907,13 @@ async function fetchProductDataInner(slug: string) {
       }
     }
 
-    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews, certificate }
+    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews, certificate, attributes }
   } catch (err) {
+    // PDP audit P1-4: do NOT convert an error into `product: null` — the page would call notFound() and
+    // ISR would cache a 404 for a live product for up to an hour. Re-throw: ISR keeps the previous good
+    // page, and a cold render falls through to app/products/[slug]/error.tsx (a retryable error, not a 404).
     console.error('[fetchProductData] error:', err)
-    return { product: null, variants: [], images: [], stateData: null, categoryName: null, related: [], reviewStats: null, reviews: [], certificate: null }
+    throw err
   }
 }
 

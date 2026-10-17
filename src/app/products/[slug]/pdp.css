@@ -108,7 +108,7 @@
 
 /* ── Share row ── */
 .pdp-share-row{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(26,58,30,.08);flex-wrap:wrap}
-.pdp-share-label{font-size:10px;color:#9a9a9a;font-weight:700;white-space:nowrap;font-family:'Josefin Sans',sans-serif;letter-spacing:1.8px;text-transform:uppercase}
+.pdp-share-label{font-size:10px;color:#6b6b6b;font-weight:700;white-space:nowrap;font-family:'Josefin Sans',sans-serif;letter-spacing:1.8px;text-transform:uppercase}
 .pdp-share-icons{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .pdp-share-btn{width:36px;height:36px;border-radius:50%;border:1.5px solid #e8e0d4;background:#fff;display:flex;align-items:center;justify-content:center;transition:all .22s;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.06);text-decoration:none}
 .pdp-share-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
@@ -201,8 +201,10 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-why-pillar:hover{transform:translateY(-6px);box-shadow:0 12px 32px rgba(26,58,30,.15)}
 .pdp-why-num{font-size:22px;font-weight:900;color:rgba(26,58,30,.07);position:absolute;top:6px;right:10px;font-family: var(--font-playfair), 'Playfair Display', serif}
 .pdp-why-pt{font-size:13px;font-weight:700;color:#1a3a1e;margin-bottom:4px;font-family: var(--font-playfair), 'Playfair Display', serif}
-.pdp-why-pd{font-size:11.5px;color:#7a7a7a;line-height:1.6;max-width:180px}
-@media(max-width:760px){.pdp-why-grid{grid-template-columns:1fr 1fr}.pdp-why-bg{padding:32px 16px}}
+.pdp-why-pd{font-size:11.5px;color:#6b6b6b;line-height:1.6;max-width:180px}
+/* PDP audit P0-1: pillar/card absent when there is no certificate to back it → 3 columns, last one centred on mobile */
+.pdp-why-grid--3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:760px){.pdp-why-grid{grid-template-columns:1fr 1fr}.pdp-why-bg{padding:32px 16px}.pdp-why-grid--3{grid-template-columns:1fr 1fr}.pdp-why-grid--3 .pdp-why-pillar:last-child{grid-column:1/-1}}
 
 /* ── Variant grid (used by AddToCartSection) ── */
 .pdp-variants-label{font-size:11px;font-weight:700;color:#7a7a7a;margin-bottom:12px;letter-spacing:1.5px;text-transform:uppercase;font-family:'Josefin Sans',sans-serif}
@@ -215,7 +217,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-vcard:disabled{opacity:.4;cursor:not-allowed}
 .pdp-vc-size{font-size:13px;font-weight:800;color:#1a1a1a;display:block;margin-bottom:3px}
 .pdp-vc-price{font-size:14px;font-weight:900;color:#1a3a1e;display:block}
-.pdp-vc-orig{font-size:11px;color:#7a7a7a;text-decoration:line-through;margin-left:4px}
+.pdp-vc-orig{font-size:11px;color:#6b6b6b;text-decoration:line-through;margin-left:4px}
 .pdp-vc-save{font-size:10.5px;color:#c8920a;font-weight:800;display:block;margin-top:2px}
 .pdp-vcard-tag{position:absolute;top:-8px;left:10px;font-size:9px;font-weight:900;padding:3px 9px;border-radius:4px;letter-spacing:.5px;color:#fff;font-family:'Josefin Sans',sans-serif;text-transform:uppercase;z-index:3}
 .pdp-vcard-tag.best{background:#1a3a1e}
@@ -225,7 +227,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-qty-atc{display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
 .pdp-qty-row{display:flex;align-items:center;gap:10px}
 .pdp-qty-ctrl{display:inline-flex;flex-direction:column;align-items:stretch;border:2px solid #e8e0d0;border-radius:10px;overflow:hidden;background:#fff;min-width:72px}
-.pdp-qty-above{font-size:10px;font-weight:700;color:#7a7a7a;text-align:center;padding:3px 10px 0;letter-spacing:.3px;text-transform:uppercase;border-bottom:1px solid rgba(26,58,30,.12)}
+.pdp-qty-above{font-size:10px;font-weight:700;color:#6b6b6b;text-align:center;padding:3px 10px 0;letter-spacing:.3px;text-transform:uppercase;border-bottom:1px solid rgba(26,58,30,.12)}
 .pdp-qty-inner{display:flex;align-items:center}
 .pdp-qty-btn{width:34px;height:38px;border:none;background:#fff;font-size:18px;font-weight:700;cursor:pointer;color:#1a3a1e;transition:background .15s;display:flex;align-items:center;justify-content:center;font-family:inherit}
 .pdp-qty-btn:hover{background:#f8f9f5}
@@ -264,7 +266,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 }
 .pdp-mob-price-col{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
 .pdp-mob-price{font-size:18px;font-weight:800;color:#1a3a1e;font-family:inherit}
-.pdp-mob-mrp{font-size:12px;color:#999;text-decoration:line-through}
+.pdp-mob-mrp{font-size:12px;color:#6b6b6b;text-decoration:line-through}
 .pdp-mob-actions{display:flex;gap:8px;flex:1;min-width:0}
 .pdp-mob-atc,.pdp-mob-buy{
   flex:1;height:42px;border:none;border-radius:10px;font-size:13px;font-weight:700;
@@ -285,7 +287,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 /* ── Stat trio (under tagline) ── */
 .pdp-stat-trio{display:flex;gap:32px;padding:16px 0;margin:14px 0 4px;border-top:1px solid rgba(26,58,30,.12);border-bottom:1px solid rgba(26,58,30,.12)}
 .pdp-stat-num{font-family:var(--font-playfair),'Playfair Display',serif;font-size:24px;color:#1a3a1e;font-weight:700;line-height:1}
-.pdp-stat-label{font-size:11px;color:#7a7a7a;margin-top:4px}
+.pdp-stat-label{font-size:11px;color:#6b6b6b;margin-top:4px}
 @media(max-width:760px){.pdp-stat-trio{gap:20px}}
 
 /* ── Journey (story) section ── */
@@ -452,7 +454,8 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-why-diff-grid{position:relative;z-index:1}
 .pdp-why-diff-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:15px;color:#1a3a1e;margin-top:10px;font-weight:700}
 .pdp-why-diff-desc{font-size:12.5px;color:#5a5a5a;margin-top:6px;line-height:1.5}
-@media(max-width:760px){.pdp-why-diff-grid{grid-template-columns:1fr 1fr}}
+.pdp-why-diff-grid--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:760px){.pdp-why-diff-grid{grid-template-columns:1fr 1fr}.pdp-why-diff-grid--3 .pdp-why-diff-card:last-child{grid-column:1/-1}}
 
 /* ── Know Your Source ── */
 .pdp-source{padding:20px 32px 56px;max-width:900px;margin:0 auto}
@@ -522,3 +525,27 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
   .honey-var-card .pdp-why-diff-title{font-size:16px}
   .honey-var-card .pdp-why-diff-desc{font-size:12.5px;padding:0 10px !important}
 }
+
+/* PDP audit: data-driven fine print (shelf life / packaging / FSSAI). #5a5a5a on white = 6.9:1 (WCAG AA). */
+.pdp-fine-print{font-size:12.5px;line-height:1.5;color:#5a5a5a;margin:10px 2px 0}
+
+/* ── PDP audit P2-11: accessibility, no visual-direction change ───────────────────────────────
+   • iOS Safari zooms the page when a focused input is < 16px — make the PIN field 16px on small screens.
+   • Touch targets: quantity −/+, PIN "Check" and the sticky-bar buttons are 34–42px; WCAG 2.5.8 / platform
+     guidance is ≥ 44px. Applied only to coarse (touch) pointers so desktop spacing is untouched.
+   • The PIN input removed its outline on focus and relied on a border-colour change only — give keyboard users
+     a visible focus ring (WCAG 2.4.7). */
+@media(max-width:900px){.pdp-pincode-input{font-size:16px}}
+@media(pointer:coarse){
+  .pdp-qty-btn{width:44px;height:44px}
+  .pdp-pincode-btn{min-height:44px;padding-left:16px;padding-right:16px}
+  .pdp-pincode-input{min-height:44px}
+  .pdp-mob-atc,.pdp-mob-buy{height:44px}
+}
+.pdp-pincode-input:focus-visible,.pdp-pincode-btn:focus-visible,.pdp-qty-btn:focus-visible,
+.pdp-mob-atc:focus-visible,.pdp-mob-buy:focus-visible{outline:2px solid #1a3a1e;outline-offset:2px}
+
+/* Why-section after removing the two unverified pillars: 1–2 pillars, centred (no stretched columns) */
+.pdp-why-grid--2{grid-template-columns:repeat(2,minmax(0,280px));justify-content:center;gap:28px}
+.pdp-why-grid--1{grid-template-columns:minmax(0,280px);justify-content:center}
+@media(max-width:760px){.pdp-why-grid--2{grid-template-columns:1fr 1fr;gap:16px}.pdp-why-grid--1{grid-template-columns:minmax(0,280px)}}

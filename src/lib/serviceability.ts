@@ -49,3 +49,20 @@ export function checkServiceability(
   }
   return { ok: true }
 }
+
+/**
+ * PIN-only check for the PDP delivery checker (PDP audit P2-3). The admin's "Blocked PIN codes" setting
+ * (Admin → Settings) is a prefix list, exactly as checkServiceability() applies it at checkout/payment, so a PIN
+ * the store has blocked can no longer look deliverable on the product page and then be refused at payment.
+ * (The admin's "Serviceable states" list needs a STATE, which a PIN alone cannot give — see PincodeRow.)
+ */
+export function isPincodeBlocked(pin: string, blockedPincodes: string | null | undefined): boolean {
+  const p = (pin ?? '').trim()
+  if (!p) return false
+  return parseBlockedPincodes(blockedPincodes).some(b => p.startsWith(b))
+}
+
+/** "assam, kerala" → ['Assam', 'Kerala'] for display (original casing is not stored, so title-case it). */
+export function formatServiceableStates(v: string | null | undefined): string[] {
+  return parseServiceableStates(v).map(s => s.replace(/\b([a-z])/g, c => c.toUpperCase()).replace(/\bAnd\b/g, 'and').replace(/&/g, '&'))
+}

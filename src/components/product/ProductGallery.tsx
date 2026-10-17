@@ -3,11 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
+import { usePdpSelection } from './PdpVariantContext'
 
 interface GalleryImage { url: string; alt: string }
 interface Props { images: GalleryImage[]; productName: string; savings?: number }
 
-export default function ProductGallery({ images, productName, savings = 0 }: Props) {
+export default function ProductGallery({ images, productName, savings: serverSavings = 0 }: Props) {
+  // PDP audit P1-2: the discount badge follows the selected pack (falls back to the server value outside a provider).
+  const pdpSel = usePdpSelection()
+  const savings = pdpSel ? pdpSel.selected.savings : serverSavings
   const [active, setActive]   = useState(0)
   const [zoomed, setZoomed]   = useState(false)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -58,6 +62,12 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') { closeZoom(); return }
+      // PDP audit P2-11: arrow-key navigation inside the lightbox (WCAG 2.1.1 keyboard operable).
+      if (images.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        setActive(i => (e.key === 'ArrowRight' ? (i + 1) % images.length : (i - 1 + images.length) % images.length))
+        return
+      }
       // Basic focus trap — keep Tab cycling within the lightbox
       if (e.key === 'Tab') {
         const modal = document.getElementById('pdp-zoom-modal')
@@ -79,7 +89,7 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [zoomed, closeZoom])
+  }, [zoomed, closeZoom, images.length])
 
   if (!images.length) {
     return (
@@ -143,7 +153,12 @@ export default function ProductGallery({ images, productName, savings = 0 }: Pro
         role="button"
         aria-label="View full image"
         tabIndex={0}
-        onKeyDown={e => e.key === 'Enter' && openZoom()}
+        onKeyDown={e => {
+          // Only react when the trigger itself has focus — Enter/Space on the nested prev/next buttons must
+          // keep their own behaviour. role="button" has to honour Space as well as Enter.
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openZoom() }
+        }}
         className="pdp-gallery-trigger"
       >
         {/* Discount badge */}

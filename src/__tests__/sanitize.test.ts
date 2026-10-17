@@ -123,3 +123,80 @@ describe('sanitizeHtml — edge cases', () => {
     expect(twice).toBe(once)
   })
 })
+
+// ── PDP audit P1-1 regression: '>' inside a quoted attribute must not end the tag ──────────
+describe('sanitizeHtml — quoted-attribute bypasses (PDP audit P1-1)', () => {
+  const noHandler = (out: string) => expect(out.toLowerCase()).not.toMatch(/\bon[a-z]+\s*=/)
+
+  it('drops onerror when a quoted attribute contains ">"', () => {
+    const out = sanitizeHtml('<img src="/x" alt=">" onerror="alert(1)">')
+    noHandler(out)
+    expect(out).not.toContain('alert(1)')
+    expect(out).toContain('src="/x"')
+  })
+
+  it('drops onclick when a quoted title contains ">"', () => {
+    const out = sanitizeHtml('<a href="/x" title=">" onclick="alert(1)">hi</a>')
+    noHandler(out)
+    expect(out).not.toContain('alert(1)')
+    expect(out).toContain('>hi</a>')
+  })
+
+  it('handles single quotes, unquoted values and mixed case handlers', () => {
+    noHandler(sanitizeHtml("<img alt='>' OnError='alert(1)' src=/x>"))
+    noHandler(sanitizeHtml('<img src=/x onerror=alert(1)>'))
+    noHandler(sanitizeHtml('<p ONMOUSEOVER="alert(1)">x</p>'))
+  })
+
+  it('does not let an attribute value escape its quotes in the output', () => {
+    const out = sanitizeHtml('<a href="/x" title=\'" onmouseover="alert(1)\'>t</a>')
+    // The hostile text must stay INSIDE the (escaped) title value: exactly two attributes, no quote breaks out.
+    expect(out).toBe('<a href="/x" title="&quot; onmouseover=&quot;alert(1)">t</a>')
+    expect(out.match(/"/g)?.length).toBe(4)
+  })
+
+  it('catches entity-encoded and whitespace-split javascript: URLs', () => {
+    expect(sanitizeHtml('<a href="java&#115;cript:alert(1)">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="&#106;avascript:alert(1)">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="jav&#x09;ascript:alert(1)">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href=" \tjavascript:alert(1)">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<a href="javascript&colon;alert(1)">x</a>')).toBe('<a>x</a>')
+  })
+
+  it('rejects protocol-relative URLs and data: images', () => {
+    expect(sanitizeHtml('<a href="//evil.example/x">x</a>')).toBe('<a>x</a>')
+    expect(sanitizeHtml('<img src="//evil.example/t.png">')).toBe('<img>')
+    expect(sanitizeHtml('<img src="data:image/svg+xml;base64,AAAA">')).toBe('<img>')
+  })
+
+  it('drops svg/math/template/noscript with their content, and comments', () => {
+    expect(sanitizeHtml('a<svg onload=alert(1)><circle/></svg>b')).toBe('ab')
+    expect(sanitizeHtml('a<math><mi>x</mi></math>b')).toBe('ab')
+    expect(sanitizeHtml('a<!-- <script>alert(1)</script> -->b')).toBe('ab')
+  })
+
+  it('neutralises nested/obfuscated tag tricks', () => {
+    const out = sanitizeHtml('<scr<script>ipt>alert(1)</scr</script>ipt>')
+    expect(out).not.toMatch(/<script/i)
+    expect(out).not.toMatch(/<[a-z]+[^>]*on[a-z]+=/i)
+  })
+
+  it('escapes a stray "<" instead of passing a half tag through', () => {
+    expect(sanitizeHtml('5 < 6 and <b>bold</b>')).toBe('5 &lt; 6 and <b>bold</b>')
+    expect(sanitizeHtml('<img src="x" onerror="alert(1)"')).not.toContain('<img')
+  })
+
+  it('target=_blank always gets rel=noopener noreferrer', () => {
+    expect(sanitizeHtml('<a href="https://a.test" target="_blank">x</a>'))
+      .toBe('<a href="https://a.test" target="_blank" rel="noopener noreferrer">x</a>')
+  })
+
+  it('no longer mangles ordinary text that contains "data:" or "javascript:" words', () => {
+    expect(sanitizeHtml('<p>Nutrition data: see label</p>')).toBe('<p>Nutrition data: see label</p>')
+  })
+
+  it('is idempotent on hostile input', () => {
+    const once = sanitizeHtml('<img src="/x" alt=">" onerror="alert(1)"><a href="java&#115;cript:1" title=">">x</a>')
+    expect(sanitizeHtml(once)).toBe(once)
+  })
+})

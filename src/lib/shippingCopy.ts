@@ -96,3 +96,20 @@ export function reconcileShippingCopy(text: string, settings: Partial<SiteSettin
   out = out.replace(ALL_ORDERS_RE, restyle)
   return out
 }
+
+/**
+ * Delivery timing exactly as published on the Shipping Policy page (app/policies/[type]/page.tsx:
+ * "Dispatch to courier: within 2 business days", "Metro cities: 3–5 business days after dispatch",
+ * "Non-metro / remote areas: 7–12 business days after dispatch"). PDP audit P1-6: the PDP, the PIN checker and
+ * the policy used to disagree ("1–2" vs "2", "days" vs "business days after dispatch", per-zone 2–4/4–6/5–8).
+ * __tests__/shippingTiming.test.ts fails if the policy page and these strings drift apart.
+ */
+export const SHIPPING_TIMING = {
+  dispatch: '2 business days',
+  metro:    '3–5 business days',
+  remote:   '7–12 business days',
+} as const
+
+/** "Metro cities 3–5 business days · Non-metro / remote 7–12 business days after dispatch" */
+export const DELIVERY_WINDOWS_TEXT =
+  `Metro cities ${SHIPPING_TIMING.metro} · Non-metro / remote ${SHIPPING_TIMING.remote} after dispatch (dispatched within ${SHIPPING_TIMING.dispatch})`

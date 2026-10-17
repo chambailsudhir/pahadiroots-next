@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+import { stripServerOnlySettings } from '@/lib/siteSettingsHelpers'
 import { sanitizeHtml } from '@/lib/server/sanitize'
 import { getCatalogMeta } from '@/lib/storeData'
 import { logger } from '@/lib/logger'
@@ -154,6 +155,8 @@ export default async function RootLayout({
   // closes the gap for defense-in-depth, matching every other DB-sourced
   // HTML render in the codebase (blog content, PDP AI fields).
   if (settings.ann_text) settings.ann_text = sanitizeHtml(settings.ann_text)
+  // Client components receive a copy WITHOUT server-only keys (admin_notify_email, order_email_enabled).
+  const clientSettings = stripServerOnlySettings(settings)
   const categories = meta.categories as any[]
   const states     = meta.states.map((s: any) => ({
     ...s,
@@ -315,9 +318,10 @@ export default async function RootLayout({
         {/* Launch-readiness (DPDP / GDPR): the Google tag is NOT loaded until the visitor opts in to
             analytics. This inline script sets Consent Mode v2 defaults to "denied" and, only for a
             returning visitor who already said yes, restores that choice and loads the tag. See
-            lib/consent.ts and lib/consentRegion.ts (banner only where required: EU/UK/CH by default,
-            owner-switchable in Admin -> Settings). Always rendered: it also decides whether consent is required. */}
-        <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId, settings.cookie_consent_mode) }} />
+            lib/consent.ts. Renders nothing when no (valid) tag id is configured. */}
+        {tagId && (
+          <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId) }} />
+        )}
       </head>
       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
         {/* Sentinel for MobileBottomNav's scroll-to-top button — observed
@@ -329,20 +333,20 @@ export default async function RootLayout({
         <SkipLink />
         <ScrollRestorationFix />
         <Providers>
-          {!isMaintenanceMode && <Header settings={settings} categories={categories} states={states} />}
+          {!isMaintenanceMode && <Header settings={clientSettings} categories={categories} states={states} />}
           <main id="main-content" className="min-h-screen">
             {children}
           </main>
           {!isMaintenanceMode && (
             <>
               <Footer
-                settings={settings}
+                settings={clientSettings}
                 categories={categories.map((c: any) => ({ name: c.name, slug: c.slug, emoji: c.emoji ?? null }))}
               />
-              <CartDrawer settings={settings} />
+              <CartDrawer settings={clientSettings} />
               <SearchOverlay />
-              <MobileMenu settings={settings} categories={categories} states={states} />
-              <MobileBottomNav settings={settings} />
+              <MobileMenu settings={clientSettings} categories={categories} states={states} />
+              <MobileBottomNav settings={clientSettings} />
               <AuthModal />
               <GoogleAuthHandler />
               <ProfilePrefetcher />

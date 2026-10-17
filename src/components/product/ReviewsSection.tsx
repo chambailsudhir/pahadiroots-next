@@ -45,12 +45,18 @@ function Stars({ n, label }: { n: number; label?: string }) {
 interface Props {
   /** Pre-fetched approved reviews from fetchProductData (server-side). */
   reviews: Review[]
+  /** Overall approved-review aggregate (same numbers as the hero rating and the JSON-LD). */
+  stats?: { avg: number; count: number } | null
 }
 
-export default function ReviewsSection({ reviews }: Props) {
+export default function ReviewsSection({ reviews, stats }: Props) {
   if (!reviews.length) return null
 
-  const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+  // PDP audit P2-5: the hero rating and JSON-LD use ALL approved reviews, but this header averaged only the
+  // latest rows it was handed and printed "(10)". Use the same overall aggregate everywhere; fall back to the
+  // displayed rows only when no aggregate was supplied.
+  const avg   = stats && stats.count > 0 ? stats.avg   : reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+  const count = stats && stats.count > 0 ? stats.count : reviews.length
 
   return (
     <section className="border-t border-stone-100 pt-10 mb-12">
@@ -59,10 +65,13 @@ export default function ReviewsSection({ reviews }: Props) {
         <div className="flex items-center gap-2">
           <Stars n={Math.round(avg)} label={`${avg.toFixed(1)} out of 5 stars`} />
           <span className="text-sm font-semibold text-stone-700">
-            {avg.toFixed(1)} ({reviews.length})
+            {avg.toFixed(1)} ({count})
           </span>
         </div>
       </div>
+      {count > reviews.length && (
+        <p className="text-xs text-stone-500 mb-4">Showing the latest {reviews.length} of {count} reviews.</p>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
         {reviews.map(r => (
           <div key={r.id} className="bg-stone-50 rounded-xl p-4 border border-stone-100">

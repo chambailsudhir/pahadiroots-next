@@ -9,14 +9,16 @@ import { useRouter } from 'next/navigation'
 import { usePDPAnalytics } from '@/hooks/useCheckoutAnalytics'
 import { trackProductView, trackAddToCart as trackInHouseAddToCart } from '@/lib/analytics/track'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
+import { usePdpSelection } from './PdpVariantContext'
 
 interface Props {
   product:  Product
   variants: ProductVariant[]
-  settings: SiteSettings
+  /** Unused by this component. Kept optional for backward compatibility; the PDP no longer passes it. */
+  settings?: SiteSettings
 }
 
-export default function AddToCartSection({ product, variants, settings }: Props) {
+export default function AddToCartSection({ product, variants }: Props) {
   const router    = useRouter()
   const addItem   = useCartStore(s => s.addItem)
   const openCart  = useUIStore(s => s.openCart)
@@ -38,6 +40,12 @@ export default function AddToCartSection({ product, variants, settings }: Props)
     const pool = inStock.length > 0 ? inStock : variants
     return pool.reduce((min, v) => (v.price < min.price ? v : min), pool[0])
   })
+  // PDP audit P1-2: tell the page-level price/stock/badge which pack is selected (no-op outside a provider).
+  const pdpSel = usePdpSelection()
+  const selectInPage = pdpSel?.selectVariant
+  useEffect(() => {
+    if (selectedVariant && selectInPage) selectInPage(selectedVariant.id)
+  }, [selectedVariant, selectInPage])
   const [qty, setQty]         = useState(1)
   const [added, setAdded]     = useState(false)
   const [buying, setBuying]   = useState(false)

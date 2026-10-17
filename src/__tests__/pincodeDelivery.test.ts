@@ -19,6 +19,7 @@ import { render, fireEvent, screen } from '@testing-library/react'
 import React from 'react'
 import { estimateDelivery, PIN_REGEX } from '@/lib/pincodeZones'
 import PincodeRow from '@/components/product/PincodeRow'
+import { DELIVERY_WINDOWS_TEXT, SHIPPING_TIMING } from '@/lib/shippingCopy'
 
 describe('estimateDelivery', () => {
   it('rejects PINs that are not 6 digits', () => {
@@ -68,12 +69,49 @@ describe('PincodeRow', () => {
   })
 
   it('shows an inline estimate for a valid PIN and does NOT open WhatsApp', () => {
-    render(React.createElement(PincodeRow, { waNumber: '919999999999' }))
+    render(React.createElement(PincodeRow, { waNumber: '919999999999', deliveryWindows: DELIVERY_WINDOWS_TEXT }))
     fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '171001' } })
     fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
 
-    expect(screen.getByText(/2-4 business days/)).toBeTruthy()
+    // PDP audit P1-6: shows the Shipping Policy's windows (not the old per-zone 2-4 / 4-6 / 5-8 tiers).
+    const status = screen.getByRole('status')
+    expect(status.textContent).toContain(SHIPPING_TIMING.metro)
+    expect(status.textContent).toContain(SHIPPING_TIMING.remote)
+    expect(status.textContent).toContain('Himachal Pradesh')
+    expect(status.textContent).not.toMatch(/2-4 business days/)
     expect(openSpy).not.toHaveBeenCalled()
+  })
+
+  it('says we do not deliver when the PIN matches the admin\'s blocked PIN list (PDP audit P2-3)', () => {
+    render(React.createElement(PincodeRow, { waNumber: '919999999999', blockedPincodes: '1941, 7900', deliveryWindows: DELIVERY_WINDOWS_TEXT }))
+    fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '194101' } })
+    fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
+    expect(screen.getByRole('status').textContent).toMatch(/do not deliver to PIN code 194101/)
+    expect(screen.queryByText('Confirm exact date on WhatsApp')).toBeNull()
+  })
+
+  it('does not block a PIN that is not on the list, and clears the blocked message on edit', () => {
+    render(React.createElement(PincodeRow, { waNumber: '919999999999', blockedPincodes: '1941', deliveryWindows: DELIVERY_WINDOWS_TEXT }))
+    fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '194101' } })
+    fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
+    expect(screen.getByRole('status').textContent).toMatch(/do not deliver/)
+    fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '110001' } })
+    expect(screen.queryByRole('status')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
+    expect(screen.getByRole('status').textContent).not.toMatch(/do not deliver/)
+  })
+
+  it('lists the admin\'s serviceable states and defers the state check to checkout when a state list is set', () => {
+    render(React.createElement(PincodeRow, { waNumber: '919999999999', serviceableStates: 'himachal pradesh, uttarakhand', deliveryWindows: DELIVERY_WINDOWS_TEXT }))
+    fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '171001' } })
+    fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
+    expect(screen.getByRole('status').textContent).toMatch(/We currently deliver to Himachal Pradesh, Uttarakhand; your state is confirmed at checkout/)
+  })
+
+  it('no longer renders the stale "5 PAHADI ROOTS" vendor chip', () => {
+    const { container } = render(React.createElement(PincodeRow, { waNumber: '919999999999' }))
+    expect(container.textContent).not.toMatch(/PAHADI ROOTS/i)
+    expect(container.textContent).not.toMatch(/VENDOR/i)
   })
 
   it('shows an error and no estimate for an invalid PIN', () => {
@@ -99,12 +137,12 @@ describe('PincodeRow', () => {
   })
 
   it('clears the estimate when the PIN is edited again', () => {
-    render(React.createElement(PincodeRow, { waNumber: '919999999999' }))
+    render(React.createElement(PincodeRow, { waNumber: '919999999999', deliveryWindows: DELIVERY_WINDOWS_TEXT }))
     fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '171001' } })
     fireEvent.click(screen.getByLabelText('Check delivery for entered PIN code'))
-    expect(screen.getByText(/business days/)).toBeTruthy()
+    expect(screen.getByRole('status')).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('PIN code'), { target: { value: '171002' } })
-    expect(screen.queryByText(/business days/)).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

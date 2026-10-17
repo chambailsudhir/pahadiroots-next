@@ -140,16 +140,13 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
 
       {/* Body */}
       <div style={{ padding: '13px' }}>
-        <div style={{ fontSize: '10px', fontWeight: 900, color: '#c8920a', letterSpacing: '.6px', textTransform: 'uppercase', marginBottom: '3px', fontFamily: "'Josefin Sans',sans-serif" }}>
-          5 PAHADI ROOTS
-        </div>
         <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1a1a', marginBottom: '8px', lineHeight: 1.35 }}>
           {p.name}
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '10px' }}>
           <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a3a1e' }}>₹{price}</span>
           {mrp && mrp > price && (
-            <span style={{ fontSize: '12px', color: '#7a7a7a', textDecoration: 'line-through' }}>₹{mrp}</span>
+            <span style={{ fontSize: '12px', color: '#6b6b6b', textDecoration: 'line-through' }}>₹{mrp}</span>
           )}
         </div>
         <button

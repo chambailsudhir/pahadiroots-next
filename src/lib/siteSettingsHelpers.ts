@@ -47,3 +47,18 @@ export const FALLBACK_FLAT_SHIPPING     = 99
 export function isCodEnabled(settings: { cod_enabled?: string | null } | Record<string, string | undefined>): boolean {
   return isEnabled((settings as { cod_enabled?: string }).cod_enabled ?? undefined, false)
 }
+
+/**
+ * Keys that exist in the admin's site_settings but are used ONLY by server code. Anything handed to a
+ * 'use client' component is serialised into the page's HTML/RSC payload for every visitor, so these must be
+ * removed first (PDP audit, security: layout.tsx passed the whole settings object to Header/Footer/CartDrawer/
+ * MobileMenu/MobileBottomNav and the PDP buy box, publishing the internal order-notification address).
+ * Verified in the codebase: nothing in components/ or hooks/ reads these keys; only app/api/v1/orders/route.ts does.
+ */
+export const SERVER_ONLY_SETTING_KEYS = ['admin_notify_email', 'order_email_enabled'] as const
+
+export function stripServerOnlySettings<T extends object>(settings: T): T {
+  const out: Record<string, unknown> = { ...(settings as Record<string, unknown>) }
+  for (const k of SERVER_ONLY_SETTING_KEYS) delete out[k]
+  return out as T
+}

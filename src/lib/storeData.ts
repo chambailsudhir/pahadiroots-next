@@ -515,7 +515,13 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
     .eq('is_deleted', false)
     .ilike('slug', escapedSlug)
     .maybeSingle()
-  if (bySlug.error) console.error('[getProductBySlug] slug lookup failed:', bySlug.error)
+  // PDP audit P1-4: a query ERROR is not "product not found". Returning null here turned a transient
+  // Supabase failure into a 404 that ISR then cached for an hour. Throw so the route keeps serving
+  // its last good page (ISR) / shows error.tsx, and only a genuine empty result becomes a 404.
+  if (bySlug.error) {
+    console.error('[getProductBySlug] slug lookup failed:', bySlug.error)
+    throw new Error(`getProductBySlug: slug lookup failed (${bySlug.error.message ?? 'unknown error'})`)
+  }
   product = (bySlug.data as Product) || null
 
   if (!product && /^\d+$/.test(slug)) {
@@ -526,7 +532,10 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
       .eq('is_deleted', false)
       .eq('id', Number(slug))
       .maybeSingle()
-    if (byId.error) console.error('[getProductBySlug] id fallback lookup failed:', byId.error)
+    if (byId.error) {
+      console.error('[getProductBySlug] id fallback lookup failed:', byId.error)
+      throw new Error(`getProductBySlug: id lookup failed (${byId.error.message ?? 'unknown error'})`)
+    }
     product = (byId.data as Product) || null
   }
 
@@ -544,8 +553,16 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
       .eq('product_id', product.id)
       .order('sort_order'),
   ])
-  if (variantsErr) console.error('[getProductBySlug] variants fetch failed:', variantsErr)
-  if (imagesErr)   console.error('[getProductBySlug] images fetch failed:', imagesErr)
+  // A failed variants/images read used to render the product with NO sizes (looks out of stock) or an
+  // empty gallery, and ISR cached that. Both are required to render a correct PDP, so fail loudly.
+  if (variantsErr) {
+    console.error('[getProductBySlug] variants fetch failed:', variantsErr)
+    throw new Error(`getProductBySlug: variants fetch failed (${variantsErr.message ?? 'unknown error'})`)
+  }
+  if (imagesErr) {
+    console.error('[getProductBySlug] images fetch failed:', imagesErr)
+    throw new Error(`getProductBySlug: images fetch failed (${imagesErr.message ?? 'unknown error'})`)
+  }
 
   // The PDP passes these rows straight into client components, which
   // serializes every field into the page payload — scrub internal columns here,
