@@ -3,7 +3,7 @@
  * coming back. Source-level guard, same style as other tests in this repo.
  *
  * Owner answers (PDP audit follow-up):
- *   • Honey is strained BY HAND through cloth and a simple sieve; no machine filtering  → never "never filtered".
+ *   • Honey is strained BY HAND through a stainless-steel mesh sieve; no machine filtering  → never "never filtered".
  *   • "5% of every order funds…", "fair wages, always", "zero single-use plastic" are NOT true → removed.
  *   • Chambail International is both manufacturer and packer → shown on the PDP.
  * Lab-test wording must stay certificate-driven (no "every batch" / "with every order").
@@ -28,12 +28,12 @@ describe('PDP claims the owner said are not true stay removed', () => {
   })
 })
 
-describe('filtering is described truthfully (cloth + simple sieve, no machine)', () => {
+describe('filtering is described truthfully (stainless-steel mesh sieve, by hand, no machine)', () => {
   it('never says "never filtered" / "or filtered" / "strained once for clarity"', () => {
     expect(code).not.toMatch(/never filtered|or filtered|strained once for clarity/i)
   })
-  it('says hand-strained through cloth and a simple sieve', () => {
-    expect(code).toContain('strained by hand through cloth and a simple sieve')
+  it('says hand-strained through a stainless-steel mesh sieve', () => {
+    expect(code).toContain('strained by hand through a stainless-steel mesh sieve')
   })
 })
 

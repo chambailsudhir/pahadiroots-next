@@ -798,7 +798,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
                   <h3 className="pdp-honey-tl-title">Strained, jarred, and ready to travel.</h3>
-                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through cloth and a simple sieve, then sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through a stainless-steel mesh sieve, then sealed into glass, carrying Spiti Valley&apos;s short summer all the way to your table.</p>
                 </div>
               </div>
             </div>
@@ -890,7 +890,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-honey-tl-content">
                   <div className="pdp-honey-tl-eyebrow">06 — The Bottle</div>
                   <h3 className="pdp-honey-tl-title">Sealed close to where it was drawn.</h3>
-                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through cloth and a simple sieve, then sealed into glass, carrying the mountain above Manali all the way to your table.</p>
+                  <p className="pdp-honey-tl-desc">The raw honey is strained by hand through a stainless-steel mesh sieve, then sealed into glass, carrying the mountain above Manali all the way to your table.</p>
                 </div>
               </div>
             </div>
@@ -1146,7 +1146,7 @@ export default async function ProductPage({ params }: Props) {
                 </div>
                 <div className="pdp-why-diff-title">Raw &amp; Hand-Strained</div>
                 <span className="pdp-why-diff-underline" aria-hidden="true"></span>
-                <div className="pdp-why-diff-desc">Never heated. Spun from the comb and strained by hand through cloth and a simple sieve — no machine filtering.</div>
+                <div className="pdp-why-diff-desc">Never heated. Spun from the comb and strained by hand through a stainless-steel mesh sieve — no machine filtering.</div>
               </div>
               <div className="pdp-why-diff-card img-card">
                 <div className="pdp-why-diff-icon icon-img">
@@ -1498,7 +1498,7 @@ export default async function ProductPage({ params }: Props) {
                 {honeySourceLabel}, Himachal Pradesh{hasHoneyJourney ? ' — see the Journey above for the full account.' : '.'}
               </AccItem>
               <AccItem title="Is it raw?" icon="desc">
-                Yes — never heated. It is spun from the comb and strained by hand through cloth and a simple sieve. No machine filtering is used.
+                Yes — never heated. It is spun from the comb and strained by hand through a stainless-steel mesh sieve. No machine filtering is used, and nothing is added: no preservatives and no added sugar.
               </AccItem>
               {/* PDP audit P0-2: no placeholder text on a live page. Shelf life is the admin's "Shelf Life"
                   product attribute; when it isn't set the question is simply not shown (never guessed). */}
