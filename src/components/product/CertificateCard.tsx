@@ -10,30 +10,48 @@
 // admin repo for the full reasoning.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface CertificateCardProps {
-  certificate: {
-    reportUrl: string
-    hasPurity: boolean
-    hasHeavyMetals: boolean
-    hasPesticides: boolean
-    hasActiveIngredients: boolean
-  }
+export interface CertificateData {
+  reportUrl: string
+  hasPurity: boolean
+  hasHeavyMetals: boolean
+  hasPesticides: boolean
+  hasActiveIngredients: boolean
 }
 
-const CHIPS: { key: keyof CertificateCardProps['certificate']; label: string; variant: string }[] = [
+// A product can have SEVERAL active reports (admin: product_certificates is many-to-many, e.g. one report for
+// active ingredients and another for purity/heavy metals). The PDP used to fetch only the newest one
+// (.limit(1).maybeSingle()), so the others silently never appeared. `certificates` shows every one;
+// `certificate` (single) is kept for backward compatibility.
+interface CertificateCardProps {
+  certificates?: CertificateData[] | null
+  certificate?: CertificateData | null
+}
+
+const CHIPS: { key: Exclude<keyof CertificateData, 'reportUrl'>; label: string; variant: string }[] = [
   { key: 'hasPurity',            label: 'Purity',             variant: 'green'  },
   { key: 'hasHeavyMetals',       label: 'Heavy Metals',       variant: 'peach'  },
   { key: 'hasPesticides',        label: 'Pesticides',         variant: 'purple' },
   { key: 'hasActiveIngredients', label: 'Active Ingredients', variant: 'blue'   },
 ]
 
-export default function CertificateCard({ certificate }: CertificateCardProps) {
-  const activeChips = CHIPS.filter(c => certificate[c.key])
-  if (activeChips.length === 0) return null
+export default function CertificateCard({ certificates, certificate }: CertificateCardProps) {
+  const all = certificates ?? (certificate ? [certificate] : [])
+  // Same rule as before per report (a report that ticks nothing shows nothing), plus: skip a report with no
+  // link and show a given report URL only once.
+  const seen = new Set<string>()
+  const reports = all
+    .map(c => ({ c, chips: CHIPS.filter(ch => c[ch.key]) }))
+    .filter(({ c, chips }) => {
+      if (!c.reportUrl || chips.length === 0 || seen.has(c.reportUrl)) return false
+      seen.add(c.reportUrl)
+      return true
+    })
+  if (reports.length === 0) return null
+  const many = reports.length > 1
 
   return (
     <div className="pdp-certificate-section">
-      <div className="pdp-certificate-label">Certificate</div>
+      <div className="pdp-certificate-label">{many ? 'Certificates' : 'Certificate'}</div>
       <div className="pdp-certificate-card">
         <div className="pdp-cert-icon" aria-hidden="true">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8">
@@ -44,21 +62,25 @@ export default function CertificateCard({ certificate }: CertificateCardProps) {
         </div>
         <div className="pdp-cert-body">
           <div className="pdp-cert-heading">Lab Tested &amp; Verified</div>
-          <div className="pdp-cert-chips">
-            {activeChips.map(c => (
-              <span key={String(c.key)} className={`pdp-cert-chip pdp-cert-chip--${c.variant}`}>
-                <span aria-hidden="true">•</span> {c.label}
-              </span>
-            ))}
-          </div>
-          <a
-            href={certificate.reportUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="pdp-cert-link"
-          >
-            View Authenticity Report <span aria-hidden="true">→</span>
-          </a>
+          {reports.map(({ c, chips }, i) => (
+            <div key={c.reportUrl} className="pdp-cert-report">
+              <div className="pdp-cert-chips">
+                {chips.map(ch => (
+                  <span key={String(ch.key)} className={`pdp-cert-chip pdp-cert-chip--${ch.variant}`}>
+                    <span aria-hidden="true">•</span> {ch.label}
+                  </span>
+                ))}
+              </div>
+              <a
+                href={c.reportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pdp-cert-link"
+              >
+                {many ? `View Authenticity Report ${i + 1}` : 'View Authenticity Report'} <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          ))}
         </div>
       </div>
     </div>

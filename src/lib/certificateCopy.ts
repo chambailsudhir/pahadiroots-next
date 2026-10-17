@@ -23,3 +23,15 @@ export function joinParameters(list: string[]): string {
   if (list.length <= 1) return list.join('')
   return `${list.slice(0, -1).join(', ')} & ${list[list.length - 1]}`
 }
+
+/** A product can have several active reports (admin: product_certificates is many-to-many). Claims such as
+ *  "lab tested for …" must reflect ALL of them, so union the ticked parameters. */
+export function mergeCertificateFlags(list: CertificateFlags[] | null | undefined): CertificateFlags | null {
+  if (!list || list.length === 0) return null
+  return {
+    hasPurity:            list.some(c => c.hasPurity),
+    hasHeavyMetals:       list.some(c => c.hasHeavyMetals),
+    hasPesticides:        list.some(c => c.hasPesticides),
+    hasActiveIngredients: list.some(c => c.hasActiveIngredients),
+  }
+}

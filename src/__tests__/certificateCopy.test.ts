@@ -21,3 +21,17 @@ describe('joinParameters', () => {
     expect(joinParameters(['purity', 'heavy metals', 'pesticides'])).toBe('purity, heavy metals & pesticides')
   })
 })
+
+import { mergeCertificateFlags } from '@/lib/certificateCopy'
+describe('mergeCertificateFlags (several reports on one product)', () => {
+  const none = { hasPurity: false, hasHeavyMetals: false, hasPesticides: false, hasActiveIngredients: false }
+  it('unions what every linked report ticks', () => {
+    const merged = mergeCertificateFlags([{ ...none, hasActiveIngredients: true }, { ...none, hasPurity: true, hasHeavyMetals: true }])
+    expect(certifiedParameters(merged)).toEqual(['purity', 'heavy metals', 'active ingredients'])
+  })
+  it('is null for no reports, so no lab claim can render', () => {
+    expect(mergeCertificateFlags([])).toBeNull()
+    expect(mergeCertificateFlags(null)).toBeNull()
+    expect(certifiedParameters(mergeCertificateFlags([]))).toEqual([])
+  })
+})

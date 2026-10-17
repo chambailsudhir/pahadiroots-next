@@ -24,7 +24,7 @@ import RelatedProducts from '@/components/product/RelatedProducts'
 import PincodeRow from '@/components/product/PincodeRow'
 import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
 import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
-import { certifiedParameters, joinParameters } from '@/lib/certificateCopy'
+import { certifiedParameters, joinParameters, mergeCertificateFlags } from '@/lib/certificateCopy'
 import { MANUFACTURER_AND_PACKER } from '@/lib/legalEntity'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
@@ -81,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
-  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews, certificate, attributes }, siteSettings] = await Promise.all([
+  const [{ product, variants, images, stateData, categoryName, related, reviewStats, reviews, certificates, attributes }, siteSettings] = await Promise.all([
     fetchProductData(slug),
     getSiteSettings(),
   ])
@@ -303,7 +303,14 @@ export default async function ProductPage({ params }: Props) {
   // A lab-test claim is only ever rendered from the certificate that is actually linked to THIS product
   // (and only when the admin's "show certificates" switch is on); it lists only the parameters that
   // certificate ticks. No certificate → no lab-test claim (e.g. ghee, which the code notes is untested).
-  const labParams    = showCertificate ? certifiedParameters(certificate) : []
+  // Same rule as CertificateCard: a report counts only if it has a link and ticks at least one parameter; each URL once.
+  const shownCertificates = showCertificate
+    ? certificates.filter((c, i, arr) =>
+        c.reportUrl &&
+        (c.hasPurity || c.hasHeavyMetals || c.hasPesticides || c.hasActiveIngredients) &&
+        arr.findIndex(x => x.reportUrl === c.reportUrl) === i)
+    : []
+  const labParams    = certifiedParameters(mergeCertificateFlags(shownCertificates))
   const hasLabClaim  = labParams.length > 0
   const labList      = joinParameters(labParams)
   // Same rule the footer uses: never claim a licence number that was never entered in Admin → Settings.
@@ -553,7 +560,7 @@ export default async function ProductPage({ params }: Props) {
                 <div><div className="pdp-stat-num">0</div><div className="pdp-stat-label">Additives</div></div>
               </div>
             )}
-            {showCertificate && certificate && <CertificateCard certificate={certificate} />}
+            {showCertificate && <CertificateCard certificates={certificates} />}
           </div>
 
           {/* RIGHT: Info */}
@@ -1507,9 +1514,18 @@ export default async function ProductPage({ params }: Props) {
                   Shelf life: <strong>{shelfLife}</strong>. Keep it cool and dark in an airtight glass jar, away from direct sunlight.
                 </AccItem>
               )}
-              {showCertificate && certificate && (
+              {hasLabClaim && (
                 <AccItem title="Can I see the lab report?" icon="cert">
-                  Yes — <a href={certificate.reportUrl} target="_blank" rel="noopener noreferrer">view the Authenticity Report here</a>.
+                  Yes —{' '}
+                  {shownCertificates.length === 1
+                    ? <a href={shownCertificates[0].reportUrl} target="_blank" rel="noopener noreferrer">view the Authenticity Report here</a>
+                    : shownCertificates.map((c, i) => (
+                        <span key={c.reportUrl}>
+                          {i > 0 && ', '}
+                          <a href={c.reportUrl} target="_blank" rel="noopener noreferrer">view Authenticity Report {i + 1}</a>
+                        </span>
+                      ))}
+                  .
                 </AccItem>
               )}
 
@@ -1849,10 +1865,11 @@ async function fetchProductDataInner(slug: string) {
         .eq('is_active', true)
         .eq('product_certificates.product_id', product.id)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        // A product can have several active reports (admin: product_certificates is many-to-many). This used to be
+        // .limit(1).maybeSingle(), so only the newest report ever showed. Cap is a sanity limit, not a feature.
+        .limit(6)
         .then(
-          ({ data }) => ({ data, error: null as unknown }),
+          ({ data, error }) => ({ data, error: (error ?? null) as unknown }),
           (error) => ({ data: null, error }),
         ),
 
@@ -1892,22 +1909,21 @@ async function fetchProductDataInner(slug: string) {
       attributes = buildAttributeMap(attrResult.defs as any, attrResult.values as any)
     }
 
-    let certificate: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean } | null = null
+    let certificates: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean }[] = []
     if (certResult.error) {
       // Non-fatal — PDP renders fine without the certificate card, same as reviews above.
       console.warn('[fetchProductData] certificate fetch failed:', certResult.error)
-    } else if (certResult.data) {
-      const c = certResult.data as any
-      certificate = {
+    } else if (Array.isArray(certResult.data)) {
+      certificates = (certResult.data as any[]).map(c => ({
         reportUrl:            c.report_url,
         hasPurity:            Boolean(c.has_purity),
         hasHeavyMetals:       Boolean(c.has_heavy_metals),
         hasPesticides:        Boolean(c.has_pesticides),
         hasActiveIngredients: Boolean(c.has_active_ingredients),
-      }
+      }))
     }
 
-    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews, certificate, attributes }
+    return { product, variants, images, stateData, categoryName: categoryRow, related, reviewStats, reviews, certificates, attributes }
   } catch (err) {
     // PDP audit P1-4: do NOT convert an error into `product: null` — the page would call notFound() and
     // ISR would cache a 404 for a live product for up to an hour. Re-throw: ISR keeps the previous good
