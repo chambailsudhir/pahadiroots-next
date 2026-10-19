@@ -514,6 +514,36 @@ describe('POST /webhook/razorpay — payment.failed (P2: one failed attempt is N
     expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
   })
 
+  // AUDIT W-1 (Oct 2026): a failed-attempt event must be bound to the Razorpay order we stored.
+  it('W-1: payment.failed whose Razorpay order id does NOT match the stored one is NOT written to the order', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id, razorpayOrderId: 'order_ATTACKER_OWN' })))
+
+    expect(res.status).toBe(200)
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'payment_attempt_failed', expect.anything(), expect.anything())
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_failed_unbound', 'razorpay', expect.anything())
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+  })
+
+  it('W-1: payment.failed against a non-Razorpay (COD) order is not written to it', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, payment_method: 'cod', payment_id: null }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id })))
+
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_failed_unbound', 'razorpay', expect.anything())
+  })
+
+  it('W-1: payment.failed with no order_id on the payment entity is not written to the order', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: PAYABLE.id, razorpayOrderId: '' })))
+
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
+  })
+
   it('payment.failed with missing notes.db_order_id → 200, nothing touched', async () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     const res = await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: undefined })))

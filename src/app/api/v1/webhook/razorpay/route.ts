@@ -281,7 +281,7 @@ export async function POST(req: Request) {
 
       const { data: order, error: failedLookupErr } = await db
         .from('orders')
-        .select('id, order_status, payment_status')
+        .select('id, order_status, payment_status, payment_method, payment_id')
         .eq('id', dbOrderId)
         .single()
       // Same rule as payment.captured above: a read fault is retryable, only "no rows" is final.
@@ -290,7 +290,26 @@ export async function POST(req: Request) {
       }
 
       // A late/duplicate failure for an order that has since been paid is noise — ignore it.
-      if (order && order.payment_status !== 'paid') {
+      //
+      // AUDIT W-1 (Oct 2026): notes.db_order_id is only a HINT (payment-level notes can be set by
+      // whoever opens Checkout), and the payment.captured branch above already refuses to act on it
+      // unless the payment belongs to the Razorpay order we stored. This branch did not, so anyone who
+      // could start a Razorpay payment against any of our orders could stamp fake "failed attempt"
+      // events and `payments` rows onto SOMEONE ELSE'S order (polluting its history, payments ledger
+      // and support view). Apply the same binding here.
+      const failedBound = !!order
+        && order.payment_method === 'razorpay'
+        && isRazorpayOrderId(order.payment_id)
+        && !!payment.order_id
+        && safeEqual(order.payment_id, payment.order_id)
+      if (order && order.payment_status !== 'paid' && !failedBound) {
+        captureError(new Error('payment.failed could not be bound to order'), {
+          action: 'webhook.razorpay.payment_failed.unbound', payment_id: payment.id, order_id: order.id, alert: false,
+        })
+        await logOrderEvent(order.id, 'payment_failed_unbound', 'razorpay', {
+          razorpay_payment_id: payment.id, reason: 'razorpay_order_id_mismatch_or_not_razorpay_order',
+        })
+      } else if (order && order.payment_status !== 'paid') {
         await logOrderEvent(order.id, 'payment_attempt_failed', 'razorpay', {
           razorpay_payment_id: payment.id,
           reason: payment.error_reason,
