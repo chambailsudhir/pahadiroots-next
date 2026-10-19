@@ -136,7 +136,9 @@ export async function fetchOrders(params: FetchOrdersParams = {}): Promise<Order
     const parsed = OrdersResponseSchema.safeParse(raw)
     if (!parsed.success) {
       captureError(parsed.error, { action: 'orderService/fetchOrders', validation: true })
-      return { success: true, orders: [], total: 0, page: 1, pages: 0 }
+      // Was: return an empty list, which the account page rendered as "No orders yet". An unreadable response is
+      // a load failure (retryable), not an empty account.
+      throw new ServiceError('Could not read your orders. Please try again.', 502)
     }
     return parsed.data
   } finally {

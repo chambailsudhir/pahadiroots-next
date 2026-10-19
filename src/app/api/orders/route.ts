@@ -75,17 +75,55 @@ async function getCustomerOrders(
     ? await sbAdminCount(`${baseFilter}&select=id,${returnsEmbed}`)
     : await sbAdminCount(baseFilter)
 
-  const rows = await sbAdmin(
-    'GET',
-    `${baseFilter}&select=id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned,order_items(id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,variant_id,products(name,emoji,image_url),product_variants(variant_value)),${returnsEmbed}&order=created_at.desc&limit=${limit}&offset=${offset}`,
-  ).catch(() => [])
+  // ── Why this query has NO product_variants(...) embed (production incident, Oct 2026) ──────────────
+  // Migration 055 added a SECOND foreign key from order_items to product_variants — the composite
+  // (variant_id, product_id) key — next to the original variant_id key. With two relationships PostgREST
+  // cannot resolve `order_items(... product_variants(variant_value))` and answers "300 / PGRST201: more than
+  // one relationship was found". The old `.catch(() => [])` turned that error into an EMPTY LIST while the
+  // separate count query and the stats RPC still succeeded — "92 orders" and full stats above "No orders yet".
+  // Variant labels are now looked up with a plain second query (below) that does not depend on FK topology,
+  // and a failing rows query is logged and surfaced instead of being hidden.
+  const ORDER_COLS = 'id,order_number,order_status,payment_method,payment_status,total_amount,created_at,tracking_number,courier,shipped_at,delivered_at,updated_at,loyalty_points_redeemed,loyalty_points_earned'
+  const ITEM_COLS  = 'id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,variant_id,products(name,emoji,image_url)'
+  const pageQs     = `&order=created_at.desc&limit=${limit}&offset=${offset}`
+
+  let rows: Array<Record<string, unknown>>
+  try {
+    rows = (await sbAdmin('GET', `${baseFilter}&select=${ORDER_COLS},order_items(${ITEM_COLS}),${returnsEmbed}${pageQs}`)) || []
+  } catch (err) {
+    console.error('[orders GET] rows query with embeds FAILED for customer', customerId, '-', err)
+    if (isReturnsTab) throw err            // the Returns tab genuinely needs the returns embed
+    // Degraded but honest: still list the customer's orders (number, status, total) without line items,
+    // rather than telling them they have none. If even this fails the error propagates (HTTP 500).
+    rows = (await sbAdmin('GET', `${baseFilter}&select=${ORDER_COLS}${pageQs}`)) || []
+    console.error('[orders GET] served DEGRADED list (no line items) for customer', customerId)
+  }
+
+  // Variant labels for lines that have no snapshot (every order placed before the snapshot fix). Plain lookup.
+  const variantIds = new Set<string>()
+  for (const o of rows) {
+    const its = Array.isArray(o.order_items) ? (o.order_items as Array<{ variant_id?: unknown; variant_value_snapshot?: unknown }>) : []
+    for (const it of its) {
+      if (!it.variant_value_snapshot && it.variant_id != null && /^[\w-]+$/.test(String(it.variant_id))) variantIds.add(String(it.variant_id))
+    }
+  }
+  const variantLabel = new Map<string, string>()
+  if (variantIds.size > 0) {
+    try {
+      const vr = await sbAdmin('GET', `/rest/v1/product_variants?id=in.(${[...variantIds].join(',')})&select=id,variant_value`)
+      for (const v of (vr || []) as Array<{ id: unknown; variant_value?: unknown }>) {
+        if (v.variant_value) variantLabel.set(String(v.id), String(v.variant_value))
+      }
+    } catch (err) {
+      console.error('[orders GET] variant label lookup failed (labels omitted, orders still returned):', err)
+    }
+  }
 
   const orders = (rows || []).map((o: Record<string, unknown>) => {
     const rawItems = (o.order_items as Array<{
       id: number | string; quantity: number; price_at_time: number; product_name_snapshot: string | null
       variant_value_snapshot: string | null; product_id: string | number | null; variant_id: string | number | null
       products?: { name?: string; emoji?: string; image_url?: string }
-      product_variants?: { variant_value?: string }
     }>) || []
     // id/variant_id/product_id added so the account UI (and the return/
     // replace request it submits) can identify exactly which line item a
@@ -103,7 +141,7 @@ async function getCustomerOrders(
       // by design) — fall back to the live product/variant name via the
       // join above, rather than the generic 'Product' placeholder.
       name:      i.product_name_snapshot || i.products?.name || 'Product',
-      variant:   i.variant_value_snapshot || i.product_variants?.variant_value || null,
+      variant:   i.variant_value_snapshot || (i.variant_id != null ? variantLabel.get(String(i.variant_id)) : undefined) || null,
       variant_id: i.variant_id ?? null,
       product_id: i.product_id ?? null,
       emoji:     i.products?.emoji     || '🌿',

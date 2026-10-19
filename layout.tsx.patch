@@ -1,0 +1,38 @@
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -24,6 +24,7 @@
+ import ProfilePrefetcher from '@/components/ProfilePrefetcher'
+ import CookieConsent from '@/components/consent/CookieConsent'
+ import { consentBootstrapScript } from '@/lib/consent'
++import { normalizeConsentMode } from '@/lib/consentRegion'
+ 
+ // SEO FIX: matches the same env-var-with-fallback pattern already used in
+ // sitemap.ts and robots.ts, so the Organization/WebSite JSON-LD below (and
+@@ -174,6 +175,8 @@
+   // else), so there is nothing for any of this chrome to usefully do.
+   const isMaintenanceMode = settings.store_open === 'false'
+   const tagId = TAG_ID_RE.test((settings.google_tag_id || '').trim()) ? settings.google_tag_id.trim() : ''
++  // Owner's choice in Admin → Settings → "Cookie consent banner" ('region' | 'always' | 'off'; anything else → 'region').
++  const consentMode = normalizeConsentMode(settings.cookie_consent_mode)
+   const waNumber = (settings.whatsapp_number || '').replace(/\D/g, '') || '919899984895'
+ 
+   return (
+@@ -315,13 +318,11 @@
+             GoogleTagManager component instead of raw scripts here — not
+             adopted since it's a new dependency for a non-blocking lint
+             suggestion; this is GTM's own documented integration method. */}
+-        {/* Launch-readiness (DPDP / GDPR): the Google tag is NOT loaded until the visitor opts in to
+-            analytics. This inline script sets Consent Mode v2 defaults to "denied" and, only for a
+-            returning visitor who already said yes, restores that choice and loads the tag. See
+-            lib/consent.ts. Renders nothing when no (valid) tag id is configured. */}
+-        {tagId && (
+-          <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId) }} />
+-        )}
++        {/* Launch-readiness (DPDP / GDPR), region-aware: this inline script ALWAYS runs (also without a Google tag
++            id — the banner and the in-house tracker need `__hvConsentRequired`). It sets Consent Mode v2 defaults to
++            "denied", decides whether consent is required from the owner's `cookie_consent_mode` setting plus the
++            `hv_geo` cookie set by proxy.ts, and only loads the Google tag when analytics is on. See lib/consent.ts. */}
++        <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId, consentMode) }} />
+       </head>
+       <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
+         {/* Sentinel for MobileBottomNav's scroll-to-top button — observed

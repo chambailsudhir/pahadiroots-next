@@ -309,7 +309,16 @@ export default function OrdersSection({ orders, showToast }: Props) {
               </div>
 
               {/* Order list */}
-              {orders.filtered.length === 0 ? (
+              {orders.filtered.length === 0 && (!!orders.error || (orders.totalCount > 0 && orders.filter === 'all' && !orders.search)) ? (
+                // The server says there ARE orders (or the request failed) but none arrived: that is a load problem,
+                // never "No orders yet" (which made customers think their orders had vanished).
+                <div className={styles.emptyState} role="alert">
+                  <div className={styles.emptyIcon}>⚠️</div>
+                  <div className={styles.emptyTitle}>We couldn&apos;t load your orders</div>
+                  <p className={styles.emptySub}>Your orders are safe. Please try again in a moment.</p>
+                  <button className={styles.btnPrimary} onClick={() => orders.refresh()}>Try again</button>
+                </div>
+              ) : orders.filtered.length === 0 ? (
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>{!orders.orders?.length ? '🛍️' : '🔍'}</div>
                   <div className={styles.emptyTitle}>{!orders.orders?.length ? 'No orders yet' : 'Nothing found'}</div>

@@ -148,7 +148,11 @@ export async function sbAdminCount(path: string): Promise<number> {
     },
     signal: AbortSignal.timeout(8_000),
   })
-  if (!res.ok) return 0
+  if (!res.ok) {
+    // Was silent. A failing count shows up as "0 orders" with no trace anywhere, so leave one.
+    console.error('[sbAdminCount] non-OK response', res.status, 'for', path.split('?')[0])
+    return 0
+  }
   // Content-Range: <start>-<end>/<total>  e.g. "0-19/847" or "*/0" when empty
   const cr    = res.headers.get('content-range') || ''
   const match = cr.match(/\/(\d+)$/)
