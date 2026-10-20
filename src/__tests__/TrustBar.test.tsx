@@ -21,7 +21,9 @@ describe('TrustBar', () => {
     render(<TrustBar settings={settings()} />)
     expect(screen.getByText('100% Natural')).toBeTruthy()
     expect(screen.getByText('Himalayan Sourced')).toBeTruthy()
-    expect(screen.getByText('Fair Trade')).toBeTruthy()
+    // "Fair Trade" read like a certification nothing backs; the fallback badge is now "Farmer Direct" (owner decision).
+    expect(screen.getByText('Farmer Direct')).toBeTruthy()
+    expect(screen.queryByText('Fair Trade')).toBeNull()
     expect(screen.getByText('Free Shipping')).toBeTruthy()
   })
 

@@ -8,6 +8,7 @@ import ProductCard from '@/components/product/ProductCard'
 import CategoryMotif from '@/components/collections/CategoryMotif'
 import type { Product } from '@/types'
 import Link from 'next/link'
+import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 60
 
@@ -337,6 +338,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
           </>
         )}
       </div>
+      {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
+          sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
+      <OurPromiseSection />
     </div>
   )
 }

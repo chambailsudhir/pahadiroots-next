@@ -29,6 +29,7 @@ import { MANUFACTURER_AND_PACKER } from '@/lib/legalEntity'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
+import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 3600
 
@@ -1569,8 +1570,9 @@ export default async function ProductPage({ params }: Props) {
           </div>
         )}
 
-        {/* ── Why HimVeda by Pahadi Roots ── */}
-        <WhySection hasLab={hasLabClaim} labList={labList} />
+        {/* "Our Promise — From the Himalayas. With Nothing to Hide." — the same section as the homepage. It replaces the
+            old "Why HimVeda by Pahadi Roots" block, which has been removed from the product page. */}
+        <OurPromiseSection />
 
       </div>
     </>
@@ -1649,71 +1651,6 @@ function ShareRow({ productName, productSlug, productImage, productPrice, facebo
         </a>
       </div>
     </div>
-  )
-}
-
-// PDP audit P0-1: pillar 01 ("Lab Tested Purity") is rendered only when THIS product has a linked certificate,
-// and its text lists only what that certificate ticks. Before, every product (including untested ghee) showed
-// "Every batch tested … Certificate with every order" — a claim the certificate model (per product, not per
-// batch or order) cannot back. Remaining pillars are renumbered and the grid adapts to the count.
-function WhySection({ hasLab, labList }: { hasLab: boolean; labList: string }) {
-  const pillars = hasLab ? 2 : 1
-  const num = (k: number) => String(hasLab ? k : k - 1).padStart(2, '0')
-  return (
-    <section className="pdp-why-bg">
-      <div className="pdp-why-inner">
-        <div className="pdp-why-chip">Our Promise</div>
-        <h2 className="pdp-why-title">Why HimVeda by Pahadi Roots</h2>
-        <p className="pdp-why-sub">{hasLab ? 'Two pillars that define' : 'The promise behind'} everything we do — mountain to doorstep.</p>
-      </div>
-      <div className={`pdp-why-grid pdp-why-grid--${pillars}`}>
-        {/* PILLAR 1: Lab Tested — only with a linked certificate */}
-        {hasLab && (
-        <div className="pdp-why-pillar">
-          <div className="pdp-why-num">{num(1)}</div>
-          <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
-            <defs><radialGradient id="lt1" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#f0f8e8"/><stop offset="100%" stopColor="#4a9858"/></radialGradient></defs>
-            <circle cx="74" cy="74" r="74" fill="url(#lt1)"/>
-            <rect x="54" y="112" width="40" height="6" rx="3" fill="#1a4828"/>
-            <rect x="68" y="90" width="12" height="24" rx="2" fill="#2a6840"/>
-            <rect x="68" y="58" width="8" height="36" rx="2" fill="#2a6840"/>
-            <rect x="68" y="56" width="30" height="8" rx="2" fill="#1a4828"/>
-            <rect x="70" y="44" width="8" height="16" rx="3" fill="#3a7850"/>
-            <circle cx="74" cy="42" r="6" fill="#1a4828"/>
-            <circle cx="74" cy="42" r="3" fill="#88c8f8" opacity=".8"/>
-            <rect x="40" y="86" width="28" height="8" rx="1" fill="#c8e8f8" opacity=".9"/>
-            <circle cx="52" cy="90" r="4" fill="#50a840" opacity=".7"/>
-            <circle cx="108" cy="44" r="18" fill="#f0c840" opacity=".95"/>
-            <circle cx="108" cy="44" r="14" fill="white" opacity=".9"/>
-            <polyline points="100,44 106,50 118,36" stroke="#1a4828" strokeWidth="3.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            <rect x="88" y="66" width="40" height="12" rx="3" fill="#1a4828" opacity=".85"/>
-            <text x="108" y="75" fontSize="7" fontWeight="700" fill="white" textAnchor="middle">CERTIFIED</text>
-            <circle cx="28" cy="30" r="11" fill="#f0c840" opacity=".88"/>
-            <text x="22" y="35" fontSize="9" fontWeight="700" fill="#7a6000">LAB</text>
-          </svg>
-          <div className="pdp-why-pt">Lab Tested Purity</div>
-          <p className="pdp-why-pd">Lab tested for {labList}. The full report is on this page.</p>
-        </div>
-        )}
-        {/* PILLAR 2: Direct from Farmers */}
-        <div className="pdp-why-pillar">
-          <div className="pdp-why-num">{num(2)}</div>
-          <svg viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg" style={{width:'110px',height:'110px',marginBottom:'10px'}}>
-            <defs><radialGradient id="fd2" cx="45%" cy="35%" r="65%"><stop offset="0%" stopColor="#d8f0d8"/><stop offset="100%" stopColor="#4a9858"/></radialGradient></defs>
-            <circle cx="74" cy="74" r="74" fill="url(#fd2)"/>
-            <polygon points="0,90 24,52 50,72 74,42 98,68 124,48 148,80 148,148 0,148" fill="#2a6840" opacity=".4"/>
-            <polygon points="0,106 20,72 46,88 74,58 102,84 128,66 148,96 148,148 0,148" fill="#1a4828"/>
-            <circle cx="116" cy="26" r="13" fill="#f0c840" opacity=".9"/>
-            <text x="108" y="30" fontSize="7" fontWeight="700" fill="#7a6000">FARM</text>
-            <text x="108" y="39" fontSize="7" fill="#7a6000">→HOME</text>
-          </svg>
-          <div className="pdp-why-pt">Direct from Farmers</div>
-          <p className="pdp-why-pd">Zero middlemen. Direct from farming families across the Himalayan states.</p>
-        </div>
-        {/* Pillars 3 (Eco Packaging — "zero single-use plastic") and 4 (Give-Back — "5% of every order funds…") were
-            REMOVED: the owner confirmed neither is true (PDP audit, owner answer). Do not re-add without evidence. */}
-      </div>
-    </section>
   )
 }
 

@@ -66,7 +66,7 @@ const PahadiStoryCard = lazy(() => import('@/components/cart/PahadiStoryCard'))
 const TRUST_ITEMS = [
   ['🌿', '100% Natural',        'No chemicals or preservatives'],
   ['🏔', 'Himalayan Sourced',   'Direct from mountain farmers'],
-  ['🤝', 'Farmer Direct',       'Fair trade, fair prices'],
+  ['🤝', 'Farmer Direct',       'No middlemen'],
   ['📦', 'Small Batch',         'Fresh, limited production'],
 ] as const
 

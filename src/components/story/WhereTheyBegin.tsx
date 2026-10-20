@@ -16,9 +16,9 @@ const CHAPTERS: Chapter[] = [
     title: 'Honey that follows the flowers of one valley.',
     paras: [
       'Above Manali, alpine meadows come into bloom for a short summer. In Spiti, the flowers grow across high, dry valleys. Bees work both, and what they gather depends on where they are.',
-      'We bring the honey raw and unfiltered, and we keep each valley’s honey separate, so you know which mountain you are tasting.',
+      'We bring the honey raw and hand-strained, and we keep each valley’s honey separate, so you know which mountain you are tasting.',
     ],
-    facts: [['Place', 'Manali and Spiti Valley'], ['Source', 'Mountain multiflora blooms'], ['Made', 'Raw and unfiltered']],
+    facts: [['Place', 'Manali and Spiti Valley'], ['Source', 'Mountain multiflora blooms'], ['Made', 'Raw and hand-strained']],
     cta: 'Meet the two honeys', href: '/collections/himalayan-honey',
     main:  { src: '/story/honey-meadow.webp',     alt: 'A wide alpine meadow of white wildflowers below snow-capped mountains' },
     inset: { src: '/story/honey-beekeeper.webp', alt: 'A beekeeper holding up a honeycomb frame dripping with honey', cap: 'The beekeeper' },

@@ -25,7 +25,7 @@ export default function TrustBar({ settings }: Props) {
   const fallback = [
     { icon: '🌿', title: '100% Natural',      sub: 'No chemicals, no preservatives' },
     { icon: '🏔️', title: 'Himalayan Sourced', sub: 'Directly from mountain farms'  },
-    { icon: '🤝', title: 'Fair Trade',         sub: 'Supporting local farmers'       },
+    { icon: '🤝', title: 'Farmer Direct',       sub: 'Supporting local farmers'       },
     { icon: '🚚', title: 'Free Shipping',      sub: freeShippingSub(settings) },
   ]
 

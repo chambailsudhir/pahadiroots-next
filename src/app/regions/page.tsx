@@ -6,6 +6,7 @@ import { getStoreData, getNormalizedProducts } from '@/lib/storeData'
 // duplicated (and already drifted) from the copy in ExploreByRegion.tsx.
 // Now both — plus the region detail page — import the single shared copy.
 import { getRegionMeta, regionProductPills } from '@/lib/regionMeta'
+import OurPromiseSection from '@/components/homepage/WhySection'
 
 // BUG FIX: uses NEXT_PUBLIC_SITE_URL like sitemap.ts, rather than hardcoding
 // "https://www.pahadiroots.com" (as /products/[slug] currently does) — a
@@ -251,6 +252,9 @@ export default async function RegionsPage() {
           .regions-shell { padding-left: 20px !important; padding-right: 20px !important; }
         }
       `}</style>
+      {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
+          sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
+      <OurPromiseSection />
     </div>
   )
 }

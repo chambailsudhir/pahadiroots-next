@@ -16,6 +16,7 @@ import { truncate } from '@/lib/utils'
 // same extracted, unit-tested sortProducts() /products already uses, rather
 // than inventing a second sort implementation for this page.
 import { sortProducts, type ProductSort } from '@/lib/filterAndSortProducts'
+import OurPromiseSection from '@/components/homepage/WhySection'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
@@ -271,6 +272,9 @@ export default async function RegionPage({ params, searchParams }: Props) {
           .region-shell { padding-left: 20px !important; padding-right: 20px !important; }
         }
       `}</style>
+      {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
+          sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
+      <OurPromiseSection />
     </div>
   )
 }

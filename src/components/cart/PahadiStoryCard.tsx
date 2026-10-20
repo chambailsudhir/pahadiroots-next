@@ -38,7 +38,7 @@ const CERTS = [
   { icon:'🤝', label:'Farmer Direct',     sub:'No middlemen'        },
   { icon:'🧪', label:'No Chemicals',      sub:'Traditional methods' },
   { icon:'📦', label:'Small Batch',       sub:'Limited, fresh stock'},
-  { icon:'💚', label:'Eco Packaged',      sub:'Minimal plastic'     },
+  { icon:'📦', label:'Pan-India Delivery', sub:'Ships across India'  },
 ] as const
 
 const STEPS = [

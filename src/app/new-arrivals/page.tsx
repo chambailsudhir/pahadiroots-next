@@ -12,6 +12,7 @@ import MobileFilterBar from '@/components/product/MobileFilterBar'
 import PriceRangeFilter from '@/components/product/PriceRangeFilter'
 import { formatPrice } from '@/lib/utils'
 import type { Product } from '@/types'
+import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 60
 
@@ -346,6 +347,9 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
           body { padding-bottom: 76px; }
         }
       `}</style>
+      {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
+          sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
+      <OurPromiseSection />
     </div>
   )
 }
