@@ -388,6 +388,16 @@ export async function POST(req: NextRequest) {
       //    P2: a previously-failed order (payment.failed on an earlier attempt, or
       //    released by the expiry job) is recovered here instead of silently
       //    returning "success" while the order stays dead.
+      // MONEY FIRST: record the verified capture before the order is flipped to paid. If it cannot
+      // be recorded we stop here; the order stays unpaid and the webhook / a retry completes it.
+      const recorded = await recordCapturedPayment(db, {
+        orderId: order_id, razorpayPaymentId: razorpay_payment_id,
+        amountInr: verifiedPaymentAmountInr, alertAction: 'payments.verify.payments_insert',
+      })
+      if (!recorded) {
+        throw new Error('Payment could not be recorded. Please contact support with payment ID: ' + razorpay_payment_id)
+      }
+
       const confirm = await confirmOrderPayment(db, {
         orderId: order_id, razorpayPaymentId: razorpay_payment_id, source: 'verify_payment',
       })
@@ -432,11 +442,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // We won (confirmed | recovered): audit row + loyalty + e-mail, exactly once.
-      await recordCapturedPayment(db, {
-        orderId: order_id, razorpayPaymentId: razorpay_payment_id,
-        amountInr: verifiedPaymentAmountInr, alertAction: 'payments.verify.payments_insert',
-      })
+      // We won (confirmed | recovered): loyalty + e-mail, exactly once (the payment row is already recorded above).
       const settings = await getFreshSiteSettings()
       await runPaidSideEffects(db, {
         order: {

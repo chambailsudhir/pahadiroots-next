@@ -214,6 +214,14 @@ export async function POST(req: Request) {
             razorpay_payment_id: paymentId, reason: problem, paid_paise: payment.amount, expected_paise: expectedPaise,
           })
         } else {
+          // MONEY FIRST: record the captured payment before flipping the order to paid. A failure
+          // throws, the outer catch returns 500 and Razorpay retries this event.
+          const recorded = await recordCapturedPayment(db, {
+            orderId: order.id, razorpayPaymentId: paymentId, amountInr: payment.amount / 100,
+            alertAction: 'webhook.razorpay.payments_insert',
+          })
+          if (!recorded) throw new Error('payment.captured could not be recorded in payments')
+
           const confirm = await confirmOrderPayment(db, {
             orderId: order.id, razorpayPaymentId: paymentId, source: 'webhook',
           })
@@ -236,10 +244,6 @@ export async function POST(req: Request) {
               razorpay_payment_id: paymentId,
               amount: payment.amount / 100,
               recovered: confirm.outcome === 'recovered',
-            })
-            await recordCapturedPayment(db, {
-              orderId: order.id, razorpayPaymentId: paymentId, amountInr: payment.amount / 100,
-              alertAction: 'webhook.razorpay.payments_insert',
             })
             const settings = await getFreshSiteSettings()
             await runPaidSideEffects(db, {

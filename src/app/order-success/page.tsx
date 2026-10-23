@@ -775,7 +775,7 @@ function SuccessContent() {
                   <div className="oc-del-field"><label>Phone</label><span>{order.customer_phone || '—'}</span></div>
                   <div className="oc-del-field" style={{gridColumn:'1/-1'}}><label>Address</label><span>{addr || '—'}</span></div>
                   <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {estimate}</span></div>
-                  <div className="oc-del-field"><label>Payment</label><span>{order.payment_method === 'razorpay_online' ? '💳 Online' : '📱 COD + WhatsApp'}</span></div>
+                  <div className="oc-del-field"><label>Payment</label><span>{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '📱 COD + WhatsApp'}</span></div>
                 </div>
               </div>
 

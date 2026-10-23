@@ -163,7 +163,7 @@ export async function storeRazorpayOrderId(db: Db, orderId: string, razorpayOrde
 export async function recordCapturedPayment(
   db: Db,
   args: { orderId: string; razorpayPaymentId: string; amountInr: number; alertAction: string },
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await db
     .from('payments')
     .insert({
@@ -176,11 +176,15 @@ export async function recordCapturedPayment(
     })
     .select('id')
   if (error && !String(error.message).includes('duplicate')) {
-    // Non-fatal: the order is already confirmed; surface so ops can backfill.
+    // MONEY FIRST (Oct 2026 audit): callers record the captured payment BEFORE flipping the order
+    // to paid, and stop when this returns false, so a paid order can never exist without its
+    // payment row. A duplicate (same provider + reference) means it is already recorded: success.
     captureError(new Error('payments insert failed: ' + error.message), {
       action: args.alertAction, order_id: args.orderId, razorpay_payment_id: args.razorpayPaymentId, alert: true,
     })
+    return false
   }
+  return true
 }
 
 export interface PaidOrderRow {
