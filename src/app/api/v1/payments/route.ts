@@ -16,6 +16,7 @@ import { sanitize } from '@/lib/server/sanitize'
 // P1/P6: constant-time compare + server-to-server payment verification.
 import { safeEqual, isRazorpayOrderId, fetchRazorpayPayment, checkPaymentAgainstOrder } from '@/lib/server/razorpay'
 import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects, storeRazorpayOrderId } from '@/lib/server/orderPayments'
+import { isStoreOpen } from '@/lib/siteSettingsHelpers'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
       // deliberately left ungated, since blocking that would leave a
       // customer's payment taken but their order unconfirmed, which is worse
       // than letting an already-initiated transaction finish.
-      if (settings.store_open === 'false') {
+      if (!isStoreOpen(settings)) {
         return NextResponse.json(
           { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
           { status: 503 },

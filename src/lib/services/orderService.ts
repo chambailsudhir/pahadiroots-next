@@ -158,7 +158,7 @@ import { variantLinePrice, variantLineMrp, productLinePrice, productLineMrp } fr
 import { reserveStockAtomicForOrder } from './inventoryService'
 import { isAmbiguousLine, buildOwnerMap, resolveLine, type LineKind } from '@/lib/lineKinds'
 import { calcPriceSummary } from './pricingService'
-import { isCodEnabled } from '@/lib/siteSettingsHelpers'
+import { assertPaymentMethodAvailable } from '@/lib/siteSettingsHelpers'
 import { checkServiceability } from '@/lib/serviceability'
 import { claimCouponUse, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
 
@@ -838,10 +838,12 @@ export async function createOrder(
   // match what the customer was shown.
   const pricing = calcPriceSummary(cartItems, settings, appliedCoupon, input.paymentMethod, loyaltyDiscountInr)
 
-  // 6. COD availability check
-  if (input.paymentMethod === 'cod' && !isCodEnabled(settings)) {
-    throw new Error('COD is not available at this time')
-  }
+  // 6. Payment method availability (COD and Razorpay switches), enforced on the server.
+  assertPaymentMethodAvailable(input.paymentMethod, settings as unknown as Record<string, string | undefined>)
+
+  // Oct 2026: "Enable Razorpay" in the admin only hid the button in the browser; assertPaymentMethodAvailable above now
+  // enforces it here too. It gates NEW order creation only: verify_payment and the webhook (a payment the customer
+  // already made) are deliberately never blocked by this switch.
 
   // 6b. FIX: cod_max_value (max order value eligible for COD) was only ever
   // enforced client-side (useCheckoutPage.ts's `codOk`, which just disables

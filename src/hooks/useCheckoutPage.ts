@@ -31,7 +31,7 @@ import { calcPriceSummary }     from '@/lib/services/pricingService'
 import { useCheckoutAnalytics } from '@/hooks/useCheckoutAnalytics'
 import { stashConfirmationToken } from '@/lib/confirmationToken'
 import { getShippingPolicy } from '@/lib/shippingCopy'
-import { isCodEnabled } from '@/lib/siteSettingsHelpers'
+import { isCodEnabled, isRazorpayEnabledByAdmin } from '@/lib/siteSettingsHelpers'
 import {
   readProfileCache  as _readProfileCache,
   writeProfileCache as _writeProfileCache,
@@ -286,7 +286,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // and new primitive values that could invalidate downstream useMemo/useCallback
   // deps unnecessarily. Each constant depends only on its specific setting key.
   const codEnabled = useMemo(() => isCodEnabled(s), [s])
-  const upiAdminOn = useMemo(() => s.upi_enabled !== 'false', [s.upi_enabled])
+  const upiAdminOn = useMemo(() => isRazorpayEnabledByAdmin(s), [s])
   // razorpayKeyId is a compile-time constant — no need to memoize
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
   const razorpayEnabled = useMemo(() => !!razorpayKeyId && upiAdminOn, [razorpayKeyId, upiAdminOn])

@@ -37,7 +37,7 @@ import './checkout.css'
 
 import Script from 'next/script'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef }  from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatPrice }  from '@/lib/utils'
 import { INDIA_STATES } from '@/lib/account/constants'
 import { useCheckoutPage } from '@/hooks/useCheckoutPage'
@@ -60,7 +60,43 @@ const CHECKOUT_TRUST_ITEMS = [
   { icon: '💬', t: 'WhatsApp Support', d: 'Real humans, always here'    },
 ] as const
 
-export function CheckoutClient({ settings }: { settings: SiteSettings }) {
+// Oct 2026: the checkout page is rendered fresh on every load, but a customer who is ALREADY on it kept seeing
+// stale payment options if the admin switched COD or Razorpay off meanwhile (the server still refused the order,
+// with an error at the last step). These are the only keys that change what the payment step offers.
+const LIVE_SETTING_KEYS = ['cod_enabled', 'upi_enabled', 'cod_max_value', 'prepaid_discount_pct', 'cod_surcharge_amount'] as const
+const LIVE_REFRESH_MS = 20_000
+
+function useLiveCheckoutSettings(initial: SiteSettings): SiteSettings {
+  const [live, setLive] = useState<SiteSettings>(initial)
+  useEffect(() => {
+    if (typeof fetch !== 'function' || typeof document === 'undefined') return
+    let stopped = false
+    const refresh = async () => {
+      try {
+        const res = await fetch('/api/v1/cart-settings', { cache: 'no-store' })
+        if (!res.ok) return
+        const json = (await res.json()) as { settings?: Record<string, string> }
+        const fresh = json?.settings
+        if (stopped || !fresh) return
+        setLive(prev => {
+          const changed = LIVE_SETTING_KEYS.some(k => fresh[k] !== undefined && fresh[k] !== (prev as unknown as Record<string, string>)[k])
+          if (!changed) return prev
+          const next = { ...prev } as unknown as Record<string, string>
+          for (const k of LIVE_SETTING_KEYS) if (fresh[k] !== undefined) next[k] = fresh[k]
+          return next as unknown as SiteSettings
+        })
+      } catch { /* offline or blip: keep what we have */ }
+    }
+    const timer = setInterval(refresh, LIVE_REFRESH_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { stopped = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
+  }, [])
+  return live
+}
+
+export function CheckoutClient({ settings: initialSettings }: { settings: SiteSettings }) {
+  const settings = useLiveCheckoutSettings(initialSettings)
   const {
     storeReady,
     cartNotices, dismissCartNotices,

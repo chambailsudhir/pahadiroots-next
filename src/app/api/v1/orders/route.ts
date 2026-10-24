@@ -17,6 +17,7 @@ import { logger, captureError } from '@/lib/logger'
 // REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
 // Was duplicated in payments/route.ts — single source of truth now.
 import { sanitize } from '@/lib/server/sanitize'
+import { isStoreOpen } from '@/lib/siteSettingsHelpers'
 
 // NOTE: createOrderSchema (imported from @/lib/schemas) is the canonical validation
 // schema for this route. coupon_code is accepted but the DISCOUNT is never trusted
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
     // order (and payment) go through while the storefront visibly shows as
     // closed. `settings` was already being fetched on this line for other
     // fields; store_open just wasn't one of the things checked.
-    if (settings.store_open === 'false') {
+    if (!isStoreOpen(settings)) {
       return NextResponse.json(
         { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
         { status: 503 },

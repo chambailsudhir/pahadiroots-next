@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import { stripServerOnlySettings } from '@/lib/siteSettingsHelpers'
+import { stripServerOnlySettings, isStoreOpen } from '@/lib/siteSettingsHelpers'
 import { sanitizeHtml } from '@/lib/server/sanitize'
 import { getCatalogMeta } from '@/lib/storeData'
 import { logger } from '@/lib/logger'
@@ -173,7 +173,7 @@ export default async function RootLayout({
   // actually check out on. When the store is closed, /maintenance is the
   // only route customers can reach anyway (proxy.ts redirects everything
   // else), so there is nothing for any of this chrome to usefully do.
-  const isMaintenanceMode = settings.store_open === 'false'
+  const isMaintenanceMode = !isStoreOpen(settings)
   const tagId = TAG_ID_RE.test((settings.google_tag_id || '').trim()) ? settings.google_tag_id.trim() : ''
   // Owner's choice in Admin → Settings → "Cookie consent banner" ('region' | 'always' | 'off'; anything else → 'region').
   const consentMode = normalizeConsentMode(settings.cookie_consent_mode)

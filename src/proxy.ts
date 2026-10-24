@@ -1,5 +1,6 @@
 import { GEO_COOKIE, geoValueFor } from '@/lib/consentRegion'
 import { NextRequest, NextResponse } from 'next/server'
+import { isStoreOpen } from '@/lib/siteSettingsHelpers'
 
 /**
  * middleware.ts — first-layer edge guardrail.
@@ -95,7 +96,9 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 // a Supabase round-trip. Cache the answer in module memory instead (per
 // instance): 30s after a successful read, 5s after a failure so a transient
 // blip neither hammers Supabase nor sticks. Still fail-open.
-const STORE_OPEN_TTL_OK_MS   = 30_000
+// Oct 2026: 30s -> 3s. "Close Store" must take effect in seconds. The read is one tiny indexed row, so a short
+// per instance cache costs next to nothing.
+const STORE_OPEN_TTL_OK_MS   = 3_000
 const STORE_OPEN_TTL_FAIL_MS = 5_000
 let storeClosedCache: { closed: boolean; expiresAt: number } | null = null
 
@@ -118,7 +121,7 @@ async function isStoreClosed(): Promise<boolean> {
       return false
     }
     const rows: { value: string }[] = await res.json()
-    const closed = rows[0]?.value === 'false'
+    const closed = rows[0]?.value !== undefined && !isStoreOpen({ store_open: rows[0].value })
     storeClosedCache = { closed, expiresAt: now + STORE_OPEN_TTL_OK_MS }
     return closed
   } catch {

@@ -38,6 +38,32 @@ export function asNumber(value: string | undefined, defaultValue: number): numbe
 export const FALLBACK_FREE_SHIPPING_MIN = 0   // 0 = every order ships free (matches the live DB row)
 export const FALLBACK_FLAT_SHIPPING     = 99
 
+// ── Store open / Razorpay switches — ONE definition each (Oct 2026) ──────────────────────────────────
+// The maintenance gate and the order routes compared store_open with an exact 'false', while the Razorpay
+// switch (upi_enabled) was only read in the browser. Both now share isEnabled()'s parsing (false/0/off/no,
+// any case) and are enforced on the server where the money moves.
+export function isStoreOpen(settings: { store_open?: string | null } | Record<string, string | undefined>): boolean {
+  return isEnabled((settings as { store_open?: string }).store_open ?? undefined, true)
+}
+// Online (Razorpay) payments. Unset → ON (matches the checkout UI, which only hides the button on an explicit off).
+export function isRazorpayEnabledByAdmin(settings: { upi_enabled?: string | null } | Record<string, string | undefined>): boolean {
+  return isEnabled((settings as { upi_enabled?: string }).upi_enabled ?? undefined, true)
+}
+
+// The one gate used by order creation: throws a customer facing message when the chosen payment method is
+// switched off in the admin. Pure, so it is unit tested without a database.
+export function assertPaymentMethodAvailable(
+  method: 'cod' | 'razorpay',
+  settings: Record<string, string | undefined | null>,
+): void {
+  if (method === 'cod' && !isCodEnabled(settings as Record<string, string | undefined>)) {
+    throw new Error('COD is not available at this time')
+  }
+  if (method === 'razorpay' && !isRazorpayEnabledByAdmin(settings as Record<string, string | undefined>)) {
+    throw new Error('Online payment is not available at this time')
+  }
+}
+
 // ── COD switch — ONE definition (F-05, Oct 2026 audit) ───────────────────────
 // The checkout UI used `!== 'false'`, the order service `=== 'false'` — so 'False', '0', 'off' or a
 // missing row meant different things on the client and the server, and customer-facing copy (the
