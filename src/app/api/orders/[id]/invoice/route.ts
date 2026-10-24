@@ -63,6 +63,8 @@ export async function GET(
 ) {
   const { id } = await params
   if (!id) return fail(400, 'Order ID required')
+  // AUDIT R2 SF-6: validate like /api/orders/[id] — the id is interpolated into a REST filter.
+  if (!/^[0-9]+$/.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return fail(400, 'Invalid order ID')
 
   let token = getToken(req)
   let refreshed = !token ? await tryRefresh(req) : null

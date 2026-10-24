@@ -20,6 +20,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
+import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import {
   ok, fail,
   sbAuth, sbAdmin,
@@ -86,6 +87,13 @@ export async function POST(
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
+    // AUDIT R2 SF-4: signed upload URLs were unlimited for any logged-in customer (the photo-count cap only
+    // counts photos already attached to a return). Cap issuance per customer so the PUBLIC bucket cannot be
+    // filled with arbitrary uploads.
+    if (!await checkRateLimitKv(`mw:rl:return_upload:${profile.id}`, 12, 3600)) {
+      return fail(429, 'Too many uploads — please try again later')
+    }
+
     // Ownership check — same as the sibling /return route
     const rows = await sbAdmin(
       'GET',
@@ -134,8 +142,8 @@ export async function POST(
       },
     )
     if (!signRes.ok) {
-      const err = await signRes.text()
-      return fail(502, `Storage sign error: ${err}`)
+      console.error('[return upload-url] storage sign failed:', (await signRes.text()).slice(0, 300))
+      return fail(502, 'Upload URL request failed')
     }
     // BUG FIX: the raw Storage REST API returns a single relative
     // `url` field with the token embedded as a query param —

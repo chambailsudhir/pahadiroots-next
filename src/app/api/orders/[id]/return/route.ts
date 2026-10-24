@@ -114,9 +114,12 @@ export async function POST(
     // "evidence". Capped defensively even though upload-url also caps it,
     // since this route doesn't otherwise know how many were issued.
     if (Array.isArray(body?.photo_urls)) {
-      const expectedPrefix = `/storage/v1/object/public/pahadi-images/returns/${id}/`
+      // AUDIT R2 SF-3: `includes()` accepted ANY URL that merely contained this path (e.g.
+      // `javascript:alert(1)//storage/v1/...` or an attacker's own host), and the admin panel renders
+      // these as links/images. Must START with this project's own public storage URL.
+      const expectedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/pahadi-images/returns/${id}/`
       photoUrls = body.photo_urls
-        .filter((u: unknown) => typeof u === 'string' && u.includes(expectedPrefix))
+        .filter((u: unknown) => typeof u === 'string' && !!process.env.NEXT_PUBLIC_SUPABASE_URL && u.startsWith(expectedPrefix) && !/[\s<>"']/.test(u))
         .slice(0, 4)
     }
   } catch {

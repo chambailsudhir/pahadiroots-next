@@ -259,8 +259,11 @@ export async function POST(req: NextRequest) {
   if (csrfError) return csrfError
 
   // ── Rate limiting — applied to sensitive actions ──────────
+  // AUDIT R2 SF-1: forgot_password was unlimited — anyone could e-mail-bomb a registered address
+  // (and burn Resend quota / sender reputation). Account-linking actions get the same throttle.
   const RATE_LIMITED_ACTIONS = new Set([
-    'send_otp', 'verify_otp', 'email_login', 'email_signup', 'change_password'
+    'send_otp', 'verify_otp', 'email_login', 'email_signup', 'change_password',
+    'forgot_password', 'link_email', 'link_phone', 'reset_password',
   ])
   if (RATE_LIMITED_ACTIONS.has(action || '')) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -272,6 +275,15 @@ export async function POST(req: NextRequest) {
         { error: 'Too many attempts. Please wait a minute before trying again.' },
         { status: 429, headers: { 'Retry-After': '60' } }
       )
+    }
+  }
+
+  // AUDIT R2 SF-1: per-ADDRESS cap on reset e-mails (the per-IP limit above does not stop a botnet).
+  if (action === 'forgot_password') {
+    const target = String((body as { email?: string }).email || '').trim().toLowerCase().slice(0, 254)
+    if (target && !await rateLimit(`forgot_password_email:${target}`, 3, 60 * 60_000)) {
+      // Same generic answer as a normal request: do not reveal whether the address exists.
+      return NextResponse.json({ success: true, message: 'If that email is registered, a reset link has been sent.' })
     }
   }
 
@@ -665,6 +677,8 @@ export async function POST(req: NextRequest) {
       description?: string; refund_amount?: string; selected_items?: Array<{ name?: string }>; is_partial?: boolean
     }
     if (!order_id || !reason) return err(400, 'order_id and reason required')
+    // AUDIT R2 SF-2: order_id is interpolated into REST filters below — it must be a plain id.
+    if (!/^[0-9]+$/.test(String(order_id)) && !/^[0-9a-f-]{36}$/i.test(String(order_id))) return err(400, 'Invalid order_id')
 
     if (!RETURN_REASON_CODES.includes(reason as typeof RETURN_REASON_CODES[number])) {
       return err(400, `Invalid reason. Must be one of: ${RETURN_REASON_CODES.join(', ')}`)
@@ -719,7 +733,10 @@ export async function POST(req: NextRequest) {
           : (is_partial && selected_items?.length)
             ? `Partial return: ${selected_items.map(i => i.name).join(', ')}`
             : null,
-        refund_amount: refund_amount ? parseFloat(refund_amount) : null,
+        // AUDIT R2 SF-2: a customer must never choose the refund amount. It was stored as sent (negative,
+        // NaN, or far above the order) and could be pre-filled in the admin refund screen. The amount is
+        // set by staff (admin enforces <= order total and a cumulative per-order cap).
+        refund_amount: null,
         status: 'requested', restock: true,
         created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       })
