@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import { INDIA_STATES } from '@/lib/account/constants'
+
+// GST depends on the delivery state (same state as the seller = CGST + SGST, otherwise IGST), so the
+// server accepts only a real Indian state or union territory and stores its canonical spelling. The
+// checkout form already offers a dropdown, but a direct API call or an old saved address could send free
+// text such as "Utter prades", which silently broke the GST split.
+const STATE_LOOKUP = new Map<string, string>(INDIA_STATES.map(s => [s.toLowerCase(), s]))
 
 // ─── Address Schema ────────────────────────────────────────────────────────────
 
@@ -8,7 +15,14 @@ export const addressSchema = z.object({
   flat:    z.string().trim().min(1).max(200),
   area:    z.string().trim().max(200).optional().default(''),
   city:    z.string().trim().min(2).max(100),
-  state:   z.string().trim().min(2).max(100),
+  state:   z.string().trim().min(2).max(100).transform((v, ctx) => {
+    const canonical = STATE_LOOKUP.get(v.toLowerCase())
+    if (!canonical) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Select a valid Indian state or union territory' })
+      return z.NEVER
+    }
+    return canonical
+  }),
   pincode: z.string().trim().regex(/^\d{6}$/, 'Invalid 6-digit pincode'),
   label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
 })
