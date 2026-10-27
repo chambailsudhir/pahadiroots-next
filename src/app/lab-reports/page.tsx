@@ -4,6 +4,11 @@
 // ACTIVE certificates linked to active honey products (admin → Catalogue →
 // Certificates), so a newly uploaded report appears here without reprinting.
 //
+// BATCH LOOKUP: the jar label carries a batch number (e.g. HVP-HNY-001). The
+// customer types it below and sees pack date + best-before from `batches`. A
+// batch has NO report of its own — lab reports cover the harvest/source — so the
+// result says so explicitly rather than implying each batch was tested.
+//
 // Same rules as the PDP CertificateCard: only the parameters the certificate
 // actually ticks are claimed; lab name and test date stay internal (admin marks
 // them "not shown on the storefront"); the master "show certificates" switch
@@ -14,8 +19,6 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { certifiedParameters, joinParameters } from '@/lib/certificateCopy'
-
-export const revalidate = 300
 
 export const metadata: Metadata = {
   title: 'Honey Lab Test Reports — HimVeda by Pahadi Roots',
@@ -77,6 +80,39 @@ async function loadReports(): Promise<CertRow[]> {
   }
 }
 
+interface BatchRow {
+  batch_no: string
+  pack_date: string | null
+  best_before: string | null
+  products: { name: string } | { name: string }[] | null
+}
+
+// Same rule as the DB check constraint (batches_batch_no_format) — also stops junk reaching the query.
+const BATCH_RE = /^[A-Z0-9-]{3,32}$/
+
+async function loadBatch(batchNo: string): Promise<BatchRow | null> {
+  try {
+    const { data } = await supabase
+      .from('batches')
+      .select('batch_no, pack_date, best_before, products(name)')
+      .eq('batch_no', batchNo)
+      .eq('is_active', true)
+      .maybeSingle()
+    return (data as BatchRow | null) ?? null
+  } catch (e) {
+    console.error('[lab-reports] batch lookup failed:', e)
+    return null
+  }
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return '—'
+  const dt = new Date(`${d}T00:00:00Z`)
+  return Number.isNaN(dt.getTime())
+    ? d
+    : dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+}
+
 function ticked(c: CertRow) {
   return [c.has_purity, c.has_heavy_metals, c.has_pesticides, c.has_active_ingredients].filter(Boolean).length
 }
@@ -85,9 +121,20 @@ function titleCase(s: string) {
   return s.replace(/\b\w/g, m => m.toUpperCase())
 }
 
-export default async function LabReportsPage() {
-  const settings = await getSiteSettings()
+export default async function LabReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const sp = await searchParams
+  const rawBatch = typeof sp.batch === 'string' ? sp.batch.trim().toUpperCase() : ''
+  const batchValid = BATCH_RE.test(rawBatch)
+  const [settings, batch] = await Promise.all([
+    getSiteSettings(),
+    batchValid ? loadBatch(rawBatch) : Promise.resolve(null),
+  ])
   const reports = isEnabled(settings.show_certificates) ? await loadReports() : []
+  const productName = batch ? (Array.isArray(batch.products) ? batch.products[0]?.name : batch.products?.name) : null
 
   return (
     <main className="max-w-xl mx-auto px-4 py-10 sm:py-14">
@@ -96,6 +143,40 @@ export default async function LabReportsPage() {
       <p className="mt-3 text-sm text-stone-600 leading-relaxed">
         Independent laboratory reports for our honey. Tap a report to open the original document.
       </p>
+
+      <form action="/lab-reports" method="get" className="mt-6 rounded-xl border border-stone-200 bg-white p-4">
+        <label htmlFor="batch" className="block text-sm font-semibold text-stone-800">Enter the batch number from your jar</label>
+        <div className="mt-2 flex gap-2">
+          <input
+            id="batch" name="batch" defaultValue={rawBatch} placeholder="HVP-HNY-001"
+            maxLength={32} autoCapitalize="characters" autoComplete="off"
+            className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm uppercase"
+          />
+          <button type="submit" className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white">Check</button>
+        </div>
+      </form>
+
+      {rawBatch && (
+        batch ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5" role="status">
+            <div className="text-xs font-semibold text-emerald-800">Batch verified</div>
+            <div className="mt-1 text-lg font-bold text-stone-900 font-mono">{batch.batch_no}</div>
+            {productName && <div className="text-sm text-stone-700">{productName}</div>}
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div><dt className="text-xs text-stone-500">Packed on</dt><dd className="font-semibold text-stone-900">{fmtDate(batch.pack_date)}</dd></div>
+              <div><dt className="text-xs text-stone-500">Best before</dt><dd className="font-semibold text-stone-900">{fmtDate(batch.best_before)}</dd></div>
+            </dl>
+            <p className="mt-3 text-xs text-stone-600">
+              The lab reports below cover the harvest/source this honey comes from. They are not a separate test of this individual batch.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-stone-700" role="status">
+            We couldn&apos;t find batch <span className="font-mono font-semibold">{rawBatch.slice(0, 32)}</span>. Please check the number printed on your jar,
+            or write to us at <a href="mailto:hello@pahadiroots.com" className="font-semibold text-emerald-800 underline">hello@pahadiroots.com</a>.
+          </div>
+        )
+      )}
 
       {reports.length === 0 ? (
         <div className="mt-8 rounded-xl border border-stone-200 bg-white p-5 text-sm text-stone-600">
