@@ -36,16 +36,23 @@ interface CertRow {
   has_active_ingredients: boolean
 }
 
-async function loadReports(): Promise<CertRow[]> {
+// productId: the batch's own product when a batch was looked up (so only THAT product's reports show);
+// otherwise every active honey product's reports.
+async function loadReports(productId?: number | null): Promise<CertRow[]> {
   try {
-    const { data: prods } = await supabase
-      .from('products')
-      .select('id')
-      .eq('is_deleted', false)
-      .eq('status', 'active')
-      .ilike('name', '%honey%')
-      .limit(200)
-    const ids = (prods ?? []).map(p => p.id)
+    let ids: number[]
+    if (productId) {
+      ids = [productId]
+    } else {
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id')
+        .eq('is_deleted', false)
+        .eq('status', 'active')
+        .ilike('name', '%honey%')
+        .limit(200)
+      ids = (prods ?? []).map(p => p.id)
+    }
     if (ids.length === 0) return []
 
     const { data: links } = await supabase
@@ -82,6 +89,7 @@ async function loadReports(): Promise<CertRow[]> {
 
 interface BatchRow {
   batch_no: string
+  product_id: number | null
   pack_date: string | null
   best_before: string | null
   products: { name: string } | { name: string }[] | null
@@ -94,7 +102,7 @@ async function loadBatch(batchNo: string): Promise<BatchRow | null> {
   try {
     const { data } = await supabase
       .from('batches')
-      .select('batch_no, pack_date, best_before, products(name)')
+      .select('batch_no, product_id, pack_date, best_before, products(name)')
       .eq('batch_no', batchNo)
       .eq('is_active', true)
       .maybeSingle()
@@ -133,7 +141,8 @@ export default async function LabReportsPage({
     getSiteSettings(),
     batchValid ? loadBatch(rawBatch) : Promise.resolve(null),
   ])
-  const reports = isEnabled(settings.show_certificates) ? await loadReports() : []
+  // Batch found and tied to a product → that product's reports only; otherwise all honey reports.
+  const reports = isEnabled(settings.show_certificates) ? await loadReports(batch?.product_id) : []
   const productName = batch ? (Array.isArray(batch.products) ? batch.products[0]?.name : batch.products?.name) : null
 
   return (
