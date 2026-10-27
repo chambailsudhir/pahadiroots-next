@@ -25,7 +25,6 @@ import PincodeRow from '@/components/product/PincodeRow'
 import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
 import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
 import { certifiedParameters, joinParameters, mergeCertificateFlags } from '@/lib/certificateCopy'
-import { MANUFACTURER_AND_PACKER } from '@/lib/legalEntity'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -682,15 +681,14 @@ export default async function ProductPage({ params }: Props) {
                 : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
             </div>
 
-            {/* Product facts that come from real data only: the admin's Shelf Life / Packaging Type attributes and the
-                FSSAI licence number from Admin → Settings (same source the footer uses). Hidden when not entered. */}
-            {(
+            {/* Product facts that come from real data only: the admin's Shelf Life / Packaging Type attributes.
+                Hidden when not entered. (The "Manufactured & packed by" and FSSAI licence lines were removed from
+                here at the owner's request, Oct 2026 — the FSSAI number still shows in the footer.) */}
+            {(shelfLife || attributes?.packaging_type) && (
               <p className="pdp-fine-print">
                 {[
-                  `Manufactured & packed by ${MANUFACTURER_AND_PACKER}`,
                   shelfLife ? `Shelf life: ${shelfLife}` : '',
                   attributes?.packaging_type ? `Packaging: ${attributes.packaging_type}` : '',
-                  fssaiLicense ? `FSSAI Lic. No. ${fssaiLicense}` : '',
                 ].filter(Boolean).join(' · ')}
               </p>
             )}

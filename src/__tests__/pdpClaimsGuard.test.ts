@@ -47,9 +47,8 @@ describe('lab-test wording is certificate-driven', () => {
 })
 
 describe('manufacturer / packer line', () => {
-  it('PDP shows "Manufactured & packed by" the confirmed legal entity', () => {
-    expect(code).toContain('Manufactured & packed by')
-    expect(code).toContain('MANUFACTURER_AND_PACKER')
-    expect(readFileSync(join(__dirname, '../lib/legalEntity.ts'), 'utf8')).toContain("'Chambail International'")
+  it('PDP fine print no longer shows the manufacturer or FSSAI lines (removed at owner request, Oct 2026)', () => {
+    expect(code).not.toContain('Manufactured & packed by')
+    expect(code).not.toContain('FSSAI Lic. No.')
   })
 })
