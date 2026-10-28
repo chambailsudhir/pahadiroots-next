@@ -88,10 +88,34 @@ describe('<ResetPasswordPage />', () => {
     expect(screen.queryByLabelText('New password')).toBeNull()
   })
 
-  it('shows the Supabase error text for an expired link', async () => {
-    setLocation('/reset-password#error=access_denied&error_description=Email+link+is+invalid+or+has+expired')
+  it('explains an expired / used link in plain words (not the raw Supabase text)', async () => {
+    setLocation('/reset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')
     render(<ResetPasswordPage />)
-    expect((await screen.findByRole('alert')).textContent).toContain('Email link is invalid or has expired')
+    const alert = (await screen.findByRole('alert')).textContent || ''
+    expect(alert).toMatch(/expired or was already used/)
+    expect(alert).not.toContain('sb=')
+  })
+
+  it('offers a "send me a new link" form that requests forgot_password and never reveals whether the address exists', async () => {
+    setLocation('/reset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')
+    render(<ResetPasswordPage />)
+    fireEvent.change(await screen.findByLabelText('Your account e-mail'), { target: { value: 'a@b.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send me a new link/i }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/auth')
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ action: 'forgot_password', email: 'a@b.com' })
+    expect((init as RequestInit).credentials).toBe('omit')
+    expect((await screen.findByRole('status')).textContent).toMatch(/If that e-mail is registered/)
+  })
+
+  it('rejects an obviously invalid e-mail without calling the API', async () => {
+    setLocation('/reset-password#error=access_denied&error_code=otp_expired')
+    render(<ResetPasswordPage />)
+    fireEvent.change(await screen.findByLabelText('Your account e-mail'), { target: { value: 'not-an-email' } })
+    fireEvent.click(screen.getByRole('button', { name: /send me a new link/i }))
+    expect((await screen.findAllByRole('alert')).map(a => a.textContent).join(' ')).toMatch(/e-mail address of your account/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('rejects a password shorter than 8 characters without calling the API', async () => {

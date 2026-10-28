@@ -26,6 +26,7 @@
 import { useEffect } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
+import { recoveryLandingTarget } from '@/app/reset-password/resetPasswordHelpers'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -65,6 +66,12 @@ export default function GoogleAuthHandler() {
   const setUser = useUserStore(s => s.setUser)
 
   useEffect(() => {
+    // Password-reset e-mail links that landed on the wrong page (Supabase falls back to the Site URL
+    // when redirect_to is not allow-listed) are forwarded to /reset-password with the hash intact —
+    // the token is NEVER consumed here, only handed to the reset page.
+    const forward = recoveryLandingTarget(window.location.pathname, window.location.hash)
+    if (forward) { window.location.replace(forward); return }
+
     // AUDIT S2-004 / S2-001: leave the URL (hash AND ?code=) completely alone
     // anywhere except the dedicated callback route, and for recovery links.
     if (!shouldHandleOAuthLanding(window.location.pathname, window.location.hash)) return

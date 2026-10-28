@@ -27,7 +27,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import {
   RESET_PASSWORD_MIN_LENGTH, RESET_RESULT_KEY,
-  parseRecoveryHash, validateNewPassword,
+  parseRecoveryHash, validateNewPassword, friendlyLinkError,
 } from './resetPasswordHelpers'
 
 type Phase = 'checking' | 'ready' | 'submitting' | 'done' | 'invalid'
@@ -42,6 +42,25 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm,  setConfirm]  = useState('')
   const [error,    setError]    = useState('')
+  const [email,    setEmail]    = useState('')
+  const [resend,   setResend]   = useState<'idle' | 'sending' | 'sent'>('idle')
+
+  async function requestNewLink(e: FormEvent) {
+    e.preventDefault()
+    const addr = email.trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) { setError('Enter the e-mail address of your account.'); return }
+    setError('')
+    setResend('sending')
+    try {
+      await fetch('/api/auth', {
+        method: 'POST', credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'forgot_password', email: addr }),
+        signal: AbortSignal.timeout(10_000),
+      })
+    } catch { /* same neutral answer either way — never reveal whether the address exists */ }
+    setResend('sent')
+  }
 
   useEffect(() => {
     // Same shape as /auth/google-callback: the hash can only be read after
@@ -55,7 +74,7 @@ export default function ResetPasswordPage() {
       }
 
       if (hashError) {
-        setError(hashError)
+        setError(friendlyLinkError(hashError))
         setPhase('invalid')
         return
       }
@@ -117,12 +136,23 @@ export default function ResetPasswordPage() {
         {phase === 'invalid' && (
           <>
             <p style={styles.errorBox} role="alert">
-              {error || 'This reset link is invalid or has expired.'}
+              {error || friendlyLinkError(null)}
             </p>
-            <p style={styles.muted}>
-              Request a new link from the sign-in screen (“Forgot password?”).
-            </p>
-            <a href="/account" style={styles.button}>Go to sign in</a>
+            {resend === 'sent' ? (
+              <p style={styles.successBox} role="status">
+                If that e-mail is registered, a new reset link is on its way. Open the newest e-mail and use the link once.
+              </p>
+            ) : (
+              <form onSubmit={requestNewLink} noValidate>
+                <label style={styles.label} htmlFor="rp-email">Your account e-mail</label>
+                <input id="rp-email" type="email" autoComplete="email" value={email}
+                  onChange={e => setEmail(e.target.value)} style={styles.input} disabled={resend === 'sending'} />
+                <button type="submit" style={styles.button} disabled={resend === 'sending'}>
+                  {resend === 'sending' ? 'Sending…' : 'Send me a new link'}
+                </button>
+              </form>
+            )}
+            <a href="/account" style={{ ...styles.button, background: 'transparent', color: '#1a5c2a', border: '1px solid #1a5c2a' }}>Back to sign in</a>
           </>
         )}
 
