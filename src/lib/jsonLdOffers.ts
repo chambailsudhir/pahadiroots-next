@@ -32,6 +32,38 @@ interface OfferProduct {
   sku?: string | null
 }
 
+/**
+ * Policy facts that Google's Product rich results and Merchant listings read
+ * from each Offer. Both are optional so callers without the data keep the
+ * previous output unchanged. `shippingCharge` is the typical shipping rate in
+ * INR (0 = free); `returnDays` is the finite window in which a customer can
+ * raise a return/replacement request.
+ */
+export interface OfferPolicy {
+  shippingCharge?: number | null
+  returnDays?:     number | null
+}
+
+function policyFields(policy?: OfferPolicy): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  if (policy?.shippingCharge != null && Number.isFinite(policy.shippingCharge)) {
+    out.shippingDetails = {
+      '@type': 'OfferShippingDetails',
+      shippingRate: { '@type': 'MonetaryAmount', value: String(policy.shippingCharge), currency: 'INR' },
+      shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
+    }
+  }
+  if (policy?.returnDays != null && policy.returnDays > 0) {
+    out.hasMerchantReturnPolicy = {
+      '@type': 'MerchantReturnPolicy',
+      applicableCountry: 'IN',
+      returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+      merchantReturnDays: policy.returnDays,
+    }
+  }
+  return out
+}
+
 const DEFAULT_SELLER_NAME = 'HimVeda by Pahadi Roots'
 
 // SEO FIX (consistency/staleness — same class of fix as layout.tsx's
@@ -74,6 +106,7 @@ export function buildOffersList(
   displayPrice: number | null | undefined,
   inStock: boolean,
   sellerName?: string | null,
+  policy?: OfferPolicy,
 ): Record<string, unknown>[] {
   const productUrl = `https://www.pahadiroots.com/products/${product.slug}`
   const SELLER = seller(sellerName)
@@ -89,6 +122,7 @@ export function buildOffersList(
       seller:        SELLER,
       url:           productUrl,
       ...(v.sku ? { sku: v.sku } : {}),
+      ...policyFields(policy),
     }))
   }
 
@@ -103,6 +137,7 @@ export function buildOffersList(
     seller:        SELLER,
     url:           productUrl,
     ...(product.sku ? { sku: product.sku } : {}),
+    ...policyFields(policy),
   }]
 }
 

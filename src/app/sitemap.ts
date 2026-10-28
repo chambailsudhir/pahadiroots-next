@@ -20,6 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE,             lastModified: now, changeFrequency: 'daily',   priority: 1.0 },
     { url: `${BASE}/products`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/new-arrivals`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/regions`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/our-stories`,  lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/mountain-stories`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
@@ -44,13 +45,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Products
   let products = null
-  try { const { data } = await supabase.from('products').select('slug, updated_at').eq('is_deleted', false).eq('status', 'active'); products = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
+  try { const { data } = await supabase.from('products').select('slug, updated_at, image_url').eq('is_deleted', false).eq('status', 'active'); products = data } catch (e: unknown) { console.error('[sitemap] fetch failed:', e) }
 
   const productPages: MetadataRoute.Sitemap = (products || []).map(p => ({
     url:             `${BASE}/products/${p.slug}`,
     lastModified:    new Date(p.updated_at || now),
     changeFrequency: 'weekly' as const,
     priority:        0.8,
+    // Image sitemap entry: helps Google Images discover the main product photo.
+    ...(p.image_url && /^https?:\/\//.test(p.image_url) ? { images: [p.image_url] } : {}),
   }))
 
   // Collections
