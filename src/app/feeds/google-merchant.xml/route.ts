@@ -15,13 +15,17 @@ export async function GET() {
   if (error || !products) return new Response('feed unavailable', { status: 503 })
 
   const ids = products.map(p => p.id)
-  const { data: variants } = ids.length
+  // `barcode` is a private column (anon cannot SELECT it), so it is not requested here;
+  // items go out with identifier_exists=no. Requesting it made this whole query fail.
+  const { data: variants, error: vErr } = ids.length
     ? await supabase
         .from('product_variants')
-        .select('id, product_id, variant_value, price, original_price, compare_at_price, available_stock, sku, barcode')
+        .select('id, product_id, variant_value, price, original_price, compare_at_price, available_stock, sku')
         .in('product_id', ids)
         .eq('is_active', true)
-    : { data: [] as never[] }
+    : { data: [] as never[], error: null }
+  // Fail loudly: an empty feed that looks valid would silently delist every product.
+  if (vErr) return new Response('feed unavailable', { status: 503 })
 
   const byProduct = new Map<string, NonNullable<typeof variants>>()
   for (const v of variants || []) {
