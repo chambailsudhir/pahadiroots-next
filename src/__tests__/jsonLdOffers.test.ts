@@ -120,3 +120,17 @@ describe('offersListToJsonLdValue', () => {
     expect(offersListToJsonLdValue([])).toBeUndefined()
   })
 })
+
+describe('buildOffersList policy fields', () => {
+  const vs = [{ size: '500ml', price: 299, available_stock: 1, sku: 'A' }]
+  it('adds shippingDetails and a finite-window return policy when given', () => {
+    const [o] = buildOffersList(product, vs, 299, true, null, { shippingCharge: 0, returnDays: 2 }) as any[]
+    expect(o.shippingDetails.shippingRate).toMatchObject({ value: '0', currency: 'INR' })
+    expect(o.hasMerchantReturnPolicy).toMatchObject({ merchantReturnDays: 2, applicableCountry: 'IN' })
+  })
+  it('leaves offers unchanged when no policy is passed', () => {
+    const [o] = buildOffersList(product, vs, 299, true) as any[]
+    expect(o.shippingDetails).toBeUndefined()
+    expect(o.hasMerchantReturnPolicy).toBeUndefined()
+  })
+})

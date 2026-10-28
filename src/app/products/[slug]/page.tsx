@@ -430,6 +430,9 @@ export default async function ProductPage({ params }: Props) {
     displayPrice,
     inStock,
     settings.site_name,
+    // Same sources as the visible shipping/returns copy (shipPolicy above; the
+    // returns policy page states a 48-hour window for damaged/defective items).
+    { shippingCharge: shipPolicy.freeForAll ? 0 : shipPolicy.flat, returnDays: 2 },
   )
 
   const jsonLd: Record<string, unknown> = {
