@@ -46,7 +46,9 @@ vi.mock('@/lib/getSiteSettings', () => {
 })
 
 vi.mock('@/lib/api/rateLimitKv', () => ({
-  checkRateLimitKv: vi.fn().mockResolvedValue(true), // always allow — not what this test covers
+  checkRateLimitKv:       vi.fn().mockResolvedValue(true),      // always allow — not what this test covers
+  checkRateLimitKvStrict: vi.fn().mockResolvedValue('allowed'), // AUDIT S1-016a: orders route uses the strict variant
+  RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC: 10,
 }))
 
 vi.mock('@/lib/supabase', () => ({

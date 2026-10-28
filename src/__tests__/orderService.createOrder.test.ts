@@ -208,9 +208,9 @@ function wireHappyPathFetch(opts: { variantPrice?: number; gstRate?: number } = 
     (url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
     [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: gstRate, is_deleted: false, status: 'active', price: variantPrice, mrp: variantPrice + 50, available_stock: 10 }]
   )
-  // 3. customer lookup by phone — not found
+  // 3. customer lookup by phone / email (AUDIT S1-002: read-only guest identity) — not found
   route(
-    (url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'),
+    (url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')),
     []
   )
   // 4. customer insert
@@ -666,7 +666,13 @@ describe('createOrder — per-customer coupon usage limit (user_limit, authorita
       (url, method) => method === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'),
       [{ id: 'cust-uuid-existing' }],
     )
-    // F-07: the per-customer limit is now enforced INSIDE claim_coupon_use (atomic, row-locked).
+    // AUDIT S1-002 / B1-16: a GUEST's history is checked read-only by phone+email against coupon_usage
+    // (claim_coupon_use skips user_limit for a NULL customer) — the matched row is never adopted.
+    routeFirst(
+      (url, method) => method === 'GET' && url.includes('/coupon_usage') && url.includes('customer_id=in.(cust-uuid-existing)'),
+      [{ id: 501 }],
+    )
+    // F-07: for signed-in customers the per-customer limit is enforced INSIDE claim_coupon_use (atomic, row-locked).
     mockDb.rpcResponses['claim_coupon_use'] = { ok: false, code: 'user_limit', error: 'You have already used this coupon' }
 
     const { createOrder } = await import('@/lib/services/orderService')
@@ -722,6 +728,9 @@ describe('createOrder — per-customer coupon usage limit (user_limit, authorita
 })
 
 describe('createOrder — loyalty enforcement', () => {
+  // AUDIT S1-002: loyalty redemption is only reachable with a verified session, so these scenarios run
+  // as the signed-in customer (a guest asking to redeem is rejected up front — see guestIdentity tests).
+  const AUTHED_INPUT = { ...BASE_INPUT, authenticatedCustomerId: 'cust-uuid-001' }
   beforeEach(() => {
     mockDb.responses['orders'] = null
     mockDb.rpcResponses['reserve_stock_at_order'] = true
@@ -734,7 +743,7 @@ describe('createOrder — loyalty enforcement', () => {
     mockDb.responses['customers'] = { loyalty_points: 100_000 }  // huge balance
     const { createOrder } = await import('@/lib/services/orderService')
     // request 5000 points * 0.25 = 1250 ₹, cap = 20% of 2000 = 400 ₹
-    await createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 5000 }, DEFAULT_SETTINGS)
+    await createOrder({ ...AUTHED_INPUT, loyaltyPointsRedeemed: 5000 }, DEFAULT_SETTINGS)
 
     const rpcCall = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
     // subtotal=2000, shipping=0 (>=799 free ship), loyaltyDiscount=400 → afterDiscount=1600, total cod=1600+0=1600
@@ -747,7 +756,7 @@ describe('createOrder — loyalty enforcement', () => {
     mockDb.responses['orders'] = (terminal: string) => (terminal === 'then' ? [{ loyalty_points_redeemed: 400 }] : null)
     const { createOrder } = await import('@/lib/services/orderService')
     // balance 500 − held 400 = 100 available; asking for 200 must fail
-    await expect(createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS))
+    await expect(createOrder({ ...AUTHED_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS))
       .rejects.toThrow(/insufficient loyalty balance.*held by another unpaid order/i)
   })
 
@@ -755,14 +764,14 @@ describe('createOrder — loyalty enforcement', () => {
     mockDb.responses['customers'] = { loyalty_points: 500 }
     mockDb.responses['orders'] = (terminal: string) => (terminal === 'then' ? [] : null)
     const { createOrder } = await import('@/lib/services/orderService')
-    const result = await createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS)
+    const result = await createOrder({ ...AUTHED_INPUT, loyaltyPointsRedeemed: 200 }, DEFAULT_SETTINGS)
     expect(result.alreadyExists).toBe(false)
   })
 
   it('throws when requested loyalty points exceed the live DB balance (race-condition guard)', async () => {
     mockDb.responses['customers'] = { loyalty_points: 50 }  // small balance
     const { createOrder } = await import('@/lib/services/orderService')
-    await expect(createOrder({ ...BASE_INPUT, loyaltyPointsRedeemed: 500 }, DEFAULT_SETTINGS))
+    await expect(createOrder({ ...AUTHED_INPUT, loyaltyPointsRedeemed: 500 }, DEFAULT_SETTINGS))
       .rejects.toThrow(/insufficient loyalty balance/i)
   })
 })
@@ -837,7 +846,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     // 3 in-flight COD orders already exist for this phone → guard should block.
     route(
@@ -857,7 +866,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     route(
       (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'),
@@ -881,7 +890,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     wireOrderRpcSuccess()
 
@@ -900,7 +909,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     wireOrderRpcSuccess()
 
@@ -967,7 +976,7 @@ describe('createOrder — product image resolution (order-confirmation email fix
       (url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', image_url: 'https://cdn.example.com/honey-fallback.jpg', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }],
     )
-    route((url, method) => method === 'GET' && url.includes('/customers') && url.includes('phone=eq.'), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     route((url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'), [])
     route(

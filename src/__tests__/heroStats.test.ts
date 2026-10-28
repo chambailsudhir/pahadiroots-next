@@ -38,19 +38,23 @@ describe('getHeroStats', () => {
     expect(stats.map(s => s.num)).toEqual(['600+', '12+', '25k+', '24hr'])
   })
 
-  it('defaults to the admin panel values, and omits the states stat until a real count exists', () => {
-    expect(getHeroStats(settings()).map(s => s.num)).toEqual(['50+', '10k+', '48hr'])
+  // AUDIT S3-005: an unset stat is hidden — there are no fabricated defaults any more.
+  it('hides every unset stat, and shows the states stat only once a real count exists', () => {
+    expect(getHeroStats(settings()).map(s => s.num)).toEqual([])
     // with a live count (withLiveStateCount) it appears, exact and without "+"
-    expect(getHeroStats(withLiveStateCount(settings(), 4)).map(s => s.num)).toEqual(['50+', '4', '10k+', '48hr'])
+    expect(getHeroStats(withLiveStateCount(settings(), 4)).map(s => s.num)).toEqual(['4'])
   })
 
   it('uses custom labels when the admin has set them', () => {
-    const stats = getHeroStats(settings({ stat_farmer_label: 'Growers' }))
+    const stats = getHeroStats(settings({ stat_farmer_families: '80', stat_farmer_label: 'Growers' }))
     expect(stats[0].lbl).toBe('Growers')
   })
 
   it('respects each stat\'s hide toggle — this is the actual bug: previously none were ever checked', () => {
-    const stats = getHeroStats(settings({ stat_hide_stat_farmer_families: 'true', stat_himalayan_states: '4' }))
+    const stats = getHeroStats(settings({
+      stat_farmer_families: '80', stat_happy_customers: '1200', stat_avg_dispatch: '48',
+      stat_hide_stat_farmer_families: 'true', stat_himalayan_states: '4',
+    }))
     expect(stats.find(s => s.key === 'farmers')).toBeUndefined()
     expect(stats.length).toBe(3)
   })

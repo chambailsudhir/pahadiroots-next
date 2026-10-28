@@ -117,21 +117,21 @@ describe('CartSummary — coupon Enter key guard (BUG FIX)', () => {
   it('calls onApplyCoupon when Enter is pressed and not loading', () => {
     const onApplyCoupon = vi.fn()
     render(el({ couponLoading: false, onApplyCoupon }))
-    fireEvent.keyDown(screen.getByPlaceholderText(/welcome50/i), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByPlaceholderText(/coupon code/i), { key: 'Enter' })
     expect(onApplyCoupon).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT call onApplyCoupon when Enter is pressed while couponLoading is true', () => {
     const onApplyCoupon = vi.fn()
     render(el({ couponLoading: true, onApplyCoupon }))
-    fireEvent.keyDown(screen.getByPlaceholderText(/welcome50/i), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByPlaceholderText(/coupon code/i), { key: 'Enter' })
     expect(onApplyCoupon).not.toHaveBeenCalled()
   })
 
   it('ignores non-Enter keys', () => {
     const onApplyCoupon = vi.fn()
     render(el({ couponLoading: false, onApplyCoupon }))
-    fireEvent.keyDown(screen.getByPlaceholderText(/welcome50/i), { key: 'a' })
+    fireEvent.keyDown(screen.getByPlaceholderText(/coupon code/i), { key: 'a' })
     expect(onApplyCoupon).not.toHaveBeenCalled()
   })
 

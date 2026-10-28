@@ -70,6 +70,7 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { likelyPaymentMethod, cartSubtotal } from '@/components/cart/cartPaymentMethod'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
@@ -265,7 +266,8 @@ export default function CartDrawer({ settings }: Props) {
   }, [isOpen])
 
   const pricing = useMemo(
-    () => calcPriceSummary(items, settings, coupon, 'cod'),
+    // AUDIT S3-003: price with the method checkout will actually start on, not always COD.
+    () => calcPriceSummary(items, settings, coupon, likelyPaymentMethod(settings, cartSubtotal(items))),
     [items, settings, coupon]
   )
 
@@ -440,6 +442,14 @@ export default function CartDrawer({ settings }: Props) {
                   pricing.total (see pricingService.ts) but was never itemized anywhere
                   on this drawer — Subtotal + Shipping silently didn't add up to Total.
                   Amazon/Myntra-style checkouts itemize every charge; do the same here. */}
+              {/* AUDIT S3-003: online orders get the prepaid discount — itemize it so Subtotal −
+                  discounts + Shipping = Total, exactly as checkout's OrderSummary shows it. */}
+              {pricing.prepaidDiscount > 0 && (
+                <div className="flex justify-between text-forest-600">
+                  <dt>Prepaid discount</dt>
+                  <dd>−{formatPrice(pricing.prepaidDiscount)}</dd>
+                </div>
+              )}
               {pricing.codSurcharge > 0 && (
                 <div className="flex justify-between text-stone-600">
                   <dt>COD Charges</dt>

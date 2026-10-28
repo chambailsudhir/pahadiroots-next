@@ -16,10 +16,16 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
-import { COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
+import { BUSINESS_INFO, computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
+import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
 
-function fail(status: number, msg: string) {
-  return new NextResponse(msg, { status, headers: { 'Content-Type': 'text/plain' } })
+// AUDIT G2 B1: every error response echoes the correlation id so a customer report can be
+// matched to the log line. AUDIT S2-022: messages are fixed strings — never backend error text.
+function fail(status: number, msg: string, requestId = '') {
+  return new NextResponse(msg, {
+    status,
+    headers: { 'Content-Type': 'text/plain', ...(requestId ? { [REQUEST_ID_HEADER]: requestId } : {}) },
+  })
 }
 
 // ── HTML escape — CRITICAL for this route ────────────────────
@@ -61,20 +67,22 @@ export async function GET(
   // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const requestId = getRequestId(req.headers)
+  const log = requestLogger(requestId, { route: 'orders.invoice' })
   const { id } = await params
-  if (!id) return fail(400, 'Order ID required')
+  if (!id) return fail(400, 'Order ID required', requestId)
   // AUDIT R2 SF-6: validate like /api/orders/[id] — the id is interpolated into a REST filter.
-  if (!/^[0-9]+$/.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return fail(400, 'Invalid order ID')
+  if (!/^[0-9]+$/.test(id) && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return fail(400, 'Invalid order ID', requestId)
 
   let token = getToken(req)
   let refreshed = !token ? await tryRefresh(req) : null
-  if (!token && !refreshed) return fail(401, 'Not logged in')
+  if (!token && !refreshed) return fail(401, 'Not logged in', requestId)
   if (refreshed) token = refreshed.token
 
   try {
     const user    = await sbAuth('/user', null, token!)
     const profile = await syncCustomerProfile(user)
-    if (!profile) return fail(404, 'Profile not found')
+    if (!profile) return fail(404, 'Profile not found', requestId)
 
     // Fetch order — customer_id guard prevents IDOR
     const rows = await sbAdmin(
@@ -83,8 +91,18 @@ export async function GET(
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return fail(404, 'Order not found')
+      return fail(404, 'Order not found', requestId)
     }
+
+    // AUDIT S3-006: loyalty ₹ is not stored on the order; points × loyalty_points_value splits the
+    // derived discount residual into loyalty vs prepaid. Best effort — if the setting cannot be read
+    // the residual is shown as one "Prepaid/loyalty discount" line and the invoice still reconciles.
+    const pointValueRows = await Promise.resolve()
+      .then(() => sbAdmin('GET', '/rest/v1/site_settings?key=eq.loyalty_points_value&select=value&limit=1'))
+      .catch(() => null)
+    const loyaltyPointValue = Array.isArray(pointValueRows) && pointValueRows[0]?.value != null
+      ? Number(pointValueRows[0].value)
+      : null
 
     const o = rows[0] as Record<string, unknown>
 
@@ -99,35 +117,42 @@ export async function GET(
       variant: i.variant_value_snapshot || null,
       qty:     i.quantity,
       price:   i.price_at_time,
-      total:   i.quantity * i.price_at_time,
     }))
 
-    const subtotal       = items.reduce((s, i) => s + i.total, 0)
-    const discount       = Number(o.coupon_discount)  || 0
-    const shipping       = Number(o.shipping_charge)  || 0
-    // DATA-INTEGRITY FIX: order.cod_surcharge is now persisted per-order
-    // (previously only folded invisibly into total_amount). Treated as a
-    // GST-inclusive taxable service charge — same back-calculation as
-    // computeInvoiceTotals in invoiceGst.ts — not an untaxed pass-through
-    // like shipping, matching how Myntra breaks out its own "Platform Fee"
-    // as a taxed line rather than a flat add-on.
-    const codSurcharge       = Number(o.cod_surcharge) || 0
-    const codSurchargeTax    = codSurcharge > 0 ? codSurcharge - codSurcharge / (1 + COD_SURCHARGE_GST_RATE / 100) : 0
-    // `tax` here is informational only (shown as its own line below) — it is
-    // NOT added into grandTotal. subtotal and codSurcharge are already
-    // GST-inclusive gross amounts (they embed their own tax), so adding tax
-    // again on top would double-count it. PRE-EXISTING BUG FIX: the old
-    // fallback formula (`subtotal - discount + shipping + tax`) already had
-    // this double-count for item tax; fixed here rather than extended to
-    // cod tax too. This fallback only fires when total_amount is
-    // missing/0, which shouldn't happen for a real committed order — the
-    // authoritative Number(o.total_amount) is what's actually used almost
-    // always — but it must still be arithmetically correct.
-    const tax            = (Number(o.tax) || 0) + codSurchargeTax
-    const grandTotal     = Number(o.total_amount)     || subtotal - discount + shipping + codSurcharge
+    let addrObj: Record<string, string> | null = null
+    try {
+      addrObj = typeof o.shipping_address === 'string'
+        ? JSON.parse(o.shipping_address)
+        : (o.shipping_address as Record<string, string> | null)
+    } catch { addrObj = null }
+
+    // AUDIT S1-009/S3-006/F2-02/F2-03: ONE computation (lib/invoiceGst.ts computeOrderInvoice),
+    // from the stored order columns only, that always reconciles to total_amount. The derived
+    // prepaid / loyalty discounts and the subtotal round-off are printed as their own lines.
+    const inv = computeOrderInvoice({
+      items,
+      total_amount:            Number(o.total_amount) || 0,
+      subtotal:                o.subtotal        != null ? Number(o.subtotal)        : null,
+      coupon_discount:         o.coupon_discount != null ? Number(o.coupon_discount) : null,
+      shipping_charge:         o.shipping_charge != null ? Number(o.shipping_charge) : null,
+      cod_surcharge:           o.cod_surcharge   != null ? Number(o.cod_surcharge)   : null,
+      tax:                     o.tax             != null ? Number(o.tax)             : null,
+      cgst:                    o.cgst            != null ? Number(o.cgst)            : null,
+      sgst:                    o.sgst            != null ? Number(o.sgst)            : null,
+      igst:                    o.igst            != null ? Number(o.igst)            : null,
+      round_off:               o.round_off       != null ? Number(o.round_off)       : null,
+      loyalty_points_redeemed: o.loyalty_points_redeemed != null ? Number(o.loyalty_points_redeemed) : null,
+      state:                   addrObj?.state ?? null,
+    }, { loyaltyPointValue })
+    if (!inv.reconciles) log.error('invoice_does_not_reconcile', { order_id: String(o.id) })
+
     // BUG FIX: escape every user-controlled value before HTML interpolation.
     // Raw profile fields (first_name, last_name, phone) come from the customers
     // table and are user-editable via POST /api/profile with no HTML stripping.
+    // "Billed To" is the ACCOUNT HOLDER (the identity that owns the order); the delivery recipient
+    // and address come from the order's shipping_address SNAPSHOT (never the live saved address).
+    // AUDIT S2-015 residual (OWNER DECISION): the account holder's name/phone are still read from the
+    // live profile because the orders row stores no billing snapshot — see the R5s report.
     const customerName   = escHtml(
       [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Customer'
     )
@@ -143,39 +168,35 @@ export async function GET(
 
     let addrBlock = ''
     let shipToName = ''
-    try {
-      const addr = typeof o.shipping_address === 'string'
-        ? JSON.parse(o.shipping_address)
-        : (o.shipping_address as Record<string, string> | null)
-      if (addr) {
-        // BUG FIX: this read addr.addr/addr.pin, but orderService.ts's
-        // create_order_with_items RPC call actually writes
-        // address_line1/pincode — a genuine key-name mismatch (those short
-        // keys match the UNRELATED saved_addresses entry shape used on the
-        // account page, not the orders.shipping_address shape actually
-        // stored here). Every invoice was silently missing its street
-        // address line AND pincode — only city/state ever matched and
-        // rendered, which is exactly what showed up in the live report
-        // ("New Delhi, Delhi" with no street address or pincode).
-        addrBlock = [addr.address_line1, addr.city, addr.state, addr.pincode]
-          .filter(Boolean)
-          .map(v => escHtml(v))
-          .join(', ')
-        // Recipient name for THIS delivery, distinct from the account
-        // holder above — only shown when it differs, so an order shipped
-        // to the account holder's own address doesn't show a redundant
-        // second name.
-        if (addr.name) shipToName = escHtml(addr.name)
-      }
-    } catch { /* no address */ }
+    if (addrObj) {
+      // orderService writes address_line1/city/state/pincode (not addr/pin).
+      addrBlock = [addrObj.address_line1, addrObj.city, addrObj.state, addrObj.pincode]
+        .filter(Boolean)
+        .map(v => escHtml(v))
+        .join(', ')
+      if (addrObj.name) shipToName = escHtml(addrObj.name)
+    }
 
-    const itemRows = items.map(i => `
+    const itemRows = inv.lines.map(i => `
       <tr>
         <td>${escHtml(i.name)}${i.variant ? ` <span class="var">(${escHtml(i.variant)})</span>` : ''}</td>
         <td class="num">${i.qty}</td>
         <td class="num">${fmt(i.price)}</td>
-        <td class="num">${fmt(i.total)}</td>
+        <td class="num">${fmt(i.lineTotal)}</td>
       </tr>`).join('')
+
+    const totalRows = invoiceRows(inv).map(r => {
+      if (r.kind === 'total') return `<div class="trow grand"><span>${r.label}</span><span>${fmt(r.amount)}</span></div>`
+      if (r.kind === 'discount') return `<div class="trow disc"><span>${r.label}</span><span>- ${fmt(-r.amount)}</span></div>`
+      return `<div class="trow"><span>${r.label}</span><span>${fmt(r.amount)}</span></div>`
+    }).join('\n  ')
+    // GST summary from the STORED order columns (tax / cgst / sgst / igst) — informational, already
+    // included in the prices above; never recomputed from live product rates.
+    const gstSummary = inv.tax > 0
+      ? (inv.supplyType === 'intra'
+          ? `<div class="trow"><span>Includes GST (CGST ${fmt(inv.cgst)} + SGST ${fmt(inv.sgst)})</span><span>${fmt(inv.tax)}</span></div>`
+          : `<div class="trow"><span>Includes GST (IGST)</span><span>${fmt(inv.igst)}</span></div>`)
+      : ''
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -234,13 +255,13 @@ export async function GET(
   <div class="brand">
     <div class="logo">🌿</div>
     <div>
-      <div class="bname">Chambail International</div>
-      <div class="btag">trading as HimVeda by Pahadi Roots</div>
+      <div class="bname">${escHtml(BUSINESS_INFO.name)}</div>
+      <div class="btag">trading as ${escHtml(BUSINESS_INFO.brandName)} · GSTIN ${escHtml(BUSINESS_INFO.gstin)}</div>
     </div>
   </div>
   <div class="inv">
     <h1>Invoice</h1>
-    <div class="num"># ${orderNum}</div>
+    <div class="num">INV-${orderNum}</div>
     <div class="dt">${orderDate}</div>
   </div>
 </div>
@@ -284,12 +305,8 @@ export async function GET(
 </table>
 
 <div class="totals">
-  <div class="trow"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
-  ${discount > 0 ? `<div class="trow disc"><span>Discount</span><span>- ${fmt(discount)}</span></div>` : ''}
-  ${shipping > 0 ? `<div class="trow"><span>Shipping</span><span>${fmt(shipping)}</span></div>` : ''}
-  ${codSurcharge > 0 ? `<div class="trow"><span>COD Charges</span><span>${fmt(codSurcharge)}</span></div>` : ''}
-  ${tax > 0 ? `<div class="trow"><span>Tax</span><span>${fmt(tax)}</span></div>` : ''}
-  <div class="trow grand"><span>Total</span><span>${fmt(grandTotal)}</span></div>
+  ${totalRows}
+  ${gstSummary}
 </div>
 
 <div class="footer">
@@ -312,6 +329,7 @@ export async function GET(
       headers: {
         'Content-Type':  'text/html; charset=utf-8',
         'Cache-Control': 'private, max-age=60',
+        [REQUEST_ID_HEADER]: requestId,
       },
     })
     if (refreshed) applyNewCookies(res, refreshed.token, refreshed.refresh)
@@ -319,7 +337,9 @@ export async function GET(
 
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
-    if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Invoice generation failed')
+    if (err.status === 401) return fail(401, 'Session expired — please login again', requestId)
+    // AUDIT S2-022: backend (PostgREST) text stays in the log, never in the response.
+    log.error('invoice_generation_failed', { error: err.message || String(e) })
+    return fail(500, 'Invoice generation failed. Please quote reference ' + requestId, requestId)
   }
 }

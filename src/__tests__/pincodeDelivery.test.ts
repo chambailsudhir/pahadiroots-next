@@ -37,20 +37,16 @@ describe('estimateDelivery', () => {
     expect(estimateDelivery('abcdef')).toBeNull()
   })
 
-  it('gives the fastest tier for the origin zone (Himachal Pradesh, zone 1)', () => {
-    const est = estimateDelivery('171001') // Shimla, HP
-    expect(est).not.toBeNull()
-    expect(est!.etaLabel).toBe('2-4 business days')
-  })
-
-  it('gives the middle tier for zones adjacent to origin (UP/Uttarakhand = 2, Bihar/Jharkhand = 8)', () => {
-    expect(estimateDelivery('201001')!.etaLabel).toBe('4-6 business days') // zone 2
-    expect(estimateDelivery('800001')!.etaLabel).toBe('4-6 business days') // zone 8
-  })
-
-  it('gives the longest tier for distant zones', () => {
-    expect(estimateDelivery('600001')!.etaLabel).toBe('5-8 business days') // Tamil Nadu, zone 6
-    expect(estimateDelivery('700001')!.etaLabel).toBe('5-8 business days') // West Bengal, zone 7
+  // AUDIT S3-001: the PIN checker may only quote the Shipping Policy windows (SHIPPING_TIMING),
+  // never its own 2-4 / 4-6 / 5-8 tiers.
+  it('quotes only the policy windows for every zone', () => {
+    for (const pin of ['171001', '201001', '800001', '600001', '700001']) {
+      const est = estimateDelivery(pin)!
+      expect(est.etaLabel).toContain(SHIPPING_TIMING.metro)
+      expect(est.etaLabel).toContain(SHIPPING_TIMING.remote)
+      expect(est.etaLabel).toMatch(/after dispatch/)
+      expect(est.etaLabel).not.toMatch(/\b(2-4|4-6|5-8)\b/)
+    }
   })
 
   it('never returns a bare numeric promise — always includes the region label alongside the estimate', () => {

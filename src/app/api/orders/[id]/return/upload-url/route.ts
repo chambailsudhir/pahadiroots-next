@@ -34,22 +34,9 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
 const BUCKET        = 'pahadi-images'
 const MAX_PHOTOS_PER_RETURN = 4
 
-const ALLOWED_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-
-function sanitizeFileName(name: unknown): string | null {
-  if (typeof name !== 'string' || !name.trim()) return null
-  const clean = name.replace(/\0/g, '').replace(/\.\./g, '').replace(/[\\/]/g, '').trim()
-  if (!/^[a-zA-Z0-9._-]+$/.test(clean)) return null
-  if (/^\.*$/.test(clean)) return null
-  if (clean.length > 200) return null
-  return clean
-}
-
-function sanitizeFileType(type: unknown): string | null {
-  if (typeof type !== 'string') return null
-  const t = type.toLowerCase().trim()
-  return ALLOWED_FILE_TYPES.has(t) ? t : null
-}
+// AUDIT S2-011: size / MIME / extension / path rules live in ./validate.ts (unit-tested; a route
+// file may only export handlers).
+import { validateUploadRequest, buildObjectPath, MAX_UPLOAD_BYTES } from './validate'
 
 export async function POST(
   req: NextRequest,
@@ -65,17 +52,15 @@ export async function POST(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
   if (!isValidId) return fail(400, 'Invalid order ID')
 
-  let fileName: string | null = null
-  let fileType: string | null = null
+  let body: unknown
   try {
-    const body = await req.json()
-    fileName = sanitizeFileName(body?.fileName)
-    fileType = sanitizeFileType(body?.fileType)
+    body = await req.json()
   } catch {
     return fail(400, 'Invalid request body')
   }
-  if (!fileName) return fail(400, 'Invalid fileName — use alphanumeric, hyphens, underscores, dots only')
-  if (!fileType) return fail(400, 'Invalid fileType — allowed: image/jpeg, image/png, image/webp')
+  const v = validateUploadRequest(body)
+  if (!v.ok) return fail(400, v.error)
+  const { fileName, fileType, fileSize } = v
 
   let token = getToken(req)
   const refreshed = !token ? await tryRefresh(req) : null
@@ -127,7 +112,7 @@ export async function POST(
 
     // Namespaced path per order — keeps evidence photos organized and
     // prevents one customer's upload from colliding with another's.
-    const path = `returns/${id}/${Date.now()}-${fileName}`
+    const path = buildObjectPath(id, fileName)
 
     const signRes = await fetch(
       `${SUPABASE_URL}/storage/v1/object/upload/sign/${BUCKET}/${path}`,
@@ -155,10 +140,20 @@ export async function POST(
     // OTHER (server-proxied) upload path instead.
     const { url: relativeSignedUrl } = await signRes.json()
     if (!relativeSignedUrl) return fail(502, 'Storage sign response missing url')
+    // AUDIT S2-011: the signed URL must point at the path WE built — refuse anything else.
+    if (typeof relativeSignedUrl !== 'string' || !relativeSignedUrl.includes(`/${BUCKET}/${path}`)) {
+      return fail(502, 'Upload URL request failed')
+    }
     const signedURL = `${SUPABASE_URL}/storage/v1${relativeSignedUrl}`
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
 
-    const res = ok({ success: true, signedURL, publicUrl })
+    // The client must send exactly these headers with the PUT; the bucket's allowed_mime_types /
+    // file_size_limit (OWNER) are what makes them binding on the storage side.
+    const res = ok({
+      success: true, signedURL, publicUrl, path,
+      uploadHeaders: { 'content-type': fileType, 'x-upsert': 'false' },
+      maxBytes: MAX_UPLOAD_BYTES, declaredBytes: fileSize,
+    })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
 

@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
-import { createOrder, IdempotencyConflictError, logOrderEvent } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf } from '@/lib/api/serverUtils'
+// AUDIT S1-004: the online path now resolves the signed-in customer exactly like /api/v1/orders does.
+import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 // REFACTOR: replaced inline checkPaymentRateLimit() (~40 lines of duplicated
 // Upstash boilerplate) with the shared helper. Key is unchanged.
-import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+// AUDIT S1-016(a): create_payment is a mutation (reserves stock, claims coupons) — fail CLOSED.
+import { checkRateLimitKvStrict, RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC } from '@/lib/api/rateLimitKv'
 import { logger, captureError } from '@/lib/logger'
 // REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
 // Was duplicated in orders/route.ts — single source of truth now.
@@ -48,6 +50,24 @@ async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrd
   return res.json()
 }
 
+// ─── AUDIT S1-003: create_payment abuse caps ──────────────────────────────────
+// Every create_payment with a fresh idempotency key reserves real stock and claims a coupon use
+// until the pending-order sweep releases it. The route used to have ONLY the 10/min/IP limit, so a
+// handful of requests could zero the catalogue. These caps bound how many pending reservations one
+// phone number / one IP can open per 10 minutes. A genuine customer who dismisses the Razorpay
+// modal and pays again reuses the same key (one order, one reservation) and stays far below them.
+const CREATE_PAYMENT_PHONE_LIMIT_10M = 6   // not exported: Next.js route modules may only export handlers/config
+const CREATE_PAYMENT_IP_LIMIT_10M    = 20
+const TEN_MINUTES_SEC = 600
+
+/** AUDIT S1-016(a): neither KV nor the DB fallback could count — refuse briefly instead of reserving uncapped stock. */
+function rateLimiterUnavailable() {
+  return NextResponse.json(
+    { error: 'Our server is briefly busy — please try again in a few seconds.' },
+    { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC) } },
+  )
+}
+
 // ─── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
@@ -56,7 +76,9 @@ export async function POST(req: NextRequest) {
 
   // ── IP-level rate limit — covers both actions (distributed via Upstash KV) ──
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  if (!await checkRateLimitKv(`mw:rl:payments_ip:${ip}`, 10)) {
+  const ipLimit = await checkRateLimitKvStrict(`mw:rl:payments_ip:${ip}`, 10)
+  if (ipLimit === 'unavailable') return rateLimiterUnavailable()
+  if (ipLimit === 'blocked') {
     // BUG FIX 13a: missing Retry-After header on 429.
     return NextResponse.json(
       { error: 'Too many requests — please wait a moment' },
@@ -95,6 +117,25 @@ export async function POST(req: NextRequest) {
       const settings = await getFreshSiteSettings()
       const pd       = parsed.data
 
+      // ── AUDIT S1-003: per-phone + per-IP caps on NEW pending reservations (10-minute windows) ──
+      const phoneKey   = normalizePhoneForLookup(pd.address.phone) || pd.address.phone
+      const phoneLimit = await checkRateLimitKvStrict(`mw:rl:payments_phone10m:${phoneKey}`, CREATE_PAYMENT_PHONE_LIMIT_10M, TEN_MINUTES_SEC)
+      if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
+      if (phoneLimit === 'blocked') {
+        return NextResponse.json(
+          { error: 'Too many payment attempts for this phone number — please wait a few minutes and try again' },
+          { status: 429, headers: { 'Retry-After': String(TEN_MINUTES_SEC) } },
+        )
+      }
+      const ipLimit10m = await checkRateLimitKvStrict(`mw:rl:payments_ip10m:${ip}`, CREATE_PAYMENT_IP_LIMIT_10M, TEN_MINUTES_SEC)
+      if (ipLimit10m === 'unavailable') return rateLimiterUnavailable()
+      if (ipLimit10m === 'blocked') {
+        return NextResponse.json(
+          { error: 'Too many payment attempts — please wait a few minutes and try again' },
+          { status: 429, headers: { 'Retry-After': String(TEN_MINUTES_SEC) } },
+        )
+      }
+
       // BUG FIX: same gap as /api/v1/orders/route.ts — this is a SEPARATE
       // order-creation entry point (the online-payment checkout flow calls
       // here; COD calls the other route) and had its own independent
@@ -110,6 +151,29 @@ export async function POST(req: NextRequest) {
           { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
           { status: 503 },
         )
+      }
+
+      // AUDIT S1-004: resolve the signed-in customer the same way /api/v1/orders does (session →
+      // syncCustomerProfile, keyed on auth_user_id). Without it every online buyer was treated as a
+      // guest: phone-matched to some row, profile PATCHed, loyalty redeemed against the wrong
+      // customer. Best-effort — no/expired session simply means guest checkout.
+      let authenticatedCustomerId: string | number | null = null
+      let refreshedAuth: { token: string; refresh: string } | null = null
+      try {
+        let token = getToken(req)
+        const refreshed = !token ? await tryRefresh(req) : null
+        if (refreshed) { token = refreshed.token; refreshedAuth = refreshed }
+        if (token) {
+          const user = await sbAuth('/user', null, token)
+          const profile = await syncCustomerProfile(user)
+          if (profile?.id) authenticatedCustomerId = profile.id as string | number
+        }
+      } catch {
+        // Not logged in, or session expired — guest checkout.
+      }
+      const withAuthCookies = (res: NextResponse) => {
+        if (refreshedAuth) applyNewCookies(res, refreshedAuth.token, refreshedAuth.refresh)
+        return res
       }
 
       const { order, alreadyExists, customerId } = await createOrder({
@@ -128,6 +192,7 @@ export async function POST(req: NextRequest) {
         idempotencyKey: pd.idempotency_key,
         // ── Loyalty ──────────────────────────────────────────────────────
         loyaltyPointsRedeemed: pd.loyalty_points_redeemed ?? 0,
+        authenticatedCustomerId,
       }, settings)
 
       const db = getServiceClient()
@@ -158,13 +223,13 @@ export async function POST(req: NextRequest) {
         // not an ORDER ID ("order_xxx"). Passing a payment ID as Razorpay's order_id
         // crashes the SDK silently on the client.
         if (existingRow?.payment_status === 'paid') {
-          return NextResponse.json({
+          return withAuthCookies(NextResponse.json({
             success:           true,
             order_id:          String(order.id),
             already_confirmed: true,
             order_number:      existingRow.order_number,
             confirmation_token: existingRow.confirmation_token ?? order.confirmationToken,
-          })
+          }))
         }
 
         if (!existingRow?.payment_id) {
@@ -174,7 +239,7 @@ export async function POST(req: NextRequest) {
           // Fall through to create a fresh Razorpay order rather than crash the SDK.
         } else {
           // Valid "order_xxx" — reuse so the client resumes the same checkout session.
-          return NextResponse.json({
+          return withAuthCookies(NextResponse.json({
             success:           true,
             order_id:          String(order.id),
             razorpay_order_id: existingRow.payment_id,
@@ -182,7 +247,7 @@ export async function POST(req: NextRequest) {
             currency:          'INR',
             customer_id:       null,
             loyalty_points_redeemed: pd.loyalty_points_redeemed ?? 0,
-          })
+          }))
         }
       }
 
@@ -197,7 +262,7 @@ export async function POST(req: NextRequest) {
       // Never hand out a payable Razorpay order we failed to link to our order (see helper).
       await storeRazorpayOrderId(db, order.id, rzpOrder.id)
 
-      return NextResponse.json({
+      return withAuthCookies(NextResponse.json({
         success:           true,
         order_id:          String(order.id),
         razorpay_order_id: rzpOrder.id,
@@ -205,7 +270,7 @@ export async function POST(req: NextRequest) {
         currency:          rzpOrder.currency,
         customer_id:       customerId ?? null,
         loyalty_points_redeemed: pd.loyalty_points_redeemed ?? 0,
-      })
+      }))
     }
 
     // ── ACTION 2: Verify payment after Razorpay success callback ─────────
@@ -473,6 +538,14 @@ export async function POST(req: NextRequest) {
       logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
       return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
     }
+    // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
+    if (err instanceof LoyaltyAuthRequiredError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
+    }
+    // AUDIT S1-005/S1-006: the order may have committed; nothing was undone. Retry with the same key.
+    if (err instanceof OrderOutcomeUnknownError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
+    }
     // BUG FIX [ERROR HANDLING]: this previously had NO user-facing carve-out at
     // all in production — every error, including the exact same user-actionable
     // messages createOrder() throws in the COD path (insufficient stock, expired/
@@ -498,6 +571,7 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
       || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
+      || lowerMessage.includes('cannot be paid online')       // S1-013 sub-₹1 online total
     // Never leak Razorpay / Supabase internals to the client in production
     const status = isUserFacing ? 409 : 500
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'

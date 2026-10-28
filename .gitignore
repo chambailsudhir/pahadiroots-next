@@ -1,5 +1,9 @@
 .vercel
 .env*.local
+# AUDIT S2-028: a plain .env / .env.production must never be committable; the contract lives in .env.example
+.env
+.env.*
+!.env.example
 
 # Local/generated artifacts
 node_modules/

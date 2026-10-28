@@ -134,7 +134,7 @@ const CartSummary = memo(function CartSummary({
               value={couponCode}
               onChange={e => onCouponCodeChange(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && !couponLoading && onApplyCoupon()}
-              placeholder="e.g. WELCOME50"
+              placeholder="Enter coupon code"
               className={styles.couponInput}
               autoCapitalize="characters"
               autoComplete="off"
@@ -231,6 +231,13 @@ const CartSummary = memo(function CartSummary({
             pricing.total (see pricingService.ts) but was never itemized anywhere
             on this page — Subtotal + Shipping silently didn't add up to Total.
             Amazon/Myntra-style checkouts itemize every charge; do the same here. */}
+        {/* AUDIT S3-003: prepaid discount itemized (same as checkout) so the rows sum to Total. */}
+        {pricing.prepaidDiscount > 0 && (
+          <div className={`${styles.row} ${styles.rowGreen}`}>
+            <span>Prepaid discount</span>
+            <span>−{formatPrice(pricing.prepaidDiscount)}</span>
+          </div>
+        )}
         {pricing.codSurcharge > 0 && (
           <div className={styles.row}>
             <span>COD Charges</span>

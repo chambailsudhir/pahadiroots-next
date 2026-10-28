@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
 import { logger, captureError } from '@/lib/logger'
 
@@ -90,7 +90,31 @@ function checkRazorpay(): { ok: boolean; reason?: string } {
   return { ok: true }
 }
 
-export async function GET() {
+// AUDIT S2-021: the public payload is ONLY { ok, version } — no config state (kv / razorpay /
+// webhook-secret presence), no DB or KV round-trips and no alert-flagged captureError on every
+// anonymous hit. The detailed checks run only for a caller presenting the CRON_SECRET bearer.
+function isAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false
+  const auth = req.headers.get('authorization') || ''
+  const m = /^Bearer\s+(.+)$/i.exec(auth)
+  if (!m) return false
+  const presented = m[1].trim()
+  // constant-time compare to avoid leaking the secret byte-by-byte
+  if (presented.length !== secret.length) return false
+  let diff = 0
+  for (let i = 0; i < secret.length; i++) diff |= presented.charCodeAt(i) ^ secret.charCodeAt(i)
+  return diff === 0
+}
+
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { ok: true, version: APP_VERSION },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
+
   const startAll = Date.now()
   const [db, kv] = await Promise.all([checkDb(), checkKv()])
   const rzp      = checkRazorpay()
@@ -109,6 +133,7 @@ export async function GET() {
 
   return NextResponse.json(
     {
+      ok:         allOk,
       status:     allOk ? 'ok' : 'degraded',
       // BUG FIX 17a: version field so uptime monitors confirm correct build is live
       version:    APP_VERSION,
@@ -119,6 +144,6 @@ export async function GET() {
       timestamp:  new Date().toISOString(),
       ...(kvWarning ? { kv_warning: kvWarning } : {}),
     },
-    { status: httpCode }
+    { status: httpCode, headers: { 'Cache-Control': 'no-store' } }
   )
 }

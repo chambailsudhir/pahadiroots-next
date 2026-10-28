@@ -16,14 +16,18 @@ import {
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY } from '@/lib/account/constants'
+import { getRequestId, requestLogger, withRequestId } from '@/lib/logger'
 
 export async function GET(
   req: NextRequest,
   // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // AUDIT G2 B1: correlation id on every log line + echoed on the response.
+  const requestId = getRequestId(req.headers)
+  const log = requestLogger(requestId, { route: 'orders.detail' })
   const { id } = await params
-  if (!id) return fail(400, 'Order ID is required')
+  if (!id) return withRequestId(fail(400, 'Order ID is required'), requestId)
 
   // BUG FIX: raw `id` from the URL path was interpolated directly into the
   // Supabase REST URL with no format validation. A crafted path like
@@ -58,10 +62,20 @@ export async function GET(
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return fail(404, 'Order not found')
+      return withRequestId(fail(404, 'Order not found'), requestId)
     }
 
     const raw = rows[0] as Record<string, unknown>
+
+    // AUDIT S3-006: the Price Details card derives the (unstored) prepaid/loyalty discount from the
+    // stored columns via lib/invoiceGst computeOrderInvoice; points × loyalty_points_value splits it.
+    // Best effort — a missing setting only collapses the two rows into one labelled line.
+    const pointValueRows = await Promise.resolve()
+      .then(() => sbAdmin('GET', '/rest/v1/site_settings?key=eq.loyalty_points_value&select=value&limit=1'))
+      .catch(() => null)
+    const loyaltyPointValue = Array.isArray(pointValueRows) && pointValueRows[0]?.value != null
+      ? Number(pointValueRows[0].value)
+      : null
 
     const rawItems = (raw.order_items as Array<{
       quantity:               number
@@ -118,6 +132,12 @@ export async function GET(
       shipping_charge:  raw.shipping_charge != null ? Number(raw.shipping_charge) : undefined,
       cod_surcharge:    raw.cod_surcharge   != null ? Number(raw.cod_surcharge)   : undefined,
       tax:              raw.tax             != null ? Number(raw.tax)             : undefined,
+      cgst:             raw.cgst            != null ? Number(raw.cgst)            : undefined,
+      sgst:             raw.sgst            != null ? Number(raw.sgst)            : undefined,
+      igst:             raw.igst            != null ? Number(raw.igst)            : undefined,
+      round_off:        raw.round_off       != null ? Number(raw.round_off)       : undefined,
+      loyalty_points_redeemed: raw.loyalty_points_redeemed != null ? Number(raw.loyalty_points_redeemed) : undefined,
+      loyalty_point_value: Number.isFinite(loyaltyPointValue as number) ? loyaltyPointValue : undefined,
       created_at:       raw.created_at,
       tracking_number:  raw.tracking_number ?? null,
       courier:          raw.courier         ?? null,
@@ -130,12 +150,15 @@ export async function GET(
 
     const res = ok({ success: true, order })
     ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
+    withRequestId(res as NextResponse, requestId)
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
 
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }
-    if (err.status === 401) return fail(401, 'Session expired — please login again')
-    return fail(500, err.message || 'Order fetch failed')
+    if (err.status === 401) return withRequestId(fail(401, 'Session expired — please login again'), requestId)
+    // AUDIT S2-022: PostgREST / upstream text is logged, never returned to the client.
+    log.error('order_detail_failed', { error: err.message || String(e) })
+    return withRequestId(fail(500, 'Order fetch failed. Please quote reference ' + requestId), requestId)
   }
 }

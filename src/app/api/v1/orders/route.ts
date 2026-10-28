@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createOrder, IdempotencyConflictError, logOrderEvent } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
@@ -12,7 +12,8 @@ import { esc } from '@/lib/server/htmlEscape'
 // REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
 // Keys are unchanged so all existing middleware counters are preserved.
-import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+// AUDIT S1-016(a): order creation is a mutation — the limiter fails CLOSED (503) when it cannot decide.
+import { checkRateLimitKvStrict, RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC } from '@/lib/api/rateLimitKv'
 import { logger, captureError } from '@/lib/logger'
 // REFACTOR: inline sanitize() extracted to shared lib/server/sanitize.ts.
 // Was duplicated in payments/route.ts — single source of truth now.
@@ -66,6 +67,14 @@ function getDeliveryEstimate(): string {
 class OrderCreateTimeoutError extends Error {
   constructor() { super('ORDER_CREATE_TIMEOUT') }
 }
+
+/** AUDIT S1-016(a): neither KV nor the DB fallback could count — refuse briefly instead of creating uncapped orders. */
+function rateLimiterUnavailable() {
+  return NextResponse.json(
+    { error: 'Our server is briefly busy — please try again in a few seconds.' },
+    { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC) } },
+  )
+}
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -83,7 +92,9 @@ export async function POST(req: NextRequest) {
   // ── Rate limit: IP-level pre-check (distributed via Upstash KV) ──────────
   // Applied before body parsing so bots are rejected cheaply without DB work.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  if (!await checkRateLimitKv(`mw:rl:orders_ip:${ip}`, 10)) {
+  const ipLimit = await checkRateLimitKvStrict(`mw:rl:orders_ip:${ip}`, 10)
+  if (ipLimit === 'unavailable') return rateLimiterUnavailable()
+  if (ipLimit === 'blocked') {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
@@ -131,7 +142,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Phone-level rate limit (after parse, so we have the phone number) ──
-    if (!await checkRateLimitKv(`mw:rl:orders_phone:${a.phone}`, 3)) {
+    // Keyed on the normalised number so "+91 98…" and "98…" share one counter (S1-002/S1-003).
+    const phoneLimit = await checkRateLimitKvStrict(`mw:rl:orders_phone:${normalizePhoneForLookup(a.phone) || a.phone}`, 3)
+    if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
+    if (phoneLimit === 'blocked') {
       return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
     }
 
@@ -421,6 +435,15 @@ export async function POST(req: NextRequest) {
     if (err instanceof IdempotencyConflictError) {
       logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
       return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+    }
+    // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
+    if (err instanceof LoyaltyAuthRequiredError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
+    }
+    // AUDIT S1-005/S1-006: the order may have committed; nothing was undone. Same retry contract as
+    // the route-level timeout below — the idempotency key makes the retry safe.
+    if (err instanceof OrderOutcomeUnknownError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
     }
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
 

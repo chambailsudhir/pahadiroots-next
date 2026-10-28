@@ -250,7 +250,8 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Tracking Your Order</h2>
           <Steps items={[
-            'Once shipped, receive your <strong>tracking number via WhatsApp</strong>',
+            // AUDIT S3-004: email is the only automated channel; WhatsApp is manual support, not a promised notification.
+            'Once shipped, receive your <strong>tracking number by email</strong>',
             `Track in real-time at <a class="text-forest-700 underline" href="/account">My Account → Orders</a>`,
             'Courier partners: <strong>Delhivery, BlueDart, DTDC, Xpressbees, Ekart, India Post</strong>',
           ]} />
@@ -306,7 +307,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li><strong>Account data:</strong> Name, email address, phone number, delivery address</li>
             <li><strong>Transaction data:</strong> Products ordered, payment method, order history</li>
             <li><strong>Newsletter:</strong> Email address if you subscribe</li>
-            <li><strong>Communications:</strong> Messages sent via email or WhatsApp</li>
+            <li><strong>Communications:</strong> Messages you send us by email or WhatsApp</li>
           </ul>
         </section>
 
@@ -322,7 +323,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <h2 className="text-base font-bold text-stone-900 mb-2">3. How We Use Your Information</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
             <li>To process and deliver your orders</li>
-            <li>To send order confirmations and shipping updates via WhatsApp / email</li>
+            <li>To send order confirmations and shipping updates by email</li>
             <li>To respond to enquiries and complaints</li>
             <li>To improve products, website, and customer experience</li>
             <li>To send newsletters or offers — <strong>only if you have subscribed or consented</strong></li>

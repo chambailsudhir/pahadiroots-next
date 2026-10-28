@@ -134,6 +134,7 @@
  */
 
 import { cartItemsToGa4 } from '@/lib/analytics/ga4'
+import { likelyPaymentMethod, cartSubtotal } from '@/components/cart/cartPaymentMethod'
 import { useCartRevalidation } from '@/hooks/useCartRevalidation'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useCartStore }       from '@/store/cartStore'
@@ -351,7 +352,8 @@ export function useCartPage() {
 
   // ── Derived / memoised values ──────────────────────────────────────────────
   const pricing = useMemo(
-    () => calcPriceSummary(visibleItems, settings as SiteSettings, coupon, 'cod'),
+    // AUDIT S3-003: same payment-method resolution as checkout, so cart total === checkout total.
+    () => calcPriceSummary(visibleItems, settings as SiteSettings, coupon, likelyPaymentMethod(settings, cartSubtotal(visibleItems))),
     [visibleItems, settings, coupon],
   )
 

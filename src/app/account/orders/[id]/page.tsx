@@ -13,6 +13,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
 import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL } from '@/lib/account/constants'
+import { computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 import styles from '../../styles/account.module.css'
 
 const STATUS_STEPS = [
@@ -60,6 +61,12 @@ type OrderDetail = Record<string, unknown> & {
   shipping_charge?: number
   cod_surcharge?:   number
   tax?:             number
+  cgst?:            number
+  sgst?:            number
+  igst?:            number
+  round_off?:       number
+  loyalty_points_redeemed?: number
+  loyalty_point_value?:     number
   created_at:       string
   shipping_address?: Record<string, string>
   items:            Array<{ name: string; qty: number; price: number; emoji: string; image_url: string | null }>
@@ -279,46 +286,61 @@ export default function OrderDetailPage() {
       )}
 
       {/* ── Price summary ───────────────────────────────────── */}
-      <div className={styles.odCard}>
-        <div className={styles.odCardTitle}>Price Details</div>
-        <div className={styles.odPriceRows}>
-          {order.subtotal != null && (
-            <div className={styles.odPriceRow}>
-              <span>Subtotal</span>
-              <span>{formatCurrency(order.subtotal)}</span>
+      {/* AUDIT S3-006 / S1-009: rows come from the ONE shared invoice computation
+          (lib/invoiceGst computeOrderInvoice) so Subtotal − discounts + Shipping + COD
+          always equals Total Paid — including the derived prepaid / loyalty discount
+          and the subtotal round-off that the order row does not store as columns. */}
+      {(() => {
+        const inv = computeOrderInvoice({
+          items:                   order.items.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+          total_amount:            order.total_amount,
+          subtotal:                order.subtotal,
+          coupon_discount:         order.coupon_discount,
+          shipping_charge:         order.shipping_charge,
+          cod_surcharge:           order.cod_surcharge,
+          tax:                     order.tax,
+          cgst:                    order.cgst,
+          sgst:                    order.sgst,
+          igst:                    order.igst,
+          round_off:               order.round_off,
+          loyalty_points_redeemed: order.loyalty_points_redeemed,
+          state:                   order.shipping_address?.state,
+        }, { loyaltyPointValue: order.loyalty_point_value })
+        const rows = invoiceRows(inv)
+        return (
+          <div className={styles.odCard}>
+            <div className={styles.odCardTitle}>Price Details</div>
+            <div className={styles.odPriceRows}>
+              {rows.filter(r => r.kind !== 'total').map(r => (
+                <div key={r.key} className={`${styles.odPriceRow}${r.kind === 'discount' ? ` ${styles.odPriceRowDiscount}` : ''}`}>
+                  <span>{r.label}</span>
+                  <span>
+                    {r.kind === 'discount' ? `−${formatCurrency(-r.amount)}`
+                      : r.key === 'shipping' && r.amount === 0 ? 'FREE'
+                      : formatCurrency(r.amount)}
+                  </span>
+                </div>
+              ))}
+              {inv.shipping === 0 && order.shipping_charge != null && (
+                <div className={styles.odPriceRow}><span>Shipping</span><span>FREE</span></div>
+              )}
+              <hr className={styles.odPriceDivider} />
+              <div className={styles.odPriceTotal}>
+                <span>Total Paid</span>
+                <span>{formatCurrency(inv.total)}</span>
+              </div>
+              {order.tax != null && (
+                <div className={styles.odPriceTax}>
+                  Incl. {formatCurrency(inv.tax)} GST
+                  {inv.tax > 0 && (inv.supplyType === 'intra'
+                    ? ` (CGST ${formatCurrency(inv.cgst)} + SGST ${formatCurrency(inv.sgst)})`
+                    : ` (IGST ${formatCurrency(inv.igst)})`)}
+                </div>
+              )}
             </div>
-          )}
-          {(order.coupon_discount || 0) > 0 && (
-            <div className={`${styles.odPriceRow} ${styles.odPriceRowDiscount}`}>
-              <span>Discount</span>
-              <span>−{formatCurrency(order.coupon_discount!)}</span>
-            </div>
-          )}
-          {order.shipping_charge != null && (
-            <div className={styles.odPriceRow}>
-              <span>Shipping</span>
-              <span>{order.shipping_charge === 0 ? 'FREE' : formatCurrency(order.shipping_charge)}</span>
-            </div>
-          )}
-          {/* TRANSPARENCY / DATA-INTEGRITY FIX: order.cod_surcharge is now
-              persisted per-order — without this line Subtotal + Shipping
-              silently didn't add up to Total Paid on COD orders. */}
-          {(order.cod_surcharge || 0) > 0 && (
-            <div className={styles.odPriceRow}>
-              <span>COD Charges</span>
-              <span>{formatCurrency(order.cod_surcharge!)}</span>
-            </div>
-          )}
-          <hr className={styles.odPriceDivider} />
-          <div className={styles.odPriceTotal}>
-            <span>Total Paid</span>
-            <span>{formatCurrency(order.total_amount)}</span>
           </div>
-          {order.tax != null && (
-            <div className={styles.odPriceTax}>Incl. ₹{order.tax} GST</div>
-          )}
-        </div>
-      </div>
+        )
+      })()}
 
       {/* ── Support ─────────────────────────────────────────── */}
       <div className={styles.odSupportWrap}>

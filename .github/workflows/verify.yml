@@ -1,0 +1,34 @@
+# CI gate (AUDIT G1-24 / B5): nothing reaches Vercel production without typecheck, critical typecheck,
+# tests and a production-dependency vulnerability audit passing. Pair this with GitHub branch protection
+# on `main` ("Require status checks: verify") and Vercel "Deploy only when checks pass".
+name: verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run type-check
+      - run: npm run lint
+      - run: npm test -- --reporter=dot
+      - name: Production dependency audit (high+ fails the build)
+        run: npm audit --omit=dev --audit-level=high
+      - name: No secrets committed
+        run: |
+          set -e
+          if git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -v '\.example$'; then echo "::error::.env file tracked"; exit 1; fi
+          if git grep -nE 'eyJhbGciOi|rzp_live_[A-Za-z0-9]{8,}|sk_live_[A-Za-z0-9]{8,}' -- ':!**/*.md' ':!.github/**'; then echo "::error::secret-like token in source"; exit 1; fi

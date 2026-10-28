@@ -1,6 +1,13 @@
 'use client'
 // ─────────────────────────────────────────────────────────────
-// NotificationsSection — manage email / WhatsApp / SMS prefs
+// NotificationsSection — manage email notification prefs
+//
+// AUDIT S3-004 (OWNER DECISION — remove, not "coming soon"): the WhatsApp and SMS
+// toggles were REMOVED. No WhatsApp/SMS sender exists anywhere in the codebase
+// (lib/server/email.ts is the only sender), so a toggle that is persisted but
+// never read promised a channel the shop does not have. The WhatsApp / SMS
+// preference columns and the API allow-list are left untouched so the rows can
+// return the day a provider ships.
 //
 // ✅ Fetches current prefs from /api/account/notifications on mount
 // ✅ Optimistic toggle with rollback on API error
@@ -14,15 +21,11 @@ import styles from '../styles/account.module.css'
 
 interface NotifPrefs {
   notif_email_orders:    boolean
-  notif_whatsapp_orders: boolean
-  notif_sms_orders:      boolean
   notif_email_marketing: boolean
 }
 
 const DEFAULTS: NotifPrefs = {
   notif_email_orders:    true,
-  notif_whatsapp_orders: true,
-  notif_sms_orders:      true,
   notif_email_marketing: false,
 }
 
@@ -46,7 +49,13 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
-        if (data?.prefs) setPrefs(data.prefs as NotifPrefs)
+        if (data?.prefs) {
+          const p = data.prefs as Partial<NotifPrefs>
+          setPrefs({
+            notif_email_orders:    p.notif_email_orders    ?? DEFAULTS.notif_email_orders,
+            notif_email_marketing: p.notif_email_marketing ?? DEFAULTS.notif_email_marketing,
+          })
+        }
       })
       .catch((e: unknown) => {
         // BUG FIX [ERROR HANDLING]: previously no logging — if the notification
@@ -105,7 +114,7 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
         </div>
         <div className={styles.card}>
           <div className={styles.notifSkeleton}>
-            {[1, 2, 3, 4].map(i => (
+            {[1, 2].map(i => (
               <div key={i} className={styles.notifSkRow}>
                 <div className={styles.notifSkText} />
                 <div className={styles.notifSkToggle} />
@@ -138,24 +147,9 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
             checked={prefs.notif_email_orders}
             busy={!!saving.notif_email_orders}
             onChange={() => toggle('notif_email_orders')}
-          />
-          <NotifRow
-            label="WhatsApp"
-            sublabel="Order updates directly on WhatsApp"
-            icon="💬"
-            checked={prefs.notif_whatsapp_orders}
-            busy={!!saving.notif_whatsapp_orders}
-            onChange={() => toggle('notif_whatsapp_orders')}
-          />
-          <NotifRow
-            label="SMS"
-            sublabel="Text messages for key order milestones"
-            icon="📱"
-            checked={prefs.notif_sms_orders}
-            busy={!!saving.notif_sms_orders}
-            onChange={() => toggle('notif_sms_orders')}
             last
           />
+          {/* AUDIT S3-004: WhatsApp / SMS rows removed — no sender exists. */}
         </div>
 
         {/* Marketing */}

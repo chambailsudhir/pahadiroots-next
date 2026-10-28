@@ -122,7 +122,7 @@ describe('SF-4 return upload-url is rate limited and hides storage errors', () =
     ;(kv.checkRateLimitKv as any).mockResolvedValueOnce(false)
     const { POST } = await import('@/app/api/orders/[id]/return/upload-url/route')
     const req = new NextRequest('https://pahadiroots.com/api/orders/5/return/upload-url', {
-      method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' }, body: JSON.stringify({ fileName: 'a.jpg', fileType: 'image/jpeg' }),
+      method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' }, body: JSON.stringify({ fileName: 'a.jpg', fileType: 'image/jpeg', fileSize: 1024 }),
     })
     expect((await POST(req, { params: Promise.resolve({ id: '5' }) })).status).toBe(429)
   })
