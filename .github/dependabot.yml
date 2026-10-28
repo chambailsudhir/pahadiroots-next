@@ -1,12 +1,12 @@
-# AUDIT G1-25 / B6: automated dependency security updates (pair with GitHub secret scanning + push protection in repo settings).
+# AUDIT G1-25 / B6: Dependabot SECURITY updates only.
+# `open-pull-requests-limit: 0` switches off routine version-bump PRs (they proposed TypeScript 7 / vitest 5
+# majors that do not build with the pinned Next.js toolchain and produced failing Vercel previews) while
+# GitHub's security-update PRs keep working (enable "Dependabot security updates" in repo Settings > Code security).
+# Re-enable routine updates deliberately, with `ignore: update-types: ["version-update:semver-major"]`.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      production-security:
-        applies-to: security-updates
-        patterns: ["*"]
+    open-pull-requests-limit: 0
