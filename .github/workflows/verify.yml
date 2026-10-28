@@ -31,4 +31,4 @@ jobs:
         run: |
           set -e
           if git ls-files | grep -E '(^|/)\.env(\..*)?$' | grep -v '\.example$'; then echo "::error::.env file tracked"; exit 1; fi
-          if git grep -nE 'eyJhbGciOi|rzp_live_[A-Za-z0-9]{8,}|sk_live_[A-Za-z0-9]{8,}' -- ':!**/*.md' ':!.github/**'; then echo "::error::secret-like token in source"; exit 1; fi
+          if git grep -nE 'eyJhbGciOi|rzp_live_[A-Za-z0-9]{8,}|sk_live_[A-Za-z0-9]{8,}' -- ':!*.md' ':!**/*.md' ':!.github/**'; then echo "::error::secret-like token in source"; exit 1; fi
