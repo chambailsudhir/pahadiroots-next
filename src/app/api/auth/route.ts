@@ -7,6 +7,14 @@
 //     email_login, email_signup, refresh_token, google_callback)
 //  ✅ change_password now requires current_password verification
 //  ✅ `any` removed — typed helpers throughout
+//  ✅ AUDIT S2-009: unused identity-mutating actions (link_email, link_phone,
+//     update_profile, send_otp, verify_otp) removed — they allowed unverified
+//     email/phone changes from a stolen 1 h cookie and had no caller. They now
+//     answer 410 (see DISABLED_ACTIONS). Profile edits go through the hardened
+//     /api/profile. create_return (also uncalled) stays for now but ignores the
+//     client-supplied customer_name/order_number.
+//  ✅ AUDIT S2-001: reset_password prefers the recovery bearer token over the
+//     session cookie and enforces the 8-character policy.
 // ═══════════════════════════════════════════════════════════════
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -19,6 +27,10 @@ const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 const IS_PROD = process.env.NODE_ENV === 'production'
+
+// AUDIT S2-001: password policy for the recovery flow (client + server agree).
+// Not exported: Next only allows route handlers/config as route-module exports.
+const RESET_PASSWORD_MIN_LENGTH = 8
 
 // ── Response helpers ─────────────────────────────────────────
 function ok(data: unknown)                 { return NextResponse.json(data, { status: 200 }) }
@@ -238,8 +250,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ── CSRF check — protects all state-mutating actions ─────────────────────
-  // This route handles login, logout, link_email, link_phone, update_profile,
-  // change_password, create_return — all state-mutating. Without CSRF validation
+  // This route handles login, logout, change_password, reset_password,
+  // create_return — all state-mutating. Without CSRF validation
   // a cross-origin page can trigger any of these actions on a logged-in user
   // (e.g. CSRF logout, CSRF profile update, CSRF return creation).
   // _ping is exempted (no state mutation, used by keep-warm scheduler).
@@ -261,9 +273,27 @@ export async function POST(req: NextRequest) {
   // ── Rate limiting — applied to sensitive actions ──────────
   // AUDIT R2 SF-1: forgot_password was unlimited — anyone could e-mail-bomb a registered address
   // (and burn Resend quota / sender reputation). Account-linking actions get the same throttle.
+  // AUDIT S2-009: these actions had NO caller in the storefront (grep) yet let any
+  // session holder set an arbitrary email/phone/password on the Auth user via the
+  // admin API with no re-auth or verification (persistent takeover, squatting),
+  // or write unvalidated profile fields; send_otp / verify_otp had no per-phone
+  // throttle (SMS bombing if SMS is ever enabled).
+  // Their implementations are removed. Answering 410 (not 400 "Unknown action")
+  // keeps any stale client's failure mode explicit. OWNER DECISION: re-add only
+  // behind Supabase's own email/phone-change confirmation + recent re-auth.
+  // create_return is kept (auth-gated, ownership-checked, refund_amount forced
+  // null — AUDIT R2 SF-2 test pins it) but no longer stores client-chosen
+  // customer_name/order_number. OWNER DECISION: remove it once the SF-2 guard
+  // is retargeted at /api/orders/[id]/return.
+  const DISABLED_ACTIONS = new Set([
+    'link_email', 'link_phone', 'update_profile', 'send_otp', 'verify_otp',
+  ])
+  if (DISABLED_ACTIONS.has(action || '')) {
+    return err(410, 'This action is no longer available')
+  }
+
   const RATE_LIMITED_ACTIONS = new Set([
-    'send_otp', 'verify_otp', 'email_login', 'email_signup', 'change_password',
-    'forgot_password', 'link_email', 'link_phone', 'reset_password',
+    'email_login', 'email_signup', 'change_password', 'forgot_password', 'reset_password',
   ])
   if (RATE_LIMITED_ACTIONS.has(action || '')) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -284,45 +314,6 @@ export async function POST(req: NextRequest) {
     if (target && !await rateLimit(`forgot_password_email:${target}`, 3, 60 * 60_000)) {
       // Same generic answer as a normal request: do not reveal whether the address exists.
       return NextResponse.json({ success: true, message: 'If that email is registered, a reset link has been sent.' })
-    }
-  }
-
-  // ── OTP ──
-  if (action === 'send_otp') {
-    const { phone } = body as { phone?: string }
-    if (!phone) return err(400, 'Phone required')
-    const normalised = phone.startsWith('+') ? phone : '+91' + phone.replace(/\D/g, '').slice(-10)
-    try {
-      await sbAuth('/otp', { phone: normalised, channel: 'sms' })
-      return ok({ success: true, message: 'OTP sent' })
-    } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
-      const msg = e2.message || ''
-      if (msg.toLowerCase().includes('unsupported') || msg.toLowerCase().includes('provider') || e2.status === 422) {
-        return err(422, 'SMS_NOT_CONFIGURED')
-      }
-      return err(e2.status || 500, e2.message || 'Failed to send OTP')
-    }
-  }
-
-  if (action === 'verify_otp') {
-    const { phone, token } = body as { phone?: string; token?: string }
-    if (!phone || !token) return err(400, 'Phone and OTP required')
-    const normalised = (phone as string).startsWith('+') ? phone as string : '+91' + (phone as string).replace(/\D/g, '').slice(-10)
-    try {
-      const data = await sbAuth('/verify', { phone: normalised, token: token as string, type: 'sms' })
-      const user = data.user || data
-      if (!user || !user.id) return err(400, 'Verification failed')
-      const profile = await syncCustomerProfile(user)
-      // ✅ Set httpOnly cookies so tokens never touch localStorage
-      const res = ok({
-        success: true,
-        user: { id: user.id, phone: user.phone || normalised, email: user.email || null }, profile: toPublicProfile(profile),
-      })
-      return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
-    } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 400, e2.message || 'Invalid OTP')
     }
   }
 
@@ -443,80 +434,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Link Email ──
-  if (action === 'link_email') {
-    const token = req.cookies.get(COOKIE_TOKEN)?.value
-              || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { email, password } = body as { email?: string; password?: string }
-    if (!token)              return err(401, 'Not logged in')
-    if (!email || !password) return err(400, 'Email and password required')
-    try {
-      const user = await sbAuth('/user', null, token)
-      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { email, password })
-      const profile = await syncCustomerProfile(user)
-      if (profile) await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, { email })
-      return ok({ success: true, message: 'Email linked successfully' })
-    } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 400, e2.message || 'Failed to link email')
-    }
-  }
-
-  // ── Link Phone ──
-  if (action === 'link_phone') {
-    const token = req.cookies.get(COOKIE_TOKEN)?.value
-               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { phone } = body as { phone?: string }
-    if (!token) return err(401, 'Not logged in')
-    if (!phone) return err(400, 'Phone required')
-    try {
-      const normalised = phone.startsWith('+') ? phone : '+91' + phone.replace(/\D/g, '').slice(-10)
-      const user = await sbAuth('/user', null, token)
-      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { phone: normalised })
-      const profile = await syncCustomerProfile(user)
-      if (profile) await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, { phone: normalised })
-      return ok({ success: true, message: 'Phone linked successfully' })
-    } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
-      return err(e2.status || 400, e2.message || 'Failed to link phone')
-    }
-  }
-
-  // ── Update Profile ──
-  if (action === 'update_profile') {
-    const token = req.cookies.get(COOKIE_TOKEN)?.value
-               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    if (!token) return err(401, 'Not logged in')
-    const { first_name, last_name, address_line1, city, state, postal_code, phone: phoneUpdate, saved_addresses } = body as {
-      first_name?: string; last_name?: string; address_line1?: string; city?: string
-      state?: string; postal_code?: string; phone?: string; saved_addresses?: string
-    }
-    try {
-      const user    = await sbAuth('/user', null, token)
-      const profile = await syncCustomerProfile(user)
-      if (!profile) return err(404, 'Profile not found')
-      const updates: Record<string, unknown> = {}
-      if (first_name      !== undefined) updates.first_name      = first_name
-      if (last_name       !== undefined) updates.last_name       = last_name
-      if (address_line1   !== undefined) updates.address_line1   = address_line1
-      if (city            !== undefined) updates.city            = city
-      if (state           !== undefined) updates.state           = state
-      if (postal_code     !== undefined) updates.postal_code     = postal_code
-      if (phoneUpdate     !== undefined) updates.phone           = phoneUpdate
-      if (saved_addresses !== undefined) updates.saved_addresses = typeof saved_addresses === 'string' ? saved_addresses : JSON.stringify(saved_addresses)
-      await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, updates)
-      return ok({ success: true, profile: toPublicProfile({ ...profile, ...updates }) })
-    } catch (e: unknown) {
-      const e2 = e as { status?: number; message?: string }
-      // BUG FIX [ERROR HANDLING]: e2.message here comes from sbAdmin() which throws
-      // the raw Supabase REST error text (e.g. "duplicate key value violates unique
-      // constraint customers_phone_key"). Exposing this leaks DB schema details.
-      console.error('[update_profile]', e)
-      const msg = process.env.NODE_ENV === 'production' ? 'Update failed' : (e2.message || 'Update failed')
-      return err(e2.status || 500, msg)
-    }
-  }
-
   // ── Logout ──
   if (action === 'logout') {
     const token = req.cookies.get(COOKIE_TOKEN)?.value
@@ -586,13 +503,20 @@ export async function POST(req: NextRequest) {
 
   // ── Reset Password ──
   if (action === 'reset_password') {
-    // Reset links pass the token via Authorization header (email link flow),
-    // but also check the httpOnly cookie for users who are already signed in.
-    const token = req.cookies.get(COOKIE_TOKEN)?.value
-               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { password } = body as { password?: string }
-    if (!token)   return err(401, 'Invalid or expired reset link')
-    if (!password || password.length < 6) return err(400, 'Password must be at least 6 characters')
+    // AUDIT S2-001: the recovery token from the e-mail link arrives as
+    // `Authorization: Bearer <access_token>` (set by /reset-password). It MUST
+    // win over the httpOnly session cookie: the old cookie-first order meant a
+    // browser already signed in as user A that opened B's recovery link reset
+    // A's password. The cookie is only a fallback when no bearer is supplied.
+    const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+    const token  = bearer || req.cookies.get(COOKIE_TOKEN)?.value || ''
+    const { password } = body as { password?: unknown }
+    if (!token) return err(401, 'Invalid or expired reset link')
+    // AUDIT S2-001: 8-character minimum (matches /reset-password's client policy).
+    if (typeof password !== 'string' || password.length < RESET_PASSWORD_MIN_LENGTH) {
+      return err(400, `Password must be at least ${RESET_PASSWORD_MIN_LENGTH} characters`)
+    }
+    if (password.length > 128) return err(400, 'Password is too long')
     try {
       // BUG FIX: no timeout — hung until Vercel's 15 s limit on slow Supabase.
       const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -725,9 +649,17 @@ export async function POST(req: NextRequest) {
       if (existing && existing.length > 0 && existing[0].status !== 'rejected') {
         return err(400, `A return request already exists for this order (status: ${existing[0].status}).`)
       }
+      // AUDIT S2-009: order_number and customer_name used to be taken from the
+      // client and shown verbatim in admin (spoofable display data). They now
+      // come from the order row / the authenticated profile; the client values
+      // are accepted for backwards compatibility but ignored.
+      void order_number; void customer_name
+      const profileName = [profile.first_name, profile.last_name]
+        .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+        .join(' ').trim()
       const returnRecord = await sbAdmin('POST', '/rest/v1/returns', {
-        order_id: Number(order_id), order_number: order_number || order.order_number,
-        customer_name: customer_name || null, reason,
+        order_id: Number(order_id), order_number: order.order_number,
+        customer_name: profileName || null, reason,
         description: safeDescription
           ? safeDescription
           : (is_partial && selected_items?.length)

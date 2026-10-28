@@ -16,7 +16,23 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useUserStore } from '@/store/userStore'
-import { clearServerSession, performHeaderLogout } from '@/lib/clientLogout'
+import { clearServerSession, performHeaderLogout, clearClientPII, CLIENT_PII_STORAGE_KEYS } from '@/lib/clientLogout'
+import { PROFILE_CACHE_KEY } from '@/lib/profileCache'
+
+// AUDIT S2-006: what the checkout prefill cache looks like for a signed-in user.
+const CACHED_PROFILE = JSON.stringify({
+  cachedAt: Date.now(),
+  profile: { first_name: 'Asha', email: 'asha@example.com', phone: '9876543210', address_line1: '12 Mall Road' },
+  savedAddresses: [{ name: 'Asha', phone: '9876543210', address_line1: '12 Mall Road', city: 'Dehradun' }],
+})
+
+function seedPII() {
+  localStorage.setItem(PROFILE_CACHE_KEY, CACHED_PROFILE)
+  localStorage.setItem('pr_pkce_verifier', 'v')
+  localStorage.setItem('pr_auth_token', 'legacy-jwt')
+  localStorage.setItem('pr_auth_refresh', 'legacy-rt')
+  localStorage.setItem('pr_auth_profile', '{"email":"asha@example.com"}')
+}
 
 describe('clientLogout', () => {
   beforeEach(() => {
@@ -69,5 +85,58 @@ describe('clientLogout', () => {
 
     expect(useUserStore.getState().user).toBeNull()
     expect(window.location.reload).toHaveBeenCalled()
+  })
+
+  // ── AUDIT S2-006: logout must clear the checkout profile cache ──────────
+  describe('client PII cache (AUDIT S2-006)', () => {
+    beforeEach(() => {
+      localStorage.clear()
+      seedPII()
+    })
+
+    it('clearClientPII removes pr_checkout_profile and every legacy auth key', () => {
+      expect(localStorage.getItem(PROFILE_CACHE_KEY)).not.toBeNull()
+
+      clearClientPII()
+
+      // This is the bug: pr_checkout_profile survived logout, so the next
+      // shopper on the device got the previous user's name/phone/address.
+      expect(localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull()
+      for (const key of CLIENT_PII_STORAGE_KEYS) expect(localStorage.getItem(key)).toBeNull()
+    })
+
+    it('clearServerSession wipes local PII even when both network calls fail', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+
+      await clearServerSession()
+
+      expect(localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull()
+      expect(localStorage.getItem('pr_auth_token')).toBeNull()
+    })
+
+    it('performHeaderLogout leaves no PII in localStorage (checkout cache gone, pr-user holds no user/addresses)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
+      useUserStore.setState({
+        user: { id: 'u1', email: 'asha@example.com', name: 'Asha', phone: '9876543210' },
+        savedAddresses: [{ id: 'a1', name: 'Asha', phone: '9876543210', address_line1: '12 Mall Road' } as never],
+        wishlist: ['prod-1'],
+      })
+
+      await performHeaderLogout()
+
+      expect(localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull()
+      const everything = Object.keys(localStorage).map(k => localStorage.getItem(k) ?? '').join('\n')
+      expect(everything).not.toContain('asha@example.com')
+      expect(everything).not.toContain('9876543210')
+      expect(everything).not.toContain('12 Mall Road')
+      // Wishlist (product ids only, not PII) is intentionally preserved — userStore.ts.
+      expect(useUserStore.getState().wishlist).toEqual(['prod-1'])
+    })
+
+    it('clearClientPII is a safe no-op when localStorage throws (private mode / quota)', () => {
+      const spy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('SecurityError') })
+      expect(() => clearClientPII()).not.toThrow()
+      spy.mockRestore()
+    })
   })
 })

@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { COURIER_TRACKING_MAP } from './constants'
+import { SHIPPED_STATUS_TEXT, RETURN_REVIEW_STATUS_TEXT } from '@/lib/shippingCopy'
 
 // ── SavedAddress shape ────────────────────────────────────────
 // Single source of truth for the address object that flows between
@@ -127,14 +128,11 @@ interface OrderStatusFields {
 export function getOrderStatusMessage(o: OrderStatusFields): string {
   const ds = o._displayStatus || o.order_status || ''
   if (ds === 'delivered')           return '✅ Delivered! Enjoy your Himalayan goodness 🌿'
-  if (ds === 'shipped' && o.shipped_at) {
-    const est = new Date(o.shipped_at)
-    est.setDate(est.getDate() + 5)
-    return `🚚 Shipped · Est. delivery by ${est.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
-  }
+  // AUDIT S3-001: no calendar-day guess — quote the policy windows (lib/shippingCopy).
+  if (ds === 'shipped')             return `🚚 ${SHIPPED_STATUS_TEXT}`
   if (ds === 'packed')              return '📦 Order packed, ready for dispatch'
   if (ds === 'confirmed')           return '✅ Order confirmed'
-  if (ds === 'return_requested')    return '⏳ Return request under review · 24–48 hrs'
+  if (ds === 'return_requested')    return `⏳ ${RETURN_REVIEW_STATUS_TEXT}`
   if (ds === 'return_approved')     return '✅ Return approved — pickup being arranged'
   if (ds === 'return_received')     return '📦 Item received — refund in progress'
   if (ds === 'return_refunded')     return '💚 Refund credited to your account!'

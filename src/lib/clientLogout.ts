@@ -26,6 +26,35 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useUserStore } from '@/store/userStore'
+import { clearProfileCache } from '@/lib/profileCache'
+
+// AUDIT S2-006: localStorage keys that hold (or historically held) a signed-in
+// customer's PII or credentials. `pr_checkout_profile` (name, email, phone,
+// address, saved addresses — profileCache.ts) was NEVER cleared on logout, so
+// the next shopper on a shared device got the previous user's details
+// prefilled at checkout. The pr_auth_* keys are legacy (tokens moved to
+// httpOnly cookies) but are still wiped in case an old build left them behind.
+// The `pr-user` zustand blob is handled by useUserStore.logout() (user and
+// savedAddresses are nulled and re-persisted; the wishlist — product ids only —
+// is intentionally kept, see userStore.ts).
+export const CLIENT_PII_STORAGE_KEYS = [
+  'pr_pkce_verifier',
+  'pr_auth_token',
+  'pr_auth_refresh',
+  'pr_auth_profile',
+] as const
+
+/**
+ * Remove every client-side PII cache for the current user. Safe to call on
+ * the server (no-op) and when storage is unavailable (private mode / quota).
+ */
+export function clearClientPII(): void {
+  if (typeof window === 'undefined') return
+  clearProfileCache()
+  for (const key of CLIENT_PII_STORAGE_KEYS) {
+    try { localStorage.removeItem(key) } catch {}
+  }
+}
 
 /**
  * Clears the httpOnly session cookie (both auth endpoints, matching the
@@ -34,6 +63,9 @@ import { useUserStore } from '@/store/userStore'
  * afterwards (Header.tsx stays on the current page; useAuth.ts goes home).
  */
 export async function clearServerSession(): Promise<void> {
+  // AUDIT S2-006: wipe local PII FIRST — it must go even if the network calls
+  // below hang or fail (offline logout on a shared device).
+  clearClientPII()
   try {
     await Promise.allSettled([
       fetch('/api/auth/session', {
@@ -64,5 +96,8 @@ export async function clearServerSession(): Promise<void> {
 export async function performHeaderLogout(): Promise<void> {
   await clearServerSession()
   useUserStore.getState().logout()
+  // AUDIT S2-006: a profile prefetch racing the logout could have re-written
+  // the checkout cache while the network calls were in flight — clear again.
+  clearClientPII()
   window.location.reload()
 }

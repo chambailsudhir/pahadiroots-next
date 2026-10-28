@@ -228,9 +228,18 @@ export async function DELETE(req: NextRequest) {
     const successMsg = userEmail
       ? `Account deleted. A confirmation has been sent to ${userEmail}.`
       : 'Account deleted successfully.'
-    return clearAuthCookies(
+    const res = clearAuthCookies(
       ok({ success: true, message: successMsg }) as NextResponse
     )
+    // AUDIT S2-006: the browser still holds the deleted user's PII in
+    // localStorage (pr_checkout_profile: name/phone/email/address, pr-user:
+    // saved addresses). Clear-Site-Data makes supporting browsers drop all DOM
+    // storage for this origin as part of the erasure (DPDP §17); the client
+    // additionally clears the specific keys (lib/clientLogout.ts clearClientPII).
+    // "storage" is deliberate: after deletion nothing in local storage is worth
+    // keeping. Not "cookies" — those are expired explicitly above.
+    res.headers.set('Clear-Site-Data', '"storage"')
+    return res
 
   } catch (e: unknown) {
     const err = e as { status?: number; message?: string }

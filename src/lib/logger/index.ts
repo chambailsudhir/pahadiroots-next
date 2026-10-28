@@ -150,3 +150,42 @@ export function trackLatency(
     logger.metric(`${operationName}.latency_ms`, Date.now() - start, 'ms', extraCtx)
   }
 }
+
+// ── AUDIT G2 B1: request correlation id ──────────────────────────────────────
+// Every API log line for one request should carry the same `requestId`, and the
+// error response should echo it so a customer's screenshot can be matched to the
+// log. Vercel already stamps `x-vercel-id` on every request; we reuse it (or an
+// upstream `x-request-id`), falling back to a UUID so local/dev requests get one too.
+type HeaderReader = { get(name: string): string | null } | null | undefined
+
+export function getRequestId(headers: HeaderReader): string {
+  const fromHeader = headers?.get('x-vercel-id') || headers?.get('x-request-id') || ''
+  const clean = fromHeader.trim().slice(0, 128)
+  if (clean && /^[A-Za-z0-9:_\-.]+$/.test(clean)) return clean
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+export type RequestLogger = typeof logger & { requestId: string }
+
+/** A logger whose every line carries `requestId` (plus any fixed context such as `route`). */
+export function requestLogger(requestId: string, base: LogContext = {}): RequestLogger {
+  const ctx = { ...base, requestId }
+  return {
+    requestId,
+    debug:  (m, c) => logger.debug(m, { ...ctx, ...c }),
+    info:   (m, c) => logger.info(m,  { ...ctx, ...c }),
+    warn:   (m, c) => logger.warn(m,  { ...ctx, ...c }),
+    error:  (m, c) => logger.error(m, { ...ctx, ...c }),
+    metric: (n, v, u, c) => logger.metric(n, v, u, { ...ctx, ...c }),
+  }
+}
+
+/** Header name API responses use to echo the correlation id. */
+export const REQUEST_ID_HEADER = 'x-request-id'
+
+/** Sets the correlation header on a Response-like object and returns it (chainable). */
+export function withRequestId<T extends { headers: { set(name: string, value: string): void } }>(res: T, requestId: string): T {
+  res.headers.set(REQUEST_ID_HEADER, requestId)
+  return res
+}

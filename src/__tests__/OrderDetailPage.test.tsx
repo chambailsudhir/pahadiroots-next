@@ -186,7 +186,7 @@ describe('Order detail page — items, address, and price summary', () => {
   it('shows the discount row only when coupon_discount > 0', async () => {
     mockFetchOk(order({ coupon_discount: 50 }))
     render(<OrderDetailPage />)
-    await waitFor(() => expect(screen.getByText('Discount')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Coupon discount')).toBeTruthy())
     expect(screen.getByText('−₹50')).toBeTruthy()
   })
 
@@ -194,7 +194,7 @@ describe('Order detail page — items, address, and price summary', () => {
     mockFetchOk(order({ coupon_discount: 0 }))
     render(<OrderDetailPage />)
     await waitFor(() => expect(screen.getByText('Price Details')).toBeTruthy())
-    expect(screen.queryByText('Discount')).toBeNull()
+    expect(screen.queryByText('Coupon discount')).toBeNull()
   })
 })
 

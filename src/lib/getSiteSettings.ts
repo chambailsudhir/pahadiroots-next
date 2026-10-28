@@ -25,12 +25,13 @@ const DEFAULTS: Partial<SiteSettings> = {
   ann_text_color:          '#d4af37',
   // Ticker — real keys confirmed
   ticker_hide:             'false',
-  ticker_1_text:           '🎁 Use code WELCOME50 · ₹50 off your first order',
+  // AUDIT S3-005: the welcome coupon minted by lib/welcomeCoupon.ts is 5% (WELCOME5-xxxxxx), not ₹50/WELCOME50.
+  ticker_1_text:           '🎁 First order? Get 5% off with your welcome code',
   // F-02: no hard-coded amount — expanded from the live free_shipping_min by reconcileShippingCopy().
   ticker_2_text:           '🚚 {{free_shipping}} — Pan India',
   ticker_3_text:           '🌿 100% Natural · No preservatives, no additives',
   ticker_4_text:           '🏔️ Direct from mountain farmers',
-  ticker_5_text:           '⭐ Rated 4.9/5 · Happy customers across India',
+  ticker_5_text:           '🏔️ Small-batch · From Himalayan farming families',   // AUDIT S3-005: no unsubstantiated rating
   ticker_1_hide:           'false',
   ticker_2_hide:           'false',
   ticker_3_hide:           'false',
@@ -110,10 +111,10 @@ const DEFAULTS: Partial<SiteSettings> = {
   // admin code's own fallback default. The DB row exists, so this
   // constant only matters if that row is ever deleted — but keeping it
   // accurate avoids confusing whoever reads this next.
-  stat_farmer_families:            '100',
+  stat_farmer_families:            '',   // AUDIT S3-005: no fabricated default — hidden until the admin enters a real figure
   stat_himalayan_states:           '',   // derived from the active `states` table, never hand-typed (lib/heroStats.ts)
-  stat_happy_customers:            '10000',
-  stat_avg_dispatch:               '48',
+  stat_happy_customers:            '',
+  stat_avg_dispatch:               '',   // contradicted 'dispatch within 2 business days'
   stat_farmer_label:               'Farmer Families',
   stat_states_label:               'Himalayan States',
   stat_customers_label:            'Happy Customers',

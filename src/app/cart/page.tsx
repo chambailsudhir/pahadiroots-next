@@ -43,6 +43,7 @@
  */
 
 import './cart-page.css'
+import { DELIVERY_BADGE, RETURNS_BADGE } from '@/lib/shippingCopy'
 
 import Link                             from 'next/link'
 import { lazy, Suspense }               from 'react'
@@ -71,8 +72,9 @@ const TRUST_ITEMS = [
 ] as const
 
 const DELIVERY_ITEMS = [
-  ['🚚', 'Delivery in 3–5 Days', 'Pan India'],
-  ['🔄', 'Easy Returns',         '48-hour policy'],
+  // AUDIT S3-001: delivery / returns wording comes from lib/shippingCopy (the policy source).
+  ['🚚', DELIVERY_BADGE.title,   DELIVERY_BADGE.sub],
+  ['🔄', RETURNS_BADGE.title,    RETURNS_BADGE.sub],
   ['🔒', 'Secure Payment',       'SSL encrypted'],
   ['📞', 'WhatsApp Support',     'Mon–Sat 9am–6pm'],
 ] as const

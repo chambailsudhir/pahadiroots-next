@@ -368,19 +368,31 @@ export function toPublicProfile<T extends Record<string, unknown> | null | undef
 type RateEntry = { count: number; reset: number }
 const _rateLimitMap = new Map<string, RateEntry>()
 
-// Prune stale entries every 5 minutes to prevent memory growth
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of _rateLimitMap) {
-    if (now > entry.reset) _rateLimitMap.delete(key)
+// Prune stale entries every 5 minutes to prevent memory growth.
+// AUDIT S2-024: guarded — an unhandled error here used to be able to take the module down, and the
+// timer is unref'd so it never keeps a test runner / build worker alive.
+const _pruneTimer = setInterval(() => {
+  try {
+    const now = Date.now()
+    for (const [key, entry] of _rateLimitMap) {
+      if (now > entry.reset) _rateLimitMap.delete(key)
+    }
+  } catch (err) {
+    captureError(err, { action: 'serverUtils.rateLimit.prune' })
   }
 }, 5 * 60_000)
+;(_pruneTimer as { unref?: () => void }).unref?.()
 
 export function checkRateLimit(
   key:      string,
   maxHits   = 20,
   windowMs  = 60_000,
 ): boolean {
+  // AUDIT S2-024: invalid limits are a programming error — never silently "allow" on a bad config.
+  if (!Number.isFinite(maxHits) || maxHits <= 0 || !Number.isFinite(windowMs) || windowMs <= 0) {
+    captureError(new Error('checkRateLimit called with invalid limits'), { action: 'serverUtils.rateLimit.invalid', key_prefix: key.split(':')[0] })
+    return false
+  }
   const now   = Date.now()
   const entry = _rateLimitMap.get(key)
   if (!entry || now > entry.reset) {
@@ -390,4 +402,27 @@ export function checkRateLimit(
   if (entry.count >= maxHits) return false  // blocked
   entry.count++
   return true   // allowed
+}
+
+/**
+ * AUDIT S2-024: cross-instance limiter for the SENSITIVE account endpoints (data export, account
+ * delete, profile/notification writes). Uses the shared KV/Postgres limiter first (same windows,
+ * seconds-based) and applies the in-process limiter as well, so a KV outage still leaves the
+ * per-instance cap in force rather than nothing. Callers migrate from checkRateLimit() to this —
+ * the migration of /api/account/* and /api/profile is tracked in the R5s report (other-track files).
+ */
+export async function checkRateLimitShared(
+  key:      string,
+  maxHits   = 20,
+  windowMs  = 60_000,
+): Promise<boolean> {
+  const local = checkRateLimit(key, maxHits, windowMs)
+  if (!local) return false
+  try {
+    const { checkRateLimitKv } = await import('@/lib/api/rateLimitKv')
+    return await checkRateLimitKv(`mw:rl:acct:${key}`, maxHits, Math.max(1, Math.ceil(windowMs / 1000)))
+  } catch (err) {
+    captureError(err, { action: 'serverUtils.rateLimitShared.kv_error', key_prefix: key.split(':')[0] })
+    return local
+  }
 }

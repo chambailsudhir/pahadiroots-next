@@ -1,3 +1,4 @@
+import { SHIPPING_TIMING } from '@/lib/shippingCopy'
 // ─────────────────────────────────────────────────────────────────────────────
 // lib/pincodeZones.ts
 //
@@ -38,10 +39,6 @@ const ZONE_NAMES: Record<string, string> = {
 // If the warehouse ever moves, update this one constant.
 const ORIGIN_ZONE = '1'
 
-// Zones adjacent to origin (share a land border / short transit lanes) get the
-// middle ETA tier; everything else gets the longer tier.
-const ADJACENT_ZONES = new Set(['2', '8'])
-
 export interface DeliveryEstimate {
   zoneLabel: string
   etaLabel:  string
@@ -58,10 +55,12 @@ export function estimateDelivery(pin: string): DeliveryEstimate | null {
   const zoneDigit = pin[0]
   const zoneLabel = ZONE_NAMES[zoneDigit] || 'your region'
 
-  let etaLabel: string
-  if (zoneDigit === ORIGIN_ZONE)      etaLabel = '2-4 business days'
-  else if (ADJACENT_ZONES.has(zoneDigit)) etaLabel = '4-6 business days'
-  else                                  etaLabel = '5-8 business days'
+  // AUDIT S3-001: the per-zone 2-4 / 4-6 / 5-8 tiers were never backed by the Shipping Policy. The
+  // only windows the policy publishes are metro vs non-metro AFTER dispatch (lib/shippingCopy
+  // SHIPPING_TIMING), so that is the only thing a PIN check may promise.
+  const etaLabel = zoneDigit === ORIGIN_ZONE
+    ? `${SHIPPING_TIMING.metro} after dispatch (${SHIPPING_TIMING.remote} for remote areas)`
+    : `${SHIPPING_TIMING.metro} for metro cities · ${SHIPPING_TIMING.remote} for non-metro / remote areas, after dispatch`
 
   return { zoneLabel, etaLabel }
 }

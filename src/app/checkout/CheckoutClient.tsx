@@ -50,12 +50,14 @@ import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
 import AddressForm          from '@/components/checkout/AddressForm'
 import PaymentSection       from '@/components/checkout/PaymentSection'
 import OrderSummary         from '@/components/checkout/OrderSummary'
+import { DELIVERY_BADGE, RETURNS_BADGE } from '@/lib/shippingCopy'
 
 // PERF: module-level constant — was an inline array literal inside JSX, which
 // created a new array on every render. Hoisting it prevents the allocation.
 const CHECKOUT_TRUST_ITEMS = [
-  { icon: '🚚', t: '3–5 Day Delivery', d: 'Pan-India Himalayan dispatch' },
-  { icon: '🔄', t: '48-Hour Returns',  d: 'Damaged or defective items'  },
+  // AUDIT S3-001: quote the policy source, not a hand-typed window.
+  { icon: '🚚', t: DELIVERY_BADGE.title, d: DELIVERY_BADGE.sub },
+  { icon: '🔄', t: RETURNS_BADGE.title,  d: RETURNS_BADGE.sub  },
   { icon: '🌿', t: '100% Authentic',   d: 'Straight from the mountains' },
   { icon: '💬', t: 'WhatsApp Support', d: 'Real humans, always here'    },
 ] as const

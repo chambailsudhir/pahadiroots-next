@@ -79,9 +79,10 @@ export function getHeroStats(settings: SiteSettings): HeroStat[] {
   const all: Array<HeroStat & { hidden: boolean }> = [
     {
       key: 'farmers',
-      num: `${settings.stat_farmer_families || '50'}+`,
+      // AUDIT S3-005: a stat the admin has not filled in is HIDDEN, never replaced by a marketing number.
+      num: `${(settings.stat_farmer_families || '').trim()}+`,
       lbl: settings.stat_farmer_label || 'Farmer Families',
-      hidden: settings.stat_hide_stat_farmer_families === 'true',
+      hidden: settings.stat_hide_stat_farmer_families === 'true' || !(settings.stat_farmer_families || '').trim(),
     },
     {
       key: 'states',
@@ -93,15 +94,15 @@ export function getHeroStats(settings: SiteSettings): HeroStat[] {
     },
     {
       key: 'customers',
-      num: formatCustomers(settings.stat_happy_customers || '10000'),
+      num: formatCustomers((settings.stat_happy_customers || '').trim()),
       lbl: settings.stat_customers_label || 'Happy Customers',
-      hidden: settings.stat_hide_stat_happy_customers === 'true',
+      hidden: settings.stat_hide_stat_happy_customers === 'true' || !(settings.stat_happy_customers || '').trim(),
     },
     {
       key: 'dispatch',
-      num: `${settings.stat_avg_dispatch || '48'}hr`,
+      num: `${(settings.stat_avg_dispatch || '').trim()}hr`,
       lbl: settings.stat_dispatch_label || 'Avg Dispatch',
-      hidden: settings.stat_hide_stat_avg_dispatch === 'true',
+      hidden: settings.stat_hide_stat_avg_dispatch === 'true' || !(settings.stat_avg_dispatch || '').trim(),
     },
   ]
   return all.filter(s => !s.hidden).map(({ hidden: _hidden, ...rest }) => rest)

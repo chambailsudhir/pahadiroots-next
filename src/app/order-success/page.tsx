@@ -5,9 +5,11 @@ import Link from 'next/link'
 import CheckoutStepper from '@/components/checkout/CheckoutStepper'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react'
-import { BUSINESS_INFO, getSupplyType, computeInvoiceLine, computeInvoiceTotals, COD_SURCHARGE_GST_RATE } from '@/lib/invoiceGst'
+import { BUSINESS_INFO, computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
 import { resolveConfirmationToken } from '@/lib/confirmationToken'
+import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
+import { FALLBACK_QUICK_SELECTS } from '@/lib/footerQuickSelects'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -62,14 +64,6 @@ function getTrackingUrl(courier: string, num: string) {
   if (!courier || !num) return null
   const base = COURIER_URLS[courier.toLowerCase().replace(/\s/g, '')] || null
   return base ? base + num : null
-}
-
-function getDeliveryEstimate(createdAt?: string) {
-  const d = createdAt ? new Date(createdAt) : new Date()
-  const lo = new Date(d); lo.setDate(lo.getDate() + 5)
-  const hi = new Date(d); hi.setDate(hi.getDate() + 7)
-  const fmt = (dt: Date) => dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  return `${fmt(lo)} – ${fmt(hi)}, ${hi.getFullYear()}`
 }
 
 /* ─── Verification helpers (CF1 / CF2) ──────────────────────── */
@@ -675,7 +669,7 @@ function SuccessContent() {
             <div className="oc-error-icon">🔍</div>
             <h2>We couldn&#39;t verify this order</h2>
             <p>
-              If you just placed an order, it may take a moment to appear — check your email or WhatsApp for the
+              If you just placed an order, it may take a moment to appear — check your email for the
               confirmation, or try again. If you&#39;re signed in, open it from your account.
             </p>
             <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
@@ -695,15 +689,14 @@ function SuccessContent() {
         {!loading && order && (() => {
           const items    = order.items || []
           const total    = order.total_amount || 0
-          const sub      = order.subtotal || total
-          const ship     = order.shipping_charge || 0
-          const codCharge = order.cod_surcharge || 0
-          const disc     = order.discount_amount || 0
-          const tax      = order.tax || 0
+          const summaryInv = computeOrderInvoice({
+            items: items.map(it => ({ name: it.name || 'Product', qty: it.qty ?? it.quantity ?? 1, price: it.price ?? it.price_at_time ?? 0 })),
+            total_amount: total, subtotal: order.subtotal, coupon_discount: order.discount_amount,
+            shipping_charge: order.shipping_charge, cod_surcharge: order.cod_surcharge, tax: order.tax, state: order.state,
+          })
           const trackNum = order.tracking_number || ''
           const courier  = order.courier || ''
           const trackUrl = getTrackingUrl(courier, trackNum)
-          const estimate = getDeliveryEstimate(order.created_at)
           const addr     = [order.delivery_address, order.city, order.state, order.pincode].filter(Boolean).join(', ')
 
           return (
@@ -753,17 +746,23 @@ function SuccessContent() {
                 }
               </div>
 
-              {/* Price summary */}
+              {/* Price summary — AUDIT S1-009/S3-006: same shared computation as the invoice, so the
+                  rows (incl. derived prepaid/loyalty discount and round-off) always sum to the total. */}
               <div className="oc-card">
                 <div className="oc-card-title">💰 Price Summary</div>
-                <div className="oc-sum-row"><span className="oc-sum-lbl">Subtotal (incl. GST)</span><span className="oc-sum-val">₹{sub.toLocaleString('en-IN')}</span></div>
-                {disc > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl" style={{color:'#2d6a4f'}}>Discount</span><span className="oc-sum-val" style={{color:'#2d6a4f'}}>−₹{disc.toLocaleString('en-IN')}</span></div>}
-                {tax > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl" style={{color:'#888',fontSize:13}}>↳ GST included</span><span className="oc-sum-val" style={{color:'#888',fontSize:13}}>₹{tax.toLocaleString('en-IN')}</span></div>}
-                <div className="oc-sum-row">
-                  <span className="oc-sum-lbl">Shipping</span>
-                  <span className={`oc-sum-val${ship === 0 ? ' oc-free-ship' : ''}`}>{ship === 0 ? '🎉 FREE' : `₹${ship}`}</span>
-                </div>
-                {codCharge > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl">COD Charges</span><span className="oc-sum-val">₹{codCharge.toLocaleString('en-IN')}</span></div>}
+                {invoiceRows(summaryInv).filter(r => r.kind !== 'total').map(r => (
+                  <div key={r.key} className="oc-sum-row">
+                    <span className="oc-sum-lbl" style={r.kind === 'discount' ? {color:'#2d6a4f'} : undefined}>{r.key === 'subtotal' ? 'Subtotal (incl. GST)' : r.label}</span>
+                    <span className="oc-sum-val" style={r.kind === 'discount' ? {color:'#2d6a4f'} : undefined}>{r.amount < 0 ? `−₹${(-r.amount).toLocaleString('en-IN')}` : `₹${r.amount.toLocaleString('en-IN')}`}</span>
+                  </div>
+                ))}
+                {summaryInv.tax > 0 && <div className="oc-sum-row"><span className="oc-sum-lbl" style={{color:'#888',fontSize:13}}>↳ GST included</span><span className="oc-sum-val" style={{color:'#888',fontSize:13}}>₹{summaryInv.tax.toLocaleString('en-IN')}</span></div>}
+                {summaryInv.shipping === 0 && (
+                  <div className="oc-sum-row">
+                    <span className="oc-sum-lbl">Shipping</span>
+                    <span className="oc-sum-val oc-free-ship">🎉 FREE</span>
+                  </div>
+                )}
                 <div className="oc-sum-row total"><span>{totalLabel(order)}</span><span>₹{total.toLocaleString('en-IN')}</span></div>
               </div>
 
@@ -774,8 +773,8 @@ function SuccessContent() {
                   <div className="oc-del-field"><label>Name</label><span>{order.customer_name || '—'}</span></div>
                   <div className="oc-del-field"><label>Phone</label><span>{order.customer_phone || '—'}</span></div>
                   <div className="oc-del-field" style={{gridColumn:'1/-1'}}><label>Address</label><span>{addr || '—'}</span></div>
-                  <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {estimate}</span></div>
-                  <div className="oc-del-field"><label>Payment</label><span>{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '📱 COD + WhatsApp'}</span></div>
+                  <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {DELIVERY_WINDOWS_TEXT}</span></div>
+                  <div className="oc-del-field"><label>Payment</label><span>{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '💵 Cash on Delivery'}</span></div>
                 </div>
               </div>
 
@@ -794,7 +793,7 @@ function SuccessContent() {
                     ) : (
                       <>
                         <div className="oc-track-label">Tracking</div>
-                        <div style={{fontSize:13,color:'#666',fontWeight:500,marginTop:2}}>Tracking details will be shared on WhatsApp once your order ships.</div>
+                        <div style={{fontSize:13,color:'#666',fontWeight:500,marginTop:2}}>{TRACKING_NOTIFICATION_TEXT}</div>
                       </>
                     )}
                   </div>
@@ -830,16 +829,29 @@ function SuccessContent() {
                   columns (products.hsn_code, products.gst_rate). */}
               <div className="invoice-print-only">
                 {(() => {
-                  const supplyType = getSupplyType(order.state)
-                  const lines = items.map(it => computeInvoiceLine({
-                    name:         it.name || 'Product',
-                    variant:      it.variant_value,
-                    hsnCode:      it.hsn_code,
-                    gstRate:      it.gst_rate ?? 0,
-                    quantity:     it.qty ?? it.quantity ?? 1,
-                    priceInclGst: it.price ?? it.price_at_time ?? 0,
-                  }))
-                  const totals = computeInvoiceTotals(lines, supplyType, ship, codCharge)
+                  // AUDIT S1-009 / S3-006 / F2-02 / F2-03: ONE shared computation (lib/invoiceGst
+                  // computeOrderInvoice) from the STORED order columns — tax from orders.tax (split
+                  // with the paise-safe splitGST), discounts/round-off derived so the lines always sum
+                  // to the paid total. Live products.gst_rate is no longer used for money; HSN is
+                  // shown as reference only.
+                  const inv = computeOrderInvoice({
+                    items: items.map(it => ({
+                      name:    it.name || 'Product',
+                      variant: it.variant_value,
+                      hsnCode: it.hsn_code,
+                      qty:     it.qty ?? it.quantity ?? 1,
+                      price:   it.price ?? it.price_at_time ?? 0,
+                    })),
+                    total_amount:    total,
+                    subtotal:        order.subtotal,
+                    coupon_discount: order.discount_amount,
+                    shipping_charge: order.shipping_charge,
+                    cod_surcharge:   order.cod_surcharge,
+                    tax:             order.tax,
+                    state:           order.state,
+                  })
+                  const supplyType = inv.supplyType
+                  const rows = invoiceRows(inv)
 
                   return (
                     <>
@@ -877,79 +889,38 @@ function SuccessContent() {
                             <th>HSN</th>
                             <th>Qty</th>
                             <th>Rate (incl. GST)</th>
-                            <th>Taxable Value</th>
-                            <th>GST %</th>
-                            {supplyType === 'intra' ? <><th>CGST</th><th>SGST</th></> : <th>IGST</th>}
-                            <th>Total</th>
+                            <th>Amount</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {lines.map((l, i) => (
+                          {inv.lines.map((l, i) => (
                             <tr key={i}>
                               <td>{i + 1}</td>
                               <td>{l.name}{l.variant ? ` (${l.variant})` : ''}</td>
                               <td>{l.hsnCode || '—'}</td>
-                              <td>{l.quantity}</td>
-                              <td>₹{l.priceInclGst.toFixed(2)}</td>
-                              <td>₹{l.lineTaxableTotal.toFixed(2)}</td>
-                              <td>{l.gstRate}%</td>
-                              {supplyType === 'intra' ? (
-                                <>
-                                  <td>₹{(l.lineTaxTotal / 2).toFixed(2)}</td>
-                                  <td>₹{(l.lineTaxTotal / 2).toFixed(2)}</td>
-                                </>
-                              ) : (
-                                <td>₹{l.lineTaxTotal.toFixed(2)}</td>
-                              )}
+                              <td>{l.qty}</td>
+                              <td>₹{Number(l.price).toFixed(2)}</td>
                               <td>₹{l.lineTotal.toFixed(2)}</td>
                             </tr>
                           ))}
-                          {/* COD Charges as its own taxed line — same pattern Myntra uses for
-                              its "Platform Fee" line (own taxable value + GST% + tax split),
-                              not an untaxed pass-through folded silently into the total. */}
-                          {codCharge > 0 && (
-                            <tr>
-                              <td>{lines.length + 1}</td>
-                              <td>COD Charges</td>
-                              <td>—</td>
-                              <td>1</td>
-                              <td>₹{codCharge.toFixed(2)}</td>
-                              <td>₹{totals.codSurchargeTaxable.toFixed(2)}</td>
-                              <td>{COD_SURCHARGE_GST_RATE}%</td>
-                              {supplyType === 'intra' ? (
-                                <>
-                                  <td>₹{(totals.codSurchargeTax / 2).toFixed(2)}</td>
-                                  <td>₹{(totals.codSurchargeTax / 2).toFixed(2)}</td>
-                                </>
-                              ) : (
-                                <td>₹{totals.codSurchargeTax.toFixed(2)}</td>
-                              )}
-                              <td>₹{codCharge.toFixed(2)}</td>
-                            </tr>
-                          )}
                         </tbody>
                       </table>
 
                       <div className="inv-totals">
-                        {/* Combined taxable value = products + COD Charges (see
-                            computeInvoiceTotals) so this + CGST/SGST/IGST below
-                            reconciles to Grand Total without re-listing COD
-                            Charges a second time as an untaxed line. */}
-                        <div><span>Taxable Value</span><span>₹{(totals.taxableValue + totals.codSurchargeTaxable).toFixed(2)}</span></div>
-                        {supplyType === 'intra' ? (
+                        {rows.map(r => r.kind === 'total'
+                          ? <div key={r.key} className="inv-grand-total"><span>Grand Total</span><span>₹{r.amount.toFixed(2)}</span></div>
+                          : <div key={r.key}><span>{r.label}</span><span>{r.amount < 0 ? `-₹${(-r.amount).toFixed(2)}` : `₹${r.amount.toFixed(2)}`}</span></div>
+                        )}
+                        {/* GST included in the above — from the stored order tax, never re-derived live. */}
+                        {inv.tax > 0 && (supplyType === 'intra' ? (
                           <>
-                            <div><span>CGST</span><span>₹{totals.cgst.toFixed(2)}</span></div>
-                            <div><span>SGST</span><span>₹{totals.sgst.toFixed(2)}</span></div>
+                            <div><span>CGST</span><span>₹{inv.cgst.toFixed(2)}</span></div>
+                            <div><span>SGST</span><span>₹{inv.sgst.toFixed(2)}</span></div>
                           </>
                         ) : (
-                          <div><span>IGST</span><span>₹{totals.igst.toFixed(2)}</span></div>
-                        )}
-                        {ship > 0 && <div><span>Shipping</span><span>₹{ship.toFixed(2)}</span></div>}
-                        {disc > 0 && <div><span>Discount</span><span>-₹{disc.toFixed(2)}</span></div>}
-                        {/* Grand total uses the order's actual total_amount (the authoritative,
-                            already-charged figure) rather than re-deriving it from items, to
-                            avoid any rounding drift between this invoice and what was really paid. */}
-                        <div className="inv-grand-total"><span>Grand Total</span><span>₹{total.toFixed(2)}</span></div>
+                          <div><span>IGST</span><span>₹{inv.igst.toFixed(2)}</span></div>
+                        ))}
+                        {inv.tax > 0 && <div><span>Total GST (included in Grand Total)</span><span>₹{inv.tax.toFixed(2)}</span></div>}
                       </div>
 
                       <div className="inv-footer-note">
@@ -1052,8 +1023,8 @@ function SuccessContent() {
           <div>
             <div className="oc-fh">Quick Selects</div>
             <ul className="oc-ful">
-              {['🍯 Wild Honey','🧈 A2 Bilona Ghee','🌸 Kashmiri Saffron','🪨 Ladakhi Shilajit','🍃 Himalayan Teas','🌾 Ancient Grains'].map(t => (
-                <li key={t}><Link href="/#products">{t}</Link></li>
+              {FALLBACK_QUICK_SELECTS.map(q => (
+                <li key={q.href}><Link href={q.href}>{q.emoji} {q.label}</Link></li>
               ))}
             </ul>
           </div>
@@ -1103,13 +1074,9 @@ function SuccessContent() {
                 <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" className="oc-f-soc" title={s.label}>{s.svg}</a>
               ))}
             </div>
-            <div className="oc-f-fssai">
-              <div className="oc-f-fssai-badge">FSSAI</div>
-              <div>
-                <div style={{fontSize:11,color:'rgba(255,255,255,.6)',fontWeight:700}}>Licensed</div>
-                <div className="oc-f-fssai-num">Lic. No. — update karein</div>
-              </div>
-            </div>
+            {/* AUDIT S3-005: the FSSAI badge is rendered by the main footers only when
+                settings.fssai_license is set; this page has no settings source, so the
+                old "Lic. No. — update karein" placeholder is removed rather than faked. */}
           </div>
         </div>
 

@@ -4,16 +4,18 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { supabase } from '@/lib/supabase'
 import type { SiteSettings } from '@/types'
+import { DELIVERY_FAQ_ANSWER, DAMAGE_FAQ_ANSWER, TRACK_FAQ_ANSWER } from '@/lib/shippingCopy'
 
 const FAQ = [
-  { q: 'How long does delivery take?',               a: '3–5 business days across India. We ship via trusted courier partners.' },
+  // AUDIT S3-001 / S3-004: delivery, damage and tracking answers quote lib/shippingCopy (the policy source).
+  { q: 'How long does delivery take?',               a: DELIVERY_FAQ_ANSWER },
   { q: 'Do you offer Cash on Delivery?',             a: 'We accept UPI, cards and net banking via Razorpay. Cash on Delivery is offered only when it is switched on for the store — see our Payment Methods page for what is available right now.' },
   { q: 'Are your products certified organic?',       a: 'Our products are 100% natural — no preservatives, no additives. We work directly with farmers but do not carry formal organic certifications as these are expensive and inaccessible to small mountain farmers.' },
-  { q: 'What if my product arrives damaged?',        a: 'Please WhatsApp us a photo within 48 hours of delivery. We will send a replacement or full refund — no questions asked.' },
+  { q: 'What if my product arrives damaged?',        a: DAMAGE_FAQ_ANSWER },
   { q: 'Can I return a product?',                    a: 'For non-edible items, yes — within 48 hours of delivery, unopened and in original condition. Edible/food items (honey, ghee, shilajit, spices, tea, etc.) are generally not returnable once opened, per food-safety norms — but we do consider damage or quality-defect claims raised within 48 hours with photo/video proof. See our Return & Refund Policy for full details.' },
   { q: 'Where are your products sourced from?',      a: 'Directly from farming communities across the Himalayas. Every product page names its state of origin.' },
   { q: 'Do you ship internationally?',               a: 'Currently we ship only within India. International shipping is on our roadmap.' },
-  { q: 'How do I track my order?',                   a: 'Visit our Track Order page and enter your order number and phone number. We also send WhatsApp updates when your order ships.' },
+  { q: 'How do I track my order?',                   a: TRACK_FAQ_ANSWER },
 ]
 
 function FAQItem({ q, a }: { q: string; a: string }) {
@@ -146,8 +148,10 @@ export default function ContactPage() {
                 { field: 'email',   label: 'Email',        type: 'email', placeholder: 'ravi@example.com' },
               ].map(({ field, label, type, placeholder }) => (
                 <div key={field}>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">{label}</label>
+                  {/* AUDIT S2-027: every label is associated with its control. */}
+                  <label htmlFor={`contact-${field}`} className="block text-xs font-semibold text-stone-600 mb-1">{label}</label>
                   <input
+                    id={`contact-${field}`}
                     type={type}
                     value={form[field as keyof typeof form]}
                     onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
@@ -158,8 +162,9 @@ export default function ContactPage() {
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Message</label>
+                <label htmlFor="contact-message" className="block text-xs font-semibold text-stone-600 mb-1">Message</label>
                 <textarea
+                  id="contact-message"
                   value={form.message}
                   onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                   placeholder="Tell us how we can help…"

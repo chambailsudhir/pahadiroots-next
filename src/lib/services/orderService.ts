@@ -345,11 +345,97 @@ function assertSafeItemIds(items: Array<{ productId: string; variantId: string }
   }
 }
 
+/**
+ * AUDIT S1-002: loyalty points belong to an account. A guest request (no verified session) that
+ * asks to redeem points can only be spending SOMEONE ELSE's balance (matched by a phone number
+ * anyone can type), so it is refused before anything is read or reserved. Routes map this to 401.
+ */
+export class LoyaltyAuthRequiredError extends Error {
+  readonly code = 'LOYALTY_AUTH_REQUIRED'
+  constructor() {
+    super('Please sign in to redeem Pahadi Coins on this order.')
+    this.name = 'LoyaltyAuthRequiredError'
+  }
+}
+
+/**
+ * AUDIT S1-005/S1-006: the create_order_with_items RPC did not answer in time (or the transport
+ * threw), so the order may or may not have committed. Nothing has been undone — see
+ * createOrder's finally block. Routes map this to a retryable 503.
+ */
+export class OrderOutcomeUnknownError extends Error {
+  readonly code = 'ORDER_OUTCOME_UNKNOWN'
+  constructor(public readonly idempotencyKey: string) {
+    super('Our server is briefly slow right now — please try again in a few seconds. Do not place the order again if it already appears in your orders.')
+    this.name = 'OrderOutcomeUnknownError'
+  }
+}
+
+/** Last 10 digits — the same normalisation customers.normalized_phone uses. */
+export function normalizePhoneForLookup(raw: string | null | undefined): string {
+  return String(raw ?? '').replace(/\D/g, '').slice(-10)
+}
+
+/**
+ * Postgres 23505 on orders.idempotency_key: a concurrent request with the same key committed
+ * first (AUDIT S1-013). Message/code shapes differ between PostgREST and supabase-js versions.
+ */
+function isIdempotencyUniqueViolation(err: RpcErrShape | null): boolean {
+  if (!err) return false
+  const text = `${err.message ?? ''} ${err.details ?? ''}`.toLowerCase()
+  return (err.code === '23505' || text.includes('duplicate key')) && text.includes('idempotency')
+}
+
+type RpcErrShape = { code?: string; message?: string; details?: string }
+
+interface ExistingOrderRow {
+  id: string
+  order_number: string
+  total_amount: number
+  order_status: string
+  confirmation_token?: string | null
+}
+
+/** The "this key already produced an order" result. Email/loyalty readers are skipped by callers. */
+function existingOrderResult(existing: ExistingOrderRow): { order: CreatedOrder; alreadyExists: true; customerId: null } {
+  return {
+    order: {
+      id:           existing.id,
+      order_number: existing.order_number,
+      total_amount: existing.total_amount,
+      total:        existing.total_amount,
+      status:       existing.order_status,
+      // Not needed — email (the only reader of these) is skipped when
+      // alreadyExists is true. Zeroed rather than omitted to satisfy
+      // CreatedOrder's type without implying these are real values.
+      subtotal:       0,
+      shippingCharge: 0,
+      codSurcharge:   0,
+      discount:       0,
+      cartItems:    [], // not needed — email is skipped when alreadyExists is true
+      confirmationToken: existing.confirmation_token ?? null,
+    },
+    alreadyExists: true,
+    customerId:    null,
+  }
+}
+
+// AUDIT S1-002: a guest row is flagged so the CRM can tell "checked out without an account" from a
+// real profile. The column (`customers.is_guest boolean default false`) is proposed for the DB batch;
+// until it exists PostgREST rejects the insert, which is detected once per instance and the flag is
+// dropped — guest separation itself never depends on the column.
+let _guestFlagSupported: boolean | null = null
+
 export async function createOrder(
   input: CreateOrderInput,
   settings: SiteSettings,
 ): Promise<{ order: CreatedOrder; alreadyExists: boolean; customerId: string | null }> {
   const db = getServiceClient()
+
+  // 0. AUDIT S1-002: loyalty redemption needs a verified account — before any read or reservation.
+  if ((input.loyaltyPointsRedeemed ?? 0) > 0 && input.authenticatedCustomerId == null) {
+    throw new LoyaltyAuthRequiredError()
+  }
 
   // 1. Idempotency check — return existing order if same key
   const { data: existing } = await withTimeout(
@@ -390,26 +476,28 @@ export async function createOrder(
     if (mismatch) throw new IdempotencyConflictError(mismatch)
   }
 
-  if (existing) {
-    return {
-      order: {
-        id:           existing.id,
-        order_number: existing.order_number,
-        total_amount: existing.total_amount,
-        total:        existing.total_amount,
-        status:       existing.order_status,
-        // Not needed — email (the only reader of these) is skipped when
-        // alreadyExists is true. Zeroed rather than omitted to satisfy
-        // CreatedOrder's type without implying these are real values.
-        subtotal:       0,
-        shippingCharge: 0,
-        codSurcharge:   0,
-        discount:       0,
-        cartItems:    [], // not needed — email is skipped when alreadyExists is true
-        confirmationToken: existing.confirmation_token ?? null,
-      },
-      alreadyExists: true,
-      customerId:    null,
+  if (existing) return existingOrderResult(existing as ExistingOrderRow)
+
+  /**
+   * AUDIT S1-005/S1-006/S1-013: "did this key already produce an order?" — asked again when the
+   * RPC's outcome is unknown (timeout) or a concurrent twin won the unique index. Returns null when
+   * the row is not there OR the read itself failed; callers must treat null as "unknown", never
+   * as "safe to undo".
+   */
+  const rereadByIdempotencyKey = async (): Promise<ExistingOrderRow | null> => {
+    try {
+      const { data, error } = await withTimeout(
+        db.from('orders')
+          .select('id, order_number, total_amount, order_status, confirmation_token')
+          .eq('idempotency_key', input.idempotencyKey)
+          .maybeSingle(),
+        5_000,
+        'orders idempotency re-read',
+      )
+      if (error || !data?.id) return null
+      return data as ExistingOrderRow
+    } catch {
+      return null
     }
   }
 
@@ -500,6 +588,9 @@ export async function createOrder(
   // F-07: id of the atomic coupon claim (coupon_usage row, order_id NULL) taken in step 4. Hoisted so
   // the finally block can release it if the order never commits.
   let couponClaimUsageId: number | null = null
+  // AUDIT S1-006: set when the create RPC's outcome is unknown; the finally block then leaves the
+  // reservation and coupon claim in place (see the RPC call below).
+  let rpcOutcomeUnknown = false
 
   try {
 
@@ -678,26 +769,38 @@ export async function createOrder(
   // Retained so step 10 can attach the order to the claim and the report can name the coupon.
   let couponDbRow: { id: number; code: string } | null = null
 
-  // Read-only identity lookup — mirrors the real customer upsert in step 7b without creating
-  // anything. A brand-new customer naturally has no match. Memoised: used by first_order_only, the
-  // per-customer limit and the atomic claim.
-  let candidateCustMemo: string | number | null | undefined
-  const resolveCandidateCustomerId = async (): Promise<string | number | null> => {
-    if (candidateCustMemo !== undefined) return candidateCustMemo
-    let cand: string | number | null = input.authenticatedCustomerId ?? null
-    if (cand == null) {
-      const normalizedPhoneForCheck = input.customerPhone.replace(/\D/g, '').slice(-10)
-      const custByPhone = normalizedPhoneForCheck
-        ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhoneForCheck}&select=id&limit=1`)
-        : null
-      cand = custByPhone?.id ?? null
-      if (cand == null && input.customerEmail?.trim()) {
-        const custByEmail = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
-        cand = custByEmail?.id ?? null
-      }
+  // AUDIT S1-002: identity rules for this request.
+  //  • authenticatedCustomerId (verified session) is the ONLY identity that may be ADOPTED: it
+  //    receives the order, the coupon claim, loyalty and the profile.
+  //  • A guest's phone/email is matched against existing customers READ-ONLY, and only to make
+  //    rules STRICTER for the guest (deny a first-order-only / per-customer coupon, count COD
+  //    orders in flight). It never selects a row to attach to, patch, or spend from.
+  // The lookup is memoised; a brand-new customer naturally has no matches.
+  const normalizedPhone = normalizePhoneForLookup(input.customerPhone)
+  let relatedIdsMemo: string[] | undefined
+  const resolveRelatedCustomerIds = async (): Promise<string[]> => {
+    if (relatedIdsMemo !== undefined) return relatedIdsMemo
+    const ids = new Set<string>()
+    // A signed-in customer is judged on their own account only (unchanged behaviour): the typed phone
+    // may legitimately be a family member's, and their identity is already proven.
+    if (input.authenticatedCustomerId != null) { relatedIdsMemo = []; return relatedIdsMemo }
+    if (normalizedPhone) {
+      const byPhone: Array<{ id: string | number }> = await sbGet('customers', `normalized_phone=eq.${normalizedPhone}&select=id&limit=25`)
+      for (const r of byPhone ?? []) if (r?.id != null) ids.add(String(r.id))
     }
-    candidateCustMemo = cand
-    return cand
+    const email = input.customerEmail?.trim()
+    if (email) {
+      const byEmail: Array<{ id: string | number }> = await sbGet('customers', `email=eq.${encodeURIComponent(email)}&select=id&limit=25`)
+      for (const r of byEmail ?? []) if (r?.id != null) ids.add(String(r.id))
+    }
+    relatedIdsMemo = Array.from(ids)
+    return relatedIdsMemo
+  }
+  /** Ids whose history counts AGAINST this request: the verified account, plus phone/email matches. */
+  const resolveHistoryCustomerIds = async (): Promise<string[]> => {
+    const ids = new Set(await resolveRelatedCustomerIds())
+    if (input.authenticatedCustomerId != null) ids.add(String(input.authenticatedCustomerId))
+    return Array.from(ids)
   }
 
   if (input.couponCode) {
@@ -749,18 +852,34 @@ export async function createOrder(
       })
     }
 
-    const candidateCustId = await resolveCandidateCustomerId()
-    if (coupon.first_order_only && candidateCustId != null) {
+    // AUDIT S1-002 / B1-16: history checks run over the verified account AND every customer row
+    // sharing this phone/email (read-only), so a guest cannot dodge first_order_only / user_limit
+    // by checking out without signing in — and a guest can never be credited with someone else's
+    // allowance either (the claim below is made with the verified id or none).
+    const historyIds = await resolveHistoryCustomerIds()
+    if (coupon.first_order_only && historyIds.length > 0) {
       const prior = await sbGetOne(
         'orders',
-        `customer_id=eq.${candidateCustId}&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=id&limit=1`,
+        `customer_id=in.(${historyIds.join(',')})&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=id&limit=1`,
       )
       if (prior) throw new Error('This coupon is valid on your first order only')
+    }
+    // Guest per-customer limit (B1-16: claim_coupon_use skips user_limit when p_customer_id is NULL).
+    // Read-only pre-check keyed on phone+email; the race-free check stays inside the RPC for
+    // signed-in customers. OWNER DECISION (DB batch): a phone-aware claim_coupon_use would make this
+    // atomic for guests too.
+    if (coupon.user_limit != null && input.authenticatedCustomerId == null && historyIds.length > 0) {
+      const used: unknown[] = await sbGet(
+        'coupon_usage',
+        `coupon_id=eq.${Number(coupon.id)}&customer_id=in.(${historyIds.join(',')})&select=id&limit=${Number(coupon.user_limit) + 1}`,
+      )
+      if ((used?.length ?? 0) >= Number(coupon.user_limit)) throw new Error('You have already used this coupon')
     }
 
     // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a
     // customer-readable message on refusal; the claim is released in `finally` if the order fails.
-    const claim = await claimCouponUse(db, coupon.id, candidateCustId)
+    // S1-002: only a VERIFIED identity is attached to the claim — never a phone-matched row.
+    const claim = await claimCouponUse(db, coupon.id, input.authenticatedCustomerId ?? null)
     if (!claim.ok) throw new Error(claim.error)
     couponClaimUsageId = claim.usageId
     couponDbRow = { id: coupon.id, code: coupon.code }
@@ -858,6 +977,13 @@ export async function createOrder(
     }
   }
 
+  // 6c. AUDIT S1-013: Razorpay refuses an order below ₹1. Such an order (free shipping + a coupon
+  // covering the subtotal) used to be created as `pending`, fail at Razorpay with a hidden 500 and
+  // hold its stock until the sweep. Refuse it here, before the row exists (stock is restored below).
+  if (input.paymentMethod === 'razorpay' && pricing.total < 1) {
+    throw new Error('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.')
+  }
+
   // 7. Generate order number — shown to customers and support.
   //    FIX (restoring the original readable format): order numbers used to
   //    look like ORD-2026-00076 (see order id 82, the last one in this
@@ -900,65 +1026,84 @@ export async function createOrder(
     pincode:       input.pincode || null,
   }
 
-  // Lookup: authenticated session first (authoritative — see
-  // authenticatedCustomerId doc comment above), then phone, then email as
-  // a guest-checkout fallback. Avoids duplicate key on idx_customers_email.
+  // AUDIT S1-002 (P1): who does this order belong to?
+  //
+  //  • Signed in → the verified customer id. The profile is NEVER patched from a shipping form
+  //    (shipping to a friend's address must not rewrite the account — see p_shipping_address).
+  //  • Guest → a NEW customer row every time. The old code looked an existing row up by the phone
+  //    number typed into the form and PATCHed its name/address, then let the rest of createOrder
+  //    (loyalty, coupon limits, COD slots) treat the guest AS that customer. A phone number is not
+  //    proof of identity (anyone can type anyone's), so an unauthenticated request must never
+  //    select, modify or spend from an existing account. Matching by phone is used read-only, to
+  //    make rules stricter (coupon history above, COD cap below), never to adopt a row.
+  //
+  // OWNER DECISION: returning guests are no longer merged into one customer row by phone. The CRM
+  // will show one row per guest order (flagged is_guest once the column exists) instead of a merged
+  // history; the trade-off is deliberate — merging by phone is exactly the takeover vector.
+  // If the live schema has a UNIQUE index on customers.normalized_phone / email the insert of a
+  // second row for the same number fails; we then attach the order to the existing row WITHOUT
+  // touching it (no PATCH, no loyalty, no coupon credit) and page ops, so checkout never breaks.
   let custId: string | null = null
-  let existingCust: any = null
+  /** True when the order had to be attached to a pre-existing row the guest did not prove they own. */
+  let custIdAdopted = false
   if (input.authenticatedCustomerId != null) {
-    existingCust = { id: input.authenticatedCustomerId }
+    custId = String(input.authenticatedCustomerId)
   } else {
-    // BUG FIX: was an exact string match on phone (`phone=eq.<raw>`), which
-    // misses an existing customer whose number is stored in a different
-    // format (e.g. with vs without +91) — exactly the bug this whole fix
-    // addresses. Now matches against normalized_phone (last 10 digits,
-    // same normalization the DB's uniqueness constraint uses — migration
-    // 048), so format differences can't cause a miss here, and can't hit
-    // that constraint on insert either.
-    const normalizedPhone = input.customerPhone.replace(/\D/g, '').slice(-10)
-    existingCust = normalizedPhone
-      ? await sbGetOne('customers', `normalized_phone=eq.${normalizedPhone}&select=id&limit=1`)
-      : null
-    if (!existingCust?.id && input.customerEmail?.trim()) {
-      existingCust = await sbGetOne('customers', `email=eq.${encodeURIComponent(input.customerEmail.trim())}&select=id&limit=1`)
+    const insertGuest = async (body: Record<string, unknown>): Promise<string | null> => {
+      const rows: any[] = await sbPost('customers', '', body)
+      return rows?.[0]?.id != null ? String(rows[0].id) : null
     }
-  }
-
-  if (existingCust?.id) {
-    custId = existingCust.id
-    // BUG FIX (real, confirmed bug — not the phone-sharing theory from an
-    // earlier session, which was a different, separate risk): this used to
-    // unconditionally PATCH the customer's own permanent profile — name
-    // AND default address — with whatever was typed into THIS checkout's
-    // shipping form, every single time, for logged-in and guest checkout
-    // alike. For an authenticated user that's backwards: choosing to ship
-    // one order to a friend's or parent's saved address (a completely
-    // normal, one-off delivery choice) permanently overwrote their own
-    // account name and default address with that recipient's details —
-    // globally, for every future page load and every future invoice,
-    // until they happened to place another order to a different address.
-    // There is also no per-order recipient-name snapshot anywhere else in
-    // the schema (`p_shipping_address` below has no name field) — this
-    // PATCH was the only place a delivery name got recorded at all, which
-    // is exactly the architectural gap that made the bug possible.
-    //
-    // Fix: an authenticated user already has their own permanent profile,
-    // edited explicitly via /account — checkout must never silently
-    // overwrite it just because they shipped to a different address this
-    // time. Guest checkout is unaffected: with no auth session, this PATCH
-    // (keyed by phone/email lookup above) is the only mechanism recording
-    // that guest's contact details at all, so the existing upsert-style
-    // sync remains correct there.
-    if (input.authenticatedCustomerId == null) {
-      const { email: _e, ...patchBody } = custBody
-      await sbPost('customers', `id=eq.${custId}`, patchBody, 'PATCH').catch(() => null)
+    // Email may already sit on another row (idx_customers_email) → retry with email NULL; the
+    // guest flag is tried first and skipped for the rest of this instance once the column is
+    // known to be missing.
+    const attempts: Array<Record<string, unknown>> = [
+      { ...custBody, is_guest: true },
+      { ...custBody, email: null, is_guest: true },
+      { ...custBody },
+      { ...custBody, email: null },
+    ]
+    let lastErr: unknown = null
+    for (const body of attempts) {
+      if ('is_guest' in body && _guestFlagSupported === false) continue
+      try {
+        custId = await insertGuest(body)
+        if (custId) {
+          if ('is_guest' in body) _guestFlagSupported = true
+          break
+        }
+      } catch (e) {
+        lastErr = e
+        const msg = e instanceof Error ? e.message : String(e)
+        if ('is_guest' in body && /is_guest/i.test(msg)) {
+          // Column not deployed yet — stop probing for it on this instance (see _guestFlagSupported).
+          _guestFlagSupported = false
+        }
+      }
     }
-  } else {
-    // New customer — insert, fallback to null email if constraint fires
-    const rows: any[] = await sbPost('customers', '', custBody).catch(async () => {
-      return sbPost('customers', '', { ...custBody, email: null })
-    })
-    custId = rows?.[0]?.id ?? null
+    if (!custId) {
+      // LIVE SCHEMA (verified 2026-10-26): customers.normalized_phone is a GENERATED column with a
+      // partial UNIQUE index, so a returning guest's insert ALWAYS collides. That is the expected
+      // path, not an incident: attach the order to the existing row READ-ONLY (no PATCH, no loyalty,
+      // no coupon credit — AUDIT S1-002) and log at info level. Alert only when the collision is not
+      // the phone/email uniqueness we expect (a real insert failure).
+      const related = await resolveRelatedCustomerIds().catch(() => [] as string[])
+      const lastMsg = lastErr instanceof Error ? lastErr.message : String(lastErr ?? '')
+      const expectedCollision = /23505|duplicate key|normalized_phone|customers_email_key|unique/i.test(lastMsg)
+      if (related.length > 0) {
+        custId = related[0]
+        custIdAdopted = true
+        if (expectedCollision) {
+          logger.info('createOrder.guest_attached_readonly', { customerId: custId, reason: 'existing phone/email row (unique index)' })
+        } else {
+          captureError(new Error('guest customer insert failed — order attached to existing row WITHOUT patch'), {
+            action: 'createOrder.guest_row_insert_failed',
+            alert:  true,
+            hint:   'Unexpected insert failure on customers (not the normalized_phone/email unique index). AUDIT S1-002.',
+            error:  lastMsg,
+          })
+        }
+      }
+    }
   }
   if (!custId) throw new Error('Could not create/find customer record')
 
@@ -969,11 +1114,15 @@ export async function createOrder(
   // search. "Active" = not yet resolved either way (not delivered,
   // cancelled, or returned) -- the risk window this setting exists to cap
   // is real cash exposure on orders still in flight.
+  // AUDIT S1-002: the cap is PER PHONE NUMBER (the setting's own definition), so it is counted over
+  // every customer row sharing this phone/email plus the row this order lands on — a guest with a
+  // fresh row cannot reset the counter, and this is the only thing phone matching may be used for.
   if (input.paymentMethod === 'cod') {
     const codMaxActive = parseInt(settings.cod_max_active_orders || '3', 10)
     if (codMaxActive > 0) {
+      const codIds = Array.from(new Set([custId, ...await resolveRelatedCustomerIds()]))
       const activeCodOrders = await sbGet('orders',
-        `customer_id=eq.${custId}&payment_method=in.(cod,whatsapp_cod)` +
+        `customer_id=in.(${codIds.join(',')})&payment_method=in.(cod,whatsapp_cod)` +
         `&order_status=not.in.(delivered,cancelled,returned)&select=id`)
       if ((activeCodOrders?.length ?? 0) >= codMaxActive) {
         throw new Error(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
@@ -1077,7 +1226,21 @@ export async function createOrder(
     }
   })
 
-  const { data: rpcResult, error: rpcErr } = await withTimeout(
+  // AUDIT S1-005/S1-006: the RPC call is the ONE step whose failure cannot be undone blindly. A
+  // timeout (Promise.race, nothing is cancelled) or a transport error means Postgres may still
+  // commit the order; the old code treated it like any other throw and gave the stock and coupon
+  // back — oversell + coupon reuse for a live order. Now:
+  //   • outcome unknown → re-read by idempotency key once; found → carry on as committed;
+  //     not found → leave everything reserved, page ops (alert) and throw OrderOutcomeUnknownError.
+  //     The customer's retry with the same key either finds the committed order (alreadyExists) or
+  //     creates it; the one reservation that may be stranded is reconciled from the alert, never
+  //     guessed at here.
+  //   • unique violation on idempotency_key (S1-013) → a concurrent twin committed first: return it
+  //     as alreadyExists; this request's own reservation/claim is released in `finally` as usual.
+  let rpcResult: unknown = null
+  let rpcErr: RpcErrShape | null = null
+  try {
+    const rpcRes = await withTimeout(
     db.rpc('create_order_with_items', {
       p_order_number:             orderNumber,
       p_customer_id:              custId,
@@ -1133,16 +1296,47 @@ export async function createOrder(
     }),
     8_000,
     'create_order_with_items RPC',
-  )
-
-  if (rpcErr || !rpcResult) {
-    throw new Error('Failed to create order: ' + (rpcErr?.message ?? 'no data returned'))
+    )
+    rpcResult = rpcRes.data
+    rpcErr    = (rpcRes.error ?? null) as RpcErrShape | null
+  } catch (e) {
+    const recovered = await rereadByIdempotencyKey()
+    if (recovered) {
+      newOrder = recovered
+      logger.warn('[createOrder] RPC did not answer in time but the order is committed — continuing', {
+        action: 'createOrder.rpc_timeout_recovered', orderId: recovered.id, error: e instanceof Error ? e.message : String(e),
+      })
+    } else {
+      rpcOutcomeUnknown = true
+      captureError(e, {
+        action:          'createOrder.rpc_outcome_unknown',
+        alert:           true,
+        idempotency_key: input.idempotencyKey,
+        order_number:    orderNumber,
+        payment_method:  input.paymentMethod,
+        items:           input.items.map((i, idx) => ({ variantId: i.variantId, productId: i.productId, qty: i.qty, kind: lineKinds[idx] })),
+        coupon_usage_id: couponClaimUsageId,
+        hint:            'Stock/coupon NOT restored (order may have committed). Reconcile: if no order carries this idempotency_key, restore these items and release the claim.',
+      })
+      throw new OrderOutcomeUnknownError(input.idempotencyKey)
+    }
   }
 
-  // rpc() with RETURNS TABLE returns an array — take first row
-  const row = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult
-  if (!row?.id) throw new Error('Order creation RPC returned no row')
-  newOrder = row as { id: string; order_number: string; total_amount: number; order_status: string }
+  if (newOrder === null) {
+    if (isIdempotencyUniqueViolation(rpcErr)) {
+      const twin = await rereadByIdempotencyKey()
+      // The twin owns the stock/coupon; ours is released in `finally` (newOrder stays null).
+      if (twin) return existingOrderResult(twin)
+    }
+    if (rpcErr || !rpcResult) {
+      throw new Error('Failed to create order: ' + (rpcErr?.message ?? 'no data returned'))
+    }
+
+    // rpc() with RETURNS TABLE returns an array — take first row
+    const row = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult
+    if (!row?.id) throw new Error('Order creation RPC returned no row')
+    newOrder = row as { id: string; order_number: string; total_amount: number; order_status: string }
+  }
 
   // 9b. Generate the guest-safe order-confirmation token (see
   // db_migration_v6_order_confirmation_token.sql for the full rationale —
@@ -1194,7 +1388,8 @@ export async function createOrder(
       db.from('coupon_usage')
         .update({
           order_id:        newOrder!.id,
-          customer_id:     custId,
+          // S1-002: a row the guest did not prove they own must not be credited with the use.
+          customer_id:     custIdAdopted ? null : custId,
           discount_amount: appliedCoupon?.discount ?? 0,
         })
         .eq('id', couponClaimUsageId)
@@ -1256,13 +1451,20 @@ export async function createOrder(
     // This covers ALL throw paths after the atomic reservation:
     // bad product ID, coupon expired, COD disabled, loyalty shortfall,
     // customer creation failure, RPC error — every possible exit.
-    if (newOrder === null && couponClaimUsageId != null) {
+    // AUDIT S1-006: EXCEPT when the RPC's outcome is unknown — the order may exist, so nothing is
+    // undone here (see rpcOutcomeUnknown above; the alert carries what to reconcile).
+    if (rpcOutcomeUnknown) {
+      logger.warn('[createOrder] outcome unknown — stock and coupon claim intentionally NOT restored', {
+        action: 'createOrder.restore_skipped_outcome_unknown', idempotency_key: input.idempotencyKey,
+      })
+    }
+    if (newOrder === null && !rpcOutcomeUnknown && couponClaimUsageId != null) {
       // F-07: the order never committed — give the coupon use back.
       await releaseCouponClaim(db, couponClaimUsageId).catch(releaseErr => {
         captureError(releaseErr, { action: 'createOrder.coupon_claim_release_failed', alert: true })
       })
     }
-    if (newOrder === null) {
+    if (newOrder === null && !rpcOutcomeUnknown) {
       const { restoreStock } = await import('./inventoryService')
       await restoreStock(
         input.items.map((i, idx) => ({ variantId: i.variantId, productId: i.productId, qty: i.qty, kind: lineKinds[idx] }))

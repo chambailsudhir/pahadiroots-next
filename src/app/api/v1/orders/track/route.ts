@@ -51,6 +51,37 @@ import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 // token/session-gated /api/v1/orders/lookup instead.
 const TRACK_SELECT = 'order_number,order_status,payment_method,created_at,total_amount'
 
+// AUDIT S1-007 / S2-002: `orders` has NO customer_phone column (it was removed
+// — orders.customer_id → customers.phone; see db_migration.sql:10, SETUP.md
+// "Troubleshooting"). The old query filtered on `customer_phone=eq.…`, so
+// PostgREST answered 400 for every real order, `.catch(() => null)` turned
+// that into the uniform 404, and /track "failed closed" for every customer.
+// The phone is now resolved in two steps — order by order_number, then the
+// linked customers.phone (shipping_address->>'phone' as a fallback for guest
+// orders with no customer row) — and compared server-side after the same
+// last-10-digit normalisation the rest of the app uses. The fetch below adds
+// only the columns needed for that resolution; TRACK_SELECT is still the only
+// thing that leaves the server. orderTrackColumnContract.test.ts guards the
+// column names against the live schema list.
+const TRACK_FETCH_SELECT = `${TRACK_SELECT},customer_id,shipping_address`
+
+/** Last 10 digits of whatever the DB stored ('+91 98765-43210' → '9876543210'). */
+function normalizePhone(v: unknown): string | null {
+  if (typeof v !== 'string' && typeof v !== 'number') return null
+  const digits = String(v).replace(/\D/g, '').slice(-10)
+  return digits.length === 10 ? digits : null
+}
+
+async function fetchCustomerPhone(customerId: unknown): Promise<string | null> {
+  if (customerId == null || customerId === '') return null
+  const rows = await sbAdmin(
+    'GET',
+    `/rest/v1/customers?id=eq.${encodeURIComponent(String(customerId))}&select=phone&limit=1`,
+  ).catch(() => null)
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  return normalizePhone((rows[0] as { phone?: unknown }).phone)
+}
+
 export async function GET(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   if (!await checkRateLimitKv(`mw:rl:order_track_ip:${ip}`, 20)) {
@@ -80,18 +111,28 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&customer_phone=eq.${encodeURIComponent(phone)}&select=${TRACK_SELECT}&limit=1`,
+      `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&select=${TRACK_FETCH_SELECT}&limit=1`,
     ).catch(() => null)
 
-    if (!Array.isArray(rows) || rows.length === 0) {
-      // Uniform message for "no such order" AND "phone doesn't match" — same
-      // reasoning as /api/v1/orders/lookup: distinguishing the two would let
-      // an attacker confirm a guessed order_number is real even without the
-      // matching phone.
-      return fail(404, 'Order not found. Check your order number and phone number.')
-    }
+    // Uniform message for "no such order" AND "phone doesn't match" — same
+    // reasoning as /api/v1/orders/lookup: distinguishing the two would let
+    // an attacker confirm a guessed order_number is real even without the
+    // matching phone.
+    const NOT_FOUND = 'Order not found. Check your order number and phone number.'
+    if (!Array.isArray(rows) || rows.length === 0) return fail(404, NOT_FOUND)
 
     const raw = rows[0] as Record<string, unknown>
+
+    // AUDIT S1-007 / S2-002: phone match via customers.phone (orders.customer_id),
+    // falling back to the phone snapshotted in shipping_address. Both are
+    // normalised to the last 10 digits before comparing. An order with no
+    // resolvable phone at all can never be tracked here (fails closed).
+    const customerPhone = await fetchCustomerPhone(raw.customer_id)
+    const shipping      = raw.shipping_address as { phone?: unknown } | null | undefined
+    const shippingPhone = normalizePhone(shipping && typeof shipping === 'object' ? shipping.phone : null)
+    const matches = (customerPhone !== null && customerPhone === phone)
+                 || (shippingPhone !== null && shippingPhone === phone)
+    if (!matches) return fail(404, NOT_FOUND)
     const res = ok({
       success: true,
       order: {

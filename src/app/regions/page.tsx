@@ -51,6 +51,10 @@ export const metadata: Metadata = {
 export default async function RegionsPage() {
   const storeData = await getStoreData()
   const states = storeData.states || []
+  // AUDIT S3-005: the farmer-family figure is the admin's stat_farmer_families (same key as the hero
+  // stats bar) — never a hand-typed "200+". Blank/hidden in admin → the tile is not rendered.
+  const rawFarmers = (storeData.settings?.stat_farmer_families || '').trim()
+  const farmerStat = rawFarmers && storeData.settings?.stat_hide_stat_farmer_families !== 'true' ? `${rawFarmers}+` : ''
 
   // Count products per state
   // BUG FIX (perf): previously called getProductsWithImages()+normalizeProducts()
@@ -141,7 +145,8 @@ export default async function RegionsPage() {
             {[
               { val: `${states.length}`, lbl: 'Himalayan States' },
               { val: `${totalRegionProducts}`, lbl: 'Products' },
-              { val: '200+', lbl: 'Farming Families' },
+              // AUDIT S3-005: one settings key (stat_farmer_families) for every farmer-family figure; hidden when unset.
+              ...(farmerStat ? [{ val: farmerStat, lbl: 'Farming Families' }] : []),
             ].map(s => (
               <div key={s.lbl}>
                 <div style={{ fontFamily: serif, fontSize: 28, fontWeight: 700, color: '#e8b84b' }}>{s.val}</div>

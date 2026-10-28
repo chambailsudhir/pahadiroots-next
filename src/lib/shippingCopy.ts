@@ -113,3 +113,47 @@ export const SHIPPING_TIMING = {
 /** "Metro cities 3–5 business days · Non-metro / remote 7–12 business days after dispatch" */
 export const DELIVERY_WINDOWS_TEXT =
   `Metro cities ${SHIPPING_TIMING.metro} · Non-metro / remote ${SHIPPING_TIMING.remote} after dispatch (dispatched within ${SHIPPING_TIMING.dispatch})`
+
+// ── AUDIT S3-001 / S3-004 / G2 A15: ONE source for every delivery / returns / notification sentence ──
+// The cart, checkout, contact FAQ, account pages, order-success and policy pages each carried their own
+// hand-typed promise ("3–5 Days", "today's dispatch", "WhatsApp updates", "24–48 hrs") that contradicted
+// the Shipping / Returns policy. Every customer-facing surface now quotes these constants; the
+// shippingTiming test fails if a surface re-introduces a hard-coded window.
+
+/** Short badge title + sub-line (cart / checkout trust rows). */
+export const DELIVERY_BADGE = {
+  title: 'Pan-India Delivery',
+  sub:   `Metro ${SHIPPING_TIMING.metro} · remote ${SHIPPING_TIMING.remote} after dispatch`,
+} as const
+
+/** Returns / damage-claim windows exactly as the Returns Policy page states them. */
+export const RETURNS_TIMING = {
+  claimWindow:   '48 hours',
+  reviewWindow:  '24–48 hours',
+  refundWindow:  '7–10 business days',
+} as const
+
+export const RETURNS_BADGE = {
+  title: `${RETURNS_TIMING.claimWindow} Claims`,
+  sub:   'Damaged / defective items, with photo or video',
+} as const
+
+/** FAQ answers (contact page) — derived, never hand-typed. */
+export const DELIVERY_FAQ_ANSWER =
+  `Orders are dispatched within ${SHIPPING_TIMING.dispatch}. Delivery takes ${SHIPPING_TIMING.metro} after dispatch to metro cities and ${SHIPPING_TIMING.remote} to non-metro / remote areas. See our Shipping Policy for details.`
+
+export const DAMAGE_FAQ_ANSWER =
+  `Email or WhatsApp us a photo or short video within ${RETURNS_TIMING.claimWindow} of delivery with your order number. Our team reviews claims within ${RETURNS_TIMING.reviewWindow}; approved claims get a replacement or refund (refunds within ${RETURNS_TIMING.refundWindow} after approval) as set out in our Return & Refund Policy.`
+
+/** Email is the only notification channel the system actually sends on (no WhatsApp/SMS sender exists). */
+export const TRACKING_NOTIFICATION_TEXT =
+  'Tracking details are emailed to you once your order ships. You can also check My Account → Orders.'
+
+export const TRACK_FAQ_ANSWER =
+  `Visit our Track Order page and enter your order number and phone number. ${TRACKING_NOTIFICATION_TEXT}`
+
+/** Account order status line after dispatch — no calendar-day guess. */
+export const SHIPPED_STATUS_TEXT =
+  `Shipped · delivery in ${SHIPPING_TIMING.metro} (metro) or ${SHIPPING_TIMING.remote} (remote) after dispatch`
+
+export const RETURN_REVIEW_STATUS_TEXT = `Return request under review · ${RETURNS_TIMING.reviewWindow}`

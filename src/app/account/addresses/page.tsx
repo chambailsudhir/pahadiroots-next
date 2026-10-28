@@ -91,8 +91,8 @@ export default function AddressesPage() {
           <div className={styles.saFormGrid}>
             {/* Label */}
             <div className={styles.saFormSpan2}>
-              <label className={styles.saFLbl}>Label *</label>
-              <select
+              <label className={styles.saFLbl} htmlFor="sa-label">Label *</label>
+              <select id="sa-label"
                 value={addrs.form.label}
                 onChange={e => addrs.setField('label', e.target.value)}
                 className={`${styles.saFInp}${addrs.formErr.label ? ' ' + styles.saFErr : ''}`}
@@ -104,8 +104,8 @@ export default function AddressesPage() {
             </div>
             {/* Contact name */}
             <div className={styles.saFormSpan2}>
-              <label className={styles.saFLbl}>Contact Name</label>
-              <input
+              <label className={styles.saFLbl} htmlFor="sa-name">Contact Name</label>
+              <input id="sa-name"
                 type="text"
                 value={addrs.form.name}
                 onChange={e => addrs.setField('name', e.target.value)}
@@ -115,8 +115,8 @@ export default function AddressesPage() {
             </div>
             {/* Phone */}
             <div className={styles.saFormSpan2}>
-              <label className={styles.saFLbl}>Phone Number *</label>
-              <input
+              <label className={styles.saFLbl} htmlFor="sa-phone">Phone Number *</label>
+              <input id="sa-phone"
                 type="text"
                 inputMode="numeric"
                 value={addrs.form.phone}
@@ -130,8 +130,8 @@ export default function AddressesPage() {
             </div>
             {/* Street */}
             <div className={styles.saFormSpan2}>
-              <label className={styles.saFLbl}>Street / Flat / Colony *</label>
-              <input
+              <label className={styles.saFLbl} htmlFor="sa-street">Street / Flat / Colony *</label>
+              <input id="sa-street"
                 type="text"
                 value={addrs.form.addr}
                 onChange={e => addrs.setField('addr', e.target.value)}
@@ -142,8 +142,8 @@ export default function AddressesPage() {
             </div>
             {/* City */}
             <div>
-              <label className={styles.saFLbl}>City *</label>
-              <input
+              <label className={styles.saFLbl} htmlFor="sa-city">City *</label>
+              <input id="sa-city"
                 type="text"
                 value={addrs.form.city}
                 onChange={e => addrs.setField('city', e.target.value)}
@@ -154,8 +154,8 @@ export default function AddressesPage() {
             </div>
             {/* Pincode */}
             <div>
-              <label className={styles.saFLbl}>Pincode</label>
-              <input
+              <label className={styles.saFLbl} htmlFor="sa-pin">Pincode</label>
+              <input id="sa-pin"
                 type="text"
                 inputMode="numeric"
                 value={addrs.form.pin}
@@ -168,8 +168,8 @@ export default function AddressesPage() {
             </div>
             {/* State */}
             <div className={styles.saFormSpan2}>
-              <label className={styles.saFLbl}>State *</label>
-              <select
+              <label className={styles.saFLbl} htmlFor="sa-state">State *</label>
+              <select id="sa-state"
                 value={addrs.form.state}
                 onChange={e => addrs.setField('state', e.target.value)}
                 className={`${styles.saFInp}${addrs.formErr.state ? ' ' + styles.saFErr : ''}`}

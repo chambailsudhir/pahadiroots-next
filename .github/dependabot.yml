@@ -1,0 +1,12 @@
+# AUDIT G1-25 / B6: automated dependency security updates (pair with GitHub secret scanning + push protection in repo settings).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      production-security:
+        applies-to: security-updates
+        patterns: ["*"]

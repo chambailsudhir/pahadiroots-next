@@ -225,7 +225,7 @@ export default function AuthModal() {
         : tab === 'signup' ? 'Sign up for HimVeda by Pahadi Roots'
         : 'Sign in to HimVeda by Pahadi Roots'
       }>
-        <button className="am-close" onClick={closeAuth}>✕</button>
+        <button className="am-close" onClick={closeAuth} aria-label="Close" type="button">✕</button>
 
         {/* Header */}
         <div className="am-head">
@@ -241,8 +241,8 @@ export default function AuthModal() {
               ? <div className="am-success">✅ Reset link sent! Check your email inbox.</div>
               : <form onSubmit={handleFP}>
                   <div className="am-field">
-                    <label className="am-lbl">Email Address</label>
-                    <input className="am-inp" type="email" value={fpEmail} onChange={e => setFPEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
+                    <label className="am-lbl" htmlFor="am-fp-email">Email Address</label>
+                    <input id="am-fp-email" className="am-inp" type="email" value={fpEmail} onChange={e => setFPEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
                   </div>
                   {error && <div className="am-err">{error}</div>}
                   <button className="am-submit" disabled={loading}>{loading ? 'Sending…' : 'Send Reset Link'}</button>
@@ -272,13 +272,13 @@ export default function AuthModal() {
                     <div className="am-greeting">Welcome back 👋</div>
                     <div className="am-greeting-sub">Login to manage your orders &amp; account</div>
                     <div className="am-field">
-                      <label className="am-lbl">Email Address</label>
-                      <input ref={emailRef} className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
+                      <label className="am-lbl" htmlFor="am-login-email">Email Address</label>
+                      <input id="am-login-email" ref={emailRef} className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
                       {fieldErr.email && <span className="am-field-err">{fieldErr.email}</span>}
                     </div>
                     <div className="am-field" style={{ position: 'relative' }}>
-                      <label className="am-lbl">Password</label>
-                      <input className={`am-inp${fieldErr.pass?' am-inp-err':''}`} type="password" value={pass} onChange={e => { setPass(e.target.value); setFieldErr(f=>({...f,pass:''})) }} placeholder="Your password" autoComplete="current-password" />
+                      <label className="am-lbl" htmlFor="am-login-pass">Password</label>
+                      <input id="am-login-pass" className={`am-inp${fieldErr.pass?' am-inp-err':''}`} type="password" value={pass} onChange={e => { setPass(e.target.value); setFieldErr(f=>({...f,pass:''})) }} placeholder="Your password" autoComplete="current-password" />
                       <button type="button" className="am-fp-link" onClick={() => { setShowFP(true); setError(''); setFPEmail(email) }}>Forgot Password?</button>
                     </div>
                     {error   && <div className="am-err">{error}</div>}
@@ -291,29 +291,29 @@ export default function AuthModal() {
                     <div className="am-greeting-sub">Join 10K+ Himalayan product lovers</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       <div className="am-field">
-                        <label className="am-lbl">First Name *</label>
-                        <input className="am-inp" type="text" value={fname} onChange={e => setFname(e.target.value)} placeholder="Ravi" />
+                        <label className="am-lbl" htmlFor="am-su-fname">First Name *</label>
+                        <input id="am-su-fname" className="am-inp" type="text" value={fname} onChange={e => setFname(e.target.value)} placeholder="Ravi" />
                       </div>
                       <div className="am-field">
-                        <label className="am-lbl">Last Name</label>
-                        <input className="am-inp" type="text" value={lname} onChange={e => setLname(e.target.value)} placeholder="Kumar" />
+                        <label className="am-lbl" htmlFor="am-su-lname">Last Name</label>
+                        <input id="am-su-lname" className="am-inp" type="text" value={lname} onChange={e => setLname(e.target.value)} placeholder="Kumar" />
                       </div>
                     </div>
                     <div className="am-field">
-                      <label className="am-lbl">Email Address *</label>
-                      <input className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
+                      <label className="am-lbl" htmlFor="am-su-email">Email Address *</label>
+                      <input id="am-su-email" className={`am-inp${fieldErr.email?' am-inp-err':''}`} type="email" value={email} onChange={e => { setEmail(e.target.value); setFieldErr(f=>({...f,email:''})) }} placeholder="you@example.com" autoComplete="email" />
                       {fieldErr.email && <span className="am-field-err">{fieldErr.email}</span>}
                     </div>
                     <div className="am-field">
-                      <label className="am-lbl">Phone (Optional)</label>
+                      <label className="am-lbl" htmlFor="am-su-phone">Phone (Optional)</label>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ padding: '10px 12px', background: '#f5f5f5', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#555', flexShrink: 0 }}>+91</span>
-                        <input className="am-inp" style={{ flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,''))} placeholder="10-digit mobile" maxLength={10} autoComplete="tel" />
+                        <input id="am-su-phone" className="am-inp" style={{ flex: 1 }} type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,''))} placeholder="10-digit mobile" maxLength={10} autoComplete="tel" />
                       </div>
                     </div>
                     <div className="am-field">
-                      <label className="am-lbl">Password *</label>
-                      <input className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Minimum 6 characters" autoComplete="new-password" />
+                      <label className="am-lbl" htmlFor="am-su-pass">Password *</label>
+                      <input id="am-su-pass" className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Minimum 6 characters" autoComplete="new-password" />
                     </div>
                     {error   && <div className="am-err">{error}</div>}
                     {success && <div className="am-success">{success}</div>}

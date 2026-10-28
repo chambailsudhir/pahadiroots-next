@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useState, useMemo, useCallback } from 'react'
+import { SHIPPING_TIMING } from '@/lib/shippingCopy'
 import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { SiteSettings, CartItem, AppliedCoupon } from '@/types'
@@ -71,7 +72,8 @@ const OrderSummary = memo(function OrderSummary({
     savingsBadge, prepaidPct, loyaltyEnabled, loyaltyRate, loyaltyLabel,
     pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
   } = useMemo(() => {
-    const prepaidPct     = parseInt(settings.prepaid_discount_pct || '5')
+    // AUDIT S3-006: parseFloat — pricingService applies '5.5' as 5.5%, so the label must too.
+    const prepaidPct     = parseFloat(settings.prepaid_discount_pct || '5')
     const loyaltyEnabled = settings.loyalty_enabled === 'true'
     const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '1')
     const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
@@ -87,19 +89,6 @@ const OrderSummary = memo(function OrderSummary({
       pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
     }
   }, [settings, pricing, loyaltyBalance, loyaltyRedemption])
-
-  // useMemo — ETA date calc; only recalc once per mount (time-of-day doesn't change mid-session)
-  const { sameDay, etaMinStr, etaMaxStr } = useMemo(() => {
-    const now     = new Date()
-    const istHour = (now.getUTCHours() * 60 + now.getUTCMinutes() + 330) / 60 % 24
-    const sameDay = istHour < 14
-    const minDays = (sameDay ? 0 : 1) + 3
-    const maxDays = (sameDay ? 0 : 1) + 5
-    const etaMin  = new Date(now); etaMin.setDate(now.getDate() + minDays)
-    const etaMax  = new Date(now); etaMax.setDate(now.getDate() + maxDays)
-    const fmt     = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
-    return { sameDay, etaMinStr: fmt(etaMin), etaMaxStr: fmt(etaMax) }
-  }, [])
 
   // PERF FIX: wrapped in useCallback — was a plain async function declaration,
   // producing a new reference every render. cappedBalance (from the useMemo
@@ -478,11 +467,12 @@ const OrderSummary = memo(function OrderSummary({
       <div className="os-eta">
         <div className="os-eta-icon">🚚</div>
         <div>
+          {/* AUDIT S3-001: the policy windows, not a calendar-day promise or a same-day dispatch claim. */}
           <div className="os-eta-line">
-            Delivery by <strong>{etaMinStr} – {etaMaxStr}</strong>
+            Dispatched within <strong>{SHIPPING_TIMING.dispatch}</strong>
           </div>
           <div className="os-eta-sub">
-            {sameDay ? 'Order now for today\'s dispatch!' : 'Order now for tomorrow\'s dispatch'}
+            Delivery {SHIPPING_TIMING.metro} (metro) · {SHIPPING_TIMING.remote} (remote) after dispatch
           </div>
         </div>
       </div>

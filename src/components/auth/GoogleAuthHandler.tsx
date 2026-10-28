@@ -11,6 +11,16 @@
 // The primary path (server-side callback) now writes cookies
 // directly in /api/auth/google-callback and redirects to /account,
 // so this handler is only a safety net.
+//
+// AUDIT S2-004 / S2-001: although mounted globally (layout.tsx), this
+// handler now acts ONLY on the dedicated OAuth landing route
+// (/auth/google-callback). Previously ANY page accepting
+// `#access_token=…` meant (a) a link like `/#access_token=<attacker>`
+// silently signed the visitor in as the attacker (login CSRF / session
+// fixation), and (b) Supabase password-recovery links
+// (`/reset-password#access_token=…&type=recovery`) were swallowed and
+// turned into a login instead of reaching the reset form. Hashes with
+// `type=recovery` are never treated as a login, on any route.
 // ═══════════════════════════════════════════════════════════════
 
 import { useEffect } from 'react'
@@ -32,10 +42,33 @@ async function writeSessionCookie(accessToken: string, refreshToken?: string) {
   }
 }
 
+// The only route on which this handler may consume OAuth tokens. Supabase's
+// Google redirect_to is always built as `${SITE_URL}/auth/google-callback`
+// (api/auth/route.ts `google_oauth`), so nothing legitimate lands elsewhere.
+export const GOOGLE_CALLBACK_PATH = '/auth/google-callback'
+
+/**
+ * AUDIT S2-004 / S2-001 — pure decision helper (unit-tested directly):
+ * should the handler treat this location as a Google OAuth landing?
+ *   • never on any route other than /auth/google-callback
+ *   • never when the hash carries `type=recovery` (password-reset link)
+ */
+export function shouldHandleOAuthLanding(pathname: string, hash: string): boolean {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+  if (normalizedPath !== GOOGLE_CALLBACK_PATH) return false
+  const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
+  if (hashParams.get('type') === 'recovery') return false
+  return true
+}
+
 export default function GoogleAuthHandler() {
   const setUser = useUserStore(s => s.setUser)
 
   useEffect(() => {
+    // AUDIT S2-004 / S2-001: leave the URL (hash AND ?code=) completely alone
+    // anywhere except the dedicated callback route, and for recovery links.
+    if (!shouldHandleOAuthLanding(window.location.pathname, window.location.hash)) return
+
     // ── Case 1: ?code= PKCE flow ─────────────────────────────
     const params   = new URLSearchParams(window.location.search)
     const code     = params.get('code')

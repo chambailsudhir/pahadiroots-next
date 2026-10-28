@@ -28,14 +28,41 @@ const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // intentionally excluded from the JSON response — exposing it lets scrapers
 // detect when a coupon is about to expire and spam it at peak discount.
 // max_uses, uses_count, max_discount, first_order_only are also excluded.
-const HINT_SELECT = 'code,type,value,min_order,expires_at'
+// max_uses and description are fetched ONLY for the server-side S1-010 filter
+// below and are never returned.
+const HINT_SELECT = 'code,type,value,min_order,expires_at,max_uses,description'
+
+// AUDIT S1-010: the newsletter `subscribe` action mints one personal coupon per
+// subscriber (`WELCOME5-<hash>`, max_uses=1, description 'Newsletter welcome…' —
+// see lib/welcomeCoupon.ts, api/v1/actions/route.ts). Ordered by value with few
+// higher-value public codes, those single-use personal codes filled this public
+// hint list, so anyone could burn another subscriber's one-time code. A hint
+// must only ever be a genuinely public, multi-use code.
+const WELCOME_CODE_PREFIX   = 'WELCOME5-'
+const WELCOME_DESC_PREFIX   = 'Newsletter welcome'
 
 interface RawHint {
-  code:       string
-  type:       'flat' | 'percent'
-  value:      number
-  min_order:  number | null
-  expires_at: string | null
+  code:         string
+  type:         'flat' | 'percent'
+  value:        number
+  min_order:    number | null
+  expires_at:   string | null
+  max_uses?:    number | null
+  description?: string | null
+}
+
+/**
+ * AUDIT S1-010: true only for coupons that are safe to advertise publicly —
+ * multi-use (max_uses null or > 1) and not a per-subscriber welcome code.
+ * Applied in JS as well as in the PostgREST filter (belt and suspenders: the
+ * last-good fallback and any RLS/column drift must not re-expose a code).
+ */
+function isPublicHint(c: Pick<RawHint, 'code' | 'max_uses' | 'description'>): boolean {
+  if (c.max_uses != null && c.max_uses <= 1) return false
+  const code = String(c.code || '').toUpperCase()
+  if (code.startsWith(WELCOME_CODE_PREFIX)) return false
+  if (String(c.description || '').startsWith(WELCOME_DESC_PREFIX)) return false
+  return true
 }
 
 // Last-good fallback (see lib/api/lastGood.ts). Hints are purely cosmetic —
@@ -54,7 +81,11 @@ export async function GET() {
     // Supabase PostgREST supports gte/lte filter operators on timestamp columns.
     // We keep the JS filter as a belt-and-suspenders guard for timezone edge cases.
     const nowIso = new Date().toISOString()
-    const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&or=(expires_at.is.null,expires_at.gte.${nowIso})&select=${HINT_SELECT}&order=value.desc&limit=5`
+    // AUDIT S1-010: single-use codes (max_uses <= 1) and WELCOME5-* personal
+    // codes are excluded in the DB query so they can never crowd out — or
+    // appear in — the public list. (and=(or(...),or(...)) is PostgREST's
+    // syntax for two OR groups; a bare repeated `or=` would be ambiguous.)
+    const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&and=(or(expires_at.is.null,expires_at.gte.${nowIso}),or(max_uses.is.null,max_uses.gt.1))&code=not.ilike.${WELCOME_CODE_PREFIX}*&select=${HINT_SELECT}&order=value.desc&limit=10`
     const res = await fetch(url, {
       headers: {
         apikey:        ANON_KEY,
@@ -75,6 +106,7 @@ export async function GET() {
 
     const hints = raw
       .filter(c => !c.expires_at || new Date(c.expires_at) > now)
+      .filter(isPublicHint) // AUDIT S1-010
       .slice(0, 3)
       .map(c => ({
         // expires_at intentionally excluded — exposing it is a timing leak

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { RETURNS_TIMING } from '@/lib/shippingCopy'  // AUDIT S3-001: policy review window
 import Link from 'next/link'
 import OrderCard      from '../_components/OrderCard'
 import OrdersSkeleton from '../_components/OrdersSkeleton'
@@ -174,7 +175,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
         const urlRes = await fetch(`/api/orders/${returnModal.orderId}/return/upload-url`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ fileName: safeName, fileType: file.type }),
+          // AUDIT S2-011: the server validates size + MIME + extension itself (fileSize is required).
+          body:    JSON.stringify({ fileName: safeName, fileType: file.type, fileSize: file.size }),
         })
         const urlData = await urlRes.json()
         if (!urlRes.ok) {
@@ -183,7 +185,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
         }
         const putRes = await fetch(urlData.signedURL, {
           method:  'PUT',
-          headers: { 'Content-Type': file.type },
+          headers: urlData.uploadHeaders ?? { 'Content-Type': file.type },
           body:    file,
         })
         if (!putRes.ok) {
@@ -394,7 +396,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 <div className={styles.returnSuccessIcon}>✅</div>
                 <p className={styles.modalDesc}>
                   Your {submittedInfo.resolution === 'replace' ? 'replacement' : 'return'} request for order{' '}
-                  <strong>{submittedInfo.orderNum}</strong> has been submitted. Our team will reach out within 24–48 hours.
+                  <strong>{submittedInfo.orderNum}</strong> has been submitted. Our team will reach out within {RETURNS_TIMING.reviewWindow}.
                 </p>
                 {orders.settings?.whatsapp_number && (
                   <a
@@ -413,7 +415,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
             ) : (
               <>
             <p className={styles.modalDesc}>
-              Please select the reason for your return. Our team will contact you within 24–48 hours to arrange a pickup.
+              Please select the reason for your return. Our team will contact you within {RETURNS_TIMING.reviewWindow} to arrange a pickup.
             </p>
 
             {/* Item picker — only shown when the order has >1 item */}

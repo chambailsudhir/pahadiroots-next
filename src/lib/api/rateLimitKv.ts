@@ -24,6 +24,9 @@
  *   /api/v1/orders/route.ts    (key mw:rl:orders_ip:<ip>,       limit 10)
  *                              (key mw:rl:orders_phone:<phone>,  limit 3)
  *   /api/v1/payments/route.ts  (key mw:rl:payments_ip:<ip>,     limit 10)
+ *                              (key mw:rl:payments_phone10m:<phone>, limit 6 / 600 s)   AUDIT S1-003
+ *                              (key mw:rl:payments_ip10m:<ip>,       limit 20 / 600 s)  AUDIT S1-003
+ *   orders + payments use checkRateLimitKvStrict() (fail CLOSED, AUDIT S1-016a); the rest keep checkRateLimitKv().
  */
 
 import { captureError, logger } from '@/lib/logger'
@@ -46,7 +49,17 @@ import { getServiceClient } from '@/lib/supabase'
 // here. This runs whenever KV is unavailable OR unhealthy — not just when
 // unconfigured — so a transient Upstash outage gets real protection too, not
 // just a logged warning.
-async function checkRateLimitDb(key: string, limit: number, windowSec: number): Promise<boolean> {
+/**
+ * AUDIT S1-016(a): the limiter used to collapse "could not decide" into "allowed". Callers now
+ * get the three real outcomes; which one a route treats as a refusal is the route's decision
+ * (see checkRateLimitKv vs checkRateLimitKvStrict below).
+ */
+export type RateLimitOutcome = 'allowed' | 'blocked' | 'unavailable'
+
+/** Retry-After (seconds) a mutation route sends when the limiter itself is unavailable. */
+export const RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC = 10
+
+async function checkRateLimitDb(key: string, limit: number, windowSec: number): Promise<RateLimitOutcome> {
   try {
     const db = getServiceClient()
     const { data, error } = await db.rpc('rate_limit_check', {
@@ -54,20 +67,65 @@ async function checkRateLimitDb(key: string, limit: number, windowSec: number): 
     })
     if (error) {
       logger.metric('kv.db_fallback.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key })
-      return true // DB fallback itself unhealthy — fail-open as a last resort, same as the KV path
+      return 'unavailable' // DB fallback itself unhealthy — the caller decides open/closed (S1-016a)
     }
-    return data as boolean
+    if (typeof data !== 'boolean') {
+      logger.metric('kv.db_fallback.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key, reason: 'unexpected_response_shape' })
+      return 'unavailable'
+    }
+    return data ? 'allowed' : 'blocked'
   } catch {
     logger.metric('kv.db_fallback.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key })
-    return true
+    return 'unavailable'
   }
 }
 
+/**
+ * Legacy boolean API, used by read-mostly / low-risk routes (coupon pre-check, order track/lookup,
+ * cart validate, AI guard). Keeps the historical "fail open as an absolute last resort" behaviour
+ * when BOTH Upstash and the Postgres fallback are unavailable, but now says so loudly
+ * (alert:true) instead of a bare metric. Money-moving routes must use checkRateLimitKvStrict().
+ */
 export async function checkRateLimitKv(
   key:      string,
   limit:    number,
   windowSec = 60,
 ): Promise<boolean> {
+  const outcome = await resolveRateLimit(key, limit, windowSec)
+  if (outcome === 'unavailable') {
+    captureError(new Error('Rate limiter unavailable (KV + DB fallback) — request allowed (non-strict caller)'), {
+      action: 'rateLimitKv.unavailable_fail_open', key_prefix: key.split(':')[2] ?? key, alert: true,
+    })
+    return true
+  }
+  return outcome === 'allowed'
+}
+
+/**
+ * AUDIT S1-016(a): fail-CLOSED variant for mutation endpoints (order / payment creation).
+ * Returns the real outcome; when the limiter cannot decide ('unavailable') the route must answer
+ * 503 + Retry-After (RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC) rather than create an order with no
+ * abuse cap at all. A short-lived "please retry" beats an uncapped stock/coupon-locking window.
+ */
+export async function checkRateLimitKvStrict(
+  key:      string,
+  limit:    number,
+  windowSec = 60,
+): Promise<RateLimitOutcome> {
+  const outcome = await resolveRateLimit(key, limit, windowSec)
+  if (outcome === 'unavailable') {
+    captureError(new Error('Rate limiter unavailable (KV + DB fallback) — mutation refused (fail closed)'), {
+      action: 'rateLimitKv.unavailable_fail_closed', key_prefix: key.split(':')[2] ?? key, alert: true,
+    })
+  }
+  return outcome
+}
+
+async function resolveRateLimit(
+  key:      string,
+  limit:    number,
+  windowSec: number,
+): Promise<RateLimitOutcome> {
   const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
@@ -141,7 +199,7 @@ export async function checkRateLimitKv(
       })
       return checkRateLimitDb(key, limit, windowSec)
     }
-    return incrResult <= limit
+    return incrResult <= limit ? 'allowed' : 'blocked'
   } catch (e: unknown) {
     const isTimeout = e instanceof Error && e.name === 'TimeoutError'
     // BUG FIX 7: track connectivity failures as metrics
