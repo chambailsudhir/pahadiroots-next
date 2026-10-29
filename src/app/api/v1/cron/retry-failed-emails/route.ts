@@ -229,6 +229,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // AUDIT (Oct 2026): rows closed as 'expired' were counted in a metric only, unlike 'dead' rows which page ops. An
+  // e-mail that was never delivered in 72 h (e.g. a payment confirmation) deserves the same attention.
+  if (expired > 0) {
+    captureError(new Error(`${expired} transactional e-mail(s) expired undelivered after ${MAX_EMAIL_AGE_HOURS}h`), {
+      action: 'cron.retry_failed_emails.expired',
+      count:  expired,
+      alert:  true,
+    })
+  }
+
   // OBSERVABILITY FIX: emit DLQ metrics so a log aggregator can chart throughput
   // and dead-letter rate over time without a separate APM product.
   logger.metric('email.dlq.sent',          sent,         'count')

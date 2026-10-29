@@ -30,6 +30,13 @@ import type { NextRequest } from 'next/server'
 
 const ORIGINAL_ENV = { ...process.env }
 
+// ─── Mock: logger — lets tests assert on ops alerts ───────────────────────────
+const mockCaptureError = vi.fn()
+vi.mock('@/lib/logger', () => ({
+  captureError: (...a: unknown[]) => mockCaptureError(...a),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), metric: vi.fn() },
+}))
+
 // ─── Mock: resend — controllable per-row via mockSend ─────────────────────────
 const mockSend = vi.fn()
 vi.mock('resend', () => ({
@@ -135,6 +142,7 @@ function row(overrides: Partial<CandidateRow> = {}): CandidateRow {
 
 beforeEach(() => {
   resetMockDb()
+  mockCaptureError.mockReset()
   mockSend.mockReset()
   vi.resetModules()
 })
@@ -386,5 +394,29 @@ describe('GET /api/v1/cron/retry-failed-emails — abandoned claims and time bud
     expect(mockSend).toHaveBeenCalledTimes(2)
     // the deferred row was never claimed
     expect(mockDb.updateCalls.filter(c => c.payload.status === 'retrying')).toHaveLength(2)
+  })
+})
+
+describe('GET /api/v1/cron/retry-failed-emails — expired e-mails page ops (Oct 2026 audit)', () => {
+  beforeEach(() => { process.env.CRON_SECRET = 'test-cron-secret' })
+
+  it('closing rows as expired raises an alert with the count (not a metric only)', async () => {
+    const old = new Date(Date.now() - 100 * 3_600_000).toISOString()
+    mockDb.candidates = [row({ id: 'fe-1', created_at: old }), row({ id: 'fe-2', created_at: old })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+    expect(json.expired).toBe(2)
+    expect(mockSend).not.toHaveBeenCalled()
+    const alert = mockCaptureError.mock.calls.find(c => (c[1] as { action?: string })?.action === 'cron.retry_failed_emails.expired')
+    expect(alert).toBeDefined()
+    expect(alert![1]).toMatchObject({ count: 2, alert: true })
+  })
+
+  it('no alert when nothing expired', async () => {
+    mockDb.candidates = [row({ id: 'fe-1' })]
+    mockSend.mockResolvedValue({ data: { id: 'ok' }, error: null })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    await GET(makeReq('Bearer test-cron-secret'))
+    expect(mockCaptureError.mock.calls.find(c => (c[1] as { action?: string })?.action === 'cron.retry_failed_emails.expired')).toBeUndefined()
   })
 })

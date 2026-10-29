@@ -153,6 +153,16 @@ export async function POST(req: Request) {
   // conditional updates, unique payments rows), so a retry can never double-apply.
   const responsePromise = NextResponse.json({ received: true })
 
+  // A permanently unprocessable event (no db_order_id) is alerted and acknowledged with 200 so Razorpay does not
+  // retry it. Its log row must be closed too, otherwise it sits at 'received' forever and looks like a stuck event.
+  const closeLogAsProcessed = async () => {
+    if (!webhookLog?.id) return
+    await db.from('webhook_logs')
+      .update({ status: 'processed', processed_at: new Date().toISOString() })
+      .eq('id', webhookLog.id)
+  }
+
+
   try {
     const eventType = event.event
 
@@ -170,6 +180,7 @@ export async function POST(req: Request) {
           payment_id: paymentId,
           alert:      true,
         })
+        await closeLogAsProcessed()
         return responsePromise
       }
 
@@ -280,6 +291,7 @@ export async function POST(req: Request) {
           action: 'webhook.razorpay.payment_failed',
           alert:  true,
         })
+        await closeLogAsProcessed()
         return responsePromise
       }
 

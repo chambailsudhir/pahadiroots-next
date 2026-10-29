@@ -206,6 +206,14 @@ function makeEvent(overrides: Partial<{
   }
 }
 
+/** A genuinely id-less event. NOTE: makeEvent({ dbOrderId: undefined }) does NOT do this — a destructuring default
+ *  turns `undefined` back into the default order id, so it never reaches the "missing notes.db_order_id" branch. */
+function makeEventWithoutOrderId(event: string) {
+  const e = makeEvent({ event })
+  ;(e.payload.payment.entity as { notes: object }).notes = {}
+  return e
+}
+
 function makeReq(body: object, opts: { signature?: string; contentType?: string; contentLength?: string } = {}) {
   const bodyStr = JSON.stringify(body)
   const headers = new Headers()
@@ -377,7 +385,7 @@ describe('POST /webhook/razorpay — payment.captured', () => {
 
   it('does not touch the orders table when notes.db_order_id is missing', async () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(makeReq(makeEvent({ dbOrderId: undefined })))
+    const res = await POST(makeReq(makeEventWithoutOrderId('payment.captured')))
 
     expect(res.status).toBe(200) // permanently-unprocessable → don't ask Razorpay to retry
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
@@ -546,7 +554,7 @@ describe('POST /webhook/razorpay — payment.failed (P2: one failed attempt is N
 
   it('payment.failed with missing notes.db_order_id → 200, nothing touched', async () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(makeReq(makeEvent({ event: 'payment.failed', dbOrderId: undefined })))
+    const res = await POST(makeReq(makeEventWithoutOrderId('payment.failed')))
     expect(res.status).toBe(200)
     expect(mockDb.updateCalls).toHaveLength(0)
   })
@@ -688,5 +696,26 @@ describe('POST /webhook/razorpay — event-id replay (audit)', () => {
     const res = await POST(replayReq())
     expect(res.status).toBe(200)
     expect(mockDb.updateCalls.find(c => c.table === 'orders')!.payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid' })
+  })
+})
+
+describe('POST /webhook/razorpay — unprocessable events close their log row (Oct 2026 audit)', () => {
+  const closed = () => mockDb.updateCalls.find(c => c.table === 'webhook_logs' && (c.payload as { status?: string }).status === 'processed')
+
+  it('payment.captured with no notes.db_order_id: 200, orders untouched, webhook log marked processed (not left at received)', async () => {
+    mockDb.responses['webhook_logs'] = { id: 'wl-1' }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEventWithoutOrderId('payment.captured')))
+    expect(res.status).toBe(200)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(closed()).toBeDefined()
+  })
+
+  it('payment.failed with no notes.db_order_id: same', async () => {
+    mockDb.responses['webhook_logs'] = { id: 'wl-1' }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEventWithoutOrderId('payment.failed')))
+    expect(res.status).toBe(200)
+    expect(closed()).toBeDefined()
   })
 })
