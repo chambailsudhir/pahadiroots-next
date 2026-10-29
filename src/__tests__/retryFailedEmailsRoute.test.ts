@@ -85,6 +85,7 @@ function buildQueryBuilder() {
     },
     eq: (...args: unknown[]) => { eqCalls.push(args); return builder },
     lte: () => builder,
+    lt: (...args: unknown[]) => { eqCalls.push(['lt', ...args]); return builder },
     order: () => builder,
     limit: () => builder,
     then: (...a: unknown[]) => {
@@ -191,7 +192,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0 })
+    expect(json).toEqual({ candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
   })
 
   it('happy path: a pending row sends successfully and is marked sent', async () => {
@@ -202,7 +203,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0, expired: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('sent')
   })
@@ -227,7 +228,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0, expired: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('pending')
     expect(finalUpdate.payload.attempts).toBe(2)
@@ -245,7 +246,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1, expired: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('dead')
     expect(finalUpdate.payload.attempts).toBe(MAX_DLQ_ATTEMPTS)
@@ -260,7 +261,7 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0 })
+    expect(json).toEqual({ candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
     expect(mockSend).not.toHaveBeenCalled()
   })
 
@@ -323,7 +324,7 @@ describe('GET /api/v1/cron/retry-failed-emails — stale e-mails are closed, not
     const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
     const json = await (await GET(auth())).json()
     expect(mockSend).toHaveBeenCalledTimes(1)
-    expect(json).toMatchObject({ sent: 1, expired: 0 })
+    expect(json).toMatchObject({ sent: 1, expired: 0, deferred: 0 })
   })
 
   it('exactly at the boundary side: 71h is sent, 73h is closed', async () => {
@@ -339,6 +340,51 @@ describe('GET /api/v1/cron/retry-failed-emails — stale e-mails are closed, not
     mockDb.candidates = [row({ id: 'no-date' })]
     const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
     const json = await (await GET(auth())).json()
-    expect(json).toMatchObject({ sent: 1, expired: 0 })
+    expect(json).toMatchObject({ sent: 1, expired: 0, deferred: 0 })
+  })
+})
+
+describe('GET /api/v1/cron/retry-failed-emails — abandoned claims and time budget (Oct 2026 audit)', () => {
+  beforeEach(() => { process.env.CRON_SECRET = 'test-cron-secret' })
+
+  it('a claimed row is stamped with last_attempt_at so an abandoned claim can be detected', async () => {
+    mockDb.candidates = [row({ id: 'fe-1' })]
+    mockSend.mockResolvedValue({ data: { id: 'email_ok' }, error: null })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    await GET(makeReq('Bearer test-cron-secret'))
+    const claim = mockDb.updateCalls.find(c => c.payload.status === 'retrying')!
+    expect(typeof claim.payload.last_attempt_at).toBe('string')
+    expect(Number.isNaN(Date.parse(claim.payload.last_attempt_at as string))).toBe(false)
+  })
+
+  it('every sweep first returns claims older than CLAIM_STALE_MINUTES (status retrying) to pending', async () => {
+    mockDb.candidates = []
+    const { GET, } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const { CLAIM_STALE_MINUTES } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const before = Date.now()
+    await GET(makeReq('Bearer test-cron-secret'))
+    const reclaim = mockDb.updateCalls[0]
+    expect(reclaim.payload.status).toBe('pending')
+    expect(reclaim.eqCalls.some(c => c[0] === 'status' && c[1] === 'retrying')).toBe(true)
+    const lt = reclaim.eqCalls.find(c => c[0] === 'lt' && c[1] === 'last_attempt_at')!
+    // the cut-off is "now minus the stale window", so a claim made seconds ago is never touched
+    const cutoff = Date.parse(lt[2] as string)
+    expect(cutoff).toBeLessThanOrEqual(before - CLAIM_STALE_MINUTES * 60_000 + 1000)
+    expect(cutoff).toBeGreaterThan(before - (CLAIM_STALE_MINUTES + 1) * 60_000)
+  })
+
+  it('stops starting new rows once the time budget is spent; the rest are deferred, still pending, never half-processed', async () => {
+    mockDb.candidates = [row({ id: 'fe-1' }), row({ id: 'fe-2' }), row({ id: 'fe-3' })]
+    // each send "takes" 12 s of the 20 s budget → row 1 and 2 are attempted, row 3 is deferred
+    let clock = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => clock)
+    mockSend.mockImplementation(async () => { clock += 12_000; return { data: { id: 'ok' }, error: null } })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+    expect(json.sent).toBe(2)
+    expect(json.deferred).toBe(1)
+    expect(mockSend).toHaveBeenCalledTimes(2)
+    // the deferred row was never claimed
+    expect(mockDb.updateCalls.filter(c => c.payload.status === 'retrying')).toHaveLength(2)
   })
 })

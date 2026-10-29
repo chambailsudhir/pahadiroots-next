@@ -26,6 +26,15 @@ import { logger, captureError } from '@/lib/logger'
 const BATCH_SIZE = 25
 const SEND_TIMEOUT_MS = 5000
 
+// AUDIT (Oct 2026, orders/notifications): vercel.json gives this route maxDuration 30 s, but 25 rows × a
+// 5 s send timeout is up to ~125 s. During a Resend slowdown the function was killed part-way and the row it
+// was sending was left 'retrying' — a state nothing ever read again, so that e-mail (possibly a payment
+// confirmation) was lost silently. Two fixes: (1) stop starting new rows once this budget is spent (the rest
+// stay 'pending' for the next sweep); (2) a claim that is older than CLAIM_STALE_MINUTES is an abandoned
+// claim and goes back to 'pending' at the start of the next sweep.
+export const TIME_BUDGET_MS = 20_000
+export const CLAIM_STALE_MINUTES = 15
+
 // A transactional email that is still undelivered after this long is no longer useful and can
 // be actively misleading ("Payment Confirmed" arriving days after the fact; a contact-form
 // notification nobody is waiting for). Rows older than this are closed as 'dead' WITHOUT
@@ -86,6 +95,24 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getServiceClient()
+  const startedAt = Date.now()
+
+  // Return abandoned claims to the queue (see CLAIM_STALE_MINUTES). A run that is still genuinely working
+  // claimed its row seconds ago, so it is never touched by this. The 72 h expiry below still bounds how long a
+  // row that keeps crashing the function can circulate. Trade-off: if a send succeeded just before the function
+  // died, the customer can receive that e-mail twice — chosen over losing a payment confirmation.
+  const staleClaimBefore = new Date(Date.now() - CLAIM_STALE_MINUTES * 60_000).toISOString()
+  const { error: reclaimErr } = await db
+    .from('failed_emails')
+    .update({ status: 'pending', next_retry_at: new Date().toISOString() })
+    .eq('status', 'retrying')
+    .lt('last_attempt_at', staleClaimBefore)
+  if (reclaimErr) {
+    logger.error('cron: failed_emails stale-claim reclaim failed', {
+      action: 'cron.retry_failed_emails.reclaim',
+      error:  reclaimErr.message,
+    })
+  }
 
   const { data: candidates, error: fetchErr } = await db
     .from('failed_emails')
@@ -108,14 +135,18 @@ export async function GET(req: NextRequest) {
   let claimed = 0, sent = 0, stillFailing = 0, dead = 0, expired = 0
   const staleBefore = Date.now() - MAX_EMAIL_AGE_HOURS * 3_600_000
 
+  let deferred = 0
   for (const row of (candidates ?? []) as FailedEmailRow[]) {
+    // Out of time budget: leave this and the remaining rows 'pending' for the next sweep (never half-processed).
+    if (Date.now() - startedAt > TIME_BUDGET_MS) { deferred++; continue }
+
     // Atomic claim — mirrors the TOCTOU guard in webhook/razorpay/route.ts.
     // If a previous invocation is still running (slow Resend response) and
     // this one fires before it finishes, only one of them wins the claim;
     // the other sees 0 updated rows and skips, preventing a duplicate send.
     const { data: claimedRows } = await db
       .from('failed_emails')
-      .update({ status: 'retrying' })
+      .update({ status: 'retrying', last_attempt_at: new Date().toISOString() })   // timestamp lets an abandoned claim be detected
       .eq('id', row.id)
       .eq('status', 'pending')
       .select('id')
@@ -212,5 +243,6 @@ export async function GET(req: NextRequest) {
     stillFailing,
     dead,
     expired,
+    deferred,
   })
 }
