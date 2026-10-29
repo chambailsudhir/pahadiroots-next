@@ -95,7 +95,14 @@ export async function POST(req: NextRequest) {
     sess.last_seen = new Date().toISOString()
     sessions.set(session_id, sess)
 
+    // Overview audit OV-080: a purchase is idempotent per ORDER. The browser guard (localStorage) does not survive a second browser,
+    // cleared storage or a retry, and 21 purchase events existed for 20 orders. The database now holds a UNIQUE dedupe_key
+    // ('purchase:<order number>'); the insert below ignores a duplicate instead of failing the whole batch.
+    const orderRef = event_type === 'purchase' && metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).order_id : undefined
+    const dedupe_key = typeof orderRef === 'string' && orderRef.length > 0 && orderRef.length <= 60 ? `purchase:${orderRef}` : null
+
     eventRows.push({
+      dedupe_key,
       session_id,
       visitor_id,
       event_type,
@@ -119,7 +126,7 @@ export async function POST(req: NextRequest) {
       await sbAdmin('POST', '/rest/v1/analytics_sessions?on_conflict=session_id', sess, 'resolution=merge-duplicates,return=minimal')
     }
     // ONE bulk insert for the whole batch. Every row has the same keys, as PostgREST requires.
-    await sbAdmin('POST', '/rest/v1/analytics_events', eventRows, 'return=minimal')
+    await sbAdmin('POST', '/rest/v1/analytics_events?on_conflict=dedupe_key', eventRows, 'resolution=ignore-duplicates,return=minimal')
   } catch (err) {
     // Never let a broken analytics insert surface to the visitor.
     captureError(err, { action: 'analytics_track_failed' })

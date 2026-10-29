@@ -105,7 +105,7 @@ describe('POST /api/v1/orders — timeout guard around createOrder()', () => {
     expect(res.status).toBe(503)
     expect(json.error).toMatch(/try again/i)
     expect(res.headers.get('Retry-After')).toBe('5')
-  }, 15_000) // real 10s internal timeout + margin — exceeds vitest's 5s default
+  }, 40_000) // real 10s internal timeout + a wide margin (Overview audit: 15 s was not enough on a loaded machine — the suite flaked 1 in ~2,100; vitest's default is 5 s)
 
   it('does not time out a normal, fast createOrder() call', async () => {
     mockCreateOrder.mockResolvedValue({
