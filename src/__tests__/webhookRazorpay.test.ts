@@ -618,3 +618,75 @@ describe('POST /webhook/razorpay — unrecognized event types', () => {
     expect(res.status).toBe(200)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Oct 2026 orders audit — the two money controls that had no direct test:
+// binding a capture to OUR order (amount / Razorpay order id / payment method), and event-id replay.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('POST /webhook/razorpay — payment.captured is bound to our order (audit)', () => {
+  async function expectHeld(order: Record<string, unknown>, event: ReturnType<typeof makeEvent>, reason: string) {
+    mockDb.responses['orders'] = order
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(event))
+    expect(res.status).toBe(200)                                                 // held for review, not a retry storm
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()    // NOT confirmed
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()  // no payment row for a payment we cannot bind
+    expect(mockAward).not.toHaveBeenCalled()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(
+      PAYABLE.id, 'payment_captured_unbound', 'razorpay', expect.objectContaining({ reason }),
+    )
+  }
+
+  it('a capture for a DIFFERENT amount than the order total is held, never confirmed', async () => {
+    await expectHeld({ ...PAYABLE }, makeEvent({ dbOrderId: PAYABLE.id, amount: 49_900 }), 'amount_mismatch')   // order total is ₹500 = 50000 paise
+  })
+
+  it('a capture belonging to a DIFFERENT Razorpay order id is held (notes.db_order_id is only a hint)', async () => {
+    await expectHeld({ ...PAYABLE }, makeEvent({ dbOrderId: PAYABLE.id, razorpayOrderId: 'order_someone_else' }), 'razorpay_order_id_mismatch')
+  })
+
+  it('a capture against a non-Razorpay (COD) order is held', async () => {
+    await expectHeld({ ...PAYABLE, payment_method: 'cod' }, makeEvent({ dbOrderId: PAYABLE.id }), 'order_is_not_razorpay')
+  })
+
+  it('a capture against an order with no stored Razorpay order id is held', async () => {
+    await expectHeld({ ...PAYABLE, payment_id: null }, makeEvent({ dbOrderId: PAYABLE.id }), 'no_stored_razorpay_order_id')
+  })
+})
+
+describe('POST /webhook/razorpay — event-id replay (audit)', () => {
+  function replayReq() {
+    const req = makeReq(makeEvent({ dbOrderId: PAYABLE.id }))
+    req.headers.set('x-razorpay-event-id', 'evt_replay_1')
+    return req
+  }
+  /** First webhook_logs call (the insert) hits the unique index; the second (lookup) returns the existing row. */
+  function stubExistingLog(status: string) {
+    let n = 0
+    Object.defineProperty(mockDb.responses, 'webhook_logs', {
+      configurable: true,
+      get() { return n++ === 0 ? Object.assign(new Error('duplicate key'), { code: '23505' }) : { id: 'wl-existing', status } },
+    })
+  }
+
+  it('a duplicate of an event already PROCESSED is acknowledged and skipped — nothing is touched', async () => {
+    stubExistingLog('processed')
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(replayReq())
+    expect(res.status).toBe(200)
+    expect((await res.json()).duplicate).toBe(true)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeUndefined()
+    expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  it('a duplicate of an event that FAILED earlier is re-processed (Razorpay is retrying a failure)', async () => {
+    stubExistingLog('failed')
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(replayReq())
+    expect(res.status).toBe(200)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')!.payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid' })
+  })
+})
