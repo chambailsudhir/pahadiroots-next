@@ -20,7 +20,7 @@ vi.mock('@/lib/profileCache', () => ({
 }))
 
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
-import { track } from '@/lib/analytics/track'
+import { track, flushTrackQueue } from '@/lib/analytics/track'
 
 describe('ProfilePrefetcher — no /api/auth/session call unless it can help', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
@@ -62,6 +62,7 @@ describe('analytics track() — automated clients send no beacon', () => {
     Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
     Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true })
     track({ event_type: 'page_view', path: '/' })
+    flushTrackQueue()
     expect(beacon).not.toHaveBeenCalled()
     Object.defineProperty(navigator, 'webdriver', { value: false, configurable: true })
   })
@@ -71,6 +72,7 @@ describe('analytics track() — automated clients send no beacon', () => {
     Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (compatible; Googlebot/2.1)')
     track({ event_type: 'page_view', path: '/' })
+    flushTrackQueue()
     expect(beacon).not.toHaveBeenCalled()
   })
 
@@ -79,6 +81,7 @@ describe('analytics track() — automated clients send no beacon', () => {
     Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1')
     track({ event_type: 'page_view', path: '/' })
+    flushTrackQueue()
     expect(beacon).not.toHaveBeenCalled()
     expect(localStorage.getItem('pr_vid')).toBeNull()   // no visitor id is even created
   })
@@ -89,6 +92,7 @@ describe('analytics track() — automated clients send no beacon', () => {
     Object.defineProperty(navigator, 'sendBeacon', { value: beacon, configurable: true })
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari/604.1')
     track({ event_type: 'page_view', path: '/' })
+    flushTrackQueue()
     expect(beacon).toHaveBeenCalledTimes(1)
   })
 })

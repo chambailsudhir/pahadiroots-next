@@ -115,6 +115,44 @@ function isAutomatedClient(): boolean {
   }
 }
 
+// DISK-IO FIX (Oct 2026): every event used to be its own POST, and the route wrote one session upsert plus
+// one event insert per POST — two database writes per page view. Events are now queued in the browser and
+// sent as ONE batch every FLUSH_MS (or when the tab is hidden / on a purchase), and the route writes one
+// bulk insert per batch.
+const FLUSH_MS = 10_000
+const MAX_BATCH = 20
+let queue: Record<string, unknown>[] = []
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+let unloadHooked = false
+
+function send(events: Record<string, unknown>[]): void {
+  const json = JSON.stringify({ events })
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(TRACK_URL, new Blob([json], { type: 'application/json' }))
+  } else {
+    fetch(TRACK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json, keepalive: true }).catch(() => {})
+  }
+}
+
+export function flushTrackQueue(): void {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
+  if (!queue.length) return
+  const events = queue
+  queue = []
+  try { send(events) } catch { /* Analytics must never break the page. */ }
+}
+
+function enqueue(body: Record<string, unknown>, flushNow: boolean): void {
+  if (!unloadHooked) {
+    unloadHooked = true
+    window.addEventListener('pagehide', flushTrackQueue)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushTrackQueue() })
+  }
+  queue.push(body)
+  if (flushNow || queue.length >= MAX_BATCH) return flushTrackQueue()
+  if (!flushTimer) flushTimer = setTimeout(flushTrackQueue, FLUSH_MS)
+}
+
 export function track(payload: TrackPayload): void {
   if (typeof window === 'undefined') return
   if (isAutomatedClient()) return
@@ -141,19 +179,7 @@ export function track(payload: TrackPayload): void {
       if (params.get('utm_campaign')) body.utm_campaign = params.get('utm_campaign')
     }
 
-    const json = JSON.stringify(body)
-
-    if (navigator.sendBeacon) {
-      const blob = new Blob([json], { type: 'application/json' })
-      navigator.sendBeacon(TRACK_URL, blob)
-    } else {
-      fetch(TRACK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: json,
-        keepalive: true,
-      }).catch(() => {})
-    }
+    enqueue(body, payload.event_type === 'purchase' || payload.event_type === 'checkout_start')
   } catch {
     // Analytics must never break the page.
   }
