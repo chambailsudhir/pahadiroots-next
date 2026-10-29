@@ -50,16 +50,26 @@ export async function awardLoyaltyPoints(
   note = 'Earned from order',
 ): Promise<void> {
   if (settings.loyalty_enabled === 'false') return
-  const rate = parseFloat(settings.loyalty_points_per_rupee || '1')
-  const pts  = Math.floor(orderTotal * rate)
-  if (pts <= 0) return
+  // A blank / malformed setting falls back to the documented default of 1 point per rupee; a negative or
+  // non-finite rate or total never produces a NaN that would be sent to the database as null.
+  const parsed = parseFloat(settings.loyalty_points_per_rupee || '1')
+  const rate   = Number.isFinite(parsed) && parsed >= 0 ? parsed : 1
+  const pts    = Math.floor((Number.isFinite(orderTotal) ? orderTotal : 0) * rate)
+  if (!Number.isFinite(pts) || pts <= 0) return
   try {
-    await callLoyaltyRpc('award_loyalty_points', {
+    const res = await callLoyaltyRpc('award_loyalty_points', {
       p_customer_id: String(customerId),
       p_order_id:    String(orderId),
       p_points:      pts,
       p_note:        note,
     })
+    // fetch() does not throw on HTTP 4xx/5xx — without this check a rejected award was completely silent.
+    // (The database function is idempotent per order, so a replay returns 200 and is not an error.)
+    if (!res.ok) {
+      captureError(new Error(`award_loyalty_points returned HTTP ${res.status}`), {
+        action: 'loyalty.awardLoyaltyPoints', customer_id: String(customerId), order_id: String(orderId), points: pts, alert: true,
+      })
+    }
   } catch (e) {
     // BUG FIX 8: alert:true — customer paid but points silently not awarded.
     captureError(e, {
