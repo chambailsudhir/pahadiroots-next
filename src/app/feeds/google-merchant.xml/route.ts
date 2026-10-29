@@ -13,6 +13,9 @@ export async function GET() {
     .eq('is_deleted', false)
     .eq('status', 'active')
   if (error || !products) return new Response('feed unavailable', { status: 503 })
+  // A valid-looking EMPTY feed would delist every product in Merchant Center. If the query returned no rows
+  // (RLS / filter / outage) fail loudly so the previously cached feed keeps being served.
+  if (products.length === 0) return new Response('feed unavailable: no active products returned', { status: 503 })
 
   const ids = products.map(p => p.id)
   // `barcode` is a private column (anon cannot SELECT it), so it is not requested here;
