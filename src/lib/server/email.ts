@@ -36,6 +36,7 @@ import 'server-only'
 import { Resend } from 'resend'
 import { getServiceClient } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+import { sanitizeHtml } from '@/lib/server/sanitize'
 
 export type TransactionalEmailType =
   | 'order_confirmation'
@@ -122,7 +123,9 @@ export async function sendTransactionalEmail(
   try {
     const settings = await getSiteSettings()
     if (settings.email_footer_text?.trim()) {
-      html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888;">${settings.email_footer_text}</div>`
+      // AUDIT (Oct 2026, System): this admin-editable text was injected into every e-mail as raw HTML. It now goes through the
+      // same allow-list sanitiser as the announcement bar, so a stray <script>/<iframe>/on…= can never reach a customer's inbox.
+      html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888;">${sanitizeHtml(settings.email_footer_text)}</div>`
     }
   } catch {
     // Non-fatal — an email without the footer is far better than no

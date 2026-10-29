@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import type { SiteSettings } from '@/types'
+import { safeSocialUrl } from '@/lib/siteSettingsHelpers'
 
 export const GOLD = '#d7a63a'
 export const CREAM = '#f1ebdb'
@@ -18,11 +19,12 @@ export type FooterData = ReturnType<typeof getFooterData>
 export function getFooterData(settings: SiteSettings) {
   const s = settings as unknown as Record<string, string | undefined>
   return {
-    instagram: s.social_instagram || 'https://www.instagram.com/5pahadiroots/?hl=en',
-    facebook:  s.social_facebook  || 'https://www.facebook.com/HimVedaByPahadiRoots',
-    x:         s.social_twitter   || 'https://twitter.com/pahadiroots',
-    youtube:   s.social_youtube   || 'https://www.youtube.com/@pahadiroots',
-    linkedin:  s.social_linkedin  || s.linkedin_url || 'https://www.linkedin.com/company/pahadiroots/about/?viewAsMember=true',
+    // Blank = no icon (as the admin Social tab says). No guessed fallback accounts; only https links are ever rendered.
+    instagram: safeSocialUrl(s.social_instagram),
+    facebook:  safeSocialUrl(s.social_facebook),
+    x:         safeSocialUrl(s.social_twitter),
+    youtube:   safeSocialUrl(s.social_youtube),
+    linkedin:  safeSocialUrl(s.social_linkedin || s.linkedin_url),
     email:     s.contact_email    || 'hello@pahadiroots.com',
     phone:     s.contact_phone    || '+919899984895',
     address:   s.contact_address  || 'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082',
@@ -90,7 +92,7 @@ export function SocialRow({ d }: { d: FooterData }) {
     ['instagram', d.instagram, 'Instagram'], ['facebook', d.facebook, 'Facebook'], ['x', d.x, 'X'],
     ['youtube', d.youtube, 'YouTube'], ['linkedin', d.linkedin, 'LinkedIn'],
   ] as const
-  return <>{items.map(([t, href, label]) =>
+  return <>{items.filter(([, href]) => !!href).map(([t, href, label]) =>
     <a key={t} className="hv-soc" href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}><SocialIcon type={t}/></a>
   )}</>
 }

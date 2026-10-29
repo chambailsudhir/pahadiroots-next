@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import { stripServerOnlySettings, isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { stripServerOnlySettings, isStoreOpen, safeSocialUrl } from '@/lib/siteSettingsHelpers'
 import { sanitizeHtml } from '@/lib/server/sanitize'
 import { getCatalogMeta } from '@/lib/storeData'
 import { logger } from '@/lib/logger'
@@ -230,7 +230,10 @@ export default async function RootLayout({
               alternateName: 'HimVeda',
               description: settings.meta_description ||
                 'Pahadi Roots (HimVeda) sources honey, spices, grains, and other natural staples directly from Himalayan mountain farming communities and delivers them across India.',
+              // Admin → Settings → SEO → "Brand Disambiguation Note" (it was promised there but never read — the text below was
+              // hard-coded). Blank keeps the built-in default.
               disambiguatingDescription:
+                (settings.brand_disambiguation || '').trim().slice(0, 600) ||
                 'Pahadi Roots, also known as HimVeda, is an independent Himalayan food and grocery brand. It is not affiliated with, and has no business relationship to, any other company using a similar "Pahadi"-prefixed name in the beauty, skincare, or wellness category.',
               url:        SITE_URL,
               logo:       `${SITE_URL}/logo.png`,
@@ -270,11 +273,13 @@ export default async function RootLayout({
                 // etc. This structured data feeds Google's Knowledge
                 // Graph social-profile associations, so it silently never
                 // worked either.
-                settings.social_instagram,
-                settings.social_facebook,
-                settings.social_youtube,
-                settings.social_twitter,
-                settings.social_pinterest,
+                // only real https profile links belong in structured data (safeSocialUrl); blank stays out
+                safeSocialUrl(settings.social_instagram),
+                safeSocialUrl(settings.social_facebook),
+                safeSocialUrl(settings.social_youtube),
+                safeSocialUrl(settings.social_twitter),
+                safeSocialUrl(settings.social_pinterest),
+                safeSocialUrl(settings.social_linkedin),
               ].filter(Boolean),
             }),
           }}

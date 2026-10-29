@@ -88,3 +88,18 @@ export function stripServerOnlySettings<T extends object>(settings: T): T {
   for (const k of SERVER_ONLY_SETTING_KEYS) delete out[k]
   return out as T
 }
+
+/**
+ * A social-profile link from settings, or '' when it must not be shown.
+ * System audit (Oct 2026): footer links were written straight into href — a stored `javascript:` or `data:` value would have run
+ * in the visitor's browser — and a BLANK admin field was replaced by a hard-coded guess (e.g. twitter.com/pahadiroots) so an icon
+ * could not be hidden and pointed at an account nobody confirmed is ours. Only a real https:// address with a domain passes.
+ */
+export function safeSocialUrl(value: string | null | undefined): string {
+  const v = String(value ?? '').trim()
+  if (!v || v.length > 500 || /\s/.test(v)) return ''
+  try {
+    const u = new URL(v)
+    return u.protocol === 'https:' && u.hostname.includes('.') ? v : ''
+  } catch { return '' }
+}
