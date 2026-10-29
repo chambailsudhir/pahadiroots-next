@@ -14,6 +14,8 @@
 
 export const PRIVATE_PRODUCT_FIELDS = [
   'cost_price',
+  'landed_cost',        // STORE-001: purchase cost + inbound GST/freight/handling (admin migration 097)
+  'fully_loaded_cost',  // STORE-001: landed cost + packaging/overheads
   'vendor_id',
   'psy_sp_raw',
   'psy_mrp_raw',
@@ -26,6 +28,7 @@ export const PRIVATE_PRODUCT_FIELDS = [
 
 export const PRIVATE_VARIANT_FIELDS = [
   'cost_price',
+  'landed_cost',        // STORE-001
   'margin_pct',
   'reserved_stock',
   'damaged_stock',
@@ -34,9 +37,20 @@ export const PRIVATE_VARIANT_FIELDS = [
   'barcode',
 ] as const
 
+/**
+ * STORE-001 safety net. The lists above are a BLOCKLIST, and the storefront reads rows with the service key and
+ * `select('*')` (which bypasses the anon column grants), so any NEW internal column is public the moment it is added
+ * unless someone remembers to list it here — that is exactly how landed_cost / fully_loaded_cost were missed. Any own key
+ * that names a cost, margin, landed, commission or purchase figure is therefore nulled by default. No customer-facing
+ * product or variant column matches (checked against the live schema, Oct 2026): price, selling_price, mrp, discount_pct,
+ * unit_label, gst_rate… are untouched. If a genuinely public column ever needs one of these words, rename it.
+ */
+const COST_LIKE_KEY = /(^|_)(cost|costs|landed|margin|commission|purchase)(_|$)/i
+
 function nullOut<T extends object>(row: T, fields: readonly string[]): T {
   const out: Record<string, unknown> = { ...(row as Record<string, unknown>) }
   for (const f of fields) if (f in out) out[f] = null
+  for (const k of Object.keys(out)) if (COST_LIKE_KEY.test(k)) out[k] = null
   return out as T
 }
 
