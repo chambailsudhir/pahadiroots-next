@@ -88,6 +88,10 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+// Verification pass (Oct 2026): this test deliberately waits out the route's 10 s guard, so under a loaded
+// machine it ran past vitest's default 15 s limit and failed as a flake (passes alone in ~14 s). 30 s margin.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('POST /api/v1/orders — timeout guard around createOrder()', () => {
   it('[BUG FIX] returns a fast 503 with a clear retry message when createOrder() hangs past 10s', async () => {
     // Simulates a createOrder() call stuck on a hung Postgres/PostgREST call
