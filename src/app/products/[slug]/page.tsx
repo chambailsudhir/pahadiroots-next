@@ -24,7 +24,7 @@ import RelatedProducts from '@/components/product/RelatedProducts'
 import PincodeRow from '@/components/product/PincodeRow'
 import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
 import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
-import { certifiedParameters, joinParameters, mergeCertificateFlags } from '@/lib/certificateCopy'
+import { certifiedParameters, joinParameters, mergeCertificateFlags, isCurrentCertificate } from '@/lib/certificateCopy'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { product } = await fetchProductData(slug)
   if (!product) return { title: 'Product Not Found' }
 
-  const rawDesc = product.ai_description || product.short_description || `Buy ${product.name} online — pure Himalayan.`
+  const rawDesc = product.short_description || product.ai_description || `Buy ${product.name} online — pure Himalayan.`
   // BUG FIX (3.1 + 5.3): use product.name only so the layout template
   // appends " | HimVeda by Pahadi Roots" exactly once.
   // BUG FIX (5.3): use the existing truncate() utility (word-boundary aware,
@@ -307,6 +307,7 @@ export default async function ProductPage({ params }: Props) {
   const shownCertificates = showCertificate
     ? certificates.filter((c, i, arr) =>
         c.reportUrl &&
+        isCurrentCertificate(c) &&   // named lab + test date + not expired — a file alone never backs a claim
         (c.hasPurity || c.hasHeavyMetals || c.hasPesticides || c.hasActiveIngredients) &&
         arr.findIndex(x => x.reportUrl === c.reportUrl) === i)
     : []
@@ -384,8 +385,9 @@ export default async function ProductPage({ params }: Props) {
   // Description: 4-layer fallback matching old site
   // BUG FIX (02): sanitize HTML from DB/AI pipeline before dangerouslySetInnerHTML
   const descHtml = sanitizeHtml(
-    (product.ai_description?.trim())
-    || (product.long_description?.trim())
+    // Merchant-authored copy wins; AI copy (admin-reviewed) only fills the gap — a stale AI text must never shadow it.
+    (product.long_description?.trim())
+    || (product.ai_description?.trim())
     || (product.short_description ? `<p>${product.short_description}</p>` : '')
     || '<p>Authentic Himalayan product sourced directly from local farmers. No preservatives, no additives — pure and natural.</p>'
   )
@@ -440,7 +442,7 @@ export default async function ProductPage({ params }: Props) {
     '@type':    'Product',
     name:        product.name,
     // PDP audit (SEO): same source as <meta name="description"> so structured data matches what search/social show.
-          description: truncate(String(product.ai_description || product.short_description || '').replace(/<[^>]+>/g, '').trim(), 500),
+          description: truncate(String(product.short_description || product.ai_description || '').replace(/<[^>]+>/g, '').trim(), 500),
     image:       allImages.map((i: any) => i.url),
     url:         `https://www.pahadiroots.com/products/${product.slug}`,
     brand:       { '@type': 'Brand', name: settings.site_name || 'HimVeda by Pahadi Roots' },
@@ -1799,7 +1801,7 @@ async function fetchProductDataInner(slug: string) {
       // must never 404 the whole PDP.
       anonClient
         .from('certificates')
-        .select('report_url, has_purity, has_heavy_metals, has_pesticides, has_active_ingredients, product_certificates!inner(product_id)')
+        .select('report_url, lab_name, tested_on, expires_at, has_purity, has_heavy_metals, has_pesticides, has_active_ingredients, product_certificates!inner(product_id)')
         .eq('is_active', true)
         .eq('product_certificates.product_id', product.id)
         .order('created_at', { ascending: false })
@@ -1847,13 +1849,16 @@ async function fetchProductDataInner(slug: string) {
       attributes = buildAttributeMap(attrResult.defs as any, attrResult.values as any)
     }
 
-    let certificates: { reportUrl: string; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean }[] = []
+    let certificates: { reportUrl: string; labName: string | null; testedOn: string | null; expiresOn: string | null; hasPurity: boolean; hasHeavyMetals: boolean; hasPesticides: boolean; hasActiveIngredients: boolean }[] = []
     if (certResult.error) {
       // Non-fatal — PDP renders fine without the certificate card, same as reviews above.
       console.warn('[fetchProductData] certificate fetch failed:', certResult.error)
     } else if (Array.isArray(certResult.data)) {
       certificates = (certResult.data as any[]).map(c => ({
         reportUrl:            c.report_url,
+        labName:              c.lab_name ?? null,
+        testedOn:             c.tested_on ?? null,
+        expiresOn:            c.expires_at ?? null,
         hasPurity:            Boolean(c.has_purity),
         hasHeavyMetals:       Boolean(c.has_heavy_metals),
         hasPesticides:        Boolean(c.has_pesticides),

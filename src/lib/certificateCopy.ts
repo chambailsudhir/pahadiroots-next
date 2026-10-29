@@ -35,3 +35,33 @@ export function mergeCertificateFlags(list: CertificateFlags[] | null | undefine
     hasActiveIngredients: list.some(c => c.hasActiveIngredients),
   }
 }
+
+/**
+ * A certificate may back a customer-facing "Lab Tested" claim only while it is CURRENT (marketplace / FSSAI-style
+ * rule: a claim needs identifiable evidence): a named lab, a test date that is not in the future, and either an
+ * explicit expiry that has not passed or — when no expiry is recorded — a test no older than 24 months.
+ * An uploaded file alone is never enough.
+ */
+export interface CertificateEvidence {
+  labName?: string | null
+  testedOn?: string | null   // YYYY-MM-DD
+  expiresOn?: string | null  // YYYY-MM-DD
+}
+
+export const CERT_MAX_AGE_DAYS = 730
+
+const toDay = (iso: string | null | undefined): number | null => {
+  if (!iso) return null
+  const t = Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`)
+  return Number.isFinite(t) ? Math.floor(t / 86_400_000) : null
+}
+
+export function isCurrentCertificate(c: CertificateEvidence, now: Date = new Date()): boolean {
+  if (!String(c.labName ?? '').trim()) return false
+  const today = Math.floor(now.getTime() / 86_400_000)
+  const tested = toDay(c.testedOn)
+  if (tested === null || tested > today) return false
+  const expires = toDay(c.expiresOn)
+  if (c.expiresOn) return expires !== null && expires >= today
+  return today - tested <= CERT_MAX_AGE_DAYS
+}
