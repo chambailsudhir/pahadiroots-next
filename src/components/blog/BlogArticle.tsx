@@ -61,40 +61,40 @@ export default function BlogArticle({
     <div className={s.root}>
       <ReadingProgress targetId="story-body" />
 
-      <header className={s.aHero}>
-        {coverImage
-          ? <Image src={coverImage} alt="" fill priority sizes="100vw" className={s.aHeroImg} />
-          : <div className={s.fallback} style={{ position: 'absolute', inset: 0 }}><ContourLines className={s.contours} /></div>}
+      <header className={s.aHead}>
         <nav className={s.crumbs} aria-label="Breadcrumb">
           <Link href="/">Home</Link><span aria-hidden>/</span><Link href="/blog">Journal</Link>
         </nav>
-        <div className={s.aHeroIn}>
-          {post.category && <span className={s.eb}>{label(post.category)}</span>}
-          <h1>{post.title}</h1>
-          <div className={s.byline}>
-            <div className={s.avatar}>{initial}</div>
-            <div>
-              <div className={s.bName}>{authorName}</div>
-              <div className={s.bMeta}>
-                {post.published_at && formatDate(post.published_at)}
-                {post.reading_time_minutes && <> · {post.reading_time_minutes} min read</>}
-              </div>
+        {post.category && <span className={s.tagPill}>{label(post.category)}</span>}
+        <h1>{post.title}</h1>
+        {post.excerpt && <p className={s.sub}>{post.excerpt}</p>}
+        <div className={s.byline}>
+          <div className={s.avatar}>{initial}</div>
+          <div className={s.bText}>
+            <div className={s.bName}>{authorName}</div>
+            <div className={s.bMeta}>
+              {post.published_at && formatDate(post.published_at)}
+              {post.reading_time_minutes && <> · {post.reading_time_minutes} min read</>}
             </div>
           </div>
         </div>
       </header>
 
-      <article className={s.article} id="story-body">
-        {post.excerpt && <p className={s.lead}>{post.excerpt}</p>}
+      {coverImage && (
+        <div className={s.coverWrap}>
+          <figure className={s.cover}>
+            <Image src={coverImage} alt={post.title} fill priority sizes="(max-width: 1040px) 100vw, 1040px" />
+          </figure>
+        </div>
+      )}
 
+      <article className={s.article} id="story-body">
         {toc.length >= 3 && (
-          <nav className={s.toc} aria-label="In this story">
-            <span className={s.eb}>In this story</span>
-            <ol>{toc.map(t => <li key={t.id}><a href={`#${t.id}`}>{t.text}</a></li>)}</ol>
+          <nav className={s.jump} aria-label="In this story">
+            <span className={s.jumpL}>Jump to</span>
+            {toc.map(t => <a key={t.id} href={`#${t.id}`}>{t.text}</a>)}
           </nav>
         )}
-
-        <ShareRow title={post.title} url={canonicalUrl} />
 
         {html && <div className={s.prose} dangerouslySetInnerHTML={{ __html: html }} />}
 
@@ -103,7 +103,7 @@ export default function BlogArticle({
         )}
 
         <div className={s.author}>
-          <div className={s.avatar} style={{ background: 'var(--forest)', color: 'var(--gold2)', width: 52, height: 52 }}>{initial}</div>
+          <div className={s.avatar} style={{ width: 52, height: 52 }}>{initial}</div>
           <div>
             <b>{authorName}</b>
             <span>Written from the villages and valleys we source from, for people who want to know where their food comes from.</span>
@@ -112,7 +112,7 @@ export default function BlogArticle({
 
         {post.faq && post.faq.length > 0 && (
           <section className={s.faq}>
-            <span className={s.eb}>Good to know</span>
+            <span className={s.kicker}>Good to know</span>
             <h2>Frequently asked questions</h2>
             {post.faq.map((f, i) => (
               <details key={i} className={s.faqItem}>
@@ -127,14 +127,11 @@ export default function BlogArticle({
       </article>
 
       {relatedProducts.length > 0 && (
-        <section className={s.prodBand}>
-          <ContourLines className={s.ctaContours} />
-          <div className={s.prodIn}>
-            <div className={s.prodHead}>
-              <span className={s.eb} style={{ color: '#e6cf92' }}>From this story</span>
-              <h2>{relatedProducts.length > 1 ? 'Taste the story' : 'Taste the story'}</h2>
-            </div>
-            <div className={s.prodGrid}>
+        <section className={s.try}>
+          <div className={s.tryIn}>
+            <span className={s.kicker}>From this story</span>
+            <h2>Try it yourself</h2>
+            <div className={s.tryGrid}>
               {relatedProducts.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
           </div>
@@ -144,26 +141,30 @@ export default function BlogArticle({
       {moreStories.length > 0 && (
         <section className={s.moreWrap}>
           <div className={s.moreHead}>
-            <span className={s.eb}>Keep reading</span>
-            <h2>More stories</h2>
+            <div>
+              <span className={s.kicker}>Keep reading</span>
+              <h2>More stories</h2>
+            </div>
+            <Link href="/blog" className={s.moreAll}>Browse all stories</Link>
           </div>
           <div className={s.grid}>
             {moreStories.map((m, i) => (
               <Reveal key={m.slug} delay={i * 0.08}>
                 <Link href={`/blog/${m.slug}`} className={s.card}>
-                  <div className={s.cImg}>
+                  <div className={s.cMedia}>
                     {m.cover_image
                       ? <Image src={m.cover_image} alt={m.title} fill sizes="(max-width: 600px) 100vw, (max-width: 900px) 50vw, 380px" />
                       : <div className={s.fallback}><ContourLines className={s.contours} /><MountainMark /></div>}
                   </div>
-                  {m.reading_time_minutes && <div className={s.meta}><span>{m.reading_time_minutes} min read</span></div>}
-                  <h3>{m.title}</h3>
-                  <span className={s.more}>Read the story</span>
+                  <div className={s.cBody}>
+                    {m.reading_time_minutes && <div className={s.meta}><span>{m.reading_time_minutes} min read</span></div>}
+                    <h3>{m.title}</h3>
+                    <span className={s.read}>Read story</span>
+                  </div>
                 </Link>
               </Reveal>
             ))}
           </div>
-          <div className={s.moreAll}><Link href="/blog" className={s.more}>Browse all stories</Link></div>
         </section>
       )}
     </div>
