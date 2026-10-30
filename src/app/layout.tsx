@@ -43,10 +43,11 @@ const safeJsonLd = (obj: unknown) => JSON.stringify(obj).replace(/</g, '\\u003c'
 // is dropped instead of being injected.
 const TAG_ID_RE = /^(G|GTM|AW|UA)-[A-Z0-9-]{3,20}$/i
 
+// PERF FIX (audit HOME-012): Playfair Display is a variable font, so omitting `weight` serves one file per style
+// (normal + italic = 2) instead of one static file per weight x style (8). Weights 400-900 render the same.
 const playfair = Playfair_Display({
   variable: '--font-playfair',
   subsets: ['latin'],
-  weight: ['400', '600', '700', '900'],
   style: ['normal', 'italic'],
 })
 const lato = Lato({

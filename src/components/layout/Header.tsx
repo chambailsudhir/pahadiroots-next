@@ -105,7 +105,6 @@ export default function Header({ settings, categories = [], states = [] }: Props
           {showBlog && <li><Link href="/blog">Blog</Link></li>}
           <MegaMenu categories={categories} states={states} />
           {showTrack && <li><Link prefetch={false} href="/track">Track Order</Link></li>}
-          <li><Link prefetch={false} href="/payment">Payment</Link></li>
           <li><Link href="/contact">Contact</Link></li>
         </ul>
 
@@ -270,7 +269,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-nib:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-acct-av{
           width:28px;height:28px;border-radius:50%;
-          background:#c8920a;color:#fff;font-size:12px;font-weight:900;
+          background:#c8920a;color:#1a1a1a;font-size:12px;font-weight:900;
           display:flex;align-items:center;justify-content:center;font-family:var(--font-playfair),'Playfair Display',serif;
         }
         .old-acct-dot{
@@ -291,7 +290,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         .old-dark-btn:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-cart-btn{
           display:flex;align-items:center;gap:7px;
-          background:#c8920a;color:#fff;border:none;border-radius:24px;
+          background:#c8920a;color:#1a1a1a;border:none;border-radius:24px;
           padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer;
           font-family:inherit;transition:background .2s;white-space:nowrap;
           margin-left:4px;
@@ -365,6 +364,28 @@ export default function Header({ settings, categories = [], states = [] }: Props
           .old-nav-right > button[aria-label="Search"],
           .old-cart-btn,
           .old-dark-btn{ display:none!important; }
+        }
+        /* BUG FIX (audit HOME-005): even with only Wishlist + Account left, the
+           logo lock-up (logo + "by Pahadi Roots" + divider + tagline) plus the two
+           38px icons needs ~368px, so 360px phones (the most common Android width)
+           scrolled sideways by 8px, 340px by 28px and 320px by 49px with the account
+           icon cut off. Below 390px the tagline and divider are dropped (the logo
+           already carries the brand name), which frees ~90px and fits down to 320px. */
+        @media(max-width:389px){
+          .old-logo-divider,.old-logo-tl{display:none}
+        }
+        /* BUG FIX (audit, found while fixing HOME-005): between 901px and ~1150px
+           (small laptops, iPad landscape 1024/1180, browser zoom) the full desktop header
+           (logo + tagline + 6 nav links + search/wishlist/account/theme/cart) is wider than
+           the viewport, so the whole page scrolled sideways by up to 222px (901px), 99px
+           (1024px) and 23px (1100px). Measured on production. Tighten it in that band only;
+           >=1200px and <=900px are unchanged. */
+        @media(min-width:901px) and (max-width:1199px){
+          .old-nav{padding:0 14px;column-gap:8px}
+          .old-logo-divider,.old-logo-tl{display:none}
+          .old-nav-links li a,.old-nav-links li button{padding:0 8px;font-size:13px}
+          .old-nav-right{gap:0}
+          .old-cart-btn{padding:8px 12px;margin-left:2px}
         }
       `}</style>
     </div>

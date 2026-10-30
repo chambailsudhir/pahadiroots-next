@@ -11,6 +11,7 @@
 //  • `settings` is still accepted (page.tsx passes it) but is no longer used —
 //    the promise section no longer prints farmer/state statistics.
 import Image from 'next/image'
+import Link from 'next/link'
 import type { SiteSettings } from '@/types'
 
 interface Props { settings?: SiteSettings }
@@ -42,6 +43,9 @@ const PROMISES = [
     img: '/promise/transparency.webp',
     w: 435, h: 294,
     alt: 'Illustration of a honey jar beside a microscope and lab glassware',
+    // BUG FIX (audit HOME-001): the page promised transparency but gave no way to see the proof. The lab-reports
+    // page only covers honey, so the link says exactly that (no blanket "everything is lab tested" claim).
+    link: { href: '/lab-reports', label: 'View honey lab reports' },
   },
   {
     num: '04',
@@ -81,6 +85,9 @@ export default function WhySection(_props: Props) {
               {p.title[0]}<br />{p.title[1]}
             </h3>
             <p className="promise-body">{p.body}</p>
+            {'link' in p && (
+              <Link href={p.link.href} className="promise-link">{p.link.label}<span aria-hidden="true"> →</span></Link>
+            )}
           </li>
         ))}
       </ol>

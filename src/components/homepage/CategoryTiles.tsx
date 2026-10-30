@@ -252,8 +252,7 @@ export default function CategoryTiles({ categories }: Props) {
                         fill
                         sizes="(max-width:640px) 50vw, (max-width:960px) 25vw, 17vw"
                         quality={75}
-                        loading={idx < 6 ? 'eager' : 'lazy'}
-                        priority={idx < 6}
+                        loading="lazy"
                         className="cc-img"
                         style={{
                           objectFit: 'cover', zIndex: 2, opacity: 0,

@@ -20,7 +20,9 @@
   // No API key in frontend — key lives in Vercel environment variable only
   const script = document.currentScript
               || document.querySelector('script[data-whatsapp]');
-  const WA_NUM = (script && script.getAttribute('data-whatsapp')) || '919000000000';
+  // BUG FIX (audit): the fallback used to be a placeholder number (919000000000), so a blank setting would have
+  // sent customers to a stranger. With no number configured the WhatsApp button is simply not created.
+  const WA_NUM = ((script && script.getAttribute('data-whatsapp')) || '').replace(/\D/g, '');
 
   /* ── API ENDPOINT — server proxy, key never exposed to browser ── */
   const API_URL = '/api/chat';
@@ -130,9 +132,10 @@
     display:flex; flex-direction:column;
     z-index:2147483644;
     transform:scale(.87) translateY(10px); opacity:0; pointer-events:none;
-    transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s;
+    visibility:hidden; /* BUG FIX (audit): opacity:0 alone left the closed panel's controls in the tab order */
+    transition:transform .28s cubic-bezier(.34,1.2,.64,1), opacity .28s, visibility 0s linear .28s;
   }
-  #pr-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all }
+  #pr-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all; visibility:visible; transition-delay:0s }
   /* Narrow phones: full width, sitting just above the fab (56px + 12px gap)
      so it never covers the fab or the send button. */
   @media(max-width:440px) { #pr-panel { width:calc(100vw - 16px) !important; right:8px; bottom:calc(var(--pr-fab-bottom) + 68px); min-height:280px; max-height:calc(100vh - var(--pr-fab-bottom) - 68px - 16px) } }
@@ -206,7 +209,7 @@
   }
   .pr-lang-group {
     padding:5px 10px 2px; font-size:9.5px; font-weight:800;
-    color:#9ca3af; text-transform:uppercase; letter-spacing:.5px;
+    color:#6b7280; text-transform:uppercase; letter-spacing:.5px;
     background:#f9fafb; border-bottom:1px solid #e5e7eb;
   }
   .pr-lang-opt {
@@ -217,7 +220,7 @@
   .pr-lang-opt:hover { background:#d4ecd9; color:#1a3a1e; }
   .pr-lang-opt.active { background:#2d5233; color:#ffffff; }
   .pr-lang-noresult {
-    padding:14px; font-size:12px; color:#9ca3af; text-align:center; font-family:inherit;
+    padding:14px; font-size:12px; color:#6b7280; text-align:center; font-family:inherit;
   }
 
   .pr-chips-toggle {
@@ -257,7 +260,7 @@
   .pr-pcb:hover { transform:scale(1.05) }
 
   .pr-fb { display:flex; gap:4px; padding-left:35px; margin-top:2px }
-  .pr-fb button { background:none; border:1px solid #e5e7eb; border-radius:5px; padding:2px 7px; font-size:11px; color:#9ca3af; cursor:pointer; transition:all .15s; font-family:inherit }
+  .pr-fb button { background:none; border:1px solid #e5e7eb; border-radius:5px; padding:2px 7px; font-size:11px; color:#6b7280; cursor:pointer; transition:all .15s; font-family:inherit }
   .pr-fb button.liked { border-color:#4aad72; color:#4aad72 }
   .pr-fb button.disliked { border-color:#ff5252; color:#ff5252 }
 
@@ -271,7 +274,7 @@
   .pr-ir { display:flex; gap:7px; align-items:flex-end }
   #pr-ti { flex:1; background:#f3f4f6; border:1.5px solid #e5e7eb; border-radius:13px; padding:9px 12px; font-size:13px; color:#1a1a1a; resize:none; outline:none; font-family:inherit; max-height:100px; line-height:1.4; scrollbar-width:none; transition:border-color .2s }
   #pr-ti:focus { border-color:#2d5233; }
-  #pr-ti::placeholder { color:#9ca3af; }
+  #pr-ti::placeholder { color:#6b7280; }
   #pr-ti::-webkit-scrollbar { display:none }
   #pr-voice { background:none; border:1px solid #e5e7eb; border-radius:50%; width:35px; height:35px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .2s }
   #pr-voice svg { width:15px; height:15px }
@@ -281,13 +284,13 @@
   #pr-sb:hover:not(:disabled) { transform:scale(1.1) }
   #pr-sb:disabled { opacity:.35; cursor:not-allowed }
   #pr-sb svg { width:15px; height:15px }
-  .pr-ft { text-align:center; font-size:9px; color:#9ca3af; margin-top:6px; font-family:inherit }
+  .pr-ft { text-align:center; font-size:9px; color:#6b7280; margin-top:6px; font-family:inherit }
 
   .pr-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(14px); border-radius:9px; padding:8px 18px; font-size:12px; font-weight:600; opacity:0; transition:all .28s; z-index:2147483647; pointer-events:none; font-family:inherit; white-space:nowrap }
   .pr-toast.show { opacity:1; transform:translateX(-50%) translateY(0) }
   /* Clear the mobile bottom nav (.mbn, 56px tall, MobileBottomNav.tsx). */
   @media(max-width:900px) { .pr-toast { bottom:calc(16px + 56px + env(safe-area-inset-bottom,0px)) } }
-  .pr-src { font-size:10px; color:#9ca3af; margin-top:4px; padding-left:35px; }
+  .pr-src { font-size:10px; color:#6b7280; margin-top:4px; padding-left:35px; }
   .pr-src a { color:#2d5233; text-decoration:none }
   .pr-src a:hover { color:#1a3a1e; }
   `;
@@ -323,25 +326,29 @@
   waBtn.addEventListener('click', () => {
     window.open('https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent('Namaste! I want to know more about your Himalayan products'), '_blank');
   });
-  document.body.appendChild(waBtn);
+  if (WA_NUM) document.body.appendChild(waBtn);
 
   /* ── AI FAB ───────────────────────────────────────────── */
   const fab = document.createElement('button');
   fab.id = 'pr-ai-fab';
   fab.setAttribute('aria-label', 'Chat with Pahadi_AI');
-  fab.innerHTML = '<img class="pr-fi" src="' + AI_CFG.avatar + '" alt="AI"><span class="pr-fc">✕</span><span class="pr-badge" id="pr-badge">1</span>';
+  fab.setAttribute('aria-expanded', 'false');
+  fab.setAttribute('aria-controls', 'pr-panel');
+  fab.innerHTML = '<img class="pr-fi" src="' + AI_CFG.avatar + '" alt=""><span class="pr-fc">✕</span><span class="pr-badge" id="pr-badge">1</span>';
   document.body.appendChild(fab);
 
   /* ── Panel ────────────────────────────────────────────── */
   const panel = document.createElement('div');
   panel.id = 'pr-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', 'Chat with Pahadi_AI');
   panel.innerHTML = '<div id="pr-left-edge"></div><div id="pr-bottom-edge"></div><div id="pr-drag"></div>'
     + '<div class="pr-hd">'
-    + '<div class="pr-hav"><img src="' + AI_CFG.avatar + '" alt="AI"></div>'
+    + '<div class="pr-hav"><img src="' + AI_CFG.avatar + '" alt=""></div>'
     + '<div><div class="pr-hn" id="pr-name">' + AI_CFG.name + '</div>'
     + '<div class="pr-hs"><span class="pr-dot"></span><span id="pr-tagline">' + AI_CFG.tagline + '</span></div></div>'
     + '<div class="pr-lang-wrap" id="pr-lang-wrap">'
-    + '<button class="pr-lang-btn" id="pr-lang-btn"><span id="pr-lang-label">English</span><span class="pr-lang-arrow">▼</span></button>'
+    + '<button class="pr-lang-btn" id="pr-lang-btn" type="button" aria-haspopup="listbox" aria-label="Choose language"><span id="pr-lang-label">English</span><span class="pr-lang-arrow">▼</span></button>'
     + '<div class="pr-lang-menu" id="pr-lang-menu">'
     + '<div class="pr-lang-search-wrap"><input type="text" class="pr-lang-search" id="pr-lang-search" placeholder="Search language…" autocomplete="off"></div>'
     + '<div class="pr-lang-list" id="pr-lang-list">'
@@ -401,9 +408,9 @@
     + '<div class="pr-chip" data-q="Gift ideas from Himachal Pradesh?">🎁 Gift ideas</div>'
     + '<div class="pr-chip" data-q="What superfoods grow in the Himalayas?">🌿 Superfoods</div>'
     + '</div>'
-    + '<div class="pr-msgs" id="pr-msgs"></div>'
+    + '<div class="pr-msgs" id="pr-msgs" role="log" aria-live="polite" aria-label="Chat messages"></div>'
     + '<div class="pr-ia"><div class="pr-ir">'
-    + '<button id="pr-voice" title="Voice input"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.57 3.13 8.37 7.26 9.58V21h5.48v-3.42C18.87 16.37 22 12.57 22 8h-2c0 4.08-3.06 7.44-7 7.93V15.93z"/></svg></button>'
+    + '<button id="pr-voice" title="Voice input" aria-label="Voice input" type="button"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.57 3.13 8.37 7.26 9.58V21h5.48v-3.42C18.87 16.37 22 12.57 22 8h-2c0 4.08-3.06 7.44-7 7.93V15.93z"/></svg></button>'
     + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, weather, health…"></textarea>'
     + '<button id="pr-sb" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     + '</div><div class="pr-ft">HimVeda by Pahadi Roots AI · Powered by Google Gemini</div></div>';
@@ -569,10 +576,15 @@
   });
 
   /* ── TOGGLE ───────────────────────────────────────────── */
+  function syncFabA11y() {
+    fab.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    fab.setAttribute('aria-label', isOpen ? 'Close chat' : 'Chat with Pahadi_AI');
+  }
   fab.addEventListener('click', function() {
     isOpen = !isOpen;
     fab.classList.toggle('open', isOpen);
     panel.classList.toggle('open', isOpen);
+    syncFabA11y();
     var b = document.getElementById('pr-badge');
     if(b) b.remove();
     if(isOpen && !msgs.children.length) welcome();
@@ -581,7 +593,13 @@
   });
   document.addEventListener('click', function(e) {
     if(isOpen && !panel.contains(e.target) && !fab.contains(e.target)) {
-      isOpen=false; fab.classList.remove('open'); panel.classList.remove('open');
+      isOpen=false; fab.classList.remove('open'); panel.classList.remove('open'); syncFabA11y();
+    }
+  });
+  // Escape closes the chat and hands focus back to the button that opened it (WCAG 2.1.2 / 2.4.3).
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && isOpen) {
+      isOpen = false; fab.classList.remove('open'); panel.classList.remove('open'); syncFabA11y(); fab.focus();
     }
   });
   // Toggle chips
@@ -676,7 +694,7 @@
     wrap.className = 'pr-m ' + (role==='user' ? 'u' : 'b');
     var av = document.createElement('div'); av.className='pr-mav';
     if(role==='user') { av.textContent='👤'; }
-    else { av.innerHTML='<img src="' + AI_CFG.avatar + '" alt="AI">'; }
+    else { av.innerHTML='<img src="' + AI_CFG.avatar + '" alt="">'; }
     var bbl = document.createElement('div'); bbl.className='pr-mb';
     if(role==='user') { bbl.style.background='linear-gradient(135deg,'+MID_GREEN+',#3d6b42)'; }
     // AUDIT S2-007: model output is NEVER assigned via innerHTML. Text is split into
@@ -707,7 +725,7 @@
 
     if(role==='bot' && !skipHistory) {
       var fb = document.createElement('div'); fb.className='pr-fb';
-      fb.innerHTML='<button>👍</button><button>👎</button>';
+      fb.innerHTML='<button type="button" aria-label="Helpful">👍</button><button type="button" aria-label="Not helpful">👎</button>';
       fb.querySelectorAll('button').forEach(function(btn,i){
         btn.addEventListener('click', function(){
           fb.querySelectorAll('button').forEach(function(b){ b.classList.remove('liked','disliked'); });
@@ -722,7 +740,7 @@
 
   function showTyping(){
     var el=document.createElement('div'); el.id='pr-typ'; el.className='pr-m b';
-    el.innerHTML='<div class="pr-mav"><img src="'+AI_CFG.avatar+'" alt="AI"></div>'
+    el.innerHTML='<div class="pr-mav"><img src="'+AI_CFG.avatar+'" alt=""></div>'
       +'<div class="pr-mb" style="background:#152018"><div class="pr-dots">'
       +'<span style="background:'+GOLD+'"></span><span style="background:'+GOLD+'"></span><span style="background:'+GOLD+'"></span>'
       +'</div></div>';

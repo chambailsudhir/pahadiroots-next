@@ -95,4 +95,45 @@ describe('NewsletterBar', () => {
     resolveFetch!({ ok: true })
     await waitFor(() => expect(screen.getByText(/check your inbox/i)).toBeTruthy())
   })
+
+  // ── Added with the HOME-002 rebuild: accessibility + clearer feedback ──────────────────────────
+  it('labels the email field for screen readers and exposes a polite live status region', () => {
+    render(<NewsletterBar />)
+    expect(screen.getByLabelText('Email address')).toBeTruthy()
+    const live = document.querySelector('p[aria-live="polite"]')
+    expect(live).not.toBeNull()
+    expect(live!.getAttribute('role')).toBe('status')
+  })
+
+  it('tells the visitor when the email is invalid instead of silently doing nothing', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<NewsletterBar />)
+    fireEvent.change(screen.getByPlaceholderText('Your email address'), { target: { value: 'nope' } })
+    fireEvent.click(screen.getByText('Subscribe →'))
+    expect(screen.getByText(/valid email address/i)).toBeTruthy()
+    expect(screen.getByLabelText('Email address').getAttribute('aria-invalid')).toBe('true')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows a specific message when rate-limited (HTTP 429)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429 }))
+    render(<NewsletterBar />)
+    fireEvent.change(screen.getByPlaceholderText('Your email address'), { target: { value: 'jane@example.com' } })
+    fireEvent.click(screen.getByText('Subscribe →'))
+    await waitFor(() => expect(screen.getByText(/too many attempts/i)).toBeTruthy())
+  })
+
+  it('does not fire a second request while one is already in flight (double-click safe)', async () => {
+    let resolveFetch: (v: { ok: boolean }) => void
+    const fetchMock = vi.fn(() => new Promise(res => { resolveFetch = res }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<NewsletterBar />)
+    fireEvent.change(screen.getByPlaceholderText('Your email address'), { target: { value: 'jane@example.com' } })
+    const form = screen.getByLabelText('Email address').closest('form')!
+    fireEvent.submit(form); fireEvent.submit(form)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    resolveFetch!({ ok: true })
+    await waitFor(() => expect(screen.getByText(/check your inbox/i)).toBeTruthy())
+  })
 })

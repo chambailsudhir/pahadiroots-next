@@ -13,6 +13,7 @@ import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
 import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
+import NewsletterBar from '@/components/homepage/NewsletterBar'
 import BrandStory from '@/components/story/BrandStory'
 import WhereTheyBegin from '@/components/story/WhereTheyBegin'
 import RegionStories from '@/components/story/RegionStories'
@@ -46,7 +47,10 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.co
 // products) — all now explicitly fall back to /logo.png so no page is
 // ever left without a real, on-brand share image.
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSiteSettings()
+  // strict (audit): the page body already reads settings with { strict: true } so a failed read keeps the last good
+  // ISR page. Metadata used the lenient read, so on a Supabase blip the <title>/description/OG tags were built from
+  // built-in DEFAULTS and cached with the page for 5 minutes. Same strict read here keeps title and body consistent.
+  const settings = await getSiteSettings({ strict: true })
   const siteName = settings.site_name || 'HimVeda by Pahadi Roots'
   const title = settings.meta_title || `${siteName} — Pure Himalayan Natural Products`
   const description = settings.meta_description ||
@@ -166,6 +170,8 @@ export default async function HomePage() {
   const showBestSellers = isEnabled(settings.show_best_sellers)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
   const showReviews     = isEnabled(settings.show_reviews_section)
+  // Admin → Homepage Sections → "Newsletter bar" (show_newsletter_bar). Previously this toggle had no consumer.
+  const showNewsletter  = isEnabled(settings.show_newsletter_bar)
   // BUG FIX (companion to pahadi-admin's new "Explore by Region" toggle):
   // `show_state_stories` already existed as a declared settings key with a
   // 'true' default (src/types/index.ts, getSiteSettings.ts) but was never
@@ -199,6 +205,7 @@ export default async function HomePage() {
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />
       {showReviews && <ReviewsPreview />}
+      {showNewsletter && <NewsletterBar />}
     </>
   )
 }

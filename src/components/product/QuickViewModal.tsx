@@ -9,13 +9,14 @@
 // listing page's variant-pricing fix means every card already carries its
 // full variant list, so no extra fetch is needed here).
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice, savingsPercent } from '@/lib/utils'
+import { reportCardAddToCart } from '@/lib/analytics/cartEvents'
 import type { Product, ProductVariant } from '@/types'
 
 interface Props {
@@ -40,9 +41,30 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
   const stock   = selected?.available_stock ?? product.available_stock ?? 0
   const inStock = stock > 0
 
-  // Escape-to-close + body scroll lock — same pattern as CartDrawer for consistency
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  // BUG FIX (audit C-3): the parent passes an inline arrow for onClose, which is a NEW function on every render. As an
+  // effect dependency that re-ran the effect (re-applying the scroll lock and resetting body padding) on every parent
+  // re-render. Keep the latest callback in a ref so the effect below runs exactly once per open.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
+  // Escape-to-close + body scroll lock — same pattern as CartDrawer for consistency.
+  // BUG FIX (audit C-3, WCAG 2.4.3 / 2.1.2): the dialog is aria-modal but focus never moved into it, Tab could walk
+  // out into the page behind it, and focus was lost on close. Now: focus the close button on open, keep Tab inside
+  // the dialog, and give focus back to whatever opened it.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    const opener = document.activeElement as HTMLElement | null
+    closeRef.current?.focus()
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { onCloseRef.current(); return }
+      if (e.key !== 'Tab' || !sheetRef.current) return
+      const f = Array.from(sheetRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      if (!f.length) return
+      const first = f[0], last = f[f.length - 1], active = document.activeElement
+      if (e.shiftKey && (active === first || !sheetRef.current.contains(active))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (active === last || !sheetRef.current.contains(active))) { e.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', onKey)
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
     document.body.style.overflow = 'hidden'
@@ -51,8 +73,9 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
       document.body.style.paddingRight = ''
+      if (opener && document.contains(opener)) opener.focus()
     }
-  }, [onClose])
+  }, [])
 
   function handleAddToCart() {
     if (!inStock) return
@@ -71,6 +94,7 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
       isHimalayan:  !!(product.state_id),
       isBestseller: product.badges_bestseller ?? false,
     })
+    reportCardAddToCart({ id: product.id, name: product.name, price, variantId: selected?.id }, 'quick_view')
     onClose()
     openCart()
   }
@@ -78,13 +102,14 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
   const modal = (
     <div className="qv-overlay" role="presentation" onClick={onClose}>
       <div
+        ref={sheetRef}
         className="qv-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={`Quick view: ${product.name}`}
         onClick={e => e.stopPropagation()}
       >
-        <button type="button" className="qv-close" onClick={onClose} aria-label="Close quick view">✕</button>
+        <button type="button" className="qv-close" ref={closeRef} onClick={onClose} aria-label="Close quick view">✕</button>
 
         <div className="qv-image" style={{ background: product.card_bg || '#f5f0e8' }}>
           {product.image_url
@@ -106,13 +131,14 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
 
           {variants.length > 1 && (
             <div className="qv-variants">
-              <div className="qv-variants-label">Size</div>
-              <div className="qv-variants-list">
+              <div className="qv-variants-label" id="qv-size-label">Size</div>
+              <div className="qv-variants-list" role="group" aria-labelledby="qv-size-label">
                 {variants.map(v => (
                   <button
                     key={v.id}
                     type="button"
                     className={`qv-variant-btn${v.id === selectedId ? ' active' : ''}${v.available_stock <= 0 ? ' disabled' : ''}`}
+                    aria-pressed={v.id === selectedId}
                     onClick={() => v.available_stock > 0 && setSelectedId(v.id)}
                     disabled={v.available_stock <= 0}
                   >
@@ -128,7 +154,8 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
           </div>
 
           <button type="button" className="qv-atc" onClick={handleAddToCart} disabled={!inStock}>
-            {inStock ? '🛒 Add to Cart' : 'Notify Me'}
+            {/* BUG FIX (audit C-3): this said "Notify Me" but was disabled, so it did nothing. Say what it is. */}
+            {inStock ? '🛒 Add to Cart' : 'Out of Stock'}
           </button>
 
           <Link href={`/products/${product.slug}`} className="qv-full-details">
@@ -160,14 +187,14 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
           position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 72px;
         }
         .qv-body { padding: 28px 28px 24px; flex: 1; min-width: 0; }
-        .qv-region { font-size: 10.5px; color: #a07830; font-weight: 700; letter-spacing: .5px; margin-bottom: 6px; }
+        .qv-region { font-size: 10.5px; color: #8a6508; font-weight: 700; letter-spacing: .5px; margin-bottom: 6px; }
         .qv-name { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 0 0 12px; }
         .qv-price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
         .qv-price { font-size: 24px; font-weight: 900; color: #1a3a1e; }
         .qv-mrp { font-size: 14px; color: #999; text-decoration: line-through; }
-        .qv-savings { font-size: 12px; font-weight: 700; color: #c8920a; }
+        .qv-savings { font-size: 12px; font-weight: 700; color: #8a6508; }
         .qv-variants { margin-bottom: 16px; }
-        .qv-variants-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #a07830; margin-bottom: 8px; }
+        .qv-variants-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #8a6508; margin-bottom: 8px; }
         .qv-variants-list { display: flex; flex-wrap: wrap; gap: 8px; }
         .qv-variant-btn {
           padding: 8px 16px; border-radius: 20px; border: 1.5px solid #e0e0e0; background: #fff;
@@ -176,9 +203,9 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
         .qv-variant-btn.active { border-color: #1a3a1e; background: #1a3a1e; color: #fff; }
         .qv-variant-btn.disabled { opacity: .4; text-decoration: line-through; cursor: not-allowed; }
         .qv-stock { font-size: 12px; font-weight: 700; margin-bottom: 16px; }
-        .qv-stock-high { color: #22c55e; }
-        .qv-stock-mid { color: #f59e0b; }
-        .qv-stock-low { color: #ef4444; }
+        .qv-stock-high { color: #15803d; }
+        .qv-stock-mid { color: #b45309; }
+        .qv-stock-low { color: #b91c1c; }
         .qv-atc {
           width: 100%; background: #1a3a1e; color: #fff; border: none; border-radius: 26px;
           padding: 13px; font-size: 14px; font-weight: 800; cursor: pointer; margin-bottom: 12px;

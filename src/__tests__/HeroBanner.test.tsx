@@ -61,14 +61,31 @@ describe('HeroBanner — single <h1> across multiple slides (P1 fix)', () => {
     expect(container.querySelector('h1')?.textContent).toContain('First Slide')
   })
 
-  it('non-visible slides are aria-hidden so screen readers skip them', () => {
+  it('non-visible slides are aria-hidden AND inert so neither screen readers nor the Tab key reach them', () => {
     const { container } = render(<HeroBanner images={slides} settings={settings} />)
-    // slide wrappers only — decorative <svg> icons (e.g. the pause button glyph) are aria-hidden too
-    const slideWrappers = Array.from(container.querySelectorAll('[aria-hidden]')).filter(el => el.tagName.toLowerCase() !== 'svg' && el.tagName.toLowerCase() !== 'img')
-    // 2 of the 3 slides (everything but the currently-visible one) should
-    // be aria-hidden.
-    const hiddenCount = slideWrappers.filter(el => el.getAttribute('aria-hidden') === 'true').length
-    expect(hiddenCount).toBe(2)
+    // Target the slide wrappers themselves (decorative spans/svgs elsewhere, e.g. the slide-dot pills, are aria-hidden too).
+    const wrappers = Array.from(container.querySelectorAll('.hhero-slide'))
+    expect(wrappers).toHaveLength(3)
+    const hidden = wrappers.filter(el => el.getAttribute('aria-hidden') === 'true')
+    // 2 of the 3 slides (everything but the currently-visible one) should be aria-hidden...
+    expect(hidden).toHaveLength(2)
+    // ...and inert, so the links/buttons inside them are not keyboard-focusable (audit: aria-hidden-focus).
+    hidden.forEach(el => expect(el.hasAttribute('inert')).toBe(true))
+    // the visible slide stays fully interactive
+    const visible = wrappers.filter(el => el.getAttribute('aria-hidden') !== 'true')
+    expect(visible).toHaveLength(1)
+    expect(visible[0].hasAttribute('inert')).toBe(false)
+  })
+
+  it('slide dots are real >=24px hit areas that report the current slide (WCAG 2.5.8)', () => {
+    const { container } = render(<HeroBanner images={slides} settings={settings} />)
+    const dots = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label^="Slide "]'))
+    expect(dots).toHaveLength(3)
+    dots.forEach(d => expect(parseInt(d.style.height, 10)).toBeGreaterThanOrEqual(24))
+    expect(dots.filter(d => d.getAttribute('aria-current') === 'true')).toHaveLength(1)
+    fireEvent.click(dots[2])
+    expect(dots[2].getAttribute('aria-current')).toBe('true')
+    expect(dots[0].getAttribute('aria-current')).toBeNull()
   })
 
   it('has a keyboard-reachable pause control that toggles (WCAG 2.2.2)', () => {

@@ -145,6 +145,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
       <div className="filter-bar" id="filterBar" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '20px 0 16px' }}>
         <button
           className={`filter-btn${activeCat === 'all' ? ' active' : ''}`}
+          aria-pressed={activeCat === 'all'}
           onClick={() => setActiveCat('all')}
         >All</button>
 
@@ -152,6 +153,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
           <button
             key={cat.id}
             className={`filter-btn${activeCat === cat.slug ? ' active' : ''}`}
+            aria-pressed={activeCat === cat.slug}
             onClick={() => setActiveCat(cat.slug)}
           >
             {cat.emoji || emojiForCategory(cat)} {cat.name}
@@ -160,6 +162,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
 
         <select
           className="filter-sort"
+          aria-label="Sort products"
           value={sort}
           onChange={e => setSort(e.target.value)}
           style={{ marginLeft: 'auto' }}
@@ -174,7 +177,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
         </div>
       ) : (
         <div className="pgrid bsGrid">
-          {shown.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 3} />)}
+          {shown.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       )}
     </section>

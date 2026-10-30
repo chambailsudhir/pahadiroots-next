@@ -52,6 +52,8 @@ export const COMPANY = [
   ['By Region',          '/regions'],
   ['Returns & Refunds',  '/policies/returns'],
   ['Shipping Policy',    '/policies/shipping'],
+  ['Payment Methods',    '/payment'],
+  ['Lab Reports',        '/lab-reports'],
   ['Privacy Policy',     '/policies/privacy'],
   ['Cookie Settings',    '#cookie-settings'],   // opens the consent dialog (components/consent/CookieConsent.tsx)
   ['Terms & Conditions', '/policies/terms'],
