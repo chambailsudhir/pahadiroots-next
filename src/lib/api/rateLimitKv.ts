@@ -1,3 +1,4 @@
+import 'server-only'
 /**
  * rateLimitKv — shared distributed rate-limiter backed by Upstash KV.
  *

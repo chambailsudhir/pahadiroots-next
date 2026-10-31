@@ -1,3 +1,4 @@
+import 'server-only'
 // ═══════════════════════════════════════════════════════════════
 // lib/storeData.ts
 // Server-only helper — uses SERVICE KEY (bypasses RLS).
