@@ -108,7 +108,17 @@ describe('BestSellers', () => {
       expect.stringContaining('[BestSellers]'),
       expect.objectContaining({ error: 'db down', stack: expect.any(String) }),
     )
-    expect(mockLoggerWarn).not.toHaveBeenCalled()
+    expect(mockGetStoreData).toHaveBeenCalledTimes(2)   // one retry before giving up
+  })
+
+  it('recovers when the first catalogue read fails but the retry succeeds (section is not dropped from the cached page)', async () => {
+    mockGetStoreData.mockRejectedValueOnce(new Error('blip')).mockResolvedValueOnce({ categories: [{ id: 1, name: 'Honey', slug: 'honey', is_active: true }] })
+    mockGetProductsWithImages.mockReturnValue([product()])
+    const el = await BestSellers()
+    expect(el).not.toBeNull()
+    render(el as React.ReactElement)
+    expect(screen.getByTestId('best-sellers-client')).toBeTruthy()
+    expect(mockLoggerError).not.toHaveBeenCalled()
   })
 
   it('treats a category with no explicit is_active flag as active', async () => {
