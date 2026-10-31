@@ -55,7 +55,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const title = settings.meta_title || `${siteName} — Pure Himalayan Natural Products`
   const description = settings.meta_description ||
     'Shop authentic Himalayan natural products — wild honey, A2 ghee, Kashmiri saffron, Ladakhi shilajit & more. Sourced directly from mountain farmers.'
-  const ogImage = settings.og_image || '/logo.png'
+  const ogImage = settings.og_image || '/og-default.jpg'
   // SEO FIX: the single most important page on the site had no canonical
   // and no OG/Twitter override — it silently inherited the layout's
   // generic OG data, so sharing the homepage link looked no different

@@ -20,13 +20,13 @@ export const metadata: Metadata = {
     title: 'Blog — HimVeda by Pahadi Roots',
     description: 'Health benefits, recipes, and buying guides for authentic Himalayan natural products.',
     url: `${BASE}/blog`,
-    images: [{ url: '/logo.png', width: 1200, height: 630, alt: 'Blog — HimVeda by Pahadi Roots' }],
+    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Blog — HimVeda by Pahadi Roots' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Blog — HimVeda by Pahadi Roots',
     description: 'Health benefits, recipes, and buying guides for authentic Himalayan natural products.',
-    images: ['/logo.png'],
+    images: ['/og-default.jpg'],
   },
 }
 
