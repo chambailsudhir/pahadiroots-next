@@ -4,6 +4,7 @@ import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { logger } from '@/lib/logger'
 import { filterNewArrivals } from '@/lib/newArrivals'
+import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
 import type { Product } from '@/types'
 
 export default async function NewArrivals() {
@@ -13,6 +14,10 @@ export default async function NewArrivals() {
     const storeData = await getStoreData()
     const withImgs  = getProductsWithImages(storeData)
     const all       = normalizeProducts(withImgs)
+    // BUG FIX (audit HOME-024): with at most BEST_SELLERS_LIMIT active products the Best Sellers grid above already shows
+    // every one of them, so this section could only repeat the same cards. It reappears by itself as soon as the catalog
+    // is larger than that grid.
+    if (all.length <= BEST_SELLERS_LIMIT) return null
     // BUG FIX: this used to just take the 4 most-recently-created products
     // regardless of age (so it never went empty, but also never actually
     // meant "new"), and "See All" pointed at /products?sort=newest — a

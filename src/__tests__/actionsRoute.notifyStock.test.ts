@@ -37,6 +37,12 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/server/email', () => ({
   sendTransactionalEmail: vi.fn().mockResolvedValue(undefined),
 }))
+// Shared (cross-instance) limiter — the route no longer uses the per-instance in-memory one.
+const mockRateLimit = vi.fn().mockResolvedValue(true)
+vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: (...a: unknown[]) => mockRateLimit(...a) }))
+// Double opt-in: `subscribe` only emails a confirmation link.
+const mockSendConfirm = vi.fn().mockResolvedValue({ sent: true })
+vi.mock('@/lib/server/subscribe', () => ({ sendSubscribeConfirmation: (...a: unknown[]) => mockSendConfirm(...a) }))
 
 import { POST } from '@/app/api/v1/actions/route'
 
@@ -89,45 +95,64 @@ describe('POST /api/v1/actions — notify_stock (P1 fix)', () => {
   })
 })
 
-describe('POST /api/v1/actions — subscribe (schema-drift bug found + fixed)', () => {
+describe('POST /api/v1/actions — subscribe (double opt-in, audit C-11)', () => {
   beforeEach(() => {
     mockUpsert.mockReset()
     mockFrom.mockClear()
+    mockSendConfirm.mockClear()
+    mockRateLimit.mockReset().mockResolvedValue(true)
   })
 
-  it('no longer sends the non-existent subscribed_at column', async () => {
-    mockUpsert.mockResolvedValue({ error: null })
-
-    await POST(req({ action: 'subscribe', email: 'jane@example.com' }))
-
-    expect(mockFrom).toHaveBeenCalledWith('subscribers')
-    const [payload] = mockUpsert.mock.calls[0]
-    // This is the actual bug: the old upsert sent `subscribed_at`, a
-    // column that does not exist on the real table (confirmed via
-    // information_schema.columns) — every signup may have been silently
-    // erroring. Real columns only: email, name, is_active.
-    expect(payload).not.toHaveProperty('subscribed_at')
-    expect(payload).toEqual({ email: 'jane@example.com', name: null, is_active: true, source: null })
-  })
-
-  it('surfaces a subscribers-table error as a 500 instead of silently swallowing it', async () => {
-    // First call = subscribers upsert (fails), no second call should
-    // matter since we return early.
-    mockUpsert.mockResolvedValueOnce({ error: { message: 'column does not exist' } })
-
-    const res = await POST(req({ action: 'subscribe', email: 'jane@example.com' }))
-    // This is the actual bug: previously the result of this upsert was
-    // never checked at all — a DB error here was invisible to both the
-    // caller and any logs.
-    expect(res.status).toBe(500)
-  })
-
-  it('still returns success on the happy path', async () => {
-    mockUpsert.mockResolvedValue({ error: null })
-
-    const res = await POST(req({ action: 'subscribe', email: 'jane@example.com' }))
+  it('only emails a confirmation link — it does NOT store the address or create a coupon yet', async () => {
+    const res = await POST(req({ action: 'subscribe', email: 'Jane@Example.com', name: 'Jane' }))
     expect(res.status).toBe(200)
-    const json = await res.json()
-    expect(json).toEqual({ success: true })
+    expect(await res.json()).toEqual({ success: true, pending: true })
+    await vi.waitFor(() => expect(mockSendConfirm).toHaveBeenCalledTimes(1))
+    expect(mockSendConfirm).toHaveBeenCalledWith({ email: 'jane@example.com', name: 'Jane', source: null })
+    expect(mockFrom).not.toHaveBeenCalled()          // nothing written to subscribers / coupons
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid email', async () => {
+    const res = await POST(req({ action: 'subscribe', email: 'nope' }))
+    expect(res.status).toBe(400)
+    expect(mockSendConfirm).not.toHaveBeenCalled()
+  })
+
+  it('strips HTML from the name before it goes into the email token', async () => {
+    await POST(req({ action: 'subscribe', email: 'a@b.co', name: '<script>alert(1)</script>Ann' }))
+    await vi.waitFor(() => expect(mockSendConfirm).toHaveBeenCalled())
+    expect(mockSendConfirm.mock.calls[0][0].name).toBe('alert(1)Ann')
+  })
+
+  it('stops mailing an address after its hourly limit but answers identically (no address enumeration)', async () => {
+    mockRateLimit.mockImplementation(async (key: string) => !String(key).startsWith('mw:rl:subscribe_email:'))
+    const res = await POST(req({ action: 'subscribe', email: 'victim@example.com' }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, pending: true })
+    await new Promise(r => setTimeout(r, 20))
+    expect(mockSendConfirm).not.toHaveBeenCalled()
+  })
+
+  it('limits per address with the shared limiter: 3 per hour', async () => {
+    await POST(req({ action: 'subscribe', email: 'jane@example.com' }))
+    expect(mockRateLimit).toHaveBeenCalledWith('mw:rl:subscribe_email:jane@example.com', 3, 3600)
+  })
+})
+
+describe('POST /api/v1/actions — shared IP rate limit (audit C-11)', () => {
+  beforeEach(() => { mockRateLimit.mockReset().mockResolvedValue(true); mockSendConfirm.mockClear() })
+
+  it('answers 429 with Retry-After when the shared limiter says the IP is over its budget', async () => {
+    mockRateLimit.mockResolvedValue(false)
+    const res = await POST(req({ action: 'subscribe', email: 'jane@example.com' }))
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('60')
+    expect(mockSendConfirm).not.toHaveBeenCalled()
+  })
+
+  it('keys the limit by client IP in the shared store (10 per minute)', async () => {
+    await POST(req({ action: 'notify_stock', email: 'jane@example.com', product_id: 1 }))
+    expect(mockRateLimit).toHaveBeenCalledWith(expect.stringMatching(/^mw:rl:actions_ip:10\.0\.0\.\d+$/), 10, 60)
   })
 })

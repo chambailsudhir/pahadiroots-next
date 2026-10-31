@@ -11,15 +11,12 @@ import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
 import { ANALYTICS_URL_GUARD_SCRIPT } from '@/lib/analyticsGuard'
 import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
-import MobileMenu from '@/components/layout/MobileMenu'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
+import LazyOverlays from '@/components/layout/LazyOverlays'
 import Script from 'next/script'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
-import CartDrawer from '@/components/cart/CartDrawer'
-import SearchOverlay from '@/components/search/SearchOverlay'
-import AuthModal from '@/components/auth/AuthModal'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 import CookieConsent from '@/components/consent/CookieConsent'
@@ -350,11 +347,9 @@ export default async function RootLayout({
                 settings={clientSettings}
                 categories={categories.map((c: any) => ({ name: c.name, slug: c.slug, emoji: c.emoji ?? null }))}
               />
-              <CartDrawer settings={clientSettings} />
-              <SearchOverlay />
-              <MobileMenu settings={clientSettings} categories={categories} states={states} />
+              {/* PERF (audit): cart drawer, search, mobile menu and login modal load on demand (see LazyOverlays.tsx). */}
+              <LazyOverlays settings={clientSettings} categories={categories} states={states} />
               <MobileBottomNav settings={clientSettings} />
-              <AuthModal />
               <GoogleAuthHandler />
               <ProfilePrefetcher />
             </>

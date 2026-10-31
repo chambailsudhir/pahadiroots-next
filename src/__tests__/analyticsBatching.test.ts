@@ -8,7 +8,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({ sbAdmin: vi.fn() }))
-vi.mock('@/lib/api/serverUtils', () => ({ sbAdmin: mocks.sbAdmin, checkRateLimit: () => true }))
+vi.mock('@/lib/api/serverUtils', () => ({ sbAdmin: mocks.sbAdmin, hasForeignOrigin: () => false }))
+// The route now uses the shared (cross-instance) limiter instead of the per-instance in-memory one.
+vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/lib/logger', () => ({ captureError: vi.fn() }))
 
 const ev = (over: Record<string, unknown> = {}) => ({ session_id: 's1', visitor_id: 'v1', event_type: 'page_view', path: '/', ...over })

@@ -17,7 +17,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
-import { sbAdmin, checkRateLimit } from '@/lib/api/serverUtils'
+import { sbAdmin, hasForeignOrigin } from '@/lib/api/serverUtils'
+import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { captureError } from '@/lib/logger'
 
 const BOT_UA_PATTERN = /bot|crawl|spider|slurp|headless|curl|wget|python-requests|scrapy|facebookexternalhit|pingdom|uptimerobot|ahrefs|semrush|bytespider/i
@@ -36,6 +37,19 @@ function clientIp(req: NextRequest): string {
       || 'unknown'
 }
 
+// Ids are positive integers; anything else (negative, fractional, absurdly large, NaN) is dropped, not stored.
+function safeId(v: unknown): number | null {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= 2_147_483_647 ? v : null
+}
+
+// `metadata` is free-form JSON, so cap it: at most 2,000 characters when serialised. Larger (or non-plain) values are
+// replaced with {} instead of being stored — it was previously written to the database unbounded.
+const MAX_METADATA_CHARS = 2000
+function safeMetadata(v: unknown): Record<string, unknown> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+  try { return JSON.stringify(v).length <= MAX_METADATA_CHARS ? (v as Record<string, unknown>) : {} } catch { return {} }
+}
+
 function classifyDevice(ua: string): string {
   if (/mobile/i.test(ua))                     return 'mobile'
   if (/tablet|ipad/i.test(ua))                 return 'tablet'
@@ -48,8 +62,18 @@ export async function POST(req: NextRequest) {
   // Bot traffic never gets written — keeps the dashboard honest.
   if (BOT_UA_PATTERN.test(ua)) return ok()
 
+  // Other websites must not be able to post events from our visitors' browsers.
+  if (hasForeignOrigin(req)) return fail(403, 'forbidden')
+
   const ip = clientIp(req)
-  if (!checkRateLimit(`analytics:${ip}`, 240, 60_000)) return fail(429, 'rate limited')
+  // BUG FIX (audit C-11): was the in-process limiter — a Map per serverless instance — so the real ceiling was 240/min
+  // PER INSTANCE. The shared limiter counts across instances. Non-strict on purpose: if the limiter itself is down,
+  // analytics keeps flowing (it must never take pages down), and the failure is alerted by rateLimitKv.
+  if (!(await checkRateLimitKv(`mw:rl:analytics_ip:${ip}`, 240, 60))) return fail(429, 'rate limited')
+
+  // Reject oversized bodies before parsing (a page-view batch is a few KB at most).
+  const declared = Number(req.headers.get('content-length') || 0)
+  if (declared > 64_000) return fail(413, 'too large')
 
   let body: Record<string, unknown>
   try {
@@ -108,12 +132,12 @@ export async function POST(req: NextRequest) {
       event_type,
       path:          typeof path === 'string' ? path.slice(0, 500) : null,
       page_type:     typeof page_type === 'string' ? page_type.slice(0, 50) : null,
-      product_id:    typeof product_id === 'number' ? product_id : null,
-      variant_id:    typeof variant_id === 'number' ? variant_id : null,
+      product_id:    safeId(product_id),
+      variant_id:    safeId(variant_id),
       search_query:  typeof search_query === 'string' ? search_query.slice(0, 200) : null,
-      results_count: typeof results_count === 'number' ? results_count : null,
+      results_count: typeof results_count === 'number' && Number.isInteger(results_count) && results_count >= 0 && results_count <= 100_000 ? results_count : null,
       source:        typeof source === 'string' ? source.slice(0, 100) : null,
-      metadata:      metadata && typeof metadata === 'object' ? metadata : {},
+      metadata:      safeMetadata(metadata),
     })
   }
 

@@ -48,6 +48,8 @@ export type TransactionalEmailType =
   // promised "5% off, check your inbox" without ever generating a code or
   // sending anything — this type is what actually fulfills that promise.
   | 'newsletter_welcome'
+  // Double opt-in: the "please confirm your email" message sent by `subscribe` (see lib/server/subscribe.ts).
+  | 'newsletter_confirm'
 
 export interface SendTransactionalEmailParams {
   type:      TransactionalEmailType

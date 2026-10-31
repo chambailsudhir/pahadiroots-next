@@ -37,6 +37,8 @@ vi.mock('@/lib/server/email', () => ({
   sendTransactionalEmail: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: vi.fn().mockResolvedValue(true) }))
+
 import { POST } from '@/app/api/v1/actions/route'
 
 let ipCounter = 0
