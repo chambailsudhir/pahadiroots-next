@@ -78,15 +78,17 @@ describe('consentBootstrapScript (inline <head> script)', () => {
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION, ts: Date.now(), analytics: false }))
     run('G-ABC123XYZ'); expect(document.head.querySelectorAll('script').length).toBe(0)
   })
-  it('restores a previous YES: grants consent, then loads the tag (deferred until after load + idle)', async () => {
+  it('restores a previous YES: grants consent, then loads the tag (deferred until the first interaction)', async () => {
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION, ts: Date.now(), analytics: true }))
     run('G-ABC123XYZ')
     const calls = w.dataLayer.map((a: IArguments) => Array.from(a)[0] + ':' + Array.from(a)[1])
     expect(calls.slice(0, 2)).toEqual(['consent:default', 'consent:update'])
     expect(w.__hvTagLoaded).toBe(true)
-    // PERF: the 180KB gtag.js download must NOT start during HTML parse — only after load + idle.
+    // PERF: the 180KB gtag.js download must NOT start during HTML parse — only after the visitor's first interaction.
     expect(document.head.querySelectorAll('script').length).toBe(0)
     await new Promise(r => setTimeout(r, 30))
+    expect(document.head.querySelectorAll('script').length).toBe(0)       // idle time alone does not load it
+    window.dispatchEvent(new Event('scroll'))
     expect(document.head.querySelector('script')!.src).toContain('gtag/js?id=G-ABC123XYZ')
   })
   it('defers the tag until window load when the page is still loading', async () => {
@@ -98,8 +100,19 @@ describe('consentBootstrapScript (inline <head> script)', () => {
       expect(document.head.querySelectorAll('script').length).toBe(0)       // still parsing: nothing loaded yet
       window.dispatchEvent(new Event('load'))
       await new Promise(r => setTimeout(r, 30))
-      expect(document.head.querySelectorAll('script').length).toBe(1)       // loaded exactly once after `load`
+      expect(document.head.querySelectorAll('script').length).toBe(0)       // after load it still waits for the visitor
+      window.dispatchEvent(new Event('pointerdown')); window.dispatchEvent(new Event('scroll'))
+      expect(document.head.querySelectorAll('script').length).toBe(1)       // loaded exactly once
     } finally { rs.mockRestore() }
+  })
+  it('loads the tag by itself 5 s after load when the visitor never interacts (so bounces are still counted)', () => {
+    vi.useFakeTimers()
+    try {
+      localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION, ts: Date.now(), analytics: true }))
+      run('G-ABC123XYZ')
+      vi.advanceTimersByTime(4900); expect(document.head.querySelectorAll('script').length).toBe(0)
+      vi.advanceTimersByTime(200);  expect(document.head.querySelectorAll('script').length).toBe(1)
+    } finally { vi.useRealTimers() }
   })
   it('ignores an expired or old-version YES, and never emits an unsafe id', () => {
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION, ts: Date.now() - CONSENT_MAX_AGE_MS - 5000, analytics: true }))

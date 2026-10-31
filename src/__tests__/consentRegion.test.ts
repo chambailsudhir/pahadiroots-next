@@ -34,7 +34,8 @@ describe('country classification', () => {
 })
 
 // The bootstrap now injects the tag after window load + idle (requestIdleCallback, or a 1ms timeout where unavailable).
-const flushDeferredTag = () => new Promise<void>(r => setTimeout(r, 30))
+// (first scroll/tap/key press, or 5 s after load — whichever comes first)
+const flushDeferredTag = async () => { window.dispatchEvent(new Event('scroll')); await new Promise<void>(r => setTimeout(r, 5)) }
 
 describe('bootstrap by region', () => {
   it('INDIA (region mode): no banner needed, analytics ON by default, tag loads, consent granted', async () => {
@@ -43,7 +44,7 @@ describe('bootstrap by region', () => {
     expect(hasAnalyticsConsent()).toBe(true)
     const calls = w.dataLayer.map((a: IArguments) => Array.from(a).slice(0, 2).join(':'))
     expect(calls.slice(0, 2)).toEqual(['consent:default', 'consent:update'])
-    // PERF: the 180KB gtag.js download is deferred until after load + idle, not started during HTML parse.
+    // PERF: the 180KB gtag.js download is deferred until until the visitor's first interaction (or 5 s after load), not started during HTML parse.
     expect(document.head.querySelectorAll('script').length).toBe(0)
     await flushDeferredTag()
     expect(document.head.querySelector('script')!.src).toContain('gtag/js?id=G-ABC123XYZ')
