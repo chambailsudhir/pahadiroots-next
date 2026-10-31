@@ -154,10 +154,7 @@ export default function FooterA({ settings, categories }: Props) {
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '11px' }}>
             {quick.map(q => (
               <li key={q.href}>
-                <Link href={q.href} style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px', transition: 'all .2s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.paddingLeft = '5px' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.55)'; (e.currentTarget as HTMLElement).style.paddingLeft = '0' }}
-                >
+                <Link href={q.href} className="ft-a-link" style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px' }}>
                   {q.emoji} {q.label}
                 </Link>
               </li>
@@ -183,8 +180,6 @@ export default function FooterA({ settings, categories }: Props) {
               .map(([label, href]) => (
               <li key={label}>
                 <Link href={href} style={{ fontSize: '14.5px', color: 'rgba(255,255,255,.55)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '7px', transition: 'all .2s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.paddingLeft = '5px' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.55)'; (e.currentTarget as HTMLElement).style.paddingLeft = '0' }}
                 >{label}</Link>
               </li>
             ))}
@@ -206,10 +201,7 @@ export default function FooterA({ settings, categories }: Props) {
               <span style={{ fontSize: '15px', flexShrink: 0, marginTop: '1px' }}>{item.icon}</span>
               <div style={{ fontSize: '14px', color: 'rgba(255,255,255,.5)', lineHeight: 1.7 }}>
                 {item.href ? (
-                  <a href={item.href} style={{ color: 'rgba(255,255,255,.5)', textDecoration: 'none' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,.5)' }}
-                  >{item.text}</a>
+                  <a href={item.href} className="ft-a-sub" style={{ color: 'rgba(255,255,255,.5)', textDecoration: 'none' }}>{item.text}</a>
                 ) : item.text}
               </div>
             </div>

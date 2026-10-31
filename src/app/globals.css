@@ -1226,3 +1226,11 @@ html.premium .mbn-item.active { color: #f1d98a; }
 html.premium .mob-nav-panel { background: #0d1c13; color: #efe7d2; }
 html.premium .mob-nav-panel a { color: #efe7d2; }
 html.premium .mob-nav-logo { color: #f1d98a; }
+
+/* FooterA hover/focus states. These used to be inline onMouseEnter/Leave handlers, which a Server Component cannot pass to a
+   client <Link> — the footer failed to render (and broke the production build) whenever the settings read fell back to
+   the default footer variant. Plain CSS has no such limit and also covers keyboard focus. */
+.ft-a-link { transition: color .2s, padding-left .2s; }
+.ft-a-link:hover, .ft-a-link:focus-visible { color: #fff !important; padding-left: 5px; }
+.ft-a-sub:hover, .ft-a-sub:focus-visible { color: #fff !important; }
+@media (prefers-reduced-motion: reduce) { .ft-a-link { transition: none; } }
