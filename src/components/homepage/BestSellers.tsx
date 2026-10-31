@@ -18,7 +18,15 @@ export default async function BestSellers() {
   let categories: Cat[]     = []
 
   try {
-    const storeData = await getStoreData()
+    // The homepage is cached for minutes (ISR), so one failed read here would leave this section out of the cached page
+    // for everyone until the next refresh. Try once more before giving up.
+    let storeData
+    try { storeData = await getStoreData() }
+    catch (firstErr) {
+      logger.warn('[BestSellers] first catalogue read failed — retrying once', { error: firstErr instanceof Error ? firstErr.message : String(firstErr) })
+      await new Promise(r => setTimeout(r, 400))
+      storeData = await getStoreData()
+    }
     const withImgs  = getProductsWithImages(storeData)
     // BUG FIX (performance, found while chasing "/products images load
     // slowly"): BestSellersClient needs the *entire* active catalog (not
