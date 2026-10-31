@@ -96,6 +96,12 @@ const nextConfig = {
     // can still force a fresh copy by uploading under a new filename (the
     // storefront already reads whatever URL is in `product_images`).
     minimumCacheTTL: 60 * 60 * 24 * 7,
+    // PERF: every <Image> prints one srcset URL per size in these lists (default 16 sizes). The homepage has ~57 images,
+    // which made the HTML ~75 KB bigger than it needs to be — and the browser can't ask for the hero image until it
+    // has the whole document. Fewer, well-spaced steps (still covering 1x-3x phones, laptops and 4K) keep every image
+    // sharp while sending far less markup.
+    deviceSizes: [640, 828, 1200, 1920],
+    imageSizes: [128, 256, 384],
     // BUG FIX (images loading slow — audit follow-up round 3): confirmed via
     // Network panel that the remaining slow request (2.84s) is a genuine
     // Vercel Image Optimization cache MISS — a first-ever request for that
