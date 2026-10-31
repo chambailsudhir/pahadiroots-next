@@ -12,7 +12,7 @@ export default function HimalayanRange() {
   return (
     <section className={`${s.root} ${s.range}`} aria-label="The Himalayan range and the regions we source from">
       <Reveal className={s.rangeIn}>
-        <div className={s.rangeScroll}>
+        <div className={s.rangeScroll} tabIndex={0} role="region" aria-label="Himalayan range map (scrollable)">
           {/* the track is the full-width image box, so the snap anchors below are
              positioned as a percentage of the IMAGE (not of the small phone screen) */}
           <div className={s.rangeTrack}>

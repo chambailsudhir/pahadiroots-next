@@ -58,7 +58,7 @@
 .tabs{display:flex;gap:2px;overflow-x:auto;margin-bottom:34px;border-bottom:1px solid rgba(26,58,30,.2);scroll-snap-type:x proximity;scrollbar-width:thin}
 .tab{scroll-snap-align:start;white-space:nowrap;font:700 15px var(--sans);color:var(--mute);background:none;border:0;border-bottom:3px solid transparent;padding:12px 18px 14px;cursor:pointer;margin-bottom:-1px;display:inline-flex;gap:8px;align-items:center}
 .tab:hover{color:var(--g)}.tab[aria-selected="true"]{color:var(--g);border-bottom-color:var(--gd)}
-.tab small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;background:rgba(200,146,10,.18);color:var(--gdt);padding:3px 7px;border-radius:999px}
+.tab small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;background:rgba(200,146,10,.18);color:#6f5006;/* contrast: was --gdt #8a6508 = 3.9:1 on this pill; #6f5006 = 5.5:1 */padding:3px 7px;border-radius:999px}
 .tab:focus-visible{outline:2px solid var(--gd);outline-offset:-2px;border-radius:6px}
 .pn{display:grid;grid-template-columns:1fr 1.1fr;gap:64px;align-items:start}.pn[hidden]{display:none}
 .pnSoon{grid-template-columns:1fr;max-width:640px}

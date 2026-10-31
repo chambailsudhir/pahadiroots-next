@@ -1,5 +1,7 @@
-'use client'
-
+// PERF FIX (audit C-5): this switcher used to be 'use client', which pulled FooterA, FooterB and FooterC (hundreds of
+// lines, including the two that are pure markup) into the client JS bundle for no reason — it holds no state and
+// uses no browser API. As a server component only the chosen variant is rendered, and only FooterA (which has its
+// own 'use client' for the newsletter form) ships JS.
 import type { SiteSettings } from '@/types'
 import FooterA from './FooterA'
 import FooterB from './FooterB'

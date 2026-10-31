@@ -1,4 +1,5 @@
 import type { SiteSettings } from '@/types'
+import TickerPause from './TickerPause'
 
 interface Props { settings: SiteSettings }
 
@@ -21,12 +22,15 @@ export default function TickerBar({ settings }: Props) {
   const txt = settings.ticker_text_color || '#1a1a1a'
 
   return (
-    <div className="ticker-wrap" style={{ background: bg }}>
+    <div className="ticker-wrap" style={{ background: bg, color: txt }}>
       <div className="ticker-track">
         {doubled.map((item, idx) => (
-          <span key={idx} className="ticker-item" style={{ color: txt }}>{item}</span>
+          // The second copy only exists to make the loop seamless: hide it from screen readers (they used to
+          // read every announcement twice) and, via CSS, from the static reduced-motion layout.
+          <span key={idx} className="ticker-item" style={{ color: txt }} aria-hidden={idx >= items.length ? true : undefined}>{item}</span>
         ))}
       </div>
+      <TickerPause />
     </div>
   )
 }

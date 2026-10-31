@@ -258,7 +258,7 @@ export default function HeroBanner({ images, settings }: Props) {
           )
           const srOnlyStyle = { position: 'absolute' as const, width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden' as const, clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' as const, border: 0 }
           return (
-          <div key={i} aria-hidden={!isVisible} className={`hhero-slide${hasOverlayContent ? ' hhero-slide-ov' : ''}${isVisible ? ' hhero-slide-on' : ''}`} style={{
+          <div key={i} aria-hidden={!isVisible} {...(!isVisible ? { inert: true } : {})} className={`hhero-slide${hasOverlayContent ? ' hhero-slide-ov' : ''}${isVisible ? ' hhero-slide-on' : ''}`} style={{
             position: 'absolute', inset: 0,
             opacity: isVisible ? 1 : 0,
             transition: 'opacity 0.9s cubic-bezier(0.4,0,0.2,1)',
@@ -355,12 +355,14 @@ export default function HeroBanner({ images, settings }: Props) {
                   <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                     className="hhero-baked-img"
                     onLoad={e => handleImgLoad(i, e)}
-                    style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }} priority={i === 0} />
+                    style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }}
+                    {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const } : {})} />
                 </div>
               ) : (
                 <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                   onLoad={e => handleImgLoad(i, e)}
-                  style={{ objectFit: 'cover', objectPosition: 'center 30%' }} priority={i === 0} />
+                  style={{ objectFit: 'cover', objectPosition: 'center 30%' }}
+                  {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const } : {})} />
               )
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
@@ -452,9 +454,9 @@ export default function HeroBanner({ images, settings }: Props) {
 
         {/* Pause / play the auto-advance (WCAG 2.2.2). Only shown when there is something to pause. */}
         {total > 1 && (
-          <button type="button" onClick={() => setUserPaused(p => !p)}
+          <button type="button" onClick={() => setUserPaused(p => !p)} className="hhero-pause"
             aria-label={userPaused ? 'Play slideshow' : 'Pause slideshow'} aria-pressed={userPaused}
-            style={{ position:'absolute', left:20, bottom:66, zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:44, height:44, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            style={{ position:'absolute', zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:44, height:44, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             {userPaused ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4" /></svg>
             ) : (
@@ -467,8 +469,8 @@ export default function HeroBanner({ images, settings }: Props) {
             video, and only rendered once here (not per-slide) since only
             one video ever plays at a time. */}
         {slides && slides[current]?.video && (
-          <button onClick={() => setIsMuted(m => !m)} aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-            style={{ position:'absolute', right:20, bottom:66, zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:40, height:40, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,.4)' }}>
+          <button onClick={() => setIsMuted(m => !m)} aria-label={isMuted ? 'Unmute video' : 'Mute video'} className="hhero-mute"
+            style={{ position:'absolute', zIndex:20, background:'rgba(0,0,0,.35)', backdropFilter:'blur(10px)', border:'1.5px solid rgba(255,255,255,.4)', color:'#fff', width:40, height:40, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 12px rgba(0,0,0,.4)' }}>
             {isMuted ? (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -487,10 +489,15 @@ export default function HeroBanner({ images, settings }: Props) {
 
         {/* Dots */}
         {total > 1 && (
-          <div style={{ position:'absolute', bottom:20, left:'50%', transform:'translateX(-50%)', display:'flex', gap:8, zIndex:10 }}>
+          // BUG FIX (audit HOME-008, WCAG 2.5.8 Target Size): the slide dots were bare 8x8px buttons — too small to tap
+          // reliably. Each button is now a 24px-tall hit area (40px wide for the active pill, 24px for the others) that
+          // draws the same visible dot/pill inside it, so the look is unchanged but every dot is easy to hit.
+          <div style={{ position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)', display:'flex', gap:0, zIndex:10 }}>
             {Array.from({ length: total }).map((_, i) => (
-              <button key={i} onClick={() => setCurrent(i)} aria-label={`Slide ${i+1}`}
-                style={{ height:8, borderRadius: i===current ? 4 : '50%', width: i===current ? 24 : 8, background: i===current ? '#fff' : 'rgba(255,255,255,.35)', border:'none', cursor:'pointer', transition:'all .3s', padding:0 }} />
+              <button key={i} type="button" onClick={() => setCurrent(i)} aria-label={`Slide ${i+1}`} aria-current={i === current ? 'true' : undefined}
+                style={{ width: i===current ? 40 : 24, height:24, display:'flex', alignItems:'center', justifyContent:'center', background:'none', border:'none', padding:0, cursor:'pointer' }}>
+                <span aria-hidden="true" style={{ display:'block', height:8, borderRadius: i===current ? 4 : '50%', width: i===current ? 24 : 8, background: i===current ? '#fff' : 'rgba(255,255,255,.35)', transition:'all .3s' }} />
+              </button>
             ))}
           </div>
         )}
@@ -628,6 +635,18 @@ export default function HeroBanner({ images, settings }: Props) {
            (>768px) keeps the original 46px arrows exactly as before —
            this rule only fires below the same 768px breakpoint already
            used for the rest of the mobile hero layout. */
+        /* BUG FIX (audit HOME-004): the pause / mute buttons were inline-positioned
+           at bottom:66px on EVERY viewport. On phones and tablets the CTA row sits in
+           that same band (content padding-bottom 52px + a 45px-tall button), so the 44px
+           pause button covered the first letters of the primary CTA (measured at 320, 375,
+           412 and 768px). Desktop keeps the original spot; at <=768px both controls drop
+           into the dots row (below the CTA) and the content area reserves room for them. */
+        .hhero-pause{ left: 20px; bottom: 66px; }
+        .hhero-mute{ right: 20px; bottom: 66px; }
+        @media(max-width:768px){
+          .hhero-pause{ left: 12px; bottom: 6px; }
+          .hhero-mute{ right: 12px; bottom: 6px; }
+        }
         @media(max-width:768px){
           .hhero-arrow {
             display: none !important;
@@ -675,7 +694,7 @@ export default function HeroBanner({ images, settings }: Props) {
             inset: auto !important;
             margin-top: -34px;
             align-items: flex-start !important;
-            padding: 0 0 52px;
+            padding: 0 0 64px;
           }
           .hhero-layout-stack .hhero-slide-ov .hhero-h{
             font-size: clamp(25px, 7.4vw, 30px) !important;
@@ -709,7 +728,7 @@ export default function HeroBanner({ images, settings }: Props) {
           .hhero-layout-full .hhero-slide-ov .hhero-content{ align-items: stretch !important; }
           .hhero-layout-full .hhero-slide-ov .hslide-content-inner{
             height: 100%; max-width: none !important;
-            padding: 26px 22px 46px !important;
+            padding: 26px 22px 62px !important;
           }
           .hhero-layout-full .hhero-slide-ov .hhero-h{
             font-size: clamp(27px, 8vw, 32px) !important;

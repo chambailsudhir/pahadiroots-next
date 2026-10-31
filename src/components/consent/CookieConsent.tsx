@@ -108,7 +108,7 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
 
   const required = isConsentRequired()
   const wrap: React.CSSProperties = {
-    position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 100000,
+    position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 2147483646 /* above the chat widget (2147483645) so its FAB can never cover the Accept/Reject buttons */,
     padding: '12px 12px calc(12px + env(safe-area-inset-bottom, 0px))', pointerEvents: 'none',
   }
   const card: React.CSSProperties = {

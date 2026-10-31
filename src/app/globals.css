@@ -116,6 +116,23 @@ button { cursor: pointer; font-family: inherit; }
   width: max-content;
 }
 .ticker-track:hover { animation-play-state: paused; }
+.ticker-wrap { position: relative; }
+.ticker-wrap.ticker-paused .ticker-track { animation-play-state: paused; }
+/* Pause / resume control (WCAG 2.2.2). Sits over the right edge with the bar's own colour behind it. */
+.ticker-pause {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; padding: 0; border: 1px solid currentColor; border-radius: 50%;
+  background: inherit; color: inherit; font-size: 10px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.ticker-pause:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+/* BUG FIX (audit HOME-010): the ticker kept scrolling for visitors who asked the OS for reduced motion.
+   Show the announcements as a static, centred, wrapping row instead (and drop the duplicated copy + the pause button). */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track { animation: none; width: auto; flex-wrap: wrap; justify-content: center; white-space: normal; }
+  .ticker-item[aria-hidden="true"] { display: none; }
+  .ticker-pause { display: none; }
+}
 .ticker-item {
   padding: 0 32px;
   font-size: 12px;
@@ -181,7 +198,7 @@ nav.main-nav.shadow { box-shadow: 0 2px 16px rgba(0,0,0,.08); }
 /* ── SECTIONS ── */
 section.sec { padding: 52px 40px; }
 .ct { text-align: center; margin-bottom: 28px; }
-.chip { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; color: var(--gd); border: 1px solid rgba(200,146,10,.3); padding: 5px 14px; border-radius: 20px; margin-bottom: 10px; }
+.chip { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; color: var(--pm-gold-text, #8a6508); /* BUG FIX (audit): was var(--gd) #c8920a = 2.44:1 on cream; #8a6508 = 5.3:1 */ border: 1px solid rgba(200,146,10,.3); padding: 5px 14px; border-radius: 20px; margin-bottom: 10px; }
 .sh2 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: clamp(22px,3.5vw,40px); color: var(--g); font-weight: 700; margin-bottom: 8px; }
 .ssub { font-size: 14px; color: var(--tx2); max-width: 560px; margin: 0 auto; }
 
@@ -201,10 +218,10 @@ section.sec { padding: 52px 40px; }
    - Mobile (<700px): 2 columns x 2 rows = first 4 cards (5th/6th hidden so
      the grid never leaves a third row or an orphan card).
    Anyone who wants more uses the "Show All Products" button. */
-.pgrid.bsGrid { grid-template-columns: repeat(2,1fr); }
+.pgrid.bsGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .pgrid.bsGrid > *:nth-child(n+5) { display: none; }
 @media (min-width:700px) {
-  .pgrid.bsGrid { grid-template-columns: repeat(3,1fr); max-width: 1120px; }
+  .pgrid.bsGrid { grid-template-columns: repeat(3,minmax(0,1fr)); max-width: 1120px; }
   .pgrid.bsGrid > *:nth-child(n+5) { display: block; }
   .pgrid.bsGrid > *:nth-child(n+7) { display: none; }
 }
@@ -319,8 +336,9 @@ section.sec { padding: 52px 40px; }
 .pbody { padding: 16px 16px 18px; display: flex; flex-direction: column; flex: 1; }
 .pregion { font-size: 10.5px; color: var(--gd); font-weight: 700; letter-spacing: .5px; margin-bottom: 4px; }
 .prow { display: flex; align-items: baseline; gap: 6px; }
-@media(max-width:900px) { .pgrid { grid-template-columns: repeat(2,1fr); gap: 16px; } }
-@media(max-width:600px) { .pgrid { grid-template-columns: repeat(2,1fr); gap: 10px; } }
+@media(max-width:900px) { .pgrid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; } }
+/* BUG FIX (audit): plain `1fr` has an implicit min of auto, so at 320px each card kept its ~160px min-content width and the grid overflowed by 5px (page scrolled sideways). minmax(0,1fr) lets the columns shrink. */
+@media(max-width:600px) { .pgrid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; } }
 
 /* ── FILTER BAR ── */
 .filter-wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; max-width: 1200px; margin: 0 auto 22px; }
@@ -344,6 +362,10 @@ section.sec { padding: 52px 40px; }
 .promise-label { font-size: 11px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: var(--gd); margin-bottom: 4px; }
 .promise-title { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: clamp(21px,2vw,27px); line-height: 1.18; font-weight: 700; color: var(--g); margin: 0 0 10px; }
 .promise-body { font-size: 14px; line-height: 1.65; color: var(--tx2); margin: 0; max-width: 300px; }
+.promise-link{ display:inline-block; margin-top:12px; font-size:13px; font-weight:800; color:#8a6508; text-decoration:underline; text-underline-offset:3px; }
+.promise-link:hover{ color:#1a3a1e; }
+.promise-link:focus-visible{ outline:3px solid #8a6508; outline-offset:3px; border-radius:2px; }
+
 @media(max-width:960px) {
   .promise-grid { grid-template-columns: repeat(2,1fr); row-gap: 36px; }
   .promise-card:nth-child(odd) { border-left: 0; }
@@ -494,7 +516,7 @@ footer.site-footer {
 }
 .mbn-item {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; height: 56px; background: none; border: none; color: #7a7a7a;
+  gap: 3px; height: 56px; background: none; border: none; color: #6b6b6b; /* contrast: was #7a7a7a = 4.29:1 at 10.5px */
   font-size: 10.5px; font-weight: 700; font-family: inherit; text-decoration: none;
   cursor: pointer; position: relative; transition: color .15s;
 }
@@ -600,6 +622,9 @@ footer.site-footer {
   font-family: inherit !important; white-space: nowrap !important; letter-spacing: 0 !important;
   transition: color .2s, background .2s !important; border-radius: 0 !important;
 }
+/* BUG FIX (audit HOME-007): `outline:none !important` above beat the global *:focus-visible ring, so keyboard users
+   could not see where focus was on the Shop menu. Restore a visible ring for keyboard focus only. */
+.mega-trigger:focus-visible { outline: 2px solid #1a6b20 !important; outline-offset: -2px !important; }
 .mega-trigger:hover, .mega-parent.open .mega-trigger { color: #1a3a1e !important; background: rgba(26,58,30,.04) !important; }
 .mega-trigger .arr { font-size: 10px !important; transition: transform .25s ease !important; display: inline-block !important; margin-left: 2px !important; line-height: 1 !important; }
 .mega-parent.open .mega-trigger .arr { transform: rotate(180deg) !important; }
@@ -848,7 +873,7 @@ ul.mega-list.mega-list-2col {
         .old-nib:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-acct-av{
           width:28px;height:28px;border-radius:50%;
-          background:#c8920a;color:#fff;font-size:12px;font-weight:900;
+          background:#c8920a;color:#1a1a1a;font-size:12px;font-weight:900;
           display:flex;align-items:center;justify-content:center;font-family:var(--font-playfair),'Playfair Display',serif;
         }
         .old-acct-dot{
@@ -869,7 +894,7 @@ ul.mega-list.mega-list-2col {
         .old-dark-btn:hover{background:rgba(26,58,30,.06);color:#1a3a1e}
         .old-cart-btn{
           display:flex;align-items:center;gap:7px;
-          background:#c8920a;color:#fff;border:none;border-radius:24px;
+          background:#c8920a;color:#1a1a1a;border:none;border-radius:24px;
           padding:8px 16px;font-size:13px;font-weight:800;cursor:pointer;
           font-family:inherit;transition:background .2s;white-space:nowrap;
           margin-left:4px;
@@ -1159,6 +1184,8 @@ html.premium ::selection { background: #d4af37; color: #0b1710; }
 html.premium .sh2, html.premium .pname, html.premium .pnow,
 html.premium .promise-title, html.premium .promise-h2, html.premium .ran { color: var(--pm-heading); }
 html.premium .ssub, html.premium .promise-body, html.premium .rtxt { color: var(--tx2); }
+html.premium .promise-link { color: #e3c25f; }
+html.premium .promise-link:hover { color: #fff; }
 html.premium .chip { color: #e3c25f; border-color: rgba(227,194,95,.45); }
 
 /* surfaces */

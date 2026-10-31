@@ -1,6 +1,7 @@
 'use client'
 
 import { ga4AddToWishlist } from '@/lib/analytics/ga4'
+import { reportCardAddToCart } from '@/lib/analytics/cartEvents'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -146,6 +147,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
       isHimalayan:  !!(product.state_id),
       isBestseller: product.badges_bestseller ?? false,
     })
+    reportCardAddToCart({ id: product.id, name: product.name, price, variantId: baseVariant?.id }, 'product_card')
     openCart()
   }
 
@@ -346,8 +348,11 @@ export default function ProductCard({ product, showWishlist = true, priority = f
               tricks to fight anchor-nesting behaviour. */}
           <div className="pcard-actions">
             {inStock ? (
-              <button className="atc pcard-atc-full" onClick={handleAddToCart} style={{ position: 'relative', zIndex: 3 }}>
-                🛒 Add to Cart
+              // BUG FIX (audit HOME-019): every card's button was just "Add to Cart" — a screen-reader user tabbing a
+              // product grid heard the same name N times with no way to tell which product it adds. The accessible
+              // name now starts with the visible text (WCAG 2.5.3) and names the product; the emoji is decorative.
+              <button className="atc pcard-atc-full" onClick={handleAddToCart} aria-label={`Add to cart: ${product.name}`} style={{ position: 'relative', zIndex: 3 }}>
+                <span aria-hidden="true">🛒</span> Add to Cart
               </button>
             ) : notifyState === 'asking' ? (
               // BUG FIX (P1): guest email capture for Notify Me — this

@@ -10,8 +10,13 @@ import { getRegionMeta, regionProductPills, type RegionMeta } from '@/lib/region
 import styles from './ExploreByRegion.module.css'
 
 // Section-scoped faces that match the approved design (serif headings + clean geometric sans).
-const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], weight: ['400', '500', '600', '700'], style: ['normal', 'italic'], display: 'swap' })
-const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' })
+// PERF FIX (audit HOME-012): both faces are variable fonts. Listing `weight: [...]` made next/font ship one static
+// file PER weight (8 + 4 files); with no `weight` it serves a single variable file per style (2 + 1) and every
+// weight 400-700 still renders identically.
+// `preload: false`: this section is far below the fold, so its faces should not be preloaded in <head> where they
+// compete with the hero image (LCP) for the first bytes of bandwidth. They are fetched when the section is styled.
+const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], style: ['normal', 'italic'], display: 'swap', preload: false })
+const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], display: 'swap', preload: false })
 
 export interface RichState {
   id: string
@@ -131,8 +136,11 @@ export default function ExploreByRegion({ states }: Props) {
             </div>
 
             <div className={styles.story} style={{ background: meta.homePanelBg || meta.panelBg || '#15281c' }}>
-              <img className={styles.storyMountain} src="/explore-region-art/story-mountain.png" alt="" aria-hidden="true" />
-              <img className={styles.storyPine} src="/explore-region-art/story-pine.png" alt="" aria-hidden="true" />
+              {/* Decorative, absolutely positioned engravings far below the fold: lazy + decoded off-thread (React was preloading them in <head> at page start). Natural width/height are declared; CSS sets the displayed size. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className={styles.storyMountain} src="/explore-region-art/story-mountain.png" alt="" aria-hidden="true" width={175} height={90} loading="lazy" decoding="async" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className={styles.storyPine} src="/explore-region-art/story-pine.png" alt="" aria-hidden="true" width={147} height={170} loading="lazy" decoding="async" />
 
               <div className={styles.storyInner}>
                 <div className={styles.storyKicker}>{activeState.name}<span /></div>
@@ -157,7 +165,8 @@ export default function ExploreByRegion({ states }: Props) {
 
           {/* PRODUCT ROW: editorial copy + four equal cards, engraving anchored bottom left. */}
           <div className={styles.productsRow}>
-            <img className={styles.productMountains} src="/explore-region-art/product-mountains.png" alt="" aria-hidden="true" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={styles.productMountains} src="/explore-region-art/product-mountains.png" alt="" aria-hidden="true" width={345} height={113} loading="lazy" decoding="async" />
             <div className={styles.productsCopy}>
               <div className={styles.eyebrow}><b>F</b>rom This Region <span /></div>
               <h3>Flavours<br />of {displayRegion}</h3>

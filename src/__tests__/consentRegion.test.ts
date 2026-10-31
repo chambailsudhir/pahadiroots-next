@@ -33,13 +33,19 @@ describe('country classification', () => {
   })
 })
 
+// The bootstrap now injects the tag after window load + idle (requestIdleCallback, or a 1ms timeout where unavailable).
+const flushDeferredTag = () => new Promise<void>(r => setTimeout(r, 30))
+
 describe('bootstrap by region', () => {
-  it('INDIA (region mode): no banner needed, analytics ON by default, tag loads, consent granted', () => {
+  it('INDIA (region mode): no banner needed, analytics ON by default, tag loads, consent granted', async () => {
     run('region', 'row')
     expect(w.__hvConsentRequired).toBe(false); expect(isConsentRequired()).toBe(false)
     expect(hasAnalyticsConsent()).toBe(true)
     const calls = w.dataLayer.map((a: IArguments) => Array.from(a).slice(0, 2).join(':'))
     expect(calls.slice(0, 2)).toEqual(['consent:default', 'consent:update'])
+    // PERF: the 180KB gtag.js download is deferred until after load + idle, not started during HTML parse.
+    expect(document.head.querySelectorAll('script').length).toBe(0)
+    await flushDeferredTag()
     expect(document.head.querySelector('script')!.src).toContain('gtag/js?id=G-ABC123XYZ')
   })
   it('EU/UK (region mode): consent required, analytics OFF, tag NOT loaded', () => {
@@ -51,10 +57,10 @@ describe('bootstrap by region', () => {
     run('region', undefined)
     expect(w.__hvConsentRequired).toBe(true); expect(document.head.querySelectorAll('script').length).toBe(0)
   })
-  it("'always' asks even in India; 'off' never asks even in the EU", () => {
-    run('always', 'row'); expect(w.__hvConsentRequired).toBe(true); expect(document.head.querySelectorAll('script').length).toBe(0)
+  it("'always' asks even in India; 'off' never asks even in the EU", async () => {
+    run('always', 'row'); expect(w.__hvConsentRequired).toBe(true); await flushDeferredTag(); expect(document.head.querySelectorAll('script').length).toBe(0)
     delete w.dataLayer; delete w.__hvTagLoaded
-    run('off', 'eu'); expect(w.__hvConsentRequired).toBe(false); expect(document.head.querySelectorAll('script').length).toBe(1)
+    run('off', 'eu'); expect(w.__hvConsentRequired).toBe(false); await flushDeferredTag(); expect(document.head.querySelectorAll('script').length).toBe(1)
   })
   it('an explicit opt-out is respected even where consent is not required (India visitor unticks analytics)', () => {
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ v: CONSENT_VERSION, ts: Date.now(), analytics: false }))

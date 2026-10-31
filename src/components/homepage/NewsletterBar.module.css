@@ -1,0 +1,47 @@
+/* Homepage email-capture strip. Self-contained: the old global .nl-sec/.nlf/.nli rules were removed from
+   globals.css, which is why the previous component would have rendered unstyled. */
+.sec{
+  background:#0d2410; color:#fff; text-align:center;
+  padding:48px 24px 52px;
+}
+.inner{ max-width:560px; margin:0 auto; }
+.chip{
+  display:inline-block; border:1.5px solid rgba(224,182,74,.55); color:#e0b64a; border-radius:20px;
+  padding:5px 16px; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:12px;
+}
+.h2{
+  font-family:var(--font-playfair,"Playfair Display",Georgia,serif);
+  font-size:clamp(24px,4vw,34px); font-weight:700; line-height:1.2; margin:0 0 10px; color:#fff;
+}
+.sub{ margin:0 0 24px; color:rgba(255,255,255,.78); font-size:15px; line-height:1.6; }
+.form{ display:flex; gap:10px; justify-content:center; align-items:stretch; flex-wrap:wrap; }
+.srOnly{
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden;
+  clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+.input{
+  flex:1 1 240px; min-width:0; max-width:340px; box-sizing:border-box;
+  padding:13px 16px; font-size:16px; /* 16px stops iOS Safari zooming the page on focus */
+  border-radius:12px; border:1.5px solid rgba(255,255,255,.35); background:rgba(255,255,255,.1); color:#fff;
+  font-family:inherit;
+}
+.input::placeholder{ color:rgba(255,255,255,.6); }
+.input:focus-visible,.btn:focus-visible{ outline:3px solid #e0b64a; outline-offset:2px; }
+.btn{
+  background:#e0b64a; color:#0d2410; font-weight:800; font-size:14px; border:none; border-radius:12px;
+  padding:13px 24px; cursor:pointer; font-family:inherit; white-space:nowrap; min-height:48px;
+  transition:background .2s,opacity .2s;
+}
+.btn:hover{ background:#eccb73; }
+.btn:disabled{ opacity:.7; cursor:progress; }
+.done{
+  background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25); border-radius:14px;
+  padding:16px 24px; color:#fff; font-weight:700; font-size:15px; line-height:1.5;
+}
+.msg{ margin:10px 0 0; font-size:13px; line-height:1.5; min-height:1.2em; }
+.err{ color:#fecaca; }
+.fine{ margin:14px 0 0; color:rgba(255,255,255,.7); font-size:12px; }
+@media (max-width:520px){
+  .sec{ padding:40px 16px 44px; }
+  .input,.btn{ flex:1 1 100%; max-width:none; }
+}

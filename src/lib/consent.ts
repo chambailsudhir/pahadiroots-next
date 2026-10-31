@@ -191,5 +191,6 @@ export function consentBootstrapScript(tagId: string, mode: ConsentMode | string
     + `if(on){gtag('consent','update',${granted});if(ID){w.__hvTagLoaded=true;var s=document.createElement('script');s.async=true;`
     + `if(/^GTM-/i.test(ID)){w.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});s.src='https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(ID)}`
     + `else{s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(ID);gtag('js',new Date());gtag('config',ID)}`
-    + `document.head.appendChild(s)}}}catch(e){}})();`
+    + `var inject=function(){document.head.appendChild(s)};var later=function(){if(w.requestIdleCallback){w.requestIdleCallback(inject,{timeout:3000})}else{setTimeout(inject,1)}};`
+    + `if(document.readyState==='complete'){later()}else{w.addEventListener('load',later)}}}}catch(e){}})();`
 }

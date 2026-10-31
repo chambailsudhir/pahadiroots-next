@@ -6,6 +6,7 @@ import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { getBaseVariant } from '@/lib/normalizeProduct'
+import { reportCardAddToCart } from '@/lib/analytics/cartEvents'
 import type { Product } from '@/types'
 import styles from './ExploreByRegion.module.css'
 
@@ -45,6 +46,7 @@ export default function RegionProductCard({ product, priority = false }: { produ
       isHimalayan:  !!product.state_id,
       isBestseller: product.badges_bestseller ?? false,
     })
+    reportCardAddToCart({ id: product.id, name: product.name, price, variantId: baseVariant?.id }, 'region_card')
     openCart()
   }
 

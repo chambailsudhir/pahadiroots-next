@@ -34,7 +34,7 @@
 .header h2 { font-size: clamp(34px, 3.23vw, 42.3px); line-height: 1.12; color: var(--ink); }
 .header p { max-width: 520px; margin: 9px 0 0; color: #2f3832; font: 400 13.4px/1.58 var(--sans); }
 .eyebrow { color: #141d17; font: 600 11.7px/1.2 var(--sans); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 6px; white-space: nowrap; }
-.eyebrow b { font-weight: 500; color: #b98a2e; }
+.eyebrow b { font-weight: 500; color: #8a6508; } /* was #b98a2e = 2.8:1 on cream; #8a6508 = 4.8:1 */
 .eyebrow span { display: inline-block; width: 42px; height: 1px; margin-left: 10px; vertical-align: middle; background: #c89427; }
 .viewAll {
   flex: 0 0 auto;
@@ -78,7 +78,7 @@
 .regionTab + .regionTab::before { content: ""; position: absolute; left: 0; top: 50%; height: 14px; margin-top: -8px; border-left: 1px solid rgba(23,38,27,.4); }
 .regionTab span { display: inline-block; padding-bottom: 8px; border-bottom: 2px solid transparent; }
 .regionTab:focus-visible { outline: 2px solid #c89427; outline-offset: 2px; }
-.regionTab.active { color: #b98a2e; }
+.regionTab.active { color: #8a6508; } /* contrast: was 2.8:1 */
 .regionTab.active span { border-bottom-color: #c89427; }
 
 /* ───────── hero: photo + overlapping green panel ───────── */
@@ -139,7 +139,7 @@
 .cardFoot { margin-top: auto; padding-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cardPrice { display: flex; align-items: baseline; gap: 8px; }
 .cardPrice strong { color: #141f17; font: 700 13.6px/1 var(--sans); }
-.cardPrice span { color: #77807a; font: 400 9.5px/1 var(--sans); }
+.cardPrice span { color: #5c655f; /* was 4.08:1 at 9.5px; now 6:1 */ font: 400 9.5px/1 var(--sans); }
 .cardCart { position: relative; z-index: 3; display: grid; place-items: center; width: 37px; height: 28px; border: 0; border-radius: 7px; background: #12301f; color: #fff; cursor: pointer; transition: background .2s ease; }
 .cardCart:hover:not(:disabled) { background: #1b472d; }
 .cardCart:focus-visible { outline: 2px solid #c89427; outline-offset: 2px; }

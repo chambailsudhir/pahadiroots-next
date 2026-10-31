@@ -1,14 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
+import styles from './NewsletterBar.module.css'
 
+type Status = 'idle' | 'loading' | 'done' | 'error' | 'invalid' | 'throttled'
+
+// Homepage email capture. Posts to the real `subscribe` action (api/v1/actions), which stores the subscriber,
+// creates a single-use 5%-off first-order coupon (30 days) and emails the code — so the promise below is
+// fulfilled by the backend, not just advertised.
+//
+// BUG FIX (audit HOME-002): this component existed but was never mounted, its admin toggle
+// (show_newsletter_bar) had no consumer, and the global .nl-* CSS it depended on had been deleted. It is now
+// self-styled (CSS module), labelled for screen readers, announces its status via aria-live, and is mounted by
+// app/page.tsx behind that same toggle.
 export default function NewsletterBar() {
   const [email, setEmail]   = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [status, setStatus] = useState<Status>('idle')
+  const fieldId = useId()
+  const msgId   = useId()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.includes('@')) return
+    if (status === 'loading') return
+    if (!email.includes('@')) { setStatus('invalid'); return }
     setStatus('loading')
     try {
       const res = await fetch('/api/v1/actions', {
@@ -16,52 +30,51 @@ export default function NewsletterBar() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', email }),
       })
-      setStatus(res.ok ? 'done' : 'error')
+      setStatus(res.ok ? 'done' : res.status === 429 ? 'throttled' : 'error')
     } catch { setStatus('error') }
   }
 
+  const message =
+    status === 'invalid'   ? 'Please enter a valid email address.' :
+    status === 'throttled' ? 'Too many attempts. Please wait a minute and try again.' :
+    status === 'error'     ? 'Something went wrong. Please try again.' : ''
+
   return (
-    <section className="nl-sec">
-      <div className="chip" style={{ borderColor: 'rgba(200,146,10,.4)', color: 'var(--gd3)' }}>✉️ Join The Community</div>
-      <h2 className="sh2" style={{ color: '#fff', marginTop: 8 }}>Get 5% Off Your First Order</h2>
-      <p className="ssub" style={{ color: 'rgba(255,255,255,.65)', marginBottom: 24 }}>
-        Mountain stories, seasonal harvests & exclusive offers. No spam, ever.
-      </p>
+    <section className={styles.sec} aria-labelledby="nl-heading">
+      <div className={styles.inner}>
+        <div className={styles.chip}><span aria-hidden="true">✉️ </span>Join The Community</div>
+        <h2 id="nl-heading" className={styles.h2}>Get 5% Off Your First Order</h2>
+        <p className={styles.sub}>Mountain stories, seasonal harvests &amp; exclusive offers. No spam, ever.</p>
 
-      {status === 'done' ? (
-        <div style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 14, padding: '16px 28px', color: '#fff', fontWeight: 700, fontSize: 15 }}>
-          🎉 Thank you! Check your inbox for your discount code.
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="nlf">
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="Your email address"
-            autoComplete="email"
-            required
-            className="nli"
-          />
-          <button
-            type="submit"
-            disabled={status === 'loading'}
-            style={{
-              background: 'var(--gd)', color: '#1a0800', fontWeight: 800, fontSize: 14,
-              border: 'none', borderRadius: 12, padding: '13px 24px', cursor: 'pointer',
-              fontFamily: 'var(--font-lato), Lato, sans-serif', transition: 'background .2s', whiteSpace: 'nowrap',
-              opacity: status === 'loading' ? .7 : 1,
-            }}
-          >
-            {status === 'loading' ? '…' : 'Subscribe →'}
-          </button>
-        </form>
-      )}
+        {status === 'done' ? (
+          <div className={styles.done} role="status">
+            <span aria-hidden="true">🎉 </span>Thank you! Check your inbox for your discount code.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className={styles.form} noValidate aria-describedby={msgId}>
+            <label htmlFor={fieldId} className={styles.srOnly}>Email address</label>
+            <input
+              id={fieldId}
+              type="email"
+              value={email}
+              onChange={e => { setEmail(e.target.value); if (status === 'invalid' || status === 'error' || status === 'throttled') setStatus('idle') }}
+              placeholder="Your email address"
+              autoComplete="email"
+              inputMode="email"
+              required
+              aria-invalid={status === 'invalid' || undefined}
+              className={styles.input}
+            />
+            <button type="submit" disabled={status === 'loading'} aria-busy={status === 'loading'} className={styles.btn}>
+              {status === 'loading' ? '…' : 'Subscribe →'}
+            </button>
+          </form>
+        )}
 
-      {status === 'error' && (
-        <p style={{ color: '#fca5a5', fontSize: 12, marginTop: 8 }}>Something went wrong. Please try again.</p>
-      )}
-      <p style={{ color: 'rgba(255,255,255,.3)', fontSize: 11, marginTop: 12 }}>No spam. Unsubscribe anytime.</p>
+        {/* Always rendered so assistive tech reliably announces changes. */}
+        <p id={msgId} role="status" aria-live="polite" className={`${styles.msg} ${message ? styles.err : ''}`}>{message}</p>
+        <p className={styles.fine}>No spam. Unsubscribe anytime.</p>
+      </div>
     </section>
   )
 }

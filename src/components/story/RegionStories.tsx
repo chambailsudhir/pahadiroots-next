@@ -81,7 +81,7 @@ export default function RegionStories({ regionNames = [] }: { regionNames?: stri
     <section id="shop-by-region" className={`${s.root} ${s.rx}`} aria-labelledby="rs-h">
       <div className={s.rxIn}>
         <Reveal as="figure" className={s.rangeFig}>
-          <div className={s.rangeScroll}>
+          <div className={s.rangeScroll} tabIndex={0} role="region" aria-label="Himalayan range map (scrollable)">
             {/* the track is the full-width image box (min-width 1400px on mobile),
                so the snap anchors are positioned as a % of the IMAGE, not the phone screen */}
             <div className={s.rangeTrack}>
