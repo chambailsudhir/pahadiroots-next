@@ -13,7 +13,6 @@ import WhySection from '@/components/homepage/WhySection'
 import ReviewsPreview from '@/components/homepage/ReviewsPreview'
 import NewArrivals from '@/components/homepage/NewArrivals'
 import FeaturedBanner from '@/components/homepage/FeaturedBanner'
-import NewsletterBar from '@/components/homepage/NewsletterBar'
 import BrandStory from '@/components/story/BrandStory'
 import WhereTheyBegin from '@/components/story/WhereTheyBegin'
 import RegionStories from '@/components/story/RegionStories'
@@ -170,8 +169,6 @@ export default async function HomePage() {
   const showBestSellers = isEnabled(settings.show_best_sellers)
   const showNewArrivals = isEnabled(settings.show_new_arrivals)
   const showReviews     = isEnabled(settings.show_reviews_section)
-  // Admin → Homepage Sections → "Newsletter bar" (show_newsletter_bar). Previously this toggle had no consumer.
-  const showNewsletter  = isEnabled(settings.show_newsletter_bar)
   // BUG FIX (companion to pahadi-admin's new "Explore by Region" toggle):
   // `show_state_stories` already existed as a declared settings key with a
   // 'true' default (src/types/index.ts, getSiteSettings.ts) but was never
@@ -205,7 +202,6 @@ export default async function HomePage() {
       {featuredSlug && <FeaturedBanner slug={featuredSlug} />}
       <WhySection settings={settings} />
       {showReviews && <ReviewsPreview />}
-      {showNewsletter && <NewsletterBar />}
     </>
   )
 }
