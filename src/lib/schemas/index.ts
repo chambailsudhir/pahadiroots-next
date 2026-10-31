@@ -126,13 +126,6 @@ export const newsletterSchema = z.object({
   name:  z.string().trim().max(100).optional(),
 })
 
-// ─── Subscribe Schema (alias used by cart/route.ts and other routes) ──────────
-export const subscribeSchema = z.object({
-  email: z.string().email().toLowerCase().trim(),
-  name:  z.string().trim().max(100).optional(),
-  source: z.string().trim().max(50).optional(),
-})
-
 // ─── Stock Notification Schema ──────────────────────────────────────────────
 // BUG FIX (P1, homepage audit): backs the "Notify Me" button on out-of-stock
 // products (ProductCard.tsx), which previously had no capture mechanism at

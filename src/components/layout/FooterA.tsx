@@ -1,9 +1,6 @@
-'use client'
-
 import { safeSocialUrl } from '@/lib/siteSettingsHelpers'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState } from 'react'
 import type { SiteSettings } from '@/types'
 import { quickSelects, type FooterCategory } from '@/lib/footerQuickSelects'
 
@@ -12,33 +9,6 @@ interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 export default function FooterA({ settings, categories }: Props) {
   // Quick Selects come from the admin categories (active, in admin order), not a hard-coded list.
   const quick = quickSelects(categories, settings as unknown as Record<string, string | undefined>)
-  const [email, setEmail] = useState('')
-  const [subDone, setSubDone] = useState(false)
-  const [subLoading, setSubLoading] = useState(false)
-  const [subError, setSubError] = useState(false)
-
-  async function handleSub(e: React.FormEvent) {
-    e.preventDefault()
-    if (!email.includes('@')) return
-    setSubLoading(true)
-    setSubError(false)
-    // BUG FIX (audit): the form used to show "check your inbox" even when the request failed (network error, 429, 500)
-    // because it set `subDone` unconditionally. It now only reports success when the server accepted the request.
-    let accepted = false
-    try {
-      const res = await fetch('/api/v1/actions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'subscribe', email }),
-      })
-      accepted = res.ok
-    } catch (e: unknown) {
-      // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — completely silent.
-      // Newsletter subscription failures were invisible to ops.
-      console.error('[Footer] newsletter subscribe failed:', e)
-    }
-    if (accepted) setSubDone(true); else setSubError(true)
-    setSubLoading(false)
-  }
 
   // BUG FIX (confirmed against the pahadi-admin repo directly): this was
   // reading instagram_url/facebook_url/youtube_url — but the admin panel's
@@ -65,43 +35,6 @@ export default function FooterA({ settings, categories }: Props) {
 
   return (
     <footer style={{ background: '#0f2a14', fontFamily: 'var(--font-lato), Lato, sans-serif' }}>
-
-      {/* ── Newsletter strip ─────────────────────────────── */}
-      <div style={{
-        background: 'linear-gradient(180deg,#0f2a14 0%,#1a3a1e 100%)',
-        borderTop: '2px solid #c8920a', borderBottom: '2px solid rgba(200,146,10,.2)',
-        boxShadow: '0 -6px 32px rgba(0,0,0,.18),inset 0 1px 0 rgba(200,146,10,.15)',
-        padding: '32px 40px 36px',
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
-          <div>
-            <h4 style={{ fontFamily: 'var(--font-playfair),"Playfair Display",serif', fontSize: '18px', fontWeight: 900, color: '#fff', marginBottom: '4px', margin: '0 0 4px' }}>
-              🌿 Join the Pahadi Family
-            </h4>
-            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,.55)', margin: 0 }}>
-              New arrivals &amp; Himalayan stories, straight to your inbox
-            </p>
-          </div>
-          {subDone ? (
-            <div style={{ color: '#c8920a', fontWeight: 700, fontSize: '14px' }}>✉️ Almost there — check your inbox and click the link to confirm. Your 5% off code follows right after.</div>
-          ) : (
-            <form onSubmit={handleSub} style={{ display: 'flex', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,.18)', minWidth: '300px' }}>
-              <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="Enter your email address" required autoComplete="email"
-                style={{ flex: 1, padding: '12px 16px', background: 'rgba(255,255,255,.07)', border: 'none', color: '#fff', fontSize: '13px', outline: 'none' }}
-              />
-              <button type="submit" aria-label="Subscribe to newsletter" disabled={subLoading} style={{
-                padding: '12px 20px', background: '#c8920a', color: '#1a0800',
-                fontWeight: 800, fontSize: '13px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}>Subscribe</button>
-            </form>
-          )}
-          {subError && !subDone && (
-            <div role="alert" style={{ color: '#fca5a5', fontSize: '12px', marginTop: '8px' }}>Something went wrong. Please try again in a moment.</div>
-          )}
-        </div>
-      </div>
 
       {/* ── Himachali Chamba Rumal frieze (dancer band) ──── */}
       <div style={{ background: '#1a0d2e', borderTop: '2px solid #c8920a', borderBottom: '2px solid #c8920a', lineHeight: 0, overflow: 'hidden' }}>
