@@ -1,4 +1,4 @@
-import { scrubProduct } from './privateFields'
+import { scrubProduct, PRIVATE_PRODUCT_FIELDS, PRIVATE_VARIANT_FIELDS, COST_LIKE_KEY } from './privateFields'
 import { variantDisplayMrp, type VariantRow, type ProductRow } from '@/lib/pricing/linePricing'
 import type { Product } from '@/types'
 
@@ -139,19 +139,30 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
  * This returns the same `Product` shape (so no type changes needed at call
  * sites) with just the unused heavy fields nulled out.
  */
-export function toCardProductData(p: Product): Product {
-  return {
-    ...scrubProduct(p),
-    short_description: null,
-    long_description: null,
-    tags: null,
-    ai_description: null,
-    ai_health_benefits: null,
-    ai_how_to_use: null,
-    ai_storage_tips: null,
-    ai_who_should_buy: null,
-    ai_generated_at: null,
+const CARD_UNUSED_FIELDS = [
+  'short_description', 'long_description', 'tags',
+  'ai_description', 'ai_health_benefits', 'ai_how_to_use', 'ai_storage_tips', 'ai_who_should_buy', 'ai_generated_at',
+] as const
+
+// Nulling a field still serialises its key into the page ("cost_price":null …), roughly 20-30 bytes each, on every
+// card. Cards never read these, so leave the keys out entirely. (Cost-like keys follow privateFields' own rule.)
+function dropKeys<T extends object>(row: T, keys: readonly string[]): T {
+  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) }
+  for (const k of Object.keys(out)) {
+    if ((keys.includes(k) || COST_LIKE_KEY.test(k)) && out[k] === null) delete out[k]
   }
+  return out as T
+}
+
+export function toCardProductData(p: Product): Product {
+  const scrubbed = scrubProduct(p) as Product & { product_variants?: unknown }
+  const base = { ...scrubbed } as Record<string, unknown>
+  for (const f of CARD_UNUSED_FIELDS) base[f] = null
+  const out = dropKeys(base, [...PRIVATE_PRODUCT_FIELDS, ...CARD_UNUSED_FIELDS]) as Record<string, unknown>
+  if (Array.isArray(out.product_variants)) {
+    out.product_variants = out.product_variants.map(v => dropKeys(v as object, PRIVATE_VARIANT_FIELDS))
+  }
+  return out as unknown as Product
 }
 
 /**

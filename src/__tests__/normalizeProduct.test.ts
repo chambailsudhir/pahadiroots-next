@@ -239,10 +239,11 @@ describe('cost_price never reaches client-bound product data', () => {
     expect(PRODUCT_SELECT).not.toMatch(/cost_price/)
   })
 
-  it('toCardProductData nulls cost_price (defence in depth for any caller)', async () => {
+  it('toCardProductData removes cost_price (defence in depth for any caller)', async () => {
     const { toCardProductData } = await import('@/lib/normalizeProduct')
     const out = toCardProductData({ id: 1, name: 'Honey', cost_price: 123.45 } as any)
-    expect(out.cost_price).toBeNull()
+    expect(out).not.toHaveProperty('cost_price')
+    expect(JSON.stringify(out)).not.toContain('123.45')
   })
 })
 

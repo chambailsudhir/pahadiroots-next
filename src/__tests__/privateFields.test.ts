@@ -45,10 +45,10 @@ describe('scrubProduct / scrubVariant', () => {
 
   it('toCardProductData (the client-bound card payload) is scrubbed too', () => {
     const out: any = toCardProductData(fullProduct() as any)
-    expect(out.cost_price).toBeNull()
-    expect(out.vendor_id).toBeNull()
-    expect(out.product_variants[0].cost_price).toBeNull()
-    expect(out.product_variants[0].margin_pct).toBeNull()
+    for (const k of ['cost_price', 'vendor_id', 'fully_loaded_cost', 'orders_reserved']) expect(out).not.toHaveProperty(k)
+    expect(out.product_variants[0]).not.toHaveProperty('cost_price')
+    expect(out.product_variants[0]).not.toHaveProperty('margin_pct')
+    expect(out.product_variants[0].price).toBeDefined()   // public fields are untouched
   })
 
   it('serialized card JSON contains none of the private values', () => {
