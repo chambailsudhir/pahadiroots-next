@@ -150,7 +150,7 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
           )}
 
           <div className={`qv-stock qv-stock-${inStock ? (stock > 20 ? 'high' : 'mid') : 'low'}`}>
-            {inStock ? (stock > 20 ? 'In Stock' : `Only ${stock} left`) : 'Out of Stock'}
+            {inStock ? (stock > 5 ? 'In Stock' : `Only ${stock} left`) : 'Out of Stock'}
           </div>
 
           <button type="button" className="qv-atc" onClick={handleAddToCart} disabled={!inStock}>

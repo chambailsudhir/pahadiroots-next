@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 import { emojiForCategory } from '@/lib/categoryEmoji'
@@ -17,16 +17,6 @@ const SORTS = [
 ]
 
 interface Cat { id: number; name: string; slug: string; emoji?: string | null }
-
-function shuffleProducts(products: Product[]): Product[] {
-  const copy = [...products]
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[copy[i], copy[j]] = [copy[j], copy[i]]
-  }
-  return copy
-}
-
 
 interface Props {
   initialProducts: Product[]
@@ -51,33 +41,10 @@ export default function BestSellersClient({ initialProducts, categories }: Props
   const [activeCat, setActiveCat] = useState<string>('all')
   const [sort,      setSort]      = useState('default')
 
-  // BUG FIX (lint: react-hooks/set-state-in-effect): the previous version
-  // called `setAllProducts(prev => shuffleProducts(prev))` directly inside a
-  // mount effect, computing AND storing derived data as a side effect. That
-  // combination (compute + store in its own state slot) is what the rule is
-  // actually trying to catch, and it caused an extra render right after
-  // mount. It's fixed by separating the two: the effect below only flips a
-  // boolean, and the shuffle itself is computed via useMemo, keyed off that
-  // boolean, so it runs at most once instead of being recomputed or
-  // re-stored on every render.
-  //
-  // The boolean flip itself still trips the same lint rule — same genuinely
-  // necessary exception as ClientOnly.tsx: whether we're past hydration
-  // cannot be known during any render phase (only the effect phase), so
-  // there's no render-time equivalent. Reshuffling has to wait until after
-  // mount because the server always renders `initialProducts` in its
-  // original order — the client's first render must match that exactly, and
-  // Math.random() can only run safely once hydration has completed.
-  const [hydrated, setHydrated] = useState(false)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setHydrated(true)
-  }, [])
-
-  const allProducts = useMemo(
-    () => (hydrated ? shuffleProducts(initialProducts) : initialProducts),
-    [hydrated, initialProducts],
-  )
+  // The order is decided on the server (see rankForHomepage in BestSellers.tsx) so what the server sends is what the visitor
+  // sees — nothing is reshuffled after hydration, which used to swap the cards under the visitor's eyes (layout shift) and
+  // preloaded the wrong images.
+  const allProducts = initialProducts
 
   // BUG FIX (audit): a chip was rendered for EVERY active category, even ones
   // with no bestseller products — click it and you got an empty grid with no
@@ -126,7 +93,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
         <div className="ct rv" style={{ marginBottom: 0, textAlign: 'left' }}>
           <div className="chip">Bestsellers</div>
           <h2 className="sh2">Our Finest Offerings</h2>
-          <p className="ssub">A fresh edit of six Himalayan favorites, reshuffled every visit.</p>
+          <p className="ssub">Six Himalayan favorites, chosen by what customers love most.</p>
         </div>
         <Link
           href="/products"

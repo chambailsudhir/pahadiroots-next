@@ -193,6 +193,27 @@ export function toHomeCardData(p: Product): Product {
 }
 
 /**
+ * rankForHomepage — one deterministic order for the "Our Finest Offerings" grid (the same server render serves everyone, no
+ * client-side shuffling): in-stock first, then flagged bestsellers, then the biggest real discount, then the catalogue's own
+ * order (name). Out-of-stock items are kept (the filters still need them) but sort last.
+ */
+export function rankForHomepage(products: Product[]): Product[] {
+  const stockOf = (p: Product) => getBaseVariant(p)?.available_stock ?? p.available_stock ?? 0
+  const discountOf = (p: Product) => {
+    const price = getEffectivePrice(p), mrp = getEffectiveMrp(p)
+    return mrp > price && mrp > 0 ? (mrp - price) / mrp : 0
+  }
+  return products
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) =>
+      (stockOf(b.p) > 0 ? 1 : 0) - (stockOf(a.p) > 0 ? 1 : 0)
+      || (b.p.badges_bestseller ? 1 : 0) - (a.p.badges_bestseller ? 1 : 0)
+      || discountOf(b.p) - discountOf(a.p)
+      || a.i - b.i)
+    .map(x => x.p)
+}
+
+/**
  * getBaseVariant — the single source of truth for "which variant does this
  * card represent by default": the lowest-priced *active* variant, or null
  * when the product has no variants. getEffectivePrice, getEffectiveStock,
