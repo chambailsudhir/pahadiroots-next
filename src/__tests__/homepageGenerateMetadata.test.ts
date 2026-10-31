@@ -11,7 +11,7 @@
  * page's openGraph had no `images` field, so the homepage had zero
  * og:image in production, and chat apps fell back to the favicon. This
  * test locks in that the homepage's own openGraph/twitter always carries
- * an image, sourced from settings.og_image with a /logo.png fallback,
+ * an image, sourced from settings.og_image with a /og-default.jpg fallback,
  * exactly matching layout.tsx's existing fallback behavior.
  */
 
@@ -67,14 +67,14 @@ describe('generateMetadata() (homepage) — og:image regression', () => {
     expect(metadata.title).toEqual({ absolute: 'HimVeda — Himalayan Foods' })
   })
 
-  it('falls back to /logo.png (never an empty/missing image) when og_image is blank', async () => {
+  it('falls back to the branded /og-default.jpg (never an empty/missing image) when og_image is blank', async () => {
     mockGetSiteSettings.mockResolvedValue({})
 
     const metadata = await generateMetadata()
 
     expect(metadata.openGraph?.images).toEqual([
-      expect.objectContaining({ url: '/logo.png' }),
+      expect.objectContaining({ url: '/og-default.jpg' }),
     ])
-    expect((metadata.twitter as any)?.images).toEqual(['/logo.png'])
+    expect((metadata.twitter as any)?.images).toEqual(['/og-default.jpg'])
   })
 })

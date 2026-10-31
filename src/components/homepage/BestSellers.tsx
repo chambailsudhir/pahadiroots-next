@@ -1,4 +1,6 @@
 import BestSellersClient from './BestSellersClient'
+import { buildHomeItemListLd, escapeJsonLd } from '@/lib/homepageJsonLd'
+import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toHomeCardData } from '@/lib/normalizeProduct'
 import { logger } from '@/lib/logger'
@@ -77,5 +79,12 @@ export default async function BestSellers() {
     return null
   }
 
-  return <BestSellersClient initialProducts={products} categories={categories} />
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+  const itemList = buildHomeItemListLd(products.slice(0, BEST_SELLERS_LIMIT), siteUrl, BEST_SELLERS_LIMIT)
+  return (
+    <>
+      {itemList && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(itemList) }} />}
+      <BestSellersClient initialProducts={products} categories={categories} />
+    </>
+  )
 }

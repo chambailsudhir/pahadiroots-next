@@ -79,7 +79,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       // BUG FIX: '/og-default.jpg' does not exist in /public — fell back to
       // a broken image whenever a region has no state image set. Matches
       // layout.tsx's fallback to the real logo.png asset.
-      images: stateImageUrl ? [{ url: stateImageUrl, width: 1200, height: 630, alt: state.name }] : [{ url: '/logo.png', width: 1200, height: 630, alt: state.name }],
+      images: stateImageUrl ? [{ url: stateImageUrl, width: 1200, height: 630, alt: state.name }] : [{ url: '/og-default.jpg', width: 1200, height: 630, alt: state.name }],
     },
     twitter: {
       card:        'summary_large_image',
