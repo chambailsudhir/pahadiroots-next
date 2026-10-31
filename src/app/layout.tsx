@@ -14,6 +14,7 @@ import Footer from '@/components/layout/Footer'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
 import LazyOverlays from '@/components/layout/LazyOverlays'
 import Script from 'next/script'
+import { settingsForShell } from '@/lib/clientSettings'
 import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
@@ -156,6 +157,7 @@ export default async function RootLayout({
   if (settings.ann_text) settings.ann_text = sanitizeHtml(settings.ann_text)
   // Client components receive a copy WITHOUT server-only keys (admin_notify_email, order_email_enabled).
   const clientSettings = stripServerOnlySettings(settings)
+  const shellSettings  = settingsForShell(clientSettings)   // for the client-side shell only (Header, bottom nav, panels)
   // PERF: these lists are handed to client components, so every field is serialised into the HTML (twice — Header and
   // the on-demand panels). The menus only read id / name / slug / is_active, so send just those (the rest — long
   // descriptions, SEO text, timestamps — was ~50 KB of the document that has to arrive before the hero image is requested).
@@ -342,7 +344,7 @@ export default async function RootLayout({
         <SkipLink />
         <ScrollRestorationFix />
         <Providers>
-          {!isMaintenanceMode && <Header settings={clientSettings} categories={categories} states={states} />}
+          {!isMaintenanceMode && <Header settings={shellSettings} categories={categories} states={states} />}
           <main id="main-content" className="min-h-screen">
             {children}
           </main>
@@ -353,8 +355,8 @@ export default async function RootLayout({
                 categories={categories.map((c: any) => ({ name: c.name, slug: c.slug, emoji: c.emoji ?? null }))}
               />
               {/* PERF (audit): cart drawer, search, mobile menu and login modal load on demand (see LazyOverlays.tsx). */}
-              <LazyOverlays settings={clientSettings} categories={categories} states={states} />
-              <MobileBottomNav settings={clientSettings} />
+              <LazyOverlays settings={shellSettings} categories={categories} states={states} />
+              <MobileBottomNav settings={shellSettings} />
               <GoogleAuthHandler />
               <ProfilePrefetcher />
             </>
