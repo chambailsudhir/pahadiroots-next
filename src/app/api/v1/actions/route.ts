@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { subscribeSchema, reviewSchema, notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
+import { reviewSchema, notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
 import { checkCsrf, getToken } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { sendSubscribeConfirmation } from '@/lib/server/subscribe'
 import { logger } from '@/lib/logger'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
@@ -28,7 +27,7 @@ function stripTags(str: string): string {
 /**
  * /api/v1/actions — generic action dispatcher for non-cart server mutations.
  *
- * Handles: subscribe, submit_review, contact
+ * Handles: submit_review, contact, notify_stock, abandoned-cart actions
  *
  * Previously this file lived at /api/v1/cart/route.ts which was misleading —
  * none of these actions are cart-related. Renamed to /api/v1/actions.
@@ -36,13 +35,13 @@ function stripTags(str: string): string {
  */
 
 export async function POST(req: NextRequest) {
-  // ── CSRF guard — protects subscribe, submit_review, contact ──────────────
+  // ── CSRF guard — protects every action ──────────────
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
   // ── Rate limit ─────────────────────────────────────────────────────────────
-  // subscribe and contact are unauthenticated and have no other anti-spam
-  // guard — without a rate limit a bot can flood the subscribers table and
+  // contact and notify_stock are unauthenticated and have no other anti-spam
+  // guard — without a rate limit a bot can flood the notify list and
   // admin inbox indefinitely. checkRateLimit() is the in-process limiter
   // (sufficient here: these are low-risk, non-financial actions where a small
   // per-replica burst window is acceptable). 10 requests/min per IP covers all
@@ -74,37 +73,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing or invalid action field' }, { status: 400 })
     }
     const db     = getServiceClient()
-
-    if (action === 'subscribe') {
-      const parsed = subscribeSchema.safeParse(body)
-      if (!parsed.success) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
-
-      const { email, name, source } = parsed.data
-
-      // BUG FIX: name was inserted raw into the subscribers table with no HTML
-      // stripping. A bot could store "<script>alert(1)</script>" as a subscriber
-      // name which would be rendered as HTML in any admin email export.
-      const safeName = name ? stripTags(name) : null
-
-      // DOUBLE OPT-IN (audit C-11). This public endpoint used to subscribe whatever address it was handed and email
-      // that address a coupon — anyone could subscribe a stranger, or use it to spam an inbox. Now it ONLY emails a
-      // signed confirmation link (lib/server/subscribe.ts); the address is stored and the 5%-off code is sent when its
-      // owner opens that link (api/v1/subscribe/confirm). Nothing is written to the database here.
-      //
-      // At most 3 confirmation emails per address per hour (shared limiter, so it holds across serverless instances).
-      // The response is identical either way, so the endpoint cannot be used to find out which addresses are known.
-      const mayEmail = await checkRateLimitKv(`mw:rl:subscribe_email:${email}`, 3, 3600)
-      if (mayEmail) {
-        after(async () => {
-          try {
-            await sendSubscribeConfirmation({ email, name: safeName, source: source || null })
-          } catch (e) {
-            logger.error('actions: subscribe confirmation email failed', { action: 'actions.subscribe.confirm', error: e instanceof Error ? e.message : String(e) })
-          }
-        })
-      }
-      return NextResponse.json({ success: true, pending: true })
-    }
 
     if (action === 'notify_stock') {
       const parsed = notifyStockSchema.safeParse(body)
