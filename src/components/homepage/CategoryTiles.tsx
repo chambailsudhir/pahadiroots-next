@@ -8,6 +8,19 @@ import { emojiForCategory } from '@/lib/categoryEmoji'
 
 interface Props { categories: Category[] }
 
+// Tile images start at opacity 0 and fade in once loaded, hiding the emoji placeholder underneath.
+// BUG FIX (audit C-14): the fade-in was driven ONLY by onLoad. An image that is already in the browser cache can finish
+// loading before React attaches the handler (hydration), so onLoad never fires and the tile stays blank (emoji only).
+// The ref callback below handles that case; it has a stable identity, so React runs it once per mount.
+function revealImg(img: HTMLImageElement) {
+  img.style.opacity = '1'
+  const emo = img.previousElementSibling as HTMLElement | null
+  if (emo?.classList.contains('cc-emo')) emo.style.opacity = '0'
+}
+function revealIfAlreadyLoaded(img: HTMLImageElement | null) {
+  if (img && img.complete && img.naturalWidth > 0) revealImg(img)
+}
+
 
 export default function CategoryTiles({ categories }: Props) {
   const active = categories.filter(c => c.is_active)
@@ -132,6 +145,10 @@ export default function CategoryTiles({ categories }: Props) {
     const onTouchEnd = () => { setTimeout(() => { pausedRef.current = false }, 1800) }
     wrap.addEventListener('mouseenter', onEnter)
     wrap.addEventListener('mouseleave', onLeave)
+    // BUG FIX (audit C-13, WCAG 2.2.2): autoplay only paused for mouse and touch — a keyboard user tabbing through the
+    // tiles had the carousel scroll away under them. Pause while focus is anywhere inside it.
+    wrap.addEventListener('focusin', onEnter)
+    wrap.addEventListener('focusout', onLeave)
     wrap.addEventListener('touchstart', onTouchStart, { passive: true })
     wrap.addEventListener('touchend', onTouchEnd, { passive: true })
 
@@ -146,6 +163,8 @@ export default function CategoryTiles({ categories }: Props) {
       window.removeEventListener('resize', onResize)
       wrap.removeEventListener('mouseenter', onEnter)
       wrap.removeEventListener('mouseleave', onLeave)
+      wrap.removeEventListener('focusin', onEnter)
+      wrap.removeEventListener('focusout', onLeave)
       wrap.removeEventListener('touchstart', onTouchStart)
       wrap.removeEventListener('touchend', onTouchEnd)
     }
@@ -258,12 +277,8 @@ export default function CategoryTiles({ categories }: Props) {
                           objectFit: 'cover', zIndex: 2, opacity: 0,
                           transition: 'opacity .35s, transform .35s',
                         }}
-                        onLoad={e => {
-                          const img = e.currentTarget
-                          img.style.opacity = '1'
-                          const emo = img.previousElementSibling as HTMLElement | null
-                          if (emo?.classList.contains('cc-emo')) emo.style.opacity = '0'
-                        }}
+                        ref={revealIfAlreadyLoaded}
+                        onLoad={e => revealImg(e.currentTarget)}
                         onError={e => { e.currentTarget.style.display = 'none' }}
                       />
                     )}

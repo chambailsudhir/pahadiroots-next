@@ -79,11 +79,12 @@ export default function Header({ settings, categories = [], states = [] }: Props
           here as well, on top of <SkipLink /> already rendered in layout.tsx —
           keyboard and screen-reader users hit two identical skip links in a
           row. The layout one is the single source now. */}
-      <div className="sticky top-0 z-30">
+      {/* BUG FIX (audit HOME-025): was a plain <div>, so the page had no <header>/banner landmark for screen-reader users. */}
+      <header className="sticky top-0 z-30">
       <AnnouncementBar settings={settings} />
       <TickerBar settings={settings} />
 
-      <nav className={`old-nav${scrolled ? ' scrolled' : ''}`}>
+      <nav aria-label="Primary" className={`old-nav${scrolled ? ' scrolled' : ''}`}>
         {/* Logo */}
         <Link href="/" className="old-logo">
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px' }}>
@@ -388,7 +389,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           .old-cart-btn{padding:8px 12px;margin-left:2px}
         }
       `}</style>
-    </div>
+    </header>
     </>
   )
 }

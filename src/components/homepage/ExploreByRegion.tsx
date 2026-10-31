@@ -13,8 +13,10 @@ import styles from './ExploreByRegion.module.css'
 // PERF FIX (audit HOME-012): both faces are variable fonts. Listing `weight: [...]` made next/font ship one static
 // file PER weight (8 + 4 files); with no `weight` it serves a single variable file per style (2 + 1) and every
 // weight 400-700 still renders identically.
-const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], style: ['normal', 'italic'], display: 'swap' })
-const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], display: 'swap' })
+// `preload: false`: this section is far below the fold, so its faces should not be preloaded in <head> where they
+// compete with the hero image (LCP) for the first bytes of bandwidth. They are fetched when the section is styled.
+const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], style: ['normal', 'italic'], display: 'swap', preload: false })
+const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], display: 'swap', preload: false })
 
 export interface RichState {
   id: string

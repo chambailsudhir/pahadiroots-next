@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { collectionTitle } from '@/lib/collectionTitle'
 import { notFound, redirect } from 'next/navigation'
 import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
@@ -52,7 +53,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   return {
     // Brand suffix comes from layout.tsx's title.template — do not repeat it here.
-    title:       `${cat.name} — Himalayan ${cat.name}`,
+    title:       collectionTitle(cat.name),
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
     alternates:  { canonical: canonicalUrl },
     robots:      isFiltered ? { index: false, follow: true } : undefined,
