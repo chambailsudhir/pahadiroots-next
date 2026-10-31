@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
+import { settingsForHero } from '@/lib/clientSettings'
 import { toHomeCardData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
@@ -188,7 +189,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <HeroBanner images={heroImages} settings={settings} />
+      <HeroBanner images={heroImages} settings={settingsForHero(settings)} />
       {showTrustBar && <TrustBar settings={settings} />}
       {/* Browse Collections — "What the Mountains Offer" */}
       {showBrandStory && <BrandStory />}
