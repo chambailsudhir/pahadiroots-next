@@ -85,6 +85,21 @@ export function checkCsrf(req: NextRequest): NextResponse | null {
   return null  // valid
 }
 
+/**
+ * True only when the request names an origin/referer that is NOT ours. A request with neither header (a normal
+ * first-party sendBeacon can omit them) is NOT treated as foreign — this is deliberately weaker than checkCsrf(),
+ * for low-risk write-only endpoints such as analytics where blocking a legitimate beacon is worse than letting a
+ * header-less script through. It stops other WEBSITES from posting events from visitors' browsers.
+ */
+export function hasForeignOrigin(req: NextRequest): boolean {
+  const origin  = req.headers.get('origin')
+  const referer = req.headers.get('referer')
+  let source: string | null = origin
+  if (!source && referer) { try { source = new URL(referer).origin } catch { source = null } }
+  if (!source) return false
+  return !isAllowedOrigin(source)
+}
+
 // ── Supabase Auth call ────────────────────────────────────────
 export async function sbAuth(
   path:   string,

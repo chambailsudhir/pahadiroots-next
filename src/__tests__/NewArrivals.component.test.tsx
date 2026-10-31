@@ -50,12 +50,19 @@ function product(overrides: Record<string, unknown> = {}) {
   }
 }
 
+// The Best Sellers grid above shows up to BEST_SELLERS_LIMIT (6) products. With a catalogue that small, New Arrivals would only
+// repeat those same cards, so it hides itself (audit HOME-024). These tests pad the catalogue with older products so it is
+// larger than that grid and the section has something genuinely different to show.
+const filler = (n = 8) => Array.from({ length: n }, (_, i) =>
+  product({ id: 1000 + i, name: `Older catalogue item ${i}`, created_at: NEW_DAYS_AGO(500 + i) }))
+
 describe('NewArrivals', () => {
   it('renders genuinely new products, sorted newest-first', async () => {
     mockGetStoreData.mockResolvedValue({})
     mockGetProductsWithImages.mockReturnValue([
       product({ id: 1, name: 'Older New Item', created_at: NEW_DAYS_AGO(5) }),
       product({ id: 2, name: 'Newest Item', created_at: NEW_DAYS_AGO(1) }),
+      ...filler(),
     ])
 
     const el = await NewArrivals()
@@ -71,6 +78,7 @@ describe('NewArrivals', () => {
     mockGetProductsWithImages.mockReturnValue([
       // created_at far enough in the past that filterNewArrivals excludes it
       product({ id: 1, name: 'Old Product', created_at: NEW_DAYS_AGO(400) }),
+      ...filler().map(p => ({ ...p, created_at: NEW_DAYS_AGO(900) })),
     ])
 
     const el = await NewArrivals()
@@ -104,7 +112,7 @@ describe('NewArrivals', () => {
 
   it('"See All" links to /new-arrivals, not a generic unfiltered listing', async () => {
     mockGetStoreData.mockResolvedValue({})
-    mockGetProductsWithImages.mockReturnValue([product()])
+    mockGetProductsWithImages.mockReturnValue([product(), ...filler()])
 
     const el = await NewArrivals()
     render(el as React.ReactElement)
@@ -116,12 +124,29 @@ describe('NewArrivals', () => {
   it('caps at 4 products even when more qualify', async () => {
     mockGetStoreData.mockResolvedValue({})
     mockGetProductsWithImages.mockReturnValue(
-      [1, 2, 3, 4, 5, 6].map(id => product({ id, name: `Product ${id}` }))
+      [1, 2, 3, 4, 5, 6, 7, 8].map(id => product({ id, name: `Product ${id}` }))
     )
 
     const el = await NewArrivals()
     render(el as React.ReactElement)
 
+    expect(screen.getAllByTestId('product-card').length).toBe(4)
+  })
+
+  it('hides itself when the whole catalogue already fits in the Best Sellers grid (it could only repeat those cards)', async () => {
+    mockGetStoreData.mockResolvedValue({})
+    for (const n of [1, 3, 5, 6]) {
+      mockGetProductsWithImages.mockReturnValue(Array.from({ length: n }, (_, i) => product({ id: i + 1, name: `P${i + 1}` })))
+      expect(await NewArrivals()).toBeNull()
+    }
+  })
+
+  it('comes back by itself as soon as the catalogue is bigger than the Best Sellers grid', async () => {
+    mockGetStoreData.mockResolvedValue({})
+    mockGetProductsWithImages.mockReturnValue(Array.from({ length: 7 }, (_, i) => product({ id: i + 1, name: `P${i + 1}` })))
+    const el = await NewArrivals()
+    expect(el).not.toBeNull()
+    render(el as React.ReactElement)
     expect(screen.getAllByTestId('product-card').length).toBe(4)
   })
 })

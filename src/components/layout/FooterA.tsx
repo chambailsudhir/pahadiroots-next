@@ -15,22 +15,28 @@ export default function FooterA({ settings, categories }: Props) {
   const [email, setEmail] = useState('')
   const [subDone, setSubDone] = useState(false)
   const [subLoading, setSubLoading] = useState(false)
+  const [subError, setSubError] = useState(false)
 
   async function handleSub(e: React.FormEvent) {
     e.preventDefault()
     if (!email.includes('@')) return
     setSubLoading(true)
+    setSubError(false)
+    // BUG FIX (audit): the form used to show "check your inbox" even when the request failed (network error, 429, 500)
+    // because it set `subDone` unconditionally. It now only reports success when the server accepted the request.
+    let accepted = false
     try {
-      await fetch('/api/v1/actions', {
+      const res = await fetch('/api/v1/actions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'subscribe', email }),
       })
+      accepted = res.ok
     } catch (e: unknown) {
       // BUG FIX [ERROR HANDLING]: previously bare `catch {}` — completely silent.
       // Newsletter subscription failures were invisible to ops.
       console.error('[Footer] newsletter subscribe failed:', e)
     }
-    setSubDone(true)
+    if (accepted) setSubDone(true); else setSubError(true)
     setSubLoading(false)
   }
 
@@ -77,7 +83,7 @@ export default function FooterA({ settings, categories }: Props) {
             </p>
           </div>
           {subDone ? (
-            <div style={{ color: '#c8920a', fontWeight: 700, fontSize: '14px' }}>🎉 Check your inbox for your 5% off code!</div>
+            <div style={{ color: '#c8920a', fontWeight: 700, fontSize: '14px' }}>✉️ Almost there — check your inbox and click the link to confirm. Your 5% off code follows right after.</div>
           ) : (
             <form onSubmit={handleSub} style={{ display: 'flex', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,.18)', minWidth: '300px' }}>
               <input
@@ -90,6 +96,9 @@ export default function FooterA({ settings, categories }: Props) {
                 fontWeight: 800, fontSize: '13px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
               }}>Subscribe</button>
             </form>
+          )}
+          {subError && !subDone && (
+            <div role="alert" style={{ color: '#fca5a5', fontSize: '12px', marginTop: '8px' }}>Something went wrong. Please try again in a moment.</div>
           )}
         </div>
       </div>

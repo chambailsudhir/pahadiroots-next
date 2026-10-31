@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { subscribeSchema, reviewSchema, notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf, getToken, checkRateLimit } from '@/lib/api/serverUtils'
+import { checkCsrf, getToken } from '@/lib/api/serverUtils'
+import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { generateWelcomeCouponCode } from '@/lib/welcomeCoupon'
+import { sendSubscribeConfirmation } from '@/lib/server/subscribe'
 import { logger } from '@/lib/logger'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
@@ -47,8 +48,10 @@ export async function POST(req: NextRequest) {
   // per-replica burst window is acceptable). 10 requests/min per IP covers all
   // legitimate use (a real user doesn't submit the contact form 10 times/min).
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  const rateLimitKey = `actions:${ip}`
-  if (!checkRateLimit(rateLimitKey, 10, 60_000)) {
+  // BUG FIX (audit C-11): this used the in-process `checkRateLimit` (a Map per serverless instance), so the real limit
+  // was 10/min PER INSTANCE and a spread-out flood was never counted. The shared limiter (Upstash KV, DB fallback)
+  // counts across all instances like the orders/coupons routes do.
+  if (!(await checkRateLimitKv(`mw:rl:actions_ip:${ip}`, 10, 60))) {
     // BUG FIX 12: missing Retry-After header on 429. RFC 6585 §4 requires it.
     return NextResponse.json(
       { error: 'Too many requests — please wait a moment' },
@@ -83,106 +86,26 @@ export async function POST(req: NextRequest) {
       // name which would be rendered as HTML in any admin email export.
       const safeName = name ? stripTags(name) : null
 
-      // Upsert to subscribers table
-      const { error: subscribeError } = await db.from('subscribers').upsert(
-        // BUG FIX (found while schema-verifying the P1 batch — pre-existing,
-        // not introduced by this fix): the real `subscribers` table has no
-        // `subscribed_at` column at all (confirmed via
-        // information_schema.columns). This upsert has been sending a
-        // column that doesn't exist — Supabase/PostgREST rejects unknown
-        // columns on insert/upsert, so every newsletter signup may have
-        // been erroring silently (the result was never checked for
-        // `error` here). Removed the bogus field; `created_at` is NOT
-        // NULL with no default confirmed either way, so left unset — if
-        // it turns out to have no DB-side default, the error logging
-        // added below will now surface that loudly instead of silently.
-        // is_active is nullable but obviously means "this is a live
-        // subscriber" — explicitly set true for a fresh signup rather
-        // than leaving it NULL.
-        { email, name: safeName, is_active: true, source: source || null },
-        { onConflict: 'email' }
-      )
-      if (subscribeError) {
-        logger.error('actions: subscribers upsert failed', { action: 'actions.subscribe', error: subscribeError.message })
-        return NextResponse.json({ error: 'Could not subscribe right now — please try again' }, { status: 500 })
+      // DOUBLE OPT-IN (audit C-11). This public endpoint used to subscribe whatever address it was handed and email
+      // that address a coupon — anyone could subscribe a stranger, or use it to spam an inbox. Now it ONLY emails a
+      // signed confirmation link (lib/server/subscribe.ts); the address is stored and the 5%-off code is sent when its
+      // owner opens that link (api/v1/subscribe/confirm). Nothing is written to the database here.
+      //
+      // At most 3 confirmation emails per address per hour (shared limiter, so it holds across serverless instances).
+      // The response is identical either way, so the endpoint cannot be used to find out which addresses are known.
+      const mayEmail = await checkRateLimitKv(`mw:rl:subscribe_email:${email}`, 3, 3600)
+      if (mayEmail) {
+        after(async () => {
+          try {
+            await sendSubscribeConfirmation({ email, name: safeName, source: source || null })
+          } catch (e) {
+            logger.error('actions: subscribe confirmation email failed', { action: 'actions.subscribe.confirm', error: e instanceof Error ? e.message : String(e) })
+          }
+        })
       }
-
-      // ── BUG FIX (P1 — trust): the homepage newsletter form promised
-      // "Get 5% Off Your First Order" and, on success, "Check your inbox
-      // for your discount code" (originally NewsletterBar.tsx, since
-      // deleted as a confirmed duplicate of Footer.tsx's own newsletter
-      // form — both hit this same action). Previously nothing after this
-      // point existed — no code was ever generated, no email was ever
-      // sent. Every subscriber got a false promise. This block actually
-      // fulfills it:
-      //
-      //   1. Derive a deterministic code from the email (sha256, first 6
-      //      hex chars) so the SAME email always maps to the SAME code —
-      //      re-submitting the form (e.g. double-click, or resubscribing
-      //      months later) can't mint unlimited fresh 5%-off coupons for
-      //      one person.
-      //   2. Upsert into `coupons` with `ignoreDuplicates: true` — if this
-      //      email already has a welcome coupon, this is a no-op (doesn't
-      //      reset uses_count on a coupon that's already been redeemed).
-      //   3. Email the code via the existing sendTransactionalEmail
-      //      pipeline, which already retries + dead-letters on failure
-      //      (src/lib/server/email.ts) — same guarantee the contact-form
-      //      email below already relies on.
-      //
-      // Deliberately best-effort and non-blocking: a coupon/email hiccup
-      // must never fail the newsletter signup itself (matches the
-      // contact-form pattern immediately below).
-      // BUG FIX (same class as the checkout 504 fix): deferred to after() so
-      // a slow/retrying email send can't delay or fail the newsletter
-      // signup response. Coupon creation + email happen in the background;
-      // delivery guarantee (incl. failed_emails dead-letter) is unchanged.
-      after(async () => {
-        try {
-          const code = generateWelcomeCouponCode(email)
-          const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-
-          await db.from('coupons').upsert(
-            {
-              code,
-              type:              'percent',
-              value:             5,
-              max_uses:          1,
-              uses_count:        0,
-              is_active:         true,
-              expires_at:        expiresAt,
-              first_order_only:  true,
-              description:       'Newsletter welcome discount (5% off, first order)',
-            },
-            { onConflict: 'code', ignoreDuplicates: true },
-          )
-
-          const safeEmailForHtml = esc(email)
-          await sendTransactionalEmail({
-            type:    'newsletter_welcome',
-            to:      email,
-            from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
-            subject: 'Welcome to HimVeda by Pahadi Roots — here\u2019s 5% off your first order',
-            html:    `<p>Hi${safeName ? ' ' + esc(safeName) : ''},</p>
-<p>Thanks for joining the HimVeda by Pahadi Roots community! Use the code below at checkout for 5% off your first order:</p>
-<p style="font-size:20px;font-weight:800;letter-spacing:1px;">${esc(code)}</p>
-<p>Valid for 30 days, one-time use.</p>`,
-            context: { subscribed_email: safeEmailForHtml, coupon_code: code },
-          })
-        } catch (e) {
-          // Non-fatal — the subscription itself already succeeded above.
-          logger.error('actions: newsletter welcome coupon/email failed', { action: 'actions.subscribe.welcomeEmail', error: e instanceof Error ? e.message : String(e) })
-        }
-      })
-
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, pending: true })
     }
 
-    // ── BUG FIX (P1, homepage audit): ProductCard.tsx's "Notify Me" button
-    // on out-of-stock products was rendered disabled with no onClick, no
-    // email capture, and no backend at all. This action is the real
-    // capture behind it — see db_migration_v10_stock_notifications.sql
-    // for the table, and the NOTE in that file about the separate,
-    // schedulable restock-email job this does NOT include.
     if (action === 'notify_stock') {
       const parsed = notifyStockSchema.safeParse(body)
       if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

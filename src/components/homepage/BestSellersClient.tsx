@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
 import { useState, useEffect, useMemo } from 'react'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
@@ -117,7 +118,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
       filtered.sort((a, b) => (b.badges_bestseller ? 1 : 0) - (a.badges_bestseller ? 1 : 0))
   }
 
-  const shown = filtered.slice(0, 6)
+  const shown = filtered.slice(0, BEST_SELLERS_LIMIT)
 
   return (
     <section className="sec" id="products" style={{ background: 'var(--pm-cream, #f5f0e8)', padding: '36px 40px 48px' }}>
