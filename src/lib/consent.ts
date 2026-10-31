@@ -191,6 +191,8 @@ export function consentBootstrapScript(tagId: string, mode: ConsentMode | string
     + `if(on){gtag('consent','update',${granted});if(ID){w.__hvTagLoaded=true;var s=document.createElement('script');s.async=true;`
     + `if(/^GTM-/i.test(ID)){w.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});s.src='https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(ID)}`
     + `else{s.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(ID);gtag('js',new Date());gtag('config',ID)}`
-    + `var inject=function(){document.head.appendChild(s)};var later=function(){if(w.requestIdleCallback){w.requestIdleCallback(inject,{timeout:3000})}else{setTimeout(inject,1)}};`
+    + `var done=false;var inject=function(){if(done)return;done=true;document.head.appendChild(s)};`
+    + `var later=function(){var ev=['pointerdown','keydown','scroll','touchstart'];var go=function(){for(var i=0;i<ev.length;i++){w.removeEventListener(ev[i],go)}inject()};`
+    + `for(var i=0;i<ev.length;i++){w.addEventListener(ev[i],go,{passive:true,once:true})}setTimeout(go,5000)};`
     + `if(document.readyState==='complete'){later()}else{w.addEventListener('load',later)}}}}catch(e){}})();`
 }
