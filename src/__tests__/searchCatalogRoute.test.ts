@@ -41,8 +41,8 @@ describe('GET /api/v1/search-catalog', () => {
     expect(p.state_id).toBe(7)
     expect(p.product_variants[0].price).toBe(500)
     // card-sized payload: heavy text fields are stripped
-    expect(p.long_description).toBeNull()
-    expect(p.ai_description).toBeNull()
+    expect(p).not.toHaveProperty('long_description')
+    expect(p).not.toHaveProperty('ai_description')
   })
 
   it('sets a 60s shared-cache header matching the Browse listing freshness', async () => {

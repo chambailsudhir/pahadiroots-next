@@ -93,10 +93,10 @@ describe('buildStates', () => {
     const result = await buildStates(storeData as any)
     const product = result[0].products[0] as any
 
-    // toCardProductData() explicitly nulls these out — see normalizeProduct.ts.
-    expect(product.long_description).toBeNull()
-    expect(product.short_description).toBeNull()
-    expect(product.tags).toBeNull()
+    // toCardProductData() leaves these keys out entirely — see normalizeProduct.ts.
+    expect(product).not.toHaveProperty('long_description')
+    expect(product).not.toHaveProperty('short_description')
+    expect(product).not.toHaveProperty('tags')
     expect(product.ai_description).toBeFalsy()
     expect(product.ai_health_benefits).toBeFalsy()
   })

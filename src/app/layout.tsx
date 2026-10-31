@@ -50,7 +50,7 @@ const playfair = Playfair_Display({
 const lato = Lato({
   variable: '--font-lato',
   subsets: ['latin'],
-  weight: ['300', '400', '700', '900'],
+  weight: ['400', '700', '900'],  // 300 is never used — one less font file competing with the hero image
 })
 
 // BUG FIX (confirmed against a live admin-panel screenshot): this was a
@@ -156,9 +156,14 @@ export default async function RootLayout({
   if (settings.ann_text) settings.ann_text = sanitizeHtml(settings.ann_text)
   // Client components receive a copy WITHOUT server-only keys (admin_notify_email, order_email_enabled).
   const clientSettings = stripServerOnlySettings(settings)
-  const categories = meta.categories as any[]
-  const states     = meta.states.map((s: any) => ({
-    ...s,
+  // PERF: these lists are handed to client components, so every field is serialised into the HTML (twice — Header and
+  // the on-demand panels). The menus only read id / name / slug / is_active, so send just those (the rest — long
+  // descriptions, SEO text, timestamps — was ~50 KB of the document that has to arrive before the hero image is requested).
+  const categories = (meta.categories as any[]).map((c: any) => ({
+    id: c.id, name: c.name, slug: c.slug, emoji: c.emoji ?? null, is_active: c.is_active,
+  })) as any[]
+  const states = meta.states.map((s: any) => ({
+    id: s.id, name: s.name,
     slug: s.id,  // In admin, the id IS the slug
   })) as any[]
   // BUG FIX: store_open === 'false' previously only redirected page content
@@ -370,7 +375,7 @@ export default async function RootLayout({
             data-name="Pahadi_AI"
             data-tagline="Himalayan Shopping Guide · Online"
             data-whatsapp={waNumber}
-            strategy="afterInteractive"
+            strategy="lazyOnload"
           />
         )}
         {/* Consent banner / preferences. Client-only, fixed position (no layout shift). */}

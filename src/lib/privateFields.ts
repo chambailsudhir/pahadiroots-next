@@ -45,7 +45,7 @@ export const PRIVATE_VARIANT_FIELDS = [
  * product or variant column matches (checked against the live schema, Oct 2026): price, selling_price, mrp, discount_pct,
  * unit_label, gst_rate… are untouched. If a genuinely public column ever needs one of these words, rename it.
  */
-const COST_LIKE_KEY = /(^|_)(cost|costs|landed|margin|commission|purchase)(_|$)/i
+export const COST_LIKE_KEY = /(^|_)(cost|costs|landed|margin|commission|purchase)(_|$)/i
 
 function nullOut<T extends object>(row: T, fields: readonly string[]): T {
   const out: Record<string, unknown> = { ...(row as Record<string, unknown>) }

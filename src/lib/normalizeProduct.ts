@@ -1,4 +1,4 @@
-import { scrubProduct } from './privateFields'
+import { scrubProduct, PRIVATE_PRODUCT_FIELDS, PRIVATE_VARIANT_FIELDS, COST_LIKE_KEY } from './privateFields'
 import { variantDisplayMrp, type VariantRow, type ProductRow } from '@/lib/pricing/linePricing'
 import type { Product } from '@/types'
 
@@ -139,19 +139,57 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
  * This returns the same `Product` shape (so no type changes needed at call
  * sites) with just the unused heavy fields nulled out.
  */
-export function toCardProductData(p: Product): Product {
-  return {
-    ...scrubProduct(p),
-    short_description: null,
-    long_description: null,
-    tags: null,
-    ai_description: null,
-    ai_health_benefits: null,
-    ai_how_to_use: null,
-    ai_storage_tips: null,
-    ai_who_should_buy: null,
-    ai_generated_at: null,
+const CARD_UNUSED_FIELDS = [
+  'short_description', 'long_description', 'tags',
+  'ai_description', 'ai_health_benefits', 'ai_how_to_use', 'ai_storage_tips', 'ai_who_should_buy', 'ai_generated_at',
+] as const
+
+// Nulling a field still serialises its key into the page ("cost_price":null …), roughly 20-30 bytes each, on every
+// card. Cards never read these, so leave the keys out entirely. (Cost-like keys follow privateFields' own rule.)
+function dropKeys<T extends object>(row: T, keys: readonly string[]): T {
+  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) }
+  for (const k of Object.keys(out)) {
+    if ((keys.includes(k) || COST_LIKE_KEY.test(k)) && out[k] === null) delete out[k]
   }
+  return out as T
+}
+
+export function toCardProductData(p: Product): Product {
+  const scrubbed = scrubProduct(p) as Product & { product_variants?: unknown }
+  const base = { ...scrubbed } as Record<string, unknown>
+  for (const f of CARD_UNUSED_FIELDS) base[f] = null
+  const out = dropKeys(base, [...PRIVATE_PRODUCT_FIELDS, ...CARD_UNUSED_FIELDS]) as Record<string, unknown>
+  if (Array.isArray(out.product_variants)) {
+    out.product_variants = out.product_variants.map(v => dropKeys(v as object, PRIVATE_VARIANT_FIELDS))
+  }
+  return out as unknown as Product
+}
+
+// Homepage cards (ProductCard, QuickViewModal, BestSellersClient's filter/sort) read only these fields. Everything else on
+// a product row — hsn_code, sku_backup, initial_stock, video_url, seo_*, the raw image list … — would be serialised into
+// the page for every product, and the document has to arrive before the browser can even ask for the hero image.
+const HOME_CARD_FIELDS = [
+  'id', 'name', 'slug', 'image_url', 'emoji', 'card_bg', 'region', 'unit', 'unit_label',
+  'price', 'selling_price', 'mrp', 'gst_rate', 'available_stock',
+  'badges', 'badges_new', 'badges_bestseller', 'badges_organic', 'review_count',
+  'category_id', 'state_id', 'is_active', 'sort_order', 'created_at',
+] as const
+const HOME_CARD_VARIANT_FIELDS = ['id', 'product_id', 'size', 'price', 'mrp', 'available_stock', 'is_active', 'sort_order'] as const
+
+export function toHomeCardData(p: Product): Product {
+  const src = p as unknown as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of HOME_CARD_FIELDS) if (src[k] !== undefined) out[k] = src[k]
+  const cat = src.categories as { id?: unknown; name?: unknown; slug?: unknown } | null | undefined
+  if (cat && typeof cat === 'object') out.categories = { id: cat.id, name: cat.name, slug: cat.slug }
+  if (Array.isArray(src.product_variants)) {
+    out.product_variants = (src.product_variants as Record<string, unknown>[]).map(v => {
+      const o: Record<string, unknown> = {}
+      for (const k of HOME_CARD_VARIANT_FIELDS) if (v[k] !== undefined) o[k] = v[k]
+      return o
+    })
+  }
+  return out as unknown as Product
 }
 
 /**

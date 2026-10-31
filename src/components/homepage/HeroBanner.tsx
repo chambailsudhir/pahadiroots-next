@@ -356,13 +356,13 @@ export default function HeroBanner({ images, settings }: Props) {
                     className="hhero-baked-img"
                     onLoad={e => handleImgLoad(i, e)}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }}
-                    {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const } : {})} />
+                    {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : {})} />
                 </div>
               ) : (
                 <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                   onLoad={e => handleImgLoad(i, e)}
                   style={{ objectFit: 'cover', objectPosition: 'center 30%' }}
-                  {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const } : {})} />
+                  {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : {})} />
               )
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
