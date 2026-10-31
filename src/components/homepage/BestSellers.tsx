@@ -27,7 +27,15 @@ export default async function BestSellers() {
       await new Promise(r => setTimeout(r, 400))
       storeData = await getStoreData()
     }
-    const withImgs  = getProductsWithImages(storeData)
+    let withImgs  = getProductsWithImages(storeData)
+    // An empty list on a live store is almost always a bad read or a cached empty result, not a real empty catalogue —
+    // and the homepage is cached for minutes, so hiding the section here hides it for everyone. Read fresh (bypassing
+    // the data cache) once before accepting "no products".
+    if (withImgs.length === 0) {
+      logger.warn('[BestSellers] catalogue came back empty — re-reading fresh before hiding the section')
+      storeData = await getStoreData(true)
+      withImgs  = getProductsWithImages(storeData)
+    }
     // BUG FIX (performance, found while chasing "/products images load
     // slowly"): BestSellersClient needs the *entire* active catalog (not
     // just the 8 it displays) because its category filter buttons run

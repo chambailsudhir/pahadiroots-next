@@ -16,7 +16,7 @@ import React from 'react'
 const mockGetStoreData          = vi.fn()
 const mockGetProductsWithImages = vi.fn()
 vi.mock('@/lib/storeData', () => ({
-  getStoreData: () => mockGetStoreData(),
+  getStoreData: (...a: unknown[]) => mockGetStoreData(...a),
   getProductsWithImages: (sd: unknown) => mockGetProductsWithImages(sd),
 }))
 vi.mock('@/components/homepage/BestSellersClient', () => ({
@@ -84,6 +84,14 @@ describe('BestSellers', () => {
       expect.stringContaining('[BestSellers]'),
     )
     expect(mockLoggerError).not.toHaveBeenCalled()
+  })
+
+  it('re-reads fresh (force) before accepting an empty catalogue, and shows the section if the fresh read has products', async () => {
+    mockGetStoreData.mockResolvedValue({ categories: [{ id: 1, name: 'Honey', slug: 'honey', is_active: true }] })
+    mockGetProductsWithImages.mockReturnValueOnce([]).mockReturnValueOnce([product()])
+    const el = await BestSellers()
+    expect(mockGetStoreData).toHaveBeenCalledWith(true)
+    expect(el).not.toBeNull()
   })
 
   it('renders nothing (fails safe) when the data fetch throws', async () => {
