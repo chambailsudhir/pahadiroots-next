@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { normalizeProducts, toHomeCardData } from '@/lib/normalizeProduct'
 import { logger } from '@/lib/logger'
 import { filterNewArrivals } from '@/lib/newArrivals'
 import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
@@ -35,7 +35,7 @@ export default async function NewArrivals() {
     isFallback = newArrivals.length === 0
     products = (newArrivals.length ? newArrivals : all.sort(
       (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-    )).slice(0, 4).map(toCardProductData) as Product[]
+    )).slice(0, 4).map(toHomeCardData) as Product[]
     // BUG FIX (audit): these 4 products went into a Client Component
     // (ProductCard) with every AI-content / long-description field still
     // attached — the exact payload bloat already fixed in BestSellers.tsx

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
-import { toCardProductData } from '@/lib/normalizeProduct'
+import { toHomeCardData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
 import CategoryTiles from '@/components/homepage/CategoryTiles'
@@ -296,7 +296,7 @@ export async function buildStates(storeData: Awaited<ReturnType<typeof getStoreD
       products:    normalized
         .filter(p => p.state_id != null && String(p.state_id).toLowerCase() === String(s.id).toLowerCase())
         .slice(0, 4)
-        .map(toCardProductData),
+        .map(toHomeCardData),
     }
   }) as unknown as RichState[]
 }

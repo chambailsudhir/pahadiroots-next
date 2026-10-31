@@ -165,6 +165,33 @@ export function toCardProductData(p: Product): Product {
   return out as unknown as Product
 }
 
+// Homepage cards (ProductCard, QuickViewModal, BestSellersClient's filter/sort) read only these fields. Everything else on
+// a product row — hsn_code, sku_backup, initial_stock, video_url, seo_*, the raw image list … — would be serialised into
+// the page for every product, and the document has to arrive before the browser can even ask for the hero image.
+const HOME_CARD_FIELDS = [
+  'id', 'name', 'slug', 'image_url', 'emoji', 'card_bg', 'region', 'unit', 'unit_label',
+  'price', 'selling_price', 'mrp', 'gst_rate', 'available_stock',
+  'badges', 'badges_new', 'badges_bestseller', 'badges_organic', 'review_count',
+  'category_id', 'state_id', 'is_active', 'sort_order', 'created_at',
+] as const
+const HOME_CARD_VARIANT_FIELDS = ['id', 'product_id', 'size', 'price', 'mrp', 'available_stock', 'is_active', 'sort_order'] as const
+
+export function toHomeCardData(p: Product): Product {
+  const src = p as unknown as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of HOME_CARD_FIELDS) if (src[k] !== undefined) out[k] = src[k]
+  const cat = src.categories as { id?: unknown; name?: unknown; slug?: unknown } | null | undefined
+  if (cat && typeof cat === 'object') out.categories = { id: cat.id, name: cat.name, slug: cat.slug }
+  if (Array.isArray(src.product_variants)) {
+    out.product_variants = (src.product_variants as Record<string, unknown>[]).map(v => {
+      const o: Record<string, unknown> = {}
+      for (const k of HOME_CARD_VARIANT_FIELDS) if (v[k] !== undefined) o[k] = v[k]
+      return o
+    })
+  }
+  return out as unknown as Product
+}
+
 /**
  * getBaseVariant — the single source of truth for "which variant does this
  * card represent by default": the lowest-priced *active* variant, or null

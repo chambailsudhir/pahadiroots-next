@@ -1,6 +1,6 @@
 import BestSellersClient from './BestSellersClient'
 import { getStoreData, getProductsWithImages } from '@/lib/storeData'
-import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
+import { normalizeProducts, toHomeCardData } from '@/lib/normalizeProduct'
 import { logger } from '@/lib/logger'
 import type { Product } from '@/types'
 
@@ -31,8 +31,9 @@ export default async function BestSellers() {
     // for the PDP. That's the same bug fixed on /products via
     // toCardProductData — except worse here, since it was the WHOLE catalog
     // rather than one paginated page of 24.
-    products   = normalizeProducts(withImgs).map(toCardProductData)
+    products   = normalizeProducts(withImgs).map(toHomeCardData)
     categories = (storeData.categories ?? []).filter((c: any) => c.is_active !== false)
+      .map((c: any) => ({ id: c.id, name: c.name, slug: c.slug, emoji: c.emoji ?? null }))
   } catch (err) {
     // BUG FIX (observability — the "Bestsellers section just disappeared
     // with no error anywhere" report): this used to be a bare `catch {
