@@ -1,59 +1,64 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ComponentProps, type ComponentType } from 'react'
+import { Component, useEffect, useState, type ComponentProps, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { useUIStore } from '@/store/uiStore'
-import type CartDrawer from '@/components/cart/CartDrawer'
-import type SearchOverlay from '@/components/search/SearchOverlay'
-import type MobileMenu from '@/components/layout/MobileMenu'
-import type AuthModal from '@/components/auth/AuthModal'
+import type CartDrawerType from '@/components/cart/CartDrawer'
+import type MobileMenuType from '@/components/layout/MobileMenu'
 
 /**
  * Cart drawer, search overlay, mobile menu and login modal — the four panels that are invisible until the visitor taps
  * something. They used to be bundled and hydrated with every page (about 2,000 lines of components plus their
  * dependencies), competing with the hero image and the first interaction for the main thread.
  *
- * Now each one is a separate chunk that is:
- *   1. downloaded + mounted the moment its panel is opened (the store flag flips), and
- *   2. warmed up automatically ~3s after the page has loaded, while the browser is idle,
+ * Now each one is a separate chunk (`next/dynamic`, client-only) that is mounted — and therefore downloaded —
+ *   1. the moment its panel is opened (the store flag flips), and
+ *   2. automatically ~3s after the page has finished loading, while the browser is idle,
  * so by the time a visitor reaches for the cart it is normally already there and behaves exactly as before
- * (including the slide-in animation). If a chunk fails to download (flaky network) it simply retries the next time the
- * panel is opened.
+ * (including the slide-in animation). Once mounted a panel stays mounted.
+ *
+ * Safety net: if a chunk cannot be downloaded (flaky network) the error is contained by `PanelBoundary` — the page keeps
+ * working — and, if the visitor was trying to open the cart or search, they are taken to the full /cart or /search page.
  */
-function useLazyPanel<P extends object>(loader: () => Promise<{ default: ComponentType<P> }>, isOpen: boolean, warm: boolean) {
-  const [Comp, setComp] = useState<ComponentType<P> | null>(null)
-  const inFlight = useRef(false)
+const CartDrawer    = dynamic(() => import('@/components/cart/CartDrawer'),       { ssr: false })
+const SearchOverlay = dynamic(() => import('@/components/search/SearchOverlay'),  { ssr: false })
+const MobileMenu    = dynamic(() => import('@/components/layout/MobileMenu'),     { ssr: false })
+const AuthModal     = dynamic(() => import('@/components/auth/AuthModal'),        { ssr: false })
 
-  const load = useCallback(() => {
-    if (inFlight.current) return
-    inFlight.current = true
-    loader().then(m => setComp(() => m.default)).catch(() => { inFlight.current = false })   // retried on next open
-  }, [loader])
-
-  useEffect(() => { if (isOpen && !Comp) load() }, [isOpen, Comp, load])
-  useEffect(() => { if (warm && !Comp) load() }, [warm, Comp, load])
-  return Comp
+type SiteSettings = ComponentProps<typeof CartDrawerType>['settings'] & ComponentProps<typeof MobileMenuType>['settings']
+type Props = {
+  settings:   SiteSettings
+  categories: ComponentProps<typeof MobileMenuType>['categories']
+  states:     ComponentProps<typeof MobileMenuType>['states']
 }
 
-const loadCart   = () => import('@/components/cart/CartDrawer')
-const loadSearch = () => import('@/components/search/SearchOverlay')
-const loadMenu   = () => import('@/components/layout/MobileMenu')
-const loadAuth   = () => import('@/components/auth/AuthModal')
+/** Contains a failed panel (e.g. its chunk did not download) so it can never take the whole page down. */
+class PanelBoundary extends Component<{ children: ReactNode; onError?: () => void }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(error: Error) {
+    console.error('[LazyOverlays] a panel failed to load', error)
+    this.props.onError?.()
+  }
+  render() { return this.state.failed ? null : this.props.children }
+}
 
-type CartProps   = ComponentProps<typeof CartDrawer>
-type SearchProps = ComponentProps<typeof SearchOverlay> & object   // takes no props
-type MenuProps   = ComponentProps<typeof MobileMenu>
-type AuthProps   = ComponentProps<typeof AuthModal> & object        // takes no props
-
-// The layout passes the same site settings to the cart drawer and the mobile menu.
-type Props = { settings: CartProps['settings'] & MenuProps['settings']; categories: MenuProps['categories']; states: MenuProps['states'] }
+/** True from the first moment the panel is opened (or the background warm-up fires) — and stays true. */
+function useMountedOnce(isOpen: boolean, warm: boolean): boolean {
+  const [mounted, setMounted] = useState(false)
+  if ((isOpen || warm) && !mounted) setMounted(true)
+  return mounted
+}
 
 export default function LazyOverlays({ settings, categories, states }: Props) {
+  const router = useRouter()
   const cartOpen   = useUIStore(s => s.isCartOpen)
   const searchOpen = useUIStore(s => s.isSearchOpen)
   const menuOpen   = useUIStore(s => s.isMobileMenuOpen)
   const authOpen   = useUIStore(s => s.isAuthOpen)
 
-  // Warm-up: once the page has finished loading, wait for the browser to be idle (max 6s) and then fetch the panels.
+  // Warm-up: once the page has finished loading, wait 3s and then for the browser to be idle (max 6s).
   const [warm, setWarm] = useState(false)
   useEffect(() => {
     let cancelled = false, idleId: number | undefined, timer: ReturnType<typeof setTimeout> | undefined
@@ -73,17 +78,17 @@ export default function LazyOverlays({ settings, categories, states }: Props) {
     }
   }, [])
 
-  const Cart   = useLazyPanel<CartProps>(loadCart, cartOpen, warm)
-  const Search = useLazyPanel<SearchProps>(loadSearch, searchOpen, warm)
-  const Menu   = useLazyPanel<MenuProps>(loadMenu, menuOpen, warm)
-  const Auth   = useLazyPanel<AuthProps>(loadAuth, authOpen, warm)
+  const cartOn   = useMountedOnce(cartOpen, warm)
+  const searchOn = useMountedOnce(searchOpen, warm)
+  const menuOn   = useMountedOnce(menuOpen, warm)
+  const authOn   = useMountedOnce(authOpen, warm)
 
   return (
     <>
-      {Cart   && <Cart settings={settings} />}
-      {Search && <Search />}
-      {Menu   && <Menu settings={settings} categories={categories} states={states} />}
-      {Auth   && <Auth />}
+      {cartOn   && <PanelBoundary onError={() => { if (cartOpen)   router.push('/cart') }}><CartDrawer settings={settings} /></PanelBoundary>}
+      {searchOn && <PanelBoundary onError={() => { if (searchOpen) router.push('/search') }}><SearchOverlay /></PanelBoundary>}
+      {menuOn   && <PanelBoundary><MobileMenu settings={settings} categories={categories} states={states} /></PanelBoundary>}
+      {authOn   && <PanelBoundary><AuthModal /></PanelBoundary>}
     </>
   )
 }
