@@ -50,7 +50,7 @@ const playfair = Playfair_Display({
 const lato = Lato({
   variable: '--font-lato',
   subsets: ['latin'],
-  weight: ['300', '400', '700', '900'],
+  weight: ['400', '700', '900'],  // 300 is never used — one less font file competing with the hero image
 })
 
 // BUG FIX (confirmed against a live admin-panel screenshot): this was a
@@ -370,7 +370,7 @@ export default async function RootLayout({
             data-name="Pahadi_AI"
             data-tagline="Himalayan Shopping Guide · Online"
             data-whatsapp={waNumber}
-            strategy="afterInteractive"
+            strategy="lazyOnload"
           />
         )}
         {/* Consent banner / preferences. Client-only, fixed position (no layout shift). */}
