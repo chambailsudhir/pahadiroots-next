@@ -5,7 +5,7 @@ const limiter = vi.fn(async (..._a: any[]) => true)
 vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: (...a: any[]) => limiter(...a) }))
 
 import {
-  guardAiRequest, isSameOrigin, sanitizeChatContents, sanitizeSystemText, isAllowedAudioMime, readCappedJson,
+  toClientChatResponse, guardAiRequest, isSameOrigin, sanitizeChatContents, sanitizeSystemText, isAllowedAudioMime, readCappedJson,
 } from '@/lib/api/aiGuard'
 
 const OPTS = { name: 't', maxBodyBytes: 1000, perMinute: 2, perHour: 5, perDayGlobal: 9 }
@@ -25,6 +25,30 @@ describe('same-origin check', () => {
     expect(isSameOrigin(req({}))).toBe(false)
     expect(isSameOrigin(req({ origin: 'not a url' }))).toBe(false)
   })
+})
+
+describe('Sec-Fetch-Site (set by the browser, not forgeable by page scripts)', () => {
+  it('refuses a request the browser labels cross-site even when Origin is forged', () => {
+    expect(isSameOrigin(req({ origin: 'https://www.pahadiroots.com', 'sec-fetch-site': 'cross-site' }))).toBe(false)
+    expect(isSameOrigin(req({ origin: 'https://www.pahadiroots.com', 'sec-fetch-site': 'same-site' }))).toBe(false)
+  })
+  it('accepts same-origin and user-initiated labels', () => {
+    expect(isSameOrigin(req({ origin: 'https://www.pahadiroots.com', 'sec-fetch-site': 'same-origin' }))).toBe(true)
+  })
+})
+
+describe('toClientChatResponse', () => {
+  it('relays only text, finish reason and at most 5 cited web sources', () => {
+    const out: any = toClientChatResponse({
+      modelVersion: 'x', usageMetadata: { total: 1 },
+      candidates: [{ content: { role: 'model', parts: [{ text: 'Hello' }, { inlineData: 'x' }] }, finishReason: 'STOP', safetyRatings: [1],
+        groundingMetadata: { searchEntryPoint: { renderedContent: '<div>…</div>' }, groundingChunks: Array.from({ length: 8 }, (_, i) => ({ web: { uri: `https://e.test/${i}`, title: 't', extra: 1 } })) } }],
+    })
+    expect(out.candidates[0].content.parts).toEqual([{ text: 'Hello' }])
+    expect(out.candidates[0].groundingMetadata.groundingChunks).toHaveLength(5)
+    expect(JSON.stringify(out)).not.toMatch(/safetyRatings|usageMetadata|searchEntryPoint|modelVersion|extra/)
+  })
+  it('returns null when there is no candidate', () => { expect(toClientChatResponse({})).toBeNull() })
 })
 
 describe('guardAiRequest', () => {

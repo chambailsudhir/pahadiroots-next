@@ -5,7 +5,7 @@
 // Keys stored in Vercel Environment Variables — never exposed to browser.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { guardAiRequest, readCappedJson, sanitizeChatContents, getClientIp } from '@/lib/api/aiGuard'
+import { guardAiRequest, readCappedJson, sanitizeChatContents, getClientIp, toClientChatResponse } from '@/lib/api/aiGuard'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { buildChatSystemPrompt, resolveChatLang, CHAT_ROUTE_LIMITS } from './systemPrompt'
 import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
@@ -79,9 +79,10 @@ export async function POST(req: NextRequest) {
 
       const data = await geminiRes.json()
 
-      if (geminiRes.ok && data.candidates?.[0]) {
+      const clean = geminiRes.ok ? toClientChatResponse(data) : null
+      if (clean) {
         log.info('chat_gemini_ok')
-        return withId(NextResponse.json(data, { status: 200 }))
+        return withId(NextResponse.json(clean, { status: 200 }))
       }
 
       log.warn('chat_gemini_failed', { upstream: data.error?.message || geminiRes.status })
