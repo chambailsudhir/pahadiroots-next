@@ -35,6 +35,14 @@ const CLOSED_PANELS = {
   isAuthOpen:       false,
 }
 
+let cartOpener: HTMLElement | null = null
+/** Element that opened the cart drawer (for returning keyboard focus when it closes). Read once. */
+export function takeCartOpener(): HTMLElement | null {
+  const el = cartOpener
+  cartOpener = null
+  return el
+}
+
 export const useUIStore = create<UIStore>((set) => ({
   isCartOpen:       false,
   isSearchOpen:     false,
@@ -42,7 +50,13 @@ export const useUIStore = create<UIStore>((set) => ({
   isAuthOpen:       false,
   searchQuery:      '',
 
-  openCart:         () => set({ ...CLOSED_PANELS, isCartOpen:       true }),
+  openCart:         () => {
+    // The drawer is a lazily-loaded chunk: on the first open it mounts after the click, by which time
+    // document.activeElement can already be <body>. Remember the real opener here, at click time.
+    cartOpener = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      && document.activeElement !== document.body ? document.activeElement : null
+    set({ ...CLOSED_PANELS, isCartOpen: true })
+  },
   closeCart:        () => set({ isCartOpen:       false }),
   openSearch:       () => set({ ...CLOSED_PANELS, isSearchOpen:     true }),
   // closeSearch also resets the query so the next open starts blank.
