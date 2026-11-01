@@ -1,5 +1,6 @@
 import type { SiteSettings } from '@/types'
 import { freeShippingSub } from '@/lib/shippingCopy'
+import { AdminIcon } from '@/components/ui/Icon'
 
 interface Props { settings: SiteSettings }
 
@@ -45,7 +46,7 @@ export default function TrustBar({ settings }: Props) {
     <div className="trust-bar" style={{ background: bg }}>
       {display.map((item, i) => (
         <div key={i} className="trust-cell">
-          <span className="trust-icon">{item.icon}</span>
+          <span className="trust-icon" aria-hidden="true"><AdminIcon value={item.icon} /></span>
           <div>
             <div className="trust-title" style={{ color: txt }}>{item.title}</div>
             <div className="trust-sub" style={{ color: txt, opacity: 0.6 }}>{item.sub}</div>

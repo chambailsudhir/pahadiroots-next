@@ -147,8 +147,12 @@ export const abandonedCartItemSchema = z.object({
   price:      z.number().nonnegative(),
 })
 
+// A cart-draft session id is an unguessable random id minted in the browser (a UUID). Requiring a real-length id means nobody can
+// target another visitor's draft with a short guessable value (audit C-11).
+const CART_SESSION_ID = z.string().trim().regex(/^[A-Za-z0-9_-]{16,100}$/, 'invalid session id')
+
 export const saveAbandonedCartSchema = z.object({
-  session_id: z.string().trim().min(1).max(100),
+  session_id: CART_SESSION_ID,
   email:      z.string().email().toLowerCase().trim().optional(),
   phone:      z.string().trim().max(20).optional(),
   name:       z.string().trim().max(100).optional(),
@@ -157,7 +161,7 @@ export const saveAbandonedCartSchema = z.object({
 }).refine(d => !!d.email || !!d.phone, { message: 'email or phone required' })
 
 export const markCartConvertedSchema = z.object({
-  session_id: z.string().trim().min(1).max(100),
+  session_id: CART_SESSION_ID,
 })
 
 // ─── Search Schema ─────────────────────────────────────────────────────────────

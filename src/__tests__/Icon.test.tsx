@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import React from 'react'
-import Icon from '@/components/ui/Icon'
+import Icon, { AdminIcon, leadingEmojiIcon } from '@/components/ui/Icon'
 
 describe('Icon', () => {
   it('is a decorative inline SVG that inherits colour and size', () => {
@@ -18,9 +18,21 @@ describe('Icon', () => {
     expect(container.querySelector('svg')!.getAttribute('fill')).toBe('currentColor')
   })
   it('every icon draws something', () => {
-    for (const n of ['search', 'heart', 'user', 'sparkle', 'cart', 'eye', 'pin', 'mail', 'phone', 'globe', 'sun', 'moon', 'package'] as const) {
+    for (const n of ['search', 'heart', 'user', 'sparkle', 'cart', 'eye', 'pin', 'mail', 'phone', 'globe', 'sun', 'moon', 'package', 'leaf', 'mountain', 'users', 'truck', 'shield', 'gift', 'flask', 'star'] as const) {
       const { container } = render(<Icon name={n} />)
       expect(container.querySelector('svg')!.children.length).toBeGreaterThan(0)
     }
+  })
+
+  it('turns known owner-written emoji into icons and leaves unknown values alone', () => {
+    const { container } = render(<><AdminIcon value="🏔️" /><span data-t>{<AdminIcon value="🦄" />}</span></>)
+    expect(container.querySelectorAll('svg').length).toBe(1)
+    expect(container.querySelector('[data-t]')!.textContent).toBe('🦄')
+  })
+  it('splits a leading emoji off ticker text', () => {
+    expect(leadingEmojiIcon('🎁 Use code WELCOME50')).toEqual({ icon: 'gift', rest: 'Use code WELCOME50' })
+    expect(leadingEmojiIcon('🚚 Free shipping')).toMatchObject({ icon: 'truck', rest: 'Free shipping' })
+    expect(leadingEmojiIcon('🦄 Unknown')).toEqual({ icon: null, rest: 'Unknown' })
+    expect(leadingEmojiIcon('Direct from farmers')).toEqual({ icon: null, rest: 'Direct from farmers' })
   })
 })
