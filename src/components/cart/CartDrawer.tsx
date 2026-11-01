@@ -233,11 +233,18 @@ export default function CartDrawer({ settings }: Props) {
       // focus — so skip candidates that are disabled or hidden. The header and mobile-nav cart buttons are the fallback.
       const usable = (el: Element | null | undefined): el is HTMLElement =>
         !!el && el.isConnected && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0
-      const fallbacks = Array.from(document.querySelectorAll<HTMLElement>('button[aria-label^="Open cart"]'))
-      const target = [takeCartOpener(), openerRef.current, ...fallbacks].find(usable)
+      const opener = takeCartOpener()
+      const remembered = openerRef.current
       openerRef.current = null
-      // Nothing to restore on the very first render (drawer never opened).
-      if (target && document.activeElement !== target && wasOpenRef.current) target.focus()
+      // Restore on the next frame: in the same commit other panels may still be marked inert / scroll-locked, which
+      // makes focus() silently do nothing (seen on mobile, where the fallback is the bottom-nav cart button).
+      if (wasOpenRef.current) {
+        requestAnimationFrame(() => {
+          const fallbacks = Array.from(document.querySelectorAll<HTMLElement>('button[aria-label^="Open cart"]'))
+          const target = [opener, remembered, ...fallbacks].find(usable)
+          if (target && document.activeElement !== target) target.focus()
+        })
+      }
       wasOpenRef.current = false
     }
 
