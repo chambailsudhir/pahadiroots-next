@@ -47,6 +47,7 @@ const PATHS = {
   bank:    <><path d="m3 9.500 9-5.500 9 5.500H3Z" /><path d="M5.500 9.500v8M10 9.500v8M14 9.500v8M18.500 9.500v8M3 20h18" /></>,
   refresh: <><path d="M20 11.500A8 8 0 0 0 5.500 7.500L4 9.500" /><path d="M4 4.500v5h5" /><path d="M4 12.500a8 8 0 0 0 14.500 4L20 14.500" /><path d="M20 19.500v-5h-5" /></>,
   settings:<><circle cx="12" cy="12" r="3" /><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100" /></>,
+  basket:  <><path d="M3.500 10h17l-2 10h-13l-2-10Z" /><path d="m8 10 3.500-6M16 10l-3.500-6" /></>,
   sun:     <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M2 12h2M20 12h2M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400" /></>,
   moon:    <path d="M20.500 14.500A8.500 8.500 0 0 1 9.500 3.500a8.500 8.500 0 1 0 11 11Z" />,
 } as const
@@ -83,7 +84,7 @@ const EMOJI_ICON: Record<string, IconName> = {
   '🚚': 'truck', '🚛': 'truck', '📦': 'package', '🔒': 'lock', '🔐': 'lock', '🛡': 'shield', '🎁': 'gift', '🔬': 'flask', '🧪': 'flask', '⭐': 'star', '🌟': 'star',
   '✅': 'check', '✓': 'check', '⚠': 'warning', '📍': 'pin', '🔍': 'search', '🛒': 'cart', '🛍': 'cart', '🏠': 'home', '🏢': 'building', '💬': 'chat', '🪙': 'coins',
   '⚡': 'bolt', '🏷': 'tag', '↩': 'undo', '👁': 'eye', '🙈': 'eye-off', '✏': 'edit', '🗑': 'trash', '🔔': 'bell', '⏰': 'clock', '⏱': 'clock', '💵': 'cash',
-  '🏦': 'bank', '🔄': 'refresh', '⚙': 'settings', '❌': 'close', '✕': 'close', '👤': 'user', '✉': 'mail', '📞': 'phone', '🎉': 'sparkle', '💸': 'cash', '🎟': 'tag',
+  '🏦': 'bank', '🔄': 'refresh', '⚙': 'settings', '❌': 'close', '✕': 'close', '👤': 'user', '✉': 'mail', '📞': 'phone', '🎉': 'sparkle', '💸': 'cash', '🎟': 'tag', '🧺': 'basket',
 }
 const LEADING_EMOJI = /^\s*(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier})*)\s*/u
 const clean = (e: string) => e.replace(/\uFE0F/g, '')

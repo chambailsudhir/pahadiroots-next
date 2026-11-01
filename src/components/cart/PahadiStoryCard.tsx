@@ -75,7 +75,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
         {CERTS.map(c => (
           <div key={c.label} className={styles.cert}>
             {/* A2: aria-hidden — icon emoji is decorative; label text follows */}
-            <span className={styles.certIcon} aria-hidden="true"><AdminIcon value={c.icon} color="#1a3a1e" /></span>
+            <span className={styles.certIcon} aria-hidden="true"><AdminIcon value={c.icon} color="#f0d98c" /></span>
             <div>
               <div className={styles.certLabel}>{c.label}</div>
               <div className={styles.certSub}>{c.sub}</div>
@@ -93,7 +93,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
             <div key={s.step} className={styles.stepWrap}>
               <div className={styles.step}>
                 {/* A2: aria-hidden — icon emoji is decorative; step label follows */}
-                <div className={styles.stepIcon} aria-hidden="true"><AdminIcon value={s.icon} color="#1a3a1e" /></div>
+                <div className={styles.stepIcon} aria-hidden="true"><AdminIcon value={s.icon} color="#f0d98c" /></div>
                 <div className={styles.stepLabel}>{s.step}</div>
                 <div className={styles.stepDesc}>{s.desc}</div>
               </div>
