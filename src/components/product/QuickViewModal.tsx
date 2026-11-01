@@ -18,6 +18,7 @@ import { useUIStore } from '@/store/uiStore'
 import { formatPrice, savingsPercent } from '@/lib/utils'
 import { reportCardAddToCart } from '@/lib/analytics/cartEvents'
 import type { Product, ProductVariant } from '@/types'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   product: Product
@@ -119,7 +120,7 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
 
         <div className="qv-body">
           {(product.region || product.categories?.name) && (
-            <div className="qv-region">📍 {product.region || product.categories?.name}</div>
+            <div className="qv-region"><Icon name="pin" size="1em" /> {product.region || product.categories?.name}</div>
           )}
           <h3 className="qv-name">{product.name}</h3>
 
@@ -155,7 +156,7 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
 
           <button type="button" className="qv-atc" onClick={handleAddToCart} disabled={!inStock}>
             {/* BUG FIX (audit C-3): this said "Notify Me" but was disabled, so it did nothing. Say what it is. */}
-            {inStock ? '🛒 Add to Cart' : 'Out of Stock'}
+            {inStock ? <><Icon name="cart" /> Add to Cart</> : 'Out of Stock'}
           </button>
 
           <Link href={`/products/${product.slug}`} className="qv-full-details">

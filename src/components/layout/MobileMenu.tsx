@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useUIStore } from '@/store/uiStore'
 import type { SiteSettings, Category, State } from '@/types'
 import { isEnabled } from '@/lib/siteSettingsHelpers'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   settings:    SiteSettings
@@ -92,20 +93,20 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   const showAbout    = settings.about_page_enabled !== 'false'
 
   const navLinks = [
-    { href: '/',                         label: 'Home',        icon: '🏡' },
+    { href: '/',                         label: 'Home' },
     // BUG FIX: '/collections/best-sellers' 404s (not a real category slug) —
     // same fix as MegaMenu.tsx, points at the working 'popular' sort instead.
-    { href: '/products?sort=popular',    label: 'Best Sellers',icon: '⭐' },
+    { href: '/products?sort=popular',    label: 'Best Sellers' },
     // BUG FIX: mobile menu had no New Arrivals entry at all, unlike the
     // desktop MegaMenu's CURATED list — added for parity.
-    { href: '/new-arrivals',             label: 'New Arrivals', icon: '🆕' },
-    { href: '/products',                 label: 'All Products', icon: '🌿' },
-    ...(showAbout    ? [{ href: '/our-stories', label: 'Our Story',   icon: '📖' }] : []),
-    ...(showBlog     ? [{ href: '/blog',     label: 'Blog',        icon: '✍️' }] : []),
-    ...(showTrack    ? [{ href: '/track',    label: 'Track Order', icon: '📦' }] : []),
-    ...(showWishlist ? [{ href: '/wishlist', label: 'Wishlist',    icon: '❤️' }] : []),
-    { href: '/account',                  label: 'My Account',   icon: '👤' },
-    { href: '/contact',                  label: 'Contact',      icon: '💬' },
+    { href: '/new-arrivals',             label: 'New Arrivals' },
+    { href: '/products',                 label: 'All Products' },
+    ...(showAbout    ? [{ href: '/our-stories', label: 'Our Story' }] : []),
+    ...(showBlog     ? [{ href: '/blog',     label: 'Blog' }] : []),
+    ...(showTrack    ? [{ href: '/track',    label: 'Track Order' }] : []),
+    ...(showWishlist ? [{ href: '/wishlist', label: 'Wishlist' }] : []),
+    { href: '/account',                  label: 'My Account' },
+    { href: '/contact',                  label: 'Contact' },
   ]
 
   return (
@@ -125,14 +126,14 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
           aria-pressed={isDark}
           onClick={() => setIsDark(setPremium(!readPremium()))}
         >
-          <span aria-hidden="true">{isDark ? '☀️' : '✨'}</span>
+          <Icon name={isDark ? 'sun' : 'sparkle'} />
           {isDark ? 'Standard Mode' : 'Premium Mode'}
         </button>
 
         {/* Primary links */}
         {navLinks.map(item => (
           <Link key={item.href} href={item.href} onClick={closeMobileMenu}>
-            <span style={{ marginRight: 8 }}>{item.icon}</span>{item.label}
+            {item.label}
           </Link>
         ))}
 

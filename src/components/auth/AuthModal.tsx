@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
+import Icon from '@/components/ui/Icon'
 
 type AuthTab = 'email' | 'signup'
 
@@ -334,13 +335,13 @@ export default function AuthModal() {
                   would just trade one broken promise for a different one. */}
               <div className="am-ql-wrap">
                 {[
-                  { icon: '📦', href: '/account?tab=orders', label: 'My Orders',      sub: 'Track & manage orders' },
-                  { icon: '🤍', href: '/wishlist',          label: 'Wishlist',        sub: 'Saved products' },
-                  { icon: '📍', href: '/account/addresses', label: 'Saved Addresses', sub: 'Delivery locations' },
-                  { icon: '💬', href: '/contact',           label: 'Contact Us',      sub: "We're here to help" },
+                  { icon: 'package' as const, href: '/account?tab=orders', label: 'My Orders',      sub: 'Track & manage orders' },
+                  { icon: 'heart' as const, href: '/wishlist',          label: 'Wishlist',        sub: 'Saved products' },
+                  { icon: 'pin' as const, href: '/account/addresses', label: 'Saved Addresses', sub: 'Delivery locations' },
+                  { icon: 'mail' as const, href: '/contact',           label: 'Contact Us',      sub: "We're here to help" },
                 ].map(q => (
                   <Link key={q.label} href={q.href} className="am-ql-item" onClick={closeAuth}>
-                    <span className="am-ql-icon">{q.icon}</span>
+                    <span className="am-ql-icon"><Icon name={q.icon} size="1.1em" /></span>
                     <div><div className="am-ql-lbl">{q.label}</div><div className="am-ql-sub">{q.sub}</div></div>
                     <span className="am-ql-arr">›</span>
                   </Link>
