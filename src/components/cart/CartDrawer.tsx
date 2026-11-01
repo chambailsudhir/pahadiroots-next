@@ -232,7 +232,8 @@ export default function CartDrawer({ settings }: Props) {
       // The PDP button is disabled for ~2s after "Add to Cart" (it shows "Added"), and a disabled button cannot take
       // focus — so skip candidates that are disabled or hidden. The header and mobile-nav cart buttons are the fallback.
       const usable = (el: Element | null | undefined): el is HTMLElement =>
-        !!el && el.isConnected && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0
+        !!el && el !== document.body && el !== document.documentElement && el.isConnected
+        && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0
       const opener = takeCartOpener()
       const remembered = openerRef.current
       openerRef.current = null
