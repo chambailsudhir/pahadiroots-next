@@ -24,6 +24,10 @@ export default function Reveal({
     const el = ref.current
     if (!el) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return
+    // Anything already on screen when we get here stays visible. Arming it now would hide content that was painted by the
+    // server a moment ago and then fade it back in — a visible flash on the first screen of every page.
+    const r = el.getBoundingClientRect()
+    if (r.top < window.innerHeight && r.bottom > 0) return
     el.classList.add(s.rvArm)
     const io = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) { el.classList.add(s.rvIn); io.disconnect() }

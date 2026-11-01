@@ -70,9 +70,11 @@ export default function RegionStories({ regionNames = [] }: { regionNames?: stri
   const [active, setActive] = useState(PANELS[0].id)
 
   const onKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return
     e.preventDefault()
-    const next = PANELS[(i + (e.key === 'ArrowRight' ? 1 : PANELS.length - 1)) % PANELS.length].id
+    // WAI-ARIA tabs pattern: arrows move one tab (wrapping), Home / End jump to the first / last.
+    const target = e.key === 'Home' ? 0 : e.key === 'End' ? PANELS.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : PANELS.length - 1)) % PANELS.length
+    const next = PANELS[target].id
     setActive(next)
     document.getElementById(`rs-tab-${next}`)?.focus()
   }
@@ -136,7 +138,7 @@ export default function RegionStories({ regionNames = [] }: { regionNames?: stri
               {p.made && (
                 <>
                   <h4>Made here</h4>
-                  <ul>{p.made.map(([n, m]) => <li key={n}><Link href={p.href!}><span>{n}</span><small>{m}</small></Link></li>)}</ul>
+                  <ul>{p.made.map(([n, m]) => <li key={n}><Link href={`/search?q=${encodeURIComponent(n)}`}><span>{n}</span><small>{m}</small></Link></li>)}</ul>
                 </>
               )}
               {p.href && <Link href={p.href} className={s.cta}>{p.cta} <span aria-hidden="true">→</span></Link>}

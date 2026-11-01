@@ -30,7 +30,6 @@ describe('REGION_META — data completeness', () => {
       expect(meta.panelBg, `${id}.panelBg`).toBeTruthy()
       expect(meta.snippet, `${id}.snippet`).toBeTruthy()
       expect(meta.description, `${id}.description`).toBeTruthy()
-      expect(meta.pills.length, `${id}.pills should not be empty`).toBeGreaterThan(0)
     }
   })
 
@@ -63,11 +62,3 @@ describe('getRegionMeta — case-insensitive lookup', () => {
   })
 })
 
-describe('REGION_META — the specific drift bug #2 caught', () => {
-  it('Nagaland\'s Axone pill is the single canonical value (no drifted duplicate to disagree with)', () => {
-    // Before the fix: regions/page.tsx said "🫙 Axone", ExploreByRegion.tsx said
-    // "🫙 Axone (Fermented)". Now there is exactly one copy, so this is the only
-    // value either surface can ever show.
-    expect(REGION_META.nl.pills).toContain('🫙 Axone (Fermented)')
-  })
-})

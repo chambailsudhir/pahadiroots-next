@@ -184,11 +184,9 @@ export default function Header({ settings, categories = [], states = [] }: Props
                         onClick={async () => {
                           setAcctOpen(false)
                           setLoggingOut(true)
-                          await performHeaderLogout()
-                          // performHeaderLogout() reloads the page on success;
-                          // setLoggingOut(false) only matters if that somehow
-                          // doesn't happen (e.g. reload blocked in a test env).
-                          setLoggingOut(false)
+                          // performHeaderLogout() reloads the page on success. `finally` guarantees the button never stays
+                          // stuck on "Logging out…" if it throws or the reload is blocked.
+                          try { await performHeaderLogout() } finally { setLoggingOut(false) }
                         }}
                       >
                         {loggingOut ? 'Logging out…' : 'Logout'}

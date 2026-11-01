@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { trackPageView } from '@/lib/analytics/track'
 
 // Fires one page_view event per route change (including the first load).
@@ -9,15 +9,15 @@ import { trackPageView } from '@/lib/analytics/track'
 // unmounts between navigations — only the pathname/search params change.
 export default function PageViewTracker() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const lastTracked = useRef<string | null>(null)
 
+  // The event carries only the path, so de-duplicate on the path too. It used to key on path + query string while sending
+  // just the path, so filtering/sorting/paging a listing sent several identical "page views" for one page.
   useEffect(() => {
-    const full = `${pathname}?${searchParams.toString()}`
-    if (lastTracked.current === full) return
-    lastTracked.current = full
+    if (lastTracked.current === pathname) return
+    lastTracked.current = pathname
     trackPageView(pathname)
-  }, [pathname, searchParams])
+  }, [pathname])
 
   return null
 }

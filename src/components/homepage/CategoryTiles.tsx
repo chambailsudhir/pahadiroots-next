@@ -200,7 +200,7 @@ export default function CategoryTiles({ categories }: Props) {
       {/* Carousel */}
       <div style={{ position: 'relative', padding: '12px 52px 28px', boxSizing: 'border-box', overflow: 'hidden' }}>
 
-        <button className="cgrid-arrow left" aria-label="Previous" style={{
+        <button type="button" className="cgrid-arrow left" aria-label="Previous" style={{
           position: 'absolute', top: '50%', transform: 'translateY(-60%)', zIndex: 10,
           left: '8px', width: '36px', height: '36px', background: '#fff',
           border: '1.5px solid #e0e0e0', borderRadius: '50%', display: 'flex',
@@ -209,7 +209,7 @@ export default function CategoryTiles({ categories }: Props) {
           transition: 'all .2s',
         }}>&#8249;</button>
 
-        <button className="cgrid-arrow right" aria-label="Next" style={{
+        <button type="button" className="cgrid-arrow right" aria-label="Next" style={{
           position: 'absolute', top: '50%', transform: 'translateY(-60%)', zIndex: 10,
           right: '8px', width: '36px', height: '36px', background: '#fff',
           border: '1.5px solid #e0e0e0', borderRadius: '50%', display: 'flex',

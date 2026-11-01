@@ -30,12 +30,12 @@ export default function AnnouncementBar({ settings }: Props) {
           {/* F-02: the sentence comes from the live free_shipping_min setting (0 → "on all orders"),
               never from a hard-coded amount. */}
           🌿 {freeShippingPhrase(settings)} &nbsp;|&nbsp;{' '}
-          <a href="/checkout">UPI · Cards{isCodEnabled(settings) ? ' · COD' : ''}</a> &nbsp;|&nbsp;{' '}
-          {/* BUG FIX: was settings.states_covered, a key the admin panel
-              never actually writes to. The real key it manages is
-              stat_himalayan_states (see lib/heroStats.ts). */}
+          <a href="/checkout">UPI · Cards{isCodEnabled(settings) ? ' · COD' : ''}</a>
+          {/* BUG FIX: was settings.states_covered, a key the admin panel never actually writes to. The real key it manages
+              is stat_himalayan_states (see lib/heroStats.ts). The separator is part of this item so a hidden stat never
+              leaves a dangling "|" (it used to render "… | |"). */}
           {getStatesCovered(settings) && settings.stat_hide_stat_himalayan_states !== 'true'
-            ? <>&nbsp;|&nbsp;{' '}{getStatesCovered(settings)} Himalayan States Covered</>
+            ? <> &nbsp;|&nbsp;{' '}{getStatesCovered(settings)} Himalayan States Covered</>
             : null}
         </span>
       )}

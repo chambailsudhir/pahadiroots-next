@@ -37,16 +37,14 @@ export default function ExploreByRegion({ states }: Props) {
   }, [states])
 
   const [activeId, setActiveId] = useState(initialId)
-  const sectionRef = useRef<HTMLElement>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   if (!states.length) return null
 
   const activeIndex = Math.max(0, states.findIndex(s => s.id === activeId))
   const activeState = states[activeIndex] ?? states[0]
-  const meta: Partial<RegionMeta> & Pick<RegionMeta, 'tagline' | 'panelBg' | 'pills' | 'snippet'> = getRegionMeta(activeState.id) ?? {
+  const meta: Partial<RegionMeta> & Pick<RegionMeta, 'tagline' | 'panelBg' | 'snippet'> = getRegionMeta(activeState.id) ?? {
     tagline: activeState.name,
     panelBg: '#0f3219',
-    pills: [],
     snippet: activeState.description ?? '',
   }
 
@@ -72,7 +70,7 @@ export default function ExploreByRegion({ states }: Props) {
   }
 
   return (
-    <section ref={sectionRef} className={styles.section} id="regions">
+    <section className={styles.section} id="regions">
       <div className={styles.inner}>
         <header className={styles.header}>
           <div>
