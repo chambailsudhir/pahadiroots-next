@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('next/link', () => ({
@@ -124,5 +124,36 @@ describe('BestSellersClient — 3 columns x 2 rows layout', () => {
     const { container } = render(<BestSellersClient initialProducts={products} categories={[]} />)
     expect(container.querySelectorAll('[data-testid="product-card"]').length).toBe(6)
     expect(screen.getByText(/Show All Products/).closest('a')?.getAttribute('href')).toBe('/products')
+  })
+
+  describe('lazy catalogue (only 6 cards are server-rendered)', () => {
+    const six = Array.from({ length: 6 }, (_, i) => product({ id: i + 1, name: `Shown ${i + 1}`, category_id: 1 }))
+    const cats = [{ id: 1, name: 'Honey', slug: 'honey', has_products: true }, { id: 2, name: 'Ghee', slug: 'ghee', has_products: true }]
+
+    it('does not fetch anything until the visitor touches the filters', () => {
+      const f = vi.fn(); vi.stubGlobal('fetch', f)
+      render(<BestSellersClient initialProducts={six} categories={cats} />)
+      expect(f).not.toHaveBeenCalled()
+      vi.unstubAllGlobals()
+    })
+
+    it('fetches the full catalogue once on the first filter click and then filters across all of it', async () => {
+      const all = [...six, product({ id: 50, name: 'Ghee From Catalogue', category_id: 2 })]
+      const f = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ products: all }) }); vi.stubGlobal('fetch', f)
+      render(<BestSellersClient initialProducts={six} categories={cats} />)
+      fireEvent.click(screen.getByText(/Ghee$/))
+      await waitFor(() => expect(screen.getByText('Ghee From Catalogue')).toBeTruthy())
+      expect(f).toHaveBeenCalledTimes(1)
+      expect(f.mock.calls[0][0]).toBe('/api/v1/search-catalog')
+      vi.unstubAllGlobals()
+    })
+
+    it('keeps the server-rendered cards and offers the full shop when the catalogue cannot be loaded', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }))
+      render(<BestSellersClient initialProducts={six} categories={cats} />)
+      fireEvent.click(screen.getByText(/Ghee$/))
+      await waitFor(() => expect(screen.getByText(/Browse all products/)).toBeTruthy())
+      vi.unstubAllGlobals()
+    })
   })
 })

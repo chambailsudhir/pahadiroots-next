@@ -14,6 +14,7 @@ import MegaMenu from './MegaMenu'
 import AnnouncementBar from './AnnouncementBar'
 import TickerBar from './TickerBar'
 import Icon from '@/components/ui/Icon'
+import { minifyCss } from '@/lib/minifyCss'
 
 interface Props {
   settings:   SiteSettings
@@ -234,7 +235,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
         </div>
       </nav>
 
-      <style>{`
+      <style>{minifyCss(`
         /* ── Old-site nav styles ── */
         .old-nav{
           background:#fff;padding:0 32px;border-bottom:1px solid rgba(26,58,30,.12);
@@ -387,7 +388,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           .old-nav-right{gap:0}
           .old-cart-btn{padding:8px 12px;margin-left:2px}
         }
-      `}</style>
+      `)}</style>
     </header>
     </>
   )

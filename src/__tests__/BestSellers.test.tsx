@@ -53,7 +53,7 @@ describe('BestSellers', () => {
         { id: 2, name: 'Discontinued', slug: 'old', is_active: false },
       ],
     })
-    mockGetProductsWithImages.mockReturnValue([product({ id: 1 }), product({ id: 2 })])
+    mockGetProductsWithImages.mockReturnValue([product({ id: 1, category_id: 1 }), product({ id: 2, category_id: 1 })])
 
     const el = await BestSellers()
     render(el as React.ReactElement)
@@ -133,11 +133,27 @@ describe('BestSellers', () => {
     mockGetStoreData.mockResolvedValue({
       categories: [{ id: 1, name: 'No Flag Set', slug: 'no-flag' }],
     })
-    mockGetProductsWithImages.mockReturnValue([product()])
+    mockGetProductsWithImages.mockReturnValue([product({ category_id: 1 })])
 
     const el = await BestSellers()
     render(el as React.ReactElement)
 
     expect(screen.getByTestId('best-sellers-client').textContent).toContain('categories:1')
+  })
+
+  it('sends only the cards the section shows (6) to the browser, not the whole catalogue', async () => {
+    mockGetStoreData.mockResolvedValue({ categories: [{ id: 1, name: 'Honey', slug: 'honey', is_active: true }] })
+    mockGetProductsWithImages.mockReturnValue(Array.from({ length: 20 }, (_, i) => product({ id: i + 1, category_id: 1 })))
+    const el = await BestSellers()
+    render(el as React.ReactElement)
+    expect(screen.getByTestId('best-sellers-client').textContent).toBe('products:6 categories:1')
+  })
+
+  it('only offers filter chips for categories that have products', async () => {
+    mockGetStoreData.mockResolvedValue({ categories: [{ id: 1, name: 'Honey', slug: 'honey', is_active: true }, { id: 2, name: 'Empty', slug: 'empty', is_active: true }] })
+    mockGetProductsWithImages.mockReturnValue([product({ id: 1, category_id: 1 })])
+    const el = await BestSellers()
+    render(el as React.ReactElement)
+    expect(screen.getByTestId('best-sellers-client').textContent).toBe('products:1 categories:1')
   })
 })

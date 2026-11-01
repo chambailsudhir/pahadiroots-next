@@ -2,11 +2,11 @@
 
 import Link from 'next/link'
 import { BEST_SELLERS_LIMIT } from '@/lib/homepageLimits'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import ProductCard from '@/components/product/ProductCard'
 import type { Product } from '@/types'
 import { emojiForCategory } from '@/lib/categoryEmoji'
-import { getEffectivePrice, getEffectiveMrp } from '@/lib/normalizeProduct'
+import { getEffectivePrice, getEffectiveMrp, rankForHomepage } from '@/lib/normalizeProduct'
 
 const SORTS = [
   { val: 'default',    label: 'Sort: Featured'     },
@@ -16,7 +16,7 @@ const SORTS = [
   { val: 'name',       label: 'Name A-Z'            },
 ]
 
-interface Cat { id: number; name: string; slug: string; emoji?: string | null }
+interface Cat { id: number; name: string; slug: string; emoji?: string | null; has_products?: boolean }
 
 interface Props {
   initialProducts: Product[]
@@ -41,20 +41,38 @@ export default function BestSellersClient({ initialProducts, categories }: Props
   const [activeCat, setActiveCat] = useState<string>('all')
   const [sort,      setSort]      = useState('default')
 
-  // The order is decided on the server (see rankForHomepage in BestSellers.tsx) so what the server sends is what the visitor
-  // sees — nothing is reshuffled after hydration, which used to swap the cards under the visitor's eyes (layout shift) and
-  // preloaded the wrong images.
-  const allProducts = initialProducts
+  // The server sends only the six products the section shows (ranked by rankForHomepage in BestSellers.tsx), so the HTML does
+  // not carry the whole catalogue just in case a visitor changes the filter. The full list is fetched once, the first time the
+  // visitor touches the filters/sort (or hovers/focuses them), from the same cached catalogue endpoint search uses. Until it
+  // arrives the six server-rendered cards stay on screen; if it fails they stay too and a link to the full shop is offered.
+  const [catalog, setCatalog] = useState<Product[] | null>(null)
+  const [catalogFailed, setCatalogFailed] = useState(false)
+  const requested = useRef(false)
+  const loadCatalog = useCallback(() => {
+    if (requested.current) return
+    requested.current = true
+    fetch('/api/v1/search-catalog')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { products?: Product[] }) => setCatalog(rankForHomepage(Array.isArray(d.products) ? d.products : [])))
+      .catch(() => { requested.current = false; setCatalogFailed(true) })
+  }, [])
+  const wantsMore = activeCat !== 'all' || sort !== 'default'
+  useEffect(() => { if (wantsMore) loadCatalog() }, [wantsMore, loadCatalog])
+
+  const allProducts = catalog ?? initialProducts
+  const loadingMore = wantsMore && !catalog && !catalogFailed
 
   // BUG FIX (audit): a chip was rendered for EVERY active category, even ones
   // with no bestseller products — click it and you got an empty grid with no
   // explanation. Large storefronts only offer a filter that returns results
   // (a dead filter reads as "broken"). Chips are now limited to categories
   // that actually have at least one product in this list.
+  // The server already limited `categories` to those that have products (it saw the whole catalogue); only fall back to
+  // deriving it here for callers that pass a plain product list.
   const chipCategories = useMemo(() => {
-    const withProducts = new Set(initialProducts.map((p: any) => String(p.category_id)))
-    return categories.filter(c => withProducts.has(String(c.id)))
-  }, [categories, initialProducts])
+    const withProducts = new Set(allProducts.map((p: any) => String(p.category_id)))
+    return categories.filter(c => (c as any).has_products ?? withProducts.has(String(c.id)))
+  }, [categories, allProducts])
 
   let filtered = [...allProducts]
   if (activeCat !== 'all') {
@@ -110,7 +128,7 @@ export default function BestSellersClient({ initialProducts, categories }: Props
         </Link>
       </div>
 
-      <div className="filter-bar" id="filterBar" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '20px 0 16px' }}>
+      <div className="filter-bar" id="filterBar" onPointerEnter={loadCatalog} onFocusCapture={loadCatalog} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '20px 0 16px' }}>
         <button
           className={`filter-btn${activeCat === 'all' ? ' active' : ''}`}
           aria-pressed={activeCat === 'all'}
@@ -141,10 +159,10 @@ export default function BestSellersClient({ initialProducts, categories }: Props
 
       {shown.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--tx3, #7a7a7a)' }}>
-          No products found
+          {catalogFailed ? <>Couldn&apos;t load more products right now. <Link href="/products" style={{ color: 'var(--g)', fontWeight: 700 }}>Browse all products</Link></> : 'No products found'}
         </div>
       ) : (
-        <div className="pgrid bsGrid">
+        <div className="pgrid bsGrid" aria-busy={loadingMore || undefined}>
           {shown.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       )}

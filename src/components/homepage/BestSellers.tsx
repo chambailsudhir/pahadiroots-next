@@ -79,12 +79,18 @@ export default async function BestSellers() {
     return null
   }
 
+  // Only the cards the section shows go into the page; filtering/sorting fetches the rest on demand (BestSellersClient).
+  // Filter chips are limited to categories that really have products — decided here, where the whole catalogue is known.
+  const withProducts = new Set(products.map((p: any) => String(p.category_id)))
+  const chipCats = categories.filter(c => withProducts.has(String(c.id))).map(c => ({ ...c, has_products: true }))
+  const shownProducts = products.slice(0, BEST_SELLERS_LIMIT)
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
-  const itemList = buildHomeItemListLd(products.slice(0, BEST_SELLERS_LIMIT), siteUrl, BEST_SELLERS_LIMIT)
+  const itemList = buildHomeItemListLd(shownProducts, siteUrl, BEST_SELLERS_LIMIT)
   return (
     <>
       {itemList && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: escapeJsonLd(itemList) }} />}
-      <BestSellersClient initialProducts={products} categories={categories} />
+      <BestSellersClient initialProducts={shownProducts} categories={chipCats} />
     </>
   )
 }

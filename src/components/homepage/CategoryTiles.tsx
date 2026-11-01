@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Category } from '@/types'
 import { emojiForCategory } from '@/lib/categoryEmoji'
+import { minifyCss } from '@/lib/minifyCss'
 
 interface Props { categories: Category[] }
 
@@ -269,7 +270,9 @@ export default function CategoryTiles({ categories }: Props) {
                         src={cat.image_url}
                         alt={cat.name}
                         fill
-                        sizes="(max-width:640px) 50vw, (max-width:960px) 25vw, 17vw"
+                        // sizes = the tile's real painted width (cell minus its padding and inset, measured at 360-1440px), not the
+                        // whole cell — the old value made phones download images ~2x larger than they display.
+                        sizes="(max-width:639px) calc(50vw - 72px), (max-width:959px) calc(25vw - 47px), calc(16.667vw - 40px)"
                         quality={75}
                         loading="lazy"
                         className="cc-img"
@@ -297,7 +300,7 @@ export default function CategoryTiles({ categories }: Props) {
         </div>
       </div>
 
-      <style>{`
+      <style>{minifyCss(`
         /* BUG FIX (P1): this selector previously read
            div[style*="overflowX: scroll"] — which can never match, since
            React serializes inline styles as kebab-case with no space
@@ -312,7 +315,7 @@ export default function CategoryTiles({ categories }: Props) {
         .cc-cell:hover .cc-img { transform: scale(1.06) !important; }
         .cgrid-arrow:hover { background: #f5f5f5 !important; box-shadow: 0 4px 16px rgba(0,0,0,.18) !important; border-color: #ccc !important; }
         @media(max-width:640px) { .cgrid-arrow { display: none !important; } }
-      `}</style>
+      `)}</style>
     </section>
   )
 }

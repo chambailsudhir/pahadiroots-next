@@ -6,6 +6,7 @@ import {
   GOLD, CREAM, COMPANY, quickSelects, getFooterData,
   ProductIcon, ContactIcon, SocialRow, FssaiCard, LeafMark, Botanical, TrustIcon,
 } from './FooterShared'
+import { minifyCss } from '@/lib/minifyCss'
 
 /**
  * Footer B — "Mountain Edge".
@@ -97,7 +98,7 @@ export default function FooterB({ settings, categories }: Props) {
         <div className="hvb-copy">© {new Date().getFullYear()} <strong>HimVeda by Pahadi Roots</strong> · Himachal Pradesh, India</div>
       </div>
 
-      <style>{`
+      <style>{minifyCss(`
 .hvb{background:${BG};color:${CREAM};font-family:var(--font-lato),Lato,sans-serif;position:relative;overflow:hidden}
 .hvb *{box-sizing:border-box}
 .hvb ul{list-style:none;margin:0;padding:0}
@@ -186,7 +187,7 @@ export default function FooterB({ settings, categories }: Props) {
   .hvb-bot{display:none}
 }
 @media(max-width:520px){.hvb-cols{grid-template-columns:1fr}.hvb-trust{grid-template-columns:1fr}}
-`}</style>
+`)}</style>
     </footer>
   )
 }

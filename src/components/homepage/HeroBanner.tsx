@@ -7,6 +7,7 @@ import type { SiteSettings } from '@/types'
 import { useAutoplayInterval } from '@/hooks/useAutoplayInterval'
 import { getHeroStats } from '@/lib/heroStats'
 import { formatPrice } from '@/lib/utils'
+import { minifyCss } from '@/lib/minifyCss'
 
 interface HeroImage {
   url: string
@@ -560,7 +561,7 @@ export default function HeroBanner({ images, settings }: Props) {
         )
       })()}
 
-      <style>{`
+      <style>{minifyCss(`
         .hslide-content-inner { padding: 0 0 0 72px; }
         @media(max-width:860px){
           .hslide-content-inner { padding: 0 20px !important; }
@@ -766,7 +767,7 @@ export default function HeroBanner({ images, settings }: Props) {
             border: 1px solid rgba(255,255,255,.7); background: rgba(255,255,255,.12); color: #fff !important;
           }
         }
-      `}</style>
+      `)}</style>
     </>
   )
 }

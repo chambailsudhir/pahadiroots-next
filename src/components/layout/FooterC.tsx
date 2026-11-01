@@ -5,6 +5,7 @@ import {
   GOLD, CREAM, COMPANY, quickSelects, getFooterData,
   ProductIcon, ContactIcon, SocialRow, FssaiCard, LeafMark, Botanical, Sprig,
 } from './FooterShared'
+import { minifyCss } from '@/lib/minifyCss'
 
 /**
  * Footer C — "Himalayan Landscape".
@@ -92,7 +93,7 @@ export default function FooterC({ settings, categories }: Props) {
         </div>
       </div>
 
-      <style>{`
+      <style>{minifyCss(`
 .hvc{background:${BG};color:${CREAM};font-family:var(--font-lato),Lato,sans-serif;position:relative;overflow:hidden}
 .hvc *{box-sizing:border-box}
 .hvc ul{list-style:none;margin:0;padding:0}
@@ -187,7 +188,7 @@ export default function FooterC({ settings, categories }: Props) {
   .hvc-main{padding-bottom:34px}
   .hvc-art{width:300px;height:90px}.hvc-bot{display:none}
 }
-`}</style>
+`)}</style>
     </footer>
   )
 }
