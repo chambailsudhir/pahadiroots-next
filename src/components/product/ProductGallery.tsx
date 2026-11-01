@@ -43,7 +43,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
   // is always defined by the time this branch renders.
   // BUG FIX (3.7 + A11y): track the trigger element so focus can be restored
   // to it when the lightbox closes (WCAG 2.1 SC 2.4.3)
-  const triggerRef            = useRef<HTMLDivElement>(null)
+  const triggerRef            = useRef<HTMLButtonElement>(null)
   // BUG FIX (A11y): first focusable element inside lightbox for focus trap
   const closeBtnRef           = useRef<HTMLButtonElement>(null)
 
@@ -141,33 +141,32 @@ export default function ProductGallery({ images, productName, savings: serverSav
     <>
       {/* Main image */}
       <div
-        ref={triggerRef}
         style={{
           position: 'relative', borderRadius: '20px', overflow: 'hidden',
           background: '#f8f5f0', aspectRatio: '4/5', cursor: 'zoom-in',
           boxShadow: '0 8px 40px rgba(0,0,0,.14)'
         }}
-        onClick={handleTriggerClick}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        role="button"
-        aria-label="View full image"
-        tabIndex={0}
-        onKeyDown={e => {
-          // Only react when the trigger itself has focus — Enter/Space on the nested prev/next buttons must
-          // keep their own behaviour. role="button" has to honour Space as well as Enter.
-          if (e.target !== e.currentTarget) return
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openZoom() }
-        }}
         className="pdp-gallery-trigger"
       >
+        {/* A11Y (axe nested-interactive): the zoom trigger used to be a role="button" container holding the prev/next
+            buttons. It is now a real button laid over the image; the arrows are its siblings, not its children. */}
+        <button
+          ref={triggerRef}
+          type="button"
+          className="pdp-gallery-open"
+          aria-label="View full image"
+          onClick={handleTriggerClick}
+          style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 'none', padding: 0, cursor: 'zoom-in' }}
+        />
         {/* Discount badge */}
         {savings >= 5 && (
           <div style={{
             position: 'absolute', top: '16px', right: '16px',
             background: '#c0392b', color: '#fff', fontSize: '12px',
             fontWeight: 900, padding: '5px 13px', borderRadius: '20px',
-            zIndex: 2, letterSpacing: '.3px'
+            zIndex: 2, letterSpacing: '.3px', pointerEvents: 'none'
           }}>
             -{savings}%
           </div>
@@ -241,7 +240,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
               position: 'absolute', bottom: '14px', right: '14px',
               background: 'rgba(0,0,0,.52)', color: '#fff', fontSize: '11px',
               fontWeight: 700, padding: '4px 10px', borderRadius: '20px',
-              zIndex: 2, backdropFilter: 'blur(4px)',
+              zIndex: 2, backdropFilter: 'blur(4px)', pointerEvents: 'none',
             }}>
               {active + 1} / {images.length}
             </div>
@@ -251,7 +250,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
 
       {/* Thumbnails */}
       {images.length > 1 && (
-        <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+        <div className="pdp-thumbs" style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
           {images.map((img, i) => (
             <button
               key={i}

@@ -164,8 +164,8 @@
 }
 
 .cic-size {
-  font-size: 11px;
-  color: #9a8e7e;
+  font-size: 12px;
+  color: #6f6554; /* was a faint grey (3.2:1); now 5.7:1 on white */
   letter-spacing: .4px;
   text-transform: uppercase;
   font-weight: 600;

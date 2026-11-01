@@ -51,7 +51,7 @@
 .pdp-info-col{padding-top:4px}
 
 /* ── Vendor / region ── */
-.pdp-vendor{font-size:10.5px;font-weight:800;color:#c8920a;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-family:'Josefin Sans',sans-serif}
+.pdp-vendor{font-size:12px;font-weight:800;color:#8a6205;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-family:'Josefin Sans',sans-serif}
 .pdp-vendor::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(200,146,10,.3),transparent)}
 
 /* ── Title ── */
@@ -71,7 +71,7 @@
 .pdp-price-block{margin-bottom:20px}
 .pdp-price-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
 .pdp-price{font-family: var(--font-playfair), 'Playfair Display', serif;font-size:42px;font-weight:900;color:#1a3a1e;line-height:1;letter-spacing:-1.5px}
-.pdp-mrp{font-size:20px;color:#7a7a7a;text-decoration:line-through;font-weight:400}
+.pdp-mrp{font-size:20px;color:#666;text-decoration:line-through;font-weight:400}
 .pdp-save-badge{background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;font-size:12px;font-weight:900;padding:5px 13px;border-radius:20px;letter-spacing:.3px;box-shadow:0 2px 8px rgba(192,57,43,.3)}
 .pdp-tax-note{font-size:12px;color:#7a7a7a;margin-top:3px}
 .pdp-urgency{margin-top:10px}
@@ -191,7 +191,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 @media(max-width:640px){.pdp-reviews-wrap,.pdp-related-wrap{padding:0 16px 32px}}
 
 /* ── Variant grid (used by AddToCartSection) ── */
-.pdp-variants-label{font-size:11px;font-weight:700;color:#7a7a7a;margin-bottom:12px;letter-spacing:1.5px;text-transform:uppercase;font-family:'Josefin Sans',sans-serif}
+.pdp-variants-label{font-size:12px;font-weight:700;color:#666;margin-bottom:12px;letter-spacing:1.5px;text-transform:uppercase;font-family:'Josefin Sans',sans-serif}
 .pdp-variants-label span{color:#1a3a1e;font-weight:800}
 .pdp-variant-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:20px}
 .pdp-variant-grid.has-more{grid-template-columns:repeat(2,1fr)}
@@ -452,7 +452,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-enjoy{background:#faf6ee;padding:56px 32px}
 .pdp-enjoy-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;max-width:1100px;margin:0 auto}
 .pdp-enjoy-card{background:#fff;border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 8px 24px -14px rgba(26,58,30,.15)}
-.pdp-enjoy-num{font-family:var(--font-playfair),'Playfair Display',serif;font-size:20px;color:#c8920a}
+.pdp-enjoy-num{font-family:var(--font-playfair),'Playfair Display',serif;font-size:20px;color:#8a6205}
 .pdp-enjoy-text{font-size:12.5px;color:#3a342a;margin-top:8px;line-height:1.5}
 @media(max-width:760px){.pdp-enjoy-grid{grid-template-columns:1fr 1fr}}
 
@@ -530,3 +530,23 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 /* Several lab reports on one product: stack them inside the one card, separated by a hairline */
 .pdp-cert-report + .pdp-cert-report{margin-top:14px;padding-top:14px;border-top:1px solid rgba(26,58,30,.14)}
 .pdp-cert-report .pdp-cert-chips{margin-bottom:10px}
+
+
+/* ── UX / accessibility pass (Nov 2026) ── */
+.pdp-gallery-open:focus-visible{outline:3px solid #1a3a1e;outline-offset:-5px;border-radius:20px}
+/* Mobile: buy box (title, price, size, Add to Cart) comes straight after the gallery; the honey stat trio and the
+   lab-certificate card follow it instead of pushing the price ~1,250px and Add to Cart ~2,250px down the page.
+   display:contents lets the image column's children join the page grid so they can be ordered individually. */
+@media(max-width:900px){
+  .pdp-img-col{display:contents}
+  .pdp-info-col{order:1}
+  .pdp-stat-trio{order:2}
+  .pdp-certificate-card{order:3}
+}
+/* Mobile: one swipeable row of thumbnails instead of a 2-row wrap that adds ~170px before the title. */
+@media(max-width:640px){
+  .pdp-thumbs{flex-wrap:nowrap!important;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+  .pdp-thumbs>button{scroll-snap-align:start}
+  /* the breadcrumb already links to All Products: drop the duplicate pill on phones */
+  .pdp-back-pill{display:none}
+}

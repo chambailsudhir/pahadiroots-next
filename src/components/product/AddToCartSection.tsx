@@ -63,6 +63,9 @@ export default function AddToCartSection({ product, variants }: Props) {
   // sentinel, so no extra DOM node is needed.
   const [showMobBar, setShowMobBar] = useState(false)
   const buyBoxRef = useRef<HTMLDivElement>(null)
+  // UX: on a phone the real buy box can sit 2,000px+ down the page (gallery, trust stats, highlights come first), so the
+  // quick-add bar also appears as soon as the visitor starts scrolling toward it (>240px), not only after passing it.
+  const lastEntryRef = useRef<IntersectionObserverEntry | null>(null)
   useEffect(() => {
     const el = buyBoxRef.current
     // Guard for environments with no IntersectionObserver (older browsers,
@@ -73,17 +76,23 @@ export default function AddToCartSection({ product, variants }: Props) {
     if (!el || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) { setShowMobBar(false); return }
-        // Not intersecting can mean two different things: the buy box has
-        // scrolled UP out of view (top < 0 — user is past it, show the bar)
-        // or it hasn't been scrolled TO yet (top > 0, e.g. right after
-        // mount before any scrolling) — don't show the bar in that case.
-        setShowMobBar(entry.boundingClientRect.top < 0)
+        lastEntryRef.current = entry
+        evaluate()
       },
       { threshold: 0 }
     )
+    // Not intersecting means either: the buy box has scrolled UP out of view (top < 0: show the bar), or it has not been
+    // reached yet (top > 0: show the bar once the visitor has scrolled a little, so it never covers the first screen).
+    function evaluate() {
+      const entry = lastEntryRef.current
+      if (!entry) return
+      if (entry.isIntersecting) { setShowMobBar(false); return }
+      setShowMobBar(entry.boundingClientRect.top < 0 || window.scrollY > 240)
+    }
+    const onScroll = () => { if (lastEntryRef.current && !lastEntryRef.current.isIntersecting) evaluate() }
+    window.addEventListener('scroll', onScroll, { passive: true })
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => { observer.disconnect(); window.removeEventListener('scroll', onScroll) }
   }, [])
 
 
@@ -99,6 +108,7 @@ export default function AddToCartSection({ product, variants }: Props) {
   const { trackAddToCart } = usePDPAnalytics({
     itemId:   String(product.id),
     itemName: product.name,
+    variant:  selectedVariant?.size || undefined,
     price,
   })
 
@@ -187,7 +197,7 @@ export default function AddToCartSection({ product, variants }: Props) {
     })
 
     // GA4/Meta remarketing pixel (usePDPAnalytics above).
-    trackAddToCart({ itemId: String(product.id), itemName: product.name, price }, qty)
+    trackAddToCart({ itemId: String(product.id), itemName: product.name, variant: selectedVariant?.size || undefined, price }, qty)
 
     // BUG FIX: the in-house analytics add_to_cart event (imported as
     // trackInHouseAddToCart to avoid the name collision with the GA4

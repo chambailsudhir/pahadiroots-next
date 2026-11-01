@@ -44,15 +44,15 @@
         }
         .os-head-count {
           font-family: var(--font-lato), Lato, sans-serif;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 500;
-          color: #9A9080;
+          color: #6a6050;
           background: #F2EAE0;
           padding: 3px 9px;
           border-radius: 20px;
         }
         .os-chevron {
-          color: #9A9080;
+          color: #6f6554;
           transition: transform .25s ease;
           flex-shrink: 0;
         }
@@ -118,7 +118,7 @@
         .os-item-size {
           font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
-          color: #9A9080;
+          color: #6f6554;
           margin-top: 2px;
         }
         .os-item-price {
@@ -264,7 +264,7 @@
         .os-hint-label {
           font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
-          color: #9A9080;
+          color: #6f6554;
         }
 
         /* ── Loyalty coins area ─────────────────────────────── */
@@ -425,7 +425,7 @@
         }
         .os-price-row--green { color: #3A7030; font-weight: 600; }
         .os-price-row--coins { color: #C8A800; font-weight: 600; }
-        .os-price-row--muted { font-size: 11px; color: #B0A898; }
+        .os-price-row--muted { font-size: 12px; color: #6f6554; }
         .os-free { color: #3A7030; font-weight: 600; }
 
         .os-total {
@@ -542,11 +542,11 @@
           gap: 5px;
           font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
-          color: #9A9080;
+          color: #6f6554;
           margin-top: 8px;
           font-weight: 400;
         }
-        .os-lock { color: #9A9080; flex-shrink: 0; }
+        .os-lock { color: #6f6554; flex-shrink: 0; }
 
         /* ETA */
         .os-eta {
@@ -570,8 +570,8 @@
         .os-eta-line strong { font-weight: 700; }
         .os-eta-sub {
           font-family: var(--font-lato), Lato, sans-serif;
-          font-size: 11px;
-          color: #9A9080;
+          font-size: 12px;
+          color: #6f6554;
           margin-top: 2px;
         }
 
