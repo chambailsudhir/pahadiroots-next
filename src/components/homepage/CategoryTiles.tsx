@@ -269,7 +269,9 @@ export default function CategoryTiles({ categories }: Props) {
                         src={cat.image_url}
                         alt={cat.name}
                         fill
-                        sizes="(max-width:640px) 50vw, (max-width:960px) 25vw, 17vw"
+                        // sizes = the tile's real painted width (cell minus its padding and inset, measured at 360-1440px), not the
+                        // whole cell — the old value made phones download images ~2x larger than they display.
+                        sizes="(max-width:639px) calc(50vw - 72px), (max-width:959px) calc(25vw - 47px), calc(16.667vw - 40px)"
                         quality={75}
                         loading="lazy"
                         className="cc-img"
