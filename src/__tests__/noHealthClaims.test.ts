@@ -25,8 +25,9 @@ describe('product page copy', () => {
 })
 
 describe('chatbot instructions', () => {
-  it('forbids health claims and no longer allows "honey boosts immunity"', () => {
-    expect(prompt).toContain('NEVER state or imply that any product prevents, treats, cures or improves any health condition')
+  it('allows only the soft traditional wording and forbids disease or cure claims', () => {
+    expect(prompt).toContain('NEVER state or imply that any product prevents, treats, cures or heals any disease or health condition')
+    expect(prompt).toContain('soft, traditional-use wording already shown on the product pages')
     expect(prompt).not.toMatch(/honey boosts immunity/i)
   })
 })
