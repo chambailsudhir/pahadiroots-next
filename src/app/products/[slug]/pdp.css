@@ -65,7 +65,7 @@
 .pdp-stars{display:flex;gap:2px}
 .pdp-star{width:16px;height:16px;fill:#e8a020}
 .pdp-rating-num{font-size:13.5px;font-weight:800;color:#4a4a4a}
-.pdp-rating-count{font-size:13px;color:#7a7a7a;text-decoration:underline;cursor:pointer}
+.pdp-rating-count{font-size:13px;color:#666;text-decoration:underline;cursor:pointer}
 
 /* ── Price ── */
 .pdp-price-block{margin-bottom:20px}
@@ -73,7 +73,7 @@
 .pdp-price{font-family: var(--font-playfair), 'Playfair Display', serif;font-size:42px;font-weight:900;color:#1a3a1e;line-height:1;letter-spacing:-1.5px}
 .pdp-mrp{font-size:20px;color:#666;text-decoration:line-through;font-weight:400}
 .pdp-save-badge{background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;font-size:12px;font-weight:900;padding:5px 13px;border-radius:20px;letter-spacing:.3px;box-shadow:0 2px 8px rgba(192,57,43,.3)}
-.pdp-tax-note{font-size:12px;color:#7a7a7a;margin-top:3px}
+.pdp-tax-note{font-size:12px;color:#666;margin-top:3px}
 .pdp-urgency{margin-top:10px}
 .pdp-urgency-label{font-size:11.5px;font-weight:700;color:#c0392b;margin-bottom:5px}
 .pdp-urgency-track{height:5px;background:#f3f5f0;border-radius:4px;overflow:hidden}
@@ -202,7 +202,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-vc-size{font-size:13px;font-weight:800;color:#1a1a1a;display:block;margin-bottom:3px}
 .pdp-vc-price{font-size:14px;font-weight:900;color:#1a3a1e;display:block}
 .pdp-vc-orig{font-size:11px;color:#6b6b6b;text-decoration:line-through;margin-left:4px}
-.pdp-vc-save{font-size:10.5px;color:#c8920a;font-weight:800;display:block;margin-top:2px}
+.pdp-vc-save{font-size:10.5px;color:#8a6205;font-weight:800;display:block;margin-top:2px}
 .pdp-vcard-tag{position:absolute;top:-8px;left:10px;font-size:9px;font-weight:900;padding:3px 9px;border-radius:4px;letter-spacing:.5px;color:#fff;font-family:'Josefin Sans',sans-serif;text-transform:uppercase;z-index:3}
 .pdp-vcard-tag.best{background:#1a3a1e}
 .pdp-vcard-tag.deal{background:#b8700a}
@@ -277,7 +277,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 /* ── Journey (story) section ── */
 .pdp-journey{background:#faf6ee;padding:64px 0 8px;margin-top:8px}
 .pdp-journey-head{text-align:center;max-width:640px;margin:0 auto 20px;padding:0 24px}
-.pdp-journey-eyebrow{font-size:11.5px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#c8920a;font-family:'Josefin Sans',sans-serif}
+.pdp-journey-eyebrow{font-size:11.5px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#8a6205;font-family:'Josefin Sans',sans-serif}
 .pdp-journey-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(24px,3vw,32px);color:#1a3a1e;margin-top:10px}
 .pdp-honey-journey-intro{font-size:14.5px;color:#5a5a5a;line-height:1.7;margin-top:14px;text-align:center;max-width:560px;margin-left:auto;margin-right:auto;padding:0 24px}
 
@@ -302,7 +302,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-honey-tl-media img{width:100%;height:100%;object-fit:cover;display:block}
 .pdp-honey-tl-content{flex:1 1 0;min-width:0;padding-left:32px}
 .pdp-honey-tl-item.right .pdp-honey-tl-content{text-align:right;padding-left:0;padding-right:32px}
-.pdp-honey-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
+.pdp-honey-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#8a6205}
 .pdp-honey-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(30px,3.4vw,42px);line-height:1.18;color:#1a3a1e;margin-top:12px}
 .pdp-honey-tl-desc{font-size:14px;color:#5a5a5a;line-height:1.65;margin-top:16px}
 
@@ -338,7 +338,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-sb-tl-media img{width:100%;height:100%;object-fit:cover;display:block}
 .pdp-sb-tl-content{flex:1 1 0;min-width:0;padding-left:32px}
 .pdp-sb-tl-item.right .pdp-sb-tl-content{text-align:right;padding-left:0;padding-right:32px}
-.pdp-sb-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
+.pdp-sb-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#8a6205}
 .pdp-sb-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(30px,3.4vw,42px);line-height:1.18;color:#1a3a1e;margin-top:12px}
 .pdp-sb-tl-desc{font-size:14px;color:#5a5a5a;line-height:1.65;margin-top:16px}
 
@@ -398,7 +398,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-ghee-tl-media.fit-full img{object-fit:contain;padding:24px;box-sizing:border-box}
 .pdp-ghee-tl-content{flex:1 1 0;min-width:0;padding-left:32px}
 .pdp-ghee-tl-item.right .pdp-ghee-tl-content{text-align:right;padding-left:0;padding-right:32px}
-.pdp-ghee-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#c8920a}
+.pdp-ghee-tl-eyebrow{font-family:'Josefin Sans',sans-serif;font-weight:800;font-size:11.5px;letter-spacing:2.5px;text-transform:uppercase;color:#8a6205}
 .pdp-ghee-tl-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:clamp(30px,3.4vw,42px);line-height:1.18;color:#1a3a1e;margin-top:12px}
 .pdp-ghee-tl-desc{font-size:14px;color:#5a5a5a;line-height:1.65;margin-top:16px}
 
@@ -541,7 +541,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
   .pdp-img-col{display:contents}
   .pdp-info-col{order:1}
   .pdp-stat-trio{order:2}
-  .pdp-certificate-card{order:3}
+  .pdp-certificate-section{order:3}
 }
 /* Mobile: one swipeable row of thumbnails instead of a 2-row wrap that adds ~170px before the title. */
 @media(max-width:640px){
