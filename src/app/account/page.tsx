@@ -23,6 +23,7 @@ import LoyaltySection    from './_sections/LoyaltySection'
 import { getSavedAddresses } from '@/lib/account/utils'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from './styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 const VALID_TABS: Tab[] = ['orders', 'addresses', 'profile', 'password', 'notifications', 'privacy', 'loyalty']
 
@@ -177,7 +178,7 @@ function AccountPageInner() {
 
       {auth.expired && (
         <div className={styles.sessionBanner}>
-          ⚠️ Your session has expired.
+          <Icon name="warning" /> Your session has expired.
           <button className={styles.sessionBannerBtn} onClick={openAuth}>Login Again</button>
         </div>
       )}

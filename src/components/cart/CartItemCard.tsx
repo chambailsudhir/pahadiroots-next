@@ -45,6 +45,7 @@ import Image                  from 'next/image'
 import Link                   from 'next/link'
 import { formatPrice }        from '@/lib/utils'
 import type { CartItem }      from '@/types'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   item:        CartItem
@@ -95,11 +96,11 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
           <div className="cic-badges">
             {/* A2: aria-hidden on badge emojis — the text label that follows
                 provides all the information; the emoji name adds only noise. */}
-            {item.isOrganic    && <span className="cic-badge org"><span aria-hidden="true">🌿</span> Natural</span>}
-            {item.isHimalayan  && <span className="cic-badge hml"><span aria-hidden="true">🏔</span> Himalayan</span>}
-            {item.isBestseller && <span className="cic-badge best"><span aria-hidden="true">⭐</span> Bestseller</span>}
+            {item.isOrganic    && <span className="cic-badge org"><span aria-hidden="true"><Icon name="leaf" /></span> Natural</span>}
+            {item.isHimalayan  && <span className="cic-badge hml"><span aria-hidden="true"><Icon name="mountain" /></span> Himalayan</span>}
+            {item.isBestseller && <span className="cic-badge best"><span aria-hidden="true"><Icon name="star" /></span> Bestseller</span>}
             {(item.maxQty ?? 99) <= 5  && (
-              <span className="cic-badge stock"><span aria-hidden="true">⚡</span> Only {item.maxQty ?? 99} left</span>
+              <span className="cic-badge stock"><span aria-hidden="true"><Icon name="bolt" /></span> Only {item.maxQty ?? 99} left</span>
             )}
           </div>
         </div>

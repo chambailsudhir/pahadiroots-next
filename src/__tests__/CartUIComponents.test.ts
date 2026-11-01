@@ -216,6 +216,6 @@ describe('EmptyCart', () => {
   it('marks the decorative cart icon as aria-hidden', () => {
     const { container } = render(React.createElement(EmptyCart))
     const icon = container.querySelector('[aria-hidden="true"]')
-    expect(icon?.textContent).toBe('🛒')
+    expect(icon?.querySelector('svg')).not.toBeNull()   // drawn as an SVG icon, not an emoji
   })
 })

@@ -3,6 +3,7 @@ import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { validate }  from '@/lib/account/validation'
 import type { useProfile } from '../hooks/useProfile'
 import styles from '../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 type ProfileHook = ReturnType<typeof useProfile>
 
@@ -28,7 +29,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
                 <div className={styles.forgotPwRow}>
                   {profile.forgotPwSent ? (
                     <span className={styles.forgotPwSent}>
-                      ✅ Reset link sent to {profile.profileEmail}
+                      <Icon name="check" /> Reset link sent to {profile.profileEmail}
                     </span>
                   ) : (
                     <button
@@ -82,7 +83,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
               </div>
               {profile.pfErr.conf && <div className={styles.errTxt}>{profile.pfErr.conf}</div>}
               {profile.pw.conf.length > 0 && profile.pw.newp === profile.pw.conf && (
-                <div className={styles.matchMsg}>✅ Passwords match</div>
+                <div className={styles.matchMsg}><Icon name="check" /> Passwords match</div>
               )}
             </div>
           </div>

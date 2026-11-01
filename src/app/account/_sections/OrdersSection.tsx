@@ -10,6 +10,7 @@ import { SELF_SERVE_RETURN_REASONS, RETURN_REASONS, canReplace } from '@/lib/acc
 import type { useOrders } from '../hooks/useOrders'
 import type { Order }     from '../hooks/useOrders'
 import styles from '../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 type Orders = ReturnType<typeof useOrders>
 
@@ -278,7 +279,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
               {/* Toolbar */}
               <div className={styles.ordersToolbar}>
                 <div className={styles.searchWrap}>
-                  <span className={styles.searchIcon}>🔍</span>
+                  <span className={styles.searchIcon}><Icon name="search" /></span>
                   <label htmlFor="order-search" className="sr-only">Search orders</label>
                   <input
                     id="order-search"
@@ -290,7 +291,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     onChange={e => orders.setSearch(e.target.value)}
                   />
                   {orders.search && (
-                    <button type="button" className={styles.searchClear} onClick={() => orders.setSearch('')}>✕</button>
+                    <button type="button" className={styles.searchClear} onClick={() => orders.setSearch('')}><Icon name="close" /></button>
                   )}
                 </div>
                 <div className={styles.filterRow} role="group" aria-label="Filter orders by status">
@@ -315,7 +316,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 // The server says there ARE orders (or the request failed) but none arrived: that is a load problem,
                 // never "No orders yet" (which made customers think their orders had vanished).
                 <div className={styles.emptyState} role="alert">
-                  <div className={styles.emptyIcon}>⚠️</div>
+                  <div className={styles.emptyIcon}><Icon name="warning" /></div>
                   <div className={styles.emptyTitle}>We couldn&apos;t load your orders</div>
                   <p className={styles.emptySub}>Your orders are safe. Please try again in a moment.</p>
                   <button className={styles.btnPrimary} onClick={() => orders.refresh()}>Try again</button>
@@ -387,13 +388,13 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 disabled={submitting}
                 className={styles.modalCloseBtn}
                 aria-label="Close return modal"
-              >✕</button>
+              ><Icon name="close" /></button>
             </div>
 
             {submittedInfo ? (
               // ── Post-submit success + share view ──────────────────────
               <div className={styles.returnSuccessWrap}>
-                <div className={styles.returnSuccessIcon}>✅</div>
+                <div className={styles.returnSuccessIcon}><Icon name="check" /></div>
                 <p className={styles.modalDesc}>
                   Your {submittedInfo.resolution === 'replace' ? 'replacement' : 'return'} request for order{' '}
                   <strong>{submittedInfo.orderNum}</strong> has been submitted. Our team will reach out within {RETURNS_TIMING.reviewWindow}.
@@ -405,7 +406,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    💬 Share details on WhatsApp
+                    <Icon name="chat" /> Share details on WhatsApp
                   </a>
                 )}
                 <div className={styles.modalFooter}>
@@ -487,7 +488,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                   aria-pressed={resolution === 'replace'}
                   onClick={() => setResolution('replace')}
                 >
-                  📦 Replace
+                  <Icon name="package" /> Replace
                 </button>
               </div>
             )}
@@ -511,7 +512,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                           className={styles.returnPhotoRemove}
                           aria-label={`Remove ${p.name}`}
                           onClick={() => setUploadedPhotos(prev => prev.filter((_, i) => i !== idx))}
-                        >✕</button>
+                        ><Icon name="close" /></button>
                       </div>
                     ))}
                   </div>

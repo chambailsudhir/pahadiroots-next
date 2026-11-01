@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Icon from '@/components/ui/Icon'
 
 export default function AccountError({
   error,
@@ -24,7 +25,7 @@ export default function AccountError({
       textAlign: 'center',
       fontFamily: 'var(--font-lato), Lato, sans-serif',
     }}>
-      <div style={{ fontSize: '48px', marginBottom: '16px' }}>👤</div>
+      <div style={{ fontSize: '48px', marginBottom: '16px' }}><Icon name="user" /></div>
       <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#1a1a1a', marginBottom: '10px' }}>
         Account page failed to load
       </h2>

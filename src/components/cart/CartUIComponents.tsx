@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { memo, useEffect, useRef, useState } from 'react'
 import { formatPrice } from '@/lib/utils'
 import styles from './CartUIComponents.module.css'
+import Icon from '@/components/ui/Icon'
 
 // ─── Sticky mobile CTA ────────────────────────────────────────────────────────
 interface StickyProps {
@@ -91,12 +92,12 @@ export const StickyCartCTA = memo(function StickyCartCTA({
             disabled
             aria-describedby="scc-min-warn"
           >
-            <span aria-hidden="true">🔒</span> Checkout
+            <span aria-hidden="true"><Icon name="lock" /></span> Checkout
           </button>
         </>
       ) : (
         <Link prefetch={false} href="/checkout" className={styles.sccBtn} onClick={onCheckout}>
-          <span aria-hidden="true">🔒</span> Checkout
+          <span aria-hidden="true"><Icon name="lock" /></span> Checkout
         </Link>
       )}
     </div>
@@ -113,7 +114,7 @@ export const EmptyCart = memo(function EmptyCart() {
        *    the page state. The large cart emoji is purely visual decoration —
        *    having SR announce "shopping cart emoji" before the heading adds noise.
        */}
-      <div className={styles.ecIcon} aria-hidden="true">🛒</div>
+      <div className={styles.ecIcon} aria-hidden="true"><Icon name="cart" /></div>
       <h1 className={styles.ecTitle}>Your cart is empty</h1>
       <p className={styles.ecSub}>
         Discover natural Himalayan goodness crafted by mountain farmers.

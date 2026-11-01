@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
+import Icon, { AdminIcon } from '@/components/ui/Icon'
 
 // BUG FIX (found in a fresh audit): the referral link below used to
 // hardcode 'https://www.pahadiroots.com' in two places, independent of the
@@ -162,21 +163,21 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
 
   if (loading) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}>🪙 Pahadi Coins</div>
+      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
       <div className={styles.lySkeleton} aria-busy="true" />
     </div>
   )
 
   if (loadErr) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}>🪙 Pahadi Coins</div>
+      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub} style={{ color: '#c0392b' }}>{loadErr}</p>
     </div>
   )
 
   if (!data?.enabled) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}>🪙 Pahadi Coins</div>
+      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Loyalty programme coming soon — stay tuned!</p>
     </div>
   )
@@ -187,7 +188,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   return (
     <ErrorBoundary section="Loyalty">
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}>🪙 Pahadi Coins</div>
+      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Earn coins on every order. Redeem for discounts at checkout.</p>
 
       {/* ── Balance card ──────────────────────────────────────── */}
@@ -199,7 +200,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
             <div className={styles.lyBalanceVal}>≈ ₹{pointsVal} redeemable value</div>
           )}
         </div>
-        <div className={styles.lyBalanceCoin} aria-hidden="true">🪙</div>
+        <div className={styles.lyBalanceCoin} aria-hidden="true"><Icon name="coins" size="1em" /></div>
       </div>
 
       {/* ── How it works ──────────────────────────────────────── */}
@@ -211,7 +212,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },
         ].map(it => (
           <div key={it.title} className={styles.lyHowCard}>
-            <span className={styles.lyHowIcon}>{it.icon}</span>
+            <span className={styles.lyHowIcon}><AdminIcon value={it.icon} color="#1a3a1e" /></span>
             <strong className={styles.lyHowTitle}>{it.title}</strong>
             <p className={styles.lyHowDesc}>{it.desc}</p>
           </div>
@@ -222,7 +223,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
       {data.referral_code && (
         <div className={styles.lyReferral}>
           <div className={styles.lyRefHeader}>
-            <span className={styles.lyRefIcon}>🤝</span>
+            <span className={styles.lyRefIcon}><Icon name="users" /></span>
             <div>
               <div className={styles.lyRefTitle}>Refer &amp; Earn</div>
               <div className={styles.lyRefSub}>Both you and your friend earn 100 bonus coins when they place their first order.</div>
@@ -292,7 +293,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
                 })
                 return (
                   <div key={t.id} className={styles.lyTxnRow}>
-                    <span className={styles.lyTxnIcon}>{meta.icon}</span>
+                    <span className={styles.lyTxnIcon}><AdminIcon value={meta.icon} color={meta.color} /></span>
                     <div className={styles.lyTxnInfo}>
                       <div className={styles.lyTxnNote}>{t.note || meta.label}</div>
                       <div className={styles.lyTxnDate}>{date} · Balance: {t.balance_after}</div>

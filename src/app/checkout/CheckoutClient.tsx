@@ -51,6 +51,7 @@ import AddressForm          from '@/components/checkout/AddressForm'
 import PaymentSection       from '@/components/checkout/PaymentSection'
 import OrderSummary         from '@/components/checkout/OrderSummary'
 import { DELIVERY_BADGE, RETURNS_BADGE } from '@/lib/shippingCopy'
+import Icon, { AdminIcon } from '@/components/ui/Icon'
 
 // PERF: module-level constant — was an inline array literal inside JSX, which
 // created a new array on every render. Hoisting it prevents the allocation.
@@ -260,7 +261,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
 
       {bothPayOff && (
         <div className="ck-alert">
-          ⚠ Checkout temporarily unavailable. Please contact support.{' '}
+          <Icon name="warning" /> Checkout temporarily unavailable. Please contact support.{' '}
           <Link href="/cart" className="ck-alert-link">← Back to Cart</Link>
         </div>
       )}
@@ -330,7 +331,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
             <div className="ck-trust">
               {CHECKOUT_TRUST_ITEMS.map(({ icon, t, d }) => (
                 <div key={t} className="ck-trust-card">
-                  <div className="ck-trust-icon" aria-hidden="true">{icon}</div>
+                  <div className="ck-trust-icon" aria-hidden="true"><AdminIcon value={icon} color="#1a3a1e" /></div>
                   <div className="ck-trust-text">
                     <strong>{t}</strong>
                     <span>{d}</span>

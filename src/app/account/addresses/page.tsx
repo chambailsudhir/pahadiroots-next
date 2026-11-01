@@ -14,6 +14,7 @@ import { useAddresses } from '@/app/account/hooks/useAddresses'
 import { safeLocalStorage } from '@/lib/account/utils'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from '../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 export default function AddressesPage() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([])
@@ -59,7 +60,7 @@ export default function AddressesPage() {
 
   if (error === '401' || error?.includes('Unauthorized') || error?.includes('Not logged in')) return (
     <div className={styles.saAuthWall}>
-      <div className={styles.saAuthIcon}>🔒</div>
+      <div className={styles.saAuthIcon}><Icon name="lock" /></div>
       <p className={styles.saAuthMsg}>Please sign in to view your addresses</p>
       <a href="/account" className={styles.saAuthLink}>Sign In</a>
     </div>
@@ -202,7 +203,7 @@ export default function AddressesPage() {
 
       {addresses.length === 0 && !addrs.showForm ? (
         <div className={styles.saEmpty}>
-          <div className={styles.saEmptyIcon}>📍</div>
+          <div className={styles.saEmptyIcon}><Icon name="pin" /></div>
           <p className={styles.saEmptyMsg}>No saved addresses yet</p>
           <button type="button" onClick={addrs.startAdd} className={styles.saEmptyBtn}>
             Add your first address

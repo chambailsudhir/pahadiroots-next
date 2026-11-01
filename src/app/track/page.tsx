@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { formatDate } from '@/lib/utils'
 import type { OrderStatus } from '@/types'
+import Icon from '@/components/ui/Icon'
 
 const STATUS_STEPS: { status: OrderStatus; label: string; icon: string }[] = [
   { status: 'confirmed',        label: 'Order Confirmed',    icon: '✅' },
@@ -80,7 +81,7 @@ export default function TrackPage() {
   return (
     <div className="max-w-xl mx-auto px-4 py-12">
       <div className="text-center mb-8">
-        <div className="text-4xl mb-3">📦</div>
+        <div className="text-4xl mb-3"><Icon name="package" /></div>
         <h1 className="text-2xl font-bold text-stone-900 mb-1">Track Your Order</h1>
         <p className="text-stone-500 text-sm">Enter your order number and phone to see the latest status</p>
       </div>

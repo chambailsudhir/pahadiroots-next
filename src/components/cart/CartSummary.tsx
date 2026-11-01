@@ -52,6 +52,7 @@ import { formatPrice } from '@/lib/utils'
 import type { AppliedCoupon } from '@/types'
 import type { PriceSummary } from '@/lib/services/pricingService'
 import styles from './CartSummary.module.css'
+import Icon from '@/components/ui/Icon'
 
 interface CouponHint { code: string; label: string }
 
@@ -106,7 +107,7 @@ const CartSummary = memo(function CartSummary({
       <div className={styles.coupon}>
         {/* A2: aria-hidden on 🏷️ — emoji is decorative; SR reads "Have a coupon code?" */}
         <div className={styles.couponHead}>
-          <span aria-hidden="true">🏷️</span>{' '}Have a coupon code?
+          <span aria-hidden="true"><Icon name="tag" /></span>{' '}Have a coupon code?
         </div>
         <div className={styles.couponBody}>
         {coupon ? (
@@ -121,7 +122,7 @@ const CartSummary = memo(function CartSummary({
             >
               {/* A4: aria-hidden on ✕ — button's aria-label already describes the action;
                   some AT implementations read both the label and the inner text/character */}
-              <span aria-hidden="true">✕</span>
+              <span aria-hidden="true"><Icon name="close" /></span>
             </button>
           </div>
         ) : (
@@ -164,7 +165,7 @@ const CartSummary = memo(function CartSummary({
             as a complete sentence when it appears. */}
         <div aria-live="polite" aria-atomic="true" className={styles.couponLive}>
           {couponError && (
-            <span id="coupon-code-error" className={styles.couponErr}>⚠ {couponError}</span>
+            <span id="coupon-code-error" className={styles.couponErr}><Icon name="warning" /> {couponError}</span>
           )}
         </div>
         {/* Coupon hints — quick-apply pills from /api/v1/coupon-hints */}
@@ -223,7 +224,7 @@ const CartSummary = memo(function CartSummary({
           <span>Shipping</span>
           <span className={pricing.isFreeShipping ? styles.free : ''}>
             {pricing.isFreeShipping ? (
-              <><span aria-hidden="true">🚚</span> FREE</>
+              <><span aria-hidden="true"><Icon name="truck" /></span> FREE</>
             ) : formatPrice(pricing.shipping)}
           </span>
         </div>
@@ -270,7 +271,7 @@ const CartSummary = memo(function CartSummary({
       {/* Min order warning */}
       {belowMinOrder && (
         <div id="cart-min-warn" className={styles.minWarn} role="alert">
-          ⚠ Minimum order is {formatPrice(minOrderAmt)}. Add{' '}
+          <Icon name="warning" /> Minimum order is {formatPrice(minOrderAmt)}. Add{' '}
           <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more to checkout.
         </div>
       )}
@@ -284,13 +285,13 @@ const CartSummary = memo(function CartSummary({
           className={`${styles.cta} ${styles.ctaDisabled}`}
         >
           {/* A5: aria-hidden on 🔒 — button label is "Proceed to Checkout"; emoji is decorative */}
-          <span aria-hidden="true">🔒</span>
+          <span aria-hidden="true"><Icon name="lock" /></span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </button>
       ) : (
         <Link prefetch={false} href="/checkout" className={styles.cta} onClick={onCheckout}>
-          <span aria-hidden="true">🔒</span>
+          <span aria-hidden="true"><Icon name="lock" /></span>
           <span>Proceed to Checkout</span>
           <span className={styles.ctaAmt}>{formatPrice(pricing.total)}</span>
         </Link>
@@ -302,8 +303,8 @@ const CartSummary = memo(function CartSummary({
       <div className={styles.trust}>
         <div className={styles.trustRow}>
           <span><span aria-hidden="true">🔐</span> SSL Encrypted</span>
-          <span><span aria-hidden="true">🏦</span> Razorpay</span>
-          <span><span aria-hidden="true">✅</span> Secure</span>
+          <span><span aria-hidden="true"><Icon name="bank" /></span> Razorpay</span>
+          <span><span aria-hidden="true"><Icon name="check" /></span> Secure</span>
         </div>
         <div className={styles.logos}>
           {PAYMENT_LOGOS.map(([bg, label]) => (

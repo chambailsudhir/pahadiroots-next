@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import type { SavedAddress } from '@/types'
 import './SavedAddressSelector.css'  // PERF FIX: extracted from inline <style>
+import { AdminIcon } from '@/components/ui/Icon'
 
 const LABEL_ICONS: Record<string, string> = {
   Home: '🏠', Office: '🏢', Parents: '👨‍👩‍👦', Friends: '👫', Others: '📍',
@@ -52,7 +53,7 @@ const SavedAddressSelector = memo(function SavedAddressSelector({ addresses, sel
             </div>
             <div className="sas-body">
               <div className="sas-tag">
-                <span>{LABEL_ICONS[a.label ?? ''] || '📍'}</span>
+                <span><AdminIcon value={LABEL_ICONS[a.label ?? ''] || '📍'} /></span>
                 <span>{a.label}</span>
               </div>
               <div className="sas-addr">

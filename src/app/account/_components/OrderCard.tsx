@@ -6,6 +6,7 @@ import { BADGE_CLASS, STATUS_LABEL, STRIPE_CLASS, SUPPORT_WHATSAPP_NUMBER } from
 import { formatCurrency, formatDate, getOrderStatusMessage, getPaymentLabel, getCourierTrackingUrl } from '@/lib/account/utils'
 import { type Order } from '@/lib/services/orderService'
 import styles from '../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 // CSS Module class map — converts old kebab-case strings to module classes
 // Covers the return_* lifecycle (requested/approved/received/refunded/
@@ -154,7 +155,7 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
         {/* Track chip */}
         {trackUrl && (
           <a href={trackUrl} target="_blank" rel="noopener noreferrer" className={styles.trackChip}>
-            🚚 Track · {o.tracking_number}
+            <Icon name="truck" /> Track · {o.tracking_number}
           </a>
         )}
 
@@ -178,7 +179,7 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
             target="_blank" rel="noopener noreferrer"
             className={`${styles.actionBtn} ${styles.actionSupport}`}
           >
-            💬 Support
+            <Icon name="chat" /> Support
           </a>
         </div>
       </div>

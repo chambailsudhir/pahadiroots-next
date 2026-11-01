@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
 import styles from './PaymentSection.module.css'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   payMethod: 'razorpay' | 'cod'
@@ -87,7 +88,7 @@ const PaymentSection = memo(function PaymentSection({
               <div className={styles.optHead}>
                 <span className={styles.optTitle}>Cash on Delivery</span>
                 {/* aria-hidden: icon is decorative alongside the text label */}
-                <span className={styles.codIcon} aria-hidden="true">💵</span>
+                <span className={styles.codIcon} aria-hidden="true"><Icon name="cash" /></span>
               </div>
               <p className={styles.optSub}>Pay in cash when your order arrives</p>
             </div>
@@ -112,7 +113,7 @@ const PaymentSection = memo(function PaymentSection({
             tabIndex={-1}
           >
             <div className={styles.codDisabledLeft}>
-              <span className={styles.codIcon} aria-hidden="true">💵</span>
+              <span className={styles.codIcon} aria-hidden="true"><Icon name="cash" /></span>
               <span className={`${styles.optTitle} ${styles.optTitleOff}`}>Cash on Delivery</span>
             </div>
             <span className={styles.codReason} id="cod-disabled-reason">
@@ -124,9 +125,9 @@ const PaymentSection = memo(function PaymentSection({
 
       {/* Security strip — emojis are decorative; text carries the meaning */}
       <div className={styles.seals}>
-        <div className={styles.seal}><span aria-hidden="true">🔒</span> SSL Encrypted</div>
-        <div className={styles.seal}><span aria-hidden="true">🏦</span> Razorpay Secured</div>
-        <div className={styles.seal}><span aria-hidden="true">✅</span> PCI-DSS</div>
+        <div className={styles.seal}><span aria-hidden="true"><Icon name="lock" /></span> SSL Encrypted</div>
+        <div className={styles.seal}><span aria-hidden="true"><Icon name="bank" /></span> Razorpay Secured</div>
+        <div className={styles.seal}><span aria-hidden="true"><Icon name="check" /></span> PCI-DSS</div>
         <div className={styles.seal}><span aria-hidden="true">🇮🇳</span> Made for India</div>
       </div>
     </div>

@@ -325,7 +325,7 @@ export default function CartDrawer({ settings }: Props) {
             ref={firstFocusRef}
             className={styles.closeBtn}
           >
-            ✕ Close
+            <Icon name="close" /> Close
           </button>
         </div>
 
@@ -380,7 +380,7 @@ export default function CartDrawer({ settings }: Props) {
             {!pricing.isFreeShipping && pricing.remainingForFreeShip > 0 && (
               <div className="bg-earth-50 rounded-xl p-3 border border-earth-100">
                 <p className="text-xs text-earth-700 font-medium">
-                  <span aria-hidden="true">🚚</span>{' '}
+                  <span aria-hidden="true"><Icon name="truck" /></span>{' '}
                   Add {formatPrice(pricing.remainingForFreeShip)} more for{' '}
                   <span className="font-bold">FREE shipping</span>
                 </p>
