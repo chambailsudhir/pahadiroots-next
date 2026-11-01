@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Playfair_Display, Lato } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { stripServerOnlySettings, isStoreOpen, safeSocialUrl } from '@/lib/siteSettingsHelpers'
@@ -41,17 +41,26 @@ const safeJsonLd = (obj: unknown) => JSON.stringify(obj).replace(/</g, '\\u003c'
 // is dropped instead of being injected.
 const TAG_ID_RE = /^(G|GTM|AW|UA)-[A-Z0-9-]{3,20}$/i
 
-// PERF FIX (audit HOME-012): Playfair Display is a variable font, so omitting `weight` serves one file per style
-// (normal + italic = 2) instead of one static file per weight x style (8). Weights 400-900 render the same.
-const playfair = Playfair_Display({
+// Fonts are SELF-HOSTED (src/fonts, latin subset, woff2) rather than fetched from Google at build time. A transient Google
+// Fonts failure used to fail the whole production deploy (Oct 2026), and self-hosting also removes a build-time network
+// dependency and any third-party request. Two families site-wide: Playfair Display (variable, normal + italic) for headings
+// and Lato for text — the audit's HOME-012 limit.
+const playfair = localFont({
   variable: '--font-playfair',
-  subsets: ['latin'],
-  style: ['normal', 'italic'],
+  display: 'swap',
+  src: [
+    { path: '../fonts/PlayfairDisplay-normal-400-900.woff2', style: 'normal', weight: '400 900' },
+    { path: '../fonts/PlayfairDisplay-italic-400-900.woff2', style: 'italic', weight: '400 900' },
+  ],
 })
-const lato = Lato({
+const lato = localFont({
   variable: '--font-lato',
-  subsets: ['latin'],
-  weight: ['400', '700', '900'],  // 300 is never used — one less font file competing with the hero image
+  display: 'swap',
+  src: [
+    { path: '../fonts/Lato-normal-400.woff2', style: 'normal', weight: '400' },
+    { path: '../fonts/Lato-normal-700.woff2', style: 'normal', weight: '700' },
+    { path: '../fonts/Lato-normal-900.woff2', style: 'normal', weight: '900' },
+  ],
 })
 
 // BUG FIX (confirmed against a live admin-panel screenshot): this was a

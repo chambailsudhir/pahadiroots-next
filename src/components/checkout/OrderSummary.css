@@ -31,7 +31,7 @@
           font-family: inherit;
         }
         .os-head-title {
-          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
           font-size: 18px;
           font-weight: 600;
           color: #1C2B1E;
@@ -43,7 +43,7 @@
           gap: 8px;
         }
         .os-head-count {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           font-weight: 500;
           color: #9A9080;
@@ -95,7 +95,7 @@
           background: #2C4A2E;
           color: #fff;
           border-radius: 50%;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 10px;
           font-weight: 700;
           display: flex;
@@ -106,7 +106,7 @@
         }
         .os-item-info { flex: 1; min-width: 0; }
         .os-item-name {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           font-weight: 600;
           color: #1C2B1E;
@@ -116,13 +116,13 @@
           letter-spacing: -0.1px;
         }
         .os-item-size {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #9A9080;
           margin-top: 2px;
         }
         .os-item-price {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 14px;
           font-weight: 700;
           color: #1C2B1E;
@@ -139,7 +139,7 @@
         .os-coupon-input {
           flex: 1;
           min-width: 0;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           font-weight: 500;
           letter-spacing: 1.5px;
@@ -159,7 +159,7 @@
           box-shadow: 0 0 0 3px rgba(44,74,46,.08);
         }
         .os-coupon-btn {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 700;
           color: #fff;
@@ -191,14 +191,14 @@
         .os-coupon-left { display: flex; align-items: center; gap: 10px; }
         .os-coupon-emoji { font-size: 20px; }
         .os-coupon-name {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           font-weight: 700;
           color: #2C4A2E;
           letter-spacing: 1px;
         }
         .os-coupon-saving {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #4A7A40;
           font-weight: 500;
@@ -220,7 +220,7 @@
         }
         .os-coupon-rm:hover { background: rgba(0,0,0,.12); }
         .os-coupon-err {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #C04030;
           margin-top: 6px;
@@ -229,7 +229,7 @@
         .os-hints-toggle {
           background: none;
           border: none;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 600;
           color: #2C4A2E;
@@ -255,14 +255,14 @@
         }
         .os-hint:hover { border-color: #2C4A2E; background: #EEF6EC; }
         .os-hint-code {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 700;
           color: #2C4A2E;
           letter-spacing: 1px;
         }
         .os-hint-label {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #9A9080;
         }
@@ -284,14 +284,14 @@
         .os-loyalty-applied-left { display: flex; align-items: center; gap: 10px; }
         .os-loyalty-emoji { font-size: 20px; }
         .os-loyalty-applied-title {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           font-weight: 700;
           color: #7A5800;
           letter-spacing: 0.3px;
         }
         .os-loyalty-applied-save {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #A07020;
           font-weight: 500;
@@ -309,7 +309,7 @@
           border: 1.5px solid #E8D878;
           border-radius: 12px;
           cursor: pointer;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           transition: border-color .2s, background .2s;
           text-align: left;
         }
@@ -352,7 +352,7 @@
         .os-loyalty-info-row {
           display: flex;
           justify-content: space-between;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           color: #7A6020;
         }
@@ -365,7 +365,7 @@
         .os-loyalty-input {
           flex: 1;
           min-width: 0;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           font-weight: 600;
           padding: 10px 12px;
@@ -379,7 +379,7 @@
         .os-loyalty-input:focus { border-color: #C8A800; box-shadow: 0 0 0 3px rgba(200,168,0,.1); }
         .os-loyalty-input::placeholder { color: #C8B870; font-weight: 400; }
         .os-loyalty-apply-btn {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 700;
           color: #fff;
@@ -399,7 +399,7 @@
         .os-loyalty-apply-btn:disabled { opacity: .5; cursor: not-allowed; }
         .os-loyalty-preview {
           margin-top: 8px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           color: #7A5800;
           font-weight: 600;
@@ -419,7 +419,7 @@
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           color: #7A7060;
         }
@@ -437,13 +437,13 @@
           margin-top: 4px;
         }
         .os-total-label {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 14px;
           font-weight: 600;
           color: #1C2B1E;
         }
         .os-total-value {
-          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
           font-size: 30px;
           font-weight: 700;
           color: #1C2B1E;
@@ -459,7 +459,7 @@
           border: 1px solid #B8DCA8;
           border-radius: 10px;
           padding: 9px 12px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 500;
           color: #3A6030;
@@ -470,7 +470,7 @@
           border: 1px solid #E8D070;
           border-radius: 10px;
           padding: 9px 12px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           color: #7A5800;
         }
@@ -482,7 +482,7 @@
           border: 1px solid #F0C8C0;
           border-radius: 12px;
           padding: 11px 14px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 13px;
           color: #B03020;
           font-weight: 500;
@@ -497,7 +497,7 @@
           color: #F5F0E8;
           border: none;
           border-radius: 16px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 15px;
           font-weight: 600;
           cursor: pointer;
@@ -528,7 +528,7 @@
         .os-cta:active:not(:disabled) { transform: translateY(0); }
         .os-cta:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
         .os-cta-amt {
-          font-family: 'Cormorant Garamond', Georgia, serif;
+          font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
           font-size: 20px;
           font-weight: 700;
           letter-spacing: -0.3px;
@@ -540,7 +540,7 @@
           align-items: center;
           justify-content: center;
           gap: 5px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #9A9080;
           margin-top: 8px;
@@ -561,7 +561,7 @@
         }
         .os-eta-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
         .os-eta-line {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           color: #4A4238;
           font-weight: 500;
@@ -569,7 +569,7 @@
         }
         .os-eta-line strong { font-weight: 700; }
         .os-eta-sub {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 11px;
           color: #9A9080;
           margin-top: 2px;

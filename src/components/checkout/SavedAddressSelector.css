@@ -1,7 +1,7 @@
 .sas-root { padding: 20px 28px 8px; }
         @media (max-width: 640px) { .sas-root { padding: 16px 20px 6px; } }
         .sas-label {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 10px;
           font-weight: 600;
           color: #9A9080;
@@ -51,14 +51,14 @@
           display: flex;
           align-items: center;
           gap: 5px;
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           font-weight: 600;
           color: #2C4A2E;
           margin-bottom: 3px;
         }
         .sas-addr {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-lato), Lato, sans-serif;
           font-size: 12px;
           color: #7A7060;
           line-height: 1.5;

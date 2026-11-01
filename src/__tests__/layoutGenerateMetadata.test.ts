@@ -11,7 +11,7 @@
  * values) still work when a field is blank.
  *
  * layout.tsx also does heavy module-level work unrelated to
- * generateMetadata() (loads next/font/google, imports Header/Footer/etc,
+ * generateMetadata() (loads next/font/local, imports Header/Footer/etc,
  * fetches categories/states for RootLayout itself) — all mocked out below
  * so this file exercises generateMetadata() in isolation.
  */
@@ -23,9 +23,8 @@ vi.mock('@/lib/getSiteSettings', () => ({
   getSiteSettings: () => mockGetSiteSettings(),
 }))
 
-vi.mock('next/font/google', () => ({
-  Playfair_Display: () => ({ variable: '--font-playfair' }),
-  Lato: () => ({ variable: '--font-lato' }),
+vi.mock('next/font/local', () => ({
+  default: (o: { variable: string }) => ({ variable: o.variable }),
 }))
 
 vi.mock('@/lib/server/sanitize', () => ({ sanitizeHtml: (s: string) => s }))

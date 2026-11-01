@@ -101,7 +101,7 @@
 .ck-nav-crumbs { display: flex; align-items: center; gap: 0; list-style: none; margin: 0; padding: 0; }
 .ck-step-item { list-style: none; margin: 0; padding: 0; }
 
-.ck-crumb { display: flex; align-items: center; gap: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
+.ck-crumb { display: flex; align-items: center; gap: 8px; font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; font-weight: 500; color: #BDB5A8; letter-spacing: 0.02em; }
 .ck-crumb--done   { color: #7A9A6A; }
 .ck-crumb--active { color: #2C4A2E; font-weight: 600; }
 
