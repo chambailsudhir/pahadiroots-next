@@ -29,6 +29,7 @@ import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
 import Image from 'next/image'
 import OurPromiseSection from '@/components/homepage/WhySection'
+import Icon from '@/components/ui/Icon'
 
 export const revalidate = 3600
 
@@ -637,7 +638,7 @@ export default async function ProductPage({ params }: Props) {
             {/* Key Benefits card */}
             {benefits.length > 0 && (
               <div className="pdp-benefits-card">
-                <div className="pdp-benefits-title">✨ Highlights</div>
+                <div className="pdp-benefits-title"><Icon name="sparkle" size="1em" /> Highlights</div>
                 {benefits.map((b: any, i: number) => (
                   <div key={i} className="pdp-ben-item">
                     <div className="pdp-ben-icon">{typeof b === 'object' ? (b.icon || '✓') : '✓'}</div>
@@ -689,8 +690,8 @@ export default async function ProductPage({ params }: Props) {
                 <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
               </svg>
               {freeShipMin === 0
-                ? `🚚 Free delivery on all orders · Delivery ${deliveryArea} · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`
-                : `🚚 Delivery ${deliveryArea} · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
+                ? `Free delivery on all orders · Delivery ${deliveryArea} · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`
+                : `Delivery ${deliveryArea} · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
             </div>
 
             {/* Product facts that come from real data only: the admin's Shelf Life / Packaging Type attributes.
