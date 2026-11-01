@@ -10,6 +10,7 @@ import { usePDPAnalytics } from '@/hooks/useCheckoutAnalytics'
 import { trackProductView, trackAddToCart as trackInHouseAddToCart } from '@/lib/analytics/track'
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 import { usePdpSelection } from './PdpVariantContext'
+import { bestValueVariantId } from '@/lib/variantValueTag'
 
 interface Props {
   product:  Product
@@ -226,6 +227,7 @@ export default function AddToCartSection({ product, variants }: Props) {
   }
 
   const hasMore = variants.length > 3
+  const bestValueId = bestValueVariantId(variants)
 
   return (
     <div style={{ marginTop: '20px', position: 'relative', zIndex: 2 }}>
@@ -237,7 +239,7 @@ export default function AddToCartSection({ product, variants }: Props) {
             Select Size: <span id="var-label-display">{selectedVariant?.size || variants[0]?.size}</span>
           </div>
           <div className={`pdp-variant-grid${hasMore ? ' has-more' : ''}`}>
-            {variants.map((v, i) => {
+            {variants.map((v) => {
               const savePct = v.mrp && v.mrp > v.price ? Math.round((1 - v.price / v.mrp) * 100) : 0
               const isActive = selectedVariant?.id === v.id
               const oos = v.available_stock <= 0
@@ -259,11 +261,8 @@ export default function AddToCartSection({ product, variants }: Props) {
                   aria-pressed={isActive}
                   aria-label={variantLabel}
                 >
-                  {i === 1 && variants.length >= 3 && (
+                  {bestValueId === v.id && (
                     <span className="pdp-vcard-tag best">Best Value</span>
-                  )}
-                  {i === variants.length - 1 && variants.length >= 3 && i !== 1 && (
-                    <span className="pdp-vcard-tag deal">Steal Deal</span>
                   )}
                   <span className="pdp-vc-size">{v.size}</span>
                   <span className="pdp-vc-price">
