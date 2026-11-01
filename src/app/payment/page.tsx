@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { isCodEnabled, asNumber } from '@/lib/siteSettingsHelpers'
 import { parseServiceableStates } from '@/lib/serviceability'
-import { freeShippingPhrase } from '@/lib/shippingCopy'
+import { freeShippingPhrase, RETURNS_TIMING } from '@/lib/shippingCopy'
 
 // SEO FIX: added canonical — same gap as /about, no other public page fix
 // needed here since this is a simple informational page with no OG-worthy
@@ -42,7 +42,7 @@ export default async function PaymentPage() {
       : { icon: '💵', title: 'Cash on Delivery (COD)', desc: 'Cash on Delivery is not available at the moment — all orders are paid online, securely, at checkout.' },
     { icon: '🚚', title: 'Shipping', desc: `${freeShippingPhrase(settings)}, delivered ${where}.` },
     { icon: '🔒', title: '100% Secure', desc: 'All transactions are SSL-encrypted. We never store your card details. Powered by Razorpay — PCI DSS compliant.' },
-    { icon: '↩️', title: 'Easy Refunds', desc: 'Refunds for prepaid orders are processed within 5–7 business days to your original payment method.' },
+    { icon: '↩️', title: 'Easy Refunds', desc: `Refunds for prepaid orders are processed within ${RETURNS_TIMING.refundWindow} after approval, to your original payment method. We refund the full amount you paid and do not deduct payment-gateway charges for damaged, defective, wrong or cancelled-by-us orders.` },
   ]
 
   return (

@@ -11,6 +11,7 @@
 
 import type { SiteSettings } from '@/types'
 import { asNumber, FALLBACK_FREE_SHIPPING_MIN, FALLBACK_FLAT_SHIPPING } from '@/lib/siteSettingsHelpers'
+import { parseServiceableStates } from '@/lib/serviceability'
 
 export interface ShippingPolicy {
   /** Order value (after discounts) at/above which shipping is free. 0 → always free. */
@@ -44,12 +45,21 @@ export function freeShippingSub(settings: Partial<SiteSettings> | Record<string,
   return p.freeForAll ? 'On all orders' : `On orders above ${inr(p.freeMin)}`
 }
 
+/**
+ * Where we deliver, worded from the live `serviceable_states` setting instead of a fixed nationwide claim.
+ * Same wording as the Payment Methods page: "across India" when no states are restricted.
+ */
+export function deliveryAreaPhrase(settings: Partial<SiteSettings> | Record<string, string | undefined>): string {
+  const s = settings as Record<string, string | undefined>
+  return parseServiceableStates(s.serviceable_states).length > 0 ? 'in the states we currently deliver to' : 'across India'
+}
+
 /** Sentence for the shipping policy page. */
 export function shippingPolicySentence(settings: Partial<SiteSettings> | Record<string, string | undefined>): string {
   const p = getShippingPolicy(settings)
   return p.freeForAll
-    ? 'Free shipping on all orders · Pan-India delivery'
-    : `Free shipping on orders above ${inr(p.freeMin)} · Flat ${inr(p.flat)} on orders below ${inr(p.freeMin)} · Pan-India delivery`
+    ? `Free shipping on all orders · Delivery ${deliveryAreaPhrase(settings)}`
+    : `Free shipping on orders above ${inr(p.freeMin)} · Flat ${inr(p.flat)} on orders below ${inr(p.freeMin)} · Delivery ${deliveryAreaPhrase(settings)}`
 }
 
 // Matches a hand-typed free-shipping claim WITH an amount, e.g.
@@ -122,7 +132,7 @@ export const DELIVERY_WINDOWS_TEXT =
 
 /** Short badge title + sub-line (cart / checkout trust rows). */
 export const DELIVERY_BADGE = {
-  title: 'Pan-India Delivery',
+  title: 'Home Delivery',
   sub:   `Metro ${SHIPPING_TIMING.metro} · remote ${SHIPPING_TIMING.remote} after dispatch`,
 } as const
 

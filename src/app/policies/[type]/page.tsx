@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getSiteSettings } from '@/lib/getSiteSettings'
-import { shippingPolicySentence } from '@/lib/shippingCopy'
+import { shippingPolicySentence, RETURNS_TIMING } from '@/lib/shippingCopy'
+import { parseServiceableStates } from '@/lib/serviceability'
 import { isCodEnabled } from '@/lib/siteSettingsHelpers'
 
 export const revalidate = 86400 // 24hr
@@ -22,6 +23,10 @@ const OPERATOR_LINE = `${LEGAL_ENTITY} (trading as ${BRAND})`
 const ADDRESS = 'Village Sakoh, PO Sakoh, Distt. Kangra, Himachal Pradesh 176082'
 const JURISDICTION = 'Palampur, Himachal Pradesh'
 const SHORT_LOCATION = 'Himachal Pradesh, India'
+// Consumer Protection (E-Commerce) Rules, 2020, rule 4(4): the platform must show the NAME, contact details and
+// designation of its grievance officer. Set the name before launch (left empty on purpose: do not invent one).
+const GRIEVANCE_OFFICER_NAME = ''
+const GRIEVANCE_OFFICER_DESIGNATION = 'Grievance Officer'
 
 // ── Small styled helpers, reused across all four policies ───────────────
 function Callout({ tone, children }: { tone: 'green' | 'amber' | 'red' | 'blue'; children: React.ReactNode }) {
@@ -41,6 +46,17 @@ function Callout({ tone, children }: { tone: 'green' | 'amber' | 'red' | 'blue';
 async function ShippingCallout() {
   const settings = await getSiteSettings({ strict: true }) // ISR page: see /payment for why
   return <Callout tone="green">🎉 {shippingPolicySentence(settings)}</Callout>
+}
+
+// Coverage follows the live `serviceable_states` setting (same source as the Payment Methods page), so this
+// page can never claim a wider area than checkout actually serves.
+async function ShippingCoverage() {
+  const settings = await getSiteSettings({ strict: true }) // ISR page: see /payment for why
+  const states = parseServiceableStates((settings as unknown as Record<string, string | undefined>).serviceable_states)
+    .map(st => st.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))
+  return states.length > 0
+    ? <p className="text-stone-600">We currently deliver to: <strong>{states.join(', ')}</strong>. Enter your pincode on any product page to check delivery to your address.</p>
+    : <p className="text-stone-600">We deliver to serviceable pincodes <strong>across India</strong>. Enter your pincode on any product page to check delivery to your address.</p>
 }
 
 // F-05: the terms promised COD unconditionally while it was switched off. Rendered from the live
@@ -127,6 +143,11 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
   // perishable-goods carve-out — real returns are only for non-edible
   // items, and the actual operative window everywhere (edible or not) is
   // 48 hours with photo/video proof, not 7 days. Rewritten to match.
+  // COMPLIANCE NOTE (Nov 2026 review): the Consumer Protection (E-Commerce) Rules, 2020 contain NO
+  // perishable-goods exemption (the words "perishable" / "best before" do not appear). Change-of-mind
+  // returns of food are declined as OUR hygiene policy; defective / not-as-described / late goods must still
+  // be taken back and refunded (rule 7(4)), and no cancellation charge may be imposed on customers unless we
+  // bear a similar one (rule 4(8)). Do not re-introduce a statutory "exemption" claim.
   returns: {
     title: 'Return & Refund Policy',
     content: (
@@ -140,14 +161,14 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">1. Returns for Food / Edible Products</h2>
-          <p className="text-stone-600 mb-2">In accordance with hygiene, safety, and perishable-goods exemptions under consumer protection law, returns and exchanges are <strong>generally not permitted</strong> for edible items — honey, ghee, saffron, shilajit, teas, spices, and all other food products.</p>
-          <p className="text-stone-600 mb-2">As a goodwill measure, we <strong>may consider</strong> a return/refund for edible items on a case-by-case basis, subject to all of the following:</p>
+          <p className="text-stone-600 mb-2">For hygiene and safety, we do <strong>not accept returns of edible items for change of mind</strong> — honey, ghee, teas, spices, juices and all other food products. Once food has left our facility it cannot be resold.</p>
+          <p className="text-stone-600 mb-2">This does not limit your legal rights. If an edible item is <strong>damaged, defective, spoilt, not as described, or delivered later than the delivery time we stated</strong> (except where the delay is caused by force majeure), you can ask us to take it back and we will refund the amount you paid. To help us verify the claim, please provide:</p>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
-            <li>Request raised <strong>within 48 hours</strong> of delivery</li>
-            <li>Clear <strong>photo or video evidence</strong> provided</li>
-            <li>Issue is damage, spoilage, or a quality concern attributable to transit or a manufacturing defect — not a change of mind</li>
+            <li>Your request <strong>within 48 hours</strong> of delivery</li>
+            <li>Clear <strong>photo or video evidence</strong></li>
+            <li>A description of the issue: damage, spoilage, a quality defect, or a mismatch with the product description — not a change of mind</li>
           </ul>
-          <p className="text-stone-500 text-xs mt-2">This decision is made in good faith, without prejudice to your statutory rights under the Consumer Protection Act, 2019 or any other applicable law.</p>
+          <p className="text-stone-500 text-xs mt-2">This is in line with the Consumer Protection Act, 2019 and the Consumer Protection (E-Commerce) Rules, 2020, and does not affect any other right you have under applicable law.</p>
         </section>
 
         <section>
@@ -194,11 +215,13 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             ]}
           />
           <p className="text-stone-500 text-xs mt-2">Shipping and handling charges are non-refundable unless the return is due to our error.</p>
+          <p className="text-stone-600 mt-2">We refund the <strong>full amount you paid</strong> for items that are damaged, defective, spoilt, not as described, delivered late (other than for force majeure) or cancelled by us. <strong>We do not deduct payment-gateway charges</strong> from these refunds.</p>
         </section>
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">6. Order Cancellation</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
+            <li>If you cancel <strong>before dispatch</strong>, we refund the <strong>full amount you paid</strong>, including any shipping charge, and we charge <strong>no cancellation fee</strong></li>
             <li>Orders may be cancelled <strong>before dispatch</strong> only — contact us immediately on WhatsApp. Requests between confirmation and dispatch are accepted at our discretion</li>
             <li>Once dispatched, cancellation requests <strong>cannot be accepted</strong></li>
             <li>Food/edible orders <strong>cannot be cancelled once dispatched</strong></li>
@@ -210,7 +233,8 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">7. Consumer Grievance Redressal</h2>
-          <p className="text-stone-600">In compliance with the <strong>Consumer Protection (E-Commerce) Rules, 2020</strong>, you may contact us for any grievance. We acknowledge complaints within <strong>48 hours</strong> and resolve them within a reasonable timeframe.</p>
+          <p className="text-stone-600">In compliance with the <strong>Consumer Protection (E-Commerce) Rules, 2020</strong>, you may contact us for any grievance. We acknowledge complaints within <strong>48 hours</strong> and resolve them within <strong>one month</strong> of receipt.</p>
+          <p className="text-stone-600 mt-1"><strong>{GRIEVANCE_OFFICER_DESIGNATION}:</strong> {GRIEVANCE_OFFICER_NAME ? `${GRIEVANCE_OFFICER_NAME}, ` : ''}{LEGAL_ENTITY}</p>
           <p className="text-stone-600 mt-1"><strong>Grievance Contact:</strong> <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 hover:underline">{SUPPORT_PHONE}</a></p>
         </section>
 
@@ -244,7 +268,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Shipping Coverage</h2>
-          <p className="text-stone-600">We deliver <strong>Pan India</strong> — all 28 states and 8 Union Territories. Our Himalayan products travel from the mountains directly to your doorstep.</p>
+          <ShippingCoverage />
         </section>
 
         <section>
@@ -275,7 +299,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">Refused Delivery (Prepaid Orders)</h2>
-          <p className="text-stone-600">If you refuse a prepaid order, we arrange one re-attempt. If not possible, the order is cancelled and refunded <strong>after deducting RTO (return-to-origin) charges</strong> within 5–10 business days of the package reaching our facility.</p>
+          <p className="text-stone-600">If you refuse a prepaid order, we arrange one re-attempt. If not possible, the order is cancelled and refunded <strong>after deducting RTO (return-to-origin) charges</strong> within {RETURNS_TIMING.refundWindow} of the package reaching our facility.</p>
         </section>
 
         <Callout tone="amber">⚠️ If packaging appears tampered or damaged, <strong>refuse the delivery</strong> and WhatsApp us immediately with your order number. We will arrange a replacement or refund.</Callout>
@@ -361,7 +385,10 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Request correction of inaccurate data</li>
             <li>Request deletion of your account and associated data</li>
             <li>Opt out of marketing communications at any time</li>
+            <li>Withdraw your consent to our processing of your data at any time</li>
+            <li>Raise a grievance with us about how your data is handled</li>
           </ul>
+          <p className="text-stone-500 text-xs mt-2">These rights follow the Digital Personal Data Protection Act, 2023. If we do not resolve your grievance, the Act allows you to complain to the Data Protection Board of India.</p>
           <p className="text-stone-600 mt-2">To exercise any right: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a></p>
         </section>
 
