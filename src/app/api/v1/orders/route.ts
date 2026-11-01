@@ -332,7 +332,7 @@ export async function POST(req: NextRequest) {
   </div>
   <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
     <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${esc(estDate)}</strong><br>
-    <span style="color:#888;font-size:12px">Pan India · We&apos;ll notify you when shipped</span>
+    <span style="color:#888;font-size:12px">We&apos;ll notify you when it ships</span>
   </div>
   <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
     <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>

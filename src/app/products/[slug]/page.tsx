@@ -9,7 +9,7 @@ import { getStoreData, getProductBySlug, getRelatedProducts } from '@/lib/storeD
 import { buildOffersList, offersListToJsonLdValue } from '@/lib/jsonLdOffers'
 import { pdpFetchLimiter } from '@/lib/concurrencyLimit'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
-import { getShippingPolicy, SHIPPING_TIMING, DELIVERY_WINDOWS_TEXT } from '@/lib/shippingCopy'
+import { getShippingPolicy, SHIPPING_TIMING, DELIVERY_WINDOWS_TEXT, deliveryAreaPhrase } from '@/lib/shippingCopy'
 import { isCodEnabled } from '@/lib/siteSettingsHelpers'
 import { supabase as anonClient, getServiceClient } from '@/lib/supabase'
 import { buildAttributeMap, formatShelfLife, type ProductAttributeMap } from '@/lib/productAttributes'
@@ -285,6 +285,7 @@ export default async function ProductPage({ params }: Props) {
   const freeShipMin    = shipPolicy.freeForAll ? 0 : shipPolicy.freeMin
   const flatShipCharge = shipPolicy.flat
   const codNote        = isCodEnabled(settings) ? 'COD available. ' : ''
+  const deliveryArea   = deliveryAreaPhrase(settings)   // follows the serviceable_states setting
   const showReviews     = isEnabled(settings.show_reviews_on_pdp)
   const showRelated     = isEnabled(settings.show_related_products)
   const showCertificate = isEnabled(settings.show_certificates)
@@ -682,8 +683,8 @@ export default async function ProductPage({ params }: Props) {
                 <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
               </svg>
               {freeShipMin === 0
-                ? `🚚 Free delivery on all orders · Pan India · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`
-                : `🚚 Pan India · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
+                ? `🚚 Free delivery on all orders · Delivery ${deliveryArea} · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`
+                : `🚚 Delivery ${deliveryArea} · Free above ₹${freeShipMin} (₹${flatShipCharge} below) · Metro ${SHIPPING_TIMING.metro} · Others ${SHIPPING_TIMING.remote} after dispatch`}
             </div>
 
             {/* Product facts that come from real data only: the admin's Shelf Life / Packaging Type attributes.
@@ -1399,7 +1400,7 @@ export default async function ProductPage({ params }: Props) {
 
             {!isHoneyPdp && (
               <AccItem title="Shipping" icon="ship">
-                <strong>Pan India Shipping</strong><br /><br />
+                <strong>Delivery {deliveryArea}</strong><br /><br />
                 {freeShipMin === 0
                   ? `Free shipping on all orders. ${codNote}`
                   : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}
@@ -1534,7 +1535,7 @@ export default async function ProductPage({ params }: Props) {
               )}
 
               <AccItem title="Shipping" icon="ship">
-                <strong>Pan India Shipping</strong><br /><br />
+                <strong>Delivery {deliveryArea}</strong><br /><br />
                 {freeShipMin === 0
                   ? `Free shipping on all orders. ${codNote}`
                   : `Free shipping above ₹${freeShipMin} · Flat ₹${flatShipCharge} below. ${codNote}`}

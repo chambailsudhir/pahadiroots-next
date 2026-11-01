@@ -53,7 +53,7 @@ describe('replacements are in place', () => {
     expect(c).toContain('Raw and hand-strained')
   })
   it('cart sidebar badge and trust row use supported wording', () => {
-    expect(get('components/cart/PahadiStoryCard.tsx')).toContain('Pan-India Delivery')
+    expect(get('components/cart/PahadiStoryCard.tsx')).toContain('Home Delivery')
     expect(get('app/cart/page.tsx')).toContain("'Farmer Direct',       'No middlemen'")
   })
 })

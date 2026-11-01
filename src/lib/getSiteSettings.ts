@@ -28,7 +28,7 @@ const DEFAULTS: Partial<SiteSettings> = {
   // AUDIT S3-005: the welcome coupon minted by lib/welcomeCoupon.ts is 5% (WELCOME5-xxxxxx), not ₹50/WELCOME50.
   ticker_1_text:           '🎁 First order? Get 5% off with your welcome code',
   // F-02: no hard-coded amount — expanded from the live free_shipping_min by reconcileShippingCopy().
-  ticker_2_text:           '🚚 {{free_shipping}} — Pan India',
+  ticker_2_text:           '🚚 {{free_shipping}}',
   ticker_3_text:           '🌿 100% Natural · No preservatives, no additives',
   ticker_4_text:           '🏔️ Direct from mountain farmers',
   ticker_5_text:           '🏔️ Small-batch · From Himalayan farming families',   // AUDIT S3-005: no unsubstantiated rating
