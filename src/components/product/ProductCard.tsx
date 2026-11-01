@@ -56,8 +56,11 @@ export default function ProductCard({ product, showWishlist = true, priority = f
 
   // BUG FIX (catalogue-wide audit, Aug 2026): products.price is a legacy
   // column the pricing engine no longer writes to — prefer selling_price.
-  const price   = baseVariant?.price ?? product.selling_price ?? product.price
-  const mrp     = baseVariant?.mrp   ?? product.mrp ?? product.selling_price ?? product.price
+  // AUDIT C-4: if every price source is missing the card used to render "₹NaN" and a NaN discount. Treat a non-finite
+  // price as 0 and hide the card entirely (below) — a shop never advertises a product it cannot price.
+  const finite  = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) ? n : 0)
+  const price   = finite(baseVariant?.price ?? product.selling_price ?? product.price)
+  const mrp     = finite(baseVariant?.mrp   ?? product.mrp ?? product.selling_price ?? product.price)
   const savings = savingsPercent(mrp, price)
 
   const stock   = baseVariant?.available_stock ?? product.available_stock ?? 0
@@ -70,7 +73,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   // each tier's own meaningful range instead, so the bar's width never
   // contradicts its own color/label.
   const sPct    = sClass === 'high' ? 100 : sClass === 'mid' ? Math.round(60 + (Math.min(stock, 20) - 6) / 14 * 30) : Math.round(15 + Math.min(stock, 5) / 5 * 15)
-  const sLbl    = !inStock ? 'Out of Stock' : stock > 20 ? 'In Stock' : `Only ${stock} left`
+  // AUDIT C-4: "Only N left" is scarcity messaging — only show it when it is true urgency (5 or fewer), never for 6-20 units.
+  const sLbl    = !inStock ? 'Out of Stock' : stock > 5 ? 'In Stock' : `Only ${stock} left`
 
   // BUG FIX (premium UX — "multi-badge support" from the audit): this used
   // to be a single if/else-if chain, so a product that was BOTH a bestseller
@@ -159,6 +163,8 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   }
 
   const href = `/products/${product.slug}`
+
+  if (price <= 0) return null   // AUDIT C-4: unpriced product — never show "₹NaN" / a broken discount
 
   return (
     // BUG FIX (accessibility/HTML validity): this used to be a <Link> with

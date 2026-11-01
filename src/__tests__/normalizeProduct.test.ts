@@ -289,3 +289,13 @@ describe('base variant prefers the cheapest variant that is in stock (D1)', () =
     expect(getEffectiveStock(prod([], { available_stock: 7 }))).toBe(7)
   })
 })
+
+describe('rankForHomepage (deterministic, no shuffling)', () => {
+  it('orders in-stock first, then bestsellers, then biggest discount, keeping catalogue order for ties', async () => {
+    const { rankForHomepage } = await import('@/lib/normalizeProduct')
+    const mk = (id: number, o: Record<string, unknown>) => ({ id, name: `P${id}`, price: 100, mrp: 100, selling_price: 100, available_stock: 5, badges_bestseller: false, product_variants: [], ...o }) as any
+    const list = [mk(1, { available_stock: 0, badges_bestseller: true }), mk(2, {}), mk(3, { badges_bestseller: true }), mk(4, { mrp: 200 }), mk(5, {})]
+    expect(rankForHomepage(list).map(p => p.id)).toEqual([3, 4, 2, 5, 1])
+    expect(rankForHomepage(list).map(p => p.id)).toEqual(rankForHomepage([...list]).map(p => p.id))  // same input, same output
+  })
+})
