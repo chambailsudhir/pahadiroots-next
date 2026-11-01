@@ -73,13 +73,13 @@ describe('looks are preserved per skin (class contract the shared CSS targets)',
     r({ current: 'checkout', skin: 'cart' })
     const steps = Array.from(document.querySelectorAll('.cp-step'))
     expect(steps.map(s => s.className)).toEqual(['cp-step cp-step-done', 'cp-step cp-step-active', 'cp-step'])
-    expect(steps.map(s => s.querySelector('span')!.textContent)).toEqual(['✓', '2', '3'])
+    expect(steps.map(s => s.querySelector('span')!.querySelector('svg') ? '✓' : s.querySelector('span')!.textContent)).toEqual(['✓', '2', '3'])
   })
   it('checkout skin: ck-crumb* classes, ✓ on done, numbers otherwise, done lines coloured', () => {
     r({ current: 'confirmation', skin: 'checkout' })
     const crumbs = Array.from(document.querySelectorAll('.ck-crumb'))
     expect(crumbs.map(c => c.className.replace(' ck-crumb--link', ''))).toEqual(['ck-crumb ck-crumb--done', 'ck-crumb ck-crumb--done', 'ck-crumb ck-crumb--active'])
-    expect(Array.from(document.querySelectorAll('.ck-crumb-dot')).map(d => d.textContent)).toEqual(['✓', '✓', '3'])
+    expect(Array.from(document.querySelectorAll('.ck-crumb-dot')).map(d => d.querySelector('svg') ? '✓' : d.textContent)).toEqual(['✓', '✓', '3'])
     expect(Array.from(document.querySelectorAll('.ck-crumb-line')).map(l => l.className)).toEqual(['ck-crumb-line ck-crumb-line--done', 'ck-crumb-line ck-crumb-line--done'])
   })
   it('checkout skin on checkout: first line done, second not (matches the previous hand-written markup)', () => {

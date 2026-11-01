@@ -113,7 +113,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 400): P
       lastErr = err
       if (i < retries - 1) {
         logger.warn('[storeData] fetch attempt failed — retrying', {
-          attempt: i + 1, retries, error: err instanceof Error ? err.message : String(err),
+          attempt: i + 1, retries, error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : String(err),
         })
         await new Promise(r => setTimeout(r, delayMs * 2 ** i))
       }

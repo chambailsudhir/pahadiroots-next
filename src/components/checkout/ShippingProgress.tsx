@@ -1,6 +1,7 @@
 'use client'
 import { memo } from 'react'
 import { formatPrice } from '@/lib/utils'
+import Icon from '@/components/ui/Icon'
 // BUG FIX: styles extracted from the inline <style>{`…`}</style> block that
 // previously lived inside the JSX return.  An inline <style> tag re-creates
 // and re-parses its CSS on every render of the component, bypassing the
@@ -38,8 +39,8 @@ const ShippingProgress = memo(function ShippingProgress({ progressBase, freeShip
   return (
     <div className={`sp-bar${isFreeShipping ? ' sp-bar--free' : ''}`}>
       <div className="sp-content">
-        {/* aria-hidden on emoji — the text beside it carries all meaning */}
-        <span className="sp-icon" aria-hidden="true">{isFreeShipping ? '🎉' : '🚚'}</span>
+        {/* decorative icon — the text beside it carries all meaning */}
+        <span className="sp-icon" aria-hidden="true"><Icon name={isFreeShipping ? 'sparkle' : 'truck'} size="1em" /></span>
         <span className="sp-text">
           {isFreeShipping
             ? 'Free shipping unlocked!'

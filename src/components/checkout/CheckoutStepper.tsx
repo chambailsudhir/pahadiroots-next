@@ -16,6 +16,7 @@
  */
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import Icon from '@/components/ui/Icon'
 import './checkout-stepper.css'
 
 export type CheckoutStep = 'cart' | 'checkout' | 'confirmation'
@@ -88,7 +89,7 @@ function StepItemCart({ index, label, state }: { index: number; label: string; s
     <>
       {index > 1 && <li className="cp-step-line" aria-hidden="true" />}
       <li className={cls} aria-current={state === 'active' ? 'step' : undefined}>
-        <span aria-hidden="true">{state === 'done' ? '✓' : index}</span> {label}
+        <span aria-hidden="true">{state === 'done' ? <Icon name="check" size="1em" /> : index}</span> {label}
       </li>
     </>
   )
@@ -101,7 +102,7 @@ function StepItemCheckout({
   const dotCls   = `ck-crumb-dot${state === 'done' ? ' ck-crumb-dot--done' : state === 'active' ? ' ck-crumb-dot--active' : ''}`
   const inner = (
     <>
-      <div className={dotCls} aria-hidden="true">{state === 'done' ? '✓' : index}</div>
+      <div className={dotCls} aria-hidden="true">{state === 'done' ? <Icon name="check" size="1em" /> : index}</div>
       <span>{label}</span>
     </>
   )

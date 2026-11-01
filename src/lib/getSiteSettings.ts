@@ -396,7 +396,7 @@ export async function getSiteSettings(opts: { strict?: boolean } = {}): Promise<
     return await getCachedSiteSettings()
   } catch (err) {
     if (opts.strict) throw err
-    logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : String(err) })
+    logger.error('getSiteSettings: failed to fetch, using defaults', { action: 'getSiteSettings.fetch', error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : String(err) })
     return withReconciledShippingCopy(DEFAULTS as SiteSettings)
   }
 }

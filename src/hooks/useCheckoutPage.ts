@@ -592,6 +592,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // Loyalty balance
   useEffect(() => {
     if (s.loyalty_enabled !== 'true') return
+    // Guests have no points: skip the call (it would 401, log a console error and bill an invocation).
+    if (!useUserStore.getState().user) return
     const ac = new AbortController()
     fetch('/api/v1/loyalty', { signal: ac.signal })
       .then(r => r.ok ? r.json() : null)
@@ -614,6 +616,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     // user can just type their address manually; the cache write below still
     // benefits future page loads even after a timeout on this one.
     const timeoutId = setTimeout(() => ctrl.abort(), 6_000)
+    if (!useUserStore.getState().user) { clearTimeout(timeoutId); return }
     fetch('/api/profile', { signal: ctrl.signal })
       .then(async r => {
         if (!r.ok || ctrl.signal.aborted) return

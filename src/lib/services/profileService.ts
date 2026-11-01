@@ -11,6 +11,10 @@ import { captureError } from '@/lib/logger'
 // ─────────────────────────────────────────────────────────────
 import { z } from 'zod'
 
+// Strict CSP on /checkout and /account forbids eval. Zod 4 probes `Function("")` at first use to decide whether it may
+// JIT-compile parsers; the probe itself is reported as a CSP violation. jitless skips the probe (and the JIT).
+z.config({ jitless: true })
+
 // ── Zod Schemas — API response validation ────────────────────
 //
 // BUG FIX (root cause of "Something went wrong / Could not connect" on

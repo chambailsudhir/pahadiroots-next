@@ -62,6 +62,9 @@ export function useAuth() {
   const init = useCallback(async () => {
     if (initDone.current) return
     initDone.current = true
+    // No persisted user means nobody has logged in from this browser: a guest. Skip the profile call (it would 401,
+    // log a console error and bill a serverless invocation). Login always sets the store user, so a real customer passes.
+    if (!useUserStore.getState().user) { setAuthState('guest'); return }
     setAuthState('loading')
     try {
       const data = await fetchProfile()

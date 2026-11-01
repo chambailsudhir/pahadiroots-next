@@ -75,7 +75,6 @@ describe('legacy ?token= URL absorption', () => {
 describe('inline <head> guard (runs BEFORE any analytics tag)', () => {
   it('scrubs the token on /order-success and stores it under the same key the page reads', () => {
     window.history.replaceState(null, '', `/order-success?id=PR1A2B3C4D&token=${TOKEN}`)
-    // eslint-disable-next-line no-new-func
     new Function(ANALYTICS_URL_GUARD_SCRIPT)()
     expect(window.location.href).not.toContain(TOKEN)
     expect(readConfirmationToken('PR1A2B3C4D')).toBe(TOKEN)
@@ -83,7 +82,6 @@ describe('inline <head> guard (runs BEFORE any analytics tag)', () => {
 
   it('leaves every other path alone (Google sign-in callback legitimately uses ?token=)', () => {
     window.history.replaceState(null, '', `/auth/google-callback?token=${TOKEN}`)
-    // eslint-disable-next-line no-new-func
     new Function(ANALYTICS_URL_GUARD_SCRIPT)()
     expect(window.location.search).toContain(`token=${TOKEN}`)
   })
