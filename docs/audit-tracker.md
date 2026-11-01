@@ -5,8 +5,8 @@
 | Status | Count |
 |---|---|
 | Fixed | 69 |
-| Verified OK | 2 |
-| Decision | 4 |
+| Verified OK | 1 |
+| Decision | 5 |
 | Mitigated | 2 |
 | Open - owner action | 2 |
 | Open - by design | 1 |
@@ -35,10 +35,10 @@
 | HOME-008 | P2 | Accessibility | Contrast, unlabeled controls, hidden slides focusable, tiny dots | Fixed | axe (WCAG 2.2 AA) reports 0 violations on the live homepage | PR #18 |
 | HOME-009 | P2 | Privacy | Analytics runs without a banner for Indian visitors | Decision | Kept region-based mode. Owner action: switch setting cookie_consent_mode to "always" before 14 May 2027 (DPDP date in code comment) | - |
 | HOME-010 | P2 | Accessibility | Ticker: hover-only pause, read twice, ignores reduced motion | Fixed | Pause button, aria-hidden clone, reduced-motion rule | PR #18 |
-| HOME-011 | P2 | Widgets | Four stacked floating widgets | Fixed | WhatsApp moved into the chat panel; two floating controls remain (chat, scroll-to-top) | PR #34 |
+| HOME-011 | P2 | Widgets | Four stacked floating widgets | Decision | WhatsApp moved into the chat panel (PR #34); the desktop floating button was restored at the owner's request (PR #54). Desktop: chat, WhatsApp and scroll-to-top in one column; mobile: WhatsApp in the bottom nav | PR #34, #54 |
 | HOME-012 | P2 | Fonts | Four font families, 16 font requests | Fixed | Two self-hosted families (Playfair Display, Lato); no Google download at build or run time | PR #33 |
 | HOME-013 | P2 | Navigation | "Payment" in the main nav | Fixed | Moved to footer | PR #18 |
-| HOME-014 | P2 | Icons | Emoji used as UI icons | Fixed | SVG icon set on homepage, header, menus, cards, quick view, cart drawer, checkout, cart, account, order pages. Emoji in sentences/toasts and owner-written content intentionally kept as text. Trust bar keeps owner emoji (line icons were too faint on dark green) | PR #34, #46, #52 |
+| HOME-014 | P2 | Icons | Emoji used as UI icons | Fixed | SVG icon set on homepage, header, menus, cards, quick view, cart drawer, checkout, cart, account, order pages. Verification pass converted the last icon-style emoji (address-label chips, shipping and SSL badges, stepper tick, PIN-code pin). Emoji in sentences/toasts and owner-written content intentionally kept as text. Trust bar keeps owner emoji (line icons were too faint on dark green) | PR #34, #46, #52, #59 |
 | HOME-015 | P2 | Brand | Three brand names | Decision | Checked: already consistent (HimVeda by Pahadi Roots) | - |
 | HOME-016 | P2 | Hero | Hero order / no price on slides | Decision | Honey stays first. A "From ₹" line was built, then removed at the owner's request | PR #36, #47 |
 | HOME-017 | P2 | SEO | Share image was a hero photo | Fixed | Branded 1200x630 default image; og_image setting updated (revert logged) | PR #30 |
@@ -48,13 +48,13 @@
 | HOME-021 | P2 | Content | Hidden ticker item claimed "4.9/5, 10,000 customers" | Fixed | Item hidden/removed in settings | - |
 | HOME-022 | P2 | SEO | /lab-reports was noindex | Fixed | Indexable and in the sitemap | PR #36 |
 | HOME-023 | P2 | Images | ~184 KiB image savings; 20 tile images; 13 head preloads | Fixed | Right-sized tiles, trimmed srcset. Lighthouse image audit now 0 KB savings; image bytes 378 KB -> 239 KB | PR #24, #41 |
-| HOME-024 | P2 | Content | Same products repeated in 3 sections | Fixed | New Arrivals hidden when it would repeat; deterministic ranking | PR #18, #29 |
+| HOME-024 | P2 | Content | Same products repeated in 3 sections | Fixed | New Arrivals hidden when it would repeat; deterministic ranking. Region cards intentionally show that region's own products, so with a 5-product catalogue they can overlap Bestsellers | PR #18, #29 |
 | HOME-025 | P3 | Accessibility | No header landmark; unlabeled nav | Fixed | <header>, nav aria-label | PR #18 |
 | HOME-026 | P3 | Accessibility | 10 identical "Add to Cart" names | Fixed | "Add to cart: <product>" | PR #18 |
 | HOME-027 | P3 | Security | X-Powered-By, no COOP, CSP unsafe-* | Fixed | X-Powered-By removed; COOP same-origin-allow-popups; unsafe-eval limited to checkout; strict nonce CSP on checkout/account. unsafe-inline on other pages tracked as C-12 | PR #20, #36, #45 |
 | HOME-028 | P3 | SEO | Sitemap dates = build time; "seabuckthorn" vs "Sea Buckthorn" | Fixed | Real dates, paged queries, legacy URL redirect | PR #30, #36 |
 | HOME-029 | P3 | Content | Slide 2 title ALL CAPS | Fixed | Title case in settings (revert logged) | - |
-| HOME-030 | P3 | Database | Backup tables in public schema | Verified OK | All 14 have row-level security, no policies, no public read: not exposed | - |
+| HOME-030 | P3 | Database | Backup tables in public schema | Fixed | All 14 have row-level security and no policies. Verification found two product_claims backups (1 Nov) created with Postgres default anon/authenticated grants (RLS still returned no rows); grants revoked on them and on 36 other internal tables that have RLS but no policy | verification 1 Nov 2026 |
 | HOME-031 | P3 | Reliability | Homepage served stale / sections missing intermittently | Mitigated | Retries, fresh re-read on empty result, partial-catalogue guard. Root cause is the slow Supabase database (see L-18) | PR #25, #26, #46 |
 | HOME-032 | P2 | Analytics | No GA4 add_to_cart from homepage cards | Fixed | Card and quick-view adds now tracked | PR #18 |
 | HOME-033 | P2 | Accessibility | Range scroller not keyboard focusable | Fixed | tabindex, role, label | PR #18 |

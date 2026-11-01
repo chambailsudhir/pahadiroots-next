@@ -60,7 +60,8 @@ const settings = {} as SiteSettings
 function primeStores() {
   useCartStore.getState().clearCart()
   useCartStore.setState({ _hasHydrated: true })
-  useUserStore.setState({ user: null } as Partial<ReturnType<typeof useUserStore.getState>>)
+  // A persisted user: guests no longer call /api/profile at all (verification pass, 1 Nov 2026).
+  useUserStore.setState({ user: { id: 'u1', phone: '9999999999', email: 'c@example.com', name: 'C' } } as unknown as Partial<ReturnType<typeof useUserStore.getState>>)
 }
 
 describe('useCheckoutPage — profile prefill loading & timeout', () => {

@@ -388,7 +388,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
               </form>
             ) : notifyState === 'done' ? (
               <button className="atc pcard-atc-full" disabled style={{ position: 'relative', zIndex: 3, cursor: 'default' }}>
-                ✓ We&apos;ll email you
+                <Icon name="check" size="1em" /> We&apos;ll email you
               </button>
             ) : (
               <button

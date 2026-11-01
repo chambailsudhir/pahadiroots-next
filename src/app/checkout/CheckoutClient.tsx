@@ -158,7 +158,6 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
       })
     }, 2500)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeReady, items, addr.phone, addr.name, email, pricing.total])
 
   // PERF FIX: stable callbacks for JSX props that were previously inline arrow

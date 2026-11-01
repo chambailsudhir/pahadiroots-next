@@ -18,6 +18,7 @@
 import { useState, useRef } from 'react'
 import { estimateDelivery, type DeliveryEstimate } from '@/lib/pincodeZones'
 import { isPincodeBlocked, formatServiceableStates } from '@/lib/serviceability'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   waNumber: string
@@ -70,7 +71,7 @@ export default function PincodeRow({ waNumber, blockedPincodes = '', serviceable
 
   return (
     <div className="pdp-pincode-row" role="group" aria-label="Check delivery by PIN code">
-      <span aria-hidden="true">📍</span>
+      <span aria-hidden="true"><Icon name="pin" size="1em" /></span>
       <span className="pdp-pincode-label">Check delivery:</span>
       <input
         ref={inputRef}

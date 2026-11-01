@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import Link from 'next/link'
 import {
   CONSENT_CHANGE_EVENT, COOKIE_SETTINGS_HASH, OPEN_PREFS_EVENT, hasAnalyticsConsent, isConsentRequired, loadGoogleTag, readConsent, writeConsent,
 } from '@/lib/consent'
@@ -127,7 +128,7 @@ export default function CookieConsent({ tagId = '' }: { tagId?: string }) {
           <p id="hv-cc-desc" style={{ margin: '0 0 12px', color: PALETTE.muted }}>
             Essential cookies keep your cart and checkout working. With your permission we also use analytics (Google Analytics and a
             visitor ID) to see which products people like. No advertising cookies. See our{' '}
-            <a href="/policies/privacy" style={{ color: PALETTE.accent, fontWeight: 600 }}>Privacy Policy</a>.
+            <Link href="/policies/privacy" style={{ color: PALETTE.accent, fontWeight: 600 }}>Privacy Policy</Link>.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <button type="button" style={btnAlt} onClick={() => decide(false)}>Reject non-essential</button>

@@ -1,4 +1,8 @@
 import { z } from 'zod'
+
+// Strict CSP on /checkout and /account forbids eval. Zod 4 probes `Function("")` at first use to decide whether it may
+// JIT-compile parsers; the probe itself is reported as a CSP violation. jitless skips the probe (and the JIT).
+z.config({ jitless: true })
 import { INDIA_STATES } from '@/lib/account/constants'
 
 // GST depends on the delivery state (same state as the seller = CGST + SGST, otherwise IGST), so the

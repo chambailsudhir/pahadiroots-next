@@ -7,6 +7,7 @@
 //  ✅ Edit capability retained
 //  ✅ Migrated from Tailwind to account.module.css
 // ─────────────────────────────────────────────────────────────
+import { useUserStore } from '@/store/userStore'
 import { useEffect, useState } from 'react'
 import { INDIA_STATES, ADDRESS_LABELS, CHECKOUT_PROFILE_CACHE_KEY } from '@/lib/account/constants'
 import { updateProfile } from '@/lib/services/profileService'
@@ -29,7 +30,9 @@ export default function AddressesPage() {
 
   useEffect(() => {
     const ctrl = new AbortController()
-    fetch('/api/profile', { signal: ctrl.signal })
+    // A browser with no persisted user is a guest: don't call /api/profile (it would 401 and bill an invocation).
+    const req = useUserStore.getState().user ? fetch('/api/profile', { signal: ctrl.signal }) : Promise.reject(new Error('401'))
+    req
       .then(async r => {
         if (r.status === 401) throw new Error('401')
         if (!r.ok) throw new Error('Could not load addresses')

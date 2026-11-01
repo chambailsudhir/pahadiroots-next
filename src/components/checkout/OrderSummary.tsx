@@ -157,7 +157,7 @@ const OrderSummary = memo(function OrderSummary({
           {coupon ? (
             <div className="os-coupon-applied">
               <div className="os-coupon-left">
-                <span className="os-coupon-emoji">🎉</span>
+                <span className="os-coupon-emoji" aria-hidden="true"><Icon name="sparkle" size="1em" /></span>
                 <div>
                   <div className="os-coupon-name">{coupon.code}</div>
                   <div className="os-coupon-saving">Saving {formatPrice(coupon.discount)}</div>
@@ -370,7 +370,7 @@ const OrderSummary = memo(function OrderSummary({
           <div className="os-price-row">
             <span>Shipping</span>
             <span className={pricing.isFreeShipping ? 'os-free' : ''}>
-              {pricing.isFreeShipping ? '🚚 FREE' : formatPrice(pricing.shipping)}
+              {pricing.isFreeShipping ? <><Icon name="truck" size="1em" /> FREE</> : formatPrice(pricing.shipping)}
             </span>
           </div>
           {/* TRANSPARENCY FIX: pricing.codSurcharge was already being added into

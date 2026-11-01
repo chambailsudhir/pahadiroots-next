@@ -1,5 +1,4 @@
 import { captureError, logger } from '@/lib/logger'
-import crypto from 'crypto'
 // ─────────────────────────────────────────────────────────────
 // orderService — orders API calls
 //
@@ -1357,7 +1356,7 @@ export async function createOrder(
   // never let a non-critical UX enhancement fail an already-successful order.
   let confirmationToken: string | null = null
   try {
-    confirmationToken = crypto.randomUUID()
+    confirmationToken = globalThis.crypto.randomUUID()
     const { error: tokenErr } = await withTimeout(
       db.from('orders')
         .update({ confirmation_token: confirmationToken })

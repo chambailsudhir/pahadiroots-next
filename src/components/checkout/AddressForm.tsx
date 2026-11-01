@@ -421,7 +421,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 className={`af-tag${addr.label === lbl ? ' af-tag--on' : ''}`}
                 onClick={() => onChange('label', lbl)}
                 aria-pressed={addr.label === lbl}>
-                {LABEL_ICONS[lbl]} {lbl}
+                <AdminIcon value={LABEL_ICONS[lbl]} /> {lbl}
               </button>
             ))}
           </div>

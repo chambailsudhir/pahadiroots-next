@@ -113,7 +113,7 @@ const CartSummary = memo(function CartSummary({
         {coupon ? (
           <div className={styles.couponApplied}>
             {/* A3: aria-hidden on 🎉 — SR hears code + saving amount; emoji adds noise */}
-            <span><span aria-hidden="true">🎉</span> <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
+            <span><span aria-hidden="true"><Icon name="sparkle" /></span> <strong>{coupon.code}</strong> — saving {formatPrice(coupon.discount)}</span>
             <button
               type="button"
               className={styles.couponRm}
@@ -263,7 +263,7 @@ const CartSummary = memo(function CartSummary({
         {pricing.discount > 0 && (
           // A5: aria-hidden on 🎉 — the saving amount text is the meaningful content
           <div className={styles.savePill}>
-            <span aria-hidden="true">🎉</span> Saving {formatPrice(pricing.discount)} on this order!
+            <span aria-hidden="true"><Icon name="sparkle" /></span> Saving {formatPrice(pricing.discount)} on this order!
           </div>
         )}
       </div>
@@ -302,7 +302,7 @@ const CartSummary = memo(function CartSummary({
       {/* Payment trust */}
       <div className={styles.trust}>
         <div className={styles.trustRow}>
-          <span><span aria-hidden="true">🔐</span> SSL Encrypted</span>
+          <span><span aria-hidden="true"><Icon name="lock" /></span> SSL Encrypted</span>
           <span><span aria-hidden="true"><Icon name="bank" /></span> Razorpay</span>
           <span><span aria-hidden="true"><Icon name="check" /></span> Secure</span>
         </div>
