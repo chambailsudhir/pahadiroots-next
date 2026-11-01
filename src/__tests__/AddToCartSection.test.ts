@@ -100,6 +100,13 @@ beforeEach(() => {
   resetIntersectionObserverMock()
 })
 
+// /checkout is opened with a full page load (window.location.assign) so it gets its own strict security policy.
+const mockAssign = vi.fn()
+beforeEach(() => {
+  mockAssign.mockClear()
+  Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: mockAssign } })
+})
+
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -117,16 +124,16 @@ describe('AddToCartSection — timer cleanup on unmount (BUG FIX)', () => {
     unmount() // unmount before the 300ms timer fires
 
     vi.advanceTimersByTime(300)
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
   })
 
-  it('calls router.push to /checkout after 300ms when NOT unmounted', () => {
+  it('opens /checkout (full page load) after 300ms when NOT unmounted', () => {
     render(el({ product: makeProduct({ available_stock: 10 }) }))
 
     fireEvent.click(screen.getByRole('button', { name: /buy.*now/i }))
     vi.advanceTimersByTime(300)
 
-    expect(mockPush).toHaveBeenCalledWith('/checkout')
+    expect(mockAssign).toHaveBeenCalledWith('/checkout')
   })
 
   it('does not throw when unmounting before the 2200ms "Added" reset timer fires', () => {
@@ -437,7 +444,7 @@ describe('AddToCartSection — mobile sticky bar (.pdp-mob-bar)', () => {
     const btn = container.querySelector('.pdp-mob-buy') as HTMLButtonElement
     fireEvent.click(btn)
     vi.advanceTimersByTime(300)
-    expect(mockPush).toHaveBeenCalledWith('/checkout')
+    expect(mockAssign).toHaveBeenCalledWith('/checkout')
   })
 
   it('shows "Out of Stock" and disables both sticky buttons for an out-of-stock product', () => {
