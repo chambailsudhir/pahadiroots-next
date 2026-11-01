@@ -42,6 +42,10 @@ export function getClientIp(req: NextRequest): string {
  * a script can forge headers — which is why the rate limits below exist.
  */
 export function isSameOrigin(req: NextRequest): boolean {
+  // Browsers attach Sec-Fetch-Site themselves and page scripts cannot override it, so a request made from another website
+  // announces itself as cross-site even if it forges Origin. (Non-browser clients can still omit it — the rate limits cover those.)
+  const site = req.headers.get('sec-fetch-site')
+  if (site && site !== 'same-origin' && site !== 'none') return false
   const self = req.headers.get('host')
   const raw = req.headers.get('origin') || req.headers.get('referer')
   if (!self || !raw) return false
@@ -130,4 +134,27 @@ export const TRANSCRIBE_MAX_BODY_BYTES = 4_500_000
 const AUDIO_MIME = /^audio\/(webm|ogg|mp4|mpeg|mp3|wav|x-wav|aac|x-m4a|m4a|flac)(;.*)?$/i
 export function isAllowedAudioMime(m: unknown): m is string {
   return typeof m === 'string' && m.length < 100 && AUDIO_MIME.test(m.trim())
+}
+
+/**
+ * Reduces a Gemini response to what the widget renders: the reply text, finish reason and the cited web sources.
+ * The rest of the upstream payload (search-suggestion HTML, safety ratings, usage counters, model version…) is not ours to relay.
+ */
+export function toClientChatResponse(data: any) {
+  const cand = data?.candidates?.[0]
+  if (!cand) return null
+  const parts = (cand.content?.parts ?? [])
+    .filter((p: any) => typeof p?.text === 'string')
+    .map((p: any) => ({ text: p.text as string }))
+  const chunks = (cand.groundingMetadata?.groundingChunks ?? [])
+    .filter((c: any) => typeof c?.web?.uri === 'string')
+    .slice(0, 5)
+    .map((c: any) => ({ web: { uri: c.web.uri as string, title: typeof c.web.title === 'string' ? c.web.title : undefined } }))
+  return {
+    candidates: [{
+      content: { role: 'model', parts },
+      finishReason: cand.finishReason ?? 'STOP',
+      ...(chunks.length ? { groundingMetadata: { groundingChunks: chunks } } : {}),
+    }],
+  }
 }

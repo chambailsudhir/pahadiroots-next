@@ -1,3 +1,4 @@
+import 'server-only'
 import { getServiceClient } from '@/lib/supabase'
 import { captureError } from '@/lib/logger'
 

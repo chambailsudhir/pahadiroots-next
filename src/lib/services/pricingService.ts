@@ -1,3 +1,4 @@
+import 'server-only'
 import type { CartItem, AppliedCoupon, SiteSettings } from '@/types'
 import { calcGST, asNumber } from '@/lib/utils'
 import { FALLBACK_FREE_SHIPPING_MIN, FALLBACK_FLAT_SHIPPING } from '@/lib/siteSettingsHelpers'
