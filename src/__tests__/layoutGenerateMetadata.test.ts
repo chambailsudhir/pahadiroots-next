@@ -91,13 +91,13 @@ describe('generateMetadata() — admin SEO tab actually reaches the page', () =>
     expect(metadata.keywords).toEqual(['himalayan products', 'natural honey', 'pahadi', 'mountain foods', 'natural', 'India'])
   })
 
-  it("falls back og:image to logo.png, not the nonexistent og-default.jpg", async () => {
+  it("falls back og:image to the branded og-default.jpg (a real 1200x630 file shipped in public/, see ogDefaultImage.test.ts)", async () => {
     mockGetSiteSettings.mockResolvedValue({})
 
     const metadata = await generateMetadata()
 
     expect(metadata.openGraph?.images).toEqual([
-      expect.objectContaining({ url: '/logo.png' }),
+      expect.objectContaining({ url: '/og-default.jpg' }),
     ])
   })
 

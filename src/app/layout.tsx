@@ -82,7 +82,7 @@ export async function generateMetadata(): Promise<Metadata> {
   // used as a stopgap — it's nearly square rather than the ideal
   // 1200x630 banner ratio, so a purpose-built OG image (or setting the
   // admin's OG Share Image field) would still look better.
-  const ogImage = settings.og_image || '/logo.png'
+  const ogImage = settings.og_image || '/og-default.jpg'
 
   return {
     metadataBase: new URL(SITE_URL),

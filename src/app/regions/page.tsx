@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     // producing a broken image in WhatsApp/Facebook link previews for
     // this page. Matches layout.tsx's fallback (logo.png is a real,
     // existing asset, though not an ideal 1200×630 shape — see Pending).
-    images: [{ url: '/logo.png', width: 1200, height: 630, alt: 'Explore Himalayan Regions — HimVeda by Pahadi Roots' }],
+    images: [{ url: '/og-default.jpg', width: 1200, height: 630, alt: 'Explore Himalayan Regions — HimVeda by Pahadi Roots' }],
   },
   twitter: {
     card: 'summary_large_image',

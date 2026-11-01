@@ -24,6 +24,8 @@ beforeEach(() => {
 function makeChain(rows: unknown[], capturedFilters: Record<string, unknown>[]) {
   const chain: any = {
     eq: (col: string, val: unknown) => { capturedFilters.push({ [col]: val }); return chain },
+    order: () => chain,
+    range: () => chain,
     then: (res: (v: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(res),
   }
   return chain
@@ -69,6 +71,8 @@ describe('sitemap()', () => {
     function fullChain(rows: unknown[]) {
       const chain: any = {
         eq:   () => chain,
+        order: () => chain,
+        range: () => chain,
         then: (res: (v: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(res),
       }
       return chain
@@ -122,5 +126,20 @@ describe('sitemap()', () => {
     for (const slug of ['shipping', 'returns', 'privacy', 'terms']) {
       expect(entries.some(e => e.url.endsWith(`/policies/${slug}`))).toBe(true)
     }
+  })
+
+  it('does not stamp the build time on everything: pages take their content\'s last change; policy pages a fixed review date', async () => {
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: { from: (table: string) => ({ select: () => makeChain(
+        table === 'products' ? [{ slug: 'a', updated_at: '2026-09-01T00:00:00Z', image_url: null, category_id: 1 }, { slug: 'b', updated_at: '2026-10-05T00:00:00Z', image_url: null, category_id: 2 }]
+        : table === 'categories' ? [{ id: 1, slug: 'honey' }, { id: 2, slug: 'ghee' }] : [], []) }) },
+    }))
+    const { default: sitemap } = await import('@/app/sitemap')
+    const e = await sitemap()
+    const at = (suffix: string) => new Date(e.find(x => x.url.endsWith(suffix))!.lastModified as Date).toISOString()
+    expect(at('/products')).toBe('2026-10-05T00:00:00.000Z')            // newest product
+    expect(at('/collections/honey')).toBe('2026-09-01T00:00:00.000Z')   // only its own products
+    expect(at('/collections/ghee')).toBe('2026-10-05T00:00:00.000Z')
+    expect(at('/policies/privacy')).toBe('2026-10-01T00:00:00.000Z')    // fixed, not "now"
   })
 })

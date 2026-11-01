@@ -66,7 +66,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       // image_url — same class of bug as page.tsx/blog/products, causing a
       // broken WhatsApp/Facebook share preview for any category without a
       // photo. Falls back to the real logo instead.
-      images:      [{ url: cat.image_url || '/logo.png', width: 1200, height: 630, alt: cat.name }],
+      images:      [{ url: cat.image_url || '/og-default.jpg', width: 1200, height: 630, alt: cat.name }],
     },
   }
 }

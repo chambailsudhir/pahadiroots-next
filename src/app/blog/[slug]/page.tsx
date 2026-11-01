@@ -69,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // og_image nor cover_image set — same class of bug as page.tsx/collections/
   // products, causing a broken WhatsApp/Facebook share preview for any post
   // without a photo. Falls back to the real logo instead.
-  const image = post.og_image || post.cover_image || '/logo.png'
+  const image = post.og_image || post.cover_image || '/og-default.jpg'
   const ogImages = [{ url: image, width: 1200, height: 630, alt: post.title }]
 
   return {
