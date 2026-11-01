@@ -76,6 +76,13 @@
   cursor: pointer;
   transition: all 0.25s;
   padding: 0;
+  position: relative;
+}
+/* invisible 24px+ tap area around the 7px dot (WCAG 2.2 AA 2.5.8) */
+.dot::after {
+  content: '';
+  position: absolute;
+  inset: -9px -7px;
 }
 
 .dot.active {

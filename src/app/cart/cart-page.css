@@ -204,7 +204,7 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  background: #25d366;
+  background: #0b7a3c; /* the standard WhatsApp green gave white text only 1.98:1; this green gives 5.4:1 */
   color: #fff;
   text-decoration: none;
   padding: 14px 20px;
@@ -217,7 +217,7 @@
 }
 
 .cp-whatsapp:hover {
-  background: #22be5c;
+  background: #096532;
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(37,211,102,.36);
 }

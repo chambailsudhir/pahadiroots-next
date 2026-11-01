@@ -101,9 +101,9 @@ const STYLES = `
   @media (max-width: 640px) { .af-tags-wrap { padding: 14px 20px 10px; } }
   .af-tags-label {
     font-family: var(--font-lato), Lato, sans-serif;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    color: #9A9080;
+    color: #6f6554;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     white-space: nowrap;
@@ -192,11 +192,11 @@ const STYLES = `
     gap: 6px;
   }
   .af-optional {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
-    color: #A09888;
+    color: #6f6554;
     background: #F2ECE4;
     padding: 1px 6px;
     border-radius: 4px;
@@ -280,7 +280,7 @@ const STYLES = `
     display: inline-block;
     animation: pin-spin .6s linear infinite;
     font-style: normal;
-    color: #9A9080;
+    color: #6f6554;
   }
   @keyframes pin-spin { to { transform: rotate(360deg); } }
   .af-pin-ok {

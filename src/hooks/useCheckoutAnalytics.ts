@@ -277,6 +277,8 @@ export interface PDPAnalyticsItem {
   itemId:    string
   itemName:  string
   category?: string
+  /** Pack size, e.g. "500g". GA4 `item_variant`, so reports can tell the sizes of one product apart. */
+  variant?:  string
   price:     number
 }
 
@@ -294,6 +296,7 @@ export function usePDPAnalytics(item: PDPAnalyticsItem | null) {
         item_id:       item.itemId,
         item_name:     item.itemName,
         item_category: item.category,
+        ...(item.variant ? { item_variant: item.variant } : {}),
         price:         item.price,
         quantity:      1,
       }],
@@ -309,6 +312,7 @@ export function usePDPAnalytics(item: PDPAnalyticsItem | null) {
         item_id:       it.itemId,
         item_name:     it.itemName,
         item_category: it.category,
+        ...(it.variant ? { item_variant: it.variant } : {}),
         price:         it.price,
         quantity,
       }],
