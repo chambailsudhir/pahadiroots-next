@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { SiteSettings } from '@/types'
 import { quickSelects, type FooterCategory } from '@/lib/footerQuickSelects'
+import Icon from '@/components/ui/Icon'
 
 interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
@@ -192,13 +193,13 @@ export default function FooterA({ settings, categories }: Props) {
             Connect With Us
           </div>
           {[
-            { icon: '🌐', text: 'pahadiroots.com', href: 'https://www.pahadiroots.com' },
-            { icon: '📧', text: email2, href: `mailto:${email2}` },
-            { icon: '📞', text: phone, href: `tel:${phone.replace(/\s/g,'')}` },
-            { icon: '📍', text: address, href: undefined },
+            { icon: 'globe' as const, text: 'pahadiroots.com', href: 'https://www.pahadiroots.com' },
+            { icon: 'mail' as const, text: email2, href: `mailto:${email2}` },
+            { icon: 'phone' as const, text: phone, href: `tel:${phone.replace(/\s/g,'')}` },
+            { icon: 'pin' as const, text: address, href: undefined },
           ].map(item => (
             <div key={item.icon} style={{ display: 'flex', alignItems: 'flex-start', gap: '11px', marginBottom: '13px' }}>
-              <span style={{ fontSize: '15px', flexShrink: 0, marginTop: '1px' }}>{item.icon}</span>
+              <span aria-hidden="true" style={{ fontSize: '15px', flexShrink: 0, marginTop: '3px', color: '#c8920a' }}><Icon name={item.icon} size="1.05em" /></span>
               <div style={{ fontSize: '14px', color: 'rgba(255,255,255,.5)', lineHeight: 1.7 }}>
                 {item.href ? (
                   <a href={item.href} className="ft-a-sub" style={{ color: 'rgba(255,255,255,.5)', textDecoration: 'none' }}>{item.text}</a>

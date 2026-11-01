@@ -79,6 +79,7 @@ import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
 import type { CartItem, SiteSettings } from '@/types'
 import styles from './CartDrawer.module.css'
+import Icon from '@/components/ui/Icon'
 
 interface Props { settings: SiteSettings }
 
@@ -305,7 +306,7 @@ export default function CartDrawer({ settings }: Props) {
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <span className={styles.cartIcon} aria-hidden="true">🛒</span>
+            <span className={styles.cartIcon} aria-hidden="true"><Icon name="cart" size="1.2em" /></span>
             <h2 id="cart-drawer-title" className={styles.title}>Your Cart</h2>
             {items.length > 0 && (
               /* A2: aria-label gives AT the context "3 items in cart" not just "3" */
@@ -332,7 +333,7 @@ export default function CartDrawer({ settings }: Props) {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-10">
-              <div className="text-5xl mb-4" aria-hidden="true">🛒</div>
+              <div className="mb-4" aria-hidden="true" style={{ color: '#c8a96a' }}><Icon name="cart" size="3.2rem" /></div>
               <h3 className="text-base font-semibold text-stone-700 mb-1">Your cart is empty</h3>
               <p className="text-stone-400 text-sm mb-5">Add products to get started</p>
               {/* A5: arrow wrapped in aria-hidden so AT reads "Continue Shopping" only */}

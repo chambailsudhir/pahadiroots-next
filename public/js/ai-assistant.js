@@ -53,44 +53,15 @@
   /* ── STYLES ───────────────────────────────────────────── */
   const css = document.createElement('style');
   css.textContent = `
-  /* WhatsApp button: shown only on desktop (min-width:901px). On mobile,
-     pahadiroots-next's own bottom nav (MobileBottomNav.tsx) already has a
-     "Chat" WhatsApp entry, so a second one here would duplicate it — but
-     that bottom nav is mobile-only (display:none above 900px), so desktop
-     had no WhatsApp entry point at all without this.
-     Stacked 12px above the site's own scroll-to-top button (.stt-btn in
-     globals.css: desktop bottom:24px, right:16px, 42px tall) instead of
-     sharing its exact spot — round 3 put both at bottom:24/right:16, which
-     overlapped them directly. */
-  #pr-wa {
-    display:none; position:fixed; right:16px; bottom:78px; /* 24 + 42 + 12 */
-    width:52px; height:52px; border-radius:50%;
-    background:#25D366; border:none; cursor:pointer;
-    box-shadow:0 4px 16px rgba(37,211,102,.45);
-    align-items:center; justify-content:center;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1);
-    z-index:2147483645;
-  }
-  @media(min-width:901px) { #pr-wa { display:flex } }
-  #pr-wa:hover { transform:scale(1.1) }
-  #pr-wa svg { width:27px; height:27px; fill:#fff }
-  .pr-wa-tip {
-    position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
-    background:rgba(0,0,0,.75); color:#fff; font-size:11px;
-    padding:4px 10px; border-radius:7px; white-space:nowrap;
-    opacity:0; pointer-events:none; transition:opacity .18s; font-family:inherit;
-  }
-  #pr-wa:hover .pr-wa-tip { opacity:1 }
+  /* One launcher, not a stack. WhatsApp used to be a second floating button on desktop; it now lives inside the chat panel header
+     (and in the mobile bottom nav), so the only floating controls are this chat button and the site's scroll-to-top. */
+  .pr-wa-link { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; margin-left:auto; margin-right:6px;
+    border-radius:50%; background:#25D366; flex-shrink:0; text-decoration:none }
+  .pr-wa-link:hover, .pr-wa-link:focus-visible { filter:brightness(1.1); outline:2px solid #fff; outline-offset:1px }
+  .pr-wa-link svg { width:17px; height:17px; fill:#fff }
 
-  /* AI fab: stacked directly ABOVE the WhatsApp button, bottom right, so the
-     three floating buttons read as one tidy column (AI, WhatsApp, scroll to
-     top). Desktop: WhatsApp occupies bottom 78 to 130px, so the fab sits
-     12px above it at 142px. Mobile (900px and below): WhatsApp is hidden
-     (the bottom nav has its own Chat entry), so the fab sits 12px above the
-     site's scroll to top button instead (16 + 56 nav + 42 button + 12 gap =
-     126px, plus the iPhone safe area). The chat panel opens beside the fab
-     and grows upward from the same baseline. */
-  :root { --pr-fab-bottom: 142px; }
+  /* AI fab: sits 12px above the site's scroll-to-top button (desktop: 24 + 42 + 12 = 78px; mobile: above the bottom nav). */
+  :root { --pr-fab-bottom: 78px; }
   @media(max-width:900px) { :root { --pr-fab-bottom: calc(126px + env(safe-area-inset-bottom,0px)); } }
   #pr-ai-fab {
     position:fixed; bottom:var(--pr-fab-bottom); right:16px;
@@ -318,16 +289,6 @@
     document.querySelectorAll('.pr-pcb').forEach(b => { b.style.background=GOLD; b.style.color='#1a1a0a'; });
   }
 
-  /* ── WhatsApp button (desktop only — see #pr-wa CSS comment) ────── */
-  const waBtn = document.createElement('button');
-  waBtn.id = 'pr-wa';
-  waBtn.setAttribute('aria-label', 'WhatsApp');
-  waBtn.innerHTML = '<span class="pr-wa-tip">WhatsApp us</span><svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>';
-  waBtn.addEventListener('click', () => {
-    window.open('https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent('Namaste! I want to know more about your Himalayan products'), '_blank');
-  });
-  if (WA_NUM) document.body.appendChild(waBtn);
-
   /* ── AI FAB ───────────────────────────────────────────── */
   const fab = document.createElement('button');
   fab.id = 'pr-ai-fab';
@@ -347,6 +308,7 @@
     + '<div class="pr-hav"><img src="' + AI_CFG.avatar + '" alt=""></div>'
     + '<div><div class="pr-hn" id="pr-name">' + AI_CFG.name + '</div>'
     + '<div class="pr-hs"><span class="pr-dot"></span><span id="pr-tagline">' + AI_CFG.tagline + '</span></div></div>'
+    + (WA_NUM ? '<a class="pr-wa-link" href="https://wa.me/' + WA_NUM + '?text=' + encodeURIComponent('Namaste! I want to know more about your Himalayan products') + '" target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp (opens in a new tab)" title="Chat on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></a>' : '')
     + '<div class="pr-lang-wrap" id="pr-lang-wrap">'
     + '<button class="pr-lang-btn" id="pr-lang-btn" type="button" aria-haspopup="listbox" aria-label="Choose language"><span id="pr-lang-label">English</span><span class="pr-lang-arrow">▼</span></button>'
     + '<div class="pr-lang-menu" id="pr-lang-menu">'

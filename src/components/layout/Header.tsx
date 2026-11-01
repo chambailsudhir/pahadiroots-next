@@ -13,6 +13,7 @@ import { readPremium, setPremium } from '@/lib/premiumMode'
 import MegaMenu from './MegaMenu'
 import AnnouncementBar from './AnnouncementBar'
 import TickerBar from './TickerBar'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   settings:   SiteSettings
@@ -112,12 +113,12 @@ export default function Header({ settings, categories = [], states = [] }: Props
         {/* Right actions */}
         <div className="old-nav-right">
           {/* Search */}
-          <button type="button" onClick={openSearch} aria-label="Search" className="old-nib" title="Search products"><span aria-hidden="true">🔍</span></button>
+          <button type="button" onClick={openSearch} aria-label="Search" className="old-nib" title="Search products"><Icon name="search" size="1.15em" /></button>
 
           {/* Wishlist */}
           {showWishlist && (
             <Link prefetch={false} href="/wishlist" aria-label="Wishlist" className="old-nib" style={{ position: 'relative' }}>
-              <span aria-hidden="true">❤️</span>
+              <Icon name="heart" size="1.15em" />
               {mounted && wishlist.length > 0 && (
                 // aria-hidden: count already in link aria-label isn't practical here, but the
                 // number badge is decorative alongside the icon. Announce via aria-label update instead.
@@ -146,7 +147,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
             >
               {mounted && user && initials
                 ? <span className="old-acct-av">{initials}</span>
-                : <span aria-hidden="true">👤</span>}
+                : <Icon name="user" size="1.15em" />}
               {mounted && user && <span className="old-acct-dot" />}
             </Link>
 
@@ -158,13 +159,13 @@ export default function Header({ settings, categories = [], states = [] }: Props
                     : <><div className="old-dd-name">Welcome!</div><div className="old-dd-sub">Login to manage your account</div></>}
                 </div>
                 <Link prefetch={false} href="/account" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
-                  <span aria-hidden="true">📦</span> My Orders
+                  <Icon name="package" /> My Orders
                 </Link>
                 <Link prefetch={false} href="/wishlist" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
-                  <span aria-hidden="true">🤍</span> Wishlist
+                  <Icon name="heart" /> Wishlist
                 </Link>
                 <Link prefetch={false} href="/account/addresses" className="old-dd-item" role="menuitem" onClick={() => setAcctOpen(false)}>
-                  <span aria-hidden="true">👤</span> Profile &amp; Address
+                  <Icon name="user" /> Profile &amp; Address
                 </Link>
                 <div className="old-dd-foot">
                   {mounted && user
@@ -208,7 +209,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
             aria-label={isDark ? 'Switch to standard mode' : 'Switch to premium mode'}
             aria-pressed={isDark}
             onClick={() => setIsDark(setPremium(!readPremium()))}
-          ><span aria-hidden="true">✨</span></button>
+          ><Icon name="sparkle" size="1.15em" /></button>
 
           {/* Cart — aria-label includes count so SR announces "Open cart, 3 items" (WCAG 4.1.2) */}
           <button
@@ -219,7 +220,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
               : 'Open cart'}
             className="old-cart-btn"
           >
-            <span aria-hidden="true">🛒</span> Cart
+            <Icon name="cart" /> Cart
             {mounted && cartCount > 0 && (
               // aria-hidden: count already conveyed in button aria-label above
               <span className="old-cbadge" aria-hidden="true">{cartCount > 9 ? '9+' : cartCount}</span>

@@ -12,6 +12,7 @@ import { formatPrice, savingsPercent } from '@/lib/utils'
 import { getBaseVariant } from '@/lib/normalizeProduct'
 import QuickViewModal from '@/components/product/QuickViewModal'
 import type { Product } from '@/types'
+import Icon from '@/components/ui/Icon'
 
 // Shared by both the callback ref (catches "already loaded before hydration
 // attached") and the onLoad handler (catches the normal async-load case) —
@@ -285,7 +286,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             aria-haspopup="dialog"
             aria-label={`Quick view ${product.name}`}
           >
-            <span aria-hidden="true">👁</span>
+            <Icon name="eye" />
             <span className="piw-qv-label"> Quick View</span>
           </button>
         </div>
@@ -297,7 +298,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             onClick={handleWishlist}
             aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
           >
-            {inWishlist ? '❤️' : '🤍'}
+            <Icon name="heart" filled={inWishlist} size="1.25em" style={{ color: inWishlist ? '#c0392b' : '#555' }} />
           </button>
         )}
       </div>
@@ -306,7 +307,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
       <div className="pbody">
 
         {/* Region / category label */}
-        {region && <div className="pregion">📍 {region}</div>}
+        {region && <div className="pregion"><Icon name="pin" size="1em" /> {region}</div>}
 
         {/* Name */}
         <div className="pname">{product.name}</div>
@@ -358,7 +359,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
               // product grid heard the same name N times with no way to tell which product it adds. The accessible
               // name now starts with the visible text (WCAG 2.5.3) and names the product; the emoji is decorative.
               <button className="atc pcard-atc-full" onClick={handleAddToCart} aria-label={`Add to cart: ${product.name}`} style={{ position: 'relative', zIndex: 3 }}>
-                <span aria-hidden="true">🛒</span> Add to Cart
+                <Icon name="cart" /> Add to Cart
               </button>
             ) : notifyState === 'asking' ? (
               // BUG FIX (P1): guest email capture for Notify Me — this
