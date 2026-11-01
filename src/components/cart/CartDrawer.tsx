@@ -74,7 +74,7 @@ import { likelyPaymentMethod, cartSubtotal } from '@/components/cart/cartPayment
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCartStore } from '@/store/cartStore'
-import { useUIStore } from '@/store/uiStore'
+import { useUIStore, takeCartOpener } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
 import type { CartItem, SiteSettings } from '@/types'
@@ -200,6 +200,7 @@ export default function CartDrawer({ settings }: Props) {
   // WCAG 2.1 §3.2 — when a dialog closes, focus must return to the element
   // that triggered it. Capture the active element when the drawer opens.
   const openerRef = useRef<HTMLElement | null>(null)
+  const wasOpenRef = useRef(false)
 
   // Close on Escape + focus trap
   useEffect(() => {
@@ -221,14 +222,19 @@ export default function CartDrawer({ settings }: Props) {
     }
 
     if (isOpen) {
+      wasOpenRef.current = true
       openerRef.current = document.activeElement as HTMLElement
       document.addEventListener('keydown', onKey)
       focusTimer = setTimeout(() => firstFocusRef.current?.focus(), 50)
     } else {
-      if (openerRef.current && typeof openerRef.current.focus === 'function') {
-        openerRef.current.focus()
-        openerRef.current = null
-      }
+      // Prefer the opener recorded when openCart() ran (reliable on the first, lazy-mounted open);
+      // fall back to what this effect captured, then to the header cart button, so focus is never dropped on <body>.
+      const target = [takeCartOpener(), openerRef.current].find(el => el && el.isConnected && typeof el.focus === 'function')
+        ?? document.querySelector<HTMLElement>('button[aria-label^="Open cart"]')
+      openerRef.current = null
+      // Nothing to restore on the very first render (drawer never opened).
+      if (target && document.activeElement !== target && wasOpenRef.current) target.focus()
+      wasOpenRef.current = false
     }
 
     return () => {
