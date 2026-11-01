@@ -66,7 +66,7 @@ const PahadiStoryCard = lazy(() => import('@/components/cart/PahadiStoryCard'))
 // Static, defined at module level — never recreated on re-renders.
 const TRUST_ITEMS = [
   ['🌿', '100% Natural',        'No chemicals or preservatives'],
-  ['🏔', 'Himalayan Sourced',   'Direct from mountain farmers'],
+  ['🌄', 'Himalayan Sourced',   'Direct from mountain farmers'],
   ['🤝', 'Farmer Direct',       'No middlemen'],
   ['📦', 'Small Batch',         'Fresh, limited production'],
 ] as const

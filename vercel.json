@@ -3,7 +3,7 @@
   "regions": [
     "bom1"
   ],
-  "buildCommand": "next build",
+  "buildCommand": "node scripts/wait-for-db.cjs && next build",
   "outputDirectory": ".next",
   "installCommand": "npm ci",
   "functions": {

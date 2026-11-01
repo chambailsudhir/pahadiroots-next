@@ -34,7 +34,7 @@ import styles from './PahadiStoryCard.module.css'
 
 const CERTS = [
   { icon:'✅', label:'100% Natural',      sub:'No pesticides'       },
-  { icon:'🏔', label:'Himalayan Source',  sub:'High altitude farms' },
+  { icon:'🌄', label:'Himalayan Source',  sub:'High altitude farms' },
   { icon:'🤝', label:'Farmer Direct',     sub:'No middlemen'        },
   { icon:'🧪', label:'No Chemicals',      sub:'Traditional methods' },
   { icon:'📦', label:'Small Batch',       sub:'Limited, fresh stock'},
