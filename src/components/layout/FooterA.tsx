@@ -4,6 +4,7 @@ import Image from 'next/image'
 import type { SiteSettings } from '@/types'
 import { quickSelects, type FooterCategory } from '@/lib/footerQuickSelects'
 import Icon from '@/components/ui/Icon'
+import { minifyCss } from '@/lib/minifyCss'
 
 interface Props { settings: SiteSettings; categories?: FooterCategory[] }
 
@@ -291,7 +292,7 @@ export default function FooterA({ settings, categories }: Props) {
         </svg>
       </div>
 
-      <style>{`
+      <style>{minifyCss(`
         /* BUG FIX (P1 — mobile layout): these selectors previously
            targeted inline styles directly, e.g.
            div[style*="padding: 36px 60px 28px"]. That can never match:
@@ -315,7 +316,7 @@ export default function FooterA({ settings, categories }: Props) {
           footer svg[width="52"] { display: none !important; }
           footer .ft-bottom-row { padding: 12px 20px !important; flex-direction: column !important; text-align: center !important; }
         }
-      `}</style>
+      `)}</style>
     </footer>
   )
 }

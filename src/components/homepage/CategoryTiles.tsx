@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Category } from '@/types'
 import { emojiForCategory } from '@/lib/categoryEmoji'
+import { minifyCss } from '@/lib/minifyCss'
 
 interface Props { categories: Category[] }
 
@@ -299,7 +300,7 @@ export default function CategoryTiles({ categories }: Props) {
         </div>
       </div>
 
-      <style>{`
+      <style>{minifyCss(`
         /* BUG FIX (P1): this selector previously read
            div[style*="overflowX: scroll"] — which can never match, since
            React serializes inline styles as kebab-case with no space
@@ -314,7 +315,7 @@ export default function CategoryTiles({ categories }: Props) {
         .cc-cell:hover .cc-img { transform: scale(1.06) !important; }
         .cgrid-arrow:hover { background: #f5f5f5 !important; box-shadow: 0 4px 16px rgba(0,0,0,.18) !important; border-color: #ccc !important; }
         @media(max-width:640px) { .cgrid-arrow { display: none !important; } }
-      `}</style>
+      `)}</style>
     </section>
   )
 }
