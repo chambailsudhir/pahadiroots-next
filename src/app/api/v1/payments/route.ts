@@ -114,12 +114,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
       }
 
-      const settings = await getFreshSiteSettings()
       const pd       = parsed.data
 
       // ── AUDIT S1-003: per-phone + per-IP caps on NEW pending reservations (10-minute windows) ──
-      const phoneKey   = normalizePhoneForLookup(pd.address.phone) || pd.address.phone
-      const phoneLimit = await checkRateLimitKvStrict(`mw:rl:payments_phone10m:${phoneKey}`, CREATE_PAYMENT_PHONE_LIMIT_10M, TEN_MINUTES_SEC)
+      // These three reads are independent, so they run together: when the database is slow (each round trip ~1 s) doing
+      // them one after another cost ~3 s of the function's time budget before any real work started.
+      const phoneKey = normalizePhoneForLookup(pd.address.phone) || pd.address.phone
+      const [settings, phoneLimit, ipLimit10m] = await Promise.all([
+        getFreshSiteSettings(),
+        checkRateLimitKvStrict(`mw:rl:payments_phone10m:${phoneKey}`, CREATE_PAYMENT_PHONE_LIMIT_10M, TEN_MINUTES_SEC),
+        checkRateLimitKvStrict(`mw:rl:payments_ip10m:${ip}`, CREATE_PAYMENT_IP_LIMIT_10M, TEN_MINUTES_SEC),
+      ])
       if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
       if (phoneLimit === 'blocked') {
         return NextResponse.json(
@@ -127,7 +132,6 @@ export async function POST(req: NextRequest) {
           { status: 429, headers: { 'Retry-After': String(TEN_MINUTES_SEC) } },
         )
       }
-      const ipLimit10m = await checkRateLimitKvStrict(`mw:rl:payments_ip10m:${ip}`, CREATE_PAYMENT_IP_LIMIT_10M, TEN_MINUTES_SEC)
       if (ipLimit10m === 'unavailable') return rateLimiterUnavailable()
       if (ipLimit10m === 'blocked') {
         return NextResponse.json(
