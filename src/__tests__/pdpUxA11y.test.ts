@@ -53,6 +53,7 @@ describe('text contrast', () => {
     for (const [f, bad] of [['components/cart/cart-item-card.css', '#9a8e7e'], ['components/checkout/checkout-stepper.css', '#c0b8ae'], ['components/checkout/OrderSummary.css', '#B0A898'], ['components/checkout/OrderSummary.css', '#9A9080'], ['components/checkout/AddressForm.tsx', '#9A9080'], ['components/checkout/AddressForm.tsx', '#A09888']] as const) {
       expect(css(f), `${f} still has ${bad}`).not.toContain(bad)
     }
+    expect(css('components/product/RelatedProducts.tsx')).not.toContain('color:#7a7a7a')
     expect(css('app/cart/cart-page.css')).not.toMatch(/\.cp-whatsapp \{[^}]*background: #25d366;/)
   })
 })
