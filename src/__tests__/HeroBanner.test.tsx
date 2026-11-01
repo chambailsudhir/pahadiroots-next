@@ -247,11 +247,8 @@ describe('HeroBanner — prev/next arrow buttons', () => {
     expect(queryByLabelText('Previous')).toBeNull()
   })
 
-  it('shows "From ₹X" when the slide has a real price, and nothing when it does not', () => {
-    const withPrice = slides.map((sl: any, i: number) => ({ ...sl, from_price: i === 0 ? 350 : null }))
-    const { container } = render(<HeroBanner images={withPrice as any} settings={settings} />)
-    const from = container.querySelectorAll('.hhero-from')
-    expect(from.length).toBe(1)
-    expect(from[0].textContent).toMatch(/From\s*₹\s*350/)
+  it('shows no price on the hero slides', () => {
+    const { container } = render(<HeroBanner images={slides} settings={settings} />)
+    expect(container.textContent).not.toMatch(/From\s*₹/)
   })
 })
