@@ -18,10 +18,6 @@ vi.mock('next/link', () => ({
   default: ({ children, href }: { children?: React.ReactNode; href: string }) =>
     React.createElement('a', { href }, children),
 }))
-vi.mock('next/font/google', () => ({
-  Source_Serif_4: () => ({ variable: '' }),
-  Montserrat: () => ({ variable: '' }),
-}))
 vi.mock('@/components/homepage/RegionProductCard', () => ({
   default: ({ product }: { product: { id: number; name: string } }) =>
     React.createElement('div', { 'data-testid': 'product-card' }, product.name),

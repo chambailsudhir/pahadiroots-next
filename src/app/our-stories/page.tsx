@@ -2,15 +2,12 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Cormorant_Garamond, Inter } from 'next/font/google'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import OurStoryShell from '@/components/story/OurStoryShell'
 import s from '@/components/story/OurStory.module.css'
 
 // Scoped to this page only — loaded here so no other route pays for them.
-const cormorant = Cormorant_Garamond({ subsets: ['latin'], weight: ['400', '500', '600'], style: ['normal', 'italic'], variable: '--font-cormorant', display: 'swap' })
-const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-inter', display: 'swap' })
 
 const DESC = 'How HimVeda by Pahadi Roots began — bringing the food, craft and character of the Himalayas closer to home, with the people behind it at the heart of the story.'
 
@@ -98,7 +95,7 @@ export default async function AboutPage() {
   const quoteBy = settings.about_quote_attribution || 'The Founding Team'
 
   return (
-    <div className={`${cormorant.variable} ${inter.variable}`}>
+    <div>
       <OurStoryShell>
         {/* ── 1. Hero — image first ── */}
         <header className={s.hero}>

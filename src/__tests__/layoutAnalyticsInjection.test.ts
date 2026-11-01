@@ -24,9 +24,8 @@ vi.mock('@/lib/getSiteSettings', () => ({
   getSiteSettings: () => mockGetSiteSettings(),
 }))
 
-vi.mock('next/font/google', () => ({
-  Playfair_Display: () => ({ variable: '--font-playfair' }),
-  Lato: () => ({ variable: '--font-lato' }),
+vi.mock('next/font/local', () => ({
+  default: (o: { variable: string }) => ({ variable: o.variable }),
 }))
 
 vi.mock('@/lib/server/sanitize', () => ({ sanitizeHtml: (s: string) => s }))

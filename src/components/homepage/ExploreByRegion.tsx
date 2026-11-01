@@ -3,7 +3,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Source_Serif_4, Montserrat } from 'next/font/google'
 import RegionProductCard from './RegionProductCard'
 import type { Product } from '@/types'
 import { getRegionMeta, regionProductPills, type RegionMeta } from '@/lib/regionMeta'
@@ -15,8 +14,6 @@ import styles from './ExploreByRegion.module.css'
 // weight 400-700 still renders identically.
 // `preload: false`: this section is far below the fold, so its faces should not be preloaded in <head> where they
 // compete with the hero image (LCP) for the first bytes of bandwidth. They are fetched when the section is styled.
-const regionSerif = Source_Serif_4({ variable: '--font-region-serif', subsets: ['latin'], style: ['normal', 'italic'], display: 'swap', preload: false })
-const regionSans  = Montserrat({ variable: '--font-region-sans', subsets: ['latin'], display: 'swap', preload: false })
 
 export interface RichState {
   id: string
@@ -75,7 +72,7 @@ export default function ExploreByRegion({ states }: Props) {
   }
 
   return (
-    <section ref={sectionRef} className={`${styles.section} ${regionSerif.variable} ${regionSans.variable}`} id="regions">
+    <section ref={sectionRef} className={styles.section} id="regions">
       <div className={styles.inner}>
         <header className={styles.header}>
           <div>

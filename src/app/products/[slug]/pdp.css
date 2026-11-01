@@ -58,7 +58,7 @@
 .pdp-title{font-family: var(--font-playfair), 'Playfair Display', serif;font-size:clamp(24px,3.2vw,38px);font-weight:900;color:#1a3a1e;line-height:1.12;margin-bottom:8px;letter-spacing:-.4px}
 
 /* ── Tagline ── */
-.pdp-tagline{font-size:16px;color:#3a3030;line-height:1.75;margin-bottom:16px;font-family:'Cormorant Garamond',serif;font-weight:600;letter-spacing:.1px;font-style:italic}
+.pdp-tagline{font-size:16px;color:#3a3030;line-height:1.75;margin-bottom:16px;font-family:var(--font-playfair), 'Playfair Display',serif;font-weight:600;letter-spacing:.1px;font-style:italic}
 
 /* ── Rating ── */
 .pdp-rating-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}

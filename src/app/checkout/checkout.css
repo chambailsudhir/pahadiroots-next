@@ -10,16 +10,15 @@
  * Import: `import './checkout.css'` at the top of CheckoutClient.tsx.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 /* ── Navigation breadcrumb ─ the stepper itself lives in components/checkout/checkout-stepper.css;
    only the page's own back link stays here. */
-.ck-nav-back { display: flex; align-items: center; gap: 6px; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700; color: #2C4A2E; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+.ck-nav-back { display: flex; align-items: center; gap: 6px; font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; font-weight: 700; color: #2C4A2E; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
 .ck-nav-back:hover, .ck-nav-back:focus-visible { text-decoration: underline; }
 @media (max-width: 480px) { .ck-nav-back span.ck-nav-back-full { display: none; } }
 
 /* ── Alerts ────────────────────────────────────────────── */
-.ck-alert { background: #FEF0EE; border-bottom: 1px solid #F5C8C0; color: #B03020; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 40px; text-align: center; }
+.ck-alert { background: #FEF0EE; border-bottom: 1px solid #F5C8C0; color: #B03020; font-family: var(--font-lato), Lato, sans-serif; font-size: 13px; font-weight: 500; padding: 10px 40px; text-align: center; }
 .ck-alert-link { color: #B03020; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 .ck-alert-link:hover, .ck-alert-link:focus-visible { color: #7A1F14; }
 
@@ -56,7 +55,7 @@
 @media (max-width: 640px) { .ck-section-header { padding: 18px 20px 16px; } }
 
 .ck-step-badge {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
   font-size: 13px; font-weight: 600; color: #F7F2EB;
   background: #2C4A2E;
   width: 36px; height: 36px; border-radius: 50%;
@@ -67,11 +66,11 @@
 }
 
 .ck-section-title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
   font-size: 22px; font-weight: 600; color: #1C2B1E;
   margin: 0 0 3px; letter-spacing: -0.3px; line-height: 1.2;
 }
-.ck-section-desc { font-family: 'DM Sans', sans-serif; font-size: 12px; color: #9A9080; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
+.ck-section-desc { font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; color: #9A9080; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
 .ck-section-body { padding: 0; }
 
 /* ── Trust strip ───────────────────────────────────────── */
@@ -86,8 +85,8 @@
 .ck-trust-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(44,30,10,.09); border-color: rgba(180,210,160,.7); }
 .ck-trust-icon { font-size: 22px; flex-shrink: 0; }
 .ck-trust-text { display: flex; flex-direction: column; gap: 2px; }
-.ck-trust-text strong { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; color: #2C3A28; }
-.ck-trust-text span   { font-family: 'DM Sans', sans-serif; font-size: 11px; color: #9A9080; }
+.ck-trust-text strong { font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; font-weight: 600; color: #2C3A28; }
+.ck-trust-text span   { font-family: var(--font-lato), Lato, sans-serif; font-size: 11px; color: #9A9080; }
 
 /* ── Right sidebar ─────────────────────────────────────── */
 .ck-sidebar {
@@ -115,13 +114,13 @@
 @media (max-width: 960px) { .ck-mob-bar { display: flex; } }
 
 .ck-mob-info  { display: flex; flex-direction: column; }
-.ck-mob-total { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 700; color: #1C2B1E; line-height: 1; }
-.ck-mob-sub   { font-family: 'DM Sans', sans-serif; font-size: 10px; color: #9A9080; margin-top: 2px; font-weight: 400; }
+.ck-mob-total { font-family: var(--font-playfair), 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 700; color: #1C2B1E; line-height: 1; }
+.ck-mob-sub   { font-family: var(--font-lato), Lato, sans-serif; font-size: 10px; color: #9A9080; margin-top: 2px; font-weight: 400; }
 
 .ck-mob-cta {
   background: #2C4A2E; color: #F5F0E8;
   border: none; padding: 14px 24px; border-radius: 14px;
-  font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 14px;
+  font-family: var(--font-lato), Lato, sans-serif; font-weight: 600; font-size: 14px;
   cursor: pointer; white-space: nowrap;
   box-shadow: 0 4px 16px rgba(44,74,46,.35); transition: all .2s; letter-spacing: 0.02em;
 }

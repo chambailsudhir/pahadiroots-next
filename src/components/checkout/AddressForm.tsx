@@ -100,7 +100,7 @@ const STYLES = `
   }
   @media (max-width: 640px) { .af-tags-wrap { padding: 14px 20px 10px; } }
   .af-tags-label {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 11px;
     font-weight: 500;
     color: #9A9080;
@@ -110,7 +110,7 @@ const STYLES = `
   }
   .af-tags { display: flex; gap: 6px; flex-wrap: wrap; }
   .af-tag {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 12px;
     font-weight: 500;
     padding: 5px 12px;
@@ -135,7 +135,7 @@ const STYLES = `
     background: #EEF6EC;
     border-radius: 10px;
     border: 1px solid #C8E0BC;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 12px;
     color: #3A6030;
     flex-wrap: wrap;
@@ -181,7 +181,7 @@ const STYLES = `
   }
 
   .af-label {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 11px;
     font-weight: 600;
     color: #5A5248;
@@ -203,7 +203,7 @@ const STYLES = `
   }
 
   .af-input {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 14px;
     font-weight: 400;
     color: #1C2B1E;
@@ -246,7 +246,7 @@ const STYLES = `
     box-shadow: 0 0 0 3px rgba(44,74,46,.09);
   }
   .af-phone-pre {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 13px;
     font-weight: 600;
     color: #6A6258;
@@ -294,7 +294,7 @@ const STYLES = `
 
   /* Errors */
   .af-err {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 11px;
     color: #D04030;
     font-weight: 500;
@@ -304,7 +304,7 @@ const STYLES = `
      pincode itself is still valid; only the auto-detect step failed), so it
      gets its own muted amber treatment rather than the red .af-err style. */
   .af-pin-warn {
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 11px;
     color: #9A7A20;
     font-weight: 500;
@@ -320,7 +320,7 @@ const STYLES = `
     padding: 8px 14px;
     background: #F5F0E8;
     border-radius: 10px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-lato), Lato, sans-serif;
     font-size: 12px;
     color: #7A7060;
   }

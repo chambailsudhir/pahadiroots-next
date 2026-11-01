@@ -3,8 +3,8 @@
   --green: #15281c;
   --gold: #c89427;
   --ink: #10261a;
-  --serif: var(--font-region-serif, 'Source Serif 4'), Georgia, serif;
-  --sans: var(--font-region-sans, Montserrat), var(--font-lato, Lato), Arial, sans-serif;
+  --serif: var(--font-playfair), 'Playfair Display', Georgia, serif;
+  --sans: var(--font-lato), Lato, Arial, sans-serif;
   background: var(--cream);
   color: var(--ink);
   width: 100%;
