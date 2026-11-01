@@ -37,7 +37,7 @@ interface Props { params: Promise<{ slug: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const { product } = await fetchProductData(slug)
+  const { product, images } = await fetchProductData(slug)
   if (!product) return { title: 'Product Not Found' }
 
   const rawDesc = product.short_description || product.ai_description || `Buy ${product.name} online — pure Himalayan.`
@@ -51,7 +51,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // image_url — same class of bug as page.tsx/blog/collections, causing a
   // broken WhatsApp/Facebook share preview for any product without a photo.
   // Falls back to the real logo instead.
-  const ogImage = [{ url: product.image_url || '/logo.png', width: 800, height: 800, alt: product.name }]
+  // SEO (AUD-009): the share preview must be the FIRST gallery photo, as the gallery and the Product JSON-LD already are.
+  // `product.image_url` is a legacy field that can point at a different (e.g. the last) photo.
+  const firstGalleryImage = (images as Array<{ image_url?: string }> | undefined)?.[0]?.image_url
+  const ogImage = [{ url: firstGalleryImage || product.image_url || '/logo.png', width: 800, height: 800, alt: product.name }]
 
   return {
     // BUG FIX (3.1): was `${product.name} — HimVeda by Pahadi Roots` which rendered
