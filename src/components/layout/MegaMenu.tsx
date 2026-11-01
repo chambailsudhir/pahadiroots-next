@@ -31,7 +31,12 @@ export default function MegaMenu({ categories, states }: Props) {
   const visibleCategories = categories.filter(c => c.is_active).slice(0, 12)
   const visibleStates     = states.slice(0, 10)
 
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // Only track the header position while the menu is open — it used to re-measure (and set state) on every scroll event
+  // for the whole life of the page, even with the menu closed.
   useEffect(() => {
+    if (!open) return
     function updateTop() {
       const nav = document.querySelector('nav.old-nav') as HTMLElement | null
       if (nav) setMegaTop(nav.getBoundingClientRect().bottom)
@@ -43,14 +48,14 @@ export default function MegaMenu({ categories, states }: Props) {
       window.removeEventListener('scroll', updateTop)
       window.removeEventListener('resize', updateTop)
     }
-  }, [])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     function onOut(e: MouseEvent) {
       if (liRef.current && !liRef.current.contains(e.target as Node)) setOpen(false)
     }
-    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') { setOpen(false); triggerRef.current?.focus() } }
     document.addEventListener('click', onOut)
     document.addEventListener('keydown', onEsc)
     return () => {
@@ -61,13 +66,13 @@ export default function MegaMenu({ categories, states }: Props) {
 
   return (
     <li ref={liRef} className={`mega-parent${open ? ' open' : ''}`}>
-      <button className="mega-trigger" aria-expanded={open} onClick={() => setOpen(v => !v)}>
+      <button ref={triggerRef} type="button" className="mega-trigger" aria-expanded={open} aria-haspopup="true" aria-controls="mega-menu-panel" onClick={() => setOpen(v => !v)}>
         Shop <span className="arr">▾</span>
       </button>
 
       {open && <div className="mega-menu-backdrop" style={{ position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:500 }} onClick={() => setOpen(false)} />}
 
-      <div className={`mega-menu${open ? ' open' : ''}`} style={{ top: megaTop }}>
+      <div id="mega-menu-panel" className={`mega-menu${open ? ' open' : ''}`} style={{ top: megaTop }}>
 
         {/* Column 1 — All Collections */}
         <div className="mega-col" id="megaColCollections">

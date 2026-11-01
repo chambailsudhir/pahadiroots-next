@@ -21,7 +21,7 @@ import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 import CookieConsent from '@/components/consent/CookieConsent'
-import { consentBootstrapScript } from '@/lib/consent'
+import { consentBootstrapScript, TAG_ID_RE } from '@/lib/consent'
 import { normalizeConsentMode } from '@/lib/consentRegion'
 
 // SEO FIX: matches the same env-var-with-fallback pattern already used in
@@ -39,7 +39,6 @@ const safeJsonLd = (obj: unknown) => JSON.stringify(obj).replace(/</g, '\\u003c'
 // BUG FIX (audit): google_tag_id was interpolated straight into inline
 // <script> source. Only real GA4 / GTM ids are ever valid, so anything else
 // is dropped instead of being injected.
-const TAG_ID_RE = /^(G|GTM|AW|UA)-[A-Z0-9-]{3,20}$/i
 
 // Fonts are SELF-HOSTED (src/fonts, latin subset, woff2) rather than fetched from Google at build time. A transient Google
 // Fonts failure used to fail the whole production deploy (Oct 2026), and self-hosting also removes a build-time network

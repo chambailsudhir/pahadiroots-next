@@ -83,8 +83,12 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   }, [isMobileMenuOpen, closeMobileMenu])
 
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    // Only touch the page scroll lock while THIS menu is open, and put back whatever was there before. It used to write ''
+    // on every close/unmount, which also released a lock held by the cart drawer or a modal that happened to be open.
+    if (!isMobileMenuOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previous }
   }, [isMobileMenuOpen])
 
   const showTrack    = isEnabled(settings.show_track_order_page)
@@ -110,7 +114,7 @@ export default function MobileMenu({ settings, categories = [], states = [] }: P
   ]
 
   return (
-    <div className={`mob-nav${isMobileMenuOpen ? ' open' : ''}`} role="dialog" aria-modal="true">
+    <div className={`mob-nav${isMobileMenuOpen ? ' open' : ''}`} role="dialog" aria-modal="true" aria-label="Main menu">
       <div className="mob-nav-bg" onClick={closeMobileMenu} aria-hidden="true" />
       <div className="mob-nav-panel" ref={panelRef}>
         <button ref={closeRef} className="mob-close" onClick={closeMobileMenu} aria-label="Close menu">✕</button>

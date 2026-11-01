@@ -111,11 +111,14 @@ export default function HeroBanner({ images, settings }: Props) {
   // identical to a static background image. Explicitly calling .play() /
   // .pause() via refs, driven off `current`, fixes every slide regardless
   // of load order.
+  const [userPaused, setUserPaused] = useState(false)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   useEffect(() => {
     videoRefs.current.forEach((el, i) => {
       if (!el) return
-      if (i === current) {
+      // The slideshow's pause button also pauses the visible video (WCAG 2.2.2 — moving content that starts on its own
+      // must be pausable), not just the slide timer.
+      if (i === current && !userPaused) {
         el.muted = isMuted
         // el.play() returns a Promise in every evergreen browser, but is
         // guarded here rather than assumed — some embedded/webview
@@ -127,7 +130,7 @@ export default function HeroBanner({ images, settings }: Props) {
       }
       else el.pause()
     })
-  }, [current, isMuted])
+  }, [current, isMuted, userPaused])
 
   useEffect(() => {
     videoRefs.current.forEach(el => { if (el) el.muted = isMuted })
@@ -141,7 +144,6 @@ export default function HeroBanner({ images, settings }: Props) {
   const [isHovering, setIsHovering] = useState(false)
   // WCAG 2.2.2: auto-advancing content that lasts > 5 s needs a visible pause control that works
   // for keyboard/touch users too (hover-pause alone does not satisfy it).
-  const [userPaused, setUserPaused] = useState(false)
 
   const next = useCallback(() => setCurrent(c => (c + 1) % total), [total])
   const prev = useCallback(() => setCurrent(c => (c - 1 + total) % total), [total])
@@ -159,6 +161,10 @@ export default function HeroBanner({ images, settings }: Props) {
   // common carousel libraries (Swiper's default is 50px) — high enough
   // to ignore an accidental brush, low enough to feel responsive.
   const touchStartX = useRef<number | null>(null)
+  const hoverTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The touch-end timer used to be fire-and-forget: it could run after the banner unmounted (state update on an unmounted
+  // component) or stack up with the next swipe. Keep one, and clear it on unmount.
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current) }, [])
   // BUG FIX (audit): phones fire an emulated mouseenter right AFTER touchend.
   // That re-set isHovering=true after the 1.8s touch timer had already
   // cleared it, and since a finger never produces a matching mouseleave, the
@@ -179,7 +185,8 @@ export default function HeroBanner({ images, settings }: Props) {
       else if (delta > 40) prev()
     }
     touchStartX.current = null
-    setTimeout(() => setIsHovering(false), 1800)
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setIsHovering(false), 1800)
   }
 
   return (
@@ -314,13 +321,13 @@ export default function HeroBanner({ images, settings }: Props) {
             {img.video ? (
               <video
                 ref={el => { videoRefs.current[i] = el }}
-                src={img.video}
+                src={nearCurrent || i === current ? img.video : undefined}
                 poster={img.url || undefined}
                 autoPlay={isVisible}
                 muted={isMuted}
                 loop
                 playsInline
-                preload={i === 0 ? 'auto' : 'metadata'}
+                preload={i === current ? 'auto' : 'none'}
                 onLoadedMetadata={e => handleVideoMeta(i, e)}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
               />
@@ -411,7 +418,7 @@ export default function HeroBanner({ images, settings }: Props) {
                 </div>
               </>
             ) : (
-              <HeadingTag style={srOnlyStyle}>{img.alt_text || 'HimVeda by Pahadi Roots'}</HeadingTag>
+              <HeadingTag style={srOnlyStyle}>{plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'}</HeadingTag>
             )}
           </div>
           )
