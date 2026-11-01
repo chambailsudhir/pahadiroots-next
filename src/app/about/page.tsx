@@ -13,7 +13,7 @@ import MountainStories from '@/components/story/MountainStories'
 // the layout's generic OG image/description, so sharing this page's link
 // looked identical to sharing the homepage.
 export const metadata: Metadata = {
-  title:       'Our Story — HimVeda by Pahadi Roots',
+  title:       'Our Story',
   description: 'How HimVeda by Pahadi Roots was born — our mission to connect mountain farming communities with people who value pure, natural food.',
   alternates:  { canonical: '/about' },
   openGraph: {

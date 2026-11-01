@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { SiteSettings } from '@/types'
 import { useAutoplayInterval } from '@/hooks/useAutoplayInterval'
 import { getHeroStats } from '@/lib/heroStats'
+import { formatPrice } from '@/lib/utils'
 
 interface HeroImage {
   url: string
@@ -24,6 +25,8 @@ interface HeroImage {
   cta_link?: string
   cta2_text?: string
   cta2_link?: string
+  /** Lowest current price behind this slide's link (see lib/heroPrice.ts); null/absent = show none. */
+  from_price?: number | null
 }
 interface Props { images: HeroImage[]; settings: SiteSettings }
 
@@ -406,8 +409,14 @@ export default function HeroBanner({ images, settings }: Props) {
                         {img.coupon_code && <span style={{ fontSize:11, fontWeight:700, color:'#bc4749' }}>· {img.coupon_code}</span>}
                       </div>
                     )}
+                    {typeof img.from_price === 'number' && img.from_price > 0 && (
+                      <p className="hhero-from" style={{ margin:'0 0 12px', fontSize:14, fontWeight:700, color:'#fff' }}>
+                        <span style={{ opacity:.85, fontWeight:600 }}>From </span>
+                        <span style={{ fontSize:20, fontWeight:900, color:'#e0b64a' }}>{formatPrice(img.from_price)}</span>
+                      </p>
+                    )}
                     <div className="hhero-ctas" style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
-                      <Link className="hhero-cta1" href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'var(--g)', color:'#fff', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
+                      <Link className="hhero-cta1" href={img.cta_link || '/products'} style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#e0b64a', color:'#0d2410', fontSize:14, fontWeight:800, padding:'13px 28px', borderRadius:50, textDecoration:'none', boxShadow:'0 4px 20px rgba(0,0,0,.25)', letterSpacing:'.2px', transition:'all .25s' }}>
                         {img.cta_text || 'Explore Our Store'}
                       </Link>
                       <Link className="hhero-cta2" href={img.cta2_link || '/our-stories'} style={{ display:'inline-flex', alignItems:'center', fontSize:13, fontWeight:700, color:'rgba(255,255,255,.85)', textDecoration:'none', padding:'12px 0', gap:6, transition:'color .2s' }}>

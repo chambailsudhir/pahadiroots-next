@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { guardAiRequest, readCappedJson, sanitizeChatContents, getClientIp, toClientChatResponse } from '@/lib/api/aiGuard'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { verifyChatToken } from '@/lib/api/chatToken'
 import { buildChatSystemPrompt, resolveChatLang, CHAT_ROUTE_LIMITS } from './systemPrompt'
 import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
 
@@ -33,6 +34,11 @@ export async function POST(req: NextRequest) {
     perMinute: CHAT_ROUTE_LIMITS.perMinute, perHour: CHAT_ROUTE_LIMITS.perHour, perDayGlobal: CHAT_ROUTE_LIMITS.perDayGlobal,
   })
   if (blocked) return withId(blocked)
+
+  // Proof that this browser loaded the site and asked for a session token first (see lib/api/chatToken.ts).
+  if (!verifyChatToken(req.headers.get('x-chat-token'), req.headers.get('user-agent') ?? '')) {
+    return withId(NextResponse.json({ error: 'Session expired — please refresh the page' }, { status: 403 }))
+  }
 
   // AUDIT S2-008: per-IP daily cap sits in front of the global ceiling so a single actor cannot
   // trip the shared 3000/day switch and deny the assistant to everyone else.

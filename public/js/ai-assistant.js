@@ -373,7 +373,7 @@
     + '<div class="pr-msgs" id="pr-msgs" role="log" aria-live="polite" aria-label="Chat messages"></div>'
     + '<div class="pr-ia"><div class="pr-ir">'
     + '<button id="pr-voice" title="Voice input" aria-label="Voice input" type="button"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93H2c0 4.57 3.13 8.37 7.26 9.58V21h5.48v-3.42C18.87 16.37 22 12.57 22 8h-2c0 4.08-3.06 7.44-7 7.93V15.93z"/></svg></button>'
-    + '<textarea id="pr-ti" rows="1" placeholder="Ask anything — products, weather, health…"></textarea>'
+    + '<textarea id="pr-ti" rows="1" maxlength="1000" aria-label="Your message" placeholder="Ask anything — products, weather, health…"></textarea>'
     + '<button id="pr-sb" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>'
     + '</div><div class="pr-ft">HimVeda by Pahadi Roots AI · Powered by Google Gemini</div></div>';
   document.body.appendChild(panel);
@@ -748,16 +748,26 @@
       contents: contents
     };
 
-    // Call our secure server proxy — key never in browser
-    return fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    .then(function(res){
-      if(!res.ok) return res.json().then(function(e){ throw new Error(e.error?.message || 'HTTP '+res.status); });
-      return res.json();
-    })
+    // Call our secure server proxy — key never in browser. A short-lived session token (GET /api/chat/token) proves this
+    // browser loaded the site; the request is abandoned after 30 s so a slow upstream never leaves the panel spinning.
+    function send(allowRetry){
+      return getToken().then(function(tok){
+        var ctl = new AbortController();
+        var timer = setTimeout(function(){ ctl.abort(); }, 30000);
+        return fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-chat-token': tok },
+          body: JSON.stringify(body),
+          signal: ctl.signal,
+        }).then(function(res){
+          clearTimeout(timer);
+          if(res.status === 403 && allowRetry){ chatTok = null; return send(false); }
+          if(!res.ok) return res.json().then(function(e){ throw new Error((e.error && e.error.message) || e.error || 'HTTP '+res.status); });
+          return res.json();
+        }, function(err){ clearTimeout(timer); throw (err && err.name === 'AbortError') ? new Error('The assistant took too long to reply. Please try again.') : err; });
+      });
+    }
+    return send(true)
     .then(function(data){
       var candidate = data.candidates && data.candidates[0];
       if(!candidate) throw new Error('No candidates in response');
@@ -786,6 +796,16 @@
 
       return { text: text, sources: sources };
     });
+  }
+
+  /* Session token for /api/chat (cached until shortly before it expires). */
+  var chatTok = null, chatTokExp = 0;
+  function getToken(){
+    if(chatTok !== null && Date.now() < chatTokExp) return Promise.resolve(chatTok);
+    return fetch('/api/chat/token', { credentials: 'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : { token: '', expires_in: 0 }; })
+      .then(function(d){ chatTok = d.token || ''; chatTokExp = Date.now() + Math.max(0, (d.expires_in || 0) - 60) * 1000; return chatTok; })
+      .catch(function(){ return ''; });
   }
 
   /* ── VOICE ────────────────────────────────────────────── */

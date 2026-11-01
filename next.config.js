@@ -154,6 +154,8 @@ const nextConfig = {
   async redirects() {
     return [
       { source: '/about', destination: '/our-stories', permanent: true },
+      // Old/typed spelling of the Sea Buckthorn product URL (the canonical slug is hyphenated).
+      { source: '/products/seabuckthorn', destination: '/products/sea-buckthorn', permanent: true },
     ]
   },
   async headers() {
@@ -176,6 +178,9 @@ const nextConfig = {
           // third-party content) — just enough for the widget's own
           // MediaRecorder-based voice input (see public/js/ai-assistant.js
           // and src/app/api/transcribe/route.ts) to work at all.
+          // Isolates our windows from pages that open us, while still allowing the payment and sign-in popups
+          // (Razorpay, Google) that checkout needs — same-origin-allow-popups, not the stricter same-origin.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
           { key: 'Permissions-Policy',      value: 'camera=(), microphone=(self), geolocation=()' },
           {
             key:   'Strict-Transport-Security',

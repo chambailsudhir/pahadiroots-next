@@ -12,7 +12,7 @@ import s from '@/components/story/OurStory.module.css'
 const DESC = 'How HimVeda by Pahadi Roots began — bringing the food, craft and character of the Himalayas closer to home, with the people behind it at the heart of the story.'
 
 export const metadata: Metadata = {
-  title:       'Our Story — HimVeda by Pahadi Roots',
+  title:       'Our Story',
   description: DESC,
   alternates:  { canonical: '/our-stories' },
   openGraph: {
