@@ -196,3 +196,12 @@ export function consentBootstrapScript(tagId: string, mode: ConsentMode | string
     + `for(var i=0;i<ev.length;i++){w.addEventListener(ev[i],go,{passive:true,once:true})}setTimeout(go,5000)};`
     + `if(document.readyState==='complete'){later()}else{w.addEventListener('load',later)}}}}catch(e){}})();`
 }
+
+/**
+ * The two owner settings that shape the inline consent bootstrap script. Used by the root layout (to render the script) AND by
+ * the proxy (to compute its CSP hash for checkout/account), so both always produce the byte-identical script text.
+ */
+export function consentBootstrapInputs(settings: { google_tag_id?: string | null; cookie_consent_mode?: string | null }): { tagId: string; consentMode: ConsentMode } {
+  const raw = (settings.google_tag_id || '').trim()
+  return { tagId: TAG_ID_RE.test(raw) ? raw : '', consentMode: normalizeConsentMode(settings.cookie_consent_mode ?? undefined) }
+}

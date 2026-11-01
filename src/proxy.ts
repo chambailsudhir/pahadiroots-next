@@ -1,6 +1,8 @@
 import { GEO_COOKIE, geoValueFor } from '@/lib/consentRegion'
 import { NextRequest, NextResponse } from 'next/server'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { STRICT_CSP_PATH, buildStrictCsp, makeNonce } from '@/lib/strictCsp'
+import { buildCsp } from '@/lib/csp'
 
 /**
  * middleware.ts — first-layer edge guardrail.
@@ -131,6 +133,50 @@ async function isStoreClosed(): Promise<boolean> {
   }
 }
 
+// ── Strict CSP inputs ───────────────────────────────────────────────────
+// The consent bootstrap script in the root layout depends on two owner settings; its CSP hash must be computed from the same
+// values. Read them (anon key, same RLS-safe table as the store_open read above) at most once a minute.
+interface BootstrapSettings { google_tag_id: string; cookie_consent_mode: string }
+let bootstrapCache: { v: BootstrapSettings; expiresAt: number } | null = null
+
+async function getBootstrapSettings(): Promise<BootstrapSettings | null> {
+  if (!SUPABASE_URL || !SUPABASE_ANON) return null
+  const now = Date.now()
+  if (bootstrapCache && bootstrapCache.expiresAt > now) return bootstrapCache.v
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/site_settings?key=in.(google_tag_id,cookie_consent_mode)&select=key,value`,
+      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }, signal: AbortSignal.timeout(1_500), cache: 'no-store' },
+    )
+    if (!res.ok) return bootstrapCache?.v ?? null
+    const rows = await res.json() as { key: string; value: string }[]
+    const v: BootstrapSettings = { google_tag_id: '', cookie_consent_mode: '' }
+    for (const r of rows) if (r.key === 'google_tag_id' || r.key === 'cookie_consent_mode') v[r.key] = r.value ?? ''
+    bootstrapCache = { v, expiresAt: now + 60_000 }
+    return v
+  } catch {
+    return bootstrapCache?.v ?? null
+  }
+}
+
+/**
+ * Checkout and account pages: per-request nonce CSP (see lib/strictCsp.ts). If the settings it depends on cannot be read, fall
+ * back to the normal cache-friendly policy for that one response instead of risking a policy that blocks our own scripts.
+ */
+async function withStrictCsp(req: NextRequest): Promise<NextResponse> {
+  const pathname = req.nextUrl.pathname
+  const settings = await getBootstrapSettings()
+  const nonce = makeNonce()
+  const csp = settings
+    ? buildStrictCsp({ pathname, nonce, ...settings })
+    : buildCsp({ allowEval: /^\/checkout(\/|$)/.test(pathname) })
+  const requestHeaders = new Headers(req.headers)
+  if (settings) { requestHeaders.set('x-nonce', nonce); requestHeaders.set('content-security-policy', csp) }
+  const res = NextResponse.next({ request: { headers: requestHeaders } })
+  res.headers.set('Content-Security-Policy', csp)
+  return withGeoCookie(req, res)
+}
+
 /**
  * Hands the visitor's country class to the browser (`hv_geo` = eu | row | unk) so the cookie-consent
  * banner can be region-aware WITHOUT making the page dynamic: the HTML stays identical (and cacheable)
@@ -155,6 +201,11 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
     if (await isStoreClosed()) {
       return NextResponse.redirect(new URL('/maintenance', req.url))
     }
+  }
+
+  // ── 1b. Strict per-request CSP for the payment and account pages ───────
+  if (req.method === 'GET' && STRICT_CSP_PATH.test(pathname)) {
+    return withStrictCsp(req)
   }
 
   // ── 2. /api/v1/* rate limiting ─────────────────────────────────────────

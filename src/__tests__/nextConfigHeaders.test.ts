@@ -21,29 +21,26 @@ const headersFor = async (path: string) => {
 describe('next.config.js headers', () => {
   it('hides the X-Powered-By header', () => { expect(config.poweredByHeader).toBe(false) })
 
-  it.each(['/', '/products', '/products/sea-buckthorn', '/collections/himalayan-honey', '/cart', '/order-success', '/account/orders/1', '/api/v1/orders'])(
+  it.each(['/', '/products', '/products/sea-buckthorn', '/collections/himalayan-honey', '/cart', '/order-success', '/api/v1/orders'])(
     'sends exactly one CSP for %s and it has NO unsafe-eval', async path => {
       const { csp } = await headersFor(path)
       expect(csp).toHaveLength(1)
       expect(csp[0]).not.toContain('unsafe-eval')
     })
 
-  it.each(['/checkout', '/checkout/'])('keeps unsafe-eval (and Razorpay) on %s — payments must keep working', async path => {
-    const { csp } = await headersFor(path)
-    expect(csp).toHaveLength(1)
-    expect(csp[0]).toContain("'unsafe-eval'")
-    expect(csp[0]).toContain('https://checkout.razorpay.com')
+  it.each(['/checkout', '/checkout/', '/checkout/pay', '/account', '/account/', '/account/orders/1'])(
+    'sends NO static CSP on %s — the proxy sends a strict per-request one there', async path => {
+      expect((await headersFor(path)).csp).toHaveLength(0)
+    })
+
+  it('does not exempt look-alike paths from the static CSP (/accountant, /checkout-help)', async () => {
+    for (const path of ['/accountant', '/checkout-help']) expect((await headersFor(path)).csp).toHaveLength(1)
   })
 
-  it('the two policies differ ONLY by unsafe-eval', async () => {
-    const home = (await headersFor('/')).csp[0], checkout = (await headersFor('/checkout')).csp[0]
-    expect(checkout.replace("'unsafe-eval' ", '')).toBe(home)
-  })
-
-  it('still sends the other security headers on every route, including checkout', async () => {
-    for (const path of ['/', '/checkout']) {
+  it('still sends the other security headers on every route, including checkout and account', async () => {
+    for (const path of ['/', '/checkout', '/account']) {
       const keys = (await headersFor(path)).flat.map(h => h.key)
-      for (const k of ['Strict-Transport-Security', 'X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy', 'Content-Security-Policy'])
+      for (const k of ['Strict-Transport-Security', 'X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy'])
         expect(keys).toContain(k)
     }
   })

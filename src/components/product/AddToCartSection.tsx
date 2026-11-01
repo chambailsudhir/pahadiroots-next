@@ -210,7 +210,9 @@ export default function AddToCartSection({ product, variants }: Props) {
       // so the component unmounts before the finally can flip it back.
       const t = setTimeout(async () => {
         try {
-          await router.push('/checkout')
+          // Full page load, not a client-side navigation: /checkout is served with its own strict per-request security
+          // policy (see StrictRouteNav), and only a real document load picks that policy up.
+          window.location.assign('/checkout')
         } catch {
           setBuying(false)
         }

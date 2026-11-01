@@ -21,8 +21,7 @@ import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 import CookieConsent from '@/components/consent/CookieConsent'
-import { consentBootstrapScript, TAG_ID_RE } from '@/lib/consent'
-import { normalizeConsentMode } from '@/lib/consentRegion'
+import { consentBootstrapScript, consentBootstrapInputs } from '@/lib/consent'
 
 // SEO FIX: matches the same env-var-with-fallback pattern already used in
 // sitemap.ts and robots.ts, so the Organization/WebSite JSON-LD below (and
@@ -187,9 +186,8 @@ export default async function RootLayout({
   // only route customers can reach anyway (proxy.ts redirects everything
   // else), so there is nothing for any of this chrome to usefully do.
   const isMaintenanceMode = !isStoreOpen(settings)
-  const tagId = TAG_ID_RE.test((settings.google_tag_id || '').trim()) ? settings.google_tag_id.trim() : ''
+  const { tagId, consentMode } = consentBootstrapInputs(settings as unknown as { google_tag_id?: string; cookie_consent_mode?: string })
   // Owner's choice in Admin → Settings → "Cookie consent banner" ('region' | 'always' | 'off'; anything else → 'region').
-  const consentMode = normalizeConsentMode(settings.cookie_consent_mode)
   const waNumber = (settings.whatsapp_number || '').replace(/\D/g, '') || '919899984895'
 
   return (
