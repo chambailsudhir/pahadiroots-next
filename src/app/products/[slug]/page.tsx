@@ -646,6 +646,9 @@ export default async function ProductPage({ params }: Props) {
                     </div>
                   </div>
                 ))}
+                <p style={{ fontSize: '11px', color: '#888', margin: '10px 0 0', lineHeight: 1.5 }}>
+                  Traditional use and general information. Not medical advice and not intended to diagnose, treat, cure or prevent any disease.
+                </p>
               </div>
             )}
 

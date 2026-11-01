@@ -14,6 +14,9 @@ describe('product page copy', () => {
     expect(pdp).toContain('✨ Highlights')
     expect(pdp).not.toContain('✨ Key Benefits')
   })
+  it('shows a traditional-use / not-medical-advice note under the highlight cards', () => {
+    expect(pdp).toContain('Traditional use and general information. Not medical advice')
+  })
   it('sea buckthorn sections make no nutrient or vitamin claims', () => {
     for (const bad of ['nutrient-packed', 'nutrient-dense', 'rich in nutrients', 'natural vitamins', 'omegas and antioxidants', 'rich in natural nutrients']) {
       expect(pdp).not.toContain(bad)
