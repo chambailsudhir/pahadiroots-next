@@ -637,7 +637,7 @@ export default async function ProductPage({ params }: Props) {
             {/* Key Benefits card */}
             {benefits.length > 0 && (
               <div className="pdp-benefits-card">
-                <div className="pdp-benefits-title">✨ Key Benefits</div>
+                <div className="pdp-benefits-title">✨ Highlights</div>
                 {benefits.map((b: any, i: number) => (
                   <div key={i} className="pdp-ben-item">
                     <div className="pdp-ben-icon">{typeof b === 'object' ? (b.icon || '✓') : '✓'}</div>
@@ -649,6 +649,9 @@ export default async function ProductPage({ params }: Props) {
                     </div>
                   </div>
                 ))}
+                <p style={{ fontSize: '11px', color: '#888', margin: '10px 0 0', lineHeight: 1.5 }}>
+                  Traditional use and general information. Not medical advice and not intended to diagnose, treat, cure or prevent any disease.
+                </p>
               </div>
             )}
 
@@ -1073,7 +1076,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">02 — The Berry</div>
                   <h3 className="pdp-sb-tl-title">Small, fierce, and full of life.</h3>
-                  <p className="pdp-sb-tl-desc">Wild Sea Buckthorn berries, rich in nutrients, grow naturally in harsh mountain conditions, developing a rare strength and purity.</p>
+                  <p className="pdp-sb-tl-desc">Wild Sea Buckthorn berries grow naturally in the harsh conditions of the high Himalayan mountains.</p>
                 </div>
               </div>
 
@@ -1097,7 +1100,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">04 — Extraction</div>
                   <h3 className="pdp-sb-tl-title">Pressed with care, kept whole.</h3>
-                  <p className="pdp-sb-tl-desc">Fresh berries are carefully processed to extract the rich, nutrient-dense pulp, without artificial additives, preserving its natural goodness.</p>
+                  <p className="pdp-sb-tl-desc">Fresh berries are carefully processed to extract the pulp.</p>
                 </div>
               </div>
 
@@ -1109,7 +1112,7 @@ export default async function ProductPage({ params }: Props) {
                 <div className="pdp-sb-tl-content">
                   <div className="pdp-sb-tl-eyebrow">05 — The Pulp</div>
                   <h3 className="pdp-sb-tl-title">Rich by nature, gathered as one.</h3>
-                  <p className="pdp-sb-tl-desc">The result is a vibrant, nutrient-packed Sea Buckthorn pulp, full of natural vitamins, omegas and antioxidants.</p>
+                  <p className="pdp-sb-tl-desc">The result is a vibrant Sea Buckthorn pulp.</p>
                 </div>
               </div>
 
@@ -1277,9 +1280,9 @@ export default async function ProductPage({ params }: Props) {
             </div>
             <div className="pdp-why-diff-grid">
               {[
-                ['berries', 'Wild sea buckthorn berries on the branch with Himalayan mountains behind', 'High Altitude Himalayan Berries', 'Wild sea buckthorn harvested from pristine high-altitude regions of the Himalayas, rich in natural nutrients.'],
+                ['berries', 'Wild sea buckthorn berries on the branch with Himalayan mountains behind', 'High Altitude Himalayan Berries', 'Wild sea buckthorn harvested from high-altitude regions of the Himalayas.'],
                 ['handpicked', 'Woman hand-picking sea buckthorn berries into a woven basket', 'Handpicked with Care', 'Locally hand-harvested by mountain communities, ensuring only the best ripe berries are selected.'],
-                ['cold-pressed', 'Wooden press gently extracting sea buckthorn juice', 'Cold-Pressed Extraction', "Gently cold-pressed to retain the berry's natural vitamins, antioxidants and Himalayan goodness."],
+                ['cold-pressed', 'Wooden press gently extracting sea buckthorn juice', 'Cold-Pressed Extraction', "Gently cold-pressed from the berries."],
                 ['pure-natural', 'Bottle of sea buckthorn juice beside fresh berries', 'Pure & Natural', 'No added chemicals or preservatives — just pure Himalayan sea buckthorn in its most natural form.'],
               ].map(([img, alt, title, desc]) => (
                 <div key={img} className="pdp-why-diff-card img-card">
