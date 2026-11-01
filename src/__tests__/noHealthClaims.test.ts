@@ -11,7 +11,7 @@ const prompt = get('app/api/chat/systemPrompt.ts')
 
 describe('product page copy', () => {
   it('uses "Highlights", not "Key Benefits", for the DB-driven highlight cards', () => {
-    expect(pdp).toContain('✨ Highlights')
+    expect(pdp).toContain('<Icon name="sparkle" size="1em" /> Highlights')
     expect(pdp).not.toContain('✨ Key Benefits')
   })
   it('shows a traditional-use / not-medical-advice note under the highlight cards', () => {
