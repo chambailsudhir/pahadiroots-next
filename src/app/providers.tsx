@@ -5,6 +5,7 @@ import { SWRConfig } from 'swr'
 import { useUserStore } from '@/store/userStore'
 import { useCartStore } from '@/store/cartStore'
 import PageViewTracker from '@/components/analytics/PageViewTracker'
+import WebVitalsReporter from '@/components/analytics/WebVitalsReporter'
 
 // ── StoreHydrator ─────────────────────────────────────────────
 // Both stores use skipHydration:true — they start with empty defaults
@@ -34,6 +35,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }}
     >
       <StoreHydrator />
+      <WebVitalsReporter />
       <Suspense fallback={null}>
         <PageViewTracker />
         {/* BUG FIX (removed per explicit request): the "Get 5% Off Your

@@ -47,6 +47,7 @@ const safeJsonLd = (obj: unknown) => JSON.stringify(obj).replace(/</g, '\\u003c'
 const playfair = localFont({
   variable: '--font-playfair',
   display: 'swap',
+  preload: false,   // fetched when text first uses it (after the CSS), so five font files no longer compete with the hero image for bandwidth
   src: [
     { path: '../fonts/PlayfairDisplay-normal-400-900.woff2', style: 'normal', weight: '400 900' },
     { path: '../fonts/PlayfairDisplay-italic-400-900.woff2', style: 'italic', weight: '400 900' },
@@ -55,6 +56,7 @@ const playfair = localFont({
 const lato = localFont({
   variable: '--font-lato',
   display: 'swap',
+  preload: false,
   src: [
     { path: '../fonts/Lato-normal-400.woff2', style: 'normal', weight: '400' },
     { path: '../fonts/Lato-normal-700.woff2', style: 'normal', weight: '700' },
