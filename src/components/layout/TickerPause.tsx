@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Icon from '@/components/ui/Icon'
 
 // WCAG 2.2.2 (Pause, Stop, Hide): content that scrolls automatically for more than 5 seconds needs a way to pause
 // it that works for everyone — the old CSS only paused on mouse hover, which keyboard and touch users never get.
@@ -20,7 +21,7 @@ export default function TickerPause() {
         e.currentTarget.closest('.ticker-wrap')?.classList.toggle('ticker-paused', next)
       }}
     >
-      <span aria-hidden="true">{paused ? '▶' : '⏸'}</span>
+      <Icon name={paused ? 'play' : 'pause'} size="0.85em" filled />
     </button>
   )
 }

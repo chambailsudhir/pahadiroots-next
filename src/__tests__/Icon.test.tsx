@@ -18,7 +18,7 @@ describe('Icon', () => {
     expect(container.querySelector('svg')!.getAttribute('fill')).toBe('currentColor')
   })
   it('every icon draws something', () => {
-    for (const n of ['search', 'heart', 'user', 'sparkle', 'cart', 'eye', 'pin', 'mail', 'phone', 'globe', 'sun', 'moon', 'package', 'leaf', 'mountain', 'users', 'truck', 'shield', 'gift', 'flask', 'star'] as const) {
+    for (const n of ['search', 'heart', 'user', 'sparkle', 'cart', 'eye', 'pin', 'mail', 'phone', 'globe', 'sun', 'moon', 'package', 'leaf', 'mountain', 'users', 'truck', 'shield', 'gift', 'flask', 'star', 'pause', 'play'] as const) {
       const { container } = render(<Icon name={n} />)
       expect(container.querySelector('svg')!.children.length).toBeGreaterThan(0)
     }
