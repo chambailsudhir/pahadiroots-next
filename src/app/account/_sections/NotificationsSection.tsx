@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import styles from '../styles/account.module.css'
+import { AdminIcon } from '@/components/ui/Icon'
 
 interface NotifPrefs {
   notif_email_orders:    boolean
@@ -196,7 +197,7 @@ interface RowProps {
 function NotifRow({ label, sublabel, icon, checked, busy, onChange, last }: RowProps) {
   return (
     <div className={`${styles.notifRow}${last ? ' ' + styles.notifRowLast : ''}`}>
-      <span className={styles.notifRowIcon} aria-hidden="true">{icon}</span>
+      <span className={styles.notifRowIcon} aria-hidden="true"><AdminIcon value={icon} color="#1a3a1e" /></span>
       <div className={styles.notifRowText}>
         {/* Plain span — the button below carries its own aria-label for screen readers.
             htmlFor on a <button> is invalid HTML and mis-announces the control. */}

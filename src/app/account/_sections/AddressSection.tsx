@@ -5,6 +5,7 @@ import type { Profile }      from '../hooks/useAuth'
 import type { SavedAddress } from '@/lib/account/utils'
 import type { useProfile }   from '../hooks/useProfile'
 import styles from '../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 type ProfileHook = ReturnType<typeof useProfile>
 
@@ -33,7 +34,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           {authProfile?.address_line1 && (
             <div className={`${styles.addrCard} ${styles.addrDefault}`}>
               <div className={styles.addrHeader}>
-                <div className={styles.addrLabel}>🏠 Default Address</div>
+                <div className={styles.addrLabel}><Icon name="home" /> Default Address</div>
                 <div className={styles.addrTag}>Primary</div>
               </div>
               <div className={styles.addrLine}>
@@ -43,7 +44,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
               </div>
               <div className={styles.addrActions}>
                 {/* aria-label gives screen readers a descriptive action name beyond the emoji */}
-                <button className={styles.addrBtn} onClick={onEditAddress} aria-label="Edit default address">✏️ Edit Address</button>
+                <button className={styles.addrBtn} onClick={onEditAddress} aria-label="Edit default address"><Icon name="edit" /> Edit Address</button>
               </div>
             </div>
           )}
@@ -52,7 +53,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           {savedAddrsList.map((a: SavedAddress) => (
             <div key={a.id} className={styles.addrCard}>
               <div className={styles.addrHeader}>
-                <div className={styles.addrLabel}>📍 {a.label || 'Saved Address'}</div>
+                <div className={styles.addrLabel}><Icon name="pin" /> {a.label || 'Saved Address'}</div>
               </div>
               <div className={styles.addrLine}>
                 {a.name && <><strong>{a.name}</strong><br /></>}
@@ -87,7 +88,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                       aria-label={`Edit ${a.label || 'saved'} address`}
                       disabled={!!addresses.deletingId}
                     >
-                      ✏️ Edit
+                      <Icon name="edit" /> Edit
                     </button>
                     <button
                       className={`${styles.addrBtn} ${styles.addrDel}`}
@@ -96,7 +97,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
                       disabled={addresses.deletingId === a.id}
                       style={{ marginLeft: '6px' }}
                     >
-                      🗑 Remove
+                      <Icon name="trash" /> Remove
                     </button>
                   </>
                 )}
@@ -107,7 +108,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
           {/* Empty state */}
           {!authProfile?.address_line1 && savedAddrs.length === 0 && !addresses.showForm && (
             <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>📍</div>
+              <div className={styles.emptyIcon}><Icon name="pin" /></div>
               <div className={styles.emptyTitle}>No addresses saved</div>
               <p className={styles.emptySub}>Add a delivery address to checkout faster.</p>
             </div>

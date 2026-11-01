@@ -31,6 +31,7 @@
 
 import { memo } from 'react'
 import styles from './PahadiStoryCard.module.css'
+import Icon, { AdminIcon } from '@/components/ui/Icon'
 
 const CERTS = [
   { icon:'✅', label:'100% Natural',      sub:'No pesticides'       },
@@ -62,7 +63,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
     <div className={styles.card}>
       <div className={styles.header}>
         {/* A4: aria-hidden — decorative leaf; headline text carries the meaning */}
-        <span className={styles.leaf} aria-hidden="true">🌿</span>
+        <span className={styles.leaf} aria-hidden="true"><Icon name="leaf" /></span>
         {/* A1: semantic <h3> for correct document outline and SR heading navigation */}
         <h3 className={styles.headline}>{headline}</h3>
       </div>
@@ -74,7 +75,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
         {CERTS.map(c => (
           <div key={c.label} className={styles.cert}>
             {/* A2: aria-hidden — icon emoji is decorative; label text follows */}
-            <span className={styles.certIcon} aria-hidden="true">{c.icon}</span>
+            <span className={styles.certIcon} aria-hidden="true"><AdminIcon value={c.icon} color="#f0d98c" /></span>
             <div>
               <div className={styles.certLabel}>{c.label}</div>
               <div className={styles.certSub}>{c.sub}</div>
@@ -92,7 +93,7 @@ const PahadiStoryCard = memo(function PahadiStoryCard({
             <div key={s.step} className={styles.stepWrap}>
               <div className={styles.step}>
                 {/* A2: aria-hidden — icon emoji is decorative; step label follows */}
-                <div className={styles.stepIcon} aria-hidden="true">{s.icon}</div>
+                <div className={styles.stepIcon} aria-hidden="true"><AdminIcon value={s.icon} color="#f0d98c" /></div>
                 <div className={styles.stepLabel}>{s.step}</div>
                 <div className={styles.stepDesc}>{s.desc}</div>
               </div>

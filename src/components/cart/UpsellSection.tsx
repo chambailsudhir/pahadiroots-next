@@ -36,6 +36,7 @@ import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import type { UpsellItem } from '@/types'
 import styles from './UpsellSection.module.css'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   items: UpsellItem[]
@@ -114,7 +115,7 @@ const UpsellSection = memo(function UpsellSection({
   return (
     <div className={styles.card}>
       <div className={styles.head}>
-        <h2 className={styles.title}><span aria-hidden="true">🛍</span> Customers Also Buy</h2>
+        <h2 className={styles.title}><span aria-hidden="true"><Icon name="cart" /></span> Customers Also Buy</h2>
         <span className={styles.sub}>
           {freeShipMin > 0 && !isFreeShipping
             ? `Add ${formatPrice(remainingForFreeShip)} more for free shipping`

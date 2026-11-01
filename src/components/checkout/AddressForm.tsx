@@ -6,6 +6,7 @@ import type { OrderAddress } from '@/types'
 // verbatim in AddressForm, CheckoutClient, and lib/account/constants.ts.
 // Any state addition or correction had to be made in all three places.
 import { INDIA_STATES } from '@/lib/account/constants'
+import Icon, { AdminIcon } from '@/components/ui/Icon'
 
 const LABEL_OPTIONS = ['Home', 'Office', 'Parents', 'Friends', 'Others'] as const
 // PERF FIX: module-level constant — LABEL_ICONS was already declared here, good.
@@ -429,7 +430,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
 
       {selectedSavedIdx !== null && addr.label && (
         <div className="af-addr-badge">
-          <span>{LABEL_ICONS[addr.label] || '📍'}</span>
+          <span><AdminIcon value={LABEL_ICONS[addr.label] || '📍'} /></span>
           <span>Delivering to <strong>{addr.label}</strong></span>
           <span className="af-addr-hint">Select a different address above to change</span>
         </div>
@@ -574,7 +575,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 )}
                 {pincodeMsg && !pincodeLoading && (
                   // aria-label gives SR a clean sentence without the ✓ glyph name
-                  <span className="af-pin-ok" aria-label={`Found: ${pincodeMsg}`}>✓ {pincodeMsg}</span>
+                  <span className="af-pin-ok" aria-label={`Found: ${pincodeMsg}`}><Icon name="check" /> {pincodeMsg}</span>
                 )}
               </div>
             </div>

@@ -27,6 +27,27 @@ const PATHS = {
   star:    <path d="m12 3 2.700 5.600 6.100.9-4.400 4.300 1 6.100L12 17l-5.400 2.900 1-6.100-4.400-4.300 6.100-.9L12 3Z" />,
   pause:   <><rect x="6.500" y="5" width="3.500" height="14" rx="1" /><rect x="14" y="5" width="3.500" height="14" rx="1" /></>,
   play:    <path d="M8 5.500v13l11-6.500-11-6.500Z" />,
+  lock:    <><rect x="4.500" y="10.500" width="15" height="10" rx="2" /><path d="M8 10.500V8a4 4 0 0 1 8 0v2.500" /></>,
+  check:   <path d="m4.500 12.500 5 5 10-11" />,
+  warning: <><path d="M12 3.500 2.500 20h19L12 3.500Z" /><path d="M12 10v4.500M12 17.500v.5" /></>,
+  close:   <path d="m6 6 12 12M18 6 6 18" />,
+  coins:   <><ellipse cx="12" cy="7" rx="7" ry="3" /><path d="M5 7v5c0 1.700 3.100 3 7 3s7-1.300 7-3V7M5 12v5c0 1.700 3.100 3 7 3s7-1.300 7-3v-5" /></>,
+  tag:     <><path d="M3 12.500V4h8.500l9 9-8.500 8.500-9-9Z" /><circle cx="7.500" cy="8.500" r="1.200" /></>,
+  home:    <><path d="m3 11 9-7.500 9 7.500" /><path d="M5.500 9.500V20h13V9.500" /><path d="M10 20v-5.500h4V20" /></>,
+  building:<><rect x="5" y="3.500" width="14" height="17" rx="1.500" /><path d="M9 8h2M13 8h2M9 12h2M13 12h2M10.500 20.500v-4h3v4" /></>,
+  chat:    <path d="M4 5.500h16v10.500H10l-5 4v-4H4V5.500Z" />,
+  bolt:    <path d="M13 2.500 4.500 13.500H11l-1 8 8.500-11H12l1-8Z" />,
+  undo:    <><path d="M9 7 4.500 11.500 9 16" /><path d="M5 11.500h8a5.500 5.500 0 0 1 0 11" /></>,
+  'eye-off': <><path d="M3 3l18 18" /><path d="M10.500 6.200A9.500 9.500 0 0 1 12 6c6.500 0 10.500 6 10.500 6a17 17 0 0 1-3.200 3.700M6.600 7.600A17 17 0 0 0 1.500 12S5.500 19 12 19a9.500 9.500 0 0 0 4.200-1" /><path d="M9.800 9.800a3 3 0 0 0 4.200 4.200" /></>,
+  edit:    <><path d="M4 20h4L19.500 8.500a2.800 2.800 0 0 0-4-4L4 16v4Z" /><path d="m13.500 6.500 4 4" /></>,
+  trash:   <><path d="M4.500 6.500h15M9.500 6.500V4h5v2.500M6.500 6.500l1 14h9l1-14" /><path d="M10 10.500v6M14 10.500v6" /></>,
+  bell:    <><path d="M6 17h12l-1.500-2V10a4.500 4.500 0 0 0-9 0v5L6 17Z" /><path d="M10 20h4" /></>,
+  clock:   <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.500 2" /></>,
+  cash:    <><rect x="2.500" y="6" width="19" height="12" rx="2" /><circle cx="12" cy="12" r="2.800" /><path d="M6 9v.5M18 14.500v.5" /></>,
+  bank:    <><path d="m3 9.500 9-5.500 9 5.500H3Z" /><path d="M5.500 9.500v8M10 9.500v8M14 9.500v8M18.500 9.500v8M3 20h18" /></>,
+  refresh: <><path d="M20 11.500A8 8 0 0 0 5.500 7.500L4 9.500" /><path d="M4 4.500v5h5" /><path d="M4 12.500a8 8 0 0 0 14.500 4L20 14.500" /><path d="M20 19.500v-5h-5" /></>,
+  settings:<><circle cx="12" cy="12" r="3" /><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100" /></>,
+  basket:  <><path d="M3.500 10h17l-2 10h-13l-2-10Z" /><path d="m8 10 3.500-6M16 10l-3.500-6" /></>,
   sun:     <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M2 12h2M20 12h2M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400" /></>,
   moon:    <path d="M20.500 14.500A8.500 8.500 0 0 1 9.500 3.500a8.500 8.500 0 1 0 11 11Z" />,
 } as const
@@ -59,8 +80,11 @@ export default function Icon({ name, filled = false, size = '1.1em', style, ...r
  * icon so the strip looks the same on every device; anything unknown is left alone (`AdminIcon`) or dropped (`stripLeadingEmoji`).
  */
 const EMOJI_ICON: Record<string, IconName> = {
-  '🌿': 'leaf', '🍃': 'leaf', '🌱': 'leaf', '🏔': 'mountain', '⛰': 'mountain', '🤝': 'users', '👥': 'users',
-  '🚚': 'truck', '📦': 'package', '🔒': 'shield', '🛡': 'shield', '🎁': 'gift', '🔬': 'flask', '🧪': 'flask', '⭐': 'star', '🌟': 'star',
+  '🌿': 'leaf', '🍃': 'leaf', '🌱': 'leaf', '🏔': 'mountain', '⛰': 'mountain', '🌄': 'mountain', '🤝': 'users', '👥': 'users', '👨‍👩‍👦': 'users', '👫': 'users',
+  '🚚': 'truck', '🚛': 'truck', '📦': 'package', '🔒': 'lock', '🔐': 'lock', '🛡': 'shield', '🎁': 'gift', '🔬': 'flask', '🧪': 'flask', '⭐': 'star', '🌟': 'star',
+  '✅': 'check', '✓': 'check', '⚠': 'warning', '📍': 'pin', '🔍': 'search', '🛒': 'cart', '🛍': 'cart', '🏠': 'home', '🏢': 'building', '💬': 'chat', '🪙': 'coins',
+  '⚡': 'bolt', '🏷': 'tag', '↩': 'undo', '👁': 'eye', '🙈': 'eye-off', '✏': 'edit', '🗑': 'trash', '🔔': 'bell', '⏰': 'clock', '⏱': 'clock', '💵': 'cash',
+  '🏦': 'bank', '🔄': 'refresh', '⚙': 'settings', '❌': 'close', '✕': 'close', '👤': 'user', '✉': 'mail', '📞': 'phone', '🎉': 'sparkle', '💸': 'cash', '🎟': 'tag', '🧺': 'basket',
 }
 const LEADING_EMOJI = /^\s*(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier})*)\s*/u
 const clean = (e: string) => e.replace(/\uFE0F/g, '')
@@ -72,7 +96,7 @@ export function leadingEmojiIcon(text: string): { icon: IconName | null; rest: s
 }
 
 /** An owner-chosen icon value: a known emoji becomes the SVG, any other value (text, unknown emoji) is shown as written. */
-export function AdminIcon({ value, size = '1em' }: { value: string; size?: number | string }) {
+export function AdminIcon({ value, size = '1em', color, strokeWidth }: { value: string; size?: number | string; color?: string; strokeWidth?: number }) {
   const name = EMOJI_ICON[clean((value ?? '').trim())]
-  return name ? <Icon name={name} size={size} /> : <>{value}</>
+  return name ? <Icon name={name} size={size} {...(strokeWidth ? { strokeWidth } : {})} {...(color ? { style: { color } } : {})} /> : <>{value}</>
 }

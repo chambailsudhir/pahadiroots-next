@@ -10,6 +10,7 @@ import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
 import { resolveConfirmationToken } from '@/lib/confirmationToken'
 import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
 import { FALLBACK_QUICK_SELECTS } from '@/lib/footerQuickSelects'
+import Icon from '@/components/ui/Icon'
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface OrderItem {
@@ -666,7 +667,7 @@ function SuccessContent() {
         {/* Unverified — the lookup failed or this is not an order the visitor can see (CF1) */}
         {!loading && error && (
           <div className="oc-error">
-            <div className="oc-error-icon">🔍</div>
+            <div className="oc-error-icon"><Icon name="search" /></div>
             <h2>We couldn&#39;t verify this order</h2>
             <p>
               If you just placed an order, it may take a moment to appear — check your email for the
@@ -720,7 +721,7 @@ function SuccessContent() {
 
               {/* Order items */}
               <div className="oc-card">
-                <div className="oc-card-title">🛒 Order Items</div>
+                <div className="oc-card-title"><Icon name="cart" /> Order Items</div>
                 {items.length === 0
                   ? <div style={{color:'#888',fontSize:13}}>Items loading…</div>
                   : items.map((item, i) => (
@@ -768,7 +769,7 @@ function SuccessContent() {
 
               {/* Delivery details */}
               <div className="oc-card">
-                <div className="oc-card-title">📍 Delivery Details</div>
+                <div className="oc-card-title"><Icon name="pin" /> Delivery Details</div>
                 <div className="oc-del-grid">
                   <div className="oc-del-field"><label>Name</label><span>{order.customer_name || '—'}</span></div>
                   <div className="oc-del-field"><label>Phone</label><span>{order.customer_phone || '—'}</span></div>
@@ -780,9 +781,9 @@ function SuccessContent() {
 
               {/* Tracking */}
               <div className="oc-card">
-                <div className="oc-card-title">🚚 Tracking</div>
+                <div className="oc-card-title"><Icon name="truck" /> Tracking</div>
                 <div className="oc-track-box">
-                  <span className="oc-track-icon">🚚</span>
+                  <span className="oc-track-icon"><Icon name="truck" /></span>
                   <div className="oc-track-info">
                     {trackNum ? (
                       <>
@@ -806,7 +807,7 @@ function SuccessContent() {
                 <div className="oc-review-sub">Rate your order — takes 2 seconds!</div>
                 <div className="oc-review-stars">
                   {[1,2,3,4,5].map(n => (
-                    <span key={n} className={`oc-review-star${rating >= n ? ' sel' : ''}`} onClick={() => rateOrder(n)}>⭐</span>
+                    <span key={n} className={`oc-review-star${rating >= n ? ' sel' : ''}`} onClick={() => rateOrder(n)}><Icon name="star" /></span>
                   ))}
                 </div>
                 {rated && <div className="oc-review-thanks">🙏 Thanks for your feedback!</div>}
@@ -814,9 +815,9 @@ function SuccessContent() {
 
               {/* Actions */}
               <div className="oc-actions">
-                <Link prefetch={false} href="/account" className="oc-btn-primary">📦 View All Orders</Link>
+                <Link prefetch={false} href="/account" className="oc-btn-primary"><Icon name="package" /> View All Orders</Link>
                 <button onClick={() => window.print()} className="oc-btn-print">🧾 Print Invoice</button>
-                <Link href="/" className="oc-btn-secondary">🌿 Continue Shopping</Link>
+                <Link href="/" className="oc-btn-secondary"><Icon name="leaf" /> Continue Shopping</Link>
               </div>
 
               {/* BUG FIX: "Print Invoice" previously just printed this whole
@@ -940,7 +941,7 @@ function SuccessContent() {
         <div className="oc-nl-inner-wrap">
           <div className="oc-nl-inner">
             <div className="oc-nl-text">
-              <h4>🌿 Join the Pahadi Family</h4>
+              <h4><Icon name="leaf" /> Join the Pahadi Family</h4>
               <p>Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox</p>
             </div>
             <div className="oc-nl-form">

@@ -58,6 +58,7 @@ import { StickyCartCTA, EmptyCart }     from '@/components/cart/CartUIComponents
 import ErrorBoundary                    from '@/components/ui/ErrorBoundary'
 import CartNoticeBanner                 from '@/components/cart/CartNoticeBanner'
 import CheckoutStepper                  from '@/components/checkout/CheckoutStepper'
+import Icon, { AdminIcon } from '@/components/ui/Icon'
 
 const UpsellSection   = lazy(() => import('@/components/cart/UpsellSection'))
 const ReviewSection   = lazy(() => import('@/components/cart/ReviewSection'))
@@ -137,8 +138,8 @@ export default function CartPage() {
           {freeShipMin > 0 ? (
             pricing.isFreeShipping
               ? <><span aria-hidden="true">🎉</span> You&apos;ve unlocked <strong>free shipping</strong>!</>
-              : <><span aria-hidden="true">🚚</span> Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</>
-          ) : <><span aria-hidden="true">🚚</span> Free shipping on all orders!</>}
+              : <><span aria-hidden="true"><Icon name="truck" /></span> Add <strong>{formatPrice(pricing.remainingForFreeShip)}</strong> more for FREE shipping</>
+          ) : <><span aria-hidden="true"><Icon name="truck" /></span> Free shipping on all orders!</>}
         </span>
         {freeShipMin > 0 && (
           <div
@@ -233,7 +234,7 @@ export default function CartPage() {
               {TRUST_ITEMS.map(([icon, label, desc]) => (
                 <div key={label} className="cp-trust-item">
                   {/* A2: aria-hidden on decorative icon emoji — label text follows */}
-                  <span className="cp-trust-icon" aria-hidden="true">{icon}</span>
+                  <span className="cp-trust-icon" aria-hidden="true"><AdminIcon value={icon} color="#1a3a1e" /></span>
                   <div className="cp-trust-label">{label}</div>
                   <div className="cp-trust-desc">{desc}</div>
                 </div>
@@ -254,7 +255,7 @@ export default function CartPage() {
               {DELIVERY_ITEMS.map(([icon, label, sub]) => (
                 <div key={label} className="cp-delivery-item">
                   {/* A2: aria-hidden on decorative icon emoji — label text follows */}
-                  <span className="cp-delivery-icon" aria-hidden="true">{icon}</span>
+                  <span className="cp-delivery-icon" aria-hidden="true"><AdminIcon value={icon} color="#1a3a1e" /></span>
                   <div>
                     <div className="cp-delivery-label">{label}</div>
                     <div className="cp-delivery-sub">{sub}</div>
@@ -278,7 +279,7 @@ export default function CartPage() {
               rel="noopener noreferrer"
               className="cp-whatsapp"
             >
-              <span aria-hidden="true">💬</span>
+              <span aria-hidden="true"><Icon name="chat" /></span>
               <span>Have a question? Chat on WhatsApp</span>
               <span className="sr-only">(opens in new window)</span>
             </a>

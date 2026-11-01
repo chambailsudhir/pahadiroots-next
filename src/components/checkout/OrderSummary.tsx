@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/utils'
 import type { SiteSettings, CartItem, AppliedCoupon } from '@/types'
 import type { PriceSummary } from '@/lib/services/pricingService'
 import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block — was 18KB re-parsed on every render
+import Icon from '@/components/ui/Icon'
 
 interface CouponHint { code: string; label: string }
 
@@ -187,7 +188,7 @@ const OrderSummary = memo(function OrderSummary({
                   {couponLoading ? <span className="os-spin" /> : 'Apply'}
                 </button>
               </div>
-              {couponError && <p className="os-coupon-err">⚠ {couponError}</p>}
+              {couponError && <p className="os-coupon-err"><Icon name="warning" /> {couponError}</p>}
               {couponHints.length > 0 && (
                 <div className="os-hints">
                   <button className="os-hints-toggle" type="button" onClick={() => setShowHints(v => !v)}>
@@ -237,7 +238,7 @@ const OrderSummary = memo(function OrderSummary({
                 /* Applied state */
                 <div className="os-loyalty-applied">
                   <div className="os-loyalty-applied-left">
-                    <span className="os-loyalty-emoji">🪙</span>
+                    <span className="os-loyalty-emoji"><Icon name="coins" /></span>
                     <div>
                       <div className="os-loyalty-applied-title">
                         {loyaltyRedemption.points} {loyaltyLabel} applied
@@ -261,7 +262,7 @@ const OrderSummary = memo(function OrderSummary({
                     onClick={() => setShowLoyalty(v => !v)}
                     type="button"
                   >
-                    <span>🪙</span>
+                    <span><Icon name="coins" /></span>
                     <span className="os-loyalty-toggle-title">
                       Use {loyaltyLabel}
                     </span>
@@ -317,7 +318,7 @@ const OrderSummary = memo(function OrderSummary({
                           💸 Saves ₹{Math.floor(parseInt(loyaltyInput || '0') * pointsValue)} on this order
                         </div>
                       )}
-                      {loyaltyError && <p className="os-coupon-err">⚠ {loyaltyError}</p>}
+                      {loyaltyError && <p className="os-coupon-err"><Icon name="warning" /> {loyaltyError}</p>}
                     </div>
                   )}
                 </>
@@ -362,7 +363,7 @@ const OrderSummary = memo(function OrderSummary({
           {/* Loyalty discount row */}
           {loyaltyRedemption && loyaltyRedemption.discount_inr > 0 && (
             <div className="os-price-row os-price-row--coins">
-              <span>🪙 {loyaltyLabel} ({loyaltyRedemption.points} coins)</span>
+              <span><Icon name="coins" /> {loyaltyLabel} ({loyaltyRedemption.points} coins)</span>
               <span>−{formatPrice(loyaltyRedemption.discount_inr)}</span>
             </div>
           )}
@@ -400,13 +401,13 @@ const OrderSummary = memo(function OrderSummary({
 
           {savingsBadge > 0 && (
             <div className="os-saving-strip">
-              <span>🏷</span>
+              <span><Icon name="tag" /></span>
               <span>You&apos;re saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
             </div>
           )}
           {loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
             <div className="os-loyalty-earn-strip">
-              ⭐ Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
+              <Icon name="star" /> Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
             </div>
           )}
         </div>
@@ -415,10 +416,10 @@ const OrderSummary = memo(function OrderSummary({
       {/* Errors — role="alert" triggers immediate announcement by screen readers */}
       {belowMinOrder && (
         <div className="os-error-box" role="alert">
-          🛒 Minimum order is {formatPrice(minOrderAmt)}. Add <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more.
+          <Icon name="cart" /> Minimum order is {formatPrice(minOrderAmt)}. Add <strong>{formatPrice(minOrderAmt - pricing.subtotal)}</strong> more.
         </div>
       )}
-      {error && <div className="os-error-box" role="alert">⚠ {error}</div>}
+      {error && <div className="os-error-box" role="alert"><Icon name="warning" /> {error}</div>}
 
       {/* BUG FIX (CRITICAL, companion to the mobile CTA fix): payMethod ===
           'razorpay' && razorpayLoadFailed previously fell through to the
@@ -428,7 +429,7 @@ const OrderSummary = memo(function OrderSummary({
           incident writeup. */}
       {payMethod === 'razorpay' && razorpayLoadFailed && (
         <div className="os-error-box" role="alert">
-          ⚠ Payment gateway couldn&apos;t load. Please check your connection and retry, or choose Cash on Delivery below.
+          <Icon name="warning" /> Payment gateway couldn&apos;t load. Please check your connection and retry, or choose Cash on Delivery below.
         </div>
       )}
 
@@ -444,11 +445,11 @@ const OrderSummary = memo(function OrderSummary({
           {placing ? (
             <><span className="os-spin os-spin--white" /> Placing Order…</>
           ) : payMethod === 'razorpay' && razorpayLoadFailed ? (
-            <>⚠ Retry payment gateway</>
+            <><Icon name="warning" /> Retry payment gateway</>
           ) : payMethod === 'razorpay' && !razorpayLoaded ? (
             <><span className="os-spin" /> Loading payment…</>
           ) : payMethod === 'razorpay' ? (
-            <><span>⚡ Pay Securely</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
+            <><span><Icon name="bolt" /> Pay Securely</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           ) : (
             <><span>Place COD Order</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           )}
@@ -465,7 +466,7 @@ const OrderSummary = memo(function OrderSummary({
 
       {/* ETA */}
       <div className="os-eta">
-        <div className="os-eta-icon">🚚</div>
+        <div className="os-eta-icon"><Icon name="truck" /></div>
         <div>
           {/* AUDIT S3-001: the policy windows, not a calendar-day promise or a same-day dispatch claim. */}
           <div className="os-eta-line">

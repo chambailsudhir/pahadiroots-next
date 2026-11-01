@@ -203,8 +203,8 @@ describe('Order detail page — support link', () => {
     mockFetchOk(order({ order_number: 'PR1A2B3C4D' }))
     render(<OrderDetailPage />)
 
-    await waitFor(() => expect(screen.getByText('💬 WhatsApp Support')).toBeTruthy())
-    const href = screen.getByText('💬 WhatsApp Support').getAttribute('href')!
+    await waitFor(() => expect(screen.getByText(/WhatsApp Support/)).toBeTruthy())
+    const href = screen.getByText(/WhatsApp Support/).getAttribute('href')!
     expect(href.startsWith('https://wa.me/919899984895?text=')).toBe(true)
     expect(decodeURIComponent(href.split('text=')[1])).toBe('Hi, I need help with order PR1A2B3C4D')
   })

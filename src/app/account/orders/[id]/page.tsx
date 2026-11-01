@@ -15,6 +15,7 @@ import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account
 import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL } from '@/lib/account/constants'
 import { computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 import styles from '../../styles/account.module.css'
+import Icon from '@/components/ui/Icon'
 
 const STATUS_STEPS = [
   { status: 'confirmed',        icon: '✅', label: 'Order Confirmed',   desc: 'Your order has been confirmed' },
@@ -104,7 +105,7 @@ export default function OrderDetailPage() {
 
   if (error) return (
     <div className={styles.odError}>
-      <div className={styles.odErrorIcon}>⚠️</div>
+      <div className={styles.odErrorIcon}><Icon name="warning" /></div>
       <p className={styles.odErrorMsg}>{error}</p>
       <Link prefetch={false} href="/account" className={styles.odBackLink}>← Back to Account</Link>
     </div>
@@ -144,7 +145,7 @@ export default function OrderDetailPage() {
           rel="noopener noreferrer"
           className={styles.odTrackChip}
         >
-          🚚 Track Shipment · {order.tracking_number}
+          <Icon name="truck" /> Track Shipment · {order.tracking_number}
         </a>
       )}
 
@@ -353,7 +354,7 @@ export default function OrderDetailPage() {
           rel="noopener noreferrer"
           className={`${styles.actionBtn} ${styles.actionSupport}`}
         >
-          💬 WhatsApp Support
+          <Icon name="chat" /> WhatsApp Support
         </a>
       </div>
 
