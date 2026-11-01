@@ -184,6 +184,11 @@ const nextConfig = {
         ],
       },
       {
+        // EXPERIMENT (hero preload via HTTP header)
+        source: '/',
+        headers: [{ key: 'Link', value: HERO_LINK }],
+      },
+      {
         // /checkout loads Razorpay's checkout.js, which needs 'unsafe-eval'.
         source: '/checkout/:path*',
         headers: [{ key: 'Content-Security-Policy', value: buildCsp(true) }],
@@ -197,5 +202,8 @@ const nextConfig = {
     ]
   },
 };
+
+const HERO_U = (w) => `/_next/image?url=https%3A%2F%2Fulyrhnpoiypuvaurlqqi.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fpahadi-images%2Fheroslide11790735647323-wrsy3.jpg&w=${w}&q=75`
+const HERO_LINK = `<${HERO_U(640)}>; rel=preload; as=image; imagesrcset="${[640,828,1200,1920].map(w => HERO_U(w)+' '+w+'w').join(', ')}"; imagesizes="100vw"; fetchpriority=high`
 
 module.exports = nextConfig;
