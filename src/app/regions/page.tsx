@@ -27,7 +27,7 @@ export const revalidate = 60
 // preview card, and without a canonical tag the page had no authoritative
 // URL declared.
 export const metadata: Metadata = {
-  title: 'Explore Himalayan Regions — HimVeda by Pahadi Roots',
+  title: 'Explore Himalayan Regions',
   description: 'Every state carries its own story — ancient forests, sacred rivers, and flavours shaped by altitude. Discover the best of each region.',
   alternates: { canonical: `${BASE}/regions` },
   openGraph: {

@@ -8,7 +8,7 @@ import type { Metadata } from 'next'
 // volume. The canonical search UI itself is still useful and linkable, so
 // it's follow:true — just not eligible to rank on its own.
 export const metadata: Metadata = {
-  title: 'Search Products — HimVeda by Pahadi Roots',
+  title: 'Search Products',
   description: 'Search our full range of Himalayan natural products — spices, herbs, honey, teas, and more from the mountains of India.',
   robots: { index: false, follow: true },
   alternates: { canonical: '/search' },

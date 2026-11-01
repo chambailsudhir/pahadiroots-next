@@ -21,10 +21,11 @@ import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { certifiedParameters, joinParameters } from '@/lib/certificateCopy'
 
 export const metadata: Metadata = {
-  title: 'Honey Lab Test Reports — HimVeda by Pahadi Roots',
+  title: 'Honey Lab Test Reports',
   description: 'View the independent lab test reports for HimVeda by Pahadi Roots honey.',
   alternates: { canonical: '/lab-reports' },
-  robots: { index: false, follow: true },
+  // Indexable: the lab reports are the strongest trust proof the shop has, and people search for them (audit HOME-022).
+  robots: { index: true, follow: true },
 }
 
 interface CertRow {

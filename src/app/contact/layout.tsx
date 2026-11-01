@@ -19,7 +19,7 @@ const FAQ = [
 ]
 
 export const metadata: Metadata = {
-  title: 'Contact Us — HimVeda by Pahadi Roots',
+  title: 'Contact Us',
   description: 'Get in touch with the HimVeda by Pahadi Roots team. We\'re here to help with orders, product questions, and anything else.',
   // SEO FIX: no canonical previously — added for consistency with every
   // other public route (cart, regions, blog, products all have one).

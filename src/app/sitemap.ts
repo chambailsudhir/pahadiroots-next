@@ -110,6 +110,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/our-stories`,  lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/mountain-stories`, lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/contact`,      lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/lab-reports`,  lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.6 },
     // Shipping / returns policy pages get real search volume for FMCG ("cash on delivery available", "return policy").
     { url: `${BASE}/policies/shipping`, lastModified: POLICIES_REVIEWED, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${BASE}/policies/returns`,  lastModified: POLICIES_REVIEWED, changeFrequency: 'yearly', priority: 0.3 },

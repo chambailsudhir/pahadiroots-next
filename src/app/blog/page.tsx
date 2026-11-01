@@ -12,7 +12,7 @@ const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 // WhatsApp/Facebook fell back to the site favicon instead of a real image.
 // Same fix applied across every route below with its own openGraph block.
 export const metadata: Metadata = {
-  title:       'Blog — HimVeda by Pahadi Roots',
+  title:       'Blog',
   description: 'Stories from the mountains — health benefits, recipes, buying guides, and honest sourcing notes on Himalayan honey, ghee, shilajit, saffron, and more.',
   alternates:  { canonical: `${BASE}/blog` },
   openGraph: {

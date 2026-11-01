@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 import { getStoreData, buildCategories, getNormalizedProducts } from '@/lib/storeData'
 import { settingsForHero } from '@/lib/clientSettings'
+import { heroFromPrice } from '@/lib/heroPrice'
 import { toHomeCardData } from '@/lib/normalizeProduct'
 import HeroBanner from '@/components/homepage/HeroBanner'
 import TrustBar from '@/components/homepage/TrustBar'
@@ -162,7 +163,10 @@ export default async function HomePage() {
   const settings = withLiveStateCount(baseSettings, storeData.states?.length ?? 0)
 
   const categories = buildCategories(storeData)
-  const heroImages = buildHeroImages(settings)
+  // "From ₹X" on each slide comes from the live catalogue (cached, shared with the region section); a failed read just
+  // means no price is shown — never a wrong one.
+  const priceCatalog = await getNormalizedProducts().catch(() => [] as Product[])
+  const heroImages = buildHeroImages(settings).map(h => ({ ...h, from_price: heroFromPrice(h.cta_link, categories, priceCatalog) }))
   const states     = await buildStates(storeData)
 
   const showCategoryTiles = isEnabled(settings.show_category_tiles)

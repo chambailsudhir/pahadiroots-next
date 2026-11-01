@@ -54,4 +54,11 @@ describe('next.config.js headers', () => {
     expect(csp).toContain("object-src 'none'")
     expect(csp).toContain('upgrade-insecure-requests')
   })
+
+  it('sends Cross-Origin-Opener-Policy same-origin-allow-popups everywhere (payment / sign-in popups keep working)', async () => {
+    for (const path of ['/', '/checkout', '/products/sea-buckthorn']) {
+      const { flat } = await headersFor(path)
+      expect(flat.find(h => h.key === 'Cross-Origin-Opener-Policy')?.value).toBe('same-origin-allow-popups')
+    }
+  })
 })
