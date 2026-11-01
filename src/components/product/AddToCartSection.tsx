@@ -11,6 +11,7 @@ import { trackProductView, trackAddToCart as trackInHouseAddToCart } from '@/lib
 import type { Product, ProductVariant, SiteSettings } from '@/types'
 import { usePdpSelection } from './PdpVariantContext'
 import { bestValueVariantId } from '@/lib/variantValueTag'
+import Icon from '@/components/ui/Icon'
 
 interface Props {
   product:  Product
@@ -338,7 +339,7 @@ export default function AddToCartSection({ product, variants }: Props) {
             aria-pressed={inWishlist}
             aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           >
-            <span aria-hidden="true">{inWishlist ? '❤️' : '🤍'}</span>
+            <span aria-hidden="true"><Icon name="heart" filled={inWishlist} /></span>
           </button>
 
           {/* Add to Cart — label conveys product name + state change for SR */}
@@ -353,7 +354,7 @@ export default function AddToCartSection({ product, variants }: Props) {
               `Add ${product.name} to cart`
             }
           >
-            {added ? '✅ Added to Cart!' : !inStock ? 'Out of Stock' : '🛒 Add to Cart'}
+            {added ? <><Icon name="check" size="1em" /> Added to Cart!</> : !inStock ? 'Out of Stock' : <><Icon name="cart" size="1em" /> Add to Cart</>}
           </button>
         </div>
 
@@ -366,7 +367,7 @@ export default function AddToCartSection({ product, variants }: Props) {
             disabled={buying}
             aria-label={buying ? `Processing order for ${product.name}` : `Buy ${product.name} now`}
           >
-            {buying ? '⚡ Processing…' : '⚡ Buy Now'}
+            <Icon name="bolt" size="1em" /> {buying ? 'Processing…' : 'Buy Now'}
           </button>
         )}
       </div>
@@ -397,7 +398,7 @@ export default function AddToCartSection({ product, variants }: Props) {
                 `Add ${product.name} to cart`
               }
             >
-              {added ? '✅ Added' : !inStock ? 'Out of Stock' : '🛒 Add to Cart'}
+              {added ? <><Icon name="check" size="1em" /> Added</> : !inStock ? 'Out of Stock' : <><Icon name="cart" size="1em" /> Add to Cart</>}
             </button>
             {inStock && (
               <button
@@ -407,7 +408,7 @@ export default function AddToCartSection({ product, variants }: Props) {
                 disabled={buying}
                 aria-label={buying ? `Processing order for ${product.name}` : `Buy ${product.name} now`}
               >
-                {buying ? '⚡…' : '⚡ Buy Now'}
+                <Icon name="bolt" size="1em" /> {buying ? '…' : 'Buy Now'}
               </button>
             )}
           </div>
