@@ -1,4 +1,3 @@
-import 'server-only'
 import { captureError, logger } from '@/lib/logger'
 import crypto from 'crypto'
 // ─────────────────────────────────────────────────────────────
