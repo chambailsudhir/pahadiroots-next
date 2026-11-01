@@ -445,8 +445,10 @@ export function attachVariants(
 
 // ── Products with images + variants applied (same as old site main.js) ──
 export function getProductsWithImages(storeData: StoreData) {
-  const withImages = applyProductImages(storeData.products, storeData.product_images)
-  return attachVariants(withImages, storeData.product_variants)
+  // A partial catalogue (some of the reads failed or timed out) used to hand `undefined` to the next step and crash the
+  // homepage's Bestsellers section with "Cannot read properties of undefined (reading 'length')". Missing parts are empty.
+  const withImages = applyProductImages(storeData.products ?? [], storeData.product_images ?? [])
+  return attachVariants(withImages, storeData.product_variants ?? [])
 }
 
 // ═══════════════════════════════════════════════════════════════
