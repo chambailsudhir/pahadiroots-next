@@ -1,7 +1,13 @@
 import type { SiteSettings } from '@/types'
 import TickerPause from './TickerPause'
+import Icon, { leadingEmojiIcon } from '@/components/ui/Icon'
 
 interface Props { settings: SiteSettings }
+
+function tickerContent(text: string) {
+  const { icon, rest } = leadingEmojiIcon(text)
+  return icon ? <><Icon name={icon} size="1.05em" style={{ marginRight: 6 }} />{rest}</> : rest
+}
 
 export default function TickerBar({ settings }: Props) {
   if (settings.ticker_hide === 'true') return null
@@ -27,7 +33,7 @@ export default function TickerBar({ settings }: Props) {
         {doubled.map((item, idx) => (
           // The second copy only exists to make the loop seamless: hide it from screen readers (they used to
           // read every announcement twice) and, via CSS, from the static reduced-motion layout.
-          <span key={idx} className="ticker-item" style={{ color: txt }} aria-hidden={idx >= items.length ? true : undefined}>{item}</span>
+          <span key={idx} className="ticker-item" style={{ color: txt }} aria-hidden={idx >= items.length ? true : undefined}>{tickerContent(item)}</span>
         ))}
       </div>
       <TickerPause />

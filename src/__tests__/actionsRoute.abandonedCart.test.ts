@@ -28,7 +28,8 @@ vi.mock('next/server', async () => {
 })
 
 const mockUpsert = vi.fn()
-const mockFrom   = vi.fn(() => ({ upsert: mockUpsert }))
+const mockExisting = vi.fn().mockResolvedValue({ data: null })
+const mockFrom   = vi.fn(() => ({ upsert: mockUpsert, select: () => ({ eq: () => ({ maybeSingle: () => mockExisting() }) }) }))
 
 vi.mock('@/lib/supabase', () => ({
   getServiceClient: vi.fn(() => ({ from: mockFrom })),
@@ -55,6 +56,7 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
   beforeEach(() => {
     mockUpsert.mockReset()
     mockFrom.mockClear()
+    mockExisting.mockResolvedValue({ data: null })
   })
 
   it('sends name in the upsert payload matching the real (post-migration) table shape', async () => {
@@ -62,7 +64,7 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
 
     await POST(req({
       action:     'save_abandoned_cart',
-      session_id: 'sess_abc123',
+      session_id: 'sess_abc123_0123456789',
       email:      'jane@example.com',
       name:       'Jane Doe',
       items:      [{ product_id: 1, name: 'Shilajit', qty: 1, price: 999 }],
@@ -76,7 +78,7 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
     // reminder_sent, reminder_sent_at, converted, created_at, updated_at,
     // reminder_count, last_reminder_at, session_id, name.
     expect(payload).toEqual({
-      session_id: 'sess_abc123',
+      session_id: 'sess_abc123_0123456789',
       email:      'jane@example.com',
       phone:      null,
       name:       'Jane Doe',
@@ -92,7 +94,7 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
 
     const res = await POST(req({
       action:     'save_abandoned_cart',
-      session_id: 'sess_def456',
+      session_id: 'sess_def456_0123456789',
       phone:      '9999999999',
       items:      [{ product_id: 1, name: 'Shilajit', qty: 1, price: 999 }],
       cart_total: 999,
@@ -108,7 +110,7 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
 
     const res = await POST(req({
       action:     'save_abandoned_cart',
-      session_id: 'sess_ghi789',
+      session_id: 'sess_ghi789_0123456789',
       email:      'jane@example.com',
       items:      [{ product_id: 1, name: 'Shilajit', qty: 1, price: 999 }],
       cart_total: 999,
@@ -126,5 +128,17 @@ describe('POST /api/v1/actions — save_abandoned_cart (schema-drift bug found +
     }))
     expect(res.status).toBe(400)
     expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('does not reopen a cart that already converted into an order (audit C-11)', async () => {
+    mockExisting.mockResolvedValue({ data: { converted: true } })
+    const res = await POST(req({ action: 'save_abandoned_cart', session_id: 'sess_done_0123456789', email: 'a@b.co', items: [{ product_id: 1, name: 'Honey', qty: 1, price: 100 }], cart_total: 100 }))
+    expect(res.status).toBe(200)
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('rejects short, guessable session ids', async () => {
+    const res = await POST(req({ action: 'save_abandoned_cart', session_id: 'abc', email: 'a@b.co', items: [{ product_id: 1, name: 'Honey', qty: 1, price: 100 }], cart_total: 100 }))
+    expect(res.status).toBe(400)
   })
 })

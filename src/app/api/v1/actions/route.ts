@@ -190,6 +190,11 @@ export async function POST(req: NextRequest) {
       const { session_id, email, phone, name, items, cart_total } = parsed.data
       const safeName = name ? stripTags(name) : null
 
+      // Never reopen a cart that already became an order: the upsert below resets converted=false, which would put a customer
+      // who has already paid back on the reminder list. A converted draft is final.
+      const { data: existing } = await db.from('abandoned_carts').select('converted').eq('session_id', session_id).maybeSingle()
+      if (existing?.converted) return NextResponse.json({ success: true })
+
       const { error } = await db.from('abandoned_carts').upsert(
         {
           session_id,
