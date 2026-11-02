@@ -184,6 +184,10 @@ export default function CartPage() {
                 />
               ))}
 
+              {visibleItems.length === 0 && (
+                <p className="cp-empty-note">Your cart is empty. <Link href="/products">Browse products</Link> or undo the removal below.</p>
+              )}
+
               {/* Undo toasts */}
               {[...pendingRemovals.entries()].map(([vid, entry]) => (
                 <div key={vid} className="cp-undo-toast" role="status">
@@ -288,7 +292,8 @@ export default function CartPage() {
         </div>
 
         {/* ══ RIGHT ══════════════════════════════════════════════════════════ */}
-        <div className="cp-right">
+        {/* Last item removed (still inside the Undo window): nothing to price or check out — hide the summary so no ₹0 order with shipping can be started. */}
+        {totalQty > 0 && <div className="cp-right">
           <div className="cp-right-inner">
             <CartSummary
               totalQty={totalQty}
@@ -306,16 +311,16 @@ export default function CartPage() {
               onCheckout={flushPendingRemovals}
             />
           </div>
-        </div>
+        </div>}
       </div>
 
-      <StickyCartCTA
+      {totalQty > 0 && <StickyCartCTA
         total={pricing.total}
         orderSubtotal={pricing.subtotal}
         totalQty={totalQty}
         minOrderAmt={minOrderAmt}
         onCheckout={flushPendingRemovals}
-      />
+      />}
 
     </main>
   )

@@ -355,3 +355,7 @@
   .cp-trust-item { padding: 16px 12px; }
   .cp-delivery-item { padding: 13px 14px; }
 }
+
+/* Shown while the last item sits in its Undo window. */
+.cp-empty-note { margin: 0; padding: 14px 4px; font-size: 14px; color: #4a4338; }
+.cp-empty-note a { color: #1a3a1e; font-weight: 700; text-decoration: underline; }

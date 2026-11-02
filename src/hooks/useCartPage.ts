@@ -847,9 +847,15 @@ export function useCartPage() {
         body:    JSON.stringify({ code: coupon.code, subtotal: pricing.subtotal }),
         signal:  combinedSignal,
       }, /* maxRetries */ 1)
-        .then(r => r.json().then(data => ({ ok: r.ok, data })))
-        .then(({ ok, data }) => {
+        .then(r => r.json().catch(() => ({})).then(data => ({ ok: r.ok, status: r.status, data })))
+        .then(({ ok, status, data }) => {
           if (ac.signal.aborted || !mountedRef.current) return
+          // Only a 400 means "this coupon no longer applies". A 429 (rate limit — shared per IP with manual applies), a 5xx or any
+          // other hiccup says nothing about the coupon, so the shopper keeps it; the server re-validates at order creation anyway.
+          if (!ok && status !== 400) {
+            logger.error('coupon_revalidation_failed', { status })
+            return
+          }
           if (!ok) {
             // Coupon no longer valid for the new subtotal (min_order, expiry,
             // usage limit). Remove it so the UI never shows a discount the
