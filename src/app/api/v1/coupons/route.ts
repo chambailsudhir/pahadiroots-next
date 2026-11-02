@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateCouponSchema } from '@/lib/schemas'
 import { validateCouponServer } from '@/lib/services/pricingService'
-import { checkCsrf } from '@/lib/api/serverUtils'
+import { checkCsrf, getToken, sbAuth, sbAdmin } from '@/lib/api/serverUtils'
 // REFACTOR: replaced the ~40-line inline checkCouponRateLimit() with the shared
 // helper.  The key `mw:rl:coupon:${ip}` is unchanged so the shared counter with
 // middleware.ts is preserved — a middleware hit still counts here.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { logger } from '@/lib/logger'
+
+/**
+ * The signed-in customer's id, from the session cookie — READ-ONLY (no profile sync, no writes). Null for guests / expired sessions.
+ * Lets the cart page (which knows nothing else about the shopper) refuse a one-time coupon the account has already used.
+ */
+async function sessionCustomerId(req: NextRequest): Promise<string | null> {
+  try {
+    const token = getToken(req)
+    if (!token) return null
+    const user = await sbAuth('/user', null, token)
+    if (!user?.id) return null
+    const rows = await sbAdmin('GET', `/rest/v1/customers?auth_user_id=eq.${encodeURIComponent(String(user.id))}&select=id&limit=1`)
+    return Array.isArray(rows) && rows[0]?.id != null ? String(rows[0].id) : null
+  } catch {
+    return null
+  }
+}
 
 export async function POST(req: NextRequest) {
   // ── CSRF check ─────────────────────────────────────────────────────────────
@@ -35,7 +52,12 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
-    const result = await validateCouponServer(parsed.data.code, parsed.data.subtotal, parsed.data.phone)
+    const result = await validateCouponServer(parsed.data.code, parsed.data.subtotal, {
+      phone:      parsed.data.phone,
+      customerId: await sessionCustomerId(req),
+      pincode:    parsed.data.pincode,
+      address:    parsed.data.address,
+    })
     if (!result.valid) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }

@@ -124,6 +124,9 @@ const CartSummary = memo(function CartSummary({
                   some AT implementations read both the label and the inner text/character */}
               <span aria-hidden="true"><Icon name="close" /></span>
             </button>
+            {coupon.oneTimeUse && (
+              <p className={styles.couponNote}>One-time offer per customer and delivery address — confirmed at checkout.</p>
+            )}
           </div>
         ) : (
           <div className={styles.couponRow}>

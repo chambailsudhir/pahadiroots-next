@@ -258,7 +258,10 @@ describe('S1-002 / B1-16 — coupons for guests', () => {
   it('user_limit is enforced for a guest from the phone/email history (read-only), since claim_coupon_use skips it for NULL customers', async () => {
     wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
     mockDb.responses['coupons'] = coupon({ user_limit: 1 })
-    routeFirst((u, m) => m === 'GET' && u.includes('/coupon_usage') && u.includes(`customer_id=in.(${VICTIM_ID})`), [{ id: 1 }])
+    // Nov 2026: a guest's earlier use is stored with customer_id NULL, so the history is rebuilt from the ORDER behind the use
+    // (orders.customer_id = the phone/email-matched row) — see lib/couponHistory.ts.
+    mockDb.responses['coupon_usage'] = [{ id: 1, coupon_id: 7, order_id: 900, customer_id: null }]
+    mockDb.responses['orders'] = (t: string) => t === 'maybeSingle' ? null : [{ id: 900, customer_id: VICTIM_ID, shipping_address: { pincode: '110001', address_line1: 'Elsewhere 9, Other Nagar' } }]
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(createOrder({ ...GUEST_INPUT, couponCode: 'WELCOME50' }, SETTINGS)).rejects.toThrow(/already used this coupon/i)
     expect(rpc('claim_coupon_use')).toHaveLength(0)
