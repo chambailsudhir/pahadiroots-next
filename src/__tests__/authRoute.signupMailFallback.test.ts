@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({ sendTransactionalEmail: vi.fn(), syncCustomerProfile: vi.fn() }))
+vi.mock('@/lib/api/rateLimitKv', async () => (await import('./helpers/inMemoryRateLimit')).rateLimitKvMock)
 vi.mock('@/lib/api/serverUtils', () => ({
   checkCsrf:           vi.fn(() => null),
   syncCustomerProfile: mocks.syncCustomerProfile,

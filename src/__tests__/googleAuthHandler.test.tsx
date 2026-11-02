@@ -25,7 +25,7 @@ vi.mock('@/lib/profileCache', () => ({
   prefetchProfileToCache: vi.fn(),
 }))
 
-import GoogleAuthHandler, { shouldHandleOAuthLanding, GOOGLE_CALLBACK_PATH } from '@/components/auth/GoogleAuthHandler'
+import GoogleAuthHandler, { GOOGLE_CALLBACK_PATH } from '@/components/auth/GoogleAuthHandler'
 
 const RECOVERY_HASH = '#access_token=RECOVERY_JWT&expires_in=3600&refresh_token=r&token_type=bearer&type=recovery'
 const LOGIN_HASH    = '#access_token=LOGIN_JWT&refresh_token=r&token_type=bearer'
@@ -39,23 +39,6 @@ async function flush() {
   await new Promise(r => setTimeout(r, 0))
   await new Promise(r => setTimeout(r, 0))
 }
-
-describe('shouldHandleOAuthLanding (pure)', () => {
-  it('is true only on the dedicated callback route with a plain login hash', () => {
-    expect(shouldHandleOAuthLanding(GOOGLE_CALLBACK_PATH, LOGIN_HASH)).toBe(true)
-    expect(shouldHandleOAuthLanding('/auth/google-callback/', LOGIN_HASH)).toBe(true)
-  })
-
-  it.each(['/', '/account', '/reset-password', '/checkout', '/auth/other'])(
-    'is false on %s even with a login-shaped hash (S2-004)', (path) => {
-      expect(shouldHandleOAuthLanding(path, LOGIN_HASH)).toBe(false)
-    })
-
-  it('is false for a recovery hash on ANY route, including the callback route itself (S2-001)', () => {
-    expect(shouldHandleOAuthLanding('/reset-password', RECOVERY_HASH)).toBe(false)
-    expect(shouldHandleOAuthLanding(GOOGLE_CALLBACK_PATH, RECOVERY_HASH)).toBe(false)
-  })
-})
 
 describe('<GoogleAuthHandler /> (rendered)', () => {
   let fetchMock: ReturnType<typeof vi.fn>
@@ -110,16 +93,16 @@ describe('<GoogleAuthHandler /> (rendered)', () => {
     expect(localStorage.getItem('pr_pkce_verifier')).toBe('stale')
   })
 
-  it('still completes a Google login on the dedicated callback route', async () => {
+  it('NEVER consumes tokens or codes from the URL, even on the callback route (auth-B #1/#7: the page is the only consumer)', async () => {
     setLocation(GOOGLE_CALLBACK_PATH + LOGIN_HASH)
     render(<GoogleAuthHandler />)
     await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('/api/auth')
-    expect(JSON.parse(init.body)).toMatchObject({ action: 'google_callback', access_token: 'LOGIN_JWT' })
-    // Token hash is stripped on the route where it IS consumed.
-    expect(window.location.hash).toBe('')
+    setLocation(GOOGLE_CALLBACK_PATH + '?code=ABC')
+    localStorage.setItem('pr_pkce_verifier', 'v')
+    render(<GoogleAuthHandler />)
+    await flush()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { NextRequest } from 'next/server'
 
+vi.mock('@/lib/api/rateLimitKv', async () => (await import('./helpers/inMemoryRateLimit')).rateLimitKvMock)
 vi.mock('@/lib/api/serverUtils', () => ({
   checkCsrf:           vi.fn(() => null),
   syncCustomerProfile: vi.fn(async () => null),

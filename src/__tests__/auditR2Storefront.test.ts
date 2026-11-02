@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   sbAdmin: vi.fn(), sbAuth: vi.fn(), getToken: vi.fn(), tryRefresh: vi.fn(),
   syncCustomerProfile: vi.fn(), applyNewCookies: vi.fn(), checkCsrf: vi.fn(),
 }))
+vi.mock('@/lib/api/rateLimitKv', async () => (await import('./helpers/inMemoryRateLimit')).rateLimitKvMock)
 vi.mock('@/lib/api/serverUtils', async () => {
   const { NextResponse } = await import('next/server')
   return {
@@ -29,7 +30,6 @@ vi.mock('@/lib/api/serverUtils', async () => {
     syncCustomerProfile: mocks.syncCustomerProfile, applyNewCookies: mocks.applyNewCookies, checkCsrf: mocks.checkCsrf,
   }
 })
-vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: vi.fn(async () => true) }))
 
 const PROFILE = { id: 'cust-1', first_name: 'A', last_name: 'B' }
 beforeEach(() => {
@@ -43,15 +43,27 @@ const authReq = (body: object, ip = '10.0.0.1') => new NextRequest('https://paha
 })
 
 describe('SF-1 forgot_password is throttled', () => {
-  it('stops e-mailing the same address after 3 requests an hour, with an unchanged generic answer', async () => {
+  it('stops e-mailing the same address after 3 requests an hour FROM ONE IP, with an unchanged generic answer', async () => {
     const fetchMock = vi.fn(async (..._a: unknown[]) => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }))
     vi.stubGlobal('fetch', fetchMock)
     const { POST } = await import('@/app/api/auth/route')
     let last: Response | undefined
-    for (let i = 0; i < 6; i++) last = await POST(authReq({ action: 'forgot_password', email: 'victim@example.com' }, `20.0.0.${i}`)) // 6 different IPs
+    for (let i = 0; i < 5; i++) last = await POST(authReq({ action: 'forgot_password', email: 'victim@example.com' }, '20.0.0.1'))
     const sent = fetchMock.mock.calls.filter(([u]) => String(u).includes('generate_link')).length
     expect(sent).toBeLessThanOrEqual(3)
     expect(last!.status).toBe(200)
+    // auth-B #3: the attacker's exhausted quota must NOT silence a genuine request from the owner's own IP.
+    const owner = await POST(authReq({ action: 'forgot_password', email: 'victim@example.com' }, '20.0.0.99'))
+    expect(owner.status).toBe(200)
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('generate_link')).length).toBe(sent + 1)
+    vi.unstubAllGlobals()
+  })
+  it('caps total reset mails per address per hour across many IPs (mail-bomb ceiling)', async () => {
+    const fetchMock = vi.fn(async (..._a: unknown[]) => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { POST } = await import('@/app/api/auth/route')
+    for (let i = 0; i < 14; i++) await POST(authReq({ action: 'forgot_password', email: 'bombed@example.com' }, `21.0.0.${i}`))
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('generate_link')).length).toBeLessThanOrEqual(10)
     vi.unstubAllGlobals()
   })
   it('limits per IP too', async () => {

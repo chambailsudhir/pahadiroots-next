@@ -133,6 +133,16 @@ describe('clientLogout', () => {
       expect(useUserStore.getState().wishlist).toEqual(['prod-1'])
     })
 
+    it('clearServerSession clears again AFTER the network calls (in-flight prefetch cannot re-seed the cache) — auth-B #6', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        // a prefetch that was in flight resolves while logout's requests are pending
+        localStorage.setItem(PROFILE_CACHE_KEY, CACHED_PROFILE)
+        return { ok: true, json: async () => ({}) }
+      }))
+      await clearServerSession()
+      expect(localStorage.getItem(PROFILE_CACHE_KEY)).toBeNull()
+    })
+
     it('clearClientPII is a safe no-op when localStorage throws (private mode / quota)', () => {
       const spy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('SecurityError') })
       expect(() => clearClientPII()).not.toThrow()

@@ -86,6 +86,11 @@ export async function clearServerSession(): Promise<void> {
   } catch (err) {
     console.error('[clientLogout] failed to clear server session:', err)
   }
+  // AUDIT (auth-B #6): a profile prefetch (ProfilePrefetcher / AuthModal) that was already in flight when
+  // the user clicked Logout can resolve DURING the awaits above and re-write `pr_checkout_profile` with the
+  // old user's data. Clear again now that the network calls are done; performHeaderLogout clears once more
+  // after the store reset, and the page reload that follows drops anything still pending.
+  clearClientPII()
 }
 
 /**

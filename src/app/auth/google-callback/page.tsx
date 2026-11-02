@@ -1,67 +1,64 @@
 'use client'
 
 // ═══════════════════════════════════════════════════════════════
-// /auth/google-callback — handles Supabase implicit OAuth redirect
+// /auth/google-callback — landing page of the Google OAuth redirect (PKCE flow)
 //
-// Supabase sends: /auth/google-callback#access_token=...&refresh_token=...
-// This page reads the hash client-side, writes the httpOnly cookie
-// via /api/auth/session, then redirects to /account.
+// `google_oauth` (api/auth) starts the flow with a PKCE code_challenge and stores the matching
+// code_verifier in a short-lived HttpOnly cookie in THIS browser. Supabase returns here with
+// `?code=<auth code>`; we post only the code to `google_callback`, which redeems it with the cookie's
+// verifier and then sets the session cookies.
+//
+// AUDIT (auth-B #1): this page used to take `#access_token=…&refresh_token=…` from the URL hash and
+// store those tokens as the session without any binding to the browser that started the flow, so a link
+// crafted with an attacker's own tokens signed the victim into the attacker's account (login CSRF /
+// session fixation). Tokens in the URL are now ignored completely; a code without this browser's
+// verifier cookie cannot be redeemed.
 //
 // Set your Supabase Google redirect URL to:
-//   https://pahadiroots.com/auth/google-callback
+//   https://www.pahadiroots.com/auth/google-callback
 // ═══════════════════════════════════════════════════════════════
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { completeGoogleLogin } from '@/lib/auth/googleLogin'
 
 export default function GoogleCallbackPage() {
   const [status, setStatus] = useState<'loading' | 'error'>('loading')
   const [errMsg, setErrMsg] = useState('')
+  // React strict mode runs effects twice in dev; an auth code is single-use, so run exactly once.
+  const started = useRef(false)
 
   useEffect(() => {
+    if (started.current) return
+    started.current = true
     ;(async () => {
       try {
-        // Read tokens from URL hash (implicit flow)
-        const hash        = window.location.hash.replace(/^#/, '')
-        const params      = new URLSearchParams(hash)
-        const accessToken  = params.get('access_token')
-        const refreshToken = params.get('refresh_token') || ''
-        const hashError    = params.get('error_description') || params.get('error')
-
-        // Also check query string for ?error= (Supabase error redirects)
         const qParams = new URLSearchParams(window.location.search)
-        const qError  = qParams.get('error_description') || qParams.get('error')
+        const hParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+        const code    = qParams.get('code')
+        const failure = qParams.get('error_description') || qParams.get('error')
+                     || hParams.get('error_description') || hParams.get('error')
 
-        if (hashError || qError) {
-          setErrMsg(hashError || qError || 'Google login failed')
+        // Remove code / tokens / errors from the address bar immediately (history, referrer, analytics).
+        window.history.replaceState({}, '', window.location.pathname)
+
+        if (failure) {
+          setErrMsg(failure.replace(/\+/g, ' '))
           setStatus('error')
           setTimeout(() => { window.location.href = '/account' }, 3000)
           return
         }
 
-        if (!accessToken) {
-          // No token — just go to account (will show login wall)
-          window.location.href = '/account'
+        // No code (e.g. a legacy `#access_token=` link): never log in from URL tokens — go to /account.
+        if (!code) { window.location.href = '/account'; return }
+
+        const result = await completeGoogleLogin(code)
+        if (!result.ok) {
+          setErrMsg(result.error)
+          setStatus('error')
+          setTimeout(() => { window.location.href = '/account' }, 3000)
           return
         }
-
-        // ✅ Write httpOnly cookie via session API
-        const res = await fetch('/api/auth/session', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            action:        'set',
-            access_token:  accessToken,
-            refresh_token: refreshToken,
-          }),
-        })
-
-        if (!res.ok) {
-          console.error('[google-callback] session set failed:', await res.text())
-        }
-
-        // ✅ Go to account — useAuth.init() will now find the cookie
         window.location.href = '/account'
-
       } catch (e) {
         console.error('[google-callback] error:', e)
         window.location.href = '/account'
