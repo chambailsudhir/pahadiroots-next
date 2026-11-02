@@ -26,7 +26,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
     <ErrorBoundary section="Addresses">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Delivery Addresses</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Delivery Addresses</div>
         </div>
         <div className={styles.card}>
 

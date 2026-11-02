@@ -163,21 +163,21 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
 
   if (loading) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <div className={styles.lySkeleton} aria-busy="true" />
     </div>
   )
 
   if (loadErr) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub} style={{ color: '#c0392b' }}>{loadErr}</p>
     </div>
   )
 
   if (!data?.enabled) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Loyalty programme coming soon — stay tuned!</p>
     </div>
   )
@@ -188,7 +188,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   return (
     <ErrorBoundary section="Loyalty">
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Earn coins on every order. Redeem for discounts at checkout.</p>
 
       {/* ── Balance card ──────────────────────────────────────── */}

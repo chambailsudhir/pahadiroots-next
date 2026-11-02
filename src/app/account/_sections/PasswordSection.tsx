@@ -12,7 +12,7 @@ export default function PasswordSection({ profile }: { profile: ProfileHook }) {
     <ErrorBoundary section="Password">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Change Password</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Change Password</div>
         </div>
         <div className={styles.card}>
           <div className={styles.cardSectionTitle}>Set New Password</div>

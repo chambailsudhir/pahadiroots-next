@@ -19,7 +19,7 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
     <ErrorBoundary section="Profile">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>My Profile</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>My Profile</div>
         </div>
 
         {/* Name */}

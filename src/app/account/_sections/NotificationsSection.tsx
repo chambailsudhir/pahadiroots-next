@@ -111,7 +111,7 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
     return (
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Notifications</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Notifications</div>
         </div>
         <div className={styles.card}>
           <div className={styles.notifSkeleton}>
@@ -131,7 +131,7 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
     <ErrorBoundary section="Notifications">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Notifications</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Notifications</div>
         </div>
 
         {/* Transactional — order updates */}

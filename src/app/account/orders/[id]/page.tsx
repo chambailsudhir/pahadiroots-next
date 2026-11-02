@@ -133,7 +133,7 @@ export default function OrderDetailPage() {
       <div className={styles.odHeader}>
         <div>
           <Link prefetch={false} href="/account" className={styles.odBackLink}>← Back to Account</Link>
-          <div className={styles.odOrderNum}>{order.order_number}</div>
+          <div className={styles.odOrderNum} role="heading" aria-level={1}>{order.order_number}</div>
           <div className={styles.odOrderDate}>Placed on {formatDate(order.created_at)}</div>
         </div>
         <div className={styles.odHeaderRight}>
@@ -171,7 +171,7 @@ export default function OrderDetailPage() {
 
       {/* ── Status tracker ─────────────────────────────────── */}
       <div className={styles.odCard}>
-        <div className={styles.odCardTitle}>Order Status</div>
+        <div className={styles.odCardTitle} role="heading" aria-level={2}>Order Status</div>
         {isCancelled ? (
           <div className={styles.odCancelledState}>
             <div className={styles.odCancelledIcon}>
@@ -239,7 +239,7 @@ export default function OrderDetailPage() {
       {/* ── Return status (only when a return exists for this order) ── */}
       {order._return && (
         <div className={styles.odCard}>
-          <div className={styles.odCardTitle}>Return Status</div>
+          <div className={styles.odCardTitle} role="heading" aria-level={2}>Return Status</div>
           <div className={styles.odCancelledState}>
             <div className={styles.odCancelledIcon}>
               {order._return.status === 'refunded' ? '💚'

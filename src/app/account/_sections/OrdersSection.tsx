@@ -250,7 +250,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     <ErrorBoundary section="Orders" onRetry={orders.refresh}>
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>My Orders</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>My Orders</div>
           {orders.stats && (
             <div className={styles.panelCount}>{orders.totalCount} {orders.totalCount === 1 ? 'order' : 'orders'}</div>
           )}

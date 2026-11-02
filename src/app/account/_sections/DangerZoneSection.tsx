@@ -193,7 +193,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     <ErrorBoundary section="Account Deletion">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Privacy &amp; Data</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Privacy &amp; Data</div>
         </div>
 
         {/* Data rights info */}
