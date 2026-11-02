@@ -420,6 +420,9 @@ export function useCartPage() {
   }
 
   // ── Settings + reviews fetch ───────────────────────────────────────────────
+  // False until /api/v1/cart-settings has answered (or failed): the summary waits for it so shipping / free-shipping / minimum order
+  // are never shown from placeholder defaults and then jump.
+  const [settingsSettled, setSettingsSettled] = useState(false)
   useEffect(() => {
     const ac = new AbortController()
 
@@ -430,11 +433,13 @@ export function useCartPage() {
 
         const ss = data.settings ?? {}
         setSettings(ss)
+        setSettingsSettled(true)
 
       })
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'AbortError') return
         logger.error('cart_settings_fetch_failed', { error: err instanceof Error ? err.message : String(err) })
+        setSettingsSettled(true)   // fall back to the defaults rather than show a skeleton forever; checkout re-reads live settings
       })
 
     return () => ac.abort()
@@ -947,7 +952,7 @@ export function useCartPage() {
 
     // reviews & settings
     reviews,
-    settings,
+    settings, settingsSettled,
 
     // ui state
     qtyAnim,

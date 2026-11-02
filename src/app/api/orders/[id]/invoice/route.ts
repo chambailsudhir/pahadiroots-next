@@ -89,7 +89,7 @@ export async function GET(
     // Fetch order — customer_id guard prevents IDOR
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,products(name))&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,products(name,hsn_code))&limit=1`,
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -119,10 +119,11 @@ export async function GET(
       price_at_time:          number
       product_name_snapshot:  string | null
       variant_value_snapshot: string | null
-      products?: { name?: string }
+      products?: { name?: string; hsn_code?: string | null }
     }>) || []).map(i => ({
       name:    i.product_name_snapshot || i.products?.name || 'Product',
       variant: i.variant_value_snapshot || null,
+      hsnCode: i.products?.hsn_code ?? null,
       qty:     i.quantity,
       price:   i.price_at_time,
     }))
@@ -188,6 +189,7 @@ export async function GET(
     const itemRows = inv.lines.map(i => `
       <tr>
         <td>${escHtml(i.name)}${i.variant ? ` <span class="var">(${escHtml(i.variant)})</span>` : ''}</td>
+        <td>${escHtml(i.hsnCode || '—')}</td>
         <td class="num">${i.qty}</td>
         <td class="num">${fmt(i.price)}</td>
         <td class="num">${fmt(i.lineTotal)}</td>
@@ -205,8 +207,9 @@ export async function GET(
       : ''
     const gstSummary = inv.tax > 0
       ? taxableRow + (inv.supplyType === 'intra'
-          ? `<div class="trow"><span>Includes GST (CGST ${fmt(inv.cgst)} + SGST ${fmt(inv.sgst)})</span><span>${fmt(inv.tax)}</span></div>`
-          : `<div class="trow"><span>Includes GST (IGST)</span><span>${fmt(inv.igst)}</span></div>`)
+          ? `<div class="trow"><span>CGST</span><span>${fmt(inv.cgst)}</span></div><div class="trow"><span>SGST</span><span>${fmt(inv.sgst)}</span></div>`
+          : `<div class="trow"><span>IGST</span><span>${fmt(inv.igst)}</span></div>`)
+        + `<div class="trow"><span>Total GST (included in Grand Total)</span><span>${fmt(inv.tax)}</span></div>`
       : ''
 
     const html = `<!DOCTYPE html>
@@ -267,11 +270,13 @@ export async function GET(
     <div class="logo">🌿</div>
     <div>
       <div class="bname">${escHtml(BUSINESS_INFO.name)}</div>
-      <div class="btag">trading as ${escHtml(BUSINESS_INFO.brandName)} · GSTIN ${escHtml(BUSINESS_INFO.gstin)}</div>
+      <div class="btag">trading as ${escHtml(BUSINESS_INFO.brandName)}</div>
+      <div class="btag">${escHtml(BUSINESS_INFO.address)}</div>
+      <div class="btag"><strong>GSTIN: ${escHtml(BUSINESS_INFO.gstin)}</strong></div>
     </div>
   </div>
   <div class="inv">
-    <h1>Invoice</h1>
+    <h1>Tax Invoice</h1>
     <div class="num">INV-${orderNum}</div>
     <div class="dt">${orderDate}</div>
   </div>
@@ -294,6 +299,7 @@ export async function GET(
     <h3>Order Details</h3>
     <p>
       <strong>Order #:</strong> ${orderNum}<br/>
+      <strong>Place of supply:</strong> ${escHtml(addrObj?.state || '—')} (${inv.supplyType === 'intra' ? 'Intra-state' : 'Inter-state'})<br/>
       <strong>Date:</strong> ${orderDate}<br/>
       <strong>Payment:</strong> ${paymentMethod}<br/>
       <strong>Status:</strong> <span class="badge">${orderStatus}</span>
@@ -305,8 +311,9 @@ export async function GET(
   <thead>
     <tr>
       <th>Product</th>
+      <th>HSN</th>
       <th class="num">Qty</th>
-      <th class="num">Unit Price</th>
+      <th class="num">Rate (incl. GST)</th>
       <th class="num">Amount</th>
     </tr>
   </thead>
@@ -322,6 +329,7 @@ export async function GET(
 
 <div class="footer">
   <div class="footer-note">
+    This is a computer-generated invoice and does not require a signature.<br/>
     HimVeda by Pahadi Roots · www.pahadiroots.com<br/>
     Questions? WhatsApp us at +91 98999 84895<br/>
     Thank you for supporting Himalayan farming communities 🙏

@@ -256,6 +256,7 @@ export interface CreateOrderInput {
 
 export interface OrderEmailItem {
   name:  string
+  variant?: string | null
   emoji: string
   image: string | null
   qty:   number
@@ -274,6 +275,10 @@ export interface CreatedOrder {
   shippingCharge: number
   codSurcharge:   number
   discount:       number
+  /** GST already included in the prices, and the prepaid / coin savings — for the itemised e-mail. */
+  gstIncluded?:     number
+  prepaidDiscount?: number
+  loyaltyDiscount?: number
   cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
   // Guest-safe capability token for the order-success confirmation page —
   // null when token generation failed (non-fatal) or for the idempotency
@@ -1581,8 +1586,12 @@ export async function createOrder(
       shippingCharge:  pricing.shipping,
       codSurcharge:    pricing.codSurcharge,
       discount:        pricing.discount,
+      gstIncluded:     pricing.gstTotal,
+      prepaidDiscount: pricing.prepaidDiscount,
+      loyaltyDiscount: pricing.loyaltyDiscount,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
+        variant: i.size || null,
         emoji: i.emoji ?? '🌿',
         image: i.image ?? null,
         qty:   i.qty,

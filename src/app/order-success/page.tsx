@@ -36,6 +36,11 @@ interface Order {
   cod_surcharge?: number
   discount_amount?: number
   tax?: number
+  cgst?: number
+  sgst?: number
+  igst?: number
+  loyalty_points_redeemed?: number
+  loyalty_point_value?: number
   created_at?: string
   tracking_number?: string
   courier?: string
@@ -428,8 +433,8 @@ function SuccessContent() {
 
         /* ── DELIVERY ── */
         .oc-del-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .oc-del-field label { font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 3px; }
-        .oc-del-field span  { font-size: 14px; font-weight: 600; color: var(--tx); }
+        .oc-del-field .oc-del-lbl { font-size: 11px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 3px; }
+        .oc-del-field .oc-del-val { font-size: 14px; font-weight: 600; color: var(--tx); }
 
         /* ── TRACKING ── */
         .oc-track-box { background: var(--bg2); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
@@ -570,6 +575,8 @@ function SuccessContent() {
         .invoice-print-only { display: none; }
         @media print {
           body * { visibility: hidden; }
+          /* visibility:hidden keeps the space, which printed blank pages after the invoice — take the page and the site chrome out of the layout. */
+          header, footer, nav, .ticker-wrap, .ann-bar, #pr-ai-fab, #pr-wa, .oc-hero, .oc-card, .oc-actions, .oc-error { display: none !important; }
           .invoice-print-only, .invoice-print-only * { visibility: visible; }
           .invoice-print-only {
             display: block; position: absolute; top: 0; left: 0; width: 100%;
@@ -677,7 +684,8 @@ function SuccessContent() {
             items: items.map(it => ({ name: it.name || 'Product', qty: it.qty ?? it.quantity ?? 1, price: it.price ?? it.price_at_time ?? 0 })),
             total_amount: total, subtotal: order.subtotal, coupon_discount: order.discount_amount,
             shipping_charge: order.shipping_charge, cod_surcharge: order.cod_surcharge, tax: order.tax, state: order.state,
-          })
+            cgst: order.cgst, sgst: order.sgst, igst: order.igst, loyalty_points_redeemed: order.loyalty_points_redeemed,
+          }, { loyaltyPointValue: order.loyalty_point_value })
           const trackNum = order.tracking_number || ''
           const courier  = order.courier || ''
           const trackUrl = getTrackingUrl(courier, trackNum)
@@ -754,11 +762,11 @@ function SuccessContent() {
               <div className="oc-card">
                 <div className="oc-card-title"><Icon name="pin" /> Delivery Details</div>
                 <div className="oc-del-grid">
-                  <div className="oc-del-field"><label>Name</label><span>{order.customer_name || '—'}</span></div>
-                  <div className="oc-del-field"><label>Phone</label><span>{order.customer_phone || '—'}</span></div>
-                  <div className="oc-del-field" style={{gridColumn:'1/-1'}}><label>Address</label><span>{addr || '—'}</span></div>
-                  {view === 'confirmed' && <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {DELIVERY_WINDOWS_TEXT}</span></div>}
-                  <div className="oc-del-field"><label>Payment</label><span>{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '💵 Cash on Delivery'}</span></div>
+                  <div className="oc-del-field"><div className="oc-del-lbl">Name</div><span className="oc-del-val">{order.customer_name || '—'}</span></div>
+                  <div className="oc-del-field"><div className="oc-del-lbl">Phone</div><span className="oc-del-val">{order.customer_phone || '—'}</span></div>
+                  <div className="oc-del-field" style={{gridColumn:'1/-1'}}><div className="oc-del-lbl">Address</div><span className="oc-del-val">{addr || '—'}</span></div>
+                  {view === 'confirmed' && <div className="oc-del-field"><div className="oc-del-lbl">Estimated Delivery</div><span className="oc-del-val">🗓 {DELIVERY_WINDOWS_TEXT}</span></div>}
+                  <div className="oc-del-field"><div className="oc-del-lbl">Payment</div><span className="oc-del-val">{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '💵 Cash on Delivery'}</span></div>
                 </div>
               </div>
 
@@ -821,7 +829,9 @@ function SuccessContent() {
                     cod_surcharge:   order.cod_surcharge,
                     tax:             order.tax,
                     state:           order.state,
-                  })
+                    cgst: order.cgst, sgst: order.sgst, igst: order.igst,
+                    loyalty_points_redeemed: order.loyalty_points_redeemed,
+                  }, { loyaltyPointValue: order.loyalty_point_value })
                   const supplyType = inv.supplyType
                   const rows = invoiceRows(inv)
 

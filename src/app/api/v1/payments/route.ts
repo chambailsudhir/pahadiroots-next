@@ -77,7 +77,13 @@ export async function POST(req: NextRequest) {
 
   // ── IP-level rate limit — covers both actions (distributed via Upstash KV) ──
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-  const ipLimit = await checkRateLimitKvStrict(`mw:rl:payments_ip:${ip}`, 10)
+  // verify_payment gets its own, larger bucket: Razorpay calls it only AFTER the customer has paid, so refusing it (many customers behind
+  // one CGNAT / office IP share a limit) would strand a paid order on an error page. It is still bounded, and protected by the HMAC.
+  // The action is peeked from a clone so the real body stays readable below.
+  const peekedAction = await req.clone().json().then((b: { action?: unknown }) => b?.action).catch(() => undefined)
+  const ipLimit = peekedAction === 'verify_payment'
+    ? await checkRateLimitKvStrict(`mw:rl:payments_verify_ip:${ip}`, 40)
+    : await checkRateLimitKvStrict(`mw:rl:payments_ip:${ip}`, 10)
   if (ipLimit === 'unavailable') return rateLimiterUnavailable()
   if (ipLimit === 'blocked') {
     // BUG FIX 13a: missing Retry-After header on 429.

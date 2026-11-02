@@ -1,7 +1,7 @@
 'use client'
 
 import { ga4AccountAction } from '@/lib/analytics/ga4'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatDate } from '@/lib/utils'
 import Icon from '@/components/ui/Icon'
 
@@ -35,6 +35,12 @@ interface TrackResult {
 
 export default function TrackPage() {
   const [orderNum, setOrderNum] = useState('')
+  // Links in order e-mails open /track?order=PR… — prefill the order number (the phone number is still asked for: it is the proof).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('order') || ''
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (/^[A-Za-z0-9-]{4,32}$/.test(q)) setOrderNum(q.toUpperCase())
+  }, [])
   const [phone,    setPhone]    = useState('')
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
@@ -101,7 +107,7 @@ export default function TrackPage() {
             autoCapitalize="characters"
             value={orderNum}
             onChange={e => setOrderNum(e.target.value.toUpperCase())}
-            placeholder="e.g. ORD-2026-00123"
+            placeholder="e.g. PR1A2B3C4D"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-forest-500 transition-colors font-mono"
           />
         </div>
@@ -113,9 +119,9 @@ export default function TrackPage() {
             inputMode="numeric"
             autoComplete="tel"
             value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="98765 43210"
-            maxLength={10}
+            // Accept what people paste ("+91 98765 43210", "098765-43210"): keep the digits, drop a leading 91 / 0, cap at 10.
+            onChange={e => { let d = e.target.value.replace(/\D/g, ''); if (d.length > 10) d = d.replace(/^(91|0)/, ''); setPhone(d.slice(0, 10)) }}
+            placeholder="9876543210"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-forest-500 transition-colors"
           />
         </div>
@@ -155,7 +161,7 @@ export default function TrackPage() {
               <div className="text-3xl mb-2">
                 {result.order_status === 'cancelled' ? '❌' : result.order_status === 'returned' ? '↩️' : '💰'}
               </div>
-              <div className="font-semibold text-stone-700 capitalize">{result.order_status.replace('_', ' ')}</div>
+              <div className="font-semibold text-stone-700 capitalize">{result.order_status.replace(/_/g, ' ')}</div>
             </div>
           ) : (
             /* Progress tracker */

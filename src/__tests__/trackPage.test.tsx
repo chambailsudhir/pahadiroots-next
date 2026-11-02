@@ -28,8 +28,8 @@ async function fillAndSubmit(orderNumber: string, phone: string) {
   const { default: TrackPage } = await import('@/app/track/page')
   render(React.createElement(TrackPage))
 
-  fireEvent.change(screen.getByPlaceholderText('e.g. ORD-2026-00123'), { target: { value: orderNumber } })
-  fireEvent.change(screen.getByPlaceholderText('98765 43210'),        { target: { value: phone } })
+  fireEvent.change(screen.getByPlaceholderText('e.g. PR1A2B3C4D'), { target: { value: orderNumber } })
+  fireEvent.change(screen.getByPlaceholderText('9876543210'),        { target: { value: phone } })
   fireEvent.click(screen.getByText('Track Order'))
 }
 
@@ -99,5 +99,20 @@ describe('track page — calls the real server endpoint, not Supabase directly',
 
     expect(await screen.findByText(/enter both order number and phone/i)).toBeTruthy()
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('track page — input niceties', () => {
+  it('a pasted "+91 98765 43210" becomes the 10-digit number, and ?order= prefills the order number', async () => {
+    window.history.replaceState(null, '', '/track?order=pr1a2b3c4d')
+    const { default: TrackPage } = await import('@/app/track/page')
+    const { render, screen, fireEvent, waitFor } = await import('@testing-library/react')
+    const React = await import('react')
+    render(React.createElement(TrackPage))
+    await waitFor(() => expect((screen.getByPlaceholderText('e.g. PR1A2B3C4D') as HTMLInputElement).value).toBe('PR1A2B3C4D'))
+    const phone = screen.getByPlaceholderText('9876543210') as HTMLInputElement
+    fireEvent.change(phone, { target: { value: '+91 98765 43210' } })
+    expect(phone.value).toBe('9876543210')
+    window.history.replaceState(null, '', '/')
   })
 })
