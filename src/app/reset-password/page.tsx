@@ -188,7 +188,7 @@ export default function ResetPasswordPage() {
               style={styles.input}
               disabled={phase === 'submitting'}
             />
-            <p style={styles.hint}>At least {RESET_PASSWORD_MIN_LENGTH} characters.</p>
+            <p style={styles.hint}>At least {RESET_PASSWORD_MIN_LENGTH} characters, with an uppercase letter, a number and a special character.</p>
             {error && <p style={styles.errorBox} role="alert">{error}</p>}
             <button type="submit" style={styles.button} disabled={phase === 'submitting'}>
               {phase === 'submitting' ? 'Updating…' : 'Set new password'}

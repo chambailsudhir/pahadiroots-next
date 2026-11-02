@@ -39,7 +39,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
               </div>
               <div className={styles.addrLine}>
                 <strong>{[authProfile.first_name, authProfile.last_name].filter(Boolean).join(' ')}</strong><br />
-                {[authProfile.address_line1, authProfile.city, authProfile.state, authProfile.postal_code].filter(Boolean).join(', ')}
+                {[authProfile.address_line1, authProfile.city, authProfile.state, authProfile.pincode ?? authProfile.postal_code].filter(Boolean).join(', ')}
                 {authProfile.phone && <><br /><span style={{ color: '#888' }}>{String(authProfile.phone)}</span></>}
               </div>
               <div className={styles.addrActions}>

@@ -89,19 +89,24 @@ export default function TrackPage() {
       {/* Input form */}
       <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6 space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-stone-600 mb-1">Order Number</label>
+          <label htmlFor="track-order-number" className="block text-xs font-semibold text-stone-600 mb-1">Order Number</label>
           <input
+            id="track-order-number"
             type="text"
+            autoComplete="off"
+            autoCapitalize="characters"
             value={orderNum}
             onChange={e => setOrderNum(e.target.value.toUpperCase())}
-            placeholder="e.g. PR-2024-0001"
+            placeholder="e.g. ORD-2026-00123"
             className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-forest-500 transition-colors font-mono"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-stone-600 mb-1">Mobile Number (used at checkout)</label>
+          <label htmlFor="track-phone" className="block text-xs font-semibold text-stone-600 mb-1">Mobile Number (used at checkout)</label>
           <input
+            id="track-phone"
             type="tel"
+            inputMode="numeric"
             autoComplete="tel"
             value={phone}
             onChange={e => setPhone(e.target.value)}

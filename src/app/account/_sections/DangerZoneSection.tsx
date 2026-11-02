@@ -18,6 +18,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import { useUserStore } from '@/store/userStore'
+import { clearClientPII } from '@/lib/clientLogout'
 import styles from '../styles/account.module.css'
 
 interface Props {
@@ -34,6 +35,8 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   const [open,        setOpen]        = useState(false)
   const [step,        setStep]        = useState<1 | 2>(1)
   const [typed,       setTyped]       = useState('')
+  const [password,    setPassword]    = useState('')
+  const [delError,    setDelError]    = useState('')
   const [deleting,    setDeleting]    = useState(false)
   const [downloading, setDownloading] = useState(false)
   const inputRef    = useRef<HTMLInputElement>(null)
@@ -46,6 +49,8 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     setOpen(false)
     setStep(1)
     setTyped('')
+    setPassword('')
+    setDelError('')
   }, [deleting])
 
   // ── Focus trap: intercept Tab/Shift+Tab so keyboard focus stays inside the modal
@@ -112,6 +117,8 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   function openModal() {
     setStep(1)
     setTyped('')
+    setPassword('')
+    setDelError('')
     setDeleting(false)
     setOpen(true)
     // BUG FIX: this only ever focused inputRef, but that input doesn't
@@ -130,12 +137,14 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   async function handleDelete() {
     if (typed !== 'DELETE' || deleting) return
     setDeleting(true)
+    setDelError('')
 
     try {
       const res = await fetch('/api/account/delete', {
         method:  'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ confirm: 'DELETE' }),
+        // AUDIT ACC-023: the current password is sent for re-authentication (email accounts).
+        body:    JSON.stringify({ confirm: 'DELETE', ...(password ? { password } : {}) }),
         signal:  AbortSignal.timeout(15_000),
       })
 
@@ -145,12 +154,25 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
         return
       }
 
+      // 403 = re-authentication problem (wrong/missing password, or Google sign-in too old).
+      // Show it INSIDE the dialog and keep the session — never treat it as "logged out".
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({})) as { error?: string; code?: string }
+        setDeleting(false)
+        setDelError(data.error || 'Please confirm your identity to continue.')
+        if (data.code === 'password_required' || data.code === 'reauth_failed') {
+          requestAnimationFrame(() => document.getElementById('del-password')?.focus())
+        }
+        return
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error((data as { error?: string }).error || 'Deletion failed')
       }
 
       // Clear all local auth state
+      clearClientPII()   // AUDIT ACC-040: name/phone/address caches must not outlive the account
       storeLogout()
       setOpen(false)
 
@@ -189,7 +211,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
             <li>Permanently close your login — this cannot be undone</li>
           </ul>
           <p className={styles.dangerInfoNote}>
-            Order records themselves are retained for 7 years as required by GST regulations,
+            Order records themselves are retained for the period required under GST and tax law,
             but will contain no information that identifies you personally.
           </p>
           {userEmail && (
@@ -310,6 +332,20 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
                   Type <strong>DELETE</strong> in the box below to permanently erase your account.
                 </p>
                 <div className={styles.dangerConfirmWrap}>
+                  <label htmlFor="del-password" style={{ display: 'block', fontSize: 13, fontWeight: 700, margin: '0 0 6px' }}>
+                    Your password <span style={{ fontWeight: 400, color: '#666' }}>(leave blank if you signed in with Google)</span>
+                  </label>
+                  <input
+                    id="del-password"
+                    type="password"
+                    className={styles.dangerConfirmInput}
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); setDelError('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleDelete() }}
+                    disabled={deleting}
+                    autoComplete="current-password"
+                    style={{ marginBottom: 12 }}
+                  />
                   <input
                     ref={inputRef}
                     type="text"
@@ -324,6 +360,9 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
                     aria-label='Type DELETE to confirm account deletion'
                   />
                 </div>
+                {delError && (
+                  <p role="alert" style={{ color: '#b3261e', fontSize: 14, fontWeight: 600, margin: '10px 0 0' }}>{delError}</p>
+                )}
                 <div className={styles.modalFooter}>
                   <button
                     className={styles.btnDanger}

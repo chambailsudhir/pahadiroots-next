@@ -43,6 +43,9 @@ export const ProfileSchema = z.object({
   address_line1:   z.string().nullable().optional(),
   city:            z.string().nullable().optional(),
   state:           z.string().nullable().optional(),
+  // AUDIT ACC-039: the API (and the customers table) call this `pincode`; `postal_code` is the old
+  // client-only name and is kept so cached profiles keep parsing.
+  pincode:         z.string().nullable().optional(),
   postal_code:     z.string().nullable().optional(),
   saved_addresses: z.string().nullable().optional(),
 }).catchall(z.unknown())

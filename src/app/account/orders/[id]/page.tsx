@@ -42,6 +42,12 @@ const STATUS_INDEX: Record<string, number> = {
 // "Order Status" box with no explanation of what happened.
 const CANCELLED_STATUSES = ['cancelled', 'returned', 'payment_failed']
 
+/** AUDIT ACC-038: an unpaid COD order must never say "Total Paid" (same rule as /order-success, CF3). */
+function totalLabel(o: { payment_status?: string | null; payment_method: string | null }): string {
+  if (o.payment_status === 'paid') return 'Total Paid'
+  return o.payment_method === 'cod' ? 'Total (pay on delivery)' : 'Order Total'
+}
+
 type OrderDetail = Record<string, unknown> & {
   id:               string
   order_number:     string
@@ -56,6 +62,7 @@ type OrderDetail = Record<string, unknown> & {
     updated_at:     string | null
   } | null
   payment_method:   string | null
+  payment_status?:  string | null
   total_amount:     number
   subtotal?:        number
   coupon_discount?: number
@@ -136,6 +143,19 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Invoice (AUDIT ACC-038: only reachable from the list card before) ── */}
+      {!CANCELLED_STATUSES.includes(order.order_status) && (
+        <a
+          href={`/api/orders/${order.id}/invoice`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.odTrackChip}
+          style={{ marginRight: 8 }}
+        >
+          <Icon name="package" /> Invoice
+        </a>
+      )}
 
       {/* ── Tracking chip ───────────────────────────────────── */}
       {trackUrl && (
@@ -327,7 +347,7 @@ export default function OrderDetailPage() {
               )}
               <hr className={styles.odPriceDivider} />
               <div className={styles.odPriceTotal}>
-                <span>Total Paid</span>
+                <span>{totalLabel(order)}</span>
                 <span>{formatCurrency(inv.total)}</span>
               </div>
               {order.tax != null && (

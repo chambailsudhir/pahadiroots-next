@@ -4,7 +4,7 @@ import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
+import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
@@ -84,7 +84,37 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
+// AUDIT ACC-032 — a successful order must never be reported as a failure.
+// The route used to abandon createOrder() after a flat 10 s and answer 503 "server briefly slow",
+// while the RPC kept running and COMMITTED the order a few seconds later (observed: 503 at ~32 s,
+// order row created right after). The customer saw an error for an order that exists.
+//   1. The budget is now measured from the START of the request (the pre-steps — rate limiter,
+//      session refresh, profile sync — each cost seconds when the database is slow), capped to stay
+//      inside vercel.json's maxDuration (40 s) with room to answer.
+//   2. If the budget is still exceeded, look the order up by its idempotency key before giving up.
+//      A hit is returned as a success (same JSON shape, 200); only a genuine miss is a 503.
+// Read per request so tests (and ops, via ORDER_CREATE_BUDGET_MS) can shorten it; default 34 s.
+function orderRouteBudgetMs(): number {
+  const n = Number(process.env.ORDER_CREATE_BUDGET_MS)
+  return Number.isFinite(n) && n > 0 ? n : 34_000
+}
+
+async function findCommittedOrder(idempotencyKey: unknown): Promise<{ id: number | string; order_number: string; confirmation_token: string | null } | null> {
+  if (typeof idempotencyKey !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(idempotencyKey)) return null
+  try {
+    const rows = await sbAdmin(
+      'GET',
+      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token&limit=1`,
+    )
+    const r = Array.isArray(rows) ? rows[0] : null
+    return r ? { id: r.id, order_number: r.order_number, confirmation_token: r.confirmation_token ?? null } : null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
+  const requestStartedAt = Date.now()
   // ── CSRF check ─────────────────────────────────────────────────────────────
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
@@ -107,8 +137,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Request too large' }, { status: 413 })
   }
 
+  // Remembered outside the try so the catch can look the order up if createOrder() times out (ACC-032).
+  let idempotencyKeyForRecovery: unknown = null
   try {
     const body   = await req.json()
+    idempotencyKeyForRecovery = (body as { idempotency_key?: unknown } | null)?.idempotency_key ?? null
     const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {
       // BUG FIX (observability): this branch previously returned the field
@@ -220,7 +253,10 @@ export async function POST(req: NextRequest) {
       // ── Loyalty ─────────────────────────────────────────────────────────
       loyaltyPointsRedeemed: d.loyalty_points_redeemed ?? 0,
       authenticatedCustomerId,
-    }, settings), 10_000)
+    }, settings), (() => {
+      const budget = orderRouteBudgetMs()
+      return Math.max(Math.min(8_000, budget), budget - (Date.now() - requestStartedAt))
+    })())
 
     // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
     if (!alreadyExists && d.payment_method === 'cod') {
@@ -443,6 +479,11 @@ export async function POST(req: NextRequest) {
     // AUDIT S1-005/S1-006: the order may have committed; nothing was undone. Same retry contract as
     // the route-level timeout below — the idempotency key makes the retry safe.
     if (err instanceof OrderOutcomeUnknownError) {
+      const committed = await findCommittedOrder(idempotencyKeyForRecovery)
+      if (committed) {
+        logger.warn('orders: outcome-unknown resolved — order was committed', { action: 'orders.recovered', order_id: committed.id, order_number: committed.order_number })
+        return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
+      }
       return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
     }
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
@@ -453,6 +494,16 @@ export async function POST(req: NextRequest) {
     // produces a bare, unexplained 504. Checked first so it can never be
     // misclassified by the generic message-sniffing below.
     if (err instanceof OrderCreateTimeoutError) {
+      // ACC-032: the RPC usually finishes a moment after we stop waiting. Check before reporting failure.
+      const committed = await findCommittedOrder(idempotencyKeyForRecovery)
+      if (committed) {
+        // Alert-level: loyalty award / confirmation e-mail run after createOrder() returns, and this request
+        // never got that far — ops can reconcile from this line (same gap the customer's retry would hit).
+        captureError(new Error('Order committed after route timeout — returned to customer; post-order steps (loyalty, e-mail) skipped'), {
+          action: 'orders.timeout_recovered', order_id: committed.id, order_number: committed.order_number, alert: true,
+        })
+        return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
+      }
       return NextResponse.json(
         { error: 'Our server is briefly slow right now — please try again in a few seconds.' },
         { status: 503, headers: { 'Retry-After': '5' } },

@@ -67,7 +67,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
     const { POST } = await import('@/app/api/auth/route')
 
     const res = await POST(makeRequest(
-      { action: 'reset_password', password: 'correct-horse-9' },
+      { action: 'reset_password', password: 'Correct-Horse-9!' },
       { bearer: 'RECOVERY_TOKEN_FOR_B', cookie: 'SESSION_TOKEN_OF_A' },
     ))
 
@@ -78,7 +78,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
     expect(init.method).toBe('PUT')
     // This is the bug: before the fix this header carried SESSION_TOKEN_OF_A.
     expect(init.headers.Authorization).toBe('Bearer RECOVERY_TOKEN_FOR_B')
-    expect(JSON.parse(init.body)).toEqual({ password: 'correct-horse-9' })
+    expect(JSON.parse(init.body)).toEqual({ password: 'Correct-Horse-9!' })
   })
 
   it('falls back to the session cookie only when no bearer is supplied', async () => {
@@ -86,7 +86,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
     const { POST } = await import('@/app/api/auth/route')
 
     const res = await POST(makeRequest(
-      { action: 'reset_password', password: 'correct-horse-9' },
+      { action: 'reset_password', password: 'Correct-Horse-9!' },
       { cookie: 'SESSION_TOKEN_OF_A' },
     ))
 
@@ -96,7 +96,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
 
   it('401s with no token at all, without calling Supabase', async () => {
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: 'correct-horse-9' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: 'Correct-Horse-9!' }))
     expect(res.status).toBe(401)
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -109,7 +109,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
     })
     const { POST } = await import('@/app/api/auth/route')
     const res = await POST(makeRequest(
-      { action: 'reset_password', password: 'correct-horse-9' }, { bearer: 'EXPIRED' },
+      { action: 'reset_password', password: 'Correct-Horse-9!' }, { bearer: 'EXPIRED' },
     ))
     expect(res.status).toBe(401)
     expect((await res.json()).success).toBeUndefined()
@@ -125,11 +125,20 @@ describe('POST /api/auth reset_password — password policy (AUDIT S2-001)', () 
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('accepts exactly 8 characters', async () => {
+  it('accepts exactly 8 characters when they satisfy the shared policy', async () => {
     fetchMock.mockResolvedValueOnce(supabaseOk())
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: '12345678' }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: 'Abcdef1!' }, { bearer: 'T' }))
     expect(res.status).toBe(200)
+  })
+
+  // AUDIT ACC-029: the server now enforces the same policy as sign-up and Change Password.
+  it.each(['12345678', 'abcdefgh', 'Abcdefgh1', 'abcdefg1!'])('400s for %j (meets the length floor but not the shared policy)', async (pw) => {
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(makeRequest({ action: 'reset_password', password: pw }, { bearer: 'T' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/uppercase letter, a number and a special character/)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('400s for a non-string password (e.g. an array) without calling Supabase', async () => {

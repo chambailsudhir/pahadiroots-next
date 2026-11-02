@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   getToken:       vi.fn(),
   tryRefresh:     vi.fn(),
   checkRateLimit: vi.fn(),
+  checkRateLimitShared: vi.fn(),
   checkCsrf:      vi.fn(),
 }))
 
@@ -36,6 +37,7 @@ vi.mock('@/lib/api/serverUtils', async () => {
     getToken:        mocks.getToken,
     tryRefresh:      mocks.tryRefresh,
     checkRateLimit:  mocks.checkRateLimit,
+    checkRateLimitShared: mocks.checkRateLimitShared,
     checkCsrf:       mocks.checkCsrf,
     applyNewCookies: (res: NextResponse) => res,
   }
@@ -54,7 +56,8 @@ function makeRequest() {
   return new NextRequest('https://pahadiroots.com/api/account/delete', {
     method:  'DELETE',
     headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.2.3.4', origin: 'https://pahadiroots.com' },
-    body:    JSON.stringify({ confirm: 'DELETE' }),
+    // AUDIT ACC-023: deletion now re-authenticates — email accounts must send their password.
+    body:    JSON.stringify({ confirm: 'DELETE', password: 'Correct-Horse-9!' }),
   })
 }
 
@@ -64,10 +67,16 @@ beforeEach(() => {
   mocks.checkRateLimit.mockReturnValue(true)
   mocks.getToken.mockReturnValue('jwt')
   mocks.tryRefresh.mockResolvedValue(null)
-  mocks.sbAuth.mockResolvedValue({ id: 'auth-uuid', email: 'asha@example.com' })
+  mocks.checkRateLimitShared.mockResolvedValue(true)
+  // /user → an email+password account; /token (password re-verification) → success
+  mocks.sbAuth.mockImplementation(async (path: string) =>
+    path.startsWith('/token')
+      ? { access_token: 'x' }
+      : { id: 'auth-uuid', email: 'asha@example.com', app_metadata: { provider: 'email', providers: ['email'] } })
   // customers lookup → one row; every other step → resolved
   mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
     if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [{ id: 42 }]
+    if (_m === 'PATCH' && path.startsWith('/rest/v1/customers?id=')) return [{ id: 42, auth_user_id: null }]
     return []
   })
   // deleteAuthUser (direct fetch to the admin API) succeeds

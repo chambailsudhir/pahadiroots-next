@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/uiStore'
 import { useUserStore } from '@/store/userStore'
 import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
 import Icon from '@/components/ui/Icon'
+import { validate as validators } from '@/lib/account/validation'
 
 type AuthTab = 'email' | 'signup'
 
@@ -35,6 +36,12 @@ async function genChallenge(v: string): Promise<string> {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// Show/hide-password control (AUDIT ACC-029): a real <button> with aria-pressed, ≥24px tall target.
+const TOGGLE_STYLE: React.CSSProperties = {
+  display: 'inline-block', marginTop: 6, padding: '4px 0', minHeight: 24, background: 'none', border: 'none',
+  color: '#2d6a4f', fontSize: 12, fontWeight: 700, textDecoration: 'underline', cursor: 'pointer',
+}
+
 export default function AuthModal() {
   const { isAuthOpen, closeAuth } = useUIStore()
   const setUser = useUserStore(s => s.setUser)
@@ -42,6 +49,7 @@ export default function AuthModal() {
   const [tab,     setTab]     = useState<AuthTab>('email')
   const [email,   setEmail]   = useState('')
   const [pass,    setPass]    = useState('')
+  const [showPass, setShowPass] = useState(false)
   const [fname,   setFname]   = useState('')
   const [lname,   setLname]   = useState('')
   const [phone,   setPhone]   = useState('')
@@ -119,7 +127,6 @@ export default function AuthModal() {
     if (!em)         { setError('Please enter your email address'); return }
     if (!isValidEmail(em)) { setError('Please enter a valid email address (e.g. you@example.com)'); return }
     if (!pass)       { setError('Please enter your password'); return }
-    if (pass.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
       const data = await callAuth('email_login', { email: em, password: pass })
@@ -168,7 +175,8 @@ export default function AuthModal() {
     if (!em)              { setError('Please enter your email address'); return }
     if (!isValidEmail(em)) { setError('Please enter a valid email (e.g. you@example.com)'); return }
     if (!pass)            { setError('Please enter a password'); return }
-    if (pass.length < 6)  { setError('Password must be at least 6 characters'); return }
+    // AUDIT ACC-029: same rules as Change Password and the server (8+ chars, upper-case, number, special).
+    if (!validators.password.isValid(pass)) { setError('Password must be at least 8 characters with an uppercase letter, a number and a special character'); return }
     if (phone && !isValidPhone(phone)) { setError('Enter a valid 10-digit Indian mobile number (starts with 6-9)'); return }
     setLoading(true); setError(''); setSuccess('')
     try {
@@ -239,21 +247,21 @@ export default function AuthModal() {
             <button className="am-back" onClick={() => { setShowFP(false); setError(''); setFPSent(false) }}>← Back to Login</button>
             <h3 className="am-sec-title">Reset Password</h3>
             {fpSent
-              ? <div className="am-success">✅ Reset link sent! Check your email inbox.</div>
+              ? <div className="am-success" role="status">✅ Reset link sent! Check your email inbox.</div>
               : <form onSubmit={handleFP}>
                   <div className="am-field">
                     <label className="am-lbl" htmlFor="am-fp-email">Email Address</label>
                     <input id="am-fp-email" className="am-inp" type="email" value={fpEmail} onChange={e => setFPEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
                   </div>
-                  {error && <div className="am-err">{error}</div>}
+                  {error && <div className="am-err" role="alert">{error}</div>}
                   <button className="am-submit" disabled={loading}>{loading ? 'Sending…' : 'Send Reset Link'}</button>
                 </form>}
           </div>
         ) : (
           <>
-            <div className="am-tabs">
-              <button className={`am-tab${tab === 'email' ? ' active' : ''}`} onClick={() => { setTab('email'); setError('') }}>✉️ Email</button>
-              <button className={`am-tab${tab === 'signup' ? ' active' : ''}`} onClick={() => { setTab('signup'); setError('') }}>Sign Up</button>
+            <div className="am-tabs" role="tablist" aria-label="Sign in or create an account">
+              <button role="tab" aria-selected={tab === 'email'} className={`am-tab${tab === 'email' ? ' active' : ''}`} onClick={() => { setTab('email'); setError('') }}>✉️ Email</button>
+              <button role="tab" aria-selected={tab === 'signup'} className={`am-tab${tab === 'signup' ? ' active' : ''}`} onClick={() => { setTab('signup'); setError('') }}>Sign Up</button>
             </div>
 
             <div className="am-body">
@@ -279,17 +287,18 @@ export default function AuthModal() {
                     </div>
                     <div className="am-field" style={{ position: 'relative' }}>
                       <label className="am-lbl" htmlFor="am-login-pass">Password</label>
-                      <input id="am-login-pass" className={`am-inp${fieldErr.pass?' am-inp-err':''}`} type="password" value={pass} onChange={e => { setPass(e.target.value); setFieldErr(f=>({...f,pass:''})) }} placeholder="Your password" autoComplete="current-password" />
+                      <input id="am-login-pass" className={`am-inp${fieldErr.pass?' am-inp-err':''}`} type={showPass ? 'text' : 'password'} value={pass} onChange={e => { setPass(e.target.value); setFieldErr(f=>({...f,pass:''})) }} placeholder="Your password" autoComplete="current-password" />
                       <button type="button" className="am-fp-link" onClick={() => { setShowFP(true); setError(''); setFPEmail(email) }}>Forgot Password?</button>
+                      <button type="button" onClick={() => setShowPass(v => !v)} aria-pressed={showPass} style={TOGGLE_STYLE}>{showPass ? 'Hide password' : 'Show password'}</button>
                     </div>
-                    {error   && <div className="am-err">{error}</div>}
-                    {success && <div className="am-success">{success}</div>}
+                    {error   && <div className="am-err" role="alert">{error}</div>}
+                    {success && <div className="am-success" role="status">{success}</div>}
                     <button className="am-submit" disabled={loading}>{loading ? 'Logging in…' : 'Login'}</button>
                     <p className="am-switch">Don&apos;t have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('signup'); setError('') }}>Sign Up</button></p>
                   </form>
                 : <form onSubmit={handleSignup}>
                     <div className="am-greeting">Create Account 🌿</div>
-                    <div className="am-greeting-sub">Join 10K+ Himalayan product lovers</div>
+                    <div className="am-greeting-sub">Join the Pahadi Roots family</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                       <div className="am-field">
                         <label className="am-lbl" htmlFor="am-su-fname">First Name *</label>
@@ -314,11 +323,20 @@ export default function AuthModal() {
                     </div>
                     <div className="am-field">
                       <label className="am-lbl" htmlFor="am-su-pass">Password *</label>
-                      <input id="am-su-pass" className="am-inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Minimum 6 characters" autoComplete="new-password" />
+                      <input id="am-su-pass" className="am-inp" type={showPass ? 'text' : 'password'} value={pass} onChange={e => setPass(e.target.value)} placeholder="8+ chars, uppercase, number, symbol" autoComplete="new-password" aria-describedby="am-su-pass-hint" />
+                      <button type="button" onClick={() => setShowPass(v => !v)} aria-pressed={showPass} style={TOGGLE_STYLE}>{showPass ? 'Hide password' : 'Show password'}</button>
+                      <span id="am-su-pass-hint" style={{ display: 'block', fontSize: 12, color: '#666', marginTop: 2 }}>At least 8 characters with an uppercase letter, a number and a special character.</span>
                     </div>
-                    {error   && <div className="am-err">{error}</div>}
-                    {success && <div className="am-success">{success}</div>}
+                    {error   && <div className="am-err" role="alert">{error}</div>}
+                    {success && <div className="am-success" role="status">{success}</div>}
                     <button className="am-submit" disabled={loading}>{loading ? 'Creating…' : 'Create Account'}</button>
+                    {/* AUDIT ACC-027: notice at the point of collection (DPDP). Marketing e-mail stays opt-in in Account → Notifications. */}
+                    <p style={{ fontSize: 12, color: '#666', textAlign: 'center', margin: '10px 0 0', lineHeight: 1.5 }}>
+                      By creating an account you agree to our{' '}
+                      <Link href="/policies/terms" onClick={closeAuth} style={{ textDecoration: 'underline' }}>Terms</Link> and{' '}
+                      <Link href="/policies/privacy" onClick={closeAuth} style={{ textDecoration: 'underline' }}>Privacy Policy</Link>.
+                      We only send promotional e-mails if you opt in.
+                    </p>
                     <p className="am-switch">Already have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('email'); setError('') }}>Login</button></p>
                   </form>}
 

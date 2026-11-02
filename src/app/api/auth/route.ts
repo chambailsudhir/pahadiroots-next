@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
+import { validate as validators } from '@/lib/account/validation'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -322,7 +323,11 @@ export async function POST(req: NextRequest) {
     const { email, password, full_name, name } = body as Record<string, string>
     const resolvedName = full_name || name || ''
     if (!email || !password) return err(400, 'Email and password required')
-    if (password.length < 6)  return err(400, 'Password must be at least 6 characters')
+    // AUDIT ACC-029: one password policy for sign-up AND change-password (was 6 chars here vs
+    // 8 + upper + number + special in the account UI; the server only ever checked length).
+    if (!validators.password.isValid(password)) {
+      return err(400, 'Password must be at least 8 characters and include an uppercase letter, a number and a special character')
+    }
     try {
       const data = await sbAuth('/signup', { email, password, data: { full_name: resolvedName } })
       const user = data.user || data
@@ -344,6 +349,18 @@ export async function POST(req: NextRequest) {
   if (action === 'email_login' || action === 'login_email') {
     const { email, password } = body as { email?: string; password?: string }
     if (!email || !password) return err(400, 'Email and password required')
+    // AUDIT ACC-034 (residual): the limiter above is per-IP, so a botnet could still hammer ONE
+    // account from many addresses. Add a per-account cap (same pattern forgot_password already uses).
+    // Generic wording — identical for real and non-existent accounts.
+    {
+      const target = String(email).trim().toLowerCase().slice(0, 254)
+      if (target && !await rateLimit(`email_login_acct:${target}`, 10, 15 * 60_000)) {
+        return NextResponse.json(
+          { error: 'Too many attempts. Please wait a few minutes before trying again.' },
+          { status: 429, headers: { 'Retry-After': '900' } },
+        )
+      }
+    }
     try {
       const data = await sbAuth('/token?grant_type=password', { email: email as string, password: password as string })
       const user = data.user || data
@@ -517,6 +534,10 @@ export async function POST(req: NextRequest) {
       return err(400, `Password must be at least ${RESET_PASSWORD_MIN_LENGTH} characters`)
     }
     if (password.length > 128) return err(400, 'Password is too long')
+    // AUDIT ACC-029: same policy as sign-up / change-password.
+    if (!validators.password.isValid(password)) {
+      return err(400, 'Password must be at least 8 characters and include an uppercase letter, a number and a special character')
+    }
     try {
       // BUG FIX: no timeout — hung until Vercel's 15 s limit on slow Supabase.
       const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -543,7 +564,9 @@ export async function POST(req: NextRequest) {
 
     if (!token)            return err(401, 'Not logged in')
     if (!current_password) return err(400, 'Current password is required')
-    if (!new_password || (new_password as string).length < 6) return err(400, 'New password must be at least 6 characters')
+    if (!new_password || !validators.password.isValid(new_password as string)) {
+      return err(400, 'New password must be at least 8 characters and include an uppercase letter, a number and a special character')
+    }
     if (current_password === new_password) return err(400, 'New password must be different from current password')
 
     try {
@@ -559,8 +582,11 @@ export async function POST(req: NextRequest) {
           password: current_password as string,
         })
       } catch {
-        // Intentionally vague to avoid leaking whether account exists
-        return err(401, 'Current password is incorrect')
+        // AUDIT ACC-036: this used to be a 401. The account UI (and every other client of this
+        // API) treats 401 as "session expired" and signs the user out — so typing a wrong
+        // CURRENT password logged the customer out of the page. The session is fine; the input
+        // is wrong → 400 with a stable machine-readable code.
+        return NextResponse.json({ error: 'Current password is incorrect', code: 'wrong_current_password' }, { status: 400 })
       }
 
       // Step 3: update password via admin API (bypasses email confirmation)

@@ -86,6 +86,9 @@ function callOrders() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // AUDIT ACC-032: the route budget is now measured from request start (default 34 s). Keep this
+  // test about the *behaviour* (fast, specific 503 when createOrder hangs) and short in wall-clock.
+  vi.stubEnv('ORDER_CREATE_BUDGET_MS', '1500')
 })
 
 // Verification pass (Oct 2026): this test deliberately waits out the route's 10 s guard, so under a loaded

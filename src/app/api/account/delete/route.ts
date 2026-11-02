@@ -7,7 +7,7 @@
 //   orders         → customer_id (bigint FK), shipping_address (jsonb)
 //                    NO customer_name / customer_phone / customer_email columns
 //   customers      → first_name, last_name, phone (now nullable), email,
-//                    address_line1/2, city, state, postal_code,
+//                    address_line1/2, city, state, pincode,
 //                    saved_addresses (text), auth_user_id, is_deleted, deleted_at
 //   saved_addresses→ separate table, customer_id (bigint)
 //   event_logs     → entity_id is TEXT (not uuid)
@@ -30,6 +30,7 @@ import {
   sbAuth, sbAdmin,
   getToken, tryRefresh,
   checkRateLimit,
+  checkRateLimitShared,
   checkCsrf,
   applyNewCookies,
 } from '@/lib/api/serverUtils'
@@ -55,7 +56,7 @@ async function sendDeletionConfirmation(email: string): Promise<void> {
         from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
         to:      [email],
         subject: 'Your HimVeda by Pahadi Roots account has been deleted',
-        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account and all associated personal data have been permanently deleted, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>.</p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px"><li>Your name, phone, email and address have been erased</li><li>Saved delivery addresses have been removed</li><li>Order records are anonymised and retained for 7 years (GST requirement)</li></ul><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account and all associated personal data have been permanently deleted, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>.</p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px"><li>Your name, phone, email and address have been erased</li><li>Saved delivery addresses have been removed</li><li>Order records are anonymised and retained for the period required under GST and tax law</li></ul><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
       }),
     })
   } catch (e) {
@@ -113,7 +114,7 @@ export async function DELETE(req: NextRequest) {
   if (refreshed) token = refreshed.token
 
   // ── Require explicit confirmation in body ─────────────────────
-  let body: { confirm?: string } = {}
+  let body: { confirm?: string; password?: string } = {}
   try { body = await req.json() } catch { return fail(400, 'Invalid JSON') }
   if (body.confirm !== 'DELETE') {
     return fail(400, 'Confirmation required — send { confirm: "DELETE" }')
@@ -123,11 +124,47 @@ export async function DELETE(req: NextRequest) {
     const user   = await sbAuth('/user', null, token!)
     const userId: string = user.id   // Supabase auth UUID
 
+    // ── Re-authentication (AUDIT ACC-023) ─────────────────────────
+    // Erasure is irreversible, and a stolen/shared session must not be enough to trigger it.
+    //   • accounts with a password  → the current password must be supplied and verified
+    //   • Google-only accounts      → no password exists, so require a RECENT sign-in instead
+    // Every failure is a 403 with a stable `code` — never 401, which clients treat as
+    // "session expired" and answer by signing the user out (see ACC-036).
+    const appMeta = (user.app_metadata ?? {}) as { provider?: string; providers?: string[] }
+    const providers: string[] = Array.isArray(appMeta.providers) ? appMeta.providers : (appMeta.provider ? [appMeta.provider] : [])
+    const hasPassword = providers.includes('email') && typeof user.email === 'string' && user.email.length > 0
+
+    if (hasPassword) {
+      if (typeof body.password !== 'string' || body.password.length === 0) {
+        return NextResponse.json({ error: 'Please enter your password to confirm deletion.', code: 'password_required' }, { status: 403 })
+      }
+      // Throttle password guesses made through this endpoint (per account, shared across instances).
+      if (!await checkRateLimitShared(`account_delete_pw:${userId}`, 5, 15 * 60_000)) {
+        return fail(429, 'Too many attempts — please wait a few minutes.', { 'Retry-After': '900' })
+      }
+      try {
+        await sbAuth('/token?grant_type=password', { email: user.email, password: body.password })
+      } catch {
+        return NextResponse.json({ error: 'That password is incorrect.', code: 'reauth_failed' }, { status: 403 })
+      }
+    } else {
+      const lastSignIn = Date.parse(String(user.last_sign_in_at ?? ''))
+      const FRESH_MS   = 15 * 60_000
+      if (!Number.isFinite(lastSignIn) || Date.now() - lastSignIn > FRESH_MS) {
+        return NextResponse.json({
+          error: 'For your security, please sign out, sign in again with Google, and retry within 15 minutes.',
+          code:  'reauth_required',
+        }, { status: 403 })
+      }
+    }
+
     // ── Step 1: Resolve customers.id (bigint) from auth_user_id ──
+    // A failed LOOKUP must abort: treating it as "no customer row" would skip anonymisation and
+    // still delete the login — the exact failure mode that left PII behind before.
     const customerRows = await sbAdmin(
       'GET',
       `/rest/v1/customers?auth_user_id=eq.${userId}&select=id&limit=1`,
-    ).catch(() => null)
+    )
 
     // customers.id is bigint — cast to string for URL params
     const customerId: string | null = customerRows?.[0]?.id != null
@@ -135,41 +172,46 @@ export async function DELETE(req: NextRequest) {
       : null
 
     if (customerId) {
+      // AUDIT ACC-033 — ROOT CAUSE of "Account deletion failed (500)":
+      // every write below used to end in `.catch(() => null)`, and the anonymising PATCH sent a
+      // column that does not exist (`postal_code` — the real column is `pincode`). PostgREST
+      // rejected the whole update (PGRST204), the swallowed error hid it, `customers.auth_user_id`
+      // stayed set, and the later auth-user delete died on FK customers_auth_user_id_fkey (23503).
+      // Steps 2–3 are therefore FATAL now: if PII could not be erased we stop BEFORE the
+      // irreversible auth deletion and the customer can simply retry.
+
       // ── Step 2: Null shipping_address on orders ─────────────────
-      // orders has NO customer_name/phone/email columns.
-      // shipping_address (JSONB) is the only standalone PII snapshot
-      // on the orders table — everything else comes via the FK join
-      // to customers, which we anonymise in Step 3.
+      // orders has NO customer_name/phone/email columns; shipping_address (JSONB — name, address
+      // and, since ACC-035, the delivery phone) is the per-order PII snapshot.
       await sbAdmin(
         'PATCH',
         `/rest/v1/orders?customer_id=eq.${customerId}`,
         { shipping_address: null },
-        'return=representation',
-      ).catch(() => null)   // non-fatal: customer may have no orders
+        'return=minimal',
+      )
 
       // ── Step 3: Anonymise customers row ──────────────────────────
-      // Keep the row so order FK (customer_id) stays valid.
-      // Strip every personally identifiable field.
-      // phone was NOT NULL — migration v3 dropped that constraint.
-      await sbAdmin(
+      // Keep the row so order FK (customer_id) stays valid; strip every personal field.
+      const anonymised = await sbAdmin(
         'PATCH',
         `/rest/v1/customers?id=eq.${customerId}`,
         {
-          auth_user_id:    null,          // unlink from Supabase Auth
+          auth_user_id:    null,          // unlink from Supabase Auth (releases the FK)
           first_name:      'Deleted',
           last_name:       'User',
-          phone:           null,          // nullable after migration v3
+          phone:           null,
           email:           null,
           address_line1:   null,
           address_line2:   null,
           city:            null,
           state:           null,
-          postal_code:     null,
-          saved_addresses: '[]',          // clear the JSON blob column
+          pincode:         null,          // was `postal_code` — no such column (ACC-033)
+          saved_addresses: '[]',          // legacy JSON blob column
+          wishlist_items:  null,
+          gstin:           null,
           notes:           null,
-          is_deleted:      true,          // column already existed
-          deleted_at:      new Date().toISOString(),   // column already existed
-          // Reset notification prefs so no ghost preferences remain
+          is_deleted:      true,
+          deleted_at:      new Date().toISOString(),
           notif_email_orders:    false,
           notif_whatsapp_orders: false,
           notif_sms_orders:      false,
@@ -177,17 +219,22 @@ export async function DELETE(req: NextRequest) {
           updated_at:      new Date().toISOString(),
         },
         'return=representation',
-      ).catch(() => null)
+      )
+      if (!Array.isArray(anonymised) || anonymised.length !== 1 || anonymised[0]?.auth_user_id != null) {
+        throw new Error('customer anonymisation did not apply (row not updated / still linked to auth user)')
+      }
 
-      // ── Step 4: Delete saved_addresses table rows ─────────────────
-      // Separate table from the customers.saved_addresses text column —
-      // both must be cleared.
-      await sbAdmin(
-        'DELETE',
-        `/rest/v1/saved_addresses?customer_id=eq.${customerId}`,
-        null,
-        'return=representation',
-      ).catch(() => null)
+      // ── Step 4: Delete personal rows keyed by customer ───────────
+      // saved_addresses (table), wishlist and abandoned carts (name/email/phone snapshots).
+      // Loyalty/coupon/order rows are financial records and stay (they hold no direct PII).
+      for (const table of ['saved_addresses', 'wishlist', 'abandoned_carts']) {
+        await sbAdmin(
+          'DELETE',
+          `/rest/v1/${table}?customer_id=eq.${customerId}`,
+          null,
+          'return=minimal',
+        )
+      }
     }
 
     // ── Step 5: DPDP audit log ────────────────────────────────────
