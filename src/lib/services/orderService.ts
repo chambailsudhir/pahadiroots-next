@@ -159,6 +159,8 @@ import { isAmbiguousLine, buildOwnerMap, resolveLine, type LineKind } from '@/li
 import { calcPriceSummary } from './pricingService'
 import { assertPaymentMethodAvailable } from '@/lib/siteSettingsHelpers'
 import { checkServiceability } from '@/lib/serviceability'
+import { countPriorCouponUse, couponReuseProblem } from '@/lib/couponHistory'
+import { sameDeliveryAddress } from '@/lib/addressMatch'
 import { claimCouponUse, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
 
 // ── Module-level Supabase REST helpers ───────────────────────
@@ -888,16 +890,30 @@ export async function createOrder(
       )
       if (prior) throw new Error('This coupon is valid on your first order only')
     }
-    // Guest per-customer limit (B1-16: claim_coupon_use skips user_limit when p_customer_id is NULL).
-    // Read-only pre-check keyed on phone+email; the race-free check stays inside the RPC for
-    // signed-in customers. OWNER DECISION (DB batch): a phone-aware claim_coupon_use would make this
-    // atomic for guests too.
-    if (coupon.user_limit != null && input.authenticatedCustomerId == null && historyIds.length > 0) {
-      const used: unknown[] = await sbGet(
-        'coupon_usage',
-        `coupon_id=eq.${Number(coupon.id)}&customer_id=in.(${historyIds.join(',')})&select=id&limit=${Number(coupon.user_limit) + 1}`,
+    // …and a household that already ordered counts too: an earlier non-cancelled order to the same address (any customer) is not a first order.
+    if (coupon.first_order_only && /^\d{6}$/.test(String(input.pincode ?? ''))) {
+      const sameAreaOrders: Array<{ shipping_address?: { pincode?: string; address_line1?: string } | null }> = await sbGet(
+        'orders',
+        `shipping_address->>pincode=eq.${encodeURIComponent(String(input.pincode))}&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=shipping_address&limit=200`,
       )
-      if ((used?.length ?? 0) >= Number(coupon.user_limit)) throw new Error('You have already used this coupon')
+      const line = [input.flat, input.area].filter(Boolean).join(', ')
+      if ((sameAreaOrders ?? []).some(o => sameDeliveryAddress(
+        { pincode: input.pincode, line }, { pincode: o.shipping_address?.pincode, line: o.shipping_address?.address_line1 },
+      ))) throw new Error('This coupon is valid on your first order only')
+    }
+    // NOV 2026 — "one person / one address, one time only". The old guest pre-check looked for coupon_usage rows by customer_id, but a
+    // guest's use is recorded with customer_id NULL (S1-002), so it could never find an earlier guest use, and the delivery address was
+    // never compared. History is now rebuilt from the ORDER behind each use (works for guests) and matched on the PERSON (verified
+    // account + phone/e-mail matches) OR the ADDRESS (same PIN + same-looking address). The race-free per-account check still runs
+    // inside claim_coupon_use below; this read is the guard for guests and for the address rule. Fails CLOSED if history can't be read.
+    if (coupon.user_limit != null) {
+      const prior = await countPriorCouponUse(db as never, coupon.id, {
+        customerIds: historyIds,
+        pincode:     input.pincode,
+        addressLine: [input.flat, input.area].filter(Boolean).join(', '),
+      })
+      const reuse = couponReuseProblem(prior, Number(coupon.user_limit))
+      if (reuse) throw new Error(reuse)
     }
 
     // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a

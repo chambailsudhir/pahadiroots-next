@@ -30,3 +30,19 @@ Public sources only (no access to Amazon / Myntra / BigBasket's own systems), so
 * **New:** the invoice now prints the **Taxable value (after discounts)** line (`computeOrderInvoice().taxableValue`: subtotal − coupon − prepaid − tax), on the order page, the account order page and the printable invoice. It is not stated when coins were redeemed but their value is unknown.
 * Orders placed before the 2 Nov change had GST computed on the pre-coupon value; their stored tax is shown as-is (never re-derived), so for those few coupon orders the taxable line is "payable goods − stored tax".
 * Shipping (free today) and the COD fee are not part of this taxable line. Your CA should still confirm the above before the next GST return.
+
+## One-time coupons: one person / one address, one time only (reported by the owner, 2 Nov)
+**Symptom:** the cart showed `WELCOME50 — saving ₹50` for a customer who had already used it.
+**Findings**
+1. The cart page's coupon check receives only the cart total, so it cannot know who is shopping; the "already used" rule only ran later.
+2. **A guest could re-use a one-time coupon indefinitely.** A guest's use is stored in `coupon_usage` with `customer_id` NULL (a typed phone number is not proof of identity — audit S1-002), and the guest check looked for rows *by customer_id*, so it could never find an earlier guest use. Only signed-in accounts were really limited.
+3. The **delivery address** was never compared at all.
+(`WELCOME50` is `user_limit = 1`; its single recorded use is a cancelled COD order from Sep. The old `MYPAHADI` repeats are all from 6 Mar, before the per-customer limit existed.)
+
+**Fix** (`lib/couponHistory.ts`, `lib/addressMatch.ts`)
+* A coupon with a per-customer limit counts as used when an earlier use belongs to the **same person** (verified account, or any customer row sharing the phone/e-mail) **or** the **same address** (same PIN code + an address line that reads as the same place). History is rebuilt from the **order** behind each use, so it works for guests.
+* `createOrder` (authoritative) refuses with "You have already used this coupon" / "This coupon has already been used for this delivery address"; it **fails closed** if the history cannot be read. `first_order_only` coupons also refuse a household that already ordered. The atomic per-account check in `claim_coupon_use` is unchanged.
+* The coupon pre-check (`/api/v1/coupons`) now identifies the signed-in customer from the session (read-only), so the **cart page refuses it up front for logged-in customers**. For a guest nothing is known on the cart, so checkout re-checks as soon as a valid mobile and address are entered (debounced), and the cart banner says "One-time offer per customer and delivery address — confirmed at checkout." A rate limit or server error no longer strips a valid coupon.
+* Address matching tolerates re-typing ("12 Main Rd" = "Flat No. 12, Main Road") but not a different house/flat number, so neighbours are not blocked; it is a deterrent, not an identity check.
+
+**Known limits:** someone can still use a genuinely different delivery address *and* a different phone/e-mail; a guest race (two simultaneous checkouts) is not atomic (the per-account RPC is). A DB-level fix (record guest identity in `claim_coupon_use`) would close the race — owner decision.
