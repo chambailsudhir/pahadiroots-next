@@ -4,13 +4,13 @@
 
 | Status | Count |
 |---|---|
-| Fixed | 69 |
+| Fixed | 71 |
 | Verified OK | 1 |
 | Decision | 5 |
-| Mitigated | 2 |
+| Mitigated | 3 |
 | Open - owner action | 2 |
-| Open - by design | 1 |
-| Open - not fixed | 2 |
+| Open - by design | 0 |
+| Open - not fixed | 0 |
 | **Total** | **82** |
 
 ## Open items
@@ -27,7 +27,7 @@
 |---|---|---|---|---|---|---|
 | HOME-001 | P1 | Trust | Trust band hidden; no link to lab reports | Fixed | Trust items un-hidden in settings; lab-reports link in footer and "Why" section | PR #18 |
 | HOME-002 | P1 | Lead capture | Newsletter / lead-capture section did nothing | Decision | Owner decision: no newsletter for now. Section, popup, signup endpoint and double opt-in removed (recoverable from git history) | PR #19, #21 |
-| HOME-003 | P1 | Performance | Mobile Core Web Vitals (CLS 0.25, TBT 1,340 ms, LCP 5.1 s in the first audit) | Open - not fixed | CLS now 0; blocking time ~150-240 ms (was 396); score 92. Lighthouse LCP still ~2.9-3.0 s vs 2.5 s target (real-device test ~2.5 s). Only remaining lever is deferring below-the-fold HTML, rejected for SEO risk. Real-user Web Vitals now reported to GA4 | PR #22, #23, #24, #44 |
+| HOME-003 | P1 | Performance | Mobile Core Web Vitals (CLS 0.25, TBT 1,340 ms, LCP 5.1 s in the first audit) | Fixed | CLS 0; blocking time ~260-350 ms (was 1,340); score 87-92. Lighthouse mobile LCP median 2.43 s (range 2.43-2.88 s) after: hidden hero slides load after first paint, hero image quality 60, Why artwork lazy/low priority, italic font no longer preloaded. Real-user Web Vitals reported to GA4 | PR #22, #23, #24, #44, #63, #64, #65 |
 | HOME-004 | P1 | Hero | Pause button overlapped the main button on phones/tablets | Fixed | Controls repositioned; verified at 320-768 px | PR #18 |
 | HOME-005 | P1 | Header | Header wider than the screen at 320-368 px (sideways scroll) | Fixed | One header definition, hidden icons on small screens; 0 px overflow at 320-768 | PR #18 |
 | HOME-006 | P2 | Hero | Desktop hero button dark green on dark photo | Fixed | Gold button with dark text | PR #36 |
@@ -68,9 +68,9 @@
 | C-7 | P2 | Security | Maintenance mode fails open / exempts API | Verified OK | Order and payment routes re-check store_open (verified in code); page gate fail-open is deliberate for availability | - |
 | C-8 | P2 | Chat widget | Closed chat focusable, no dialog role, low contrast | Fixed | visibility hidden when closed, role=dialog, Esc, labels | PR #18 |
 | C-9 | P2 | Chat widget | Placeholder WhatsApp number; z-index; no timeout/cap | Fixed | No placeholder; below cookie banner; 30 s timeout, 1000-char cap | PR #18, #36 |
-| C-10 | P2 | Security | Chat API: forgeable origin, shared daily cap, full upstream payload | Open - not fixed | Done: session token, Sec-Fetch-Site check, per-IP + global caps, text-only response, narrower scope. Not done: a real CAPTCHA (Turnstile) - needs a Cloudflare account/keys | PR #28, #36 |
+| C-10 | P2 | Security | Chat API: forgeable origin, shared daily cap, full upstream payload | Fixed | Session token + Sec-Fetch-Site check + per-IP and global caps + text-only response, and now a bot challenge: proof of work bound to the token (18 bits, solved in the background by the widget). Cloudflare Turnstile is wired in as the alternative: set TURNSTILE_SECRET_KEY and NEXT_PUBLIC_TURNSTILE_SITE_KEY to switch | PR #28, #36, #63 |
 | C-11 | P2 | Security | In-memory rate limits; unbounded analytics; subscribe w/o double opt-in; cart overwrite | Fixed | Shared KV limiter, analytics input caps, cart drafts need a real session id and never reopen a converted cart (subscribe removed with newsletter) | PR #20, #38 |
-| C-12 | P2 | Security | CSP allowed unsafe-eval/unsafe-inline on every route | Open - by design | unsafe-eval limited to checkout. Strict nonce policy (no unsafe-inline) now on /checkout and /account. Other pages keep unsafe-inline on purpose: nonces would make every page dynamic (slower, depends on the database) | PR #20, #45 |
+| C-12 | P2 | Security | CSP allowed unsafe-eval/unsafe-inline on every route | Mitigated | unsafe-eval only on /checkout (Razorpay). Nonce-based policy with no unsafe-inline on every route that is rendered per request: /checkout, /account, /products, /collections/*, /blog, /lab-reports, /new-arrivals, /regions/*. ISR-cached pages (homepage, product detail, blog posts, static pages) keep unsafe-inline on purpose: a nonce would make them dynamic (slower, and every view would hit the Free-plan database) | PR #20, #45, #63 |
 | C-13 | P2 | Accessibility | Carousel not pausable by keyboard | Fixed | Pauses on focus | PR #18 |
 | C-14 | P2 | Images | Cached tile images could stay invisible | Fixed | Ref + complete check | PR #18 |
 | P3-01 | P3 | Homepage | Metadata read non-strict; buildStates swallows errors | Fixed | Strict read; region section fails soft by design | PR #18 |
