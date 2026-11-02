@@ -39,6 +39,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
 }))
 
+import { useUserStore } from '@/store/userStore'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
 
 const settings = {} as SiteSettings
@@ -97,16 +98,29 @@ describe('MobileBottomNav — route suppression', () => {
     expect(container.querySelector('.mbn')).not.toBeNull()
   })
 
-  it('does NOT render on /account (has its own .mobTabs bar)', () => {
+  it('does NOT render on /account for a SIGNED-IN customer (has its own .mobTabs bar)', () => {
+    useUserStore.setState({ user: { id: 'u1', email: 'a@b.com' } as never })
     mockPathname = '/account'
     const { container } = renderNav()
     expect(container.querySelector('.mbn')).toBeNull()
+    useUserStore.setState({ user: null })
   })
 
-  it('does NOT render on nested /account routes', () => {
+  it('does NOT render on nested /account routes for a signed-in customer', () => {
+    useUserStore.setState({ user: { id: 'u1', email: 'a@b.com' } as never })
     mockPathname = '/account/orders'
     const { container } = renderNav()
     expect(container.querySelector('.mbn')).toBeNull()
+    useUserStore.setState({ user: null })
+  })
+
+  // ACC-018: the sign-in gate has no tab bar and the mobile header has no cart button — signed-out visitors
+  // on /account had no way to reach the cart or the menu.
+  it('DOES render on /account for a signed-out visitor (the gate has no navigation of its own)', () => {
+    useUserStore.setState({ user: null })
+    mockPathname = '/account'
+    const { container } = renderNav()
+    expect(container.querySelector('.mbn')).not.toBeNull()
   })
 
   it('does NOT render on /checkout (has its own .ck-mob-bar)', () => {

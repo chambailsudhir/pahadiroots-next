@@ -130,6 +130,12 @@ if (typeof window !== 'undefined') {
   let syncTimer: ReturnType<typeof setTimeout> | null = null
   // Track the previous wishlist reference so we can skip unrelated state changes.
   let prevWishlist: string[] = useUserStore.getState().wishlist
+  // ACC-047: login applies the server wishlist TWICE (AuthModal merge, then the account page's own GET), each time as a
+  // new array → two identical PUTs. Remember the last list the server CONFIRMED (PUT returned ok) and skip an identical
+  // one. Only a successful PUT is remembered, so a failed sync — or a guest list that has never been uploaded — is
+  // never suppressed, and logout forgets it.
+  let lastConfirmedKey: string | null = null
+  const wishlistKey = (w: string[]) => JSON.stringify([...w].sort())
 
   useUserStore.subscribe(state => {
     // Skip if wishlist array reference hasn't changed — this is the guard that
@@ -138,16 +144,19 @@ if (typeof window !== 'undefined') {
     prevWishlist = state.wishlist
 
     // Only sync when a user is logged in
-    if (!state.user?.id) return
+    if (!state.user?.id) { lastConfirmedKey = null; return }
 
     if (syncTimer) clearTimeout(syncTimer)
     syncTimer = setTimeout(() => {
+      const list = useUserStore.getState().wishlist
+      const key  = wishlistKey(list)
+      if (key === lastConfirmedKey) return          // the server already has exactly this
       // Fire-and-forget — no UI feedback needed for background sync
       fetch('/api/wishlist', {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ wishlist: useUserStore.getState().wishlist }),
-      }).catch((err: unknown) => {
+        body:    JSON.stringify({ wishlist: list }),
+      }).then(res => { if (res.ok) lastConfirmedKey = key }).catch((err: unknown) => {
         // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
         // zero logging. A persistent failure (e.g. the wishlist API broken,
         // an expired auth token that never refreshes) meant wishlist updates

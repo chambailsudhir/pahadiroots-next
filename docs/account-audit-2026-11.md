@@ -67,3 +67,41 @@ API writes the normalised `saved_addresses` table; the JSON is transport only) �
 9. Cancel: a confirmed COD order shows **Cancel order**; cancelling → status `cancelled`, stock restored, coupon released, coins reversed (`loyalty_transactions` type `adjustment`, note `Reversal:`), customer + admin e-mails. B cannot cancel A's order (404); a prepaid / packed order shows the WhatsApp prompt and the API answers 409.
 10. Sign-up with SMTP still broken → account created unconfirmed + verification e-mail through Resend (use a real inbox); with SMTP fixed → Supabase's own mail, no fallback alert in the logs.
 11. Loyalty page reads "Earn 1 coin for every ₹100 you spend" (matches `site_settings`).
+
+---
+
+## 5. Follow-up pass (second PR) — the "open, minor" list
+
+Measured first, then fixed. Accessibility was scanned with axe-core 4.14 (WCAG 2.0/2.1/2.2 A+AA) over 22 page states
+(logged-out gate, sign-in dialog, every account tab, order detail, /track × desktop + mobile).
+
+| Item | Result |
+|---|---|
+| ACC-047 duplicate calls on login | **Fixed.** `GET /api/profile` is shared between the login pre-cache and the account page (`lib/profileRequest.ts`: in-flight sharing + 4 s reuse, invalidated on edit / logout). `PUT /api/wishlist` skips a list the server already confirmed (only a *successful* PUT is remembered, so a guest list is never lost) |
+| ACC-043b two tabs overwrite addresses | **Fixed.** `GET /api/profile` returns a content fingerprint of the address list (`saved_addresses_etag`); saves send it back and a changed list answers `409 addresses_changed` instead of being overwritten. Older clients without the field keep the previous behaviour |
+| ACC-021 pincode via a third party | **Fixed.** Same-origin `GET /api/v1/pincode/[pin]` (validated, 30-day cache, only 4 fields forwarded, failures are an uncached 502 → form falls back to manual entry). The host is removed from the CSP and the browser no longer sends customers' pincodes to it |
+| ACC-017 contrast / target size | **Fixed.** axe found 209 contrast failures (light greys 1.9–3.6:1) on all 22 pages, 8 target-size failures, and an invalid ARIA structure (a link inside the mobile `tablist`). Every failing rule was recoloured with a shade verified ≥ 4.5:1 on each background it appears on; password-eye and "Forgot password?" now ≥ 24 px; the Wishlist link moved out of the tablist (`display: contents` wrapper keeps the layout). Re-scan result in the PR |
+| ACC-018 mobile logged-out polish | Gate icon now centred (it was an `<svg>`, `display:block`, so `text-align` never applied). A signed-out visitor on `/account` had **no cart or menu at all** on mobile (bottom bar suppressed, header has no cart) → the bottom bar now shows there. Logo files' faint off-white background snapped to white (no more visible tile). The ticker's pause button overlapping text is by design (it sits on the bar's own colour) |
+| ACC-016 / 019 | Wishlist and Privacy & Data are neutral (red now means only "Logout"); `/account` has a real page title ("My Account \| …") |
+| ACC-020 analytics | Audited live: `page_view, view_item, add_to_cart, begin_checkout, add_to_wishlist` + web vitals; **no e-mail / phone / token / user-id sent to Google** (the one "phone-like" match was a GTM container hash). Account journey had **no** events → added `login`, `sign_up` and `account_action` (fixed vocabulary: reset requested, password changed, address saved, order cancelled, order tracked, data exported, account deleted); consent-gated, no personal data |
+
+**Closed as by-design / not fixable safely here**
+
+| Item | Why |
+|---|---|
+| ACC-006 `'unsafe-inline'` on static pages | Documented tradeoff in `lib/strictCsp.ts`: account / checkout (the sensitive pages) already get the strict per-request nonce policy; nonces on cached pages would make them dynamic and slow. Session cookies are HttpOnly, so script injection on a marketing page cannot read them |
+| ACC-048 Best Sellers can vanish | Already retries and re-reads fresh. Failing loudly instead would risk a 500 on the home page during an outage — the real fix is the Supabase compute upgrade |
+| ACC-009b "Others" vs "Other" label, 4- vs 5-step tracker | Cosmetic; both labels are accepted end to end |
+| ACC-014 `vector` extension in `public` | Moving an extension can break embeddings / functions that reference it; needs a maintenance window and a test of the AI features |
+| ACC-011 13 backup tables with order data | Needs a retention decision (and an export) before anything is dropped — not done |
+
+**New finding (ACC-051)** — return-evidence photos are uploaded into the shared, **public** `pahadi-images` bucket
+(100 MB limit; video / PDF allowed) under `returns/<order>/…`. The route validates every request (image only, ≤ 5 MB,
+extension = type, path pinned) but Storage signed-upload URLs carry no per-URL limits, so the bucket-wide limits apply
+to anyone holding a URL, and the photos (which can show a customer's home or parcel label) are world-readable by URL.
+Fix = a dedicated **private** `return-evidence` bucket (5 MB, jpeg/png/webp) read through signed URLs — it needs a matching
+change in the admin app, so it is left for the owner.
+
+**Not tested** (and why): returns / refunds on a *delivered* order — moving a test order to `delivered` writes GST
+journal entries into the real books; real-device Safari / Firefox / Android — only Chromium is available in this
+environment (mobile *emulation* was used); e-mail content — no inbox.

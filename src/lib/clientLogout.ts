@@ -27,6 +27,7 @@
 
 import { useUserStore } from '@/store/userStore'
 import { clearProfileCache } from '@/lib/profileCache'
+import { forgetAddressEtag } from '@/lib/addressVersion'
 
 // AUDIT S2-006: localStorage keys that hold (or historically held) a signed-in
 // customer's PII or credentials. `pr_checkout_profile` (name, email, phone,
@@ -51,6 +52,7 @@ export const CLIENT_PII_STORAGE_KEYS = [
 export function clearClientPII(): void {
   if (typeof window === 'undefined') return
   clearProfileCache()
+  forgetAddressEtag()
   for (const key of CLIENT_PII_STORAGE_KEYS) {
     try { localStorage.removeItem(key) } catch {}
   }

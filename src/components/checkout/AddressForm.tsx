@@ -29,7 +29,10 @@ async function lookupPincode(pin: string, signal?: AbortSignal): Promise<{ city:
   if (!/^\d{6}$/.test(pin)) return null
   if (pincodeCache.has(pin)) return pincodeCache.get(pin)!
   try {
-    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal })
+    // ACC-021: our own cached pass-through (/api/v1/pincode) — the browser no longer talks to a third party.
+    const res = await fetch(`/api/v1/pincode/${pin}`, { signal })
+    // A 502/429 means "couldn't look it up right now", NOT "no such pincode" — don't cache it as a negative.
+    if (!res.ok) return null
     const data = await res.json()
     if (!data?.[0]?.PostOffice?.length) { pincodeCache.set(pin, null); return null }
     const po = data[0].PostOffice[0]

@@ -18,6 +18,7 @@
 // latest values even after re-renders without needing useCallback deps.
 // ─────────────────────────────────────────────────────────────
 
+import { ga4AccountAction } from '@/lib/analytics/ga4'
 import { useState, useRef, useEffect } from 'react'
 import { validateNewAddress } from '@/lib/account/validation'
 import type { FormErrors }    from '@/lib/account/validation'
@@ -124,6 +125,7 @@ export function useAddresses(config: AddressesConfig) {
       }
       await persist(updated)
       showToast(editId ? '✅ Address updated!' : '✅ Address saved!')
+      ga4AccountAction('address_saved')
       cancelForm()
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Failed to save address', 'error')

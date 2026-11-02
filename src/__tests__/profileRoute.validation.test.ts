@@ -139,3 +139,51 @@ describe('POST /api/profile — saved addresses (ACC-039)', () => {
     expect(upsert()![2][0]).not.toHaveProperty('id')
   })
 })
+
+// ── lost-update protection for the saved-address list (ACC-043b) ───────────────────────────────────────────
+import { addressesEtag } from '@/lib/server/addressEtag'
+
+describe('POST /api/profile — saved-address version check (two tabs must not overwrite each other)', () => {
+  const stored = [{ id: '11111111-1111-1111-1111-111111111111', label: 'Home', name: 'A', phone: '9876543210', addr: '12 Pahadi Lane', city: 'Shimla', state: 'Himachal Pradesh', pin: '171001' }]
+  const upserts = () => mocks.sbAdmin.mock.calls.filter(([m, p]) => m === 'POST' && p === '/rest/v1/saved_addresses')
+  const wireStored = (rows: unknown[]) => mocks.sbAdmin.mockImplementation(async (m: string, p: string) =>
+    m === 'GET' && p.startsWith('/rest/v1/saved_addresses?customer_id=eq.58') ? rows : [])
+
+  it('409 `addresses_changed` and NO write when the stored list differs from the version the client loaded', async () => {
+    wireStored(stored)
+    const res = await post({ saved_addresses: JSON.stringify([GOOD_ADDR]), saved_addresses_etag: 'stale-version' })
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe('addresses_changed')
+    expect(upserts()).toHaveLength(0)
+    expect(mocks.sbAdmin.mock.calls.some(([m]) => m === 'DELETE')).toBe(false)
+  })
+
+  it('also protects the "delete everything" save', async () => {
+    wireStored(stored)
+    const res = await post({ saved_addresses: '[]', saved_addresses_etag: 'stale-version' })
+    expect(res.status).toBe(409)
+    expect(mocks.sbAdmin.mock.calls.some(([m]) => m === 'DELETE')).toBe(false)
+  })
+
+  it('saves when the version matches, and hands back the NEW version', async () => {
+    wireStored(stored)
+    const res = await post({ saved_addresses: JSON.stringify([...stored, GOOD_ADDR]), saved_addresses_etag: addressesEtag(stored) })
+    expect(res.status).toBe(200)
+    expect(upserts()).toHaveLength(1)
+    expect(typeof (await res.json()).saved_addresses_etag).toBe('string')
+  })
+
+  it('older clients that send no version keep working (last write wins, as before)', async () => {
+    wireStored(stored)
+    expect((await post({ saved_addresses: JSON.stringify([GOOD_ADDR]) })).status).toBe(200)
+  })
+
+  it('the fingerprint changes when ANY field of ANY address changes, and ignores row order', () => {
+    const a = addressesEtag(stored)
+    expect(addressesEtag([{ ...stored[0], city: 'Manali' }])).not.toBe(a)
+    expect(addressesEtag([{ ...stored[0], phone: '9000000001' }])).not.toBe(a)
+    expect(addressesEtag([])).not.toBe(a)
+    const two = [stored[0], { ...stored[0], id: '22222222-2222-2222-2222-222222222222' }]
+    expect(addressesEtag(two)).toBe(addressesEtag([...two].reverse()))
+  })
+})
