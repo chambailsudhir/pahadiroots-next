@@ -143,3 +143,18 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
   `ReferralCapture`.
 * **Note:** rewards are released by a non-fatal step inside the existing `expire-pending-orders` sweep (daily Vercel cron, plus the
   self-sweep when orders are placed) because the Hobby plan allows only two crons. Release can lag by a little, never run early.
+### 5.4 ACC-051 — return photos moved to a private bucket (fixed, `db_migration_v18_private_return_evidence_bucket.sql`)
+
+* **Was:** return-evidence photos went into the shared **public** `pahadi-images` bucket (100 MB, video/PDF allowed), whose
+  `storage.objects` policies also let anyone list every file name. A customer's damaged-item photo was readable by anyone who could
+  guess or enumerate the path.
+* **Now:** new **private** `return-evidence` bucket (no storage policy → service role only; 5 MB; JPEG/PNG/WebP, enforced by the
+  bucket itself). The browser uploads to a signed URL, then sends the object **path** (not a URL) with the return; the API accepts only
+  `returns/<this order>/…` paths, signs a 1-year read link for each (signing also proves the object exists) and stores that link in
+  `returns.photo_urls`.
+* **No admin-app change needed:** the admin panel renders `photo_urls` as plain links; a signed link works there unchanged. After a
+  year (or if the admin wants permanent access) a fresh link can be signed server-side for the stored path.
+* **Verified:** as an anonymous caller, `list` on the new bucket returns `[]`, `/object/public/…` returns 400 and an upload returns 403
+  (the public bucket still lists). No return photos existed before (0 objects, 0 returns with photos), so nothing was migrated.
+* **Also:** WhatsApp "share your request" no longer pastes photo URLs (it says how many photos are attached); thumbnails are local
+  previews. Tests: `returnEvidence.test.ts`, SF-3 in `auditR2Storefront.test.ts`.

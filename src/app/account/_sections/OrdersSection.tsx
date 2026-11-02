@@ -21,7 +21,7 @@ type Orders = ReturnType<typeof useOrders>
 // dashes), hence the strip.
 function buildWhatsAppShareUrl(
   rawNumber: string,
-  info: { orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoUrls: string[] },
+  info: { orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoCount: number },
 ): string {
   const digits = rawNumber.replace(/\D/g, '')
   const reasonLabel = RETURN_REASONS.find(r => r.code === info.reason)?.label || info.reason
@@ -29,8 +29,9 @@ function buildWhatsAppShareUrl(
     `Hi, I've requested a ${info.resolution === 'replace' ? 'replacement' : 'return'} for order ${info.orderNum}.`,
     `Reason: ${reasonLabel}`,
   ]
-  if (info.photoUrls.length > 0) {
-    lines.push('', 'Photos:', ...info.photoUrls)
+  // The photos are private (ACC-051): they are attached to the request itself, so only mention how many.
+  if (info.photoCount > 0) {
+    lines.push('', `${info.photoCount} photo${info.photoCount === 1 ? '' : 's'} attached to the request.`)
   }
   return `https://wa.me/${digits}?text=${encodeURIComponent(lines.join('\n'))}`
 }
@@ -59,13 +60,18 @@ export default function OrdersSection({ orders, showToast }: Props) {
   // Uploaded immediately on selection (not deferred to submit) so the
   // customer sees each photo succeed/fail individually, matching the
   // upload-then-preview pattern most shopping apps use.
-  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ url: string; name: string }>>([])
+  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ path: string; preview: string; name: string }>>([])
+  // Photo previews are local blob: URLs (the bucket is private) — free them when the list is emptied or a photo removed.
+  const photosRef = useRef(uploadedPhotos)
+  useEffect(() => { photosRef.current = uploadedPhotos }, [uploadedPhotos])
+  const dropPhotos = () => { photosRef.current.forEach(p => URL.revokeObjectURL(p.preview)); setUploadedPhotos([]) }
+  useEffect(() => () => { photosRef.current.forEach(p => URL.revokeObjectURL(p.preview)) }, [])
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const MAX_PHOTOS = 4
   // Post-submit success view (within the same modal) so the WhatsApp
   // share option — which needs the order/reason/photo context — has
   // somewhere to live without a second round-trip or a separate modal.
-  const [submittedInfo, setSubmittedInfo] = useState<{ orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoUrls: string[] } | null>(null)
+  const [submittedInfo, setSubmittedInfo] = useState<{ orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoCount: number } | null>(null)
 
   // Focus management for keyboard-accessible modal
   const firstRadioRef  = useRef<HTMLInputElement>(null)
@@ -89,7 +95,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     setReturnReason('')
     setSelectedItemIdx(null)
     setResolution('refund')
-    setUploadedPhotos([])
+    dropPhotos()
     setSubmittedInfo(null)
     // Restore focus to the button that opened the modal
     triggerBtnRef.current?.focus()
@@ -136,7 +142,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     // behavior (no item fields sent, unchanged from before this feature).
     setSelectedItemIdx(null)
     setResolution('refund')
-    setUploadedPhotos([])
+    dropPhotos()
     setSubmittedInfo(null)
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum, items: order.items || [] })
   }
@@ -193,7 +199,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           showToast(`${file.name}: upload failed`, 'error')
           continue
         }
-        setUploadedPhotos(prev => [...prev, { url: urlData.publicUrl, name: file.name }])
+        setUploadedPhotos(prev => [...prev, { path: urlData.path, preview: URL.createObjectURL(file), name: file.name }])   // private bucket: preview from the local file
       }
     } catch (e: unknown) {
       console.error('[OrdersSection] photo upload failed:', e)
@@ -218,7 +224,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           variant_id:    selectedItem?.variant_id ?? undefined,
           product_id:    selectedItem?.product_id ?? undefined,
           resolution:    finalResolution,
-          photo_urls:    uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.url) : undefined,
+          photo_paths:   uploadedPhotos.length > 0 ? uploadedPhotos.map(p => p.path) : undefined,
         }),
       })
       const data = await res.json()
@@ -233,7 +239,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           orderNum:   returnModal.orderNum,
           reason:     returnReason,
           resolution: finalResolution,
-          photoUrls:  uploadedPhotos.map(p => p.url),
+          photoCount: uploadedPhotos.length,
         })
         orders.refresh()
       }
@@ -507,13 +513,13 @@ export default function OrdersSection({ orders, showToast }: Props) {
                 {uploadedPhotos.length > 0 && (
                   <div className={styles.returnPhotoPreviewRow}>
                     {uploadedPhotos.map((p, idx) => (
-                      <div key={p.url} className={styles.returnPhotoThumb}>
-                        <img src={p.url} alt={p.name} />
+                      <div key={p.path} className={styles.returnPhotoThumb}>
+                        <img src={p.preview} alt={p.name} />
                         <button
                           type="button"
                           className={styles.returnPhotoRemove}
                           aria-label={`Remove ${p.name}`}
-                          onClick={() => setUploadedPhotos(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => { URL.revokeObjectURL(p.preview); setUploadedPhotos(prev => prev.filter((_, i) => i !== idx)) }}
                         ><Icon name="close" /></button>
                       </div>
                     ))}

@@ -4,9 +4,8 @@ export const ALLOWED_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/web
 // AUDIT S2-011: the 5 MB / image-only rules were client-side only. The server now requires the
 // declared size, rejects anything over the cap or outside the image allow-list, requires the file
 // extension to match the declared MIME, and pins the upload Content-Type + the returns/<order>/ path.
-// The Storage signed-upload API has no per-URL size/MIME parameter, so the OWNER must also set the
-// bucket's file_size_limit (5 MB) + allowed_mime_types, and (ideally) move return evidence to a
-// PRIVATE bucket read via signed URLs — see the R5s report.
+// The Storage signed-upload API has no per-URL size/MIME parameter, so the bucket enforces them too: evidence now lives in the
+// PRIVATE `return-evidence` bucket (5 MB, JPEG/PNG/WebP — db_migration_v18) and is read through signed links (ACC-051).
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 export const OBJECT_PREFIX = 'returns/'
 const EXT_FOR_MIME: Record<string, RegExp> = {
