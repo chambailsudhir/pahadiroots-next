@@ -81,9 +81,10 @@ interface RazorpayOptions {
 // page reads it from there; the URL carries only the non-secret order number. If no token came
 // back (rare — see the non-fatal catch in orderService.ts) the page still works for logged-in
 // customers via their session and otherwise degrades to its "check your email / track" state.
-function buildOrderSuccessUrl(orderNumber: string, token: string | undefined, method: 'cod' | 'razorpay', total: number): string {
+// The page reads nothing but the order number (it asks the server for method and total), so nothing else is put in the URL.
+function buildOrderSuccessUrl(orderNumber: string, token: string | undefined): string {
   stashConfirmationToken(orderNumber, token)
-  const params = new URLSearchParams({ id: orderNumber, method, total: String(total) })
+  const params = new URLSearchParams({ id: orderNumber })
   return `/order-success?${params.toString()}`
 }
 
@@ -1176,7 +1177,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
         orderPlacedRef.current = true
         clearCart()
-        router.replace(buildOrderSuccessUrl(orderNumber, dbData.confirmation_token, 'cod', pricingTotal))
+        router.replace(buildOrderSuccessUrl(orderNumber, dbData.confirmation_token))
       } else {
         const RZP = (window as Window & { Razorpay?: new (opts: RazorpayOptions) => { open(): void } }).Razorpay
         if (!RZP) throw new Error('Payment gateway not loaded. Please refresh.')
@@ -1194,7 +1195,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if (data.already_confirmed) {
           orderPlacedRef.current = true
           clearCart()
-          router.replace(buildOrderSuccessUrl(data.order_number || '', data.confirmation_token, 'razorpay', pricingTotal))
+          router.replace(buildOrderSuccessUrl(data.order_number || '', data.confirmation_token))
           return
         }
 
@@ -1242,7 +1243,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               if ((verRes.status === 202 || verRes.status === 503) && verData.pending && verData.order_number) {
                 orderPlacedRef.current = true
                 clearCart()
-                router.replace(buildOrderSuccessUrl(verData.order_number, verData.confirmation_token, 'razorpay', pricingTotal))
+                router.replace(buildOrderSuccessUrl(verData.order_number, verData.confirmation_token))
                 return
               }
 
@@ -1272,7 +1273,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               trackPaymentVerified(verData.order_number, pricingTotal)
               orderPlacedRef.current = true
               clearCart()
-              router.replace(buildOrderSuccessUrl(verData.order_number || '', verData.confirmation_token, 'razorpay', pricingTotal))
+              router.replace(buildOrderSuccessUrl(verData.order_number || '', verData.confirmation_token))
             } catch (e: unknown) {
               const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
               setError(msg + ' Contact support with payment ID: ' + response.razorpay_payment_id)
