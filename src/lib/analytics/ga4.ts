@@ -91,6 +91,19 @@ export const ga4BeginCheckout = (items: ItemInput[], coupon?: string) => { const
 export const ga4AddPaymentInfo = (items: ItemInput[], paymentType: 'cod' | 'razorpay' | string, coupon?: string) => {
   const it = items.map(i => toGa4Item(i)); return ga4Event('add_payment_info', withItems(it, { payment_type: paymentType, ...(coupon ? { coupon } : {}) }))
 }
+// ── Account funnel (account audit, Nov 2026 — ACC-020) ─────────────────────────────────────────────────────────
+// Until now GA4 had the shop funnel but NOTHING for the account journey, so registration and sign-in conversion could
+// not be measured. These use GA4's recommended `login` / `sign_up` events plus one generic `account_action` event with a
+// FIXED vocabulary. Deliberately no e-mail, phone, user id, order number or error text — `method` / `action` only. All of
+// it still goes through ga4Event(), i.e. nothing is sent without analytics consent.
+export type AuthMethod = 'email' | 'google'
+export type AccountAction =
+  | 'password_reset_requested' | 'password_changed' | 'address_saved'
+  | 'order_cancelled' | 'order_tracked' | 'data_exported' | 'account_deleted'
+export const ga4Login   = (method: AuthMethod) => ga4Event('login',   { method })
+export const ga4SignUp  = (method: AuthMethod) => ga4Event('sign_up', { method })
+export const ga4AccountAction = (action: AccountAction) => ga4Event('account_action', { action })
+
 export const ga4Search = (term: string) => ga4Event('search', { search_term: String(term).slice(0, 100) })
 
 export interface PurchaseInput {

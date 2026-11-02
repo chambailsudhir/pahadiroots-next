@@ -23,6 +23,7 @@
 // `type=recovery` are never treated as a login, on any route.
 // ═══════════════════════════════════════════════════════════════
 
+import { ga4Login } from '@/lib/analytics/ga4'
 import { useEffect } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { buildCacheEntry, writeProfileCache, prefetchProfileToCache } from '@/lib/profileCache'
@@ -137,6 +138,7 @@ export default function GoogleAuthHandler() {
             // Pre-warm checkout cache so delivery form fills instantly
             if (cbData.profile) writeProfileCache(buildCacheEntry(cbData.profile))
             prefetchProfileToCache() // background: get saved_addresses too
+            ga4Login('google')
             window.location.href = '/account'
             return
           }

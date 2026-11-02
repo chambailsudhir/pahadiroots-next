@@ -14,6 +14,7 @@
 // ✅ Matches CSS Module pattern used across account module
 // ─────────────────────────────────────────────────────────────
 
+import { ga4AccountAction } from '@/lib/analytics/ga4'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
@@ -105,6 +106,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showToast('Your data has been downloaded.', 'success')
+      ga4AccountAction('data_exported')
     } catch (e: unknown) {
       // BUG FIX [ERROR HANDLING]: previously bare `catch {}` with no logging.
       console.error('[DangerZoneSection] data export download failed:', e)
@@ -172,6 +174,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       }
 
       // Clear all local auth state
+      ga4AccountAction('account_deleted')
       clearClientPII()   // AUDIT ACC-040: name/phone/address caches must not outlive the account
       storeLogout()
       setOpen(false)

@@ -7,6 +7,7 @@
 //  ✅ Edit capability retained
 //  ✅ Migrated from Tailwind to account.module.css
 // ─────────────────────────────────────────────────────────────
+import { setAddressEtag } from '@/lib/addressVersion'
 import { useUserStore } from '@/store/userStore'
 import { useEffect, useState } from 'react'
 import { INDIA_STATES, ADDRESS_LABELS, CHECKOUT_PROFILE_CACHE_KEY } from '@/lib/account/constants'
@@ -37,6 +38,7 @@ export default function AddressesPage() {
         if (r.status === 401) throw new Error('401')
         if (!r.ok) throw new Error('Could not load addresses')
         const data = await r.json()
+        setAddressEtag(data.profile?.saved_addresses_etag)
         const raw  = data.profile?.saved_addresses
         try { setAddresses(raw ? JSON.parse(raw) : []) } catch { setAddresses([]) }
       })

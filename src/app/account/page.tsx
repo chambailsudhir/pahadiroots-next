@@ -214,7 +214,10 @@ function AccountPageInner() {
 
       {/* Mobile bottom nav */}
       <nav aria-label="Account mobile navigation" className={styles.mobTabs}>
-        <div role="tablist" aria-label="Account sections" className={styles.mobTabList}>
+        <div className={styles.mobTabList}>
+          {/* ACC-017: a tablist may only contain tabs — the Wishlist LINK used to sit inside it (axe: aria-required-children).
+              `display: contents` keeps the flex layout of the bar unchanged. */}
+          <div role="tablist" aria-label="Account sections" style={{ display: 'contents' }}>
           {MOB_TABS.map(it => (
             <button
               key={it.key}
@@ -228,6 +231,7 @@ function AccountPageInner() {
               {it.label}
             </button>
           ))}
+          </div>
           <Link prefetch={false} href="/wishlist" aria-label="My Wishlist" className={styles.mobTab}>
             <span className={styles.mtIcon}>{NAV_ICONS.wishlist}</span>
             Wishlist

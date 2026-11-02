@@ -1,4 +1,6 @@
 import { captureError } from '@/lib/logger'
+import { sharedProfileRequest, invalidateProfileRequest } from '@/lib/profileRequest'
+import { getAddressEtag, setAddressEtag } from '@/lib/addressVersion'
 // ─────────────────────────────────────────────────────────────
 // profileService — all profile API calls in one place
 //
@@ -126,24 +128,35 @@ async function apiFetch(
 
 /** Fetch profile + user. Retries on network failure. Validates response. */
 export async function fetchProfile(): Promise<ProfileResp> {
-  const raw = await withRetry(() => apiFetch('/api/profile'))
+  // ACC-047: shared with prefetchProfileToCache() so a login costs ONE GET /api/profile, not two.
+  const raw = await sharedProfileRequest(() => withRetry(() => apiFetch('/api/profile')))
   const parsed = ProfileResponseSchema.safeParse(raw)
   if (!parsed.success) {
     captureError(parsed.error, { action: 'profileService/fetchProfile', validation: true })
     throw new ServiceError('Unexpected response from server')
   }
+  setAddressEtag((parsed.data.profile as { saved_addresses_etag?: unknown } | undefined)?.saved_addresses_etag)
   return parsed.data
 }
 
 /** Update profile fields. Retries on network failure. */
 export async function updateProfile(updates: Partial<Profile>): Promise<void> {
-  await withRetry(() =>
-    apiFetch('/api/profile', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(updates),
-    })
-  )
+  // ACC-043b: an address-list save carries the version it was based on, so a concurrent change elsewhere is refused (409)
+  // instead of being silently overwritten.
+  const etag = 'saved_addresses' in updates ? getAddressEtag() : null
+  const payload = etag ? { ...updates, saved_addresses_etag: etag } : updates
+  try {
+    const res = await withRetry(() =>
+      apiFetch('/api/profile', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+    )
+    setAddressEtag((res as { saved_addresses_etag?: unknown } | null)?.saved_addresses_etag)
+  } finally {
+    invalidateProfileRequest()   // the next read must see the edit (or the conflict), never a reused pre-edit copy
+  }
 }
 
 /** Change password. No retry (user action). */

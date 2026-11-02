@@ -7,6 +7,7 @@
 // Style: migrated from Tailwind to account.module.css for
 //        consistency with the rest of the account module.
 // ─────────────────────────────────────────────────────────────
+import { ga4AccountAction } from '@/lib/analytics/ga4'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -123,6 +124,7 @@ export default function OrderDetailPage() {
       const data = await res.json().catch(() => ({})) as { error?: string; code?: string }
       if (res.ok) {
         setOrder(o => o ? { ...o, order_status: 'cancelled', _displayStatus: 'cancelled', can_cancel: false, cancel_via_support: false } : o)
+        ga4AccountAction('order_cancelled')
         setCancelledMsg('Your order has been cancelled. Nothing was charged, and any Pahadi Coins you used are back in your account.')
         setCancelOpen(false)
         return

@@ -40,7 +40,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
               <div className={styles.addrLine}>
                 <strong>{[authProfile.first_name, authProfile.last_name].filter(Boolean).join(' ')}</strong><br />
                 {[authProfile.address_line1, authProfile.city, authProfile.state, authProfile.pincode ?? authProfile.postal_code].filter(Boolean).join(', ')}
-                {authProfile.phone && <><br /><span style={{ color: '#888' }}>{String(authProfile.phone)}</span></>}
+                {authProfile.phone && <><br /><span style={{ color: '#666' }}>{String(authProfile.phone)}</span></>}
               </div>
               <div className={styles.addrActions}>
                 {/* aria-label gives screen readers a descriptive action name beyond the emoji */}
