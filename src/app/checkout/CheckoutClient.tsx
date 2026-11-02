@@ -104,7 +104,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
     storeReady,
     cartNotices, dismissCartNotices,
     items, coupon, removeCoupon,
-    payMethod, setPayMethod,
+    payMethod, payMethodChosen, setPayMethod,
     placing, razorpayLoaded, setRazorpayLoaded,
     razorpayLoadFailed, setRazorpayLoadFailed,
     error,
@@ -202,7 +202,9 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
   // doesn't continuously announce the button text on every render.
   const mobCtaStatus = placing
     ? 'Placing your order…'
-    : payMethod === 'razorpay' && razorpayLoadFailed
+    : !payMethodChosen
+      ? 'Choose a payment method to continue'
+      : payMethod === 'razorpay' && razorpayLoadFailed
       ? (codEnabled
           ? 'Payment gateway unavailable — tap to retry, or switch to Cash on Delivery'
           : 'Payment gateway unavailable — tap to retry')   // F-05: never suggest COD while it is switched off
@@ -214,7 +216,9 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
 
   const mobCtaLabel = placing
     ? 'Placing…'
-    : payMethod === 'razorpay' && razorpayLoadFailed
+    : !payMethodChosen
+      ? 'Choose payment method'
+      : payMethod === 'razorpay' && razorpayLoadFailed
       ? '⚠ Retry payment gateway'
       : payMethod === 'razorpay' && !razorpayLoaded
         ? 'Loading…'
@@ -313,6 +317,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
               <div className="ck-section-body">
                 <PaymentSection
                   payMethod={payMethod}
+                  payMethodChosen={payMethodChosen}
                   onChange={setPayMethod}
                   razorpayEnabled={razorpayEnabled}
                   codOk={codOk}
@@ -370,6 +375,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
               minOrderAmt={minOrderAmt}
               onPlaceOrder={handlePlace}
               payMethod={payMethod}
+              payMethodChosen={payMethodChosen}
               summaryOpen={summaryOpen}
               onToggleSummary={handleToggleSummary}
             />

@@ -7,6 +7,8 @@ import Icon from '@/components/ui/Icon'
 
 interface Props {
   payMethod: 'razorpay' | 'cod'
+  /** Nothing is preselected: no option shows as selected until the customer picks one. */
+  payMethodChosen: boolean
   onChange: (v: 'razorpay' | 'cod') => void
   razorpayEnabled: boolean
   codOk: boolean
@@ -19,9 +21,10 @@ interface Props {
 
 // PERF FIX: memo — PaymentSection only changes when payMethod, codOk, or pricing changes.
 const PaymentSection = memo(function PaymentSection({
-  payMethod, onChange, razorpayEnabled, codOk, codEnabled,
+  payMethod: payMethodRaw, payMethodChosen, onChange, razorpayEnabled, codOk, codEnabled,
   prepaidPct, prepaidDiscount, codMax, total,
 }: Props) {
+  const payMethod = payMethodChosen ? payMethodRaw : null
   return (
     <div className={styles.root}>
       <div className={styles.opts}>

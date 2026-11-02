@@ -22,6 +22,29 @@ const req = (over: Partial<Parameters<typeof describeIdempotencyMismatch>[1]> = 
   ...over,
 })
 
+// ORD-ADDR (Nov 2026 audit): editing the delivery address between two attempts must not resume the old order.
+describe('describeIdempotencyMismatch — delivery address', () => {
+  const shipping = { line1: '12 Main Road, Near Hospital', city: 'Kangra', state: 'Himachal Pradesh', pincode: '176082' }
+  const address  = { ...shipping }
+
+  it('same address (case / spacing differences only) is still a genuine retry', () => {
+    expect(describeIdempotencyMismatch(stored({ shipping }), req({ address: { ...address, line1: '  12 MAIN road,  near hospital ' } }))).toBeNull()
+  })
+  it.each([
+    ['pincode', { pincode: '176001' }],
+    ['state',   { state: 'Punjab' }],
+    ['city',    { city: 'Dharamshala' }],
+    ['line1',   { line1: '14 Main Road' }],
+  ])('a changed %s is NOT a retry', (k, change) => {
+    expect(describeIdempotencyMismatch(stored({ shipping }), req({ address: { ...address, ...change } }))).toBe(`delivery address changed (${k})`)
+  })
+  it('never blocks when either side has no address data (older rows)', () => {
+    expect(describeIdempotencyMismatch(stored({ shipping: null }), req({ address }))).toBeNull()
+    expect(describeIdempotencyMismatch(stored({ shipping }), req())).toBeNull()
+    expect(describeIdempotencyMismatch(stored({ shipping: { ...shipping, pincode: null } }), req({ address }))).toBeNull()
+  })
+})
+
 describe('describeIdempotencyMismatch', () => {
   it('identical request → null (genuine retry)', () => {
     expect(describeIdempotencyMismatch(stored(), req())).toBeNull()

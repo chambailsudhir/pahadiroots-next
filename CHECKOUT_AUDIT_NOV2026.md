@@ -11,7 +11,14 @@
 | Misc | `/track-order` → `/track` redirect; track placeholder no longer shows an outdated year; privacy policy + checkout note disclose unfinished-checkout capture (PRIV-001 — legal wording needs counsel review). |
 
 ## Deliberately NOT changed
-* **CART-001 GST after coupon** — `gstTotal` is computed on pre-coupon line prices and stored as the order tax. Whether the coupon reduces taxable value is a tax decision for the CA; changing it alters accounting. Decide, then change `calcPriceSummary` AND the invoice together.
-* **COD preselected / COD WhatsApp popup** — business experiments, not defects.
-* Cart-nav `aria-label` "Open cart, N items" (label-in-name) — focus-return code selects `button[aria-label^="Open cart"]`; needs a coordinated change.
-* Supabase dashboard-only: enable leaked-password protection; move `vector` extension out of `public` (needs a dependency check first).
+* **WhatsApp popup after a COD order** — left as is (owner: no change). It is a supplementary `wa.me` link opened after the order is already saved; browsers may block it, which is harmless.
+* **Supabase dashboard-only items** (leaked-password protection, moving the `vector` extension) — free plan / needs a dependency check; left.
+* No WhatsApp/SMS sender exists in the code. Customers with no e-mail address get only the on-screen confirmation page. E-mail stays optional at checkout (owner call).
+
+## Found while reading production data (ops, not code)
+* `ORD-2026-00108` (Razorpay, ₹499, created 25 Aug): `order_status=confirmed` but `payment_status=pending`. Check it in the Razorpay dashboard.
+* Three ₹2 COD orders were placed today on the "Test" product — one 6 seconds *after* it was switched off in admin, which is exactly the `is_active` bug fixed here.
+* `failed_emails`: rows are QA addresses at `example.com` (Resend rejects them). A permanently-invalid recipient is retried like a transient failure until the attempt cap — harmless, but noisy.
+
+## Still unverified (cannot be done safely on production)
+Declined / cancelled / UPI-pending payments, a deliberately duplicated webhook, and the e-mail rendering have not been *run* — they were read line by line and are covered by unit tests (`webhookRazorpay`, `paymentOrderRoutes`, `recordCapturedPayment`, `idempotencyReuse`, …). Run them in `pahadiroots-test` with Razorpay test keys.

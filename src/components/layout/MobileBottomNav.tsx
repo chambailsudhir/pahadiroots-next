@@ -116,7 +116,9 @@ export default function MobileBottomNav({ settings }: Props) {
           type="button"
           onClick={openCart}
           className="mbn-item"
-          aria-label={mounted && cartCount > 0 ? `Open cart, ${cartCount} item${cartCount > 1 ? 's' : ''}` : 'Open cart'}
+          // ACC-001 (WCAG 2.5.3): name starts with the visible word "Cart"; the badge count is CSS-drawn (see globals.css .mbn-badge::after).
+          aria-label={mounted && cartCount > 0 ? `Cart, ${cartCount} item${cartCount > 1 ? 's' : ''}` : 'Cart'}
+          data-cart-trigger
         >
           <span style={{ position: 'relative' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
@@ -124,7 +126,7 @@ export default function MobileBottomNav({ settings }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 3h2l2.4 12.2a2 2 0 002 1.6h8.2a2 2 0 002-1.6L21 7H6" />
             </svg>
             {mounted && cartCount > 0 && (
-              <span className="mbn-badge" aria-hidden="true">{cartCount > 9 ? '9+' : cartCount}</span>
+              <span className="mbn-badge" aria-hidden="true" data-count={cartCount > 9 ? '9+' : String(cartCount)} />
             )}
           </span>
           Cart

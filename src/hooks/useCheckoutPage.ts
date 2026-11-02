@@ -18,6 +18,7 @@
  *   • All effects already had AbortController cleanup — preserved as-is.
  */
 
+import { firstServerFieldError } from '@/lib/serverFieldError'
 import { pinProblem } from '@/lib/pinState'
 import { cartItemsToGa4 } from '@/lib/analytics/ga4'
 import { useCartRevalidation } from '@/hooks/useCartRevalidation'
@@ -145,6 +146,7 @@ interface PaymentApiResponse {
   // Guest-safe capability token for the order-success confirmation page —
   // see db_migration_v6_order_confirmation_token.sql.
   confirmation_token?: string
+  details?:            unknown   // zod flatten() of a rejected request (400 'Invalid request')
 }
 
 function applyProfileData(
@@ -204,6 +206,8 @@ export interface CheckoutPageState {
 
   // payment
   payMethod:       'razorpay' | 'cod'
+  /** false until the customer has actually picked a payment method (nothing is preselected). */
+  payMethodChosen: boolean
   setPayMethod:    (m: 'razorpay' | 'cod') => void
   placing:         boolean
   razorpayLoaded:  boolean
@@ -312,7 +316,13 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // Fix: derive storeReady directly from the cart store's `_hasHydrated` flag,
   // which only becomes true once localStorage has actually been applied.
   const storeReady = useCartStore(selectHasHydrated)
-  const [payMethod,      setPayMethod]      = useState<'razorpay' | 'cod'>('cod')
+  // Nov 2026: NO payment method is preselected — the customer must choose (owner's decision; a preselected COD inflated
+  // refusals/RTO). `payMethod` stays a concrete value because pricing/analytics need one: until a choice is made it is
+  // 'cod' (the no-discount, no-gateway basis), and `payMethodChosen` says whether the customer has actually picked.
+  const [payChoice, setPayChoice] = useState<'razorpay' | 'cod' | null>(null)
+  const payMethod: 'razorpay' | 'cod' = payChoice ?? 'cod'
+  const payMethodChosen = payChoice !== null
+  const setPayMethod = setPayChoice as (m: 'razorpay' | 'cod') => void
   const [placing,        setPlacing]        = useState(false)
   // BUG FIX (live self-inflicted 429 on order placement): `placing` (state)
   // was checked nowhere at the top of handlePlace, and even if it had been,
@@ -552,8 +562,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       payMethod,
       coupon?.code ?? null,
       loyaltyRedemption?.points ?? 0,
+      // ORD-ADDR (Nov 2026 audit): the delivery address is part of what an order IS. Without it a customer who opened Razorpay,
+      // closed it, corrected the address and paid again reused the key and was handed the original order (old address).
+      [addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode].map(v => String(v ?? '').trim().toLowerCase()),
     ]),
-    [items, payMethod, coupon?.code, loyaltyRedemption?.points],
+    [items, payMethod, coupon?.code, loyaltyRedemption?.points, addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode],
   )
   const lastOrderSignatureRef = useRef<string | null>(null)
   useEffect(() => {
@@ -586,8 +599,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   if (prevCodOk !== codOk || prevRazorpayEnabled !== razorpayEnabled) {
     setPrevCodOk(codOk)
     setPrevRazorpayEnabled(razorpayEnabled)
-    if (payMethod === 'cod' && !codOk && razorpayEnabled) setPayMethod('razorpay')
-    if (payMethod === 'razorpay' && !razorpayEnabled && codOk) setPayMethod('cod')
+    // only re-route a choice the customer already made; never choose for them
+    if (payChoice === 'cod' && !codOk && razorpayEnabled) setPayChoice('razorpay')
+    if (payChoice === 'razorpay' && !razorpayEnabled && codOk) setPayChoice('cod')
   }
 
   // Loyalty balance
@@ -1007,6 +1021,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     for (const f of required) {
       if (!addr[f]?.toString().trim()) { placingRef.current = false; setError(`Please fill in: ${fieldLabels[f]}`); return }
     }
+    if (!payChoice) { placingRef.current = false; setError('Please choose a payment method — UPI / Card / Net Banking, or Cash on Delivery — to place your order.'); return }
     if (!/^[6-9]\d{9}$/.test(addr.phone)) { placingRef.current = false; setError('Enter a valid 10-digit mobile number'); return }
     if (!/^\d{6}$/.test(addr.pincode))     { placingRef.current = false; setError('Enter a valid 6-digit pincode'); return }
     { const pinMsg = pinProblem(addr.pincode, addr.state); if (pinMsg) { placingRef.current = false; setError(pinMsg); return } }
@@ -1096,9 +1111,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           // "Invalid request" with no way to know what to fix. Surface the
           // first concrete field error when present, so the customer (and
           // support, reading a screenshot) can actually act on it.
-          const firstFieldError = dbData.details
-            ? Object.values(dbData.details).flat().find(Boolean)
-            : undefined
+          const firstFieldError = firstServerFieldError(dbData.details)
           throw new Error(
             firstFieldError || dbData.error || `Order save failed (${dbRes.status}). Please try again.`
           )
@@ -1120,7 +1133,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         const data = await safeJsonParse<PaymentApiResponse>(res)
         if (!res.ok) {
           if ((data as { code?: string }).code === 'IDEMPOTENCY_CONFLICT') resetIdempotencyKey()
-          throw new Error(data.error || `Payment initiation failed (${res.status}). Please try again.`)
+          // a rejected request carries the concrete field problem in `details` — show that, not a bare "Invalid request"
+          throw new Error(firstServerFieldError(data.details) || data.error || `Payment initiation failed (${res.status}). Please try again.`)
         }
 
         if (data.already_confirmed) {
@@ -1229,7 +1243,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   }, [
     addr, email, items, coupon, loyaltyRedemption,
     idempotencyKey, ensureIdempotencyKey, resetIdempotencyKey,
-    payMethod, user, clearCart, router, razorpayKeyId,
+    payMethod, payChoice, user, clearCart, router, razorpayKeyId,
     trackOrderPlaced, trackPaymentInitiated, trackPaymentVerified,
     pricingShipping, pricingTotal, waNumber,
   ])
@@ -1239,7 +1253,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     storeReady,
     cartNotices, dismissCartNotices,
     items, coupon, removeCoupon,
-    payMethod, setPayMethod,
+    payMethod, payMethodChosen, setPayMethod,
     placing,
     razorpayLoaded, setRazorpayLoaded,
     razorpayLoadFailed, setRazorpayLoadFailed,

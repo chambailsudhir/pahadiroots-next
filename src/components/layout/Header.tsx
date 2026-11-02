@@ -214,15 +214,19 @@ export default function Header({ settings, categories = [], states = [] }: Props
           <button
             type="button"
             onClick={openCart}
+            // ACC-001 (WCAG 2.5.3 Label in Name): the accessible name STARTS with the visible word "Cart". The count badge is drawn
+            // by CSS (data-count + ::after) so it is not DOM text and cannot disagree with the name. data-cart-trigger is what the
+            // cart drawer uses to return focus — it no longer depends on the label wording.
             aria-label={mounted && cartCount > 0
-              ? `Open cart, ${cartCount} item${cartCount > 1 ? 's' : ''}`
-              : 'Open cart'}
+              ? `Cart, ${cartCount} item${cartCount > 1 ? 's' : ''}`
+              : 'Cart'}
+            data-cart-trigger
             className="old-cart-btn"
           >
             <Icon name="cart" /> Cart
             {mounted && cartCount > 0 && (
               // aria-hidden: count already conveyed in button aria-label above
-              <span className="old-cbadge" aria-hidden="true">{cartCount > 9 ? '9+' : cartCount}</span>
+              <span className="old-cbadge" aria-hidden="true" data-count={cartCount > 9 ? '9+' : String(cartCount)} />
             )}
           </button>
 
@@ -302,6 +306,7 @@ export default function Header({ settings, categories = [], states = [] }: Props
           width:18px;height:18px;font-size:10px;font-weight:900;
           display:flex;align-items:center;justify-content:center;
         }
+        .old-cbadge::after{content:attr(data-count)}
         /* Account dropdown */
         .old-acct-dd{
           position:absolute;top:100%;right:0;width:220px;

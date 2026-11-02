@@ -30,6 +30,7 @@ import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
+import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
 import type { getServiceClient } from '@/lib/supabase'
 
 type Db = ReturnType<typeof getServiceClient>
@@ -269,9 +270,9 @@ export async function runPaidSideEffects(
                 <p><strong>Order #:</strong> ${esc(order.order_number)}<br>
                    <strong>Payment ID:</strong> ${esc(razorpayPaymentId)}<br>
                    <strong>Amount Paid:</strong> ₹${order.total_amount}<br>
-                   <strong>Delivery:</strong> 3–5 business days</p>
+                   <strong>Delivery:</strong> ${esc(DELIVERY_WINDOWS_TEXT)}</p>
                 ${coinsHtml}
-                <p style="color:#666;font-size:14px">We&apos;ll WhatsApp you tracking details once shipped.</p>
+                <p style="color:#666;font-size:14px">${esc(TRACKING_NOTIFICATION_TEXT)}</p>
                 <a href="https://www.pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
               </div>
               <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">

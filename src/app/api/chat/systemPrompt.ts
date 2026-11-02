@@ -6,6 +6,8 @@
 // language code; the prompt text below is the only one the route will ever use.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { DELIVERY_WINDOWS_TEXT, RETURNS_TIMING } from '@/lib/shippingCopy'
+
 // AUDIT S2-008: the browser no longer sends the system prompt, so the body is a handful of short
 // turns — cap it accordingly (was 400 KB). The newest user turn is what we actually pay to
 // process; history turns are already bounded by sanitizeChatContents.
@@ -230,7 +232,7 @@ NEVER mix languages. If user writes in a different language than selected, still
 ABOUT 5 PAHADI ROOTS:
 - Sells authentic Himalayan natural products sourced directly from mountain farmers
 - Products: Wild Honey (Himachal), A2 Bilona Ghee, Kashmiri Saffron, Ladakhi Shilajit, Assam Tea, Kangra Tea, Lakadong Turmeric, Bamboo Shoot, Joha Rice, Bhut Jolokia, Black Rice, Large Cardamom, Cold Pressed Mustard Oil, Basmati Rice
-- Free shipping above ₹799 | Delivery: 4-7 business days | Returns: within 7 days
+- Delivery: ${DELIVERY_WINDOWS_TEXT}. Damaged or defective items: claim within ${RETURNS_TIMING.claimWindow} of delivery with a photo or video (see the Returns & Refunds policy). Shipping charges and any free-shipping rule are shown in the cart and on the Shipping Policy page — never quote a free-shipping threshold or a general return window from memory.
 - Website: pahadiroots.com
 
 YOU CAN ANSWER FREELY:

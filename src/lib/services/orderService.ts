@@ -304,9 +304,13 @@ export interface StoredOrderItem { product_id: unknown; variant_id: unknown; qua
  * Coupons are not compared here (the discount is already baked into total_amount and
  * the client resets its key when the coupon changes) — see useCheckoutPage.
  */
+export interface IdempotencyAddress { line1?: string | null; city?: string | null; state?: string | null; pincode?: string | null }
+
+const normAddr = (v: unknown): string => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+
 export function describeIdempotencyMismatch(
-  stored: { orderStatus: string; paymentMethod: string; loyaltyPoints: number; items: StoredOrderItem[] },
-  req:    { paymentMethod: string; loyaltyPoints: number; items: Array<{ productId: string; variantId: string; qty: number }> },
+  stored: { orderStatus: string; paymentMethod: string; loyaltyPoints: number; items: StoredOrderItem[]; shipping?: IdempotencyAddress | null },
+  req:    { paymentMethod: string; loyaltyPoints: number; items: Array<{ productId: string; variantId: string; qty: number }>; address?: IdempotencyAddress | null },
 ): string | null {
   // A dead order can never be "resumed" — start a fresh one.
   if (stored.orderStatus === 'cancelled' || stored.orderStatus === 'payment_failed') {
@@ -317,6 +321,15 @@ export function describeIdempotencyMismatch(
   }
   if (Number(stored.loyaltyPoints) !== Number(req.loyaltyPoints)) {
     return 'loyalty points changed'
+  }
+  // Nov 2026 audit (ORD-ADDR): the DELIVERY ADDRESS was never compared. A customer who opened Razorpay, closed it, corrected a typo
+  // in the address and paid again reused the key, got the OLD order back and paid for a parcel addressed to the old text. Compared
+  // only where both sides have a value (older rows / partial data never block a genuine retry).
+  if (stored.shipping && req.address) {
+    for (const k of ['pincode', 'state', 'city', 'line1'] as const) {
+      const a = normAddr(stored.shipping[k]), b = normAddr(req.address[k])
+      if (a && b && a !== b) return `delivery address changed (${k})`
+    }
   }
 
   const remaining = stored.items.map(r => ({
@@ -439,7 +452,7 @@ export async function createOrder(
   // 1. Idempotency check — return existing order if same key
   const { data: existing } = await withTimeout(
     db.from('orders')
-      .select('id, order_number, total_amount, order_status, payment_status, payment_method, loyalty_points_redeemed, confirmation_token')
+      .select('id, order_number, total_amount, order_status, payment_status, payment_method, loyalty_points_redeemed, confirmation_token, shipping_address')
       .eq('idempotency_key', input.idempotencyKey)
       .maybeSingle(),
     8_000,
@@ -465,11 +478,23 @@ export async function createOrder(
         paymentMethod: String(existing.payment_method),
         loyaltyPoints: Number(existing.loyalty_points_redeemed ?? 0),
         items:         (existingItems ?? []) as StoredOrderItem[],
+        shipping: (() => {
+          const sa = (existing as { shipping_address?: Record<string, unknown> | null }).shipping_address
+          return sa && typeof sa === 'object'
+            ? { line1: sa.address_line1 as string | null, city: sa.city as string | null, state: sa.state as string | null, pincode: sa.pincode as string | null }
+            : null
+        })(),
       },
       {
         paymentMethod: input.paymentMethod,
         loyaltyPoints: Number(input.loyaltyPointsRedeemed ?? 0),
         items:         input.items,
+        address: {
+          line1:   [input.flat, input.area].filter(Boolean).join(', '),
+          city:    input.city,
+          state:   input.state,
+          pincode: input.pincode,
+        },
       },
     )
     if (mismatch) throw new IdempotencyConflictError(mismatch)
