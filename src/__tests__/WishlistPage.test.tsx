@@ -118,6 +118,11 @@ describe('Wishlist page — populated wishlist', () => {
     await waitFor(() => expect(screen.getAllByTestId('product-card')).toHaveLength(2))
 
     fireEvent.click(screen.getByText('Clear all'))
+    expect(useUserStore.getState().wishlist).toEqual([1, 2])          // not yet: needs confirmation
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(useUserStore.getState().wishlist).toEqual([1, 2])
+    fireEvent.click(screen.getByText('Clear all'))
+    fireEvent.click(screen.getByText('Yes, remove all'))
     expect(useUserStore.getState().wishlist).toEqual([])
   })
 })

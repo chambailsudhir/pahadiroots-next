@@ -15,18 +15,35 @@ interface UserStore {
   user:             User | null
   savedAddresses:   SavedAddress[]
   wishlist:         string[]      // productIds
+  // Which account the local wishlist belongs to (null = a guest list). A different user signing in on the same browser
+  // must never inherit — or upload — the previous user's list (audit Nov 2026).
+  wishlistOwner:    string | null
+  // Ids the server is known to hold (last GET / successful PATCH). Lets a reload upload only what is NOT yet synced and
+  // lets the server list stay authoritative for ids this device did not touch (a removal made on another device sticks).
+  lastSynced:       string[]
 
   // BUG FIX: hydration-race — see matching fields/comment in cartStore.ts.
   _hasHydrated:     boolean
   setHasHydrated:   (state: boolean) => void
 
   setUser:          (user: User | null) => void
-  logout:           () => void
+  logout:           (opts?: { clearWishlist?: boolean }) => void
   setAddresses:     (addresses: SavedAddress[]) => void
   setWishlist:      (ids: string[]) => void   // used by useAuth to load server wishlist on login
   addToWishlist:    (productId: string) => void
   removeFromWishlist: (productId: string) => void
   isInWishlist:     (productId: string) => boolean
+}
+
+type OwnerPatch = Pick<UserStore, 'wishlistOwner' | 'lastSynced'> & Partial<Pick<UserStore, 'wishlist'>>
+
+/** What has to change in the wishlist bookkeeping when `user` becomes the signed-in user. Empty object = nothing. */
+function ownerPatch(state: Pick<UserStore, 'wishlistOwner'>, user: User | null): Partial<OwnerPatch> {
+  if (!user) return {}
+  const owner = state.wishlistOwner ?? null
+  if (owner === user.id) return {}
+  if (owner === null) return { wishlistOwner: user.id, lastSynced: [] }               // guest list → merged into this account
+  return { wishlistOwner: user.id, wishlist: [], lastSynced: [] }                      // someone else's list → dropped
 }
 
 export const useUserStore = create<UserStore>()(
@@ -35,24 +52,39 @@ export const useUserStore = create<UserStore>()(
       user:           null,
       savedAddresses: [],
       wishlist:       [],
+      wishlistOwner:  null,
+      lastSynced:     [],
       _hasHydrated:   false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
 
-      setUser: (user) => set({ user }),
+      setUser: (user) => set(state => ({ user, ...ownerPatch(state, user) })),
 
-      logout: () => set({ user: null, savedAddresses: [] }),
-      // Note: wishlist is intentionally NOT cleared on logout.
-      // Users expect their saved items to still be there when they log back in.
-      // Server wishlist is loaded fresh on the next login via useAuth.
+      logout: (opts) => set(opts?.clearWishlist
+        ? { user: null, savedAddresses: [], wishlist: [], wishlistOwner: null, lastSynced: [] }
+        : { user: null, savedAddresses: [] }),
+      // Note: wishlist is intentionally NOT cleared on logout (opts.clearWishlist, used after account deletion, does).
+      // Users expect their saved items to still be there when they log back in. It stays tagged with `wishlistOwner`,
+      // so if a DIFFERENT user signs in on this browser the list is dropped (setUser / ownerPatch), never uploaded.
 
       setAddresses: (addresses) => set({ savedAddresses: addresses }),
 
       // Called by useAuth after login — merges server wishlist with any locally
       // added items so the user never loses work done while logged out.
+      // The server list is authoritative for ids this device did not change since the last sync:
+      //   • ids added here and not yet synced are kept (never lose work);
+      //   • ids removed here since the last sync stay removed (the pending removal is still on its way);
+      //   • ids that were synced but are gone from the server were removed on another device → dropped here too.
+      // An empty local list can only ever ADD the server's ids (ACC-052).
       setWishlist: (ids) =>
-        set(state => ({
-          wishlist: Array.from(new Set([...ids, ...state.wishlist])),
-        })),
+        set(state => {
+          const local = new Set(state.wishlist), synced = new Set(state.lastSynced ?? [])
+          const locallyRemoved = new Set([...synced].filter(id => !local.has(id)))
+          const locallyAdded   = state.wishlist.filter(id => !synced.has(id))
+          return {
+            wishlist:   Array.from(new Set([...ids.filter(id => !locallyRemoved.has(id)), ...locallyAdded])),
+            lastSynced: Array.from(new Set(ids)),
+          }
+        }),
 
       addToWishlist: (productId) =>
         set(state => ({
@@ -129,29 +161,58 @@ export const selectHasHydrated = (s: { _hasHydrated: boolean }): boolean =>
 if (typeof window !== 'undefined') {
   let syncTimer: ReturnType<typeof setTimeout> | null = null
   let prevWishlist: string[] = useUserStore.getState().wishlist
+  let prevSynced = useUserStore.getState().lastSynced
+  // Unsent changes
   const pendingAdd    = new Set<string>()
   const pendingRemove = new Set<string>()
+  // Changes inside the request that is currently on the wire. They are tracked separately so that an id un-favourited
+  // while its add is in flight still queues a remove (it used to be collapsed into nothing → the server kept it).
+  let inflightAdd    = new Set<string>()
+  let inflightRemove = new Set<string>()
   let sending = false
+  let epoch   = 0          // bumped whenever the signed-in user changes; a response from an older epoch is ignored
 
   function flush() {
     if (sending || (pendingAdd.size === 0 && pendingRemove.size === 0)) return
     const add = [...pendingAdd], remove = [...pendingRemove]
+    inflightAdd = new Set(add); inflightRemove = new Set(remove)
+    pendingAdd.clear(); pendingRemove.clear()
+    const myEpoch = epoch
     sending = true
+
+    const requeue = (dropAdds: boolean) => {
+      if (myEpoch !== epoch) return
+      // keep the unsent delta for the next attempt — unless the customer has since reversed it
+      if (!dropAdds) add.forEach(id => { if (!pendingRemove.has(id)) pendingAdd.add(id) })
+      remove.forEach(id => { if (!pendingAdd.has(id)) pendingRemove.add(id) })
+    }
     // Fire-and-forget — no UI feedback needed for background sync
     fetch('/api/wishlist', {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ add, remove }),
-    }).then(res => {
+    }).then(async res => {
+      if (myEpoch !== epoch) return                         // another user signed in meanwhile: this answer is not theirs
       if (res.ok) {
-        add.forEach(id => pendingAdd.delete(id))
-        remove.forEach(id => pendingRemove.delete(id))
+        let serverList: string[] | null = null
+        try { const j = await res.json(); if (Array.isArray(j?.wishlist)) serverList = j.wishlist.map(String) } catch { /* body optional */ }
+        const st = useUserStore.getState()
+        const base = serverList ?? [...new Set([...(st.lastSynced ?? []), ...add])].filter(id => !remove.includes(id))
+        useUserStore.setState({ lastSynced: base })
+      } else if (res.status === 409) {
+        // list is full (cap) → these adds can never succeed; anything else (concurrent edit) is retried
+        let full = false
+        try { full = (await res.json())?.code === 'wishlist_full' } catch { /* not JSON */ }
+        requeue(full)
+      } else {
+        requeue(false)                                      // e.g. 401 logged out, 503: retried with the next change
       }
-      // not ok (e.g. 401 logged out, 503): keep the delta — it is sent with the next change / retry
     }).catch((err: unknown) => {
       console.warn('[userStore] wishlist sync failed:', err)
+      requeue(false)
     }).finally(() => {
       sending = false
+      inflightAdd = new Set(); inflightRemove = new Set()
       if (pendingAdd.size > 0 || pendingRemove.size > 0) schedule()   // changes arrived while this request was in flight
     })
   }
@@ -164,25 +225,47 @@ if (typeof window !== 'undefined') {
 
   useUserStore.subscribe(state => {
     const userId = state.user?.id ?? null
-    const justSignedIn = !prevUserId && !!userId
-    prevUserId = userId
-    if (!userId) { pendingAdd.clear(); pendingRemove.clear() }                      // guests: local only
-    // A guest who built a wishlist and then signs in: those items are not a "change", yet they must reach the account.
-    // Offering them all as ADDS is safe — adds only ever union into the stored list.
-    if (justSignedIn) { state.wishlist.forEach(id => pendingAdd.add(id)); if (pendingAdd.size > 0) schedule() }
+
+    if (userId !== prevUserId) {
+      // The account changed (sign-in, sign-out, switch): deltas collected for the previous user must never be flushed
+      // with the new user's cookie.
+      if (userId && state.user && (state.wishlistOwner ?? null) !== userId) {
+        // user set without setUser(): apply the same ownership rules (drop another user's list / adopt a guest list)
+        useUserStore.setState(ownerPatch(state, state.user))
+        return                                              // re-enters with owner set; prevUserId is handled there
+      }
+      const justSignedIn = !prevUserId && !!userId
+      prevUserId = userId
+      epoch++
+      pendingAdd.clear(); pendingRemove.clear(); inflightAdd = new Set(); inflightRemove = new Set()
+      prevWishlist = state.wishlist; prevSynced = state.lastSynced   // a list swap on account change is not a customer edit
+      // A signed-in user's list that was not yet synced (a guest list being merged, or additions made offline) must reach
+      // the account. Offering them as ADDS is safe — adds only ever union into the stored list. Ids that the server is
+      // already known to hold are NOT re-sent (a stale device must not resurrect items removed elsewhere).
+      if (justSignedIn) {
+        const synced = new Set(state.lastSynced ?? [])
+        state.wishlist.forEach(id => { if (!synced.has(id)) pendingAdd.add(id) })
+        if (pendingAdd.size > 0) schedule()
+      }
+      return
+    }
+    if (!userId) { pendingAdd.clear(); pendingRemove.clear(); return }              // guests: local only
+
+    // The server list was just applied (setWishlist) or a sync was confirmed: ids that vanished here were removed on
+    // another device — not a customer removal, so nothing is queued.
+    if (state.lastSynced !== prevSynced) { prevSynced = state.lastSynced; prevWishlist = state.wishlist; return }
 
     // Skip unrelated state changes (setAddresses, …) — only a new wishlist array is a wishlist change.
     if (state.wishlist === prevWishlist) return
     const before = new Set(prevWishlist), after = new Set(state.wishlist)
     prevWishlist = state.wishlist
 
-    if (!userId) return
-
     for (const id of after)  if (!before.has(id)) { pendingAdd.add(id);    pendingRemove.delete(id) }
     for (const id of before) if (!after.has(id)) {
-      // added and removed again before anything was sent → the server never needs to hear about it
-      if (pendingAdd.has(id)) pendingAdd.delete(id)
-      else pendingRemove.add(id)
+      // added and removed again before anything was sent → the server never needs to hear about it.
+      // If an add of this id is already on the wire, the server WILL get it, so the removal must be sent too.
+      if (pendingAdd.has(id) && !inflightAdd.has(id)) pendingAdd.delete(id)
+      else { pendingAdd.delete(id); pendingRemove.add(id) }
     }
     if (pendingAdd.size > 0 || pendingRemove.size > 0) schedule()
   })

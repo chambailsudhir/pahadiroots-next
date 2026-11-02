@@ -12,7 +12,7 @@
 // anon RLS for product_variants, and showed the raw DB error string to
 // customers. Oct 2026 audit follow-up (same class as Issue 7).
 // ─────────────────────────────────────────────────────────────
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useUserStore }  from '@/store/userStore'
 import { useSearchCatalog } from '@/hooks/useSearchCatalog'
@@ -24,6 +24,8 @@ import styles from '../styles/account.module.css'
 export default function WishlistPage() {
   const wishlist           = useUserStore(s => s.wishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
+  // "Clear all" is destructive and syncs to the account straight away, so it takes a confirm step (audit Nov 2026).
+  const [confirmingClear, setConfirmingClear] = useState(false)
 
   const { data: catalog, isLoading, error } = useSearchCatalog(wishlist.length > 0)
 
@@ -42,14 +44,27 @@ export default function WishlistPage() {
             <span className={styles.wlCount}>({wishlist.length})</span>
           )}
         </h1>
-        {wishlist.length > 0 && (
-          <button
-            type="button"
-            onClick={() => wishlist.forEach(id => removeFromWishlist(id))}
-            className={styles.wlClearBtn}
-          >
+        {wishlist.length > 0 && !confirmingClear && (
+          <button type="button" onClick={() => setConfirmingClear(true)} className={styles.wlClearBtn}>
             Clear all
           </button>
+        )}
+        {wishlist.length > 0 && confirmingClear && (
+          <div role="alertdialog" aria-labelledby="wl-clear-q" style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
+            <span id="wl-clear-q">Remove all {wishlist.length} saved item{wishlist.length === 1 ? '' : 's'}?</span>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => { [...wishlist].forEach(id => removeFromWishlist(id)); setConfirmingClear(false) }}
+              className={styles.wlClearBtn}
+              style={{ color: '#c0392b', fontWeight: 600 }}
+            >
+              Yes, remove all
+            </button>
+            <button type="button" onClick={() => setConfirmingClear(false)} className={styles.wlClearBtn}>
+              Cancel
+            </button>
+          </div>
         )}
       </div>
 

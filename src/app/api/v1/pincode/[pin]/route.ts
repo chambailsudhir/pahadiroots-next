@@ -5,7 +5,7 @@
 // browser: each typed pincode left our origin (privacy), the host had to be allowed in the CSP, and a slow/blocked
 // third party was a per-customer failure. This route is a thin, validated, cached pass-through:
 //   • the browser only ever talks to us (CSP no longer needs the third-party host);
-//   • an answer for a given pincode is cached for 30 days (pincodes almost never change), so the upstream is hit
+//   • a validated answer for a given pincode is cached for 30 days (CDN; never the Next data cache, which would also keep error bodies) (pincodes almost never change), so the upstream is hit
 //     once per pincode instead of once per customer;
 //   • only the four fields the forms use are forwarded — never arbitrary upstream content;
 //   • an upstream failure is a 502 that is NOT cached, so the form falls back to manual entry and the next try retries.
@@ -17,6 +17,7 @@ import { PIN_REGEX } from '@/lib/pincodeZones'
 
 const UPSTREAM_TIMEOUT_MS = 4_000
 const THIRTY_DAYS = 30 * 24 * 60 * 60
+const NEGATIVE_CACHE = 60 * 60        // a confirmed "no such pincode" is cached for an hour only
 
 interface UpstreamOffice { Name?: unknown; District?: unknown; Block?: unknown; State?: unknown }
 const str = (v: unknown) => (typeof v === 'string' ? v.slice(0, 80) : '')
@@ -33,15 +34,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ pin:
   try {
     const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`, {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      next:   { revalidate: THIRTY_DAYS },
+      // NOT the 30-day Next data cache: it stores whatever the upstream answered, including a 200 whose body is an error
+      // under load, which then showed "not found" for a valid PIN to everyone. Only validated answers are cached below,
+      // through our own Cache-Control (CDN).
+      cache:  'no-store',
     })
     if (!res.ok) return NextResponse.json({ error: 'Pincode service unavailable' }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
 
-    const data = await res.json() as Array<{ Status?: unknown; PostOffice?: UpstreamOffice[] | null }>
-    const offices = Array.isArray(data) && Array.isArray(data[0]?.PostOffice) ? data[0]!.PostOffice! : []
+    const data = await res.json() as Array<{ Status?: unknown; Message?: unknown; PostOffice?: UpstreamOffice[] | null }>
+    const first = Array.isArray(data) ? data[0] : undefined
+    const offices = first?.Status === 'Success' && Array.isArray(first.PostOffice) ? first.PostOffice : []
     if (offices.length === 0) {
-      // A genuine "no such pincode" — safe to cache (for a day, in case it is a new one).
-      return NextResponse.json([{ Status: 'Error', PostOffice: null }], { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600' } })
+      // Only an explicit "No records found" is a genuine "no such pincode". Any other non-success body (Status "Error"
+      // with a different/absent message, PostOffice null, an empty array…) is the upstream misbehaving under load —
+      // never cache it.
+      const msg = typeof first?.Message === 'string' ? first.Message : ''
+      if (!/no records found/i.test(msg)) {
+        return NextResponse.json({ error: 'Pincode service unavailable' }, { status: 502, headers: { 'Cache-Control': 'no-store' } })
+      }
+      return NextResponse.json([{ Status: 'Error', PostOffice: null }], { headers: { 'Cache-Control': `public, s-maxage=${NEGATIVE_CACHE}, stale-while-revalidate=600` } })
     }
 
     const body = [{
