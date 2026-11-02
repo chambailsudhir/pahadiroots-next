@@ -359,9 +359,11 @@ export default function HeroBanner({ images, settings }: Props) {
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
                   <Image src={img.url} alt="" aria-hidden="true" fill sizes="100vw"
                     className="hhero-baked-backdrop"
+                    quality={60}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%' }} />
                   <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
                     className="hhero-baked-img"
+                    quality={60}
                     onLoad={e => handleImgLoad(i, e)}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }}
                     {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : {})} />

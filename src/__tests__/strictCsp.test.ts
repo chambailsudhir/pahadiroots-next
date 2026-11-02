@@ -9,8 +9,10 @@ const scriptSrc = (csp: string) => csp.split('; ').find(d => d.startsWith('scrip
 
 describe('strict CSP for checkout and account', () => {
   it('applies to /checkout and /account (and below), not to look-alikes or other pages', () => {
-    for (const p of ['/checkout', '/checkout/pay', '/account', '/account/orders/1']) expect(STRICT_CSP_PATH.test(p)).toBe(true)
-    for (const p of ['/', '/accountant', '/checkout-help', '/products/checkout', '/order-success']) expect(STRICT_CSP_PATH.test(p)).toBe(false)
+    // Every route here is already rendered per request, so the nonce policy costs no caching.
+    for (const p of ['/checkout', '/checkout/pay', '/account', '/account/orders/1', '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals', '/regions/hp']) expect(STRICT_CSP_PATH.test(p), p).toBe(true)
+    // ISR-cached pages keep the static policy: homepage, product detail, blog posts, region index, and look-alike paths.
+    for (const p of ['/', '/accountant', '/checkout-help', '/products/checkout', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/order-success', '/cart']) expect(STRICT_CSP_PATH.test(p), p).toBe(false)
   })
 
   it('has a nonce and hashes but NO unsafe-inline in script-src', () => {

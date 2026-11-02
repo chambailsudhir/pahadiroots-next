@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
 import { ANALYTICS_URL_GUARD_SCRIPT } from '@/lib/analyticsGuard'
 import { consentBootstrapScript, consentBootstrapInputs } from '@/lib/consent'
-import { buildCsp } from '@/lib/csp'
+import { buildCsp, STRICT_CSP_PATH as SHARED_STRICT_CSP_PATH } from '@/lib/csp'
 
 /**
  * Strict Content-Security-Policy for the pages where a script-injection bug would cost the most: checkout (payment) and the
@@ -14,7 +14,7 @@ import { buildCsp } from '@/lib/csp'
  * is NOT present, so injected `<script>` text or `onerror=` handlers do nothing. Every other page keeps the cache-friendly
  * policy from next.config.js — nonces would make them dynamic and slow.
  */
-export const STRICT_CSP_PATH = /^\/(checkout|account)(\/|$)/
+export const STRICT_CSP_PATH: RegExp = SHARED_STRICT_CSP_PATH
 
 export const sha256b64 = (text: string) => createHash('sha256').update(text, 'utf8').digest('base64')
 export const makeNonce = () => randomBytes(16).toString('base64')

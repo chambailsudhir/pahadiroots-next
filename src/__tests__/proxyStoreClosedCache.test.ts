@@ -15,7 +15,8 @@ async function loadProxy() {
   return import('@/proxy')
 }
 
-function pageReq(path = '/products') {
+// /products is now a strict-CSP route (one extra bootstrap-settings fetch); use an ISR page for the store-open cache test.
+function pageReq(path = '/products/sea-buckthorn') {
   return new NextRequest(`https://pahadiroots.com${path}`, { method: 'GET' })
 }
 
@@ -40,7 +41,7 @@ describe('proxy store-closed cache', () => {
     const { proxy } = await loadProxy()
 
     await proxy(pageReq('/'))
-    await proxy(pageReq('/products'))
+    await proxy(pageReq('/products/sea-buckthorn'))
     await proxy(pageReq('/cart'))
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
@@ -54,7 +55,7 @@ describe('proxy store-closed cache', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { proxy } = await loadProxy()
 
-    const page = await proxy(pageReq('/products'))
+    const page = await proxy(pageReq('/products/sea-buckthorn'))
     expect(page.status).toBeGreaterThanOrEqual(300)
     expect(page.status).toBeLessThan(400)
     expect(page.headers.get('location')).toContain('/maintenance')
@@ -72,17 +73,17 @@ describe('proxy store-closed cache', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { proxy } = await loadProxy()
 
-    const first = await proxy(pageReq('/products'))
+    const first = await proxy(pageReq('/products/sea-buckthorn'))
     expect(first.headers.get('location')).toBeNull() // fail-open: site stays up
 
     // Within 5 s the failure is remembered — no hammering Supabase.
     vi.advanceTimersByTime(2_000)
-    await proxy(pageReq('/products'))
+    await proxy(pageReq('/products/sea-buckthorn'))
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     // After the failure TTL it asks again and now sees the closed flag.
     vi.advanceTimersByTime(4_000)
-    const later = await proxy(pageReq('/products'))
+    const later = await proxy(pageReq('/products/sea-buckthorn'))
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(later.headers.get('location')).toContain('/maintenance')
   })

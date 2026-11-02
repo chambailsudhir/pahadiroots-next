@@ -60,7 +60,7 @@ describe('proxy strict CSP', () => {
   it('does not touch other pages (they keep the cacheable static policy)', async () => {
     const f = stubFetch(settingsReply([]))
     const { proxy } = await loadProxy()
-    for (const p of ['/', '/products', '/accountant', '/order-success']) {
+    for (const p of ['/', '/products/sea-buckthorn', '/accountant', '/order-success']) {
       const res = await proxy(req(p))
       expect(res.headers.get('content-security-policy')).toBeNull()
     }

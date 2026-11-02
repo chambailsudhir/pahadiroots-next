@@ -21,20 +21,20 @@ const headersFor = async (path: string) => {
 describe('next.config.js headers', () => {
   it('hides the X-Powered-By header', () => { expect(config.poweredByHeader).toBe(false) })
 
-  it.each(['/', '/products', '/products/sea-buckthorn', '/collections/himalayan-honey', '/cart', '/order-success', '/api/v1/orders'])(
+  it.each(['/', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/cart', '/order-success', '/api/v1/orders'])(
     'sends exactly one CSP for %s and it has NO unsafe-eval', async path => {
       const { csp } = await headersFor(path)
       expect(csp).toHaveLength(1)
       expect(csp[0]).not.toContain('unsafe-eval')
     })
 
-  it.each(['/checkout', '/checkout/', '/checkout/pay', '/account', '/account/', '/account/orders/1'])(
+  it.each(['/checkout', '/checkout/', '/checkout/pay', '/account', '/account/', '/account/orders/1', '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals', '/regions/hp'])(
     'sends NO static CSP on %s — the proxy sends a strict per-request one there', async path => {
       expect((await headersFor(path)).csp).toHaveLength(0)
     })
 
   it('does not exempt look-alike paths from the static CSP (/accountant, /checkout-help)', async () => {
-    for (const path of ['/accountant', '/checkout-help']) expect((await headersFor(path)).csp).toHaveLength(1)
+    for (const path of ['/accountant', '/checkout-help', '/products/checkout', '/blog/post', '/regions']) expect((await headersFor(path)).csp).toHaveLength(1)
   })
 
   it('still sends the other security headers on every route, including checkout and account', async () => {
