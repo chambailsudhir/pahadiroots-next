@@ -35,6 +35,21 @@ import {
 } from '@/lib/api/serverUtils'
 
 const MAX_WISHLIST_SIZE = 200
+const MAX_BODY_BYTES    = 65_536
+// products.id is a bigint → a stored/sent id is a plain decimal string (audit Nov 2026: PUT accepted any 64-char string).
+const ID_RE = /^[0-9]{1,15}$/
+// The optimistic-concurrency guard puts the stored JSON in the query string. A canonical list of <=200 ids is ~5 KB
+// encoded; anything longer (legacy/oversized value) would exceed URL limits and make PATCH fail for that account forever,
+// so such a value is rewritten without the value guard (the write is canonical and bounded, so it self-heals).
+const MAX_GUARD_URL_CHARS = 6_000
+
+/** Read the body without trusting Content-Length (chunked bodies have none). */
+async function readJsonBody(req: NextRequest): Promise<{ ok: true; value: unknown } | { ok: false; status: number; msg: string }> {
+  let text: string
+  try { text = await req.text() } catch { return { ok: false, status: 400, msg: 'Invalid JSON' } }
+  if (text.length > MAX_BODY_BYTES) return { ok: false, status: 413, msg: 'Request body too large' }
+  try { return { ok: true, value: JSON.parse(text) } } catch { return { ok: false, status: 400, msg: 'Invalid JSON' } }
+}
 
 
 // ── helpers ───────────────────────────────────────────────────
@@ -45,13 +60,20 @@ async function readStoredWishlistRaw(customerId: string | number): Promise<strin
 }
 const parseWishlist = (raw: string | null): string[] => {
   if (!raw) return []
-  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : [] } catch { return [] }
+  try {
+    const v = JSON.parse(raw)
+    if (!Array.isArray(v)) return []
+    // legacy lists may hold numbers; normalise to strings and drop anything that is not a product id
+    const ids = v.map(x => (typeof x === 'number' && Number.isSafeInteger(x) ? String(x) : x))
+                 .filter((x): x is string => typeof x === 'string' && ID_RE.test(x))
+    return [...new Set(ids)].slice(0, MAX_WISHLIST_SIZE)
+  } catch { return [] }
 }
 async function readStoredWishlist(customerId: string | number): Promise<string[]> {
   return parseWishlist(await readStoredWishlistRaw(customerId))
 }
 const cleanIds = (v: unknown): string[] =>
-  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0 && x.length <= 64))].slice(0, MAX_WISHLIST_SIZE) : []
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && ID_RE.test(x)))].slice(0, MAX_WISHLIST_SIZE) : []
 
 // ── PATCH /api/wishlist — merge a change into the stored list ──
 export async function PATCH(req: NextRequest) {
@@ -68,11 +90,9 @@ export async function PATCH(req: NextRequest) {
   if (!token && !refreshed) return fail(401, 'Not logged in')
   if (refreshed) token = refreshed.token
 
-  const contentLength = Number(req.headers.get('content-length') ?? 0)
-  if (contentLength > 65_536) return fail(413, 'Request body too large')
-
-  let body: { add?: unknown; remove?: unknown } = {}
-  try { body = await req.json() } catch { return fail(400, 'Invalid JSON') }
+  const parsed = await readJsonBody(req)
+  if (!parsed.ok) return fail(parsed.status, parsed.msg)
+  const body = (parsed.value && typeof parsed.value === 'object' ? parsed.value : {}) as { add?: unknown; remove?: unknown }
   const add = cleanIds(body.add), remove = new Set(cleanIds(body.remove))
   if (add.length === 0 && remove.size === 0) return fail(400, 'Nothing to change')
 
@@ -86,9 +106,19 @@ export async function PATCH(req: NextRequest) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const raw      = await readStoredWishlistRaw(profile.id)
       const current  = parseWishlist(raw)
-      merged = [...new Set([...current, ...add])].filter(id => !remove.has(id)).slice(0, MAX_WISHLIST_SIZE)
+      merged = [...new Set([...current, ...add])].filter(id => !remove.has(id))
+      if (merged.length > MAX_WISHLIST_SIZE) {
+        // Previously the overflow was silently dropped and the request still reported success.
+        return NextResponse.json(
+          { error: `Your wishlist is full (max ${MAX_WISHLIST_SIZE} items)`, code: 'wishlist_full', wishlist: current },
+          { status: 409 },
+        )
+      }
       if (JSON.stringify(merged) === JSON.stringify(current) && raw !== null) break          // nothing to write
-      const guard = raw === null ? 'wishlist_items=is.null' : `wishlist_items=eq.${encodeURIComponent(raw)}`
+      const encodedRaw = raw === null ? '' : encodeURIComponent(raw)
+      const guard = raw === null
+        ? 'wishlist_items=is.null'
+        : (encodedRaw.length > MAX_GUARD_URL_CHARS ? 'wishlist_items=not.is.null' : `wishlist_items=eq.${encodedRaw}`)
       const written = await sbAdmin(
         'PATCH',
         `/rest/v1/customers?id=eq.${profile.id}&${guard}`,
@@ -131,9 +161,7 @@ export async function GET(req: NextRequest) {
     let wishlist: string[] = []
     if (Array.isArray(rows) && rows.length > 0) {
       const raw = (rows[0] as { wishlist_items?: string | null }).wishlist_items
-      if (raw) {
-        try { wishlist = JSON.parse(raw) } catch { wishlist = [] }
-      }
+      wishlist = parseWishlist(typeof raw === 'string' ? raw : null)   // strings only, valid ids only, deduped, capped
     }
 
     const res = ok({ wishlist })
@@ -187,21 +215,14 @@ export async function PUT(req: NextRequest) {
   if (!token && !refreshed) return fail(401, 'Not logged in')
   if (refreshed) token = refreshed.token
 
-  const contentLength = Number(req.headers.get('content-length') ?? 0)
-  if (contentLength > 65_536) return fail(413, 'Request body too large')
-
-  let body: { wishlist?: unknown } = {}
-  try { body = await req.json() } catch { return fail(400, 'Invalid JSON') }
+  const parsed = await readJsonBody(req)
+  if (!parsed.ok) return fail(parsed.status, parsed.msg)
+  const body = (parsed.value && typeof parsed.value === 'object' ? parsed.value : {}) as { wishlist?: unknown }
 
   if (!Array.isArray(body.wishlist)) return fail(400, 'wishlist must be an array')
 
-  // Sanitise: keep only non-empty strings, deduplicate, cap at MAX
-  const wishlist: string[] = [
-    ...new Set(
-      (body.wishlist as unknown[])
-        .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
-    ),
-  ].slice(0, MAX_WISHLIST_SIZE)
+  // Sanitise: valid product ids only, deduplicate, cap at MAX
+  const wishlist: string[] = cleanIds(body.wishlist)
 
   try {
     const user    = await sbAuth('/user', null, token!)

@@ -26,11 +26,30 @@ describe('GET /api/v1/pincode/[pin]', () => {
     expect(res.headers.get('Cache-Control')).toMatch(/s-maxage=2592000/)
   })
 
-  it('a genuine "no such pincode" keeps the upstream shape and is cached for a day', async () => {
-    upstream([{ Status: 'Error', PostOffice: null }])
+  it('a genuine "No records found" keeps the upstream shape and is cached only briefly', async () => {
+    upstream([{ Status: 'Error', Message: 'No records found', PostOffice: null }])
     const res = await call('999999')
     expect((await res.json())[0].PostOffice).toBeNull()
-    expect(res.headers.get('Cache-Control')).toMatch(/s-maxage=86400/)
+    expect(res.headers.get('Cache-Control')).toMatch(/s-maxage=3600/)
+  })
+
+  it.each([
+    [[{ Status: 'Error', PostOffice: null }]],
+    [[{ Status: 'Error', Message: 'Too many requests', PostOffice: null }]],
+    [[{ Status: 'Success', PostOffice: [] }]],
+    [[]],
+    [{ message: 'overloaded' }],
+  ])('an upstream 200 whose body is an error (%j) is a 502 and is NOT cached', async (body) => {
+    upstream(body)
+    const res = await call('248001')
+    expect(res.status).toBe(502); expect(res.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('does not use the 30-day Next data cache for the upstream fetch', async () => {
+    upstream([{ Status: 'Success', PostOffice: [{ Name: 'a', District: 'b', Block: 'c', State: 'd' }] }])
+    await call('248001')
+    const init = fetchMock.mock.calls[0][1]
+    expect(init.cache).toBe('no-store'); expect(init.next).toBeUndefined()
   })
 
   it('an upstream failure or timeout is a 502 that is NEVER cached (so the next try retries)', async () => {
@@ -44,7 +63,7 @@ describe('GET /api/v1/pincode/[pin]', () => {
   })
 
   it('rate-limits a single IP', async () => {
-    upstream([{ Status: 'Error', PostOffice: null }])
+    upstream([{ Status: 'Error', Message: 'No records found', PostOffice: null }])
     const { GET } = await import('@/app/api/v1/pincode/[pin]/route')
     let last = 200
     for (let i = 0; i < 70; i++) {

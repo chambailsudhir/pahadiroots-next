@@ -5,7 +5,7 @@
  * load failure with a customer-friendly message (never a raw DB error).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { useUserStore } from '@/store/userStore'
 
 const { mockUseSearchCatalog } = vi.hoisted(() => ({ mockUseSearchCatalog: vi.fn() }))
@@ -72,5 +72,21 @@ describe('Account wishlist — every saved product has since been removed (Oct 2
 
     expect(screen.getByText('Your saved items are no longer available')).toBeTruthy()
     expect(screen.getByText(/Browse Products/).closest('a')?.getAttribute('href')).toBe('/products')
+  })
+})
+
+describe('Account wishlist page — Clear all', () => {
+  it('asks for confirmation; Cancel keeps the list, confirming clears it', async () => {
+    useUserStore.setState({ wishlist: ['1', '2'] } as any)
+    mockUseSearchCatalog.mockReturnValue({ data: [prod(1, 'Honey'), prod(2, 'Ghee')], isLoading: false, error: undefined })
+    render(<AccountWishlistPage />)
+    fireEvent.click(screen.getByText('Clear all'))
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    expect(useUserStore.getState().wishlist).toEqual(['1', '2'])
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(useUserStore.getState().wishlist).toEqual(['1', '2'])
+    fireEvent.click(screen.getByText('Clear all'))
+    fireEvent.click(screen.getByText('Yes, remove all'))
+    expect(useUserStore.getState().wishlist).toEqual([])
   })
 })

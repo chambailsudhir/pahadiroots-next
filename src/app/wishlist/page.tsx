@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { useSearchCatalog } from '@/hooks/useSearchCatalog'
 import { toCardProductData } from '@/lib/normalizeProduct'
@@ -11,6 +11,7 @@ import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 export default function WishlistPublicPage() {
   const wishlist           = useUserStore(s => s.wishlist)
   const removeFromWishlist = useUserStore(s => s.removeFromWishlist)
+  const [confirmingClear, setConfirmingClear] = useState(false)   // destructive + synced to the account → confirm first
 
   // BUG FIX (same class as Issue 7, Oct 2026 audit — found in this pass): this
   // page queried `products` straight from the browser with the anon key and a
@@ -38,10 +39,21 @@ export default function WishlistPublicPage() {
             <p className="text-stone-400 text-sm mt-0.5">{wishlist.length} saved product{wishlist.length > 1 ? 's' : ''}</p>
           )}
         </div>
-        {wishlist.length > 0 && (
-          <button onClick={() => wishlist.forEach(id => removeFromWishlist(id))} className="text-xs text-stone-400 hover:text-red-500 transition-colors">
+        {wishlist.length > 0 && !confirmingClear && (
+          <button type="button" onClick={() => setConfirmingClear(true)} className="text-xs text-stone-400 hover:text-red-500 transition-colors">
             Clear all
           </button>
+        )}
+        {wishlist.length > 0 && confirmingClear && (
+          <div role="alertdialog" aria-labelledby="wl-clear-q" className="flex items-center gap-3 text-xs text-stone-600">
+            <span id="wl-clear-q">Remove all {wishlist.length} saved item{wishlist.length === 1 ? '' : 's'}?</span>
+            <button type="button" autoFocus onClick={() => { [...wishlist].forEach(id => removeFromWishlist(id)); setConfirmingClear(false) }} className="font-semibold text-red-600">
+              Yes, remove all
+            </button>
+            <button type="button" onClick={() => setConfirmingClear(false)} className="text-stone-400 hover:text-stone-700">
+              Cancel
+            </button>
+          </div>
         )}
       </div>
 
