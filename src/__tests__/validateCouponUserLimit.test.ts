@@ -1,140 +1,143 @@
 /**
  * validateCouponUserLimit.test.ts
  *
- * Tests for the per-customer usage limit (coupons.user_limit) in
- * validateCouponServer — a column that existed on the coupons table with
- * real values (both live coupons have user_limit=1) but was never actually
- * checked anywhere. Only the store-wide max_uses/uses_count check ran, so a
- * coupon meant to be "once per customer" behaved as "once ever, for the
- * whole store" instead.
+ * "One person / one address, one time only" for per-customer coupons (coupons.user_limit) — the early-warning check the cart and
+ * checkout call (validateCouponServer). Uses a small in-memory fake of the supabase query builder so the rules are tested against
+ * realistic data instead of against the exact shape of each query.
  *
- * Separate file from validateCoupon.test.ts because this needs a
- * multi-table mock (coupons, then conditionally customers + coupon_usage)
- * rather than that file's single-table coupons-only chain.
- *
- * Cases covered:
- *   • No phone provided — per-customer check is skipped (cart-page pre-check
- *     before an address is known); coupon is still valid via max_uses alone.
- *   • user_limit is null — check skipped regardless of phone (unlimited per
- *     customer, existing behaviour unchanged).
- *   • Phone provided but no matching customer (brand-new customer) — 0 prior
- *     uses assumed, coupon is valid.
- *   • Phone matches a customer who has already used the coupon user_limit
- *     times — rejected with a clear, non-committal error message.
- *   • Phone matches a customer under their per-customer limit — valid.
- *   • Phone normalisation — a phone with +91/formatting still matches the
- *     stored normalized_phone.
+ * The case that mattered (Nov 2026): a GUEST's earlier use is stored in coupon_usage with customer_id NULL (a typed phone number
+ * is not proof of identity), so the old check — which looked for rows by customer_id — could never see it and the guest could use a
+ * one-time coupon again and again. History is now rebuilt from the ORDER behind each use, and the delivery ADDRESS counts too.
  */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ─── Mock supabase BEFORE importing the module under test ─────────────────
-// Three tables get queried depending on the path: coupons (always),
-// customers and coupon_usage (only when user_limit != null && phone given).
+type Row = Record<string, unknown>
+const db: Record<string, Row[]> = {}
+let failTable: string | null = null
 
-const mockCouponSingle = vi.fn()
-const mockCouponEq2    = vi.fn(() => ({ single: mockCouponSingle }))
-const mockCouponEq1    = vi.fn(() => ({ eq: mockCouponEq2 }))
-const mockCouponSelect = vi.fn(() => ({ eq: mockCouponEq1 }))
-
-const mockCustMaybeSingle = vi.fn()
-const mockCustEq          = vi.fn(() => ({ maybeSingle: mockCustMaybeSingle }))
-const mockCustSelect      = vi.fn(() => ({ eq: mockCustEq }))
-
-const mockUsageEq2   = vi.fn()
-const mockUsageEq1   = vi.fn(() => ({ eq: mockUsageEq2 }))
-const mockUsageSelect = vi.fn(() => ({ eq: mockUsageEq1 }))
-
-const mockFrom = vi.fn((table: string) => {
-  if (table === 'coupons')      return { select: mockCouponSelect }
-  if (table === 'customers')    return { select: mockCustSelect }
-  if (table === 'coupon_usage') return { select: mockUsageSelect }
-  throw new Error(`unexpected table in test: ${table}`)
-})
+function from(table: string) {
+  const filters: Array<(r: Row) => boolean> = []
+  let max = Infinity
+  const b: any = {
+    select: () => b,
+    eq:  (c: string, v: unknown)   => { filters.push(r => r[c] === v); return b },
+    neq: (c: string, v: unknown)   => { filters.push(r => r[c] !== v); return b },
+    in:  (c: string, v: unknown[]) => { filters.push(r => v.map(String).includes(String(r[c]))); return b },
+    limit: (n: number) => { max = n; return b },
+    single:      () => { const x = run(); return Promise.resolve({ data: x[0] ?? null, error: x[0] ? null : { message: 'no rows' } }) },
+    maybeSingle: () => { const x = run(); return Promise.resolve({ data: x[0] ?? null, error: null }) },
+    then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
+      if (failTable === table) return Promise.resolve({ data: null, error: { message: 'boom' } }).then(res, rej)
+      return Promise.resolve({ data: run(), error: null }).then(res, rej)
+    },
+  }
+  const run = () => (db[table] ?? []).filter(r => filters.every(f => f(r))).slice(0, max)
+  return b
+}
 
 vi.mock('@/lib/supabase', () => ({
   supabase:         { from: vi.fn() },
-  getServiceClient: vi.fn(() => ({ from: mockFrom })),
+  getServiceClient: vi.fn(() => ({ from })),
 }))
 
 import { validateCouponServer } from '@/lib/services/pricingService'
 
-function couponRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    id: 1,
-    code: 'TESTCODE',
-    type: 'flat',
-    value: 100,
-    max_uses: null,
-    uses_count: 0,
-    min_order: null,
-    expires_at: null,
-    max_discount: null,
-    user_limit: null,
-    is_active: true,
-    ...overrides,
-  }
-}
+const coupon = (over: Row = {}): Row => ({
+  id: 1, code: 'WELCOME50', type: 'flat', value: 50, max_uses: 100, uses_count: 1, min_order: null, expires_at: null,
+  max_discount: null, user_limit: 1, first_order_only: false, is_active: true, ...over,
+})
+const ADDR = { pincode: '176082', address: '12 Main Road, Near Hospital' }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  for (const k of Object.keys(db)) delete db[k]
+  failTable = null
+  db.coupons = [coupon()]
+  db.customers = [
+    { id: 42, normalized_phone: '9876543210' },
+    { id: 77, normalized_phone: '9000000001' },
+  ]
+  // The earlier use: a GUEST order (usage row has NO customer_id), placed by customer 42 at 12 Main Road.
+  db.coupon_usage = [{ id: 1, coupon_id: 1, order_id: 500, customer_id: null }]
+  db.orders = [{
+    id: 500, customer_id: 42, payment_status: 'cod_pending', order_status: 'confirmed',
+    shipping_address: { pincode: '176082', address_line1: '12 Main Road, Near Hospital', city: 'Kangra', state: 'Himachal Pradesh' },
+  }]
 })
 
-describe('validateCouponServer — per-customer usage limit (user_limit)', () => {
-  it('skips the per-customer check when no phone is provided (e.g. cart-page pre-check)', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ user_limit: 1 }), error: null })
-    const result = await validateCouponServer('WELCOME50', 500) // no phone arg
-    expect(result.valid).toBe(true)
-    expect(mockFrom).not.toHaveBeenCalledWith('customers')
-    expect(mockFrom).not.toHaveBeenCalledWith('coupon_usage')
+describe('validateCouponServer — one person / one address, one time only', () => {
+  it('guest on the cart page (nothing known yet): cannot be checked, so the coupon is accepted and flagged one-time', async () => {
+    const r = await validateCouponServer('WELCOME50', 700)
+    expect(r.valid).toBe(true)
+    expect(r.coupon?.oneTimeUse).toBe(true)
   })
 
-  it('skips the check entirely when user_limit is null, even with a phone given', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ user_limit: null }), error: null })
-    const result = await validateCouponServer('UNLIMITED', 500, '9876543210')
-    expect(result.valid).toBe(true)
-    expect(mockFrom).not.toHaveBeenCalledWith('customers')
+  it('a coupon with no per-customer limit is never refused on history', async () => {
+    db.coupons = [coupon({ user_limit: null })]
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9876543210', ...ADDR })
+    expect(r.valid).toBe(true)
+    expect(r.coupon?.oneTimeUse).toBeUndefined()
   })
 
-  it('is valid for a brand-new customer (no matching row in customers) — 0 prior uses assumed', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ user_limit: 1 }), error: null })
-    mockCustMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
-    const result = await validateCouponServer('WELCOME50', 500, '9876543210')
-    expect(result.valid).toBe(true)
-    expect(mockFrom).not.toHaveBeenCalledWith('coupon_usage') // no customer id to check usage against
+  it('THE BUG: a guest who already used it is refused by PHONE even though their usage row has no customer_id', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9876543210' })
+    expect(r).toMatchObject({ valid: false, error: 'You have already used this coupon' })
   })
 
-  it('rejects when the matched customer has already reached their per-customer limit', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ id: 7, user_limit: 1 }), error: null })
-    mockCustMaybeSingle.mockResolvedValueOnce({ data: { id: 42 }, error: null })
-    mockUsageEq2.mockResolvedValueOnce({ count: 1, error: null })
-
-    const result = await validateCouponServer('WELCOME50', 500, '9876543210')
-
-    expect(result.valid).toBe(false)
-    // Deliberately does not say "usage limit reached" (that phrase means the
-    // store-wide max_uses cap) — this is a different, per-customer reason.
-    expect(result.error).toBe('You have already used this coupon')
-    // Usage is checked against this exact customer + this exact coupon.
-    expect(mockUsageEq1).toHaveBeenCalledWith('coupon_id', 7)
-    expect(mockUsageEq2).toHaveBeenCalledWith('customer_id', 42)
+  it('refuses a signed-in account that has used it (identified from the session, so the CART page can refuse it)', async () => {
+    db.coupon_usage = [{ id: 1, coupon_id: 1, order_id: null, customer_id: 42 }]
+    db.orders = []
+    const r = await validateCouponServer('WELCOME50', 700, { customerId: 42 })
+    expect(r).toMatchObject({ valid: false, error: 'You have already used this coupon' })
   })
 
-  it('is valid when the matched customer is still under their per-customer limit', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ user_limit: 3 }), error: null })
-    mockCustMaybeSingle.mockResolvedValueOnce({ data: { id: 42 }, error: null })
-    mockUsageEq2.mockResolvedValueOnce({ count: 2, error: null })
-
-    const result = await validateCouponServer('LOYAL3X', 500, '9876543210')
-    expect(result.valid).toBe(true)
+  it('refuses a DIFFERENT person / phone at the SAME address (re-typed differently)', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9000000001', pincode: '176082', address: 'Flat No. 12, Main Rd' })
+    expect(r).toMatchObject({ valid: false, error: 'This coupon has already been used for this delivery address' })
   })
 
-  it('normalizes a phone with +91 / formatting before matching against normalized_phone', async () => {
-    mockCouponSingle.mockResolvedValueOnce({ data: couponRecord({ user_limit: 1 }), error: null })
-    mockCustMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+  it('allows a different person at a different address', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9000000001', pincode: '171001', address: '4 Mall Road, Shimla' })
+    expect(r.valid).toBe(true)
+  })
 
-    await validateCouponServer('WELCOME50', 500, '+91 98765-43210')
+  it('allows a neighbour: same PIN and street but a different house number', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9000000001', pincode: '176082', address: '14 Main Road, Near Hospital' })
+    expect(r.valid).toBe(true)
+  })
 
-    expect(mockCustEq).toHaveBeenCalledWith('normalized_phone', '9876543210')
+  it('a brand-new customer with a new address is valid', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9111111111', pincode: '110001', address: 'A-5 Connaught Place' })
+    expect(r.valid).toBe(true)
+  })
+
+  it('normalises +91 / punctuation in the phone before matching', async () => {
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '+91 98765-43210' })
+    expect(r.valid).toBe(false)
+  })
+
+  it('a bare string is still accepted as the phone (legacy call shape)', async () => {
+    expect((await validateCouponServer('WELCOME50', 700, '9876543210')).valid).toBe(false)
+  })
+
+  it('honours a higher limit: used once of three is still valid', async () => {
+    db.coupons = [coupon({ user_limit: 3 })]
+    expect((await validateCouponServer('WELCOME50', 700, { phone: '9876543210', ...ADDR })).valid).toBe(true)
+  })
+
+  it('first-order-only: a customer with an earlier non-cancelled order is refused', async () => {
+    db.coupons = [coupon({ user_limit: null, first_order_only: true })]
+    const r = await validateCouponServer('WELCOME50', 700, { phone: '9876543210' })
+    expect(r).toMatchObject({ valid: false, error: 'This coupon is valid on your first order only' })
+  })
+
+  it('first-order-only: a cancelled earlier order does not count', async () => {
+    db.coupons = [coupon({ user_limit: null, first_order_only: true })]
+    ;(db.orders[0] as Row).order_status = 'cancelled'
+    expect((await validateCouponServer('WELCOME50', 700, { phone: '9876543210' })).valid).toBe(true)
+  })
+
+  it('fails OPEN if the history cannot be read (cart must not block); the order path re-checks and fails closed', async () => {
+    failTable = 'coupon_usage'
+    expect((await validateCouponServer('WELCOME50', 700, { phone: '9876543210' })).valid).toBe(true)
   })
 })

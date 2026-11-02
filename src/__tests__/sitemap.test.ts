@@ -142,4 +142,16 @@ describe('sitemap()', () => {
     expect(at('/collections/ghee')).toBe('2026-10-05T00:00:00.000Z')
     expect(at('/policies/privacy')).toBe('2026-10-01T00:00:00.000Z')    // fixed, not "now"
   })
+
+  it('Nov 2026 audit: a collection with no live products is NOT submitted to search engines', async () => {
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: { from: (table: string) => ({ select: () => makeChain(
+        table === 'products' ? [{ slug: 'a', updated_at: '2026-09-01T00:00:00Z', image_url: null, category_id: 1 }]
+        : table === 'categories' ? [{ id: 1, slug: 'honey' }, { id: 2, slug: 'shilajit' }] : [], []) }) },
+    }))
+    const { default: sitemap } = await import('@/app/sitemap')
+    const urls = (await sitemap()).map(x => x.url)
+    expect(urls.some(u => u.endsWith('/collections/honey'))).toBe(true)
+    expect(urls.some(u => u.endsWith('/collections/shilajit'))).toBe(false)   // empty → left out until it has stock
+  })
 })

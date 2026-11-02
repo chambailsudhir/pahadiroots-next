@@ -30,6 +30,7 @@ import { sendTransactionalEmail } from '@/lib/server/email'
 import { refreshCatalogPages } from '@/lib/server/catalogFreshness'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { esc } from '@/lib/server/htmlEscape'
+import { brandedEmail } from '@/lib/server/emailShell'
 import { logger, captureError } from '@/lib/logger'
 
 export async function POST(
@@ -119,7 +120,11 @@ export async function POST(
           await sendTransactionalEmail({
             type: 'order_cancelled', to: email,
             subject: `Order ${order.order_number} cancelled`,
-            html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px"><h2 style="color:#1a3a1e;font-family:Georgia,serif">Your order has been cancelled</h2><p style="color:#555;font-size:15px;line-height:1.6">Order <strong>${esc(order.order_number)}</strong> was cancelled at your request. As this was a Cash-on-Delivery order, nothing was charged and no refund is needed. Any Pahadi Coins you used have been returned to your account.</p><p style="color:#555;font-size:14px">Changed your mind? You can place a new order any time at <a href="${esc(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com')}" style="color:#2d6a4f">pahadiroots.com</a>.</p></div>`,
+            html: brandedEmail({
+              heading: 'Your order has been cancelled',
+              bodyHtml: `<p style="margin:0 0 12px">Order <strong>${esc(order.order_number)}</strong> was cancelled at your request. As this was a Cash-on-Delivery order, nothing was charged and no refund is needed. Any Pahadi Coins you used have been returned to your account.</p><p style="margin:0">Changed your mind? You can place a new order any time.</p>`,
+              cta: { label: 'Continue shopping', href: process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com' },
+            }),
             context: { order_id: order.id, order_number: order.order_number },
           })
         }

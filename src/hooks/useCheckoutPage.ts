@@ -481,7 +481,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // the plain `hadWarmCache` value directly, the ref serves no purpose and
   // has been removed instead of carried forward as unused state.
   const hadWarmCache = typeof window !== 'undefined' ? !!_readProfileCache() : false
-  const [profilePrefillLoading, setProfilePrefillLoading] = useState(() => !hadWarmCache)
+  // Nov 2026 audit: this used to start as `!hadWarmCache`, i.e. TRUE for every guest — but a guest has no saved details to fetch, so the
+  // effect below returned early without ever clearing it and "Loading your saved details…" stayed on screen for ever (and was announced
+  // to screen readers as a live status). It now starts true only for a signed-in customer with no cached profile, the one case in
+  // which a fetch actually follows (and clears it).
+  const [profilePrefillLoading, setProfilePrefillLoading] = useState(() => !hadWarmCache && !!useUserStore.getState().user)
   // Flips to true the moment the CUSTOMER actually edits an address field
   // (via setAddrField/applySaved below) — as opposed to the instant cache
   // fill at mount or the silent background refresh, neither of which go
@@ -699,6 +703,53 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     return () => ac.abort()
   }, [])
 
+  // NOV 2026 — "one person / one address, one time only". Where this order is going, for the coupon pre-check. Sent with every coupon
+  // request so a one-time coupon already used by this person or at this address is refused here, not only at Place Order.
+  const couponAddressCtx = useCallback(() => ({
+    pincode: /^\d{6}$/.test(addr.pincode) ? addr.pincode : undefined,
+    address: [addr.flat, addr.area].map(v => (v ?? '').trim()).filter(Boolean).join(', ') || undefined,
+  }), [addr.pincode, addr.flat, addr.area])
+
+  // What the server needs to recognise the customer: a valid mobile and a complete-looking address. The coupon is re-checked when this
+  // becomes available or changes (debounced) — NOT per keystroke — because a guest's identity is unknown on the cart page.
+  const couponIdentityKey = useMemo(() => [
+    /^[6-9]\d{9}$/.test(addr.phone) ? addr.phone : '',
+    /^\d{6}$/.test(addr.pincode) && (addr.flat ?? '').trim().length >= 4
+      ? `${addr.pincode}|${addr.flat.trim().toLowerCase()}|${(addr.area ?? '').trim().toLowerCase()}`
+      : '',
+  ].join('~'), [addr.phone, addr.pincode, addr.flat, addr.area])
+  const lastCouponIdentityCheckRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!coupon || couponIdentityKey === '~') { lastCouponIdentityCheckRef.current = null; return }
+    if (pricing.subtotal <= 0) return
+    const sig = `${coupon.code}#${couponIdentityKey}`
+    if (lastCouponIdentityCheckRef.current === sig) return
+    const ac = new AbortController()
+    const code = coupon.code
+    const timer = setTimeout(() => {
+      fetch('/api/v1/coupons', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
+        signal:  ac.signal,
+      })
+        .then(async res => {
+          if (!mountedRef.current) return
+          lastCouponIdentityCheckRef.current = sig
+          // Only a definite "no" (400) takes the discount off. A rate limit or a server hiccup must not strip a valid coupon —
+          // createOrder re-checks it authoritatively at Place Order anyway.
+          if (res.status !== 400) return
+          const data = await res.json().catch(() => ({} as { error?: string }))
+          if (!mountedRef.current) return
+          removeCouponFromStore()
+          lastValidatedCouponSubtotalRef.current = null
+          setCouponError(data.error || `Coupon ${code} no longer applies to this order`)
+        })
+        .catch(() => { /* aborted / offline — the order itself re-checks */ })
+    }, 1200)
+    return () => { clearTimeout(timer); ac.abort() }
+  }, [coupon, couponIdentityKey, pricing.subtotal, addr.phone, couponAddressCtx, removeCouponFromStore])
+
   // DATA INTEGRITY FIX — coupon revalidation on checkout.
   //
   // `coupon.discount` is a ₹ snapshot frozen by validateCouponServer() against
@@ -744,13 +795,15 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined }),
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
         signal:  ac.signal,
       })
         .then(async res => {
           if (!mountedRef.current) return
           const data = await res.json()
           if (!mountedRef.current) return
+          // A rate limit (429) or server error (5xx) says nothing about the coupon — keep it; createOrder re-checks at Place Order.
+          if (res.status === 429 || res.status >= 500) return
           if (!res.ok) {
             // Coupon no longer valid for the new subtotal (e.g. min_order
             // unmet after items were removed) — remove it rather than leave
@@ -885,6 +938,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           code:     couponCode.trim().toUpperCase(),
           subtotal: pricing.subtotal,
           phone:    addr.phone || undefined,
+          ...couponAddressCtx(),
         }),
       })
       if (!mountedRef.current) return
@@ -917,7 +971,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }, [couponCode, pricing.subtotal, addr.phone, applyCoupon, trackCouponApplied, trackCouponError])
+  }, [couponCode, pricing.subtotal, addr.phone, couponAddressCtx, applyCoupon, trackCouponApplied, trackCouponError])
 
   // PERF FIX: wrapped in useCallback. pricing.subtotal is a dep; stable
   // dispatcher/store refs and mountedRef (a ref) are not.
@@ -929,7 +983,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     try {
       const res  = await fetch('/api/v1/coupons', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal, phone: addr.phone || undefined }),
+        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
       })
       if (!mountedRef.current) return
       const data = await res.json()
@@ -953,7 +1007,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } finally {
       if (mountedRef.current) setCouponLoading(false)
     }
-  }, [pricing.subtotal, addr.phone, applyCoupon, trackCouponApplied, trackCouponError])
+  }, [pricing.subtotal, addr.phone, couponAddressCtx, applyCoupon, trackCouponApplied, trackCouponError])
 
   // BUG FIX: mountedRef guards added — same class of bug as handleCoupon /
   // handleApplyCouponHint (fixed in the previous pass, Fix 13 in useCartPage).

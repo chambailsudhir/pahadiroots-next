@@ -198,3 +198,23 @@ describe('useCheckoutPage — double-submission guard on handlePlace', () => {
     expect(ordersCallCount(fetchMock)).toBe(1)
   })
 })
+
+// Nov 2026 audit: a guest has no saved details, so the "Loading your saved details…" indicator must clear immediately instead of
+// staying on forever (the profile effect returned early for guests without ever clearing the flag).
+describe('useCheckoutPage — guest does not see a permanent "loading saved details" state', () => {
+  beforeEach(() => {
+    useCartStore.getState().clearCart()
+    useCartStore.setState({ _hasHydrated: true })
+    useCartStore.getState().addItem(sampleItem)
+    useUserStore.setState({ user: null } as Partial<ReturnType<typeof useUserStore.getState>>)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '', json: async () => ({}) }))
+  })
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('profilePrefillLoading is false after mount for a guest, and /api/profile is never called', async () => {
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+    expect(result.current.profilePrefillLoading).toBe(false)
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(c => c[0] === '/api/profile')).toBe(false)
+  })
+})

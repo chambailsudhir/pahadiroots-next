@@ -143,12 +143,22 @@
   border-radius: 10px;
   padding: 11px 14px;
   display: flex;
+  flex-wrap: wrap;          /* lets the one-time-offer note take its own line */
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
   color: #276141;
   font-weight: 700;
   gap: 8px;
+}
+
+.couponNote {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #3a6b4c;
 }
 
 .couponRm {

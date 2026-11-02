@@ -2,6 +2,7 @@ import type { CartItem, AppliedCoupon, SiteSettings } from '@/types'
 import { calcGST, asNumber } from '@/lib/utils'
 import { FALLBACK_FREE_SHIPPING_MIN, FALLBACK_FLAT_SHIPPING } from '@/lib/siteSettingsHelpers'
 import { getServiceClient } from '@/lib/supabase'
+import { countPriorCouponUse, couponReuseProblem } from '@/lib/couponHistory'
 
 export interface PriceSummary {
   subtotal:        number   // sum of (price * qty)
@@ -114,14 +115,25 @@ export function calcPriceSummary(
   }
 }
 
+/** Who is asking, as far as the caller knows. All optional: the cart page knows nothing for a guest, checkout adds phone + address. */
+export interface CouponAsker {
+  phone?:      string
+  /** Verified (signed-in) customer id, resolved server-side from the session — never from the request body. */
+  customerId?: string | number | null
+  pincode?:    string
+  /** House / flat + area as typed. */
+  address?:    string
+}
+
 // Server-side: validate coupon code against DB
 export async function validateCouponServer(
   code: string,
   subtotal: number,
-  // Optional — only known once the checkout form has a phone filled in
-  // (or the customer is logged in). See the per-customer check below.
-  customerPhone?: string,
+  // A bare string is the phone (legacy call shape).
+  asker?: string | CouponAsker,
 ): Promise<{ valid: boolean; coupon?: AppliedCoupon; error?: string }> {
+  const who: CouponAsker = typeof asker === 'string' ? { phone: asker } : (asker ?? {})
+  const customerPhone = who.phone
   const db = getServiceClient()
 
   const { data, error } = await db
@@ -144,65 +156,42 @@ export async function validateCouponServer(
     return { valid: false, error: 'Coupon usage limit reached' }
   }
 
-  // FEATURE FIX (Sep 2026): coupons.user_limit ("uses per customer") has
-  // existed on this table the whole time — both live coupons already have
-  // it set to 1 — but nothing in the app ever read it. Only the store-wide
-  // max_uses/uses_count check above ran, so a coupon meant to be "₹50 off,
-  // once per customer" behaved as "₹50 off, once ever, for the whole
-  // store" instead: the first customer's redemption exhausted it for
-  // everyone else too.
-  //
-  // This is a pre-check for fast UX feedback on the checkout page, only
-  // possible once a phone number has been typed in — it mirrors the
-  // authoritative check in orderService.createOrder, which runs
-  // regardless of whether this ran (see that file for why it can't be
-  // skipped here without a real gap: a direct /api/v1/orders call could
-  // otherwise bypass this entirely).
-  if (data.user_limit != null && customerPhone) {
-    const normalizedPhone = customerPhone.replace(/\D/g, '').slice(-10)
-    if (normalizedPhone) {
-      const { data: existingCust } = await db
-        .from('customers')
-        .select('id')
-        .eq('normalized_phone', normalizedPhone)
-        .maybeSingle()
-      if (existingCust?.id) {
-        const { count: priorUses } = await db
-          .from('coupon_usage')
-          .select('id', { count: 'exact', head: true })
-          .eq('coupon_id', data.id)
-          .eq('customer_id', existingCust.id)
-        if ((priorUses ?? 0) >= data.user_limit) {
-          return { valid: false, error: 'You have already used this coupon' }
+  // NOV 2026 — "one person / one address, one time only". This is the EARLY warning (cart / checkout) so a customer who already used a
+  // one-time coupon is told before they reach Place Order; createOrder is still the authoritative gate. What is known grows as the
+  // customer goes: nothing for a guest on the cart page (the check is then skipped), the signed-in account from the session, then the
+  // phone and delivery address once typed at checkout. History is rebuilt from the orders behind each use (guest uses carry no customer
+  // id) and matched on the PERSON or the ADDRESS — see lib/couponHistory.ts. Fails open here (a read problem must not block a
+  // customer at the cart); the order path fails closed.
+  const needsHistory = data.user_limit != null || data.first_order_only
+  if (needsHistory) {
+    try {
+      const customerIds = new Set<string>()
+      if (who.customerId != null) customerIds.add(String(who.customerId))
+      const normalizedPhone = (customerPhone ?? '').replace(/\D/g, '').slice(-10)
+      if (normalizedPhone.length === 10) {
+        const { data: byPhone } = await db.from('customers').select('id').eq('normalized_phone', normalizedPhone).limit(25)
+        for (const r of (byPhone ?? []) as Array<{ id: number | string }>) customerIds.add(String(r.id))
+      }
+      const haveAddress = /^\d{6}$/.test(who.pincode ?? '')
+      if (customerIds.size > 0 || haveAddress) {
+        if (data.user_limit != null) {
+          const prior = await countPriorCouponUse(db, data.id, { customerIds: Array.from(customerIds), pincode: who.pincode, addressLine: who.address })
+          const reuse = couponReuseProblem(prior, Number(data.user_limit))
+          if (reuse) return { valid: false, error: reuse }
+        }
+        if (data.first_order_only) {
+          // a customer with an earlier paid / COD-placed, non-cancelled order cannot use it (same rule as createOrder)
+          if (customerIds.size > 0) {
+            const { data: priorOrders } = await db
+              .from('orders').select('id').in('customer_id', Array.from(customerIds))
+              .in('payment_status', ['paid', 'cod_pending', 'refund_pending', 'refunded'])
+              .neq('order_status', 'cancelled').limit(1)
+            if (priorOrders && priorOrders.length > 0) return { valid: false, error: 'This coupon is valid on your first order only' }
+          }
         }
       }
-    }
-  }
-
-  // F-08 (Oct 2026 audit): first_order_only was configurable but never enforced. Same rule as
-  // orderService.createOrder (the authoritative gate): a customer with an earlier paid / COD-placed,
-  // non-cancelled order cannot use it. Needs a phone to identify the customer, so this is a
-  // fast-feedback pre-check; a brand-new customer simply has no history.
-  if (data.first_order_only && customerPhone) {
-    const normalizedPhone = customerPhone.replace(/\D/g, '').slice(-10)
-    if (normalizedPhone) {
-      const { data: existingCust } = await db
-        .from('customers')
-        .select('id')
-        .eq('normalized_phone', normalizedPhone)
-        .maybeSingle()
-      if (existingCust?.id) {
-        const { data: priorOrders } = await db
-          .from('orders')
-          .select('id')
-          .eq('customer_id', existingCust.id)
-          .in('payment_status', ['paid', 'cod_pending', 'refund_pending', 'refunded'])
-          .neq('order_status', 'cancelled')
-          .limit(1)
-        if (priorOrders && priorOrders.length > 0) {
-          return { valid: false, error: 'This coupon is valid on your first order only' }
-        }
-      }
+    } catch {
+      // history unreadable → let the customer continue; the order itself re-checks and refuses if needed
     }
   }
 
@@ -236,6 +225,7 @@ export async function validateCouponServer(
       discount: Math.round(discount),
       type:     data.type,
       percent:  data.type === 'percent' ? data.value : undefined,
+      oneTimeUse: data.user_limit != null || !!data.first_order_only ? true : undefined,
     },
   }
 }

@@ -158,3 +158,23 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
   (the public bucket still lists). No return photos existed before (0 objects, 0 returns with photos), so nothing was migrated.
 * **Also:** WhatsApp "share your request" no longer pastes photo URLs (it says how many photos are attached); thumbnails are local
   previews. Tests: `returnEvidence.test.ts`, SF-3 in `auditR2Storefront.test.ts`.
+
+### 5.5 Production verification after the follow-up releases (2 Nov 2026)
+
+* **Wishlist (ACC-052) on production:** server list `[11,28]`, empty local wishlist, home page only → **0 `PUT` requests**, list unchanged.
+* **Referral on production (real browser):** `?ref=` visit as a guest remembered the code and sent nothing; after sign-in exactly one
+  `POST /api/v1/referral` → `applied:true`; DB shows `referrals` row `pending` and `customers.referred_by` set; the code was forgotten
+  and a second page view sent nothing. (Paying out needs a delivered order ≥ ₹499 + 7 days; that part is covered by the nine
+  rolled-back database scenarios in 5.3, not run on production.)
+* **Browsers** (production, real UI login + Addresses tab + pincode autofill + bad-pincode refusal + no horizontal overflow):
+  WebKit desktop (Safari engine), WebKit iPhone 13 (iOS Safari engine), Chromium Pixel 7 (Android Chrome) and Firefox 155 all pass.
+  These are engine / device emulations on Linux, **not** physical iPhones or Android phones. The only console noise is an in-flight
+  profile prefetch aborted by the full page reload that follows login (harmless; WebKit words it "access control checks").
+* **E-mail content** (production-rendered messages kept in `failed_emails`; the Gmail connector needed re-authentication, so no real
+  inbox could be read): confirmation, cancellation and sign-up verification have no unresolved placeholders and correct links.
+  **Finding:** the cancellation e-mail was an unstyled paragraph (no brand, no footer, no support contact) → now uses the shared brand
+  frame (`lib/server/emailShell.ts`). DNS: DKIM (`resend._domainkey`) and SPF / bounce MX on `send.pahadiroots.com` exist and DMARC is
+  `p=reject` with relaxed alignment, which the aligned DKIM signature satisfies. Every failed send in the table was Resend refusing
+  the `example.com` test addresses — not a production fault.
+* **Test data created by this pass** (delete before launch with the rest): auth user + customer `audit.f.20261102@example.com`
+  (customer 71) and its `referrals` row.
