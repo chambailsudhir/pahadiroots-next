@@ -727,6 +727,76 @@ describe('createOrder — per-customer coupon usage limit (user_limit, authorita
   })
 })
 
+describe('createOrder — one person / one address, one time only (Nov 2026)', () => {
+  // A guest's earlier coupon use is stored with customer_id NULL, so the old guest check (by customer_id) could never see it and a
+  // guest could redeem a one-time coupon repeatedly; the delivery address was never compared. The order behind each use is the link.
+  const COUPON = { id: 7, code: 'WELCOME50', value: 50, type: 'flat', max_uses: 100, uses_count: 1, is_active: true, expires_at: null,
+                   min_order: null, max_discount: null, user_limit: 1 }
+  const PRIOR_USE = [{ id: 1, coupon_id: 7, order_id: 500, customer_id: null }]
+  const priorOrders = (customer_id: string | null, line: string, pincode = '171001') => (terminal: string) =>
+    terminal === 'maybeSingle' ? null : [{ id: 500, customer_id, shipping_address: { pincode, address_line1: line } }]
+
+  beforeEach(() => {
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+    mockDb.responses['coupons'] = COUPON
+    mockDb.responses['coupon_usage'] = PRIOR_USE
+  })
+
+  it('refuses a GUEST who already used it: matched by phone through the ORDER, though the usage row has no customer_id', async () => {
+    routeFirst((url, m) => m === 'GET' && url.includes('/customers') && url.includes('normalized_phone=eq.'), [{ id: 'cust-uuid-existing' }])
+    mockDb.responses['orders'] = priorOrders('cust-uuid-existing', 'Somewhere Else 99, Other Colony', '110001')
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).rejects.toThrow(/already used this coupon/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeUndefined()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('refuses a DIFFERENT person at the SAME address, even if the address is typed differently', async () => {
+    mockDb.responses['orders'] = priorOrders('someone-else', 'Flat No. 12, Pahadi Lane, Shimla Hills')
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).rejects.toThrow(/delivery address/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('and a refused coupon never reserves or keeps stock (the reservation is restored)', async () => {
+    mockDb.responses['orders'] = priorOrders('someone-else', '12 Pahadi Lane, Shimla Hills')
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).rejects.toThrow()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeUndefined()
+  })
+
+  it('allows a different person at a different address', async () => {
+    mockDb.responses['orders'] = priorOrders('someone-else', '4 Mall Road, Lower Bazaar', '171002')
+    const { createOrder } = await import('@/lib/services/orderService')
+    const r = await createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)
+    expect(r.alreadyExists).toBe(false)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'claim_coupon_use')).toBeDefined()
+  })
+
+  it('allows a neighbour (same PIN and street, different house number)', async () => {
+    mockDb.responses['orders'] = priorOrders('someone-else', '14 Pahadi Lane, Shimla Hills')
+    const { createOrder } = await import('@/lib/services/orderService')
+    expect((await createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).alreadyExists).toBe(false)
+  })
+
+  it('FAILS CLOSED: if the usage history cannot be read the order is refused, not waved through', async () => {
+    mockDb.responses['coupon_usage'] = new Error('db down')
+    mockDb.responses['orders'] = null
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).rejects.toThrow(/history read failed/i)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('a coupon with no per-customer limit is untouched by all of this', async () => {
+    mockDb.responses['coupons'] = { ...COUPON, user_limit: null }
+    mockDb.responses['orders'] = priorOrders('someone-else', '12 Pahadi Lane, Shimla Hills')
+    const { createOrder } = await import('@/lib/services/orderService')
+    expect((await createOrder({ ...BASE_INPUT, couponCode: 'WELCOME50' }, DEFAULT_SETTINGS)).alreadyExists).toBe(false)
+  })
+})
+
 describe('createOrder — loyalty enforcement', () => {
   // AUDIT S1-002: loyalty redemption is only reachable with a verified session, so these scenarios run
   // as the signed-in customer (a guest asking to redeem is rejected up front — see guestIdentity tests).

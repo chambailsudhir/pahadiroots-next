@@ -114,6 +114,10 @@ export const validateCouponSchema = z.object({
   // authoritative enforcement in orderService.createOrder still catches
   // it at order time regardless of whether this pre-check ran it.
   phone: z.string().trim().max(20).optional(),
+  // Nov 2026 ("one person / one address"): checkout also tells the pre-check WHERE it is delivering so a one-time coupon already used
+  // at this address is refused early. Lenient on purpose — a half-typed value must never turn into a 400 that strips a valid coupon.
+  pincode: z.string().trim().max(10).optional(),
+  address: z.string().trim().max(400).optional(),
 })
 
 // ─── Review Schema ─────────────────────────────────────────────────────────────

@@ -91,3 +91,16 @@ describe('looks are preserved per skin (class contract the shared CSS targets)',
     expect(document.querySelector('.ck-nav-inner')!.className).toContain('ck-nav-inner--solo')
   })
 })
+
+// Nov 2026 audit: the cart skin made the cart page wider than a phone. The label now lives in its own element so small screens can
+// hide non-current labels VISUALLY (clip pattern) while every step stays in the DOM / accessibility tree.
+describe('cart skin — step labels are hideable on phones without leaving the accessibility tree', () => {
+  it('each label is in a .cp-step-label element (not a <span>, which is the numbered circle) and all three are present', () => {
+    r({ current: 'cart', skin: 'cart' })
+    const nav = screen.getByRole('navigation', { name: 'Checkout progress' })
+    const labels = Array.from(nav.querySelectorAll('.cp-step-label'))
+    expect(labels.map(l => l.textContent)).toEqual(['Cart', 'Checkout', 'Confirmation'])
+    expect(labels.every(l => l.tagName === 'B')).toBe(true)
+    expect(nav.querySelector('[aria-current="step"]')?.textContent).toContain('Cart')
+  })
+})

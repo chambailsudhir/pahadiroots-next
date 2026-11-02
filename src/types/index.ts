@@ -136,6 +136,8 @@ export interface AppliedCoupon {
   discount: number    // absolute ₹ amount
   type: 'flat' | 'percent'
   percent?: number
+  /** One use per customer / address (or first order only) — the cart shows a "confirmed at checkout" note. */
+  oneTimeUse?: boolean
 }
 
 // ─── Order Types ──────────────────────────────────────────────────────────────
