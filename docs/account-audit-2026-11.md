@@ -124,3 +124,57 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
   video/PDF allowed). Fix needs a private bucket and an admin-app change.
 * **Closed as by-design / not safe to change:** static-page CSP trade-off, Best Sellers cold-start (real fix = compute upgrade),
   cosmetic labels, `vector` extension schema, backup tables (needs a retention decision).
+
+### 5.3 Referral programme + abuse controls (ACC-045 follow-up, `db_migration_v17_referral_controls.sql`)
+
+* **Finding:** the account page promised "you and your friend earn 100 coins", but nothing recorded a referral or paid it
+  (`customers.referred_by` was never set; no `referral` ledger row has ever existed). Nothing to abuse — and nothing worked.
+* **Now:** `?ref=CODE` is remembered 30 days in the browser and applied once after sign-in (`ReferralCapture`), or typed in on the
+  account page. Coins are paid by `process_referral_rewards()` (run by the expire-pending-orders sweep) — never at order time.
+* **Rules** (modelled on Myntra / Nykaa / Amazon: pay after delivery + return window; a little tighter for a small shop).
+  Adjustable without a deploy in `site_settings`: `referral_bonus_points` 100 · `referral_min_order` ₹499 · `referral_hold_days` 7 ·
+  `referral_max_per_month` 3 · `referral_max_lifetime` 10 · `referral_expiry_days` 90. Fixed rules: new customers only (no order
+  yet) · not your own code · one referrer per customer forever · not the referrer's phone / e-mail / delivery address · one delivery
+  address can be rewarded once · returned / refunded / cancelled orders never pay · when the referrer's cap is reached the friend is
+  still paid.
+* **Verified:** nine scenarios run against the production database inside a rolled-back transaction (qualifying, inside return
+  window, below minimum, returned, same address as referrer, address already rewarded, cap reached, idempotent re-run, attach
+  checks). Nothing was left behind (0 referrals, 0 test customers). Tests: `referral.lib`, `referralRoute`,
+  `ReferralCapture`.
+* **Note:** rewards are released by a non-fatal step inside the existing `expire-pending-orders` sweep (daily Vercel cron, plus the
+  self-sweep when orders are placed) because the Hobby plan allows only two crons. Release can lag by a little, never run early.
+### 5.4 ACC-051 — return photos moved to a private bucket (fixed, `db_migration_v18_private_return_evidence_bucket.sql`)
+
+* **Was:** return-evidence photos went into the shared **public** `pahadi-images` bucket (100 MB, video/PDF allowed), whose
+  `storage.objects` policies also let anyone list every file name. A customer's damaged-item photo was readable by anyone who could
+  guess or enumerate the path.
+* **Now:** new **private** `return-evidence` bucket (no storage policy → service role only; 5 MB; JPEG/PNG/WebP, enforced by the
+  bucket itself). The browser uploads to a signed URL, then sends the object **path** (not a URL) with the return; the API accepts only
+  `returns/<this order>/…` paths, signs a 1-year read link for each (signing also proves the object exists) and stores that link in
+  `returns.photo_urls`.
+* **No admin-app change needed:** the admin panel renders `photo_urls` as plain links; a signed link works there unchanged. After a
+  year (or if the admin wants permanent access) a fresh link can be signed server-side for the stored path.
+* **Verified:** as an anonymous caller, `list` on the new bucket returns `[]`, `/object/public/…` returns 400 and an upload returns 403
+  (the public bucket still lists). No return photos existed before (0 objects, 0 returns with photos), so nothing was migrated.
+* **Also:** WhatsApp "share your request" no longer pastes photo URLs (it says how many photos are attached); thumbnails are local
+  previews. Tests: `returnEvidence.test.ts`, SF-3 in `auditR2Storefront.test.ts`.
+
+### 5.5 Production verification after the follow-up releases (2 Nov 2026)
+
+* **Wishlist (ACC-052) on production:** server list `[11,28]`, empty local wishlist, home page only → **0 `PUT` requests**, list unchanged.
+* **Referral on production (real browser):** `?ref=` visit as a guest remembered the code and sent nothing; after sign-in exactly one
+  `POST /api/v1/referral` → `applied:true`; DB shows `referrals` row `pending` and `customers.referred_by` set; the code was forgotten
+  and a second page view sent nothing. (Paying out needs a delivered order ≥ ₹499 + 7 days; that part is covered by the nine
+  rolled-back database scenarios in 5.3, not run on production.)
+* **Browsers** (production, real UI login + Addresses tab + pincode autofill + bad-pincode refusal + no horizontal overflow):
+  WebKit desktop (Safari engine), WebKit iPhone 13 (iOS Safari engine), Chromium Pixel 7 (Android Chrome) and Firefox 155 all pass.
+  These are engine / device emulations on Linux, **not** physical iPhones or Android phones. The only console noise is an in-flight
+  profile prefetch aborted by the full page reload that follows login (harmless; WebKit words it "access control checks").
+* **E-mail content** (production-rendered messages kept in `failed_emails`; the Gmail connector needed re-authentication, so no real
+  inbox could be read): confirmation, cancellation and sign-up verification have no unresolved placeholders and correct links.
+  **Finding:** the cancellation e-mail was an unstyled paragraph (no brand, no footer, no support contact) → now uses the shared brand
+  frame (`lib/server/emailShell.ts`). DNS: DKIM (`resend._domainkey`) and SPF / bounce MX on `send.pahadiroots.com` exist and DMARC is
+  `p=reject` with relaxed alignment, which the aligned DKIM signature satisfies. Every failed send in the table was Resend refusing
+  the `example.com` test addresses — not a production fault.
+* **Test data created by this pass** (delete before launch with the rest): auth user + customer `audit.f.20261102@example.com`
+  (customer 71) and its `referrals` row.

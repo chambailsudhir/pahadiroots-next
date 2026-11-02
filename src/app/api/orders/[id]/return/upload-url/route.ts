@@ -31,7 +31,7 @@ import {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
-const BUCKET        = 'pahadi-images'
+const BUCKET        = 'return-evidence'   // PRIVATE (db_migration_v18); read links are signed when the return is submitted
 const MAX_PHOTOS_PER_RETURN = 4
 
 // AUDIT S2-011: size / MIME / extension / path rules live in ./validate.ts (unit-tested; a route
@@ -73,7 +73,7 @@ export async function POST(
     if (!profile) return fail(404, 'Profile not found')
 
     // AUDIT R2 SF-4: signed upload URLs were unlimited for any logged-in customer (the photo-count cap only
-    // counts photos already attached to a return). Cap issuance per customer so the PUBLIC bucket cannot be
+    // counts photos already attached to a return). Cap issuance per customer so the bucket cannot be
     // filled with arbitrary uploads.
     if (!await checkRateLimitKv(`mw:rl:return_upload:${profile.id}`, 12, 3600)) {
       return fail(429, 'Too many uploads — please try again later')
@@ -145,12 +145,11 @@ export async function POST(
       return fail(502, 'Upload URL request failed')
     }
     const signedURL = `${SUPABASE_URL}/storage/v1${relativeSignedUrl}`
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
 
     // The client must send exactly these headers with the PUT; the bucket's allowed_mime_types /
     // file_size_limit (OWNER) are what makes them binding on the storage side.
     const res = ok({
-      success: true, signedURL, publicUrl, path,
+      success: true, signedURL, path,   // `path` is what the browser sends back as photo_paths — there is no public URL any more
       uploadHeaders: { 'content-type': fileType, 'x-upsert': 'false' },
       maxBytes: MAX_UPLOAD_BYTES, declaredBytes: fileSize,
     })

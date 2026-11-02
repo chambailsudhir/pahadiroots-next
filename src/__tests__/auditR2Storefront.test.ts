@@ -89,8 +89,44 @@ describe('SF-2 legacy create_return ignores a customer-chosen refund', () => {
   })
 })
 
-describe('SF-3 return photo URLs must be this project\'s own storage URLs', () => {
-  it('drops look-alike, javascript: and foreign-host URLs', async () => {
+describe('SF-3 / ACC-051 return photos: private bucket, only this order\'s own object paths, stored as signed links', () => {
+  it('accepts only this order\'s returns/<id>/ paths, signs them, and drops URLs, look-alikes, other orders\' paths and missing objects', async () => {
+    let inserted: any = null
+    const signed: string[] = []
+    mocks.sbAdmin.mockImplementation(async (m: string, p: string, b?: any) => {
+      if (m === 'GET' && p.includes('/rest/v1/orders?')) return [{ id: 501, order_status: 'delivered', delivered_at: new Date().toISOString(), updated_at: new Date().toISOString(), order_number: 'PR-501' }]
+      if (m === 'GET') return []
+      if (m === 'POST' && p.includes('/rest/v1/returns')) { inserted = b; return null }
+      throw new Error(`Unexpected ${m} ${p}`)
+    })
+    // Storage: signs any object except the one named "missing"
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const m = /\/storage\/v1\/object\/sign\/return-evidence\/(.+)$/.exec(url)
+      if (!m) throw new Error('unexpected fetch ' + url)
+      signed.push(m[1])
+      if (m[1].includes('missing')) return { ok: false, status: 400, json: async () => ({}) }
+      return { ok: true, status: 200, json: async () => ({ signedURL: `/object/sign/return-evidence/${m[1]}?token=T` }) }
+    }))
+    const good = 'returns/501/1-a.jpg'
+    const { POST } = await import('@/app/api/orders/[id]/return/route')
+    const req = new NextRequest('https://pahadiroots.com/api/orders/501/return', {
+      method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' },
+      body: JSON.stringify({ reason: 'damaged', photo_paths: [
+        good, good,                                                              // duplicate collapses
+        'returns/999/other.jpg',                                                 // another order's folder
+        'returns/501/../999/other.jpg',                                          // traversal
+        'returns/501/2-missing.jpg',                                             // never uploaded
+        'https://proj.supabase.co/storage/v1/object/public/pahadi-images/returns/501/1-a.jpg',   // old-style public URL
+        'javascript:alert(1)', 42, null, 'returns/501/x y.jpg',
+      ] }),
+    })
+    const res = await POST(req, { params: Promise.resolve({ id: '501' }) })
+    expect(res.status).toBe(200)
+    expect(inserted.photo_urls).toEqual([`https://proj.supabase.co/storage/v1/object/sign/return-evidence/${good}?token=T`])
+    expect(signed).toEqual([good, 'returns/501/2-missing.jpg'])                  // nothing else was even offered to storage
+    vi.unstubAllGlobals()
+  })
+  it('ignores the old photo_urls field entirely (a stale browser tab cannot attach arbitrary links)', async () => {
     let inserted: any = null
     mocks.sbAdmin.mockImplementation(async (m: string, p: string, b?: any) => {
       if (m === 'GET' && p.includes('/rest/v1/orders?')) return [{ id: 501, order_status: 'delivered', delivered_at: new Date().toISOString(), updated_at: new Date().toISOString(), order_number: 'PR-501' }]
@@ -98,21 +134,13 @@ describe('SF-3 return photo URLs must be this project\'s own storage URLs', () =
       if (m === 'POST' && p.includes('/rest/v1/returns')) { inserted = b; return null }
       throw new Error(`Unexpected ${m} ${p}`)
     })
-    const good = 'https://proj.supabase.co/storage/v1/object/public/pahadi-images/returns/501/1-a.jpg'
     const { POST } = await import('@/app/api/orders/[id]/return/route')
-    const req = new NextRequest('https://pahadiroots.com/api/orders/501/return', {
+    const res = await POST(new NextRequest('https://pahadiroots.com/api/orders/501/return', {
       method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' },
-      body: JSON.stringify({ reason: 'damaged', photo_urls: [
-        good,
-        'javascript:alert(1)//storage/v1/object/public/pahadi-images/returns/501/',
-        'https://evil.example/storage/v1/object/public/pahadi-images/returns/501/x.jpg',
-        'https://proj.supabase.co/storage/v1/object/public/pahadi-images/returns/999/other.jpg',
-        good + '"onerror="x',
-      ] }),
-    })
-    const res = await POST(req, { params: Promise.resolve({ id: '501' }) })
+      body: JSON.stringify({ reason: 'damaged', photo_urls: ['https://evil.example/x.jpg'] }),
+    }), { params: Promise.resolve({ id: '501' }) })
     expect(res.status).toBe(200)
-    expect(inserted.photo_urls).toEqual([good])
+    expect(inserted.photo_urls).toBeNull()
   })
 })
 

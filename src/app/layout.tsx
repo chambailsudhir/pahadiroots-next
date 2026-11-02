@@ -19,6 +19,7 @@ import { Providers } from './providers'
 import SkipLink from '@/components/ui/SkipLink'
 import ScrollRestorationFix from '@/components/ui/ScrollRestorationFix'
 import GoogleAuthHandler from '@/components/auth/GoogleAuthHandler'
+import ReferralCapture from '@/components/auth/ReferralCapture'
 import ProfilePrefetcher from '@/components/ProfilePrefetcher'
 import CookieConsent from '@/components/consent/CookieConsent'
 import { consentBootstrapScript, consentBootstrapInputs } from '@/lib/consent'
@@ -371,6 +372,7 @@ export default async function RootLayout({
               <LazyOverlays settings={shellSettings} categories={categories} states={states} />
               <MobileBottomNav settings={shellSettings} />
               <GoogleAuthHandler />
+              <ReferralCapture />
               <ProfilePrefetcher />
             </>
           )}
