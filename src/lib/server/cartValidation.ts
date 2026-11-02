@@ -86,13 +86,13 @@ export async function validateCartLines(
   if (productIds.length > 0) {
     const { data, error } = await db
       .from('products')
-      .select('id, name, is_deleted, status, selling_price, price, mrp, available_stock')
+      .select('id, name, is_deleted, is_active, status, selling_price, price, mrp, available_stock')
       .in('id', productIds.map(asDbId))
     if (error) throw new Error('cart validation: products lookup failed: ' + error.message)
     for (const p of (data ?? []) as ProductRow[]) productMap.set(String(p.id), p)
   }
 
-  const productLive = (p: ProductRow | undefined) => !!p && !p.is_deleted && p.status === 'active'
+  const productLive = (p: ProductRow | undefined) => !!p && !p.is_deleted && p.is_active !== false && p.status === 'active'
   const stock = (n: unknown) => Math.max(0, Number(n) || 0)   // NULL counts as 0: the reserve RPC's `>= qty` is false for NULL
 
   return items.map((i, idx): LiveLine => {

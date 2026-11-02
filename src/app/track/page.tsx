@@ -83,7 +83,7 @@ export default function TrackPage() {
       <div className="text-center mb-8">
         <div className="text-4xl mb-3"><Icon name="package" /></div>
         <h1 className="text-2xl font-bold text-stone-900 mb-1">Track Your Order</h1>
-        <p className="text-stone-500 text-sm">Enter your order number and phone to see the latest status</p>
+        <p className="text-stone-600 text-sm">Enter your order number and phone to see the latest status</p>
       </div>
 
       {/* Input form */}
@@ -193,13 +193,13 @@ export default function TrackPage() {
 
           {/* Payment info */}
           <div className="mt-6 pt-4 border-t border-stone-100 flex justify-between text-sm">
-            <span className="text-stone-500">Payment</span>
+            <span className="text-stone-600">Payment</span>
             <span className="font-medium text-stone-700 capitalize">
               {result.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
             </span>
           </div>
           <div className="flex justify-between text-sm mt-1">
-            <span className="text-stone-500">Total</span>
+            <span className="text-stone-600">Total</span>
             <span className="font-bold text-stone-900">₹{result.total_amount?.toLocaleString('en-IN')}</span>
           </div>
 

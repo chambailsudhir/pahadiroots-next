@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
     const [products, images] = await Promise.all([
       sbGet<RawProduct[]>(
         'products',
-        `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false`
+        `id=in.(${idFilter})&status=eq.active&is_deleted=eq.false&is_active=not.is.false`
         + '&select=id,name,slug,emoji,gst_rate,state_id,badges,selling_price,mrp',
         5000,
       ),

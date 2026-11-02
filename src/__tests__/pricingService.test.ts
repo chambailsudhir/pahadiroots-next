@@ -229,6 +229,61 @@ describe('calcPriceSummary — GST aggregation', () => {
   })
 })
 
+// ─── GST on the discounted value (CART-001, Nov 2026 audit) ───────────────────
+
+describe('calcPriceSummary — GST is charged after seller discounts (CGST s.15(3)(a))', () => {
+  const coupon50: AppliedCoupon = { code: 'WELCOME50', discount: 50, type: 'flat' }
+  // live store config: free shipping on every order, no prepaid discount (cart-settings 2 Nov 2026)
+  const LIVE = makeSettings({ free_shipping_min: '0', prepaid_discount_pct: '0' })
+  const honey2 = [makeItem({ price: 350, mrp: 450, qty: 2, gstRate: 5 })]   // the audited ₹700 cart
+
+  it('the audited cart: ₹700, ₹50 coupon → payable ₹650 and GST is carved out of ₹650, not ₹700', () => {
+    const noCoupon = calcPriceSummary(honey2, LIVE, null)
+    const withCoupon = calcPriceSummary(honey2, LIVE, coupon50)
+    expect(noCoupon.gstTotal).toBe(33)             // round(700*5/105) — unchanged
+    expect(withCoupon.total).toBe(650)
+    expect(withCoupon.gstTotal).toBe(31)           // round(650*5/105) = 30.95 → 31 (was 33)
+  })
+
+  it('removing the coupon restores the full GST (nothing sticky)', () => {
+    expect(calcPriceSummary(honey2, LIVE, null).gstTotal).toBe(33)
+  })
+
+  it('spreads the discount across lines in proportion, each at its own rate', () => {
+    const items = [
+      makeItem({ variantId: 'a', price: 500, qty: 1, gstRate: 5 }),
+      makeItem({ variantId: 'b', price: 500, qty: 1, gstRate: 18 }),
+    ]
+    const r = calcPriceSummary(items, LIVE, { code: 'X', discount: 100, type: 'flat' })
+    // each line loses 10% → 450 at 5%, 450 at 18%
+    expect(r.gstTotal).toBe(Math.round(450 * 5 / 105) + Math.round(450 * 18 / 118))
+  })
+
+  it('a prepaid discount also reduces the taxable value; COD does not', () => {
+    const settings = makeSettings({ prepaid_discount_pct: '10' })
+    const items = [makeItem({ price: 1000, qty: 1, gstRate: 5 })]
+    expect(calcPriceSummary(items, settings, null, 'cod').gstTotal).toBe(Math.round(1000 * 5 / 105))
+    const prepaid = calcPriceSummary(items, settings, null, 'razorpay')
+    expect(prepaid.total).toBe(900)
+    expect(prepaid.gstTotal).toBe(Math.round(900 * 5 / 105))
+  })
+
+  it('loyalty coins do NOT reduce GST (coins are consideration, conservative treatment)', () => {
+    const base = calcPriceSummary(honey2, LIVE, null, 'cod', 0).gstTotal
+    expect(calcPriceSummary(honey2, LIVE, null, 'cod', 100).gstTotal).toBe(base)
+  })
+
+  it('a coupon larger than the cart cannot make GST negative; GST is 0 on a fully-discounted cart', () => {
+    const r = calcPriceSummary([makeItem({ price: 100, qty: 1 })], LIVE, { code: 'BIG', discount: 500, type: 'flat' })
+    expect(r.gstTotal).toBe(0)
+    expect(Number.isInteger(r.gstTotal)).toBe(true)
+  })
+
+  it('empty cart is still 0', () => {
+    expect(calcPriceSummary([], LIVE, coupon50).gstTotal).toBe(0)
+  })
+})
+
 // ─── Prepaid discount ─────────────────────────────────────────────────────────
 
 describe('calcPriceSummary — prepaid discount', () => {

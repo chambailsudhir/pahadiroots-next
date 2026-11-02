@@ -528,6 +528,7 @@ footer.site-footer {
   min-width: 15px; height: 15px; font-size: 9px; font-weight: 900;
   display: flex; align-items: center; justify-content: center; border: 1.5px solid #fff;
 }
+.mbn-badge::after { content: attr(data-count); }   /* count is CSS-drawn so it is not DOM text (WCAG 2.5.3) */
 
 /* ── SCROLL TO TOP ── */
 .stt-btn {
@@ -905,6 +906,7 @@ ul.mega-list.mega-list-2col {
           width:18px;height:18px;font-size:10px;font-weight:900;
           display:flex;align-items:center;justify-content:center;
         }
+        .old-cbadge::after{content:attr(data-count)}
         /* Account dropdown */
         .old-acct-dd{
           position:absolute;top:100%;right:0;width:220px;

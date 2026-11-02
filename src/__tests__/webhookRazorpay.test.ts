@@ -394,11 +394,50 @@ describe('POST /webhook/razorpay — payment.captured', () => {
   it('does not double-process an order that is already paid', async () => {
     mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc' }
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
+    // the SAME payment delivered again (Razorpay retry / verify_payment already confirmed it)
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
 
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
     expect(mockLogOrderEvent).not.toHaveBeenCalled()
     expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // PAY-DUP (Nov 2026 audit): a DIFFERENT payment captured for an order that is already paid = the customer was charged twice.
+  it('flags a second, different payment captured on an already-paid order (double charge) and never re-confirms or re-awards', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_first' }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_second' })))
+
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(
+      PAYABLE.id, 'duplicate_payment_captured', 'razorpay',
+      expect.objectContaining({ razorpay_payment_id: 'pay_second', original_payment_id: 'pay_first', amount: 500 }),
+    )
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // PAY-HOOK (Nov 2026 audit): the payment carries no client note; our stored Razorpay order id still finds the order.
+  it('confirms a payment that has NO notes.db_order_id by looking the order up through its stored Razorpay order id', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEventWithoutOrderId('payment.captured')))
+
+    expect(res.status).toBe(200)
+    const orderUpdate = mockDb.updateCalls.find(c => c.table === 'orders')
+    expect(orderUpdate).toBeDefined()
+    expect(orderUpdate!.payload).toMatchObject({ order_status: 'confirmed', payment_status: 'paid' })
+  })
+
+  it('the fallback lookup is still bound: wrong amount on a note-less payment is held, not confirmed', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE }
+    const e = makeEventWithoutOrderId('payment.captured')
+    ;(e.payload.payment.entity as { amount: number }).amount = 100
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(e))
+
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_captured_unbound', 'razorpay', expect.objectContaining({ reason: 'amount_mismatch' }))
   })
 
   it('lost the race (UPDATE matches 0 rows): no duplicate event log and NO second loyalty award', async () => {

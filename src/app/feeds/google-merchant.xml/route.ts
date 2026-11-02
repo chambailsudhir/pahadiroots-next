@@ -7,12 +7,14 @@ const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 export const revalidate = 3600
 
 export async function GET() {
-  const { data: products, error } = await supabase
+  const { data: productsRaw, error } = await supabase
     .from('products')
-    .select('id, slug, name, short_description, description, image_url, weight_grams, categories(name)')
+    .select('id, slug, name, short_description, description, image_url, weight_grams, is_active, categories(name)')
     .eq('is_deleted', false)
     .eq('status', 'active')
-  if (error || !products) return new Response('feed unavailable', { status: 503 })
+  if (error || !productsRaw) return new Response('feed unavailable', { status: 503 })
+  // SEC-001: a product the owner deactivated (products.is_active=false) must not stay in the merchant feed.
+  const products = productsRaw.filter(p => (p as { is_active?: boolean | null }).is_active !== false)
   // A valid-looking EMPTY feed would delist every product in Merchant Center. If the query returned no rows
   // (RLS / filter / outage) fail loudly so the previously cached feed keeps being served.
   if (products.length === 0) return new Response('feed unavailable: no active products returned', { status: 503 })

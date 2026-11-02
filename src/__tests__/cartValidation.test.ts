@@ -30,6 +30,19 @@ const product = (over: Row = {}) => ({ id: 1, name: 'Wild Honey', is_deleted: fa
 const variant = (over: Row = {}) => ({ id: 11, product_id: 1, price: 500, original_price: 650, compare_at_price: 650, is_active: true, available_stock: 8, ...over })
 const L = (productId: string, variantId: string, qty = 1) => ({ productId, variantId, qty })
 
+describe('validateCartLines — deactivated product (SEC-001, Nov 2026 audit)', () => {
+  // The admin "deactivate" switch sets products.is_active=false; the storefront and purchase paths used to ignore it, so a
+  // product the owner had switched off stayed visible AND purchasable.
+  it('products.is_active=false is treated as no longer available', async () => {
+    const [l] = await validateCartLines(fakeDb({ product_variants: [variant()], products: [product({ is_active: false })] }), [L('1', '11')])
+    expect(l.status).toBe('unavailable')
+  })
+  it.each([true, null, undefined])('is_active=%s still sells (NULL/absent = default true)', async (flag) => {
+    const [l] = await validateCartLines(fakeDb({ product_variants: [variant()], products: [product({ is_active: flag })] }), [L('1', '11')])
+    expect(l.status).toBe('ok')
+  })
+})
+
 describe('validateCartLines — variant lines', () => {
   it('ok line returns the LIVE variant price/mrp/stock and the product name', async () => {
     const [l] = await validateCartLines(fakeDb({ product_variants: [variant()], products: [product()] }), [L('1', '11', 2)])

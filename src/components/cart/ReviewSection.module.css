@@ -63,36 +63,34 @@
 .dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
+  gap: 0;
   margin-top: 14px;
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #d8c9a8;
+  /* ACC-001 (WCAG 2.5.8): the button itself is 24x24; the visible dot is drawn in the content box. (The old ::after
+     "invisible tap area" is not counted as target size by assistive checks and overlapped neighbouring dots.) */
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 8.5px;
+  background-clip: content-box;
+  border-radius: 12px;
+  background-color: #d8c9a8;
   border: none;
   cursor: pointer;
   transition: all 0.25s;
-  padding: 0;
   position: relative;
-}
-/* invisible 24px+ tap area around the 7px dot (WCAG 2.2 AA 2.5.8) */
-.dot::after {
-  content: '';
-  position: absolute;
-  inset: -9px -7px;
 }
 
 .dot.active {
-  background: #c9a240;
-  width: 22px;
-  border-radius: 4px;
+  background-color: #c9a240;
+  width: 39px;
+  border-radius: 12.5px;
 }
 
 .dot:hover:not(.active) {
-  background: #b8a888;
+  background-color: #b8a888;
 }
 
 /*
@@ -103,5 +101,5 @@
 .dot:focus-visible:not(.active) {
   outline: 2px solid #c9a240;
   outline-offset: 2px;
-  background: #b8a888;
+  background-color: #b8a888;
 }

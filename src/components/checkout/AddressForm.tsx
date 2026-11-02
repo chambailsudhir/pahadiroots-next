@@ -1,5 +1,6 @@
 'use client'
 
+import { pinProblem } from '@/lib/pinState'
 import { memo, useState, useCallback, useMemo, useRef } from 'react'
 import type { OrderAddress } from '@/types'
 // CODE QUALITY: import from single source of truth — INDIA_STATES was duplicated
@@ -323,7 +324,7 @@ const STYLES = `
     border-radius: 10px;
     font-family: var(--font-lato), Lato, sans-serif;
     font-size: 12px;
-    color: #7A7060;
+    color: #5F5648;
   }
   @media (max-width: 640px) { .af-prefill-status { margin: 10px 20px 0; } }
   .af-prefill-spin {
@@ -360,6 +361,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
       if (!val) { errs[field] = 'Required'; continue }
       if (field === 'phone'   && !/^[6-9]\d{9}$/.test(addr.phone))  { errs[field] = 'Invalid mobile number'; continue }
       if (field === 'pincode' && !/^\d{6}$/.test(addr.pincode))      { errs[field] = 'Invalid pincode'; continue }
+      if (field === 'pincode') { const pm = pinProblem(addr.pincode, addr.state); if (pm) { errs[field] = pm; continue } }
     }
     return errs
   }, [addr, touched])
@@ -615,6 +617,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
               onChange={e => onEmailChange(e.target.value)}
               placeholder="you@email.com"
             />
+            <p className="af-note" style={{margin:'6px 0 0',fontSize:12,color:'#5F5648'}}>We keep your cart and contact details while you check out so you can finish your order. See our <a href="/policies/privacy" target="_blank" rel="noopener" style={{textDecoration:'underline'}}>Privacy Policy</a>.</p>
           </div>
         </div>
       </div>
