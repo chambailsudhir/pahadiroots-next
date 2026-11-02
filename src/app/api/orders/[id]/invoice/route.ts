@@ -192,8 +192,11 @@ export async function GET(
     }).join('\n  ')
     // GST summary from the STORED order columns (tax / cgst / sgst / igst) — informational, already
     // included in the prices above; never recomputed from live product rates.
+    const taxableRow = inv.tax > 0 && inv.taxableValue != null
+      ? `<div class="trow"><span>Taxable value (after discounts)</span><span>${fmt(inv.taxableValue)}</span></div>`
+      : ''
     const gstSummary = inv.tax > 0
-      ? (inv.supplyType === 'intra'
+      ? taxableRow + (inv.supplyType === 'intra'
           ? `<div class="trow"><span>Includes GST (CGST ${fmt(inv.cgst)} + SGST ${fmt(inv.sgst)})</span><span>${fmt(inv.tax)}</span></div>`
           : `<div class="trow"><span>Includes GST (IGST)</span><span>${fmt(inv.igst)}</span></div>`)
       : ''

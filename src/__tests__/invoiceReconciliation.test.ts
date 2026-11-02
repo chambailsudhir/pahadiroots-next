@@ -81,3 +81,34 @@ describe('computeOrderInvoice (TV13)', () => {
     expect(Math.abs(t.cgst - t.sgst)).toBeLessThanOrEqual(0.01)
   })
 })
+
+// Nov 2026: marketplace layout — gross → discount → TAXABLE VALUE → tax. Seller discounts (coupon, prepaid) reduce the taxable value;
+// loyalty-coin redemption is payment, not a price reduction, so it does not.
+describe('computeOrderInvoice — taxable value', () => {
+  const honey = { items: [{ name: 'Wild Honey', qty: 2, price: 350 }], subtotal: 700, shipping_charge: 0, cod_surcharge: 0, state: 'Delhi' }
+
+  it('audited cart: ₹700, ₹50 coupon, GST ₹31 → taxable ₹619, and taxable + GST = goods payable ₹650', () => {
+    const inv = computeOrderInvoice({ ...honey, total_amount: 650, coupon_discount: 50, tax: 31 })
+    expect(inv.taxableValue).toBe(619)
+    expect(inv.taxableValue! + inv.tax).toBe(650)
+    expect(inv.reconciles).toBe(true)
+  })
+  it('a prepaid discount reduces the taxable value too', () => {
+    const inv = computeOrderInvoice({ ...honey, total_amount: 630, coupon_discount: 0, tax: 30 }, { loyaltyPointValue: 1 })
+    expect(inv.prepaidDiscount).toBe(70)
+    expect(inv.taxableValue).toBe(600)            // 700 − 70 − 30
+  })
+  it('redeemed loyalty coins do NOT reduce the taxable value', () => {
+    const inv = computeOrderInvoice({ ...honey, total_amount: 550, coupon_discount: 50, tax: 31, loyalty_points_redeemed: 100 }, { loyaltyPointValue: 1 })
+    expect(inv.loyaltyDiscount).toBe(100)
+    expect(inv.taxableValue).toBe(619)            // same as without coins
+    expect(inv.reconciles).toBe(true)
+  })
+  it('is not stated when coins were redeemed but their value is unknown (cannot be exact)', () => {
+    const inv = computeOrderInvoice({ ...honey, total_amount: 550, coupon_discount: 50, tax: 31, loyalty_points_redeemed: 100 })
+    expect(inv.taxableValue).toBeNull()
+  })
+  it('is null when there is no tax (nothing to split)', () => {
+    expect(computeOrderInvoice({ ...honey, total_amount: 700, coupon_discount: 0, tax: 0 }).taxableValue).toBeNull()
+  })
+})

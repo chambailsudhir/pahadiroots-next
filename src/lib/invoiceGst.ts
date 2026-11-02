@@ -210,6 +210,12 @@ export interface InvoiceReconciliation {
   codSurcharge:        number
   total:               number
   tax:                 number
+  /**
+   * Value of the goods on which the stored tax is charged = subtotal − coupon − prepaid discount − tax (the layout every
+   * marketplace invoice uses: gross → discount → taxable value → tax). Loyalty-coin redemption is NOT deducted (coins are payment,
+   * not a price reduction). null when it cannot be stated exactly (coins were redeemed but their value is unknown here).
+   */
+  taxableValue:        number | null
   cgst:                number
   sgst:                number
   igst:                number
@@ -274,6 +280,13 @@ export function computeOrderInvoice(order: StoredOrderMoney, opts: InvoiceOption
 
   const sumP = subtotalP - couponP - loyaltyP - prepaidP + shippingP + codP + otherP
 
+  // Taxable value of the goods (see InvoiceReconciliation.taxableValue). Without a known coin value the residual mixes the prepaid
+  // discount with coins, so it is only stated when no coins were redeemed or the split is known.
+  const coinsRedeemed = Math.max(0, Number(order.loyalty_points_redeemed) || 0) > 0
+  const taxableP = (splitKnown || !coinsRedeemed) && taxP > 0
+    ? Math.max(0, subtotalP - couponP - prepaidP - taxP)
+    : null
+
   return {
     lines,
     linesTotal:         toRupees(linesTotalP),
@@ -288,6 +301,7 @@ export function computeOrderInvoice(order: StoredOrderMoney, opts: InvoiceOption
     codSurcharge:       toRupees(codP),
     total:              toRupees(totalP),
     tax:                toRupees(taxP),
+    taxableValue:       taxableP == null ? null : toRupees(taxableP),
     cgst:               toRupees(cgstP),
     sgst:               toRupees(sgstP),
     igst:               toRupees(igstP),

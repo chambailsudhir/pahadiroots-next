@@ -432,6 +432,7 @@ export default function OrderDetailPage() {
               </div>
               {order.tax != null && (
                 <div className={styles.odPriceTax}>
+                  {inv.tax > 0 && inv.taxableValue != null && <>Taxable value {formatCurrency(inv.taxableValue)} · </>}
                   Incl. {formatCurrency(inv.tax)} GST
                   {inv.tax > 0 && (inv.supplyType === 'intra'
                     ? ` (CGST ${formatCurrency(inv.cgst)} + SGST ${formatCurrency(inv.sgst)})`
