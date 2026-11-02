@@ -14,7 +14,7 @@
  *   1. [UX FIX] shimmerCount persists the previous successful item count
  *      across a loading transition, instead of always showing 4 shimmers
  *      then jumping to 1-3 real items (layout shift).
- *   2. First load (no prior successful count) defaults to 2 shimmers.
+ *   2. First load (no prior successful count) defaults to 4 shimmers (a full rail, so the page does not jump).
  *   3. shimmerCount is clamped to [1, 4] — never 0, never more than 4.
  *   4. Items beyond the 4th are not rendered (visibleItems = items.slice(0,4)).
  *   5. addedIds correctly marks matching items as disabled / "✓".
@@ -122,9 +122,9 @@ describe('UpsellSection — fallback branches', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('UpsellSection — shimmer count persistence (UX FIX)', () => {
-  it('defaults to 2 shimmers on the very first load (no prior successful count)', () => {
+  it('defaults to 4 shimmers on the very first load (no prior successful count)', () => {
     const { container } = render(el({ loading: true, items: [] }))
-    expect(container.querySelectorAll('[class*="shimmer"]').length).toBe(2)
+    expect(container.querySelectorAll('[class*="shimmer"]').length).toBe(4)
   })
 
   it('remembers the last successful item count and uses it for the NEXT loading phase', () => {

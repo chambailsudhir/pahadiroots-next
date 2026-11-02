@@ -59,10 +59,11 @@ import ErrorBoundary                    from '@/components/ui/ErrorBoundary'
 import CartNoticeBanner                 from '@/components/cart/CartNoticeBanner'
 import CheckoutStepper                  from '@/components/checkout/CheckoutStepper'
 import Icon, { AdminIcon } from '@/components/ui/Icon'
+import UpsellSection from '@/components/cart/UpsellSection'
+import PahadiStoryCard from '@/components/cart/PahadiStoryCard'
 
-const UpsellSection   = lazy(() => import('@/components/cart/UpsellSection'))
+// UpsellSection / PahadiStoryCard are imported statically: lazy chunks with a null fallback made the cards below jump when they arrived (CLS).
 const ReviewSection   = lazy(() => import('@/components/cart/ReviewSection'))
-const PahadiStoryCard = lazy(() => import('@/components/cart/PahadiStoryCard'))
 
 // Static, defined at module level — never recreated on re-renders.
 const TRUST_ITEMS = [

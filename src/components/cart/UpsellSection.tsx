@@ -103,7 +103,7 @@ const UpsellSection = memo(function UpsellSection({
   // on any render where the length hasn't changed, ZERO setState calls
   // happen at all, sidestepping any reliance on bailout behavior.
   const [prevVisibleCount, setPrevVisibleCount] = useState(0)
-  const [prevCount, setPrevCount] = useState(2)
+  const [prevCount, setPrevCount] = useState(4)   // first load: reserve room for a full rail (the API returns up to 4) so the page below does not jump when it arrives
   if (visibleItems.length !== prevVisibleCount) {
     setPrevVisibleCount(visibleItems.length)
     if (!loading && !error && visibleItems.length > 0) {

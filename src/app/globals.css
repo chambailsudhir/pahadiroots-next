@@ -117,10 +117,12 @@ button { cursor: pointer; font-family: inherit; }
 }
 .ticker-track:hover { animation-play-state: paused; }
 .ticker-wrap { position: relative; }
+/* Keep scrolling text from sliding under the pause button: a solid cap in the bar's own colour at the right edge. */
+.ticker-wrap::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 40px; background: inherit; z-index: 1; pointer-events: none; }
 .ticker-wrap.ticker-paused .ticker-track { animation-play-state: paused; }
 /* Pause / resume control (WCAG 2.2.2). Sits over the right edge with the bar's own colour behind it. */
 .ticker-pause {
-  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); z-index: 2;
   width: 26px; height: 26px; padding: 0; border: 1px solid currentColor; border-radius: 50%;
   background: inherit; color: inherit; font-size: 10px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -132,6 +134,7 @@ button { cursor: pointer; font-family: inherit; }
   .ticker-track { animation: none; width: auto; flex-wrap: wrap; justify-content: center; white-space: normal; }
   .ticker-item[aria-hidden="true"] { display: none; }
   .ticker-pause { display: none; }
+  .ticker-wrap::after { display: none; }
 }
 .ticker-item {
   padding: 0 32px;

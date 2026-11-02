@@ -459,7 +459,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
           <div className={`af-group${errors.name ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-name">Full Name</label>
             <input id="af-name" className="af-input" type="text"
-              autoComplete="name" value={addr.name}
+              autoComplete="name" enterKeyHint="next" value={addr.name}
               required
               aria-required="true"
               aria-invalid={!!errors.name}
@@ -475,7 +475,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
             <div className="af-phone">
               <span className="af-phone-pre">+91</span>
               <input id="af-phone" className="af-input af-phone-field"
-                type="tel" autoComplete="tel-national" inputMode="numeric"
+                type="tel" enterKeyHint="next" autoComplete="tel-national" inputMode="numeric"
                 value={addr.phone}
                 required
                 aria-required="true"
@@ -524,7 +524,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
           <div className={`af-group${errors.city ? ' af-group--err' : ''}`}>
             <label className="af-label" htmlFor="af-city">City</label>
             <input id="af-city" className="af-input" type="text"
-              autoComplete="address-level2" value={addr.city}
+              autoComplete="address-level2" enterKeyHint="next" value={addr.city}
               required
               aria-required="true"
               aria-invalid={!!errors.city}
@@ -585,7 +585,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
               </div>
             </div>
             <input id="af-pincode" className="af-input" type="text"
-              autoComplete="postal-code" inputMode="numeric"
+              autoComplete="postal-code" enterKeyHint="next" inputMode="numeric"
               value={addr.pincode}
               required
               aria-required="true"
@@ -616,7 +616,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
               Email <span className="af-optional">for invoice</span>
             </label>
             <input id="af-email" className="af-input" type="email"
-              autoComplete="email" value={email}
+              autoComplete="email" enterKeyHint="done" value={email}
               onChange={e => onEmailChange(e.target.value)}
               placeholder="you@email.com"
             />
