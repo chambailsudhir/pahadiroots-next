@@ -914,6 +914,7 @@ function SuccessContent() {
                           : <div key={r.key}><span>{r.label}</span><span>{r.amount < 0 ? `-₹${(-r.amount).toFixed(2)}` : `₹${r.amount.toFixed(2)}`}</span></div>
                         )}
                         {/* GST included in the above — from the stored order tax, never re-derived live. */}
+                        {inv.tax > 0 && inv.taxableValue != null && <div><span>Taxable value (after discounts)</span><span>₹{inv.taxableValue.toFixed(2)}</span></div>}
                         {inv.tax > 0 && (supplyType === 'intra' ? (
                           <>
                             <div><span>CGST</span><span>₹{inv.cgst.toFixed(2)}</span></div>

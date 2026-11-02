@@ -22,3 +22,11 @@
 
 ## Still unverified (cannot be done safely on production)
 Declined / cancelled / UPI-pending payments, a deliberately duplicated webhook, and the e-mail rendering have not been *run* — they were read line by line and are covered by unit tests (`webhookRazorpay`, `paymentOrderRoutes`, `recordCapturedPayment`, `idempotencyReuse`, …). Run them in `pahadiroots-test` with Razorpay test keys.
+
+## GST on coupons and coins — what was checked, what is decided
+Public sources only (no access to Amazon / Myntra / BigBasket's own systems), so treat this as the common marketplace layout, not a certified opinion.
+* **Seller coupon / prepaid discount → reduces taxable value.** CGST s.15(3)(a): a discount given at or before supply and shown on the invoice is excluded from the value of supply. Sample Amazon and Myntra invoices follow gross → discount → *taxable value* → tax on the net.
+* **Loyalty coins / wallet / credit / vouchers → payment, not a discount.** Redeemed coins are consideration for the supply, so GST stays on the full value (the Karnataka High Court treated vouchers as money-like instruments; wallet balances work the same way). This is what the code already did.
+* **New:** the invoice now prints the **Taxable value (after discounts)** line (`computeOrderInvoice().taxableValue`: subtotal − coupon − prepaid − tax), on the order page, the account order page and the printable invoice. It is not stated when coins were redeemed but their value is unknown.
+* Orders placed before the 2 Nov change had GST computed on the pre-coupon value; their stored tax is shown as-is (never re-derived), so for those few coupon orders the taxable line is "payable goods − stored tax".
+* Shipping (free today) and the COD fee are not part of this taxable line. Your CA should still confirm the above before the next GST return.
