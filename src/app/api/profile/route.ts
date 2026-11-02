@@ -10,6 +10,7 @@
 //   ✅ Cache-Control: no-store on GET (profile data must never be cached)
 // ─────────────────────────────────────────────────────────────
 
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ok, fail,
@@ -227,7 +228,10 @@ export async function POST(req: NextRequest) {
 
           rows.push({
             // Only accept a UUID-shaped id (it ends up inside a PostgREST `not.in.(...)` filter below).
-            ...(typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? { id: a.id } : {}),
+            // A row WITHOUT an id used to be inserted and then wiped by the cleanup below (`keptIds` was empty → "delete all"),
+            // i.e. the API reported success and stored nothing. The UI always sends client-made ids, so customers never hit it —
+            // but any other caller silently lost data. The server now mints the id.
+            id: typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? a.id : randomUUID(),
             customer_id: profile.id,
             label,
             name:  name || null,

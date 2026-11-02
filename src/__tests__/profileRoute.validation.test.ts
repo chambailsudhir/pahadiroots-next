@@ -136,7 +136,9 @@ describe('POST /api/profile — saved addresses (ACC-039)', () => {
 
     mocks.sbAdmin.mockResolvedValue([])
     await post({ saved_addresses: JSON.stringify([{ ...GOOD_ADDR, id: '1),(select 1' }]) })
-    expect(upsert()![2][0]).not.toHaveProperty('id')
+    const id = String(upsert()![2][0].id)
+    expect(id).not.toContain('select')                                   // the injected value never reaches the SQL filter
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)   // the server minted a clean uuid
   })
 })
 
@@ -185,5 +187,20 @@ describe('POST /api/profile — saved-address version check (two tabs must not o
     expect(addressesEtag([])).not.toBe(a)
     const two = [stored[0], { ...stored[0], id: '22222222-2222-2222-2222-222222222222' }]
     expect(addressesEtag(two)).toBe(addressesEtag([...two].reverse()))
+  })
+})
+
+// ── live-verification find: an address row WITHOUT an id was inserted and then deleted by the cleanup ──────────────
+describe('POST /api/profile — id-less address rows are stored, not wiped', () => {
+  it('mints an id, upserts the row and never runs the "delete everything" cleanup', async () => {
+    mocks.sbAdmin.mockImplementation(async () => [])
+    const res = await post({ saved_addresses: JSON.stringify([GOOD_ADDR]) })   // GOOD_ADDR has no id
+    expect(res.status).toBe(200)
+    const upsert = mocks.sbAdmin.mock.calls.find(([m, p]) => m === 'POST' && p === '/rest/v1/saved_addresses') as [string, string, Array<Record<string, unknown>>]
+    expect(typeof upsert[2][0].id).toBe('string')
+    const deletes = mocks.sbAdmin.mock.calls.filter(([m]) => m === 'DELETE').map(c => String(c[1]))
+    // the only cleanup allowed is "everything EXCEPT the ids just written"
+    expect(deletes.every(u => u.includes('id=not.in.('))).toBe(true)
+    expect(deletes.some(u => u.endsWith(`customer_id=eq.58`))).toBe(false)
   })
 })

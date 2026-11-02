@@ -54,4 +54,13 @@ describe('sharedProfileRequest', () => {
     const next = vi.fn(async () => ({ profile: { id: 'next-user' } }))
     await expect(sharedProfileRequest(next)).resolves.toEqual({ profile: { id: 'next-user' } })
   })
+
+  it('shares state through globalThis, so a bundler that duplicates this module into two chunks still shares ONE request', async () => {
+    const fetcher = vi.fn(async () => ({ profile: { id: 7 } }))
+    await sharedProfileRequest(fetcher)
+    vi.resetModules()                                                              // a second, independent copy of the module
+    const copy = await import('@/lib/profileRequest')
+    await copy.sharedProfileRequest(fetcher)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
 })

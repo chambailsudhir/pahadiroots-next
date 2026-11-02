@@ -135,6 +135,7 @@ if (typeof window !== 'undefined') {
   // one. Only a successful PUT is remembered, so a failed sync — or a guest list that has never been uploaded — is
   // never suppressed, and logout forgets it.
   let lastConfirmedKey: string | null = null
+  let inflightKey: string | null = null            // the same list is already on its way — a second timer must not send it again
   const wishlistKey = (w: string[]) => JSON.stringify([...w].sort())
 
   useUserStore.subscribe(state => {
@@ -144,19 +145,20 @@ if (typeof window !== 'undefined') {
     prevWishlist = state.wishlist
 
     // Only sync when a user is logged in
-    if (!state.user?.id) { lastConfirmedKey = null; return }
+    if (!state.user?.id) { lastConfirmedKey = null; inflightKey = null; return }
 
     if (syncTimer) clearTimeout(syncTimer)
     syncTimer = setTimeout(() => {
       const list = useUserStore.getState().wishlist
       const key  = wishlistKey(list)
-      if (key === lastConfirmedKey) return          // the server already has exactly this
+      if (key === lastConfirmedKey || key === inflightKey) return   // the server has it / is about to have it
+      inflightKey = key
       // Fire-and-forget — no UI feedback needed for background sync
       fetch('/api/wishlist', {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ wishlist: list }),
-      }).then(res => { if (res.ok) lastConfirmedKey = key }).catch((err: unknown) => {
+      }).then(res => { if (res.ok) lastConfirmedKey = key }).finally(() => { if (inflightKey === key) inflightKey = null }).catch((err: unknown) => {
         // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
         // zero logging. A persistent failure (e.g. the wishlist API broken,
         // an expired auth token that never refreshes) meant wishlist updates
