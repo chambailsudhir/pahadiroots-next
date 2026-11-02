@@ -70,14 +70,27 @@
 }
 
 
+/* The label sits in its own element (not a <span>: .cp-step span is the numbered circle) so small screens can hide it visually. */
+.cp-step-label { font-weight: inherit; }
+
 .cp-step-done { color: var(--forest); }
 .cp-step-done span { background: #e8f0e4; color: var(--forest); border-color: #b8d4a8; }
 
 @media (max-width: 640px) {
-  .cp-steps { grid-template-columns: auto 1fr; gap: 8px; padding: 12px; }
+  /* minmax(0,1fr): the back-link column may shrink instead of forcing the page wider than the phone */
+  .cp-steps { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 12px; }
   .cp-steps-list { grid-column: 2; justify-self: end; }
   .cp-step { font-size: 11px; gap: 5px; }
   .cp-step-line { width: 14px; margin: 0 4px; }
+}
+/* Nov 2026 audit: on a phone the three labelled steps (311px) + the "Continue Shopping" link made the CART PAGE wider than the screen
+   (page scrolled sideways by 18–128px at 320–430px, shifting the fixed bottom bar). Same treatment the checkout skin already has below:
+   only the CURRENT step keeps its visible label; the others are hidden VISUALLY only (clip pattern), so every step is still announced. */
+@media (max-width: 480px) {
+  .cp-step:not(.cp-step-active) .cp-step-label {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
 }
 
 /* ── Checkout / confirmation skin ───────────────────────────────────────────── */
