@@ -127,10 +127,12 @@ export const reviewSchema = z.object({
   // was mistakenly `uuid` in the DB (fixed via migration to match products.id,
   // which is `bigint`). Matches notifyStockSchema's product_id validation.
   product_id:    z.number().int().positive(),
-  customer_name: z.string().trim().min(2).max(100),
+  // Verified-purchase reviews (Nov 2026): the order that contained the product. The customer and the public display
+  // name are NEVER taken from the body - the server builds them from the session.
+  order_id:      z.coerce.number().int().positive(),
   rating:        z.number().int().min(1).max(5),
-  comment:       z.string().trim().max(1000).optional(),
-  order_id:      z.string().min(1).optional(),
+  // Tags are stripped and the text trimmed/capped at 1000 server-side; this bound only refuses absurd bodies.
+  comment:       z.string().max(5000).optional(),
 })
 
 // ─── Newsletter Schema ─────────────────────────────────────────────────────────

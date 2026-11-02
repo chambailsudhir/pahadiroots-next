@@ -50,6 +50,8 @@ export type TransactionalEmailType =
   // promised "5% off, check your inbox" without ever generating a code or
   // sending anything — this type is what actually fulfills that promise.
   | 'newsletter_welcome'
+  // Nov 2026: "How was your order?" mail sent a few days after delivery (lib/server/reviewRequests.ts).
+  | 'review_request'
 
 export interface SendTransactionalEmailParams {
   type:      TransactionalEmailType

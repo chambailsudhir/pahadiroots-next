@@ -17,6 +17,7 @@
 //   2. Null shipping_address on orders (standalone PII snapshot in JSONB)
 //   3. Anonymise customers row — name becomes "Deleted User", PII → NULL
 //   4. Delete saved_addresses table rows for this customer
+//   4b. Anonymise the customer's product reviews (name -> 'Anonymous customer', unlink; rating/text kept)
 //   5. Write DPDP audit record to event_logs
 //   6. Delete Supabase Auth user  ← irrecoverable, always last
 //   7. Clear session cookies + respond
@@ -95,7 +96,7 @@ async function sendDeletionConfirmation(email: string): Promise<void> {
         from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
         to:      [email],
         subject: 'Your HimVeda by Pahadi Roots account has been deleted',
-        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account has been deleted and your personal data erased, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>, except for the records we are legally required to keep (below).</p><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Erased or anonymised</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Your name, phone number, e-mail, GSTIN and profile address, saved delivery addresses, wishlist and abandoned carts</li><li>Newsletter and back-in-stock subscriptions, and queued e-mails to this address</li><li>Return photos and your name and comments on return requests, order notes, and notes on Pahadi Coins entries</li></ul><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Retained as required by GST and tax law</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Invoices, credit notes and order records of completed orders, including the recipient name and delivery address printed on them, for the statutory retention period; they are not used for marketing</li></ul><p style="color:#555;font-size:14px;line-height:1.6">Product reviews you posted are public content that is not linked to your account; write to us if you would like one removed.</p><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account has been deleted and your personal data erased, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>, except for the records we are legally required to keep (below).</p><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Erased or anonymised</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Your name, phone number, e-mail, GSTIN and profile address, saved delivery addresses, wishlist and abandoned carts</li><li>Newsletter and back-in-stock subscriptions, and queued e-mails to this address</li><li>Return photos and your name and comments on return requests, order notes, and notes on Pahadi Coins entries</li></ul><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Retained as required by GST and tax law</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Invoices, credit notes and order records of completed orders, including the recipient name and delivery address printed on them, for the statutory retention period; they are not used for marketing</li></ul><p style="color:#555;font-size:14px;line-height:1.6">Product reviews you posted stay on our product pages (rating and text) but your name is replaced by &ldquo;Anonymous customer&rdquo; and they are unlinked from your account; write to us if you would like one removed.</p><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
       }),
     })
   } catch (e) {
@@ -267,6 +268,23 @@ export async function DELETE(req: NextRequest) {
       // saved_addresses (table), wishlist and abandoned carts (name/email/phone snapshots).
       for (const table of ['saved_addresses', 'wishlist', 'abandoned_carts']) {
         await sbAdmin('DELETE', `/rest/v1/${table}?customer_id=eq.${customerId}`, null, 'return=minimal')
+      }
+
+      // ── Step 5b: product reviews (verified-purchase reviews, db_migration_v23) ──
+      // Like the big marketplaces, the review itself (rating + text) stays - it is public content other shoppers rely on -
+      // but it is anonymised and unlinked from the account and order. Tolerates the columns not existing yet (migration
+      // not applied): then there is nothing linked to this customer and the step is a no-op, never a failed deletion.
+      try {
+        await sbAdmin(
+          'PATCH',
+          `/rest/v1/reviews?customer_id=eq.${customerId}`,
+          { customer_name: 'Anonymous customer', customer_id: null, order_id: null },
+          'return=minimal',
+        )
+      } catch (e) {
+        const x = e as { status?: number; message?: unknown }
+        const missingColumn = x?.status === 400 && /42703|PGRST204|does not exist|Could not find/i.test(String(x?.message ?? ''))
+        if (!missingColumn) throw e
       }
     }
 

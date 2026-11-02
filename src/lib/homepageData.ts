@@ -18,6 +18,7 @@
 
 import { unstable_cache } from 'next/cache'
 import { supabase } from './supabase'
+import { withVerifiedFlag } from './reviewVerified'
 
 export interface HomepageReview {
   id:            string
@@ -26,6 +27,8 @@ export interface HomepageReview {
   rating:        number
   review_text:   string | null
   comment:       string | null
+  /** Present (true) only for verified-purchase reviews, and only once db_migration_v23 is applied. */
+  is_verified_purchase?: boolean
 }
 
 /** Latest approved reviews that actually contain text — 5-minute shared cache,
@@ -39,7 +42,9 @@ export const getLatestReviews = unstable_cache(
       .order('created_at', { ascending: false })
       .limit(3)
     if (error) throw error
-    return ((data ?? []) as HomepageReview[]).filter(r => (r.review_text || r.comment || '').trim().length > 0)
+    const rows = ((data ?? []) as HomepageReview[]).filter(r => (r.review_text || r.comment || '').trim().length > 0)
+    // Separate best-effort query: the SELECT above must keep working before the v23 migration adds the column.
+    return withVerifiedFlag(supabase as never, rows)
   },
   ['home-latest-reviews'],
   { revalidate: 300, tags: ['reviews'] },

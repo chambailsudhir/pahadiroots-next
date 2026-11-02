@@ -213,3 +213,38 @@ foreign key — no record was damaged.)
   states the earlier scan did not reach, focus traps, error handling, missing constraints, polish).
 * Database layer: **no critical or high** finding — RLS is on for all 104 tables, no money / points / stock function is callable by
   anon or authenticated.
+
+---
+
+## 6. Verified-purchase product reviews + review-request e-mail (`db_migration_v23_reviews_verified_purchase.sql`)
+
+**What was built** (modelled on Amazon / Flipkart / Myntra / Nykaa): a review can only be written by the customer who *received* the
+product, is tied to the customer and the order ("Verified purchase"), is requested by e-mail a few days after delivery, and is moderated
+before it shows.
+
+* `submit_review` (`POST /api/v1/actions`) now takes `{product_id, order_id, rating, comment}`. The customer comes from the session
+  (`syncCustomerProfile`), never the body; the order must be theirs, `delivered`, and contain the product (`order_items`); a second review
+  of the same product by the same customer is `409 already_reviewed` (also enforced by a unique partial index). Rating is an integer 1-5,
+  the comment is tag-stripped, trimmed and capped at 1000 characters, the public name is built server-side (`Priya S.`), the rate limit is
+  shared per customer (20/hour), status stays `pending`. Response shape unchanged (`{success, message}`).
+* `GET /api/v1/reviews/eligible?order_id=` (owner-scoped) lists an order's products with `already_reviewed`.
+* Customer UI: **Rate & review** on a delivered order -> `/account/orders/[id]/review` (star radio group, optional text with counter).
+* E-mail: `sendReviewRequests` (`lib/server/reviewRequests.ts`) runs as a non-fatal step of the existing `expire-pending-orders` cron
+  (response gains `reviewRequests`, the number sent). Registered customers only, e-mail present, `notif_email_orders` not false, delivered
+  between 60 days ago and `review_request_days` ago, at least one product not yet reviewed, 20 per run. Each order is claimed in
+  `review_requests` *before* sending (single winner); a send that fails with no retry queued releases the claim.
+* "Verified purchase" badge on the product page and homepage only when the row has `is_verified_purchase === true`. The flag is read by a
+  separate best-effort query, so the pages keep working before the migration is applied; legacy reviews never show it.
+* Erasure: deleting an account sets the customer's reviews to `Anonymous customer` and unlinks `customer_id` / `order_id`; rating and text
+  stay (as on the big marketplaces). The step is skipped silently if the columns do not exist yet.
+
+**Settings** (`site_settings`, inserted by the migration with `ON CONFLICT DO NOTHING`): `review_request_enabled` (`true`; set `false` to stop
+the e-mails) and `review_request_days` (`7`, accepted 1-30).
+
+**Owner's moderation flow:** a new review arrives with `status = 'pending'` (not visible anywhere). In the admin app's Reviews screen
+approve it (`status = 'approved'`) - the product page and homepage pick it up (homepage cache is 5 minutes / `reviews` tag); reject or delete
+otherwise. Nothing in the storefront approves a review automatically.
+
+**Applying the migration:** column/table assumptions come from the repo, not the live schema - first confirm `reviews`, `customers.id`,
+`orders.id` (bigint) and `site_settings(key, value)` on the live database, then run the file in the Supabase SQL editor (it is one
+transaction and idempotent). Apply it *before* deploying: until then `submit_review` answers 503 and the cron's review step logs an alert.
