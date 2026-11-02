@@ -178,3 +178,38 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
   the `example.com` test addresses — not a production fault.
 * **Test data created by this pass** (delete before launch with the rest): auth user + customer `audit.f.20261102@example.com`
   (customer 71) and its `referrals` row.
+
+## 6. Line-by-line audit of the account area (scope A) — 2 Nov 2026, evening
+
+Six read-only reviewers each read their slice of the code **in full** (auth & session · profile / addresses / privacy · orders / cancel /
+returns / tracking · wishlist / coins / referral / pincode · account-page frontend · database security). Findings below are what they
+reported; **only the ones marked "verified" were reproduced or re-read by me**. No row of real customer data was read.
+
+### 6.1 Fixed in this PR — ACC-060 (verified on production before the fix)
+`POST /api/auth {action:'email_signup', email:<an existing customer>}` returned that customer's **profile** (name, phone, address,
+pincode, loyalty coins, wishlist) to an **anonymous** caller. Cause: the sign-up route synced the throw-away user Supabase returns for an
+existing address, and `syncCustomerProfile` adopted any customer row with a matching e-mail (with a "first row" fallback). Reproduced with
+the test account `audit.a…@example.com`. (The attempt to re-point the row at the fake id was stopped by the `customers_auth_user_id_fkey`
+foreign key — no record was damaged.)
+* Sign-up (both paths) no longer reads, creates or returns a customer row unless Supabase returned a **session**; the answer is the same
+  `{success, verification_sent}` for every address.
+* `syncCustomerProfile` adopts an e-mail-matched row only for a **confirmed** e-mail, never from another live auth user, exact
+  (case-insensitive) match only, no `rows[0]` fallback.
+* Tests: `authRoute.signupNoProfileLeak`, extended `syncCustomerProfilePhoneMergeLeak.security`, updated `authRoute.signupMailFallback`.
+
+### 6.2 Reported and NOT yet fixed (by area; "verified" = I reproduced or re-read it)
+* **Guest checkout attaches the order to an existing customer with the same phone** (orders reviewer: *high*; **verified** by my own test
+  order, which reused customer 72 and its stale e-mail). The order shows in that customer's account, can use up their COD quota, and the
+  confirmation page returns their name.
+* **Login CSRF / session fixation** through `/auth/google-callback#access_token=…` (auth reviewer: *high*, code-read, not reproduced).
+* **COD coin redemption race** — parallel orders can reuse the same coins; a failed post-commit deduction keeps the discount
+  (loyalty reviewer: *high*, code-read).
+* **Frontend:** saving an address on the Addresses tab does not update the list and the next save overwrites it; the Coins tab shows a
+  skeleton forever on the second visit (frontend reviewer: *high*, code-read).
+* ~15 *medium* items (wishlist leaks to the next user on a shared device, referral controls bypassable with a "shell" referrer, reset
+  password without recovery proof, per-account rate limits that let a stranger lock a victim out, account deletion keeps data in
+  reviews / returns / subscribers and wipes the address of in-flight orders, default grants in `public` for new tables, `site_settings`
+  public-read is a deny-list, `subscribers` insert open to any signed-in customer, …) and ~45 *low* items (accessibility contrast on
+  states the earlier scan did not reach, focus traps, error handling, missing constraints, polish).
+* Database layer: **no critical or high** finding — RLS is on for all 104 tables, no money / points / stock function is callable by
+  anon or authenticated.

@@ -221,6 +221,19 @@ export function applyNewCookies(res: NextResponse, access: string, refresh: stri
   res.cookies.set(COOKIE_REFRESH, refresh, { ...base, maxAge: 60 * 60 * 24 * 30 })
 }
 
+// Does this auth user still exist? (service-role admin API). Conservative: anything but a clean 404 counts as "exists", so a
+// Supabase hiccup can never cause a row to be taken from its owner.
+async function authUserStillExists(authUserId: string): Promise<boolean> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId)) return false   // not even a uuid → nobody owns it
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUserId}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+      signal:  AbortSignal.timeout(5_000),
+    })
+    return res.status !== 404
+  } catch { return true }
+}
+
 // ── syncCustomerProfile ───────────────────────────────────────
 // Finds an existing customer row by auth_user_id, phone, or email.
 // If none exists, upserts a new row (race-safe via merge-duplicates
@@ -231,6 +244,8 @@ export async function syncCustomerProfile(user: {
   phone?:        string
   email?:        string
   user_metadata?: Record<string, string>
+  /** GoTrue sets this once the address is PROVEN (link clicked, or an OAuth provider vouching for it). */
+  email_confirmed_at?: string | null
 }) {
   const phone = user.phone || ''
   const email = user.email || ''
@@ -296,20 +311,42 @@ export async function syncCustomerProfile(user: {
   }
 
   if (rows && rows.length > 0) {
-    let match =
-      rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id) ||
-      rows.find((r: Record<string, unknown>) => email && r.email === email) ||
-      rows[0]
-
-    if (match.auth_user_id !== user.id) {
-      const patch: Record<string, unknown> = { auth_user_id: user.id }
-      if (phone && !match.phone) patch.phone = phone
-      await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch((e: unknown) => {
-        console.warn('[syncCustomerProfile] patch failed — proceeding with stale match:', e)
-      })
-      match = { ...match, ...patch }
+    // SECURITY (account audit, Nov 2026 — found by a line-by-line review, reproduced on production with a test account):
+    // this used to adopt ANY row whose e-mail matched, with `rows[0]` as a last resort, whenever it was handed a user —
+    // including the throw-away user object Supabase returns from an e-mail SIGN-UP (for an address that already exists it is an
+    // "obfuscated" user with a random id, and nothing proves the caller owns the address). The sign-up route then returned the
+    // matched customer's name, phone, address and coins to an anonymous caller. (The attempt to re-point the row at the fake id
+    // was stopped by the customers_auth_user_id_fkey foreign key, so no record was damaged — but the data was already returned.)
+    // Now an e-mail match is adopted only when ALL of these hold:
+    //   • the auth user's e-mail is CONFIRMED (GoTrue's email_confirmed_at — set after the link is clicked / by Google);
+    //   • the row is not claimed by a DIFFERENT live auth user (defence in depth; a row whose owner no longer exists can still be
+    //     taken back by a confirmed owner of that e-mail);
+    //   • the comparison is exact (case-insensitive) — no "first row" fallback.
+    let match = rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id)
+    if (!match) {
+      const byEmail = email ? rows.find((r: Record<string, unknown>) => typeof r.email === 'string' && r.email.toLowerCase() === email.toLowerCase()) : undefined
+      if (byEmail && user.email_confirmed_at) {
+        const owner = byEmail.auth_user_id as string | null | undefined
+        if (!owner || !(await authUserStillExists(owner))) match = byEmail
+        else captureError(new Error('syncCustomerProfile: e-mail matches a customer already linked to another live auth user — not adopted'), { action: 'syncCustomerProfile.email_conflict', userId: user.id, alert: true })
+      }
+      if (!match) {
+        // Nothing this user is entitled to. Never fall through to INSERT when an e-mail-matched row exists
+        // (customers.email is unique, the insert would fail noisily) — report "no profile".
+        if (byEmail) return null
+      } 
     }
-    return match
+    if (match) {
+      if (match.auth_user_id !== user.id) {
+        const patch: Record<string, unknown> = { auth_user_id: user.id }
+        if (phone && !match.phone) patch.phone = phone
+        await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${match.id}`, patch).catch((e: unknown) => {
+          console.warn('[syncCustomerProfile] patch failed — proceeding with stale match:', e)
+        })
+        match = { ...match, ...patch }
+      }
+      return match
+    }
   }
 
   // Not found — upsert so concurrent requests cannot create duplicate rows.
