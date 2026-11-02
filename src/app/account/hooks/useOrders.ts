@@ -117,7 +117,7 @@ export function useOrders(markExpired?: () => void) {
     ? ['orders', 1, serverSearch, serverStatus]
     : null
 
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     swrKey,
     ([_k, pg, sq, st]: [string, number, string, string]) => {
       abortRef.current?.abort()
@@ -128,6 +128,16 @@ export function useOrders(markExpired?: () => void) {
       revalidateOnFocus:     false,
       revalidateOnReconnect: true,
       dedupingInterval:      30_000,
+      // AUDIT E1-6: a new key (search / filter) must keep showing the previous list while it loads, otherwise
+      // the whole section (search box included) is swapped for a skeleton on every keystroke.
+      keepPreviousData:      true,
+      // AUDIT E1-9: a 401 will never succeed on retry (and we have already surfaced the expired session) —
+      // other errors back off and give up after 3 retries instead of retrying forever.
+      onErrorRetry: (err, _key, _config, revalidate, { retryCount }) => {
+        if (err instanceof ServiceError && err.status === 401) return
+        if (retryCount >= 3) return
+        setTimeout(() => revalidate({ retryCount }), 2000 * 2 ** retryCount)
+      },
       onSuccess: (res) => {
         if (res.stats) setServerStats(res.stats as typeof serverStats extends null ? never : NonNullable<typeof serverStats>)
         setExtraOrders([])
@@ -258,6 +268,7 @@ export function useOrders(markExpired?: () => void) {
   return {
     orders:      allOrders.length > 0 ? allOrders : null,
     loading:     isLoading,
+    fetching:    isValidating,
     hasFetched,
     error:       error?.message ?? null,
     filter,      setFilter,

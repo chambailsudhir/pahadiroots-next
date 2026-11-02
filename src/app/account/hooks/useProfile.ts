@@ -16,8 +16,26 @@ import {
 } from '@/lib/account/validation'
 import { getSavedAddresses, type SavedAddress } from '@/lib/account/utils'
 import { updateProfile, changePassword as apiChangePassword, sendForgotPasswordEmail, ServiceError } from '@/lib/services/profileService'
+import { clearProfileCache } from '@/lib/profileCache'
 import { useAddresses } from './useAddresses'
 import type { Profile } from './useAuth'
+
+interface PfFields { fname: string; lname: string; addr: string; city: string; state: string; pin: string; phone: string }
+const EMPTY_PF: PfFields = { fname: '', lname: '', addr: '', city: '', state: '', pin: '', phone: '' }
+
+/** Map (part of) a profile to the form-field shape. `partial` keeps only keys that are present in `p`. */
+function pfFieldsOf(p: Partial<Profile>, partial = false): PfFields {
+  const out: Partial<PfFields> = {}
+  const has = (k: string) => !partial || k in p
+  if (has('first_name'))     out.fname = p.first_name    || ''
+  if (has('last_name'))      out.lname = p.last_name     || ''
+  if (has('address_line1'))  out.addr  = p.address_line1 || ''
+  if (has('city'))           out.city  = p.city          || ''
+  if (has('state'))          out.state = p.state         || ''
+  if (has('pincode') || has('postal_code')) out.pin = p.pincode || p.postal_code || ''
+  if (has('phone'))          out.phone = (p.phone || '').replace(/^\+91/, '')
+  return partial ? (out as PfFields) : { ...EMPTY_PF, ...out }
+}
 
 // markExpired is optional so the hook stays usable in isolation (tests, Storybook).
 // page.tsx passes auth.markExpired so a mid-session 401 surfaces the expired banner.
@@ -27,7 +45,9 @@ export function useProfile(
   toast: (msg: string, type?: 'success' | 'error') => void,
   markExpired?: () => void,
 ) {
-  const [pf,    setPf]    = useState({ fname: '', lname: '', addr: '', city: '', state: '', pin: '', phone: '' })
+  const [pf,    setPf]    = useState<PfFields>({ ...EMPTY_PF })
+  // Profile values the form was last synced to (or that this hook wrote itself) — see syncFromProfile.
+  const baseline = useRef<PfFields | null>(null)
   const [pw,    setPw]    = useState({ curp: '', newp: '', conf: '', showCur: false, showNew: false, showConf: false })
   const [pfErr, setPfErr] = useState<FormErrors>({})
   const [msg,   setMsg]   = useState<Record<string, string>>({})
@@ -63,6 +83,12 @@ export function useProfile(
     getCurrentAddresses: () => getSavedAddresses(profile),
     persist: async (updated) => {
       await updateProfile({ saved_addresses: JSON.stringify(updated) })
+      // AUDIT E1-1: the list rendered by AddressSection and read by the NEXT save comes from the local profile.
+      // Add/edit never refreshed it (only remove() applied optimisticUpdate), so the saved address never appeared
+      // and the next save was based on a stale list and silently dropped it. Mirror the server state locally.
+      updateLocalProfile({ saved_addresses: JSON.stringify(updated) })
+      // AUDIT E1-7: checkout prefills from pr_checkout_profile — drop it so it can't offer an old/deleted address.
+      clearProfileCache()
     },
     optimisticUpdate: (updated) => {
       updateLocalProfile({ saved_addresses: JSON.stringify(updated) })
@@ -79,16 +105,34 @@ export function useProfile(
   // function itself does not read any outer scope that could become stale — it
   // receives the full profile snapshot as its argument every time it is called.
   const initFromProfile = useCallback((p: Profile) => {
-    setPf({
-      fname: p.first_name    || '',
-      lname: p.last_name     || '',
-      addr:  p.address_line1 || '',
-      city:  p.city          || '',
-      state: p.state         || '',
-      pin:   p.pincode || p.postal_code || '',
-      phone: (p.phone || '').replace(/^\+91/, ''),
+    const f = pfFieldsOf(p)
+    baseline.current = f
+    setPf(f)
+  }, [])
+
+  // AUDIT E1-3: saving or rolling back ONE card changes the local profile; re-initialising the whole form from it
+  // wiped unsaved edits in the OTHER cards (and a failed save discarded what the user had just typed). Only fields
+  // whose profile value changed EXTERNALLY (vs the baseline we last synced/wrote ourselves) are copied in.
+  const syncFromProfile = useCallback((p: Profile) => {
+    const next = pfFieldsOf(p)
+    const base = baseline.current
+    if (!base) { baseline.current = next; setPf(next); return }
+    const changed = (Object.keys(next) as (keyof PfFields)[]).filter(k => next[k] !== base[k])
+    baseline.current = next
+    if (changed.length === 0) return
+    setPf(cur => {
+      const out = { ...cur }
+      for (const k of changed) out[k] = next[k]
+      return out
     })
   }, [])
+
+  /** Local profile write made by this hook itself: advance the baseline so it is not mistaken for an external change. */
+  function ownWrite(u: Partial<Profile>) {
+    const patch = pfFieldsOf(u as Profile, true)
+    baseline.current = { ...(baseline.current ?? { ...EMPTY_PF }), ...patch }
+    updateLocalProfile(u)
+  }
 
   async function saveName() {
     const errors = validateProfileName(pf.fname)
@@ -96,12 +140,13 @@ export function useProfile(
     setPfErr({})
     setBusy(b => ({ ...b, name: true }))
     const up = { first_name: pf.fname.trim(), last_name: pf.lname.trim() }
-    updateLocalProfile(up)   // optimistic
+    ownWrite(up)   // optimistic
     try {
       await updateProfile(up)
+      clearProfileCache()   // AUDIT E1-7: checkout must not prefill the pre-edit details
       setMsg$('name', '✅ Name saved!')
     } catch (e: unknown) {
-      if (profile) updateLocalProfile({ first_name: profile.first_name, last_name: profile.last_name }) // rollback
+      if (profile) ownWrite({ first_name: profile.first_name, last_name: profile.last_name }) // rollback
       handleError(e, 'Failed to save name')
     } finally {
       setBusy(b => ({ ...b, name: false }))
@@ -114,12 +159,13 @@ export function useProfile(
     setPfErr({})
     setBusy(b => ({ ...b, addr: true }))
     const up = { address_line1: pf.addr.trim(), city: pf.city.trim(), state: pf.state, pincode: pf.pin }
-    updateLocalProfile(up)   // optimistic
+    ownWrite(up)   // optimistic
     try {
       await updateProfile(up)
+      clearProfileCache()   // AUDIT E1-7: checkout must not prefill the pre-edit details
       setMsg$('addr', '✅ Address saved!')
     } catch (e: unknown) {
-      if (profile) updateLocalProfile({ address_line1: profile.address_line1, city: profile.city, state: profile.state, pincode: profile.pincode ?? profile.postal_code }) // rollback
+      if (profile) ownWrite({ address_line1: profile.address_line1, city: profile.city, state: profile.state, pincode: profile.pincode ?? profile.postal_code }) // rollback
       handleError(e, 'Failed to save address')
     } finally {
       setBusy(b => ({ ...b, addr: false }))
@@ -132,12 +178,13 @@ export function useProfile(
     setPfErr({})
     setBusy(b => ({ ...b, phone: true }))
     const normalized = '+91' + pf.phone.replace(/\D/g, '')
-    updateLocalProfile({ phone: normalized })   // optimistic
+    ownWrite({ phone: normalized })   // optimistic
     try {
       await updateProfile({ phone: normalized })
+      clearProfileCache()   // AUDIT E1-7: checkout must not prefill the pre-edit details
       setMsg$('phone', '✅ Phone saved!')
     } catch (e: unknown) {
-      if (profile) updateLocalProfile({ phone: profile.phone }) // rollback
+      if (profile) ownWrite({ phone: profile.phone }) // rollback
       handleError(e, 'Failed to save phone')
     } finally {
       setBusy(b => ({ ...b, phone: false }))
@@ -190,6 +237,6 @@ export function useProfile(
     forgotPwSent, sendForgotPassword,
     profileEmail: profile?.email || '',
     addresses,
-    initFromProfile, saveName, saveAddress, savePhone, changePassword,
+    initFromProfile, syncFromProfile, saveName, saveAddress, savePhone, changePassword,
   }
 }

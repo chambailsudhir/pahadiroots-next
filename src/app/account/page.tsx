@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth }       from './hooks/useAuth'
 import { useUIStore }    from '@/store/uiStore'
+import { useUserStore, selectHasHydrated } from '@/store/userStore'
 import { useOrders }     from './hooks/useOrders'
 import { useProfile }    from './hooks/useProfile'
 import { useToast }      from './hooks/useToast'
@@ -51,6 +52,14 @@ function AccountPageInner() {
     urlTab && VALID_TABS.includes(urlTab) ? urlTab : 'orders'
   )
 
+  // AUDIT E1-11: a <Link href="/account?tab=…"> clicked while already on /account changes the URL but the tab state
+  // was only seeded on first mount. Follow later URL changes (adjusting state during render, no effect needed).
+  const [seenUrlTab, setSeenUrlTab] = useState<Tab | null>(urlTab)
+  if (urlTab !== seenUrlTab) {
+    setSeenUrlTab(urlTab)
+    if (urlTab && VALID_TABS.includes(urlTab) && urlTab !== tab) setTabState(urlTab)
+  }
+
   function navigateTo(newTab: Tab) {
     setTabState(newTab)
     router.replace(`?tab=${newTab}`, { scroll: false })
@@ -82,17 +91,25 @@ function AccountPageInner() {
   // disable: init() is itself guarded by an internal initDone ref, so even
   // an extra re-run would be a no-op, not a real bug — this disable avoids
   // the unnecessary re-evaluation entirely.
+  // AUDIT E1-5: the persisted user store is rehydrated in a setTimeout(0) after mount (providers.tsx). init() reads
+  // the store user, so running it before hydration made a logged-in user flash "Welcome Back / Sign In" as a guest.
+  const storeHydrated = useUserStore(selectHasHydrated)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { auth.init() }, [auth.init])
+  useEffect(() => { if (storeHydrated) auth.init() }, [storeHydrated, auth.init])
 
   useEffect(() => {
     if (!auth.profile) return
     const sig = getProfileSig(auth.profile)
     // Re-init on first load OR when server-side fields change mid-session.
-    if (!profileInitialised.current || sig !== profileSig.current) {
+    if (!profileInitialised.current) {
       profile.initFromProfile(auth.profile)
       profileInitialised.current = true
       profileSig.current         = sig
+    } else if (sig !== profileSig.current) {
+      // AUDIT E1-3: only fields that changed externally are copied into the form — our own optimistic saves and
+      // rollbacks must not reset (and so discard) edits the user is making in the other cards.
+      profile.syncFromProfile(auth.profile)
+      profileSig.current = sig
     }
     // getProfileSig is module-scope (stable, no closure) — doesn't need to
     // be listed. profile.initFromProfile is memoized in useProfile.ts
@@ -102,7 +119,7 @@ function AccountPageInner() {
     // ref guard already makes re-runs a no-op unless the profile signature
     // actually changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.profile, profile.initFromProfile])
+  }, [auth.profile, profile.initFromProfile, profile.syncFromProfile])
 
   // orders.fetchOrders is memoized in useOrders.ts (useCallback, empty
   // deps). The rule still wants the whole `orders` object (a new literal
@@ -113,6 +130,12 @@ function AccountPageInner() {
     if (auth.loggedIn && !orders.hasFetched) orders.fetchOrders()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.loggedIn, orders.hasFetched, orders.fetchOrders])
+
+  // AUDIT E1-4: logout reports failure instead of pretending the server session was cleared.
+  async function handleLogout() {
+    const ok = await auth.logout()
+    if (!ok) showToast("Couldn't sign you out – try again", 'error')
+  }
 
   if (!auth.loaded) return (
     <div className={styles.accLoading}>
@@ -136,6 +159,12 @@ function AccountPageInner() {
 
   if (!auth.loggedIn) return (
     <div className={styles.accWrap}>
+      {auth.expired && (
+        <div className={styles.sessionBanner} role="alert">
+          <Icon name="warning" /> Your session has expired.
+          <button className={styles.sessionBannerBtn} onClick={openAuth}>Login Again</button>
+        </div>
+      )}
       <div className={styles.loginWall}>
         <div className={styles.lwIcon}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -190,13 +219,13 @@ function AccountPageInner() {
           profile={auth.profile}
           authUser={auth.authUser}
           stats={orders.stats}
-          onLogout={auth.logout}
+          onLogout={handleLogout}
           onOrdersClick={() => { if (!orders.hasFetched) orders.fetchOrders() }}
         />
 
         <div className={styles.mainPanel}>
           {tab === 'orders'        && <OrdersSection   orders={orders} showToast={showToast} />}
-          {tab === 'loyalty'       && <LoyaltySection  showToast={showToast} />}
+          {tab === 'loyalty'       && <LoyaltySection  showToast={showToast} markExpired={auth.markExpired} />}
           {tab === 'addresses'     && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
           {tab === 'profile'       && <ProfileSection  authProfile={auth.profile} authUser={auth.authUser} profile={profile} />}
           {tab === 'password'      && <PasswordSection profile={profile} />}
@@ -204,7 +233,7 @@ function AccountPageInner() {
           {tab === 'privacy'       && (
             <DangerZoneSection
               userEmail={String(userEmail)}
-              onLogout={auth.logout}
+              onLogout={handleLogout}
               showToast={showToast}
               markExpired={auth.markExpired}
             />
@@ -241,7 +270,9 @@ function AccountPageInner() {
             navigating by landmark reach it in the same context as the tab bar. */}
         <button
           className={styles.mobSignOut}
-          onClick={auth.logout}
+          onClick={handleLogout}
+          disabled={auth.loggingOut}
+          aria-busy={auth.loggingOut}
           aria-label="Sign out of your account"
         >
           Sign out
