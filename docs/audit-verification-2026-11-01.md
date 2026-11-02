@@ -176,3 +176,15 @@ Verdict key: **C** Confirmed, **D** Disagree.
 | L-16 | C | 0 high in `npm audit --omit=dev --audit-level=high` and `npm audit` (moderate/low only). |
 | L-17 | C | Both configs `buildCommand: node scripts/wait-for-db.cjs && next build`; `:47` exits 1 if DB never answers; `waitForDb.test.ts` passes. |
 | L-18 | C (open) | Plan `free`; `/rest/v1/*` last 24 h p50 641 ms, p95 3.5 s, 243 requests > 5 s, max 338 s. |
+
+## Resolution (2 Nov 2026)
+
+Everything this report disagreed with or flagged has been acted on:
+
+- HOME-030 / outside-the-82 item 1: `anon`/`authenticated` grants revoked on all 38 RLS-without-policy tables (database change, recorded in the tracker).
+- HOME-014 and item 2 (icon-style emoji): checkout, cart and product-page emoji replaced with the SVG icon set — PRs 59, 61, 62.
+- HOME-011 / HOME-024: tracker rows reworded.
+- Item 3 (eval on /account): Node `crypto` removed from the client bundle, Zod set jitless — 0 violations live — PR 59.
+- Item 4 (401s for guests): checkout and account no longer call account-only APIs without a persisted user — PR 59.
+- The three items that were open for the fixer: C-10 now has a proof-of-work challenge (Turnstile-ready), C-12's nonce policy covers every per-request route, and HOME-003's Lighthouse mobile LCP median is 2.43 s (five runs, range 2.43–2.88 s) after hidden hero slides, the Why artwork and the italic font stopped loading before the hero — PRs 63, 64, 65.
+- Still with the owner: the "Test" product, the Supabase Pro upgrade (HOME-020, L-18) and the cookie-banner date (HOME-009).
