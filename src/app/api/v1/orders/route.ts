@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
+import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
@@ -297,18 +297,21 @@ export async function POST(req: NextRequest) {
         // the unsafe (order as any).customer_id fallback (order doesn't carry that field).
         const cid = customerId
         if (cid) {
-          if ((d.loyalty_points_redeemed ?? 0) > 0) {
-            const redeemed = await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
+          // Use the coins STORED on the order (post-clamp), not the raw request value.
+          const pointsToRedeem = order.loyaltyPointsRedeemed ?? d.loyalty_points_redeemed ?? 0
+          if (pointsToRedeem > 0) {
+            const redeemed = await redeemLoyaltyPoints(cid, order.id, pointsToRedeem)
             if (!redeemed) {
-              // Non-fatal: order is committed, but redemption was skipped (balance race).
-              // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
-              // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
-              // appears as a filterable JSON line in log aggregators, not a plain string.
-              // F-06: discount already granted → alert (not a quiet warn) + order event audit trail.
+              // The order is committed WITH the discount but the deduction failed (balance race / timeout).
+              // Stronger than an alert (Nov 2026 audit #3): record a durable, queryable event flagged for
+              // ops. createOrder also counts an open COD order with coins and no 'redeem' ledger row as
+              // HELD, so those coins cannot back a second discount while ops resolves this one.
               captureError(new Error('Loyalty redemption failed on COD order — discount granted without deduction'), {
-                action: 'orders.cod_loyalty_redeem_failed', order_id: order.id, points: d.loyalty_points_redeemed, alert: true,
+                action: 'orders.cod_loyalty_redeem_failed', order_id: order.id, points: pointsToRedeem, alert: true,
               })
-              await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: d.loyalty_points_redeemed }).catch(() => null)
+              await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', {
+                points: pointsToRedeem, needs_ops_review: true, discount_granted: true,
+              }).catch(() => null)
             }
           }
           await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
@@ -534,6 +537,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
     }
     // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
+    // Nov 2026 audit: a guest used a registered account's mobile number — ask them to sign in.
+    if (err instanceof GuestPhoneRegisteredError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+    }
     if (err instanceof LoyaltyAuthRequiredError) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
     }
@@ -610,6 +617,7 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('multiple options')
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
+      || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
       || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
     )
     const status  = isUserFacing ? 409 : 500

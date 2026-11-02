@@ -124,6 +124,11 @@ function wireHappyPath(opts: { customerMatches?: Array<{ id: string }>; variantP
   mockDb.rpcResponses['create_order_with_items'] = [{ id: 'order-1', order_number: 'PR1', total_amount: 400, order_status: 'confirmed' }]
 }
 
+/** Rows returned for the auth-link check made on a unique-index collision. */
+function guestRowLookup(rows: Array<{ id: string; auth_user_id: string | null; normalized_phone?: string }> = [{ id: VICTIM_ID, auth_user_id: null, normalized_phone: '9876543210' }]) {
+  routeFirst((u, m) => m === 'GET' && u.includes('/customers') && u.includes('auth_user_id'), rows)
+}
+
 const customerPatches = () => fetchCalls.filter(c => c.method === 'PATCH' && c.url.includes('/customers'))
 const customerPosts   = () => fetchCalls.filter(c => c.method === 'POST'  && c.url.includes('/customers'))
 const rpc = (name: string) => mockDb.rpcCalls.filter(c => c.rpcName === name)
@@ -153,6 +158,8 @@ describe('S1-002 — guest checkout never adopts or modifies an existing custome
     expect((create.args as any).p_customer_id).toBe(NEW_GUEST)       // the order belongs to the new row …
     expect((create.args as any).p_customer_id).not.toBe(VICTIM_ID)   // … never to the phone-matched one
     expect(result.customerId).toBe(NEW_GUEST)
+    // orders audit #2: the typed e-mail is NOT planted on the guest row
+    expect(JSON.parse(customerPosts()[0].body!).email).toBeNull()
   })
 
   it('a guest with NO matching customer still gets a new row (unchanged happy path)', async () => {
@@ -195,12 +202,14 @@ describe('S1-002 — guest checkout never adopts or modifies an existing custome
     wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
     routeFirst((u, m) => m === 'POST' && u.includes('/customers'),
       { message: 'duplicate key value violates unique constraint "customers_normalized_phone_key"' }, false)
+    guestRowLookup()
     mockDb.responses['coupons'] = { id: 5, code: 'SAVE50', value: 50, type: 'flat', max_uses: null, uses_count: 0, is_active: true, expires_at: null, min_order: null, max_discount: null }
     const { createOrder } = await import('@/lib/services/orderService')
 
     const result = await createOrder({ ...GUEST_INPUT, couponCode: 'SAVE50' }, SETTINGS)
 
-    expect(result.customerId).toBe(VICTIM_ID)
+    expect(result.customerId).toBeNull()                              // adopted row: never returned -> no loyalty award
+    expect((rpc('create_order_with_items')[0].args as any).p_customer_id).toBe(VICTIM_ID)   // guest row, still linked
     expect(customerPatches()).toHaveLength(0)
     const attach = mockDb.updateCalls.find(u => u.table === 'coupon_usage')
     expect(attach?.payload).toMatchObject({ order_id: 'order-1', customer_id: null })   // the use is NOT booked on the victim
@@ -210,11 +219,42 @@ describe('S1-002 — guest checkout never adopts or modifies an existing custome
   it('an UNEXPECTED customers insert failure (not the unique index) still attaches read-only but alerts ops', async () => {
     wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
     routeFirst((u, m) => m === 'POST' && u.includes('/customers'), { message: 'permission denied for table customers' }, false)
+    guestRowLookup()
     const { createOrder } = await import('@/lib/services/orderService')
     const result = await createOrder({ ...GUEST_INPUT }, SETTINGS)
-    expect(result.customerId).toBe(VICTIM_ID)
+    expect(result.customerId).toBeNull()
     expect(customerPatches()).toHaveLength(0)
     expect(h.captureError).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ action: 'createOrder.guest_row_insert_failed', alert: true }))
+  })
+})
+
+describe('orders audit #1 — guest never lands on a registered (login-linked) account', () => {
+  it('phone collides with a row that has auth_user_id -> GuestPhoneRegisteredError, no order, stock restored', async () => {
+    wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
+    routeFirst((u, m) => m === 'POST' && u.includes('/customers'),
+      { message: 'duplicate key value violates unique constraint "customers_normalized_phone_key"' }, false)
+    guestRowLookup([{ id: VICTIM_ID, auth_user_id: 'auth-1', normalized_phone: '9876543210' }])
+    const { createOrder, GuestPhoneRegisteredError } = await import('@/lib/services/orderService')
+    await expect(createOrder(GUEST_INPUT, SETTINGS)).rejects.toBeInstanceOf(GuestPhoneRegisteredError)
+    expect(rpc('create_order_with_items')).toHaveLength(0)
+    expect(rpc('restore_stock').length).toBeGreaterThan(0)
+  })
+
+  it('cannot tell whether the row is registered (lookup fails) -> fails closed, no order', async () => {
+    wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
+    routeFirst((u, m) => m === 'POST' && u.includes('/customers'),
+      { message: 'duplicate key value violates unique constraint "customers_normalized_phone_key"' }, false)
+    routeFirst((u, m) => m === 'GET' && u.includes('/customers') && u.includes('auth_user_id'), { message: 'boom' }, false)
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(GUEST_INPUT, SETTINGS)).rejects.toThrow(/could not create\/find customer/i)
+    expect(rpc('create_order_with_items')).toHaveLength(0)
+  })
+
+  it('a signed-in customer is unaffected (never reaches the guest path)', async () => {
+    wireHappyPath({ customerMatches: [{ id: VICTIM_ID }] })
+    const { createOrder } = await import('@/lib/services/orderService')
+    const r = await createOrder({ ...GUEST_INPUT, authenticatedCustomerId: 'cust-auth-7' }, SETTINGS)
+    expect(r.customerId).toBe('cust-auth-7')
   })
 })
 

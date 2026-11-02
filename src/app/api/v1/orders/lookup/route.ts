@@ -83,9 +83,13 @@ function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string;
     try { shippingAddress = JSON.parse(rawAddr) } catch { /* leave undefined */ }
   }
 
-  const customerName = customer
-    ? [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() || undefined
-    : undefined
+  // Nov 2026 audit (#1): identity comes from this order's own shipping snapshot. The linked customers row
+  // is passed ONLY on the signed-in owner path (as a fallback for old orders without a snapshot name);
+  // the guest-token path passes null, so holding a token never reveals an account holder's real name/number.
+  const snapName  = typeof shippingAddress?.name  === 'string' ? shippingAddress.name.trim()  : ''
+  const snapPhone = typeof shippingAddress?.phone === 'string' ? shippingAddress.phone.trim() : ''
+  const rowName   = customer ? [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim() : ''
+  const customerName = snapName || rowName || undefined
 
   // Deliberately NOT included: customer_id, idempotency_key, payment_id,
   // confirmation_token itself, or any other internal-only field.
@@ -104,7 +108,7 @@ function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string;
     tracking_number:  raw.tracking_number ?? undefined,
     courier:          raw.courier         ?? undefined,
     customer_name:    customerName,
-    customer_phone:   customer?.phone ?? undefined,
+    customer_phone:   snapPhone || customer?.phone || undefined,
     delivery_address: shippingAddress?.address_line1,
     city:             shippingAddress?.city,
     state:            shippingAddress?.state,
@@ -153,8 +157,7 @@ export async function GET(req: NextRequest) {
 
       if (Array.isArray(rows) && rows.length > 0 && !isConfirmationTokenExpired((rows[0] as Record<string, unknown>).created_at)) {
         const raw = rows[0] as Record<string, unknown>
-        const customer = await fetchCustomer(raw.customer_id)
-        const res = ok({ success: true, order: mapOrder(raw, customer) })
+        const res = ok({ success: true, order: mapOrder(raw, null) })
         ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
         return res
       }

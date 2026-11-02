@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
-import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
+import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
 // AUDIT S1-004: the online path now resolves the signed-in customer exactly like /api/v1/orders does.
@@ -548,6 +548,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
     }
     // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
+    // Nov 2026 audit: a guest used a registered account's mobile number — ask them to sign in.
+    if (err instanceof GuestPhoneRegisteredError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+    }
     if (err instanceof LoyaltyAuthRequiredError) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
     }
@@ -579,6 +583,7 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('multiple options')
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
+      || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
       || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
       || lowerMessage.includes('cannot be paid online')       // S1-013 sub-₹1 online total
     // Never leak Razorpay / Supabase internals to the client in production

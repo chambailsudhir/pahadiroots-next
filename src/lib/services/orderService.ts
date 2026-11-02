@@ -279,6 +279,8 @@ export interface CreatedOrder {
   // null when token generation failed (non-fatal) or for the idempotency
   // "already exists" path (see db_migration_v6_order_confirmation_token.sql).
   confirmationToken: string | null
+  /** Coins actually stored on the order (post-clamp) — what the post-commit redeem must deduct. */
+  loyaltyPointsRedeemed?: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -369,6 +371,20 @@ export class LoyaltyAuthRequiredError extends Error {
   constructor() {
     super('Please sign in to redeem Pahadi Coins on this order.')
     this.name = 'LoyaltyAuthRequiredError'
+  }
+}
+
+/**
+ * AUDIT (Nov 2026, orders-linking #1): a guest checkout used a mobile number that belongs to a
+ * REGISTERED account (customers.auth_user_id set). The order must never be attached to that
+ * account (it would show up in its /account, count against its COD cap and leak its holder's name),
+ * so the guest is asked to sign in instead. Routes map this to 409 + code.
+ */
+export class GuestPhoneRegisteredError extends Error {
+  readonly code = 'PHONE_REGISTERED'
+  constructor() {
+    super('This mobile number belongs to a registered account — please sign in to use it.')
+    this.name = 'GuestPhoneRegisteredError'
   }
 }
 
@@ -489,7 +505,13 @@ export async function createOrder(
       },
       {
         paymentMethod: input.paymentMethod,
-        loyaltyPoints: Number(input.loyaltyPointsRedeemed ?? 0),
+        // The stored value is the CLAMPED coin count (see loyaltyPointsToStore below), so a retry that
+        // asked for more than was stored is still the same request.
+        loyaltyPoints: (() => {
+          const asked  = Number(input.loyaltyPointsRedeemed ?? 0)
+          const stored = Number(existing.loyalty_points_redeemed ?? 0)
+          return stored > 0 && stored < asked ? stored : asked
+        })(),
         items:         input.items,
         address: {
           line1:   [input.flat, input.area].filter(Boolean).join(', '),
@@ -959,6 +981,7 @@ export async function createOrder(
   // meaning the stored total_amount ignored loyalty — customers were being
   // charged the full pre-loyalty price even when points were redeemed.
   let loyaltyDiscountInr = 0
+  let loyaltyPointsToStore = 0
   if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
     const pointsValue  = parseFloat(settings.loyalty_points_value   || '0.25') || 0.25
     const maxRedeemPct = parseFloat(settings.loyalty_max_redeem_pct || '20')   || 20
@@ -971,6 +994,19 @@ export async function createOrder(
     // excess loyalty is silently capped.  The balance guard (step 7c) handles
     // the "more points than the customer owns" case.
     loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed)
+
+    // Nov 2026 audit (#4): the minimum was only enforced by the UI / action=validate. A direct caller
+    // could submit fewer coins; enforce it here too.
+    const minRedeemRaw = parseFloat(settings.loyalty_min_redeem || '40')
+    const minRedeem    = Number.isFinite(minRedeemRaw) && minRedeemRaw > 0 ? minRedeemRaw : 40
+    if (input.loyaltyPointsRedeemed! < minRedeem) {
+      throw new Error(`Minimum ${minRedeem} points required to redeem`)
+    }
+    // Charge only for the discount actually granted (never more than requested): a request clamped
+    // by the max-% cap, or a points_value < 1 floor(), no longer burns coins for nothing.
+    loyaltyPointsToStore = loyaltyDiscountInr > 0
+      ? Math.min(input.loyaltyPointsRedeemed!, Math.ceil(loyaltyDiscountInr / pointsValue - 1e-9))
+      : 0
   }
 
   // DATA INTEGRITY / PAYMENT INTEGRITY FIX: this was hardcoded to 'cod', which
@@ -1093,13 +1129,12 @@ export async function createOrder(
       const rows: any[] = await sbPost('customers', '', body)
       return rows?.[0]?.id != null ? String(rows[0].id) : null
     }
-    // Email may already sit on another row (idx_customers_email) → retry with email NULL; the
-    // guest flag is tried first and skipped for the rest of this instance once the column is
-    // known to be missing.
+    // Nov 2026 audit (#2): a guest row is stored WITHOUT the typed e-mail. Order e-mails go to the address
+    // in the request (d.customer_email), not customers.email, and a planted e-mail would let the real owner
+    // of that address "adopt" a stranger's row (name, phone, history) at sign-up. The guest flag is tried
+    // first and skipped for the rest of this instance once the column is known to be missing.
     const attempts: Array<Record<string, unknown>> = [
-      { ...custBody, is_guest: true },
       { ...custBody, email: null, is_guest: true },
-      { ...custBody },
       { ...custBody, email: null },
     ]
     let lastErr: unknown = null
@@ -1130,17 +1165,33 @@ export async function createOrder(
       const lastMsg = lastErr instanceof Error ? lastErr.message : String(lastErr ?? '')
       const expectedCollision = /23505|duplicate key|normalized_phone|customers_email_key|unique/i.test(lastMsg)
       if (related.length > 0) {
-        custId = related[0]
-        custIdAdopted = true
-        if (expectedCollision) {
-          logger.info('createOrder.guest_attached_readonly', { customerId: custId, reason: 'existing phone/email row (unique index)' })
-        } else {
-          captureError(new Error('guest customer insert failed — order attached to existing row WITHOUT patch'), {
-            action: 'createOrder.guest_row_insert_failed',
-            alert:  true,
-            hint:   'Unexpected insert failure on customers (not the normalized_phone/email unique index). AUDIT S1-002.',
-            error:  lastMsg,
-          })
+        // Nov 2026 audit (#1): never attach a guest order to a row LINKED to a login — a typed phone proves
+        // nothing. Only a plain guest row (no auth_user_id) may be reused. Fail closed if we cannot tell.
+        let linked: Array<{ id: string | number; auth_user_id: string | null; normalized_phone?: string | null }>
+        try {
+          linked = await sbGet('customers', `id=in.(${related.map(encodeURIComponent).join(',')})&select=id,auth_user_id,normalized_phone`)
+        } catch (e) {
+          throw new Error('Could not create/find customer record', { cause: e })
+        }
+        const rows = Array.isArray(linked) ? linked : []
+        if (rows.some(r => r.auth_user_id != null && (normalizedPhone ? r.normalized_phone === normalizedPhone : true))) {
+          throw new GuestPhoneRegisteredError()
+        }
+        const guestRows = rows.filter(r => r.auth_user_id == null)
+        const pick = guestRows.find(r => normalizedPhone && r.normalized_phone === normalizedPhone) ?? guestRows[0]
+        if (pick) {
+          custId = String(pick.id)
+          custIdAdopted = true
+          if (expectedCollision) {
+            logger.info('createOrder.guest_attached_readonly', { customerId: custId, reason: 'existing guest row (unique index)' })
+          } else {
+            captureError(new Error('guest customer insert failed — order attached to existing row WITHOUT patch'), {
+              action: 'createOrder.guest_row_insert_failed',
+              alert:  true,
+              hint:   'Unexpected insert failure on customers (not the normalized_phone/email unique index). AUDIT S1-002.',
+              error:  lastMsg,
+            })
+          }
         }
       }
     }
@@ -1176,7 +1227,7 @@ export async function createOrder(
   //     a point-in-time snapshot; points can be redeemed in a parallel session
   //     between that call and now. We re-fetch the live balance here so a race
   //     cannot result in a negative balance.
-  if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
+  if (loyaltyPointsToStore > 0) {
     const { data: customerRow, error: balanceErr } = await withTimeout(
       db.from('customers')
         .select('loyalty_points')
@@ -1207,13 +1258,45 @@ export async function createOrder(
       8_000,
       'loyalty held-points check',
     )
-    const heldPoints = (heldRows ?? []).reduce((sum: number, r: { loyalty_points_redeemed: number | null }) => sum + Number(r.loyalty_points_redeemed ?? 0), 0)
+    let heldPoints = (heldRows ?? []).reduce((sum: number, r: { loyalty_points_redeemed: number | null }) => sum + Number(r.loyalty_points_redeemed ?? 0), 0)
+
+    // Nov 2026 audit (#3): COD orders bake the discount into total_amount at placement but the coins are
+    // only deducted after commit, so parallel COD orders (different idempotency keys) could each pass this
+    // check and later lose the deduction race. In-flight COD orders that carry coins and have no 'redeem'
+    // ledger row yet are therefore held too. Fail-closed on a read error: better to refuse than to over-grant.
+    const { data: codRows, error: codErr } = await withTimeout(
+      db.from('orders')
+        .select('id, order_status, loyalty_points_redeemed')
+        .eq('customer_id', custId)
+        .in('payment_method', ['cod', 'whatsapp_cod'])
+        .gt('loyalty_points_redeemed', 0),
+      8_000,
+      'loyalty held-points check (cod)',
+    )
+    if (codErr) throw new Error('Could not verify loyalty balance')
+    const DONE = new Set(['cancelled', 'returned', 'payment_failed'])
+    const openCod = (codRows ?? []).filter((r: { order_status: string }) => !DONE.has(String(r.order_status)))
+    if (openCod.length > 0) {
+      const { data: redeemedRows, error: ledgerErr } = await withTimeout(
+        db.from('loyalty_transactions')
+          .select('order_id')
+          .in('order_id', openCod.map((r: { id: string }) => r.id))
+          .eq('type', 'redeem'),
+        8_000,
+        'loyalty held-points ledger check',
+      )
+      if (ledgerErr) throw new Error('Could not verify loyalty balance')
+      const done = new Set((redeemedRows ?? []).map((r: { order_id: string | number }) => String(r.order_id)))
+      for (const r of openCod as Array<{ id: string; loyalty_points_redeemed: number | null }>) {
+        if (!done.has(String(r.id))) heldPoints += Number(r.loyalty_points_redeemed ?? 0)
+      }
+    }
     const availablePoints = Math.max(0, liveBalance - heldPoints)
 
-    if (input.loyaltyPointsRedeemed! > availablePoints) {
+    if (loyaltyPointsToStore > availablePoints) {
       throw new Error(
         `Insufficient loyalty balance — available: ${availablePoints} pts, ` +
-        `requested: ${input.loyaltyPointsRedeemed} pts` +
+        `requested: ${loyaltyPointsToStore} pts` +
         (heldPoints > 0 ? ` (${heldPoints} pts are held by another unpaid order)` : '')
       )
     }
@@ -1304,7 +1387,7 @@ export async function createOrder(
       p_payment_status:           input.paymentMethod === 'cod' ? 'cod_pending' : 'pending',
       p_payment_method:           input.paymentMethod,
       p_idempotency_key:          input.idempotencyKey,
-      p_loyalty_points_redeemed:  input.loyaltyPointsRedeemed ?? 0,
+      p_loyalty_points_redeemed:  loyaltyPointsToStore,
       p_items:                    rpcItems,
       // DATA INTEGRITY FIX: pricing.codSurcharge was already being charged
       // (folded into p_total_amount) but was never persisted as its own
@@ -1489,9 +1572,11 @@ export async function createOrder(
         price: i.price,
       })),
       confirmationToken,
+      loyaltyPointsRedeemed: loyaltyPointsToStore,
     },
     alreadyExists: false,
-    customerId:    custId,
+    // An adopted (pre-existing) guest row is read-only for this request: no loyalty may be awarded to it.
+    customerId:    custIdAdopted ? null : custId,
   }
 
   } finally {

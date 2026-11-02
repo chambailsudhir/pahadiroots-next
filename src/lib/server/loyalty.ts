@@ -56,6 +56,19 @@ export async function awardLoyaltyPoints(
   const rate   = Number.isFinite(parsed) && parsed >= 0 ? parsed : 1
   const pts    = Math.floor((Number.isFinite(orderTotal) ? orderTotal : 0) * rate)
   if (!Number.isFinite(pts) || pts <= 0) return
+  // Nov 2026 audit (#5): never award on an order that was cancelled in the meantime (e.g. the ACC-032
+  // recovery path running after a cancel). Cheap single read; fail-open — the DB function is the backstop.
+  try {
+    const sres = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(String(orderId))}&select=order_status&limit=1`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+      signal: AbortSignal.timeout(3_000),
+    })
+    if (sres.ok) {
+      const rows = await sres.json()
+      const st = Array.isArray(rows) ? rows[0]?.order_status : undefined
+      if (st === 'cancelled') return
+    }
+  } catch { /* fail-open */ }
   try {
     const res = await callLoyaltyRpc('award_loyalty_points', {
       p_customer_id: String(customerId),
@@ -89,7 +102,7 @@ export async function redeemLoyaltyPoints(
   points:     number,
 ): Promise<boolean> {
   if (!points || points <= 0) return true
-  try {
+  const attempt = async (): Promise<boolean> => {
     const res    = await callLoyaltyRpc('redeem_loyalty_points', {
       p_customer_id: String(customerId),
       p_order_id:    String(orderId),
@@ -98,6 +111,15 @@ export async function redeemLoyaltyPoints(
     })
     const result = await res.json()
     return res.ok && (result === true || result?.result === true)
+  }
+  try {
+    try {
+      return await attempt()
+    } catch {
+      // A 5 s timeout / transport error does not mean the deduction failed. The DB function is
+      // idempotent per order ('redeem' row exists → TRUE, never deducts twice), so one retry is safe.
+      return await attempt()
+    }
   } catch (e) {
     // BUG FIX 8: alert:true — balance inconsistency if redemption skipped on paid order.
     captureError(e, {

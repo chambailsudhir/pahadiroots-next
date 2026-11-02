@@ -104,8 +104,9 @@ describe('GET /api/v1/orders/lookup — rate limiting', () => {
 
 describe('GET /api/v1/orders/lookup — guest token auth', () => {
   it('returns the order when order_number AND token both match the same row', async () => {
-    mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW]) // order+items query
-    mocks.sbAdmin.mockResolvedValueOnce([{ first_name: 'Sudhir', last_name: 'Chambail', phone: '9717255662' }]) // customer query
+    // Orders audit #1: name/phone come from the order's OWN shipping snapshot; the (possibly shared /
+    // account-holder) customers row is never read on the token path.
+    mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, shipping_address: { ...SAMPLE_ORDER_ROW.shipping_address, name: 'Sudhir Chambail', phone: '9717255662' } }])
 
     const { GET } = await import('@/app/api/v1/orders/lookup/route')
     const res  = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
@@ -116,12 +117,22 @@ describe('GET /api/v1/orders/lookup — guest token auth', () => {
     expect(body.order.items).toHaveLength(1)
     expect(body.order.items[0]).toMatchObject({ name: 'Mustard Oil', qty: 1, price: 143 })
     expect(body.order.customer_name).toBe('Sudhir Chambail')
+    expect(body.order.customer_phone).toBe('9717255662')
     expect(body.order.delivery_address).toBe('Flat 4B, Green Valley')
+    expect(mocks.sbAdmin).toHaveBeenCalledTimes(1)   // no customers lookup on the token path
+  })
+
+  it('token path never reveals the linked account holder when the snapshot has no name/phone', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
+    expect(body.order.customer_name).toBeUndefined()
+    expect(body.order.customer_phone).toBeUndefined()
+    expect(mocks.sbAdmin).toHaveBeenCalledTimes(1)
   })
 
   it('never returns internal-only fields (customer_id, confirmation_token, payment_id)', async () => {
     mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])
-    mocks.sbAdmin.mockResolvedValueOnce([])
 
     const { GET } = await import('@/app/api/v1/orders/lookup/route')
     const res  = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
@@ -175,7 +186,6 @@ describe('GET /api/v1/orders/lookup — F-10 guest token expiry', () => {
 
   it('still serves a token that is inside its lifetime (29 days)', async () => {
     mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, created_at: new Date(Date.now() - 29 * DAY).toISOString() }])
-    mocks.sbAdmin.mockResolvedValueOnce([])
 
     const { GET } = await import('@/app/api/v1/orders/lookup/route')
     const res = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))
@@ -254,7 +264,6 @@ describe('GET /api/v1/orders/lookup — logged-in session auth (no token needed)
 describe('GET /api/v1/orders/lookup — graceful degradation', () => {
   it('still returns the order (without customer_name) if the customer sub-fetch fails', async () => {
     mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])
-    mocks.sbAdmin.mockRejectedValueOnce(new Error('customers table timeout'))
 
     const { GET } = await import('@/app/api/v1/orders/lookup/route')
     const res  = await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))

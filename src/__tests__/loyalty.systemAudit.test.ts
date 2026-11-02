@@ -12,7 +12,9 @@ import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 
 const fetchMock = vi.fn()
 beforeEach(() => { captureError.mockReset(); fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
-const sent = () => JSON.parse(fetchMock.mock.calls[0][1].body)
+// awardLoyaltyPoints first reads the order status (orders audit #5) — the RPC call is the one with a body
+const rpcCalls = () => fetchMock.mock.calls.filter(c => String(c[0]).includes('/rpc/'))
+const sent = () => JSON.parse(rpcCalls()[0][1].body)
 
 describe('awardLoyaltyPoints', () => {
   it('awards floor(total × rate) points', async () => {
@@ -23,7 +25,7 @@ describe('awardLoyaltyPoints', () => {
   it.each(['abc', '-3', 'NaN', 'Infinity'])('malformed / negative rate %j falls back to 1 point per rupee (never NaN/null)', async (bad) => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 })
     await awardLoyaltyPoints(1, 2, 300, { loyalty_points_per_rupee: bad })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(rpcCalls()).toHaveLength(1)
     expect(sent().p_points).toBe(300)
   })
   it('a NaN order total awards nothing and makes no call', async () => {
@@ -67,5 +69,37 @@ describe('redeemLoyaltyPoints', () => {
   it('zero points is a no-op success', async () => {
     expect(await redeemLoyaltyPoints(1, 2, 0)).toBe(true)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('orders audit #5 / #3 — loyalty guards', () => {
+  it('awardLoyaltyPoints skips an order that is already cancelled', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes('/rest/v1/orders') ? { ok: true, json: async () => [{ order_status: 'cancelled' }] } : { ok: true, status: 200 })
+    await awardLoyaltyPoints(1, 2, 500, {})
+    expect(rpcCalls()).toHaveLength(0)
+  })
+  it('awardLoyaltyPoints still awards when the status read fails (fail-open; DB function is the backstop)', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/rest/v1/orders')) throw new Error('boom')
+      return { ok: true, status: 200 }
+    })
+    await awardLoyaltyPoints(1, 2, 500, {})
+    expect(rpcCalls()).toHaveLength(1)
+  })
+  it('redeemLoyaltyPoints retries once after a timeout/transport error (idempotent RPC) and succeeds', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({ ok: true, json: async () => true })
+    expect(await redeemLoyaltyPoints(1, 2, 50)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+  it('redeemLoyaltyPoints does NOT retry an explicit FALSE (insufficient balance)', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => false })
+    expect(await redeemLoyaltyPoints(1, 2, 50)).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+  it('redeemLoyaltyPoints gives up (false + alert) when both attempts throw', async () => {
+    fetchMock.mockRejectedValue(new Error('down'))
+    expect(await redeemLoyaltyPoints(1, 2, 50)).toBe(false)
+    expect(captureError).toHaveBeenCalledTimes(1)
   })
 })
