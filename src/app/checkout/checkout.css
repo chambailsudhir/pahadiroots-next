@@ -70,7 +70,7 @@
   font-size: 22px; font-weight: 600; color: #1C2B1E;
   margin: 0 0 3px; letter-spacing: -0.3px; line-height: 1.2;
 }
-.ck-section-desc { font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; color: #9A9080; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
+.ck-section-desc { font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; color: #6B6256; margin: 0; font-weight: 400; letter-spacing: 0.01em; }
 .ck-section-body { padding: 0; }
 
 /* ── Trust strip ───────────────────────────────────────── */
@@ -86,7 +86,7 @@
 .ck-trust-icon { font-size: 22px; flex-shrink: 0; }
 .ck-trust-text { display: flex; flex-direction: column; gap: 2px; }
 .ck-trust-text strong { font-family: var(--font-lato), Lato, sans-serif; font-size: 12px; font-weight: 600; color: #2C3A28; }
-.ck-trust-text span   { font-family: var(--font-lato), Lato, sans-serif; font-size: 11px; color: #9A9080; }
+.ck-trust-text span   { font-family: var(--font-lato), Lato, sans-serif; font-size: 11px; color: #6B6256; }
 
 /* ── Right sidebar ─────────────────────────────────────── */
 .ck-sidebar {
@@ -115,7 +115,7 @@
 
 .ck-mob-info  { display: flex; flex-direction: column; }
 .ck-mob-total { font-family: var(--font-playfair), 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 700; color: #1C2B1E; line-height: 1; }
-.ck-mob-sub   { font-family: var(--font-lato), Lato, sans-serif; font-size: 10px; color: #9A9080; margin-top: 2px; font-weight: 400; }
+.ck-mob-sub   { font-family: var(--font-lato), Lato, sans-serif; font-size: 10px; color: #6B6256; margin-top: 2px; font-weight: 400; }
 
 .ck-mob-cta {
   background: #2C4A2E; color: #F5F0E8;

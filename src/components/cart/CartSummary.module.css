@@ -410,7 +410,7 @@
   text-align: center;
   display: block;
   font-size: 12px;
-  color: #9a8e7e;
+  color: #6f6554;
   text-decoration: none;
   transition: color 0.2s;
   letter-spacing: 0.2px;
@@ -456,7 +456,7 @@
   display: flex;
   justify-content: space-around;
   font-size: 11px;
-  color: #9a8e7e;
+  color: #6f6554;
   flex-wrap: wrap;
   gap: 4px;
 }

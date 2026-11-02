@@ -201,18 +201,16 @@ async function fetchWithRetry(
   }
 }
 
-// ─── Fallback reviews ─────────────────────────────────────────────────────────
-// Defined at module level — not recreated on every render.
-const FALLBACK_REVIEWS: CartReview[] = [
-  { name: 'Priya M.',  location: 'Delhi',     text: "Best quality rice I've ever had. Pure taste!" },
-  { name: 'Rahul S.',  location: 'Mumbai',    text: 'Authentic Pahadi flavours, delivered fresh.'   },
-  { name: 'Anita K.',  location: 'Bangalore', text: "Love the ghee — just like dadi's kitchen."    },
-]
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+// Nov 2026: there is NO fallback list any more. The cart used to fall back to three hard-coded testimonials ("Priya M., Delhi", …) that
+// were not real customer reviews. Only real, approved reviews from /api/v1/cart-reviews are shown; with none, no reviews box appears.
 
 export interface CartReview {
   name: string
   location: string
   text: string
+  /** The review's own star rating, 1–5. */
+  rating: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,7 +238,7 @@ export function useCartPage() {
   const [upsellLoading,   setUpsellLoading]   = useState(true)
   const [upsellError,     setUpsellError]     = useState(false)
 
-  const [reviews,         setReviews]         = useState<CartReview[]>(FALLBACK_REVIEWS)
+  const [reviews,         setReviews]         = useState<CartReview[]>([])
   const [qtyAnim,         setQtyAnim]         = useState<Record<string, 'up' | 'down' | null>>({})
 
   const [settings, setSettings] = useState<Partial<SiteSettings>>({})
@@ -429,21 +427,28 @@ export function useCartPage() {
         const ss = data.settings ?? {}
         setSettings(ss)
 
-        const dbRevs = ([1, 2, 3] as const)
-          .map(n => ({
-            name:     String(ss[`review_${n}_name`     as keyof SiteSettings] ?? '') || FALLBACK_REVIEWS[n - 1].name,
-            location: String(ss[`review_${n}_location` as keyof SiteSettings] ?? '') || FALLBACK_REVIEWS[n - 1].location,
-            text:     String(ss[`review_${n}_text`     as keyof SiteSettings] ?? '') || FALLBACK_REVIEWS[n - 1].text,
-          }))
-          .filter(r => r.name && r.text)
-
-        if (dbRevs.length > 0) setReviews(dbRevs)
       })
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'AbortError') return
         logger.error('cart_settings_fetch_failed', { error: err instanceof Error ? err.message : String(err) })
       })
 
+    return () => ac.abort()
+  }, [])
+
+  // ── Real customer reviews (none → no reviews box) ───────────────────────────
+  useEffect(() => {
+    const ac = new AbortController()
+    fetchWithRetry('/api/v1/cart-reviews', { signal: ac.signal })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`cart-reviews ${r.status}`)))
+      .then((data: { reviews?: CartReview[] }) => {
+        if (ac.signal.aborted) return
+        setReviews(Array.isArray(data.reviews) ? data.reviews.filter(r => r?.name && r?.text) : [])
+      })
+      .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'AbortError') return
+        logger.error('cart_reviews_fetch_failed', { error: err instanceof Error ? err.message : String(err) })
+      })
     return () => ac.abort()
   }, [])
 

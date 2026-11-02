@@ -506,7 +506,7 @@ function SuccessContent() {
         .oc-error { text-align: center; padding: 60px 20px; }
         .oc-error-icon { font-size: 48px; margin-bottom: 16px; }
         .oc-error h2 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 24px; color: var(--g); margin-bottom: 8px; }
-        .oc-error p  { color: var(--tx3); font-size: 14px; margin-bottom: 24px; }
+        .oc-error p  { color: #666; font-size: 14px; margin-bottom: 24px; }
 
         /* ── NEWSLETTER ── */
         .oc-newsletter { border-top: 2px solid #c8920a; border-bottom: 2px solid rgba(200,146,10,.2); box-shadow: 0 -6px 32px rgba(0,0,0,.18), inset 0 1px 0 rgba(200,146,10,.15); }
@@ -548,9 +548,9 @@ function SuccessContent() {
         .oc-f-fssai-badge { background: #fff; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 900; color: #1a6b1a; letter-spacing: .5px; }
         .oc-f-fssai-num { font-size: 10.5px; color: rgba(255,255,255,.4); margin-top: 2px; }
         .oc-f-bot { padding: 14px 60px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .oc-f-bot-left { font-size: 12px; color: rgba(255,255,255,.28); }
+        .oc-f-bot-left { font-size: 12px; color: #a9bcab; }
         .oc-f-bot-left strong { color: rgba(255,255,255,.8); font-weight: 700; }
-        .oc-f-bot-tag { font-size: 11.5px; color: rgba(200,146,10,.45); font-style: italic; white-space: nowrap; }
+        .oc-f-bot-tag { font-size: 11.5px; color: #d4b04a; font-style: italic; white-space: nowrap; }
 
         @media (max-width: 768px) {
           .oc-f-brand-row { flex-wrap: wrap; gap: 16px; padding: 28px 28px 22px; }

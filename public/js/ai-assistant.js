@@ -113,6 +113,7 @@
     width:16px; height:16px; font-size:9px; font-weight:700;
     display:flex; align-items:center; justify-content:center; border:2px solid #fff;
   }
+  .pr-badge::after { content: attr(data-count); }   /* CSS-drawn so the button's name has no stray digit (WCAG 2.5.3) */
   @keyframes pr-pulse {
     0%   { box-shadow:0 0 0 0 rgba(26,58,30,.55), 0 6px 22px rgba(26,58,30,.5) }
     70%  { box-shadow:0 0 0 12px rgba(26,58,30,0), 0 6px 22px rgba(26,58,30,.5) }
@@ -333,7 +334,7 @@
   fab.setAttribute('aria-label', 'Chat with Pahadi_AI');
   fab.setAttribute('aria-expanded', 'false');
   fab.setAttribute('aria-controls', 'pr-panel');
-  fab.innerHTML = '<img class="pr-fi" src="' + AI_CFG.avatar + '" alt=""><span class="pr-fc">✕</span><span class="pr-badge" id="pr-badge">1</span>';
+  fab.innerHTML = '<img class="pr-fi" src="' + AI_CFG.avatar + '" alt=""><span class="pr-fc">✕</span><span class="pr-badge" id="pr-badge" data-count="1" aria-hidden="true"></span>';
   document.body.appendChild(fab);
 
   /* ── Panel ────────────────────────────────────────────── */
