@@ -4,9 +4,11 @@
 // DPDP Act 2023 §16 — Right to Access / Data Portability
 //
 // Returns a JSON file containing all personal data held for the
-// authenticated user: profile, saved addresses, and order history.
+// authenticated user: profile, saved addresses, order history, Pahadi Coins
+// balance + transactions, wishlist, notification preferences and returns.
 //
-// Rate limit: 3 exports per 24 hours per IP (download is heavy).
+// Rate limit: 3 exports per 24 hours per account (shared across instances)
+// plus a per-instance IP guard (download is heavy).
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,6 +17,7 @@ import {
   sbAuth, sbAdmin,
   getToken, tryRefresh,
   checkRateLimit,
+  checkRateLimitShared,
   checkCsrf,
   applyNewCookies,
 } from '@/lib/api/serverUtils'
@@ -45,6 +48,13 @@ export async function GET(req: NextRequest) {
     const user = await sbAuth('/user', null, token!)
     const userId = user.id as string
 
+    // AUDIT ACC-041: the in-process IP limiter above is per serverless instance, so the advertised
+    // "once per 24 h" was never actually enforced (two back-to-back exports both succeeded).
+    // Enforce per ACCOUNT across instances (KV/Postgres-backed).
+    if (!await checkRateLimitShared(`data_export:${userId}`, 3, 24 * 60 * 60_000)) {
+      return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
+    }
+
     // ── Fetch customer row ────────────────────────────────────────
     const customers = await sbAdmin(
       'GET',
@@ -69,6 +79,20 @@ export async function GET(req: NextRequest) {
         ).catch(() => [])
       : []
 
+    // ── Everything else we hold about this customer (AUDIT ACC-041) ──
+    // The export used to stop at profile / addresses / orders, i.e. it omitted the loyalty ledger,
+    // wishlist, notification preferences and returns — all personal data under DPDP §16.
+    const orderIds: Array<string | number> = Array.isArray(orders) ? orders.map((o: { id: string | number }) => o.id) : []
+    const [loyaltyTransactions, wishlistRows, returnsRows] = customerId
+      ? await Promise.all([
+          sbAdmin('GET', `/rest/v1/loyalty_transactions?customer_id=eq.${customerId}&select=type,points,balance_after,note,order_id,created_at&order=created_at.desc&limit=1000`).catch(() => []),
+          sbAdmin('GET', `/rest/v1/wishlist?customer_id=eq.${customerId}&select=product_id,created_at`).catch(() => []),
+          orderIds.length
+            ? sbAdmin('GET', `/rest/v1/returns?order_id=in.(${orderIds.join(',')})&select=order_number,reason,description,status,resolution,refund_amount,created_at,updated_at&order=created_at.desc`).catch(() => [])
+            : Promise.resolve([]),
+        ])
+      : [[], [], []]
+
     // ── Build export payload ──────────────────────────────────────
     const exportData = {
       exported_at:       new Date().toISOString(),
@@ -81,9 +105,22 @@ export async function GET(req: NextRequest) {
         address_line1: customer.address_line1,
         city:          customer.city,
         state:         customer.state,
-        postal_code:   customer.postal_code,
+        pincode:       customer.pincode,   // was `postal_code` — no such column, so it exported blank (ACC-039)
         created_at:    customer.created_at,
+        referral_code: customer.referral_code,
       } : null,
+      notification_preferences: customer ? {
+        order_emails:     customer.notif_email_orders,
+        order_whatsapp:   customer.notif_whatsapp_orders,
+        order_sms:        customer.notif_sms_orders,
+        marketing_emails: customer.notif_email_marketing,
+      } : null,
+      pahadi_coins: customer ? {
+        balance:      customer.loyalty_points,
+        transactions: loyaltyTransactions,
+      } : null,
+      wishlist_product_ids: Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => w.product_id) : [],
+      returns: returnsRows,
       auth: {
         email:      user.email,
         phone:      user.phone,

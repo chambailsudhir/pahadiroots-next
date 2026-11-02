@@ -42,9 +42,11 @@ describe('resetPasswordHelpers (pure)', () => {
 
   it('validateNewPassword enforces the 8-char floor and confirmation', () => {
     expect(validateNewPassword('1234567', '1234567')).toMatch(/at least 8/)
-    expect(validateNewPassword('12345678', '12345679')).toMatch(/do not match/)
+    expect(validateNewPassword('Abcdef1!', 'Abcdef1?')).toMatch(/do not match/)
     expect(validateNewPassword('x'.repeat(129), 'x'.repeat(129))).toMatch(/too long/)
-    expect(validateNewPassword('12345678', '12345678')).toBeNull()
+    // AUDIT ACC-029: complexity is now part of the shared policy
+    expect(validateNewPassword('12345678', '12345678')).toMatch(/uppercase letter, a number and a special/)
+    expect(validateNewPassword('Abcdef1!', 'Abcdef1!')).toBeNull()
     expect(RESET_PASSWORD_MIN_LENGTH).toBe(8)
   })
 })
@@ -132,8 +134,8 @@ describe('<ResetPasswordPage />', () => {
   it('rejects mismatched confirmation without calling the API', async () => {
     setLocation('/reset-password' + RECOVERY_HASH)
     render(<ResetPasswordPage />)
-    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'correct-horse-9' } })
-    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'correct-horse-8' } })
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'Correct-Horse-9!' } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'Correct-Horse-8!' } })
     fireEvent.click(screen.getByRole('button', { name: /set new password/i }))
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/do not match/)
@@ -145,8 +147,8 @@ describe('<ResetPasswordPage />', () => {
     setLocation('/reset-password' + RECOVERY_HASH)
     render(<ResetPasswordPage />)
 
-    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'correct-horse-9' } })
-    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'correct-horse-9' } })
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'Correct-Horse-9!' } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'Correct-Horse-9!' } })
     fireEvent.click(screen.getByRole('button', { name: /set new password/i }))
 
     expect((await screen.findByRole('status')).textContent).toMatch(/password has been updated/i)
@@ -158,7 +160,7 @@ describe('<ResetPasswordPage />', () => {
     // The identity is the recovery token — never the pr_token session cookie.
     expect(init.headers.Authorization).toBe('Bearer RECOVERY_JWT')
     expect(init.credentials).toBe('omit')
-    expect(JSON.parse(init.body)).toEqual({ action: 'reset_password', password: 'correct-horse-9' })
+    expect(JSON.parse(init.body)).toEqual({ action: 'reset_password', password: 'Correct-Horse-9!' })
 
     expect(sessionStorage.getItem(RESET_RESULT_KEY)).toBe('success')
     // Form is gone — the token has been dropped from memory.
@@ -170,8 +172,8 @@ describe('<ResetPasswordPage />', () => {
     setLocation('/reset-password' + RECOVERY_HASH)
     render(<ResetPasswordPage />)
 
-    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'correct-horse-9' } })
-    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'correct-horse-9' } })
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'Correct-Horse-9!' } })
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'Correct-Horse-9!' } })
     fireEvent.click(screen.getByRole('button', { name: /set new password/i }))
 
     expect((await screen.findByRole('alert')).textContent).toContain('Token has expired')

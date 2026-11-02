@@ -1287,6 +1287,15 @@ export async function createOrder(
         // the recipient name entirely or (the original bug) overwriting
         // the account holder's own identity with it.
         name:          input.customerName || null,
+        // AUDIT ACC-035: the delivery phone was stored NOWHERE for a signed-in customer (checkout
+        // deliberately never rewrites the account, and this snapshot had no phone key). Result:
+        //   • the courier / ops had no number to call for COD,
+        //   • /api/v1/orders/track — which matches order_number + phone against customers.phone OR
+        //     this snapshot's `phone` — could never find the order, so "Track Order" said
+        //     "Order not found" for every signed-in customer without a profile phone.
+        // Recording it HERE, per order, keeps the account untouched (the owner's S1-002 rule) and
+        // is exactly the fallback the track route already reads. Bare 10 digits, like the rest of the app.
+        phone:         normalizePhoneForLookup(input.customerPhone) || null,
         address_line1: addressLine || null,
         city:          input.city    || null,
         state:         input.state   || null,

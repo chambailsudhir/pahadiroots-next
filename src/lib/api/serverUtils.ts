@@ -120,7 +120,24 @@ export async function sbAuth(
     signal: AbortSignal.timeout(8000),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw { status: res.status, message: data.msg || data.error_description || 'Auth error' }
+  if (!res.ok) {
+    // AUDIT ACC-037: validating a bearer token (GET /user) against a REVOKED session (password
+    // changed on another device, logout, "sign out everywhere") makes GoTrue answer
+    // 403 `session_not_found` (or 401 `bad_jwt`). Callers only treat `status === 401` as
+    // "please log in again", so the 403 fell through to their generic branch and reached the
+    // browser as a 500 "Profile fetch failed". A token that can no longer be validated is, from
+    // the caller's point of view, simply not logged in → normalise to 401.
+    const code = String((data as { error_code?: unknown }).error_code ?? '')
+    const sessionGone =
+      path === '/user' &&
+      (res.status === 401 || res.status === 403 ||
+        code === 'session_not_found' || code === 'session_expired' || code === 'bad_jwt')
+    throw {
+      status:  sessionGone ? 401 : res.status,
+      message: data.msg || data.error_description || 'Auth error',
+      ...(code ? { code } : {}),
+    }
+  }
   return data
 }
 

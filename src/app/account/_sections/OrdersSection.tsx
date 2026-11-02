@@ -250,9 +250,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
     <ErrorBoundary section="Orders" onRetry={orders.refresh}>
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>My Orders</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>My Orders</div>
           {orders.stats && (
-            <div className={styles.panelCount}>{orders.totalCount} orders</div>
+            <div className={styles.panelCount}>{orders.totalCount} {orders.totalCount === 1 ? 'order' : 'orders'}</div>
           )}
         </div>
 
@@ -261,7 +261,9 @@ export default function OrdersSection({ orders, showToast }: Props) {
           <div className={styles.orderSummaryStrip}>
             {[
               { n: orders.stats.delivered, l: 'Delivered',   cls: styles.ossDelivered },
-              { n: orders.stats.active,    l: 'In Transit',  cls: styles.ossActive    },
+              // AUDIT ACC-038: `active` = every order still in progress (confirmed, packed, shipped, out for delivery…), not only
+              // shipments on the road — a freshly confirmed order was shown as "1 In Transit".
+              { n: orders.stats.active,    l: 'Active',      cls: styles.ossActive    },
               { n: orders.stats.cancelled, l: 'Cancelled',   cls: styles.ossCancelled },
               { n: orders.stats.spent,     l: 'Total Spent', cls: styles.ossSpent, fmt: true },
             ].map(({ n, l, cls, fmt }) => (

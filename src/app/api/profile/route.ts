@@ -20,6 +20,18 @@ import {
   checkRateLimit,
   checkCsrf,
 } from '@/lib/api/serverUtils'
+import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
+
+// ── Server-side input rules (AUDIT ACC-039) ───────────────────────────────────
+// The account forms validate in the browser only; the API accepted a blank first name,
+// "5123456789" as a mobile, "Atlantis" as a state and unbounded / HTML-bearing address text.
+// These helpers are the single server-side definition (they mirror lib/account/validation.ts).
+const STATE_SET  = new Set<string>(INDIA_STATES)
+const LABEL_SET  = new Set<string>([...ADDRESS_LABELS, 'Others'])   // checkout's chip says "Others"
+const stripTags  = (v: string) => v.replace(/<[^>]*>/g, '').trim()
+const tenDigits  = (v: string) => v.replace(/\D/g, '').slice(-10)
+const isMobile   = (d: string) => /^[6-9]\d{9}$/.test(d)
+const isPincode  = (v: string) => /^\d{6}$/.test(v)
 
 // ── GET /api/profile ─────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -166,22 +178,53 @@ export async function POST(req: NextRequest) {
           : (incoming as typeof addresses)
       } catch { return fail(400, 'Invalid saved_addresses format') }
 
+      if (!Array.isArray(addresses)) return fail(400, 'Invalid saved_addresses format')
       if (addresses.length > 10) return fail(400, 'Maximum 10 addresses allowed')
 
       if (addresses.length > 0) {
-        const rows = addresses.map((a: Record<string, unknown>) => ({
-          ...(a.id ? { id: a.id } : {}),
-          customer_id: profile.id,
-          label: a.label  || 'Home',
-          name:  a.name   || null,
-          // Per-address contact number — normalized to bare 10 digits so a
-          // pasted "+91 98765-43210" from the client never gets stored raw.
-          phone: typeof a.phone === 'string' ? (a.phone.replace(/\D/g, '').slice(-10) || null) : null,
-          addr:  a.addr   || '',
-          city:  a.city   || '',
-          state: a.state  || '',
-          pin:   a.pin    || null,
-        }))
+        // Rows already in the DB may pre-date the phone/pincode fields (migration v13) — they stay
+        // editable without being forced to gain them. NEW rows must be complete.
+        const existingRows = await sbAdmin(
+          'GET',
+          `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=id&limit=50`,
+        ).catch(() => [] as Array<{ id: string }>)
+        const existingIds = new Set<string>((Array.isArray(existingRows) ? existingRows : []).map((r: { id: string }) => String(r.id)))
+        const rows: Array<Record<string, unknown>> = []
+        for (const a of addresses) {
+          if (!a || typeof a !== 'object') return fail(400, 'Invalid saved_addresses format')
+          const str = (v: unknown) => (typeof v === 'string' ? stripTags(v) : '')
+          const label = str(a.label) || 'Home'
+          const name  = str(a.name)
+          const addr  = str(a.addr)
+          const city  = str(a.city)
+          const state = str(a.state)
+          const pin   = str(a.pin)
+          const phone = typeof a.phone === 'string' ? tenDigits(a.phone) : ''
+
+          const isExisting = typeof a.id === 'string' && existingIds.has(a.id)
+
+          if (!LABEL_SET.has(label))              return fail(400, 'Invalid address label')
+          if (name.length > 100)                  return fail(400, 'Contact name must be at most 100 characters')
+          if (addr.length > 200 || (!isExisting && addr.length < 5)) return fail(400, 'Street address must be 5–200 characters')
+          if (city.length > 100 || (!isExisting && city.length < 2)) return fail(400, 'Enter a valid city')
+          if (state ? !STATE_SET.has(state) : !isExisting) return fail(400, 'Select a valid state or union territory')
+          if (pin   ? !isPincode(pin)       : !isExisting) return fail(400, 'Enter a valid 6-digit pincode')
+          if (phone ? !isMobile(phone)      : !isExisting) return fail(400, 'Enter a valid 10-digit mobile number (starts with 6–9)')
+
+          rows.push({
+            // Only accept a UUID-shaped id (it ends up inside a PostgREST `not.in.(...)` filter below).
+            ...(typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? { id: a.id } : {}),
+            customer_id: profile.id,
+            label,
+            name:  name || null,
+            // Per-address contact number — bare 10 digits so a pasted "+91 98765-43210" is never stored raw.
+            phone: phone || null,
+            addr,
+            city,
+            state,
+            pin:   pin || null,
+          })
+        }
         // Upsert first (all rows exist), THEN delete orphans.
         // delete-then-insert was non-atomic: if insert failed after delete,
         // all addresses were permanently lost.
@@ -241,6 +284,10 @@ export async function POST(req: NextRequest) {
       phone:          20,
     }
     const ALLOWED = Object.keys(FIELD_LIMITS)
+    // AUDIT ACC-039 (pincode never saved): the account UI sends the pincode as `postal_code`, but the
+    // customers column — and this allow-list — is `pincode`, so every "Save Address" silently dropped
+    // it. Accept the legacy key as an alias.
+    if ('postal_code' in body && !('pincode' in body)) body.pincode = body.postal_code
     const patch: Record<string, unknown> = {}
     for (const key of ALLOWED) {
       if (!(key in body)) continue
@@ -253,6 +300,22 @@ export async function POST(req: NextRequest) {
       }
       // Strip HTML tags to prevent stored XSS via DB → invoice HTML template
       patch[key] = val.replace(/<[^>]*>/g, '').trim()
+    }
+    // Semantic checks on what is about to be stored (blank values are allowed only where they mean "clear").
+    if ('first_name' in patch && (patch.first_name as string).length < 1) return fail(400, 'First name is required')
+    if ('phone' in patch) {
+      const raw = patch.phone as string
+      if (raw === '') patch.phone = null
+      else {
+        const d = tenDigits(raw)
+        if (!isMobile(d)) return fail(400, 'Enter a valid 10-digit mobile number (starts with 6–9)')
+        patch.phone = d
+      }
+    }
+    if ('state'   in patch && patch.state   !== '' && !STATE_SET.has(patch.state as string)) return fail(400, 'Select a valid state or union territory')
+    if ('pincode' in patch && patch.pincode !== '' && !isPincode(patch.pincode as string))   return fail(400, 'Enter a valid 6-digit pincode')
+    for (const k of ['state', 'pincode', 'city', 'address_line1'] as const) {
+      if (k in patch && patch[k] === '') patch[k] = null
     }
     if (Object.keys(patch).length > 0) {
       await sbAdmin('PATCH', `/rest/v1/customers?id=eq.${profile.id}`, {
@@ -270,6 +333,13 @@ export async function POST(req: NextRequest) {
     const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
       || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[profile POST]', e)
+    // AUDIT ACC-039 (found in live verification): customers.normalized_phone is UNIQUE, so saving a mobile
+    // number that already belongs to another account made PostgREST answer 409 and the customer saw the
+    // opaque "Profile update failed". Say what actually happened (the whole update is rejected, so nothing
+    // else was saved either).
+    if ((err.status === 409 || /23505/.test(err.message || '')) && /phone/i.test(err.message || '')) {
+      return fail(409, 'This mobile number is already linked to another account. Please use a different number, or contact support if it is yours.')
+    }
     return fail(
       err.status || (isTransient ? 503 : 500),
       process.env.NODE_ENV === 'production'

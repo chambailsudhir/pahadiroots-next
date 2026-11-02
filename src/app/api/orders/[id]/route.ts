@@ -16,6 +16,7 @@ import {
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY } from '@/lib/account/constants'
+import { cancelEligibility } from '@/lib/orderCancellation'
 import { getRequestId, requestLogger, withRequestId } from '@/lib/logger'
 
 export async function GET(
@@ -146,6 +147,19 @@ export async function GET(
       updated_at:       raw.updated_at      ?? null,
       shipping_address: shippingAddress,
       items,
+      // AUDIT ACC-050: server-decided so the page never offers a button the API would refuse.
+      ...(() => {
+        const v = cancelEligibility({
+          order_status: raw.order_status, payment_method: raw.payment_method, payment_status: raw.payment_status,
+          tracking_number: raw.tracking_number, shipped_at: raw.shipped_at,
+        })
+        return {
+          can_cancel: v.allowed,
+          // before dispatch but not self-serve (prepaid / already being packed) → offer the WhatsApp route
+          cancel_via_support: !v.allowed && v.reason === 'contact_support'
+            && ['pending', 'confirmed', 'processing', 'packed'].includes(String(raw.order_status)),
+        }
+      })(),
     }
 
     const res = ok({ success: true, order })

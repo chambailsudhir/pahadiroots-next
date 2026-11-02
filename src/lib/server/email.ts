@@ -42,6 +42,8 @@ export type TransactionalEmailType =
   | 'order_confirmation'
   | 'admin_order_notify'
   | 'payment_confirmation'
+  | 'order_cancelled'
+  | 'signup_verification'
   | 'contact_form'
   // BUG FIX (P1 — trust): added for the newsletter signup discount-code
   // email (api/v1/actions/route.ts `subscribe`). The homepage previously

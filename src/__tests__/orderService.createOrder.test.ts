@@ -1146,3 +1146,39 @@ describe('createOrder — order_prefix (settings-driven order numbering)', () =>
     expect((call!.args as any).p_order_number.startsWith('ORD')).toBe(true)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT ACC-035 — the delivery phone typed at checkout was stored NOWHERE for a signed-in customer
+// (checkout deliberately never rewrites the account, and p_shipping_address had no phone key).
+// Live evidence: both test orders had customers.phone NULL and no `phone` in shipping_address, so
+// /api/v1/orders/track (which matches order_number + phone against customers.phone OR
+// shipping_address.phone) answered "Order not found" for a valid order, and ops had no number to call.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createOrder — delivery phone is snapshotted on the order (ACC-035)', () => {
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+  })
+
+  it('stores the normalised 10-digit phone inside p_shipping_address', async () => {
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, customerPhone: '+91 98765-43210' }, DEFAULT_SETTINGS)
+
+    const call = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')
+    const ship = (call!.args as { p_shipping_address: Record<string, unknown> }).p_shipping_address
+    expect(ship.phone).toBe('9876543210')
+    // the recipient / address snapshot is unchanged
+    expect(ship).toMatchObject({ name: BASE_INPUT.customerName, city: BASE_INPUT.city, state: BASE_INPUT.state, pincode: BASE_INPUT.pincode })
+  })
+
+  it('is the same snapshot the track route reads (shipping_address.phone, last 10 digits)', async () => {
+    const { createOrder, normalizePhoneForLookup } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, customerPhone: '098765 43210' }, DEFAULT_SETTINGS)
+
+    const ship = (mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')!.args as { p_shipping_address: { phone: string } }).p_shipping_address
+    expect(ship.phone).toBe(normalizePhoneForLookup('098765 43210'))
+    expect(ship.phone).toHaveLength(10)
+  })
+})

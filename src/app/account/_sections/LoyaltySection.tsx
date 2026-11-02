@@ -34,8 +34,18 @@ interface LoyaltyData {
   points_value:   number
   min_redeem:     number
   max_redeem_pct: number
+  earn_per_rupee?: number
+  referral_bonus?: number
   label:          string
   referral_code:  string | null
+}
+
+/** "Earn 1 coin per ₹1" / "Earn 1 coin for every ₹100 you spend" — built from the real earn rate (ACC-045). */
+export function earnCopy(rate: number | undefined): string {
+  const r = typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 1
+  if (r >= 1) return `Earn ${Number.isInteger(r) ? r : r.toFixed(2)} ${r === 1 ? 'coin' : 'coins'} per ₹1 spent on every order`
+  const per = Math.round(1 / r)
+  return `Earn 1 coin for every ₹${per.toLocaleString('en-IN')} you spend`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -163,21 +173,21 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
 
   if (loading) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <div className={styles.lySkeleton} aria-busy="true" />
     </div>
   )
 
   if (loadErr) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub} style={{ color: '#c0392b' }}>{loadErr}</p>
     </div>
   )
 
   if (!data?.enabled) return (
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Loyalty programme coming soon — stay tuned!</p>
     </div>
   )
@@ -188,7 +198,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   return (
     <ErrorBoundary section="Loyalty">
     <div className={styles.secRoot}>
-      <div className={styles.secTitle}><Icon name="coins" /> Pahadi Coins</div>
+      <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
       <p className={styles.secSub}>Earn coins on every order. Redeem for discounts at checkout.</p>
 
       {/* ── Balance card ──────────────────────────────────────── */}
@@ -206,7 +216,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          { icon: '🛍️', title: 'Shop & Earn',  desc: `Earn 1 coin per ₹1 spent on every order` },
+          { icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_rupee) },
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },
@@ -226,7 +236,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
             <span className={styles.lyRefIcon}><Icon name="users" /></span>
             <div>
               <div className={styles.lyRefTitle}>Refer &amp; Earn</div>
-              <div className={styles.lyRefSub}>Both you and your friend earn 100 bonus coins when they place their first order.</div>
+              <div className={styles.lyRefSub}>Both you and your friend earn {data.referral_bonus ?? 100} bonus coins when they place their first order.</div>
             </div>
           </div>
           <div className={styles.lyRefRow}>

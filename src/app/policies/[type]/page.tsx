@@ -222,7 +222,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <h2 className="text-base font-bold text-stone-900 mb-2">6. Order Cancellation</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
             <li>If you cancel <strong>before dispatch</strong>, we refund the <strong>full amount you paid</strong>, including any shipping charge, and we charge <strong>no cancellation fee</strong></li>
-            <li>Orders may be cancelled <strong>before dispatch</strong> only — contact us immediately on WhatsApp. Requests between confirmation and dispatch are accepted at our discretion</li>
+            <li>Orders may be cancelled <strong>before dispatch</strong> only. <strong>Cash-on-Delivery orders can be cancelled by you in My Orders</strong> until we start packing them. Once packing has started, or for prepaid orders, contact us immediately on WhatsApp — these requests are accepted at our discretion</li>
             <li>Once dispatched, cancellation requests <strong>cannot be accepted</strong></li>
             <li>Food/edible orders <strong>cannot be cancelled once dispatched</strong></li>
             <li>If <em>we</em> cancel your order (stock issue / pricing error), a <strong>full refund</strong> is issued within 7–10 business days</li>

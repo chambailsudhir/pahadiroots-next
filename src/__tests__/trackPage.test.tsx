@@ -28,7 +28,7 @@ async function fillAndSubmit(orderNumber: string, phone: string) {
   const { default: TrackPage } = await import('@/app/track/page')
   render(React.createElement(TrackPage))
 
-  fireEvent.change(screen.getByPlaceholderText('e.g. PR-2024-0001'), { target: { value: orderNumber } })
+  fireEvent.change(screen.getByPlaceholderText('e.g. ORD-2026-00123'), { target: { value: orderNumber } })
   fireEvent.change(screen.getByPlaceholderText('98765 43210'),        { target: { value: phone } })
   fireEvent.click(screen.getByText('Track Order'))
 }

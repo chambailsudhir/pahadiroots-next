@@ -84,7 +84,7 @@ export function useProfile(
       addr:  p.address_line1 || '',
       city:  p.city          || '',
       state: p.state         || '',
-      pin:   p.postal_code   || '',
+      pin:   p.pincode || p.postal_code || '',
       phone: (p.phone || '').replace(/^\+91/, ''),
     })
   }, [])
@@ -112,13 +112,13 @@ export function useProfile(
     if (Object.keys(errors).length) { setPfErr(errors); return }
     setPfErr({})
     setBusy(b => ({ ...b, addr: true }))
-    const up = { address_line1: pf.addr.trim(), city: pf.city.trim(), state: pf.state, postal_code: pf.pin }
+    const up = { address_line1: pf.addr.trim(), city: pf.city.trim(), state: pf.state, pincode: pf.pin }
     updateLocalProfile(up)   // optimistic
     try {
       await updateProfile(up)
       setMsg$('addr', '✅ Address saved!')
     } catch (e: unknown) {
-      if (profile) updateLocalProfile({ address_line1: profile.address_line1, city: profile.city, state: profile.state, postal_code: profile.postal_code }) // rollback
+      if (profile) updateLocalProfile({ address_line1: profile.address_line1, city: profile.city, state: profile.state, pincode: profile.pincode ?? profile.postal_code }) // rollback
       handleError(e, 'Failed to save address')
     } finally {
       setBusy(b => ({ ...b, addr: false }))

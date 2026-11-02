@@ -11,6 +11,7 @@
 //  failed    → API error during init
 // ─────────────────────────────────────────────────────────────
 
+import { clearClientPII } from '@/lib/clientLogout'
 import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
@@ -109,6 +110,10 @@ export function useAuth() {
   }, [init])
 
   async function logout() {
+    // AUDIT ACC-040: this (account-page) logout never called clearClientPII(), unlike the header
+    // logout — so `pr_checkout_profile` (name / phone / address) stayed in localStorage for the
+    // next person on a shared device. Wipe it FIRST so it goes even if the network calls hang.
+    clearClientPII()
     try {
       await Promise.allSettled([
         fetch('/api/auth/session', {

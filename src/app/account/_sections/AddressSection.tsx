@@ -26,7 +26,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
     <ErrorBoundary section="Addresses">
       <div className={styles.panelSection}>
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>Delivery Addresses</div>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Delivery Addresses</div>
         </div>
         <div className={styles.card}>
 
@@ -39,7 +39,7 @@ export default function AddressSection({ authProfile, profile, savedAddrs, onEdi
               </div>
               <div className={styles.addrLine}>
                 <strong>{[authProfile.first_name, authProfile.last_name].filter(Boolean).join(' ')}</strong><br />
-                {[authProfile.address_line1, authProfile.city, authProfile.state, authProfile.postal_code].filter(Boolean).join(', ')}
+                {[authProfile.address_line1, authProfile.city, authProfile.state, authProfile.pincode ?? authProfile.postal_code].filter(Boolean).join(', ')}
                 {authProfile.phone && <><br /><span style={{ color: '#888' }}>{String(authProfile.phone)}</span></>}
               </div>
               <div className={styles.addrActions}>

@@ -2,6 +2,8 @@
 // page module only exports what Next allows, and so they can be unit-tested
 // without rendering).
 
+import { validate } from '@/lib/account/validation'
+
 // Kept in sync with api/auth/route.ts (RESET_PASSWORD_MIN_LENGTH) — the server
 // enforces the same floor; the client check only gives instant feedback.
 export const RESET_PASSWORD_MIN_LENGTH = 8
@@ -29,8 +31,13 @@ export function validateNewPassword(password: string, confirm: string): string |
   if (password.length < RESET_PASSWORD_MIN_LENGTH) return `Password must be at least ${RESET_PASSWORD_MIN_LENGTH} characters`
   if (password.length > RESET_PASSWORD_MAX_LENGTH) return 'Password is too long'
   if (password !== confirm) return 'Passwords do not match'
+  // AUDIT ACC-029: same policy as sign-up and Change Password (8+ chars, upper-case, number, special).
+  if (!validate.password.isValid(password)) return PASSWORD_POLICY_MESSAGE
   return null
 }
+
+export const PASSWORD_POLICY_MESSAGE =
+  'Use at least 8 characters with an uppercase letter, a number and a special character'
 
 /**
  * A Supabase e-mail link that cannot be honoured on the page it was sent to lands on the SITE URL
