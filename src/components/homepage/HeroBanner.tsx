@@ -50,6 +50,11 @@ function plainAlt(t?: string | null): string {
 
 export default function HeroBanner({ images, settings }: Props) {
   const [current, setCurrent] = useState(0)
+  // LCP (audit HOME-003): every slide's image used to download at High priority on first paint (all slides are stacked in the
+  // viewport, so loading="lazy" does nothing). ~70 KB of hidden photos competed with the visible hero. Slides other than the
+  // first mount their image only after this flag flips, shortly after first paint and well before autoplay advances.
+  const [warm, setWarm] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setWarm(true), 2500); return () => clearTimeout(t) }, [])
   const slides = images.length > 0 ? images : null
   const total  = slides ? slides.length : 1
   const heroStats = getHeroStats(settings)
@@ -242,7 +247,7 @@ export default function HeroBanner({ images, settings }: Props) {
           // neighbours mount their image; the next one is always ready
           // before it's shown.
           const nearCurrent = i === 0 || i === current ||
-            i === (current + 1) % total || i === (current - 1 + total) % total
+            (warm && (i === (current + 1) % total || i === (current - 1 + total) % total))
           const HeadingTag = isVisible ? 'h1' : 'p'
           const headingStyle = { fontFamily:'var(--font-playfair),"Playfair Display",Georgia,serif', fontSize:'clamp(32px,4.5vw,62px)', fontWeight:900 as const, lineHeight:1.05, color:'#fff', margin:'0 0 16px', textShadow:'0 2px 20px rgba(0,0,0,.4)', letterSpacing:'-1px' }
           // BUG FIX: a slide's Background Image can itself be a fully
@@ -366,13 +371,14 @@ export default function HeroBanner({ images, settings }: Props) {
                     quality={60}
                     onLoad={e => handleImgLoad(i, e)}
                     style={{ objectFit: 'cover', objectPosition: 'center 30%', position: 'absolute' }}
-                    {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : {})} />
+                    {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : { fetchPriority: 'low' as const })} />
                 </div>
               ) : (
                 <Image src={img.url} alt={plainAlt(img.alt_text) || 'HimVeda by Pahadi Roots'} fill sizes="100vw"
+                  quality={60}
                   onLoad={e => handleImgLoad(i, e)}
                   style={{ objectFit: 'cover', objectPosition: 'center 30%' }}
-                  {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : {})} />
+                  {...(i === 0 ? { loading: 'eager' as const, fetchPriority: 'high' as const, preload: true } : { fetchPriority: 'low' as const })} />
               )
             ) : (
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(150deg,#071a09 0%,#0d2410 30%,#1a3a1e 65%,#2d5233 100%)' }} />
