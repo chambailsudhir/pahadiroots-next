@@ -60,7 +60,7 @@ describe('email_signup — mail fallback (ACC-025)', () => {
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body).toMatchObject({ success: true, verification_sent: true, user: { id: 'u-new', email: 'new@user.com' } })
+    expect(body).toEqual({ success: true, verification_sent: true })   // nothing about any account is returned
 
     const gen = fetchMock.mock.calls.find(c => String(c[0]).endsWith('/admin/generate_link'))!
     expect(JSON.parse(gen[1].body)).toMatchObject({ type: 'signup', email: 'new@user.com', password: 'Correct-Horse-9!', data: { full_name: 'Asha Rana' } })
@@ -69,7 +69,7 @@ describe('email_signup — mail fallback (ACC-025)', () => {
     const mail = mocks.sendTransactionalEmail.mock.calls[0][0]
     expect(mail).toMatchObject({ type: 'signup_verification', to: 'new@user.com' })
     expect(mail.html).toContain('https://example.supabase.co/auth/v1/verify?token=abc&type=signup')
-    expect(mocks.syncCustomerProfile).toHaveBeenCalledWith(expect.objectContaining({ id: 'u-new', email: 'new@user.com' }))
+    expect(mocks.syncCustomerProfile).not.toHaveBeenCalled()      // the address is unproven: no customer row is touched at sign-up
   })
 
   it('a healthy Supabase mailer is used exactly as before — the fallback never fires', async () => {

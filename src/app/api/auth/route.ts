@@ -286,8 +286,6 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
       captureError(new Error('signup fallback: generate_link returned no user/link'), { action: 'auth.signup.fallback_no_link', alert: true })
       return err(503, FRIENDLY)
     }
-    const profile = await syncCustomerProfile({ id: gen.id, email: gen.email || email, phone: gen.phone || undefined, user_metadata: { full_name: fullName } })
-
     const firstName = esc(fullName.split(' ')[0] || 'there')
     const safeLink  = link.replace(/"/g, '%22')
     const mail = await sendTransactionalEmail({
@@ -301,10 +299,9 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
       captureError(new Error('signup fallback: verification e-mail could not be sent or queued'), { action: 'auth.signup.fallback_email', alert: true, error: mail.error })
       return err(503, FRIENDLY)
     }
-    return ok({
-      success: true, verification_sent: true,
-      user: { id: gen.id, email: gen.email || email, phone: gen.phone || null }, profile: toPublicProfile(profile),
-    })
+    // SECURITY: nothing about any account is returned and no customer row is touched here — the address is not proven yet.
+    // The customer row is created / linked on the first CONFIRMED login (syncCustomerProfile).
+    return ok({ success: true, verification_sent: true })
   } catch (e) {
     captureError(e, { action: 'auth.signup.fallback', alert: true })
     return err(503, FRIENDLY)
@@ -398,13 +395,19 @@ export async function POST(req: NextRequest) {
       const data = await sbAuth('/signup', { email, password, data: { full_name: resolvedName } })
       const user = data.user || data
       if (!user || !user.id) return err(400, 'Signup failed — could not create user')
-      const profile = await syncCustomerProfile(user)
-      const res = ok({
-        success: true,
-        user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile: toPublicProfile(profile),
-      })
-      if (data.access_token) return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
-      return res
+      // SECURITY (account audit, Nov 2026): only when Supabase hands back a SESSION is the caller signed in as this user.
+      // Otherwise the e-mail is unproven — and for an address that already exists Supabase returns an "obfuscated" user with a
+      // random id. Syncing that user used to hand the matching customer's profile (name, phone, address, coins) to an anonymous
+      // caller. Now: no sync, no profile, the same answer for every address.
+      if (data.access_token) {
+        const profile = await syncCustomerProfile(user)
+        const res = ok({
+          success: true,
+          user: { id: user.id, email: user.email || email, phone: user.phone || null }, profile: toPublicProfile(profile),
+        })
+        return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
+      }
+      return ok({ success: true, verification_sent: true })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       // ACC-025: Supabase could not send ITS e-mail (bad SMTP credentials) → alert ops, then use our own mailer.

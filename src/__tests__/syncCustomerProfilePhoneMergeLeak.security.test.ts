@@ -132,9 +132,66 @@ describe('syncCustomerProfile — email match still correctly links a returning 
     vi.stubGlobal('fetch', fetchMock)
 
     const { syncCustomerProfile } = await import('@/lib/api/serverUtils')
-    const result = await syncCustomerProfile({ id: 'auth-returning', email: 'returning@example.com' })
+    const result = await syncCustomerProfile({ id: 'auth-returning', email: 'returning@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' })
 
     expect(result.first_name).toBe('Returning')
     expect(result.auth_user_id).toBe('auth-returning')
+  })
+})
+
+// ── Account audit, Nov 2026: sign-up with someone else's e-mail used to return THEIR profile (reproduced on production) ──────────
+describe('syncCustomerProfile — an e-mail match is adopted only for a CONFIRMED e-mail and never taken from a live owner', () => {
+  const ROW = { id: 'cust-9', auth_user_id: null, email: 'Victim@Example.com', first_name: 'Victim', phone: '9111111111' }
+  const call = async (user: Record<string, unknown>, fetchMock: ReturnType<typeof vi.fn>) => {
+    vi.stubGlobal('fetch', fetchMock)
+    const { syncCustomerProfile } = await import('@/lib/api/serverUtils')
+    return syncCustomerProfile(user as never)
+  }
+  const patched = (f: ReturnType<typeof vi.fn>) => f.mock.calls.some(c => (c[1] as RequestInit | undefined)?.method === 'PATCH')
+
+  it('UNCONFIRMED e-mail (e.g. the throw-away user returned by a sign-up): the matching row is not adopted, not patched, not returned', async () => {
+    const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [ROW]))
+    const result = await call({ id: 'fake-obfuscated-id', email: 'victim@example.com' }, f)
+    expect(result).toBeNull()
+    expect(patched(f)).toBe(false)
+    expect(f).toHaveBeenCalledTimes(1)          // no INSERT attempt either
+  })
+  it('confirmed e-mail + a guest row with no owner yet: adopted (case-insensitive)', async () => {
+    const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [ROW])).mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: 'u-real' }]))
+    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    expect(result!.first_name).toBe('Victim')
+    expect(patched(f)).toBe(true)
+  })
+  it('confirmed e-mail but the row belongs to ANOTHER LIVE auth user: refused, alerted, not re-pointed', async () => {
+    const owner = '11111111-2222-3333-4444-555555555555'
+    const f = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: owner }]))
+      .mockResolvedValueOnce(jsonResponse(200, { id: owner }))             // admin API: that user exists
+    const result = await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    expect(result).toBeNull()
+    expect(patched(f)).toBe(false)
+    expect(captureErrorMock).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ action: 'syncCustomerProfile.email_conflict' }))
+  })
+  it('a row whose owner NO LONGER EXISTS (404) can be taken back by the confirmed owner', async () => {
+    const dead = '11111111-2222-3333-4444-555555555555'
+    const f = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: dead }]))
+      .mockResolvedValueOnce(jsonResponse(404, {}))
+      .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: 'u-real' }]))
+    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    expect(result!.first_name).toBe('Victim')
+    expect(patched(f)).toBe(true)
+  })
+  it('an admin-API hiccup counts as "owner exists" — a row is never taken on uncertainty', async () => {
+    const owner = '11111111-2222-3333-4444-555555555555'
+    const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: owner }])).mockRejectedValueOnce(new Error('network'))
+    expect(await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: 'x' }, f)).toBeNull()
+    expect(patched(f)).toBe(false)
+  })
+  it('there is no "first row" fallback: a returned row whose e-mail differs is never adopted', async () => {
+    const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [{ id: 'other', auth_user_id: null, email: 'other@example.com', first_name: 'Other' }])).mockResolvedValue(jsonResponse(201, [{ id: 'new', first_name: 'victim' }]))
+    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: 'x' }, f)
+    expect(result).not.toMatchObject({ id: 'other' })
+    expect(patched(f)).toBe(false)
   })
 })
