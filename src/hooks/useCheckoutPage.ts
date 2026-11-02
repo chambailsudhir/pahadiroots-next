@@ -481,7 +481,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // the plain `hadWarmCache` value directly, the ref serves no purpose and
   // has been removed instead of carried forward as unused state.
   const hadWarmCache = typeof window !== 'undefined' ? !!_readProfileCache() : false
-  const [profilePrefillLoading, setProfilePrefillLoading] = useState(() => !hadWarmCache)
+  // Nov 2026 audit: this used to start as `!hadWarmCache`, i.e. TRUE for every guest — but a guest has no saved details to fetch, so the
+  // effect below returned early without ever clearing it and "Loading your saved details…" stayed on screen for ever (and was announced
+  // to screen readers as a live status). It now starts true only for a signed-in customer with no cached profile, the one case in
+  // which a fetch actually follows (and clears it).
+  const [profilePrefillLoading, setProfilePrefillLoading] = useState(() => !hadWarmCache && !!useUserStore.getState().user)
   // Flips to true the moment the CUSTOMER actually edits an address field
   // (via setAddrField/applySaved below) — as opposed to the instant cache
   // fill at mount or the silent background refresh, neither of which go

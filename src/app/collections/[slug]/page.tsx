@@ -50,13 +50,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const parsed = parseBrowseParams(sp)
   const page = parsed.page
   const isFiltered = page > 1 || parsed.instock || parsed.sort !== 'newest'
+  // Nov 2026 audit: an empty collection is a thin page — keep it out of search results until it has products (links still followed).
+  const isEmpty = !storeData.products.some(prod => String(prod.category_id) === String(cat.id))
 
   return {
     // Brand suffix comes from layout.tsx's title.template — do not repeat it here.
     title:       collectionTitle(cat.name),
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
     alternates:  { canonical: canonicalUrl },
-    robots:      isFiltered ? { index: false, follow: true } : undefined,
+    robots:      isFiltered || isEmpty ? { index: false, follow: true } : undefined,
     openGraph: {
       title:       `${cat.name} | HimVeda by Pahadi Roots`,
       description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
@@ -313,14 +315,34 @@ export default async function CollectionPage({ params, searchParams }: Props) {
         {products.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
             padding: '80px 20px', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
-              No products found
-            </h3>
-            <Link href={`/collections/${catSlug}`} style={{ background: '#1a3a1e', color: '#fff',
-              borderRadius: '20px', padding: '10px 24px', fontSize: '13px', fontWeight: 700,
-              textDecoration: 'none', marginTop: '12px', display: 'inline-block' }}>
-              Clear filters
-            </Link>
+            {/* Nov 2026 audit: "Clear filters" was shown on a collection that is simply EMPTY (no filter set), which looked broken.
+                Only offer it when a filter is actually narrowing the list. */}
+            {instock ? (
+              <>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
+                  No in-stock products here right now
+                </h3>
+                <Link href={`/collections/${catSlug}`} style={{ background: '#1a3a1e', color: '#fff',
+                  borderRadius: '20px', padding: '10px 24px', fontSize: '13px', fontWeight: 700,
+                  textDecoration: 'none', marginTop: '12px', display: 'inline-block' }}>
+                  Clear filters
+                </Link>
+              </>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
+                  {cat.name} is coming soon
+                </h3>
+                <p style={{ fontSize: '14px', color: '#5a5448', margin: '0 0 4px', maxWidth: '420px' }}>
+                  We are still sourcing this range from the mountains. Meanwhile, explore what is available now.
+                </p>
+                <Link href="/products" style={{ background: '#1a3a1e', color: '#fff',
+                  borderRadius: '20px', padding: '10px 24px', fontSize: '13px', fontWeight: 700,
+                  textDecoration: 'none', marginTop: '12px', display: 'inline-block' }}>
+                  Browse all products
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <>

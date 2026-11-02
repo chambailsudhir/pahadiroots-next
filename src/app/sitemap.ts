@@ -63,7 +63,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     categories = await fetchAll(( from, to ) => supabase.from('categories').select('id, slug').eq('is_active', true).order('id').range(from, to))
   } catch (e: unknown) { console.error('[sitemap] categories fetch failed:', e) }
 
-  const collectionPages: MetadataRoute.Sitemap = categories.map(c => ({
+  // Nov 2026 audit: 7 of 10 collections had no products and were still submitted to Google — thin, empty pages that read as broken.
+  // Only collections that hold at least one live product are listed; an empty one rejoins the sitemap the day it gets stock.
+  const populatedCategoryIds = new Set(products.map(p => p.category_id))
+  const collectionPages: MetadataRoute.Sitemap = categories.filter(c => populatedCategoryIds.has(c.id)).map(c => ({
     url:             `${BASE}/collections/${c.slug}`,
     lastModified:    newest(products.filter(p => p.category_id === c.id).map(p => toDate(p.updated_at)), catalogueUpdated),
     changeFrequency: 'daily' as const,
