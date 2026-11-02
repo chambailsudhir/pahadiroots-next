@@ -178,8 +178,8 @@ describe('GET /api/v1/orders/track — lookup behaviour', () => {
     const { GET } = await import('@/app/api/v1/orders/track/route')
     const res = await GET(makeRequest('?order_number=PR1A2B3C4D&phone=9876543210'))
     expect(res.status).toBe(200)
-    // No customer_id → the customers table must not even be queried.
-    expect(customersCall()).toBeUndefined()
+    // No customer_id → the customers lookup still runs (id 0, matches nothing) so every path does the same work.
+    expect(String(customersCall()![1])).toContain('id=eq.0')
   })
 
   it('404s when neither customers.phone nor shipping_address.phone matches (phone alone can never match)', async () => {

@@ -28,6 +28,7 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
+import { RETURNABLE_WINDOW_HOURS } from '@/lib/account/constants'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -82,10 +83,17 @@ export async function POST(
     // Ownership check — same as the sibling /return route
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=id&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=id,order_status,delivered_at&limit=1`,
     ).catch(() => null)
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return fail(404, 'Order not found')
+    }
+    // Signed upload URLs only for orders that can still be returned (delivered, inside the window) — the
+    // same rules as POST /return, so the bucket cannot be filled via arbitrary owned orders.
+    const ord = rows[0] as { order_status?: string; delivered_at?: string | null }
+    const hoursSince = ord.delivered_at ? (Date.now() - new Date(ord.delivered_at).getTime()) / 3_600_000 : NaN
+    if (ord.order_status !== 'delivered' || !Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
+      return fail(422, 'Photos can only be uploaded for a delivered order that is still within its return window')
     }
 
     // Server-side feature gate — never trust the client to only call this

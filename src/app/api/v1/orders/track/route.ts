@@ -73,11 +73,12 @@ function normalizePhone(v: unknown): string | null {
 }
 
 async function fetchCustomerPhone(customerId: unknown): Promise<string | null> {
-  if (customerId == null || customerId === '') return null
-  const rows = await sbAdmin(
-    'GET',
-    `/rest/v1/customers?id=eq.${encodeURIComponent(String(customerId))}&select=phone&limit=1`,
-  ).catch(() => null)
+  // Always issues the query (id 0 matches nothing) so a missing order, a guest order and a normal order all
+  // do the same work — response timing does not reveal whether an order number exists.
+  const idStr = customerId == null || customerId === '' ? '0' : String(customerId)
+  const rows = await Promise.resolve()
+    .then(() => sbAdmin('GET', `/rest/v1/customers?id=eq.${encodeURIComponent(idStr)}&select=phone&limit=1`))
+    .catch(() => null)
   if (!Array.isArray(rows) || rows.length === 0) return null
   return normalizePhone((rows[0] as { phone?: unknown }).phone)
 }
@@ -104,8 +105,15 @@ export async function GET(req: NextRequest) {
   // Per-order_number limit — the actually-meaningful guard against
   // brute-forcing the phone digits for one specific known order. Tighter
   // than the per-IP limit above on purpose.
-  if (!await checkRateLimitKv(`mw:rl:order_track_num:${orderNumber}`, 8, 300)) {
+  // Keyed on order number AND ip: order numbers are guessable/sequential, so a number-only key let anyone lock a
+  // real customer out of tracking with a handful of wrong-phone requests.
+  if (!await checkRateLimitKv(`mw:rl:order_track_num:${orderNumber}:${ip}`, 8, 300)) {
     return fail(429, 'Too many attempts for this order — please wait a few minutes')
+  }
+  // Per-phone limiter: with a known victim phone an attacker could otherwise scan sequential order numbers (from many
+  // IPs) to learn status/total. Caps how many distinct order lookups one phone number can drive.
+  if (!await checkRateLimitKv(`mw:rl:order_track_phone:${phone}`, 30, 600)) {
+    return fail(429, 'Too many attempts for this phone number — please wait a few minutes')
   }
 
   try {
@@ -119,9 +127,9 @@ export async function GET(req: NextRequest) {
     // an attacker confirm a guessed order_number is real even without the
     // matching phone.
     const NOT_FOUND = 'Order not found. Check your order number and phone number.'
-    if (!Array.isArray(rows) || rows.length === 0) return fail(404, NOT_FOUND)
-
-    const raw = rows[0] as Record<string, unknown>
+    // No early return for a missing order: the same customers lookup + comparison runs on both paths.
+    const raw = (Array.isArray(rows) && rows.length > 0 ? rows[0] : {}) as Record<string, unknown>
+    const orderExists = Array.isArray(rows) && rows.length > 0
 
     // AUDIT S1-007 / S2-002: phone match via customers.phone (orders.customer_id),
     // falling back to the phone snapshotted in shipping_address. Both are
@@ -132,7 +140,7 @@ export async function GET(req: NextRequest) {
     const shippingPhone = normalizePhone(shipping && typeof shipping === 'object' ? shipping.phone : null)
     const matches = (customerPhone !== null && customerPhone === phone)
                  || (shippingPhone !== null && shippingPhone === phone)
-    if (!matches) return fail(404, NOT_FOUND)
+    if (!orderExists || !matches) return fail(404, NOT_FOUND)
     const res = ok({
       success: true,
       order: {
