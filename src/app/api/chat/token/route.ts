@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isSameOrigin, getClientIp } from '@/lib/api/aiGuard'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { issueChatToken } from '@/lib/api/chatToken'
+import { CHAT_POW_BITS, turnstileEnabled, turnstileSiteKey } from '@/lib/api/chatChallenge'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -14,5 +15,10 @@ export async function GET(req: NextRequest) {
   }
   const t = issueChatToken(req.headers.get('user-agent') ?? '')
   // No secret configured (local dev): the chat route skips the check too, so an empty token is fine.
-  return NextResponse.json({ token: t?.token ?? '', expires_in: t?.expiresInSec ?? 0 }, { headers: { 'Cache-Control': 'no-store' } })
+  // The challenge the widget must solve before /api/chat accepts a message (see lib/api/chatChallenge.ts): Turnstile when a
+  // site key is configured, otherwise proof of work bound to this token. No token (local dev) → no challenge either.
+  const challenge = !t ? null : turnstileEnabled() && turnstileSiteKey()
+    ? { type: 'turnstile' as const, site_key: turnstileSiteKey() }
+    : { type: 'pow' as const, bits: CHAT_POW_BITS }
+  return NextResponse.json({ token: t?.token ?? '', expires_in: t?.expiresInSec ?? 0, challenge }, { headers: { 'Cache-Control': 'no-store' } })
 }

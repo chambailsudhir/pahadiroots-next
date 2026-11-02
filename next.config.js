@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const { buildCsp } = require('./src/lib/csp')
+const { buildCsp, STATIC_CSP_HEADER_SOURCE } = require('./src/lib/csp')
 
 const nextConfig = {
   // Hardening (audit HOME-027): don't advertise the framework in an `X-Powered-By: Next.js` response header.
@@ -50,9 +50,12 @@ const nextConfig = {
     // therefore silently rendered at 75. List every quality the app actually
     // requests so those props take effect. Keep this in sync with `quality=`
     // usages under src/ — an unlisted value is snapped, not honoured.
-    qualities: [70, 75, 90],
+    qualities: [60, 70, 75, 90],
   },
   experimental: {
+    // LCP (audit HOME-003): the two render-blocking stylesheets cost a full round trip before the hero could paint on a slow
+    // connection. Inlining the CSS into the HTML removes that round trip; the document grows by the CSS size but is one request.
+    inlineCss: true,
     // Enable server actions
     serverActions: {
       // Only allow our own domain + the exact Vercel preview URL injected per-deployment.
@@ -121,7 +124,7 @@ const nextConfig = {
       {
         // Everything else — including the homepage — has no 'unsafe-eval'. (Any path that does not start with /checkout or
         // /account, which the proxy covers.) Rules never overlap, so exactly one CSP header is sent per response.
-        source: '/((?!(?:checkout|account)(?:/|$)).*)',
+        source: STATIC_CSP_HEADER_SOURCE,
         headers: [{ key: 'Content-Security-Policy', value: buildCsp({ allowEval: false }) }],
       },
     ]

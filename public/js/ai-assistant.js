@@ -790,19 +790,24 @@
     // browser loaded the site; the request is abandoned after 30 s so a slow upstream never leaves the panel spinning.
     function send(allowRetry){
       return getToken().then(function(tok){
+        return getChallengeAnswer(tok).then(function(ans){
         var ctl = new AbortController();
         var timer = setTimeout(function(){ ctl.abort(); }, 30000);
+        var headers = { 'Content-Type': 'application/json', 'x-chat-token': tok };
+        if(ans && ans.pow) headers['x-chat-pow'] = ans.pow;
+        if(ans && ans.turnstile) headers['x-turnstile-token'] = ans.turnstile;
         return fetch(API_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-chat-token': tok },
+          headers: headers,
           body: JSON.stringify(body),
           signal: ctl.signal,
         }).then(function(res){
           clearTimeout(timer);
-          if(res.status === 403 && allowRetry){ chatTok = null; return send(false); }
+          if(res.status === 403 && allowRetry){ chatTok = null; challengeCache = {}; return send(false); }
           if(!res.ok) return res.json().then(function(e){ throw new Error((e.error && e.error.message) || e.error || 'HTTP '+res.status); });
           return res.json();
         }, function(err){ clearTimeout(timer); throw (err && err.name === 'AbortError') ? new Error('The assistant took too long to reply. Please try again.') : err; });
+        });
       });
     }
     return send(true)
@@ -836,14 +841,115 @@
     });
   }
 
-  /* Session token for /api/chat (cached until shortly before it expires). */
-  var chatTok = null, chatTokExp = 0;
+  /* Session token for /api/chat (cached until shortly before it expires) plus the bot challenge that goes with it
+     (see src/lib/api/chatChallenge.ts): either Cloudflare Turnstile (when the store has keys) or a proof of work that this
+     browser solves once per token, in the background, while the visitor is still typing. */
+  var chatTok = null, chatTokExp = 0, chatChallenge = null, challengeCache = {};
   function getToken(){
     if(chatTok !== null && Date.now() < chatTokExp) return Promise.resolve(chatTok);
     return fetch('/api/chat/token', { credentials: 'same-origin' })
       .then(function(r){ return r.ok ? r.json() : { token: '', expires_in: 0 }; })
-      .then(function(d){ chatTok = d.token || ''; chatTokExp = Date.now() + Math.max(0, (d.expires_in || 0) - 60) * 1000; return chatTok; })
+      .then(function(d){
+        chatTok = d.token || ''; chatTokExp = Date.now() + Math.max(0, (d.expires_in || 0) - 60) * 1000;
+        chatChallenge = d.challenge || null;
+        if(chatTok && chatChallenge && chatChallenge.type === 'pow') getChallengeAnswer(chatTok); // start early
+        return chatTok;
+      })
       .catch(function(){ return ''; });
+  }
+  function getChallengeAnswer(tok){
+    if(!tok || !chatChallenge) return Promise.resolve(null);
+    if(challengeCache[tok]) return challengeCache[tok];
+    var p;
+    if(chatChallenge.type === 'pow') p = solvePow(tok, chatChallenge.bits || 18).then(function(n){ return { pow: n }; });
+    else if(chatChallenge.type === 'turnstile') p = turnstileToken(chatChallenge.site_key).then(function(t){ return { turnstile: t }; });
+    else p = Promise.resolve(null);
+    challengeCache[tok] = p;
+    p.catch(function(){ delete challengeCache[tok]; });
+    return p;
+  }
+
+  /* Proof of work: find n (base-36 counter) so that SHA-256(token + ':' + n) starts with `bits` zero bits. Runs in slices of
+     1500 hashes so the page never freezes; ~260k hashes for 18 bits takes well under a second on a laptop, 1–3 s on a phone. */
+  function solvePow(tok, bits){
+    var prefix = tok + ':', n = 0;
+    return new Promise(function(resolve, reject){
+      var deadline = Date.now() + 60000;
+      (function slice(){
+        for(var k = 0; k < 1500; k++){
+          var candidate = (n++).toString(36);
+          if(leadingZeroBits(sha256Bytes(prefix + candidate)) >= bits){ resolve(candidate); return; }
+        }
+        if(Date.now() > deadline){ reject(new Error('challenge timeout')); return; }
+        setTimeout(slice, 0);
+      })();
+    });
+  }
+  function leadingZeroBits(bytes){
+    var bits = 0;
+    for(var i = 0; i < bytes.length; i++){
+      var b = bytes[i];
+      if(b === 0){ bits += 8; continue; }
+      bits += Math.clz32(b) - 24; break;
+    }
+    return bits;
+  }
+  /* Compact SHA-256 (FIPS 180-4) over an ASCII/UTF-8 string, returns Uint8Array(32). Synchronous on purpose — WebCrypto's
+     async digest is far too slow for a few hundred thousand tiny inputs. */
+  var SHA_K = [];
+  (function(){ var p = [], i = 2; while(p.length < 64){ var isP = true; for(var j = 0; j < p.length && p[j] * p[j] <= i; j++) if(i % p[j] === 0){ isP = false; break; } if(isP){ p.push(i); SHA_K.push(Math.floor((Math.pow(i, 1/3) % 1) * 4294967296) | 0); } i++; } })();
+  function sha256Bytes(str){
+    var msg = unescape(encodeURIComponent(str)), len = msg.length, words = [], i;
+    for(i = 0; i < len; i++) words[i >> 2] |= (msg.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8);
+    words[len >> 2] |= 0x80 << (24 - (len % 4) * 8);
+    words[(((len + 8) >> 6) << 4) + 15] = len * 8;
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19], W = new Array(64);
+    for(var off = 0; off < words.length; off += 16){
+      var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+      for(i = 0; i < 64; i++){
+        if(i < 16) W[i] = words[off + i] | 0;
+        else { var g0 = W[i-15], g1 = W[i-2];
+          var s0 = ((g0 >>> 7) | (g0 << 25)) ^ ((g0 >>> 18) | (g0 << 14)) ^ (g0 >>> 3);
+          var s1 = ((g1 >>> 17) | (g1 << 15)) ^ ((g1 >>> 19) | (g1 << 13)) ^ (g1 >>> 10);
+          W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0; }
+        var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+        var ch = (e & f) ^ (~e & g);
+        var t1 = (h + S1 + ch + SHA_K[i] + W[i]) | 0;
+        var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+        var mj = (a & b) ^ (a & c) ^ (b & c);
+        var t2 = (S0 + mj) | 0;
+        h=g; g=f; f=e; e=(d + t1) | 0; d=c; c=b; b=a; a=(t1 + t2) | 0;
+      }
+      H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0; H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+    }
+    var out = new Uint8Array(32);
+    for(i = 0; i < 8; i++){ out[i*4] = H[i] >>> 24; out[i*4+1] = (H[i] >>> 16) & 255; out[i*4+2] = (H[i] >>> 8) & 255; out[i*4+3] = H[i] & 255; }
+    return out;
+  }
+
+  /* Cloudflare Turnstile (only when the store configured a site key): load the script once, run an invisible widget, hand
+     back its response token. Each token is single-use, so the cache entry is dropped after one message. */
+  var turnstileReady = null;
+  function turnstileToken(siteKey){
+    if(!siteKey) return Promise.resolve(null);
+    if(!turnstileReady){
+      turnstileReady = new Promise(function(resolve, reject){
+        if(window.turnstile) return resolve();
+        var s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        s.async = true; s.onload = function(){ resolve(); }; s.onerror = function(){ reject(new Error('turnstile load failed')); };
+        document.head.appendChild(s);
+      });
+    }
+    return turnstileReady.then(function(){
+      return new Promise(function(resolve, reject){
+        var holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-9999px;top:0';
+        document.body.appendChild(holder);
+        var done = function(fn, v){ try { window.turnstile.remove(id); } catch(e){} holder.remove(); fn(v); };
+        var id = window.turnstile.render(holder, { sitekey: siteKey, size: 'invisible', 'error-callback': function(){ done(reject, new Error('turnstile error')); },
+          callback: function(token){ delete challengeCache[chatTok]; done(resolve, token); } });
+      });
+    });
   }
 
   /* ── VOICE ────────────────────────────────────────────── */

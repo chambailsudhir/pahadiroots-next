@@ -4,12 +4,24 @@
 // (it uses Function/eval internally), which is loaded on /checkout only (src/app/checkout/CheckoutClient.tsx). The
 // homepage and every other page are now served without it; /checkout keeps it so payments cannot break.
 // 'unsafe-inline' is unchanged on purpose (see the note near the end of the list).
+// Routes served with the per-request nonce policy by src/proxy.ts. Every one of them is ALREADY rendered per request
+// (force-dynamic, or it reads searchParams), so the nonce costs no caching: /checkout, /account, the catalogue listings
+// (/products, /collections/<slug>, /new-arrivals), the blog index, /lab-reports and the region pages. Product detail pages,
+// blog posts and the homepage are ISR-cached and keep the static policy below.
+const STRICT_CSP_PATH_SOURCE = '^/(?:(?:checkout|account|lab-reports|new-arrivals)(?:/|$)|(?:blog|products)/?$|(?:collections|regions)/[^/]+/?$)'
+const STRICT_CSP_PATH = new RegExp(STRICT_CSP_PATH_SOURCE)
+// next.config.js `source` for the static header: everything the proxy does NOT cover, so exactly one CSP header is sent.
+const STATIC_CSP_HEADER_SOURCE = '/((?!(?:checkout|account|lab-reports|new-arrivals)(?:/|$)|(?:blog|products)/?$|(?:collections|regions)/[^/]+/?$).*)'
+
+// Cloudflare Turnstile (chat CAPTCHA) is optional: hosts are added only when a site key is configured.
+const TURNSTILE_HOST = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? ' https://challenges.cloudflare.com' : ''
+
 function buildCsp(opts) {
   const { allowEval = false, nonce = null, scriptHashes = [] } = opts || {}
   // Strict mode (checkout / account): inline scripts must carry the per-request nonce or match a known hash — 'unsafe-inline'
   // is dropped. Same-origin script FILES stay allowed via 'self' and the payment/analytics hosts via the allow-list below.
   const strict = !!nonce
-  const scriptSrc = `script-src 'self' ${strict ? `'nonce-${nonce}' ${scriptHashes.map(h => `'sha256-${h}'`).join(' ')} ` : "'unsafe-inline' "}${allowEval ? "'unsafe-eval' " : ''}https://checkout.razorpay.com https://cdn.razorpay.com https://www.googletagmanager.com`.replace(/\s+/g, ' ')
+  const scriptSrc = `script-src 'self' ${strict ? `'nonce-${nonce}' ${scriptHashes.map(h => `'sha256-${h}'`).join(' ')} ` : "'unsafe-inline' "}${allowEval ? "'unsafe-eval' " : ''}https://checkout.razorpay.com https://cdn.razorpay.com https://www.googletagmanager.com${TURNSTILE_HOST}`.replace(/\s+/g, ' ')
   return [
                 "default-src 'self'",
                 // 'unsafe-eval' is required by Razorpay checkout.js (uses Function/eval internally).
@@ -61,7 +73,7 @@ function buildCsp(opts) {
                 // immediately inside <body> for users with JS disabled or blocked) is an
                 // <iframe src="https://www.googletagmanager.com/ns.html?...">, which needs
                 // its own frame-src allowance — this was blocked too, silently.
-                "frame-src https://api.razorpay.com https://www.googletagmanager.com",
+                `frame-src https://api.razorpay.com https://www.googletagmanager.com${TURNSTILE_HOST}`,
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
@@ -79,4 +91,4 @@ function buildCsp(opts) {
 }
 
 
-module.exports = { buildCsp }
+module.exports = { buildCsp, STRICT_CSP_PATH, STRICT_CSP_PATH_SOURCE, STATIC_CSP_HEADER_SOURCE }
