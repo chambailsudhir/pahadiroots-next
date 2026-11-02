@@ -1,0 +1,131 @@
+/**
+ * data-export: fails (5xx) instead of exporting empty data, counts the quota only on success, whitelist + completeness.
+ * notifications: shared per-user limiter.
+ * sanitize.hasUnsafeTextChars.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest, NextResponse } from 'next/server'
+import { hasUnsafeTextChars } from '@/lib/server/sanitize'
+
+const mocks = vi.hoisted(() => ({
+  sbAuth: vi.fn(), sbAdmin: vi.fn(), getToken: vi.fn(), tryRefresh: vi.fn(), syncCustomerProfile: vi.fn(),
+  checkRateLimit: vi.fn(), checkRateLimitShared: vi.fn(), checkCsrf: vi.fn(),
+}))
+vi.mock('@/lib/api/serverUtils', async () => {
+  const { NextResponse } = await import('next/server')
+  return {
+    ok:   (d: unknown) => NextResponse.json(d),
+    fail: (status: number, msg: string, headers?: Record<string, string>) => NextResponse.json({ error: msg }, { status, headers }),
+    sbAuth: mocks.sbAuth, sbAdmin: mocks.sbAdmin, getToken: mocks.getToken, tryRefresh: mocks.tryRefresh,
+    syncCustomerProfile: mocks.syncCustomerProfile, checkRateLimit: mocks.checkRateLimit,
+    checkRateLimitShared: mocks.checkRateLimitShared, checkCsrf: mocks.checkCsrf, applyNewCookies: (r: NextResponse) => r,
+  }
+})
+
+const calls = () => mocks.sbAdmin.mock.calls as Array<[string, string, unknown?]>
+const CUSTOMER = {
+  id: 5, first_name: 'Asha', last_name: 'Rana', email: 'a@b.com', phone: '9876543210', address_line1: 'x', address_line2: 'y',
+  city: 'c', state: 's', pincode: '171001', gstin: '22AAAAA0000A1Z5', is_business: true, created_at: 't', referral_code: 'ASHA1',
+  referred_by: 9, loyalty_points: 10, notif_email_orders: true, notif_whatsapp_orders: true, notif_sms_orders: false, notif_email_marketing: false,
+  notes: 'INTERNAL NOTE', tags: ['vip'], is_blocked: true,
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.checkCsrf.mockReturnValue(null)
+  mocks.checkRateLimit.mockReturnValue(true)
+  mocks.checkRateLimitShared.mockResolvedValue(true)
+  mocks.getToken.mockReturnValue('jwt')
+  mocks.tryRefresh.mockResolvedValue(null)
+  mocks.sbAuth.mockResolvedValue({ id: 'u1', email: 'a@b.com' })
+  mocks.syncCustomerProfile.mockResolvedValue({ id: 5 })
+  mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+    if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [CUSTOMER]
+    if (path.startsWith('/rest/v1/customers?id=eq.9')) return [{ referral_code: 'FRIEND9' }]
+    if (path.startsWith('/rest/v1/orders?')) return [{ id: 7, order_number: 'ORD-1', notes: 'leave at gate' }]
+    if (path.startsWith('/rest/v1/order_items?')) return [{ order_id: 7, quantity: 2, product_name_snapshot: 'Honey' }]
+    return []
+  })
+})
+
+const exportReq = () => import('@/app/api/account/data-export/route').then(({ GET }) =>
+  GET(new NextRequest('https://pahadiroots.com/api/account/data-export', { headers: { 'x-forwarded-for': '1.1.1.1', origin: 'https://pahadiroots.com' } })))
+
+describe('GET /api/account/data-export', () => {
+  it('fails with 5xx (no empty 200) and does not consume the quota when a section errors', async () => {
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [CUSTOMER]
+      if (path.startsWith('/rest/v1/loyalty_transactions')) throw { status: 503, message: 'timeout' }
+      return []
+    })
+    const res = await exportReq()
+    expect(res.status).toBe(500)
+    expect(mocks.checkRateLimitShared).not.toHaveBeenCalled()
+  })
+
+  it('counts the account quota only after a successful build, and answers 429 when exhausted', async () => {
+    mocks.checkRateLimitShared.mockResolvedValue(false)
+    const res = await exportReq()
+    expect(res.status).toBe(429)
+    expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
+  })
+
+  it('exports the own-data whitelist: gstin, address_line2, items, order notes, referral, consent; never notes/tags/is_blocked', async () => {
+    const res = await exportReq()
+    expect(res.status).toBe(200)
+    const body = JSON.parse(await res.text())
+    expect(body.profile).toMatchObject({ gstin: '22AAAAA0000A1Z5', address_line2: 'y', is_business: true })
+    expect(body.referral).toEqual({ your_referral_code: 'ASHA1', referred_by_code: 'FRIEND9' })
+    expect(body.consent).toMatchObject({ marketing_emails: false })
+    expect(body.orders[0].notes).toBe('leave at gate')
+    expect(body.orders[0].items).toEqual([{ quantity: 2, product_name_snapshot: 'Honey' }])
+    const raw = JSON.stringify(body)
+    expect(raw).not.toContain('INTERNAL NOTE')
+    expect(raw).not.toContain('vip')
+    expect(raw).not.toContain('is_blocked')
+    expect(raw).not.toContain('admin_notes')
+  })
+
+  it('pages past the 1000-row PostgREST cap', async () => {
+    let page = 0
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [CUSTOMER]
+      if (path.startsWith('/rest/v1/orders?')) {
+        page++
+        return page === 1 ? Array.from({ length: 1000 }, (_, i) => ({ id: i })) : [{ id: 1000 }]
+      }
+      return []
+    })
+    const body = JSON.parse(await (await exportReq()).text())
+    expect(body.orders).toHaveLength(1001)
+  })
+})
+
+describe('POST /api/account/notifications', () => {
+  const notif = () => import('@/app/api/account/notifications/route').then(({ POST }) =>
+    POST(new NextRequest('https://pahadiroots.com/api/account/notifications', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '1.1.1.1', origin: 'https://pahadiroots.com' },
+      body: JSON.stringify({ notif_email_marketing: true }),
+    })))
+
+  it('uses the shared limiter keyed by user id', async () => {
+    mocks.checkRateLimitShared.mockResolvedValue(false)
+    const res = await notif()
+    expect(res.status).toBe(429)
+    expect(mocks.checkRateLimitShared.mock.calls[0][0]).toBe('notif_post_user:u1')
+    expect(calls().some(([m]) => m === 'PATCH')).toBe(false)
+  })
+
+  it('still saves when under the limit', async () => {
+    expect((await notif()).status).toBe(200)
+  })
+})
+
+describe('hasUnsafeTextChars', () => {
+  it.each(['<img src=x onerror=1', 'a>b', 'a\nb', 'a\u0000b', 'a​b', 'a‮b', 'a\u0085b'])('flags %j', v => {
+    expect(hasUnsafeTextChars(v)).toBe(true)
+  })
+  it.each(['Flat 4, Mall Road', 'D-12/3 (near temple), Shimla', 'Åsa Rana', 'राना'])('allows %j', v => {
+    expect(hasUnsafeTextChars(v)).toBe(false)
+  })
+})

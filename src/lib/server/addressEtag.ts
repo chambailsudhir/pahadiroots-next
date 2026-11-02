@@ -24,3 +24,14 @@ export function addressesEtag(rows: EtagRow[] | null | undefined): string {
 }
 
 export const ADDRESS_SELECT = 'id,label,name,phone,addr,city,state,pin'
+
+/**
+ * Order-independent fingerprint of the CONTENT of an address list, ignoring row ids. Used to recognise a retried save
+ * whose first attempt already committed (ids of new rows are minted server-side, so they differ between attempts).
+ */
+export function addressesContentKey(rows: EtagRow[] | null | undefined): string {
+  return (rows ?? [])
+    .map(r => [r.label, r.name, r.phone, r.addr, r.city, r.state, r.pin].map(v => String(v ?? '')).join('\u001f'))
+    .sort()
+    .join('\u001e')
+}

@@ -27,14 +27,16 @@ export async function GET(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  // ── Rate limit: 3 exports per 24 h per IP ────────────────────
+  // ── Per-IP guard (per instance) ──────────────────────────────
+  // A DoS guard only: it counts every attempt, so it is generous. The real "3 exports per 24 h" quota is per ACCOUNT
+  // (shared) and is consumed only by an export that actually succeeds (see below).
   const ip = (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('x-real-ip') ||
     'unknown'
   )
-  if (!checkRateLimit(`data_export:${ip}`, 3, 24 * 60 * 60_000)) {
-    return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
+  if (!checkRateLimit(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
+    return fail(429, 'Too many export requests — please try again later.', { 'Retry-After': '3600' })
   }
 
   // ── Auth ──────────────────────────────────────────────────────
@@ -48,50 +50,61 @@ export async function GET(req: NextRequest) {
     const user = await sbAuth('/user', null, token!)
     const userId = user.id as string
 
-    // AUDIT ACC-041: the in-process IP limiter above is per serverless instance, so the advertised
-    // "once per 24 h" was never actually enforced (two back-to-back exports both succeeded).
-    // Enforce per ACCOUNT across instances (KV/Postgres-backed).
-    if (!await checkRateLimitShared(`data_export:${userId}`, 3, 24 * 60 * 60_000)) {
-      return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
-    }
-
-    // ── Fetch customer row ────────────────────────────────────────
+    // NOTE: no `.catch(() => [])` anywhere below. A transient DB error used to produce HTTP 200 with empty sections AND
+    // burn one of the 3 exports. Any failing section now fails the whole request (5xx) before the quota is touched.
     const customers = await sbAdmin(
       'GET',
       `/rest/v1/customers?auth_user_id=eq.${userId}&select=*&limit=1`,
-    ).catch(() => null)
+    )
     const customer = customers?.[0] ?? null
     const customerId = customer?.id
 
-    // ── Fetch saved addresses (separate table) ───────────────────
+    // Pages through PostgREST (its server-side max-rows is 1000) so the export is complete, not silently capped.
+    const PAGE = 1000
+    const fetchAll = async (path: string): Promise<Array<Record<string, unknown>>> => {
+      const out: Array<Record<string, unknown>> = []
+      for (let offset = 0; offset < 100_000; offset += PAGE) {
+        const rows = await sbAdmin('GET', `${path}&limit=${PAGE}&offset=${offset}`)
+        if (!Array.isArray(rows)) throw new Error('unexpected PostgREST response')
+        out.push(...rows)
+        if (rows.length < PAGE) return out
+      }
+      throw new Error('export too large')
+    }
+    const chunks = <T,>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
+
     const savedAddresses = customerId
-      ? await sbAdmin(
-          'GET',
-          `/rest/v1/saved_addresses?customer_id=eq.${customerId}&select=*`,
-        ).catch(() => [])
+      ? await sbAdmin('GET', `/rest/v1/saved_addresses?customer_id=eq.${customerId}&select=label,name,phone,addr,city,state,pin,created_at&order=created_at.asc`)
       : []
 
-    // ── Fetch orders (anonymised columns only) ───────────────────
+    // Orders: explicit whitelist of the customer's own data. `notes` is what the customer wrote at checkout;
+    // admin_notes / cost / margin columns are internal and are never exported.
     const orders = customerId
-      ? await sbAdmin(
-          'GET',
-          `/rest/v1/orders?customer_id=eq.${customerId}&select=id,order_number,order_status,total_amount,created_at,shipping_address&order=created_at.desc`,
-        ).catch(() => [])
+      ? await fetchAll(`/rest/v1/orders?customer_id=eq.${customerId}&select=id,order_number,order_status,payment_status,total_amount,created_at,shipping_address,notes&order=created_at.desc,id.desc`)
       : []
+    const orderIds = orders.map(o => o.id as string | number)
 
-    // ── Everything else we hold about this customer (AUDIT ACC-041) ──
-    // The export used to stop at profile / addresses / orders, i.e. it omitted the loyalty ledger,
-    // wishlist, notification preferences and returns — all personal data under DPDP §16.
-    const orderIds: Array<string | number> = Array.isArray(orders) ? orders.map((o: { id: string | number }) => o.id) : []
-    const [loyaltyTransactions, wishlistRows, returnsRows] = customerId
+    const [loyaltyTransactions, wishlistRows, orderItemRows, returnsRows, referrerRows, subscriberRows] = customerId
       ? await Promise.all([
-          sbAdmin('GET', `/rest/v1/loyalty_transactions?customer_id=eq.${customerId}&select=type,points,balance_after,note,order_id,created_at&order=created_at.desc&limit=1000`).catch(() => []),
-          sbAdmin('GET', `/rest/v1/wishlist?customer_id=eq.${customerId}&select=product_id,created_at`).catch(() => []),
-          orderIds.length
-            ? sbAdmin('GET', `/rest/v1/returns?order_id=in.(${orderIds.join(',')})&select=order_number,reason,description,status,resolution,refund_amount,created_at,updated_at&order=created_at.desc`).catch(() => [])
+          fetchAll(`/rest/v1/loyalty_transactions?customer_id=eq.${customerId}&select=type,points,balance_after,note,order_id,created_at&order=created_at.desc,id.desc`),
+          sbAdmin('GET', `/rest/v1/wishlist?customer_id=eq.${customerId}&select=product_id,created_at`),
+          Promise.all(chunks(orderIds, 100).map(ids => fetchAll(`/rest/v1/order_items?order_id=in.(${ids.join(',')})&select=order_id,product_id,quantity,price_at_time,product_name_snapshot,variant_value_snapshot,sku_snapshot,gst_rate&order=id.asc`))).then(r => r.flat()),
+          Promise.all(chunks(orderIds, 100).map(ids => fetchAll(`/rest/v1/returns?order_id=in.(${ids.join(',')})&select=id,order_number,customer_name,reason,description,status,resolution,refund_amount,photo_urls,created_at,updated_at&order=created_at.desc,id.desc`))).then(r => r.flat()),
+          customer.referred_by != null
+            ? sbAdmin('GET', `/rest/v1/customers?id=eq.${customer.referred_by}&select=referral_code&limit=1`)
+            : Promise.resolve([]),
+          customer.email
+            ? sbAdmin('GET', `/rest/v1/subscribers?email=eq.${encodeURIComponent(String(customer.email).toLowerCase())}&select=name,email,is_active,source,created_at`)
             : Promise.resolve([]),
         ])
-      : [[], [], []]
+      : [[], [], [], [], [], []]
+
+    const itemsByOrder = new Map<string, unknown[]>()
+    for (const it of orderItemRows as Array<Record<string, unknown>>) {
+      const { order_id, ...rest } = it
+      const k = String(order_id)
+      itemsByOrder.set(k, [...(itemsByOrder.get(k) ?? []), rest])
+    }
 
     // ── Build export payload ──────────────────────────────────────
     const exportData = {
@@ -103,11 +116,24 @@ export async function GET(req: NextRequest) {
         email:         customer.email,
         phone:         customer.phone,
         address_line1: customer.address_line1,
+        address_line2: customer.address_line2,
         city:          customer.city,
         state:         customer.state,
         pincode:       customer.pincode,   // was `postal_code` — no such column, so it exported blank (ACC-039)
+        gstin:         customer.gstin,
+        is_business:   customer.is_business,
         created_at:    customer.created_at,
-        referral_code: customer.referral_code,
+      } : null,
+      referral: customer ? {
+        your_referral_code: customer.referral_code,
+        referred_by_code:   (referrerRows as Array<{ referral_code?: string }>)[0]?.referral_code ?? null,
+      } : null,
+      consent: customer ? {
+        order_emails:       customer.notif_email_orders,
+        order_whatsapp:     customer.notif_whatsapp_orders,
+        order_sms:          customer.notif_sms_orders,
+        marketing_emails:   customer.notif_email_marketing,
+        newsletter_records: subscriberRows,
       } : null,
       notification_preferences: customer ? {
         order_emails:     customer.notif_email_orders,
@@ -121,6 +147,9 @@ export async function GET(req: NextRequest) {
       } : null,
       wishlist_product_ids: Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => w.product_id) : [],
       returns: returnsRows,
+      reviews: {
+        note: 'Product reviews are stored with the display name typed at submission time and are not linked to your account, so they cannot be listed here automatically. Contact support to find or remove a review you wrote.',
+      },
       auth: {
         email:      user.email,
         phone:      user.phone,
@@ -128,7 +157,13 @@ export async function GET(req: NextRequest) {
         last_sign_in_at: user.last_sign_in_at,
       },
       saved_addresses: savedAddresses,
-      orders,
+      orders: orders.map(o => ({ ...o, items: itemsByOrder.get(String(o.id)) ?? [] })),
+    }
+
+    // Count the quota only now that the whole export was built successfully (per ACCOUNT, shared across instances;
+    // ACC-041: the in-process limiter was never really enforced).
+    if (!await checkRateLimitShared(`data_export:${userId}`, 3, 24 * 60 * 60_000)) {
+      return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
     }
 
     // ── Return as downloadable JSON file ──────────────────────────
@@ -150,6 +185,8 @@ export async function GET(req: NextRequest) {
     return res
   } catch (e: unknown) {
     console.error('[data-export] Failed:', e)
-    return fail(500, 'Could not export your data — please try again.')
+    const err = e as { status?: number }
+    if (err.status === 401) return fail(401, 'Session expired — please login again')
+    return fail(500, 'Could not export your data — please try again. This attempt did not count towards your export limit.')
   }
 }

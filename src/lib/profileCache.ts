@@ -19,6 +19,7 @@
  */
 
 import { sharedProfileRequest, invalidateProfileRequest } from '@/lib/profileRequest'
+import { ADDRESS_LABELS } from '@/lib/account/constants'
 import type { RawProfile, SavedAddress } from '@/types'
 
 export const PROFILE_CACHE_KEY = 'pr_checkout_profile'
@@ -58,7 +59,9 @@ export function buildCacheEntry(prof: RawProfile): CachedProfile {
     phone:      cleanPhone,
   }] : []
 
-  const validLabels = new Set(['Home','Office','Parents','Friends','Others'])
+  // Derived from the one label list the server accepts (+ checkout's 'Others' chip) so Other / Partner / Warehouse
+  // addresses are no longer silently dropped from checkout.
+  const validLabels = new Set<string>([...ADDRESS_LABELS, 'Others'])
   const saved = parseSavedAddresses(prof.saved_addresses)
     .filter((a: SavedAddress) => validLabels.has(a.label ?? ''))
 

@@ -19,10 +19,12 @@ import {
   syncCustomerProfile,
   toPublicProfile,
   checkRateLimit,
+  checkRateLimitShared,
   checkCsrf,
 } from '@/lib/api/serverUtils'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
-import { addressesEtag, ADDRESS_SELECT } from '@/lib/server/addressEtag'
+import { addressesEtag, addressesContentKey, ADDRESS_SELECT } from '@/lib/server/addressEtag'
+import { hasUnsafeTextChars } from '@/lib/server/sanitize'
 
 // ── Server-side input rules (AUDIT ACC-039) ───────────────────────────────────
 // The account forms validate in the browser only; the API accepted a blank first name,
@@ -34,6 +36,28 @@ const stripTags  = (v: string) => v.replace(/<[^>]*>/g, '').trim()
 const tenDigits  = (v: string) => v.replace(/\D/g, '').slice(-10)
 const isMobile   = (d: string) => /^[6-9]\d{9}$/.test(d)
 const isPincode  = (v: string) => /^\d{6}$/.test(v)
+
+// ── Atomic compare-and-replace of the address list (db_migration_v20_atomic_address_replace.sql) ──
+// 'ok' / 'conflict' (the stored list is no longer what this request read) / 'unavailable' (function not deployed → caller
+// falls back to the non-atomic upsert + cleanup).
+async function replaceAddressesAtomically(
+  customerId: string | number,
+  rows: Array<Record<string, unknown>>,
+  expected: Array<Record<string, unknown>>,
+): Promise<'ok' | 'conflict' | 'unavailable'> {
+  try {
+    const res = await sbAdmin('POST', '/rest/v1/rpc/replace_saved_addresses', {
+      p_customer_id: customerId,
+      p_rows: rows.map(({ customer_id: _c, ...r }) => r),
+      p_expected: expected,
+    })
+    return res === false ? 'conflict' : 'ok'
+  } catch (e) {
+    const err = e as { status?: number; message?: string }
+    if (err?.status === 404 || /PGRST202|Could not find the function/i.test(err?.message || '')) return 'unavailable'
+    throw e
+  }
+}
 
 // ── GET /api/profile ─────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -167,6 +191,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const user    = await sbAuth('/user', null, token!)
+    // AUDIT (rate limits): the in-process IP limiter above is per serverless instance. The real, cross-instance
+    // limit is per ACCOUNT (shared KV/Postgres-backed).
+    if (!await checkRateLimitShared(`profile_post_user:${user.id}`, 20, 60_000)) {
+      return NextResponse.json(
+        { error: 'Too many requests — please wait a moment before trying again.' },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      )
+    }
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
@@ -188,23 +220,20 @@ export async function POST(req: NextRequest) {
       const existingRows = await sbAdmin(
         'GET',
         `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=${ADDRESS_SELECT}&limit=50`,
-      ).catch(() => [] as Array<{ id: string }>)
-      const existingList = Array.isArray(existingRows) ? existingRows : []
+      )
+      // A failed read must NOT be treated as "no addresses": the etag check and the id-ownership check below both depend on it.
+      const existingList: Array<Record<string, unknown> & { id: string }> = Array.isArray(existingRows) ? existingRows : []
+      const changed409 = () => NextResponse.json({
+        error: 'Your saved addresses were changed in another tab or device. Please reload this page to see the latest list, then try again.',
+        code:  'addresses_changed',
+      }, { status: 409 })
 
-      // ACC-043b: refuse to overwrite a list that changed (other tab / device) since the client loaded it.
-      // Clients that do not send an etag (older bundles) keep the previous last-write-wins behaviour.
-      if (typeof body.saved_addresses_etag === 'string' && body.saved_addresses_etag !== addressesEtag(existingList)) {
-        return NextResponse.json({
-          error: 'Your saved addresses were changed in another tab or device. Please reload this page to see the latest list, then try again.',
-          code:  'addresses_changed',
-        }, { status: 409 })
-      }
-
+      let rows: Array<Record<string, unknown>> = []
       if (addresses.length > 0) {
         // Rows already in the DB may pre-date the phone/pincode fields (migration v13) — they stay
         // editable without being forced to gain them. NEW rows must be complete.
         const existingIds = new Set<string>(existingList.map((r: { id: string }) => String(r.id)))
-        const rows: Array<Record<string, unknown>> = []
+        const usedIds = new Set<string>()
         for (const a of addresses) {
           if (!a || typeof a !== 'object') return fail(400, 'Invalid saved_addresses format')
           const str = (v: unknown) => (typeof v === 'string' ? stripTags(v) : '')
@@ -218,6 +247,9 @@ export async function POST(req: NextRequest) {
 
           const isExisting = typeof a.id === 'string' && existingIds.has(a.id)
 
+          if ([label, name, addr, city, state, pin].some(hasUnsafeTextChars) || (typeof a.phone === 'string' && hasUnsafeTextChars(a.phone))) {
+            return fail(400, 'Address fields cannot contain < > or control characters')
+          }
           if (!LABEL_SET.has(label))              return fail(400, 'Invalid address label')
           if (name.length > 100)                  return fail(400, 'Contact name must be at most 100 characters')
           if (addr.length > 200 || (!isExisting && addr.length < 5)) return fail(400, 'Street address must be 5–200 characters')
@@ -226,12 +258,14 @@ export async function POST(req: NextRequest) {
           if (pin   ? !isPincode(pin)       : !isExisting) return fail(400, 'Enter a valid 6-digit pincode')
           if (phone ? !isMobile(phone)      : !isExisting) return fail(400, 'Enter a valid 10-digit mobile number (starts with 6–9)')
 
+          const rowId = isExisting && !usedIds.has(a.id as string) ? (a.id as string) : randomUUID()
+          usedIds.add(rowId)
           rows.push({
-            // Only accept a UUID-shaped id (it ends up inside a PostgREST `not.in.(...)` filter below).
-            // A row WITHOUT an id used to be inserted and then wiped by the cleanup below (`keptIds` was empty → "delete all"),
-            // i.e. the API reported success and stored nothing. The UI always sends client-made ids, so customers never hit it —
-            // but any other caller silently lost data. The server now mints the id.
-            id: typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? a.id : randomUUID(),
+            // OWNERSHIP (audit): saved_addresses has PK `id` only and is written with merge-duplicates, so a client-chosen
+            // id that belongs to ANOTHER customer would overwrite that customer's row (customer_id included). Only ids
+            // the caller already owns are kept; anything else (new rows, foreign ids, duplicates within the request,
+            // missing / malformed ids) gets a server-minted UUID. The ids returned by the next GET are the truth.
+            id: rowId,
             customer_id: profile.id,
             label,
             name:  name || null,
@@ -243,39 +277,40 @@ export async function POST(req: NextRequest) {
             pin:   pin || null,
           })
         }
-        // Upsert first (all rows exist), THEN delete orphans.
-        // delete-then-insert was non-atomic: if insert failed after delete,
-        // all addresses were permanently lost.
-        await sbAdmin(
-          'POST',
-          `/rest/v1/saved_addresses`,
-          rows,
-          'resolution=merge-duplicates,return=representation',
-        )
-        const keptIds = rows.map((r) => r.id).filter(Boolean) as string[]
-        if (keptIds.length > 0) {
+      }
+
+      // IDEMPOTENT RETRY (audit): the client retries a POST on a 5xx / timeout with the SAME etag. If the first attempt
+      // actually committed, the stored list already equals the list being sent, so answer success instead of a false
+      // "changed in another tab" 409 (which made the UI roll back a save that had succeeded).
+      const alreadyApplied = addressesContentKey(existingList) === addressesContentKey(rows)
+      if (alreadyApplied) {
+        // nothing to write
+      } else {
+        // ACC-043b: refuse to overwrite a list that changed (other tab / device) since the client loaded it.
+        // Clients that do not send an etag (older bundles) keep the previous last-write-wins behaviour (owner decision, see PR).
+        if (typeof body.saved_addresses_etag === 'string' && body.saved_addresses_etag !== addressesEtag(existingList)) {
+          return changed409()
+        }
+        // Preferred: ONE transaction that re-checks the list is still what we read (db_migration_v20). Two concurrent
+        // POSTs with the same etag can no longer both pass and one delete the other's addition.
+        const rpc = await replaceAddressesAtomically(profile.id as string | number, rows, existingList)
+        if (rpc === 'conflict') return changed409()
+        if (rpc === 'unavailable') {
+          // Function not deployed yet — previous behaviour: upsert first (all rows exist), THEN delete orphans
+          // (delete-then-insert was non-atomic and could lose every address).
+          if (rows.length > 0) {
+            await sbAdmin('POST', `/rest/v1/saved_addresses`, rows, 'resolution=merge-duplicates,return=representation')
+          }
+          const keptIds = rows.map((r) => r.id).filter(Boolean) as string[]
           await sbAdmin(
             'DELETE',
-            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&id=not.in.(${keptIds.join(',')})`,
-            null,
-            'return=representation',
-          )
-        } else {
-          await sbAdmin(
-            'DELETE',
-            `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`,
+            keptIds.length > 0
+              ? `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&id=not.in.(${keptIds.join(',')})`
+              : `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`,
             null,
             'return=representation',
           )
         }
-      } else {
-        // Empty list → delete all
-        await sbAdmin(
-          'DELETE',
-          `/rest/v1/saved_addresses?customer_id=eq.${profile.id}`,
-          null,
-          'return=representation',
-        )
       }
       delete body.saved_addresses
       delete body.saved_addresses_etag
@@ -318,7 +353,9 @@ export async function POST(req: NextRequest) {
       if (val.length > FIELD_LIMITS[key]) {
         return fail(400, `${key} must be at most ${FIELD_LIMITS[key]} characters`)
       }
-      // Strip HTML tags to prevent stored XSS via DB → invoice HTML template
+      // Reject markup / control / invisible characters outright (an unterminated `<img onerror=` survives tag stripping),
+      // then strip tags as before (stored XSS via DB → invoice HTML template).
+      if (key !== 'phone' && hasUnsafeTextChars(val)) return fail(400, `${key} cannot contain < > or control characters`)
       patch[key] = val.replace(/<[^>]*>/g, '').trim()
     }
     // Semantic checks on what is about to be stored (blank values are allowed only where they mean "clear").
@@ -330,6 +367,18 @@ export async function POST(req: NextRequest) {
         const d = tenDigits(raw)
         if (!isMobile(d)) return fail(400, 'Enter a valid 10-digit mobile number (starts with 6–9)')
         patch.phone = d
+      }
+      // customers_normalized_phone_key is UNIQUE, so a rejected number reveals that it is registered. Slow enumeration
+      // down with shared (cross-instance) limits per account and per IP. (Proper fix = OTP ownership proof — owner decision.)
+      if (patch.phone !== null) {
+        const okUser = await checkRateLimitShared(`profile_phone_user:${user.id}`, 5, 60 * 60_000)
+        const okIp   = await checkRateLimitShared(`profile_phone_ip:${ip}`, 20, 60 * 60_000)
+        if (!okUser || !okIp) {
+          return NextResponse.json(
+            { error: 'Too many mobile-number changes — please try again later.' },
+            { status: 429, headers: { 'Retry-After': '3600' } },
+          )
+        }
       }
     }
     if ('state'   in patch && patch.state   !== '' && !STATE_SET.has(patch.state as string)) return fail(400, 'Select a valid state or union territory')
@@ -358,7 +407,8 @@ export async function POST(req: NextRequest) {
     // opaque "Profile update failed". Say what actually happened (the whole update is rejected, so nothing
     // else was saved either).
     if ((err.status === 409 || /23505/.test(err.message || '')) && /phone/i.test(err.message || '')) {
-      return fail(409, 'This mobile number is already linked to another account. Please use a different number, or contact support if it is yours.')
+      // Deliberately generic: never confirm that a number is registered to someone else.
+      return fail(400, 'We could not save this mobile number. Please check it and try again, or contact support.')
     }
     return fail(
       err.status || (isTransient ? 503 : 500),
