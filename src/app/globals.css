@@ -1236,3 +1236,16 @@ html.premium .mob-nav-logo { color: #f1d98a; }
 .ft-a-link:hover, .ft-a-link:focus-visible { color: #fff !important; padding-left: 5px; }
 .ft-a-sub:hover, .ft-a-sub:focus-visible { color: #fff !important; }
 @media (prefers-reduced-motion: reduce) { .ft-a-link { transition: none; } }
+
+/* ── iOS Safari input zoom (Nov 2026 audit) ─────────────────────────────────────────────────────────────
+   iPhone Safari zooms the whole page the moment a form field with text smaller than 16px gets focus. Every field on the site was
+   14px (checkout address, coupon box, order tracking, contact form, chat) — measured 22 of 22 — so a customer filling in the
+   checkout was thrown into a zoomed view on each tap. 16px on phones stops that; !important because component styles
+   (.af-input, #coupon-code, …) set their own size and would otherwise win. Desktop sizes are unchanged. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='hidden']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
