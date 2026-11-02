@@ -38,6 +38,9 @@ interface Props {
 export default function NotificationsSection({ showToast, markExpired }: Props) {
   const [prefs,   setPrefs]   = useState<NotifPrefs>(DEFAULTS)
   const [loading, setLoading] = useState(true)
+  // AUDIT E1-8: a failed load must not show the defaults as if they were the saved choices.
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
   const [saving,  setSaving]  = useState<Partial<Record<keyof NotifPrefs, boolean>>>({})
 
   // Guard against in-flight saves being clobbered
@@ -47,27 +50,34 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
   useEffect(() => {
     let cancelled = false
     fetch('/api/account/notifications', { signal: AbortSignal.timeout(10_000) })
-      .then(r => r.json())
+      .then(async r => {
+        if (r.status === 401) { if (!cancelled) markExpired?.(); return null }
+        if (!r.ok) throw new Error(`notification prefs HTTP ${r.status}`)
+        return r.json()
+      })
       .then(data => {
-        if (cancelled) return
+        if (cancelled || data === null) return
         if (data?.prefs) {
           const p = data.prefs as Partial<NotifPrefs>
           setPrefs({
             notif_email_orders:    p.notif_email_orders    ?? DEFAULTS.notif_email_orders,
             notif_email_marketing: p.notif_email_marketing ?? DEFAULTS.notif_email_marketing,
           })
+          setLoadFailed(false)
+        } else {
+          throw new Error('notification prefs: malformed response')
         }
       })
       .catch((e: unknown) => {
         // BUG FIX [ERROR HANDLING]: previously no logging — if the notification
         // prefs load fails (API down, auth expired), ops had no visibility.
         console.error('[NotificationsSection] prefs load failed:', e)
-        if (!cancelled) showToast('Could not load notification preferences', 'error')
+        if (!cancelled) { setLoadFailed(true); showToast('Could not load notification preferences', 'error') }
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [reloadTick])
 
   // ── Toggle a single preference ────────────────────────────
   const toggle = useCallback(async (key: keyof NotifPrefs) => {
@@ -121,6 +131,27 @@ export default function NotificationsSection({ showToast, markExpired }: Props) 
                 <div className={styles.notifSkToggle} />
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadFailed) {
+    return (
+      <div className={styles.panelSection}>
+        <div className={styles.panelHeader}>
+          <div className={styles.panelTitle} role="heading" aria-level={1}>Notifications</div>
+        </div>
+        <div className={styles.card}>
+          <div className={styles.emptyState} role="alert">
+            <div className={styles.emptyTitle}>We couldn&apos;t load your notification preferences</div>
+            <p className={styles.emptySub}>Your saved choices are unchanged. Please try again.</p>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={() => { setLoadFailed(false); setLoading(true); setReloadTick(t => t + 1) }}
+            >Try again</button>
           </div>
         </div>
       </div>
@@ -207,7 +238,7 @@ function NotifRow({ label, sublabel, icon, checked, busy, onChange, last }: RowP
       <button
         role="switch"
         aria-checked={checked}
-        aria-label={`${checked ? 'Disable' : 'Enable'} ${label} notifications`}
+        aria-label={`${label} notifications`}
         className={`${styles.notifToggle}${checked ? ' ' + styles.notifToggleOn : ''}`}
         onClick={onChange}
         disabled={busy}

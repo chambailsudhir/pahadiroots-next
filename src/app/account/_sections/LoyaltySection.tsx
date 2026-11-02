@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react'
+import { useUserStore } from '@/store/userStore'
 import { normalizeReferralCode, referralMessage } from '@/lib/referral'
 import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
@@ -66,56 +67,75 @@ const TYPE_META: Record<string, { icon: string; color: string; label: string }> 
   adjustment: { icon: '✏️', color: '#666',    label: 'Adjusted'},
 }
 
-// Module-level flag: survives unmount/remount when the user switches tabs.
-// AccountPage renders sections conditionally, so the component is destroyed and
-// re-created on every tab switch. A module-level boolean means we fetch once per
-// page-session rather than once per mount.
-let loyaltyDataFetched = false
+// Module-level cache of the last successful /api/v1/loyalty answer. AccountPage renders sections conditionally, so this
+// component is destroyed and re-created on every tab switch; seeding state from the cache means a return visit paints at
+// once and revalidates in the background. AUDIT E1-2: this used to be a boolean "already fetched" flag, so on remount the
+// effect returned early and the skeleton never went away. Keyed by user id so another customer never sees these coins.
+let loyaltyCache: { uid: string; data: LoyaltyData } | null = null
+/** Test helper — forget the cached answer. */
+export function __resetLoyaltyCache() { loyaltyCache = null }
 
-export default function LoyaltySection({ showToast }: { showToast?: (msg: string, type?: 'success'|'error') => void }) {
-  const [data,    setData]    = useState<LoyaltyData | null>(null)
+interface LoyaltyProps {
+  showToast?:   (msg: string, type?: 'success'|'error') => void
+  markExpired?: () => void
+}
+
+export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps) {
+  const uid = useUserStore(s => s.user?.id ?? '')
+  const cached = loyaltyCache && loyaltyCache.uid === uid ? loyaltyCache.data : null
+  const [data,    setData]    = useState<LoyaltyData | null>(cached)
   const [txns,    setTxns]    = useState<Transaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!cached)
   const [copied,  setCopied]  = useState(false)
   const [txnLoad, setTxnLoad] = useState(false)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [txnErr,  setTxnErr]  = useState<string | null>(null)
   const [txnPage,  setTxnPage]  = useState(1)
   const [hasMore,  setHasMore]  = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
   const TXN_LIMIT = 20   // must match limit= param in loadHistory
 
-  // Guard: skip fetch if data was already loaded this page session.
-  // loyaltyDataFetched is module-level so it persists across tab-switch remounts.
-  // Only set to true on a successful response; on error it stays false so the
-  // user can retry by switching away and back to this tab.
   useEffect(() => {
-    if (loyaltyDataFetched) return
     let mounted = true
     async function load() {
       try {
         const res  = await fetch('/api/v1/loyalty')
-        const json = await res.json()
+        const json = await res.json().catch(() => ({}))
         if (!mounted) return
         if (res.ok) {
-          loyaltyDataFetched = true   // lock only on success
+          loyaltyCache = { uid, data: json }
           setData(json)
-        } else {
+          setLoadErr(null)
+        } else if (res.status === 401) {
+          loyaltyCache = null
+          markExpired?.()
+        } else if (!loyaltyCache || loyaltyCache.uid !== uid) {
+          // a failed BACKGROUND refresh keeps showing the cached numbers; only a first load shows the error
           const msg = json?.error || 'Could not load loyalty data.'
           setLoadErr(msg)
           showToast?.(msg, 'error')
         }
       } catch {
         if (!mounted) return
-        const msg = 'Could not load loyalty data — please try again.'
-        setLoadErr(msg)
-        showToast?.(msg, 'error')
+        if (!loyaltyCache || loyaltyCache.uid !== uid) {
+          const msg = 'Could not load loyalty data — please try again.'
+          setLoadErr(msg)
+          showToast?.(msg, 'error')
+        }
       } finally {
         if (mounted) setLoading(false)
       }
     }
     load()
     return () => { mounted = false }
-  }, [showToast])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, reloadTick])
+
+  function retryLoad() {
+    setLoadErr(null)
+    setLoading(true)
+    setReloadTick(t => t + 1)
+  }
 
   async function loadHistory(page = 1) {
     if (txnLoad) return
@@ -123,8 +143,10 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     setTxnErr(null)
     try {
       const res  = await fetch(`/api/v1/loyalty/history?page=${page}&limit=${TXN_LIMIT}`)
-      const json = await res.json()
-      if (res.ok) {
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 401) {
+        markExpired?.()
+      } else if (res.ok) {
         const fetched: Transaction[] = json.transactions ?? []
         setTxns(prev => page === 1 ? fetched : [...prev, ...fetched])
         setTxnPage(page)
@@ -208,7 +230,8 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
   if (loadErr) return (
     <div className={styles.secRoot}>
       <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
-      <p className={styles.secSub} style={{ color: '#c0392b' }}>{loadErr}</p>
+      <p className={styles.secSub} style={{ color: '#c0392b' }} role="alert">{loadErr}</p>
+      <button type="button" className={styles.btnSecondary} onClick={retryLoad}>Try again</button>
     </div>
   )
 

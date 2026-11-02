@@ -13,7 +13,6 @@
 
 import { clearClientPII } from '@/lib/clientLogout'
 import { useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/store/userStore'
 import { fetchProfile, ServiceError, type Profile } from '@/lib/services/profileService'
 
@@ -32,11 +31,12 @@ export interface AuthUser {
 export type { Profile }
 
 export function useAuth() {
-  const router          = useRouter()
   const storeLogout     = useUserStore(s => s.logout)
   const storeSetUser    = useUserStore(s => s.setUser)
   const storeSetWishlist = useUserStore(s => s.setWishlist)
   const initDone        = useRef(false)
+  const loggingOut      = useRef(false)
+  const [isLoggingOut, setLoggingOut] = useState(false)
 
   const [authState, setAuthState] = useState<AuthState>('idle')
   const [profile,   setProfile]   = useState<Profile | null>(null)
@@ -95,12 +95,15 @@ export function useAuth() {
         })
     } catch (err: unknown) {
       if (err instanceof ServiceError && err.status === 401) {
-        setAuthState('guest')
+        // The persisted user is stale: the server no longer accepts the session. Clear it everywhere (AUDIT E1-9).
+        clearClientPII()
+        storeLogout()
+        setAuthState('expired')
       } else {
         setAuthState('failed')
       }
     }
-  }, [syncStore, storeSetWishlist])
+  }, [syncStore, storeSetWishlist, storeLogout])
 
   // Soft retry: resets the init gate so init() can re-run without a full
   // page reload. Used by the "Try Again" button in the failed state.
@@ -109,37 +112,69 @@ export function useAuth() {
     init()
   }, [init])
 
-  async function logout() {
-    // AUDIT ACC-040: this (account-page) logout never called clearClientPII(), unlike the header
-    // logout — so `pr_checkout_profile` (name / phone / address) stayed in localStorage for the
-    // next person on a shared device. Wipe it FIRST so it goes even if the network calls hang.
-    clearClientPII()
+  /** POST a JSON action; true only for a 2xx answer. */
+  async function postOk(url: string, action: string): Promise<boolean> {
     try {
-      await Promise.allSettled([
-        fetch('/api/auth/session', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ action: 'clear' }),
-          signal:  AbortSignal.timeout(5000),
-        }),
-        fetch('/api/auth', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ action: 'logout' }),
-          signal:  AbortSignal.timeout(5000),
-        }),
-      ])
-    } catch (err) {
-      console.error('[useAuth] logout error:', err)
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action }),
+        signal:  AbortSignal.timeout(5000),
+      })
+      return !!res && res.ok
+    } catch {
+      return false
     }
-    setProfile(null)
-    setAuthUser(null)
-    setAuthState('guest')
-    storeLogout()
-    router.push('/')
   }
 
-  function markExpired() { setAuthState('expired') }
+  async function clearServerSessionOnce(): Promise<boolean> {
+    const results = await Promise.all([
+      postOk('/api/auth/session', 'clear'),
+      postOk('/api/auth', 'logout'),
+    ])
+    return results.every(Boolean)
+  }
+
+  /**
+   * Resolves true when the server session was really cleared (and the page is navigating home), false when it could
+   * not be — in that case the signed-in UI is left as it is so the user can retry (AUDIT E1-4).
+   */
+  async function logout(): Promise<boolean> {
+    if (loggingOut.current) return true   // already in progress — not a failure
+    loggingOut.current = true
+    setLoggingOut(true)
+    try {
+      // AUDIT ACC-040: wipe checkout PII first so it goes even if the network calls hang.
+      clearClientPII()
+      // Persisted `pr-user` goes synchronously too (shared device / tab closed mid-request).
+      storeLogout()
+      let ok = await clearServerSessionOnce()
+      if (!ok) ok = await clearServerSessionOnce()   // one retry
+      if (!ok) {
+        console.error('[useAuth] logout: server session was not cleared')
+        return false
+      }
+      clearClientPII()   // a profile prefetch racing the request may have re-written the cache
+      setProfile(null)
+      setAuthUser(null)
+      setAuthState('guest')
+      // full reload (like performHeaderLogout) so every store/SWR cache starts clean
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign('/')
+      return true
+    } finally {
+      loggingOut.current = false
+      setLoggingOut(false)
+    }
+  }
+
+  // AUDIT E1-9: an expired/revoked session used to leave `pr-user` + the checkout cache behind, so the rest of the
+  // app (MobileBottomNav, header) still believed the visitor was signed in while /account showed the login wall.
+  function markExpired() {
+    clearClientPII()
+    storeLogout()
+    setAuthState('expired')
+  }
 
   function updateLocalProfile(updates: Partial<Profile>) {
     setProfile(prev => mergeProfile(prev, updates))
@@ -148,7 +183,7 @@ export function useAuth() {
   return {
     authState, loaded, loggedIn, expired,
     profile, authUser,
-    init, retry, logout, markExpired,
+    init, retry, logout, markExpired, loggingOut: isLoggingOut,
     updateLocalProfile,
   }
 }

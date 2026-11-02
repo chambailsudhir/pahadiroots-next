@@ -73,6 +73,10 @@ export default function OrdersSection({ orders, showToast }: Props) {
   // somewhere to live without a second round-trip or a separate modal.
   const [submittedInfo, setSubmittedInfo] = useState<{ orderNum: string; reason: string; resolution: 'refund' | 'replace'; photoCount: number } | null>(null)
 
+  // Order the open modal belongs to; photo uploads check it after every await so late results are discarded.
+  const modalOrderRef = useRef<string | null>(null)
+  useEffect(() => () => { modalOrderRef.current = null }, [])
+
   // Focus management for keyboard-accessible modal
   const firstRadioRef  = useRef<HTMLInputElement>(null)
   const triggerBtnRef  = useRef<HTMLButtonElement | null>(null)
@@ -86,11 +90,20 @@ export default function OrdersSection({ orders, showToast }: Props) {
     }
   }, [returnModal])
 
+  // AUDIT E1-10: the success view replaces the radios, so focus would fall to <body> and Esc / the Tab trap (which
+  // listen on the dialog) stopped working. Park focus on the dialog box.
+  useEffect(() => {
+    if (submittedInfo) modalBoxRef.current?.focus()
+  }, [submittedInfo])
+
   // closeReturnModal is declared before handleReturnModalKeyDown so the
   // reference is explicit. It reads `submitting` so it is a useCallback
   // with [submitting] in its dep array — prevents stale closure.
   const closeReturnModal = useCallback(() => {
-    if (submitting) return
+    // AUDIT E1-10: also blocked while a photo upload is in flight (the upload loop would keep running against a closed
+    // / different order's modal and leak blob URLs).
+    if (submitting || uploadingPhoto) return
+    modalOrderRef.current = null
     setReturnModal(null)
     setReturnReason('')
     setSelectedItemIdx(null)
@@ -98,9 +111,12 @@ export default function OrdersSection({ orders, showToast }: Props) {
     dropPhotos()
     setSubmittedInfo(null)
     // Restore focus to the button that opened the modal
-    triggerBtnRef.current?.focus()
+    // (the card — and so its button — may already be re-rendered away by orders.refresh(); fall back to the search box)
+    const trigger = triggerBtnRef.current
+    if (trigger && trigger.isConnected) trigger.focus()
+    else document.getElementById('order-search')?.focus()
     triggerBtnRef.current = null
-  }, [submitting])
+  }, [submitting, uploadingPhoto])
 
   // ESC closes the modal; Tab/Shift+Tab are trapped inside.
   // Uses onKeyDown on the modal div (same pattern as DangerZoneSection) so the
@@ -144,6 +160,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
     setResolution('refund')
     dropPhotos()
     setSubmittedInfo(null)
+    modalOrderRef.current = String(order.id)
     setReturnModal({ orderId: String(order.id), orderNum: order.order_number || orderNum, items: order.items || [] })
   }
 
@@ -164,6 +181,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
       return
     }
     const toUpload = files.slice(0, remaining)
+    const orderId = returnModal.orderId
+    const stale = () => modalOrderRef.current !== orderId
     setUploadingPhoto(true)
     try {
       for (const file of toUpload) {
@@ -179,13 +198,14 @@ export default function OrdersSection({ orders, showToast }: Props) {
           continue
         }
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const urlRes = await fetch(`/api/orders/${returnModal.orderId}/return/upload-url`, {
+        const urlRes = await fetch(`/api/orders/${orderId}/return/upload-url`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           // AUDIT S2-011: the server validates size + MIME + extension itself (fileSize is required).
           body:    JSON.stringify({ fileName: safeName, fileType: file.type, fileSize: file.size }),
         })
         const urlData = await urlRes.json()
+        if (stale()) return
         if (!urlRes.ok) {
           showToast(urlData.error || `${file.name}: upload failed`, 'error')
           continue
@@ -195,6 +215,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           headers: urlData.uploadHeaders ?? { 'Content-Type': file.type },
           body:    file,
         })
+        if (stale()) return   // modal closed / reopened for another order meanwhile: drop the result, no blob URL created
         if (!putRes.ok) {
           showToast(`${file.name}: upload failed`, 'error')
           continue
@@ -252,6 +273,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
     }
   }
 
+  const isNarrowed = !!orders.search || orders.filter !== 'all'
+
   return (
     <ErrorBoundary section="Orders" onRetry={orders.refresh}>
       <div className={styles.panelSection}>
@@ -282,7 +305,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
         )}
 
         <div className={styles.card}>
-          {(orders.loading && orders.orders === null) ? <OrdersSkeleton /> : (
+          {/* AUDIT E1-6: the toolbar (search input!) stays mounted while results load — only the list swaps to a skeleton. */}
+          {(
             <>
               {/* Toolbar */}
               <div className={styles.ordersToolbar}>
@@ -299,7 +323,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
                     onChange={e => orders.setSearch(e.target.value)}
                   />
                   {orders.search && (
-                    <button type="button" className={styles.searchClear} onClick={() => orders.setSearch('')}><Icon name="close" /></button>
+                    <button type="button" className={styles.searchClear} aria-label="Clear search" onClick={() => orders.setSearch('')}><Icon name="close" /></button>
                   )}
                 </div>
                 <div className={styles.filterRow} role="group" aria-label="Filter orders by status">
@@ -320,7 +344,8 @@ export default function OrdersSection({ orders, showToast }: Props) {
               </div>
 
               {/* Order list */}
-              {orders.filtered.length === 0 && (!!orders.error || (orders.totalCount > 0 && orders.filter === 'all' && !orders.search)) ? (
+              {(orders.loading && orders.orders === null) ? <OrdersSkeleton /> :
+               orders.filtered.length === 0 && (!!orders.error || (orders.totalCount > 0 && orders.filter === 'all' && !orders.search)) ? (
                 // The server says there ARE orders (or the request failed) but none arrived: that is a load problem,
                 // never "No orders yet" (which made customers think their orders had vanished).
                 <div className={styles.emptyState} role="alert">
@@ -330,16 +355,18 @@ export default function OrdersSection({ orders, showToast }: Props) {
                   <button className={styles.btnPrimary} onClick={() => orders.refresh()}>Try again</button>
                 </div>
               ) : orders.filtered.length === 0 ? (
+                // AUDIT E1-6: `orders.orders` is null whenever the CURRENT result is empty, so it can't tell "no orders at all"
+                // from "search/filter matched nothing" — the active search/filter can.
                 <div className={styles.emptyState}>
-                  <div className={styles.emptyIcon}>{!orders.orders?.length ? '🛍️' : '🔍'}</div>
-                  <div className={styles.emptyTitle}>{!orders.orders?.length ? 'No orders yet' : 'Nothing found'}</div>
+                  <div className={styles.emptyIcon}>{!isNarrowed ? '🛍️' : '🔍'}</div>
+                  <div className={styles.emptyTitle}>{!isNarrowed ? 'No orders yet' : 'Nothing found'}</div>
                   <p className={styles.emptySub}>
-                    {!orders.orders?.length
+                    {!isNarrowed
                       ? 'Discover our Himalayan natural products.'
                       : 'Try adjusting your search or filter.'}
                   </p>
-                  {!orders.orders?.length && <Link href="/products" className={styles.btnPrimary}>Shop Now →</Link>}
-                  {!!orders.orders?.length && (
+                  {!isNarrowed && <Link href="/products" className={styles.btnPrimary}>Shop Now →</Link>}
+                  {isNarrowed && (
                     <button className={styles.btnSecondary} onClick={() => { orders.setFilter('all'); orders.setSearch('') }}>
                       Clear Filters
                     </button>
@@ -385,7 +412,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
           onClick={e => { if (e.target === e.currentTarget) closeReturnModal() }}
           onKeyDown={handleReturnModalKeyDown}
         >
-          <div ref={modalBoxRef} className={styles.modalBox}>
+          <div ref={modalBoxRef} className={styles.modalBox} tabIndex={-1}>
             <div className={styles.modalHeader}>
               <h3 id="return-modal-title" className={styles.modalTitle}>
                 {resolution === 'replace' ? 'Replace' : 'Return'} Order {returnModal.orderNum}
@@ -393,7 +420,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
               <button
                 ref={closeButtonRef}
                 onClick={closeReturnModal}
-                disabled={submitting}
+                disabled={submitting || uploadingPhoto}
                 className={styles.modalCloseBtn}
                 aria-label="Close return modal"
               ><Icon name="close" /></button>
@@ -565,7 +592,7 @@ export default function OrdersSection({ orders, showToast }: Props) {
             <div className={styles.modalFooter}>
               <button
                 onClick={closeReturnModal}
-                disabled={submitting}
+                disabled={submitting || uploadingPhoto}
                 className={styles.btnSecondary}
               >
                 Cancel
