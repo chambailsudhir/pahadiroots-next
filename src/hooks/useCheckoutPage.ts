@@ -18,6 +18,7 @@
  *   • All effects already had AbortController cleanup — preserved as-is.
  */
 
+import { pinProblem } from '@/lib/pinState'
 import { cartItemsToGa4 } from '@/lib/analytics/ga4'
 import { useCartRevalidation } from '@/hooks/useCartRevalidation'
 import { revalidateCart } from '@/lib/cartRevalidate'
@@ -1008,6 +1009,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }
     if (!/^[6-9]\d{9}$/.test(addr.phone)) { placingRef.current = false; setError('Enter a valid 10-digit mobile number'); return }
     if (!/^\d{6}$/.test(addr.pincode))     { placingRef.current = false; setError('Enter a valid 6-digit pincode'); return }
+    { const pinMsg = pinProblem(addr.pincode, addr.state); if (pinMsg) { placingRef.current = false; setError(pinMsg); return } }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { placingRef.current = false; setError('Enter a valid email address'); return }
     setError(''); setPlacing(true)
     try {

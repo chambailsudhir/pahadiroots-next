@@ -42,8 +42,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Products
   let products: { slug: string; updated_at: string | null; image_url: string | null; category_id: number | null }[] = []
   try {
-    products = await fetchAll(( from, to ) => supabase.from('products').select('slug, updated_at, image_url, category_id')
+    products = await fetchAll(( from, to ) => supabase.from('products').select('slug, updated_at, image_url, category_id, is_active')
       .eq('is_deleted', false).eq('status', 'active').order('id').range(from, to))
+    products = products.filter(p => (p as { is_active?: boolean | null }).is_active !== false)  // SEC-001: deactivated products are not submitted
   } catch (e: unknown) { console.error('[sitemap] products fetch failed:', e) }
 
   const productPages: MetadataRoute.Sitemap = products.map(p => ({

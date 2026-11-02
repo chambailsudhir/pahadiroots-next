@@ -330,6 +330,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li><strong>Device &amp; visit data:</strong> IP address, browser type, operating system, pages visited, referral source, session duration</li>
             <li><strong>Account data:</strong> Name, email address, phone number, delivery address</li>
             <li><strong>Transaction data:</strong> Products ordered, payment method, order history</li>
+            <li><strong>Unfinished checkouts:</strong> If you enter your phone number or email at checkout but do not complete the order, we keep the cart and those contact details so that you can finish the order and so that we can follow up about it. Write to us to have them deleted.</li>
             <li><strong>Newsletter:</strong> Email address if you subscribe</li>
             <li><strong>Communications:</strong> Messages you send us by email or WhatsApp</li>
           </ul>

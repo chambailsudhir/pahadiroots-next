@@ -4,6 +4,7 @@ import { z } from 'zod'
 // JIT-compile parsers; the probe itself is reported as a CSP violation. jitless skips the probe (and the JIT).
 z.config({ jitless: true })
 import { INDIA_STATES } from '@/lib/account/constants'
+import { pinProblem } from '@/lib/pinState'
 
 // GST depends on the delivery state (same state as the seller = CGST + SGST, otherwise IGST), so the
 // server accepts only a real Indian state or union territory and stores its canonical spelling. The
@@ -29,6 +30,11 @@ export const addressSchema = z.object({
   }),
   pincode: z.string().trim().regex(/^\d{6}$/, 'Invalid 6-digit pincode'),
   label:   z.enum(['Home', 'Office', 'Parents', 'Friends', 'Others']).optional(),
+}).superRefine((a, ctx) => {
+  // CHK-001 (Nov 2026 audit): reject non-existent / non-deliverable PINs and a PIN that contradicts the state.
+  // Authoritative copy of the check the checkout form runs for fast feedback. See lib/pinState.ts.
+  const problem = pinProblem(a.pincode, a.state)
+  if (problem) ctx.addIssue({ code: 'custom', path: ['pincode'], message: problem })
 })
 
 // ─── Order Schema ──────────────────────────────────────────────────────────────

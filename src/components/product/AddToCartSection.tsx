@@ -258,12 +258,16 @@ export default function AddToCartSection({ product, variants }: Props) {
               const oos = v.available_stock <= 0
               // Build a descriptive label so screen readers announce size, price,
               // discount, and availability — not just "button, pressed".
+              // ACC-001 (Nov 2026 audit, WCAG 2.5.3 Label in Name): the accessible name must CONTAIN the visible text
+              // ("250g ₹350 ₹450 Save 22%"). It used to start with "Select" and omit the struck-through MRP, so voice-control
+              // users saying the visible words did not match. Visible words first, status after.
               const variantLabel = [
-                `Select ${v.size}`,
+                v.size,
                 `₹${v.price}`,
+                v.mrp && v.mrp > v.price ? `₹${v.mrp}` : null,
                 savePct > 0 ? `Save ${savePct}%` : null,
                 oos ? 'Out of stock' : null,
-              ].filter(Boolean).join(', ')
+              ].filter(Boolean).join(' ')
               return (
                 <button
                   key={v.id}

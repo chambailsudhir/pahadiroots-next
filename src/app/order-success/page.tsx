@@ -670,8 +670,9 @@ function SuccessContent() {
             <div className="oc-error-icon"><Icon name="search" /></div>
             <h2>We couldn&#39;t verify this order</h2>
             <p>
-              If you just placed an order, it may take a moment to appear — check your email for the
-              confirmation, or try again. If you&#39;re signed in, open it from your account.
+              If you just placed an order, it may take a moment to appear — try again in a minute. If you
+              gave us an email address, a confirmation will be sent there; you can also track the order on the
+              Track Order page with your order number and mobile number, or open it from your account if you&#39;re signed in.
             </p>
             <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
               <button
@@ -936,21 +937,9 @@ function SuccessContent() {
         })()}
       </main>
 
-      {/* ── NEWSLETTER ── */}
-      <section className="oc-newsletter">
-        <div className="oc-nl-inner-wrap">
-          <div className="oc-nl-inner">
-            <div className="oc-nl-text">
-              <h4><Icon name="leaf" /> Join the Pahadi Family</h4>
-              <p>Exclusive deals, new arrivals &amp; Himalayan stories — straight to your inbox</p>
-            </div>
-            <div className="oc-nl-form">
-              <input type="email" className="oc-nl-inp" placeholder="Enter your email address" autoComplete="email" />
-              <button className="oc-nl-btn">Subscribe</button>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* CONF-001 (Nov 2026 audit): the newsletter block that used to sit here had no submit handler (a dead form) and
+          pushed a sign-up at customers who had just paid or whose order could not be verified. The real newsletter form lives in the
+          site Footer. */}
 
       {/* ── FOOTER ── */}
       <footer className="oc-footer">

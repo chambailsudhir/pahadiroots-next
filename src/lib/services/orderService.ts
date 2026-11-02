@@ -641,7 +641,7 @@ export async function createOrder(
   // show a generic emoji, never the real product photo.
   //
   const products: any[] = await sbGet('products',
-    `select=id,name,emoji,image_url,gst_rate,is_deleted,status,price,selling_price,mrp,available_stock,category_id&id=in.(${productIdList})`
+    `select=id,name,emoji,image_url,gst_rate,is_deleted,is_active,status,price,selling_price,mrp,available_stock,category_id&id=in.(${productIdList})`
   )
   if (!products?.length) throw new Error('Could not fetch product details — product IDs not found in DB')
 
@@ -680,13 +680,13 @@ export async function createOrder(
   // Validate all products/variants are active
   for (const v of variantRows) {
     const p = productMap.get(String(v.product_id))
-    if (!v.is_active || p?.is_deleted || p?.status !== 'active') {
+    if (!v.is_active || p?.is_deleted || p?.is_active === false || p?.status !== 'active') {
       throw new Error('Product no longer available')
     }
   }
   for (const item of itemsNoVariant) {
     const p = productMap.get(String(item.productId))
-    if (!p || p.is_deleted || p.status !== 'active') {
+    if (!p || p.is_deleted || p.is_active === false || p.status !== 'active') {
       throw new Error('Product no longer available')
     }
   }

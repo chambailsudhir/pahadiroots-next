@@ -66,6 +66,11 @@ const PRODUCTS_PAGE_SIZE = 1000
 // staging/prod database first (e.g. via the Supabase SQL editor or `supabase
 // gen types`) rather than inferring column names from the Product TS type,
 // which — as this incident shows — does not necessarily match the live table.
+/** products.is_active is nullable (default true); only an explicit false takes a product off sale. */
+function isProductActive(p: { is_active?: boolean | null }): boolean {
+  return p.is_active !== false
+}
+
 async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
   const rows: Product[] = []
   let from = 0
@@ -84,7 +89,9 @@ async function fetchAllActiveProducts(db: ReturnType<typeof getServiceClient>) {
     if (data.length < PRODUCTS_PAGE_SIZE) break
     from += PRODUCTS_PAGE_SIZE
   }
-  return rows
+  // Nov 2026 audit (SEC-001): honour the admin's products.is_active switch (NULL = default true). The status/is_deleted
+  // filters above never looked at it, so a product the owner had deactivated stayed on the shop.
+  return rows.filter(isProductActive)
 }
 
 // BUG FIX (found via the "Bestsellers vanishes on hard refresh, reappears
@@ -526,6 +533,7 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
     throw new Error(`getProductBySlug: slug lookup failed (${bySlug.error.message ?? 'unknown error'})`)
   }
   product = (bySlug.data as Product) || null
+  if (product && !isProductActive(product)) product = null
 
   if (!product && /^\d+$/.test(slug)) {
     const byId = await db
@@ -540,6 +548,7 @@ export async function getProductBySlug(slug: string): Promise<ProductBySlugResul
       throw new Error(`getProductBySlug: id lookup failed (${byId.error.message ?? 'unknown error'})`)
     }
     product = (byId.data as Product) || null
+    if (product && !isProductActive(product)) product = null
   }
 
   if (!product) return { product: null, variants: [], images: [] }
@@ -622,7 +631,7 @@ export async function getRelatedProducts(opts: {
     return []
   }
 
-  const pool = (rows as Product[]) || []
+  const pool = ((rows as Product[]) || []).filter(isProductActive)
   if (pool.length === 0) return []
 
   const ids = pool.map(p => p.id)

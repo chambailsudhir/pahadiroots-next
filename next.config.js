@@ -82,6 +82,8 @@ const nextConfig = {
   async redirects() {
     return [
       { source: '/about', destination: '/our-stories', permanent: true },
+      // Common guess for the tracking page (audit: /track-order returned a 404).
+      { source: '/track-order', destination: '/track', permanent: true },
       // Old/typed spelling of the Sea Buckthorn product URL (the canonical slug is hyphenated).
       { source: '/products/seabuckthorn', destination: '/products/sea-buckthorn', permanent: true },
     ]

@@ -242,7 +242,7 @@ describe('AddToCartSection — variant selection', () => {
     fireEvent.click(screen.getByRole('button', { name: /increase quantity/i })) // qty -> 2
     expect(screen.getByLabelText('2 selected')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /select 500g/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^500g/i }))
     expect(screen.getByLabelText('1 selected')).toBeTruthy()
   })
 
@@ -253,7 +253,7 @@ describe('AddToCartSection — variant selection', () => {
     ]
     render(el({ product: makeProduct(), variants }))
 
-    const oosBtn = screen.getByRole('button', { name: /select 500g/i })
+    const oosBtn = screen.getByRole('button', { name: /^500g/i })
     expect((oosBtn as HTMLButtonElement).disabled).toBe(true)
 
     fireEvent.click(oosBtn) // disabled — should not change selection
