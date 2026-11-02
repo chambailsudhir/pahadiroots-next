@@ -19,23 +19,15 @@ import { logger, captureError } from '@/lib/logger'
 // Was duplicated in payments/route.ts — single source of truth now.
 import { sanitize } from '@/lib/server/sanitize'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { runBackgroundSweepsIfDue } from '@/lib/server/backgroundSweeps'
+// The one source for every delivery / notification sentence (lib/shippingCopy). The confirmation e-mail used to compute its own
+// optimistic 'estimated delivery' date (5 business days from today + 2) that contradicted the published policy.
+import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
 
 // NOTE: createOrderSchema (imported from @/lib/schemas) is the canonical validation
 // schema for this route. coupon_code is accepted but the DISCOUNT is never trusted
 // from the client — createOrder() re-validates and recomputes server-side.
 
-function getDeliveryEstimate(): string {
-  const d = new Date()
-  let added = 0
-  while (added < 5) {
-    d.setDate(d.getDate() + 1)
-    if (d.getDay() !== 0 && d.getDay() !== 6) added++
-  }
-  const from = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
-  d.setDate(d.getDate() + 2)
-  const to = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
-  return `${from} - ${to}`
-}
 
 // BUG FIX (live 504 "Order save failed" — Vercel Runtime Timeout Error:
 // "Task timed out after 15 seconds"): confirmed via Supabase logs that this
@@ -343,7 +335,6 @@ export async function POST(req: NextRequest) {
           try {
             const emailItems = order.cartItems ?? []
             const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
-            const estDate    = getDeliveryEstimate()
             const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
 
             // ── All user-supplied strings are HTML-escaped before interpolation ──
@@ -408,8 +399,9 @@ export async function POST(req: NextRequest) {
       ${coinsHtml}
     </div>
     <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
-      <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${esc(estDate)}</strong><br>
-      <span style="color:#888;font-size:12px">We&apos;ll notify you when it ships</span>
+      <strong style="color:#1a3a1e">🚚 Delivery</strong><br>
+      <span style="color:#555;font-size:13px">${esc(DELIVERY_WINDOWS_TEXT)}</span><br>
+      <span style="color:#888;font-size:12px">${esc(TRACKING_NOTIFICATION_TEXT)}</span>
     </div>
     <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
       <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
@@ -522,6 +514,9 @@ export async function POST(req: NextRequest) {
     })())
 
     await finalizeOrder(order, alreadyExists, customerId)
+    // OPS-001: housekeeping (expire abandoned online orders, retry failed e-mails) — throttled, after the response, never fatal.
+    const sweepOrigin = new URL(req.url).origin
+    after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))
 
     const successRes = NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },

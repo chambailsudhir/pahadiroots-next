@@ -1214,6 +1214,37 @@ describe('POST /api/v1/payments — verify_payment P1 (cheap payment must not co
   })
 })
 
+// CHK-001 (Nov 2026 audit): a non-existent / non-deliverable PIN, or a PIN that contradicts the state, is refused by BOTH order
+// entry points before any order, stock reservation or Razorpay order exists.
+describe('PIN / state validation on both order entry points (CHK-001)', () => {
+  async function callOrders(body: object) {
+    const { POST } = await import('@/app/api/v1/orders/route')
+    return POST(makeReq(body, { csrfHeader: true }) as any)
+  }
+  async function callPayments(body: object) {
+    const { POST } = await import('@/app/api/v1/payments/route')
+    return POST(makeReq(body, { csrfHeader: true }) as any)
+  }
+  const BAD: Array<[string, string, string]> = [
+    ['000000 (no such PIN)',               '000000', 'Himachal Pradesh'],
+    ['999999 (Army Postal Service)',       '999999', 'Himachal Pradesh'],
+    ['Delhi PIN with Himachal Pradesh',    '110001', 'Himachal Pradesh'],
+  ]
+  it.each(BAD)('COD /orders refuses %s with 400 and creates nothing', async (_n, pincode, state) => {
+    mockCreateOrder.mockClear()
+    const res = await callOrders({ ...COD_ORDER_BODY, address: { ...VALID_ADDRESS, pincode, state } })
+    expect(res.status).toBe(400)
+    expect(mockCreateOrder).not.toHaveBeenCalled()
+  })
+  it.each(BAD)('online /payments create_payment refuses %s with 400, a readable reason, and no Razorpay order', async (_n, pincode, state) => {
+    mockCreateOrder.mockClear()
+    const res = await callPayments({ ...COD_ORDER_BODY, payment_method: 'razorpay', action: 'create_payment', address: { ...VALID_ADDRESS, pincode, state } })
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(await res.json())).toMatch(/PIN code/i)
+    expect(mockCreateOrder).not.toHaveBeenCalled()
+  })
+})
+
 describe('POST /api/v1/orders — P1: online payments cannot be created via the COD endpoint', () => {
   it('payment_method "razorpay" → 400 and createOrder is never called', async () => {
     const { POST } = await import('@/app/api/v1/orders/route')

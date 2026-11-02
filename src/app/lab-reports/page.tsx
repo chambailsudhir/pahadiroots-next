@@ -47,12 +47,12 @@ async function loadReports(productId?: number | null): Promise<CertRow[]> {
     } else {
       const { data: prods } = await supabase
         .from('products')
-        .select('id')
+        .select('id, is_active')
         .eq('is_deleted', false)
         .eq('status', 'active')
         .ilike('name', '%honey%')
         .limit(200)
-      ids = (prods ?? []).map(p => p.id)
+      ids = (prods ?? []).filter(p => p.is_active !== false).map(p => p.id)
     }
     if (ids.length === 0) return []
 

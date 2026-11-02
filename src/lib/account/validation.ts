@@ -4,7 +4,7 @@
 
 export const validate = {
   phone:    (p: string) => /^[6-9]\d{9}$/.test(p.replace(/\D/g,'')),
-  pincode:  (p: string) => /^\d{6}$/.test(p.trim()),
+  pincode:  (p: string) => /^[1-8]\d{5}$/.test(p.trim()),
   name:     (n: string) => n.trim().length >= 2,
   address:  (a: string) => a.trim().length >= 5,
   // Each rule is exported so PasswordSection can drive the strength indicator

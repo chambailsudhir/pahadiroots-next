@@ -63,13 +63,24 @@ export function calcPriceSummary(
   const isFreeShipping = afterDiscount >= freeShippingMin
   const shipping       = isFreeShipping ? 0 : flatShipping
 
-  const gstTotal = items.reduce(
-    (sum, item) => sum + calcGST(item.price, item.gstRate, item.qty), 0
-  )
-
   const prepaidDiscount = paymentMethod === 'razorpay'
     ? Math.round(afterDiscount * prepaidPct / 100)
     : 0
+
+  // CART-001 (Nov 2026 audit) — GST is charged on the value AFTER the seller's own discounts.
+  // CGST Act 2017 s.15(3)(a): a discount given before or at the time of supply, and recorded on the invoice, is not part of the
+  // value of supply. The coupon (and the prepaid % discount) are exactly that, so the GST-inclusive prices are first reduced by
+  // them — spread across the lines in proportion to each line's value — and only then is the GST carved out. Before this the
+  // GST line ignored the coupon (₹700 cart, ₹50 coupon, ₹650 payable still showed GST on ₹700).
+  // Deliberately NOT reduced: loyalty-coin redemption (coins are consideration for the supply, not a price reduction) — the
+  // conservative reading; the owner's CA may revisit. This function also feeds orders.tax and therefore the invoice, so the cart,
+  // checkout, stored order and invoice all agree.
+  const grossLines   = items.reduce((sum, item) => sum + item.price * item.qty, 0)
+  const taxableCut   = grossLines > 0 ? Math.min(grossLines, Math.max(0, discount) + prepaidDiscount) : 0
+  const cutFraction  = grossLines > 0 ? taxableCut / grossLines : 0
+  const gstTotal = items.reduce(
+    (sum, item) => sum + calcGST(item.price * (1 - cutFraction), item.gstRate, item.qty), 0
+  )
 
   // Flat COD handling fee — folded into `total`. Shown as its own "COD
   // Charges" line in the cart drawer, cart page, and checkout summary (see

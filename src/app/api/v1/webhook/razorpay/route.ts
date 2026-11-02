@@ -30,6 +30,31 @@ interface RazorpayWebhookEvent {
   }
 }
 
+/**
+ * Which of OUR orders does this payment belong to?
+ *
+ * Nov 2026 audit (PAY-HOOK): the webhook located the order ONLY through `payment.notes.db_order_id`, a note the customer's browser
+ * attaches when it opens Razorpay Checkout. Any payment that does not carry it (a retried / resumed checkout, a payment link, a
+ * browser that dropped the option) was alerted and acknowledged, leaving a customer who really paid with a pending order that the
+ * expiry job later cancels. The Razorpay ORDER id stored on our order at create_payment time (orders.payment_id) is the server's
+ * own record of the pairing, so it is the fallback. Either way the caller still binds the payment to the order below (stored
+ * Razorpay order id + exact amount) before confirming anything, so a wrong hint can never confirm the wrong order.
+ * A database fault throws so the caller returns 500 and Razorpay retries; "no such order" returns null.
+ */
+async function resolveDbOrderId(
+  db: ReturnType<typeof getServiceClient>,
+  payment: RazorpayPaymentEntity,
+): Promise<string | null> {
+  const fromNotes = payment.notes?.db_order_id
+  if (fromNotes) return String(fromNotes)
+  if (!isRazorpayOrderId(payment.order_id)) return null
+  const { data, error } = await db.from('orders').select('id').eq('payment_id', payment.order_id).maybeSingle()
+  if (error && (error as { code?: string }).code !== 'PGRST116') {
+    throw new Error('webhook order lookup by razorpay order id failed: ' + error.message)
+  }
+  return data?.id != null ? String(data.id) : null
+}
+
 export async function POST(req: Request) {
   // BUG FIX: the previous check used parseInt() on the Content-Length header,
   // but parseInt('abc', 10) returns NaN and NaN > 1_048_576 is false — a
@@ -173,9 +198,9 @@ export async function POST(req: Request) {
       // Look up our order via notes.db_order_id (set when creating the Razorpay order).
       // We cannot use payment_id here because verify_payment already overwrites it
       // with the Razorpay payment ID before this webhook fires.
-      const dbOrderId = payment.notes?.db_order_id
+      const dbOrderId = await resolveDbOrderId(db, payment)
       if (!dbOrderId) {
-        captureError(new Error('payment.captured missing notes.db_order_id'), {
+        captureError(new Error('payment.captured missing notes.db_order_id and no order holds this Razorpay order id'), {
           action:     'webhook.razorpay.payment_captured',
           payment_id: paymentId,
           alert:      true,
@@ -202,7 +227,22 @@ export async function POST(req: Request) {
           action: 'webhook.razorpay.payment_captured.unknown_order', payment_id: paymentId, db_order_id: dbOrderId, alert: true,
         })
       } else if (order.payment_status === 'paid') {
-        logger.info('webhook: payment.captured order already confirmed', { paymentId, dbOrderId })
+        // Nov 2026 audit (PAY-DUP): an order that is already paid by a DIFFERENT payment id means this customer was charged
+        // twice for one order (two tabs / a retry that also succeeded). This branch used to log at info level and move on, so
+        // the second charge was invisible until the customer complained. Same payment id = the normal duplicate delivery.
+        const paidWith = typeof order.payment_id === 'string' ? order.payment_id : ''
+        if (paidWith.startsWith('pay_') && paidWith !== paymentId) {
+          captureError(new Error('payment.captured for an order already paid by a different payment — possible double charge, refund needed'), {
+            action: 'webhook.razorpay.payment_captured.duplicate_payment', payment_id: paymentId, paid_with: paidWith,
+            order_id: order.id, amount_paise: payment.amount, alert: true,
+          })
+          await logOrderEvent(order.id, 'duplicate_payment_captured', 'razorpay', {
+            razorpay_payment_id: paymentId, original_payment_id: paidWith, amount: payment.amount / 100,
+            note: 'A second payment was captured for an order that was already paid. Refund the duplicate from the Razorpay dashboard.',
+          })
+        } else {
+          logger.info('webhook: payment.captured order already confirmed', { paymentId, dbOrderId })
+        }
       } else {
         // notes.db_order_id is only a hint — it is NOT proof this payment belongs to this
         // order. Bind on facts we control: the order must be a Razorpay order, the payment
@@ -284,10 +324,10 @@ export async function POST(req: Request) {
       // it is either paid, or the pending-order expiry job releases it. If a payment still
       // lands after expiry, confirmOrderPayment() recovers the order.
       const payment   = event.payload.payment.entity
-      const dbOrderId = payment.notes?.db_order_id
+      const dbOrderId = await resolveDbOrderId(db, payment)
 
       if (!dbOrderId) {
-        captureError(new Error('payment.failed missing notes.db_order_id'), {
+        captureError(new Error('payment.failed missing notes.db_order_id and no order holds this Razorpay order id'), {
           action: 'webhook.razorpay.payment_failed',
           alert:  true,
         })

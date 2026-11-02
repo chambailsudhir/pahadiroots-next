@@ -265,7 +265,7 @@
 /* ── Price ────────────────────────────────────────────────────────────────────── */
 .cic-price-col { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 
-.cic-mrp { font-size: 11.5px; color: #c0b8ae; text-decoration: line-through; }
+.cic-mrp { font-size: 11.5px; color: #756c61; text-decoration: line-through; }
 
 .cic-price {
   font-family: var(--font-playfair, 'Playfair Display', serif);

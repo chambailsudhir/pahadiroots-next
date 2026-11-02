@@ -970,4 +970,24 @@
   sb.addEventListener('click', function(){ send(); });
   function autoR(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
 
+  /* INT-001 (Nov 2026 audit): no AI chat on the payment path. The assistant answers open-ended questions (incl. health),
+     and its floating button competes with the Place Order / Pay button on small screens. The WhatsApp support button stays.
+     The site is a client-routed app, so follow history changes as well as the first load. */
+  (function(){
+    var st = document.createElement('style');
+    st.textContent = 'html[data-pr-pay] #pr-ai-fab, html[data-pr-pay] #pr-panel { display:none !important }';
+    document.head.appendChild(st);
+    function sync(){
+      var onPay = /^\/(checkout|payment)(\/|$)/.test(location.pathname);
+      if (onPay) document.documentElement.setAttribute('data-pr-pay', '');
+      else document.documentElement.removeAttribute('data-pr-pay');
+    }
+    ['pushState','replaceState'].forEach(function(m){
+      var orig = history[m];
+      history[m] = function(){ var r = orig.apply(this, arguments); sync(); return r; };
+    });
+    window.addEventListener('popstate', sync);
+    sync();
+  })();
+
 })();

@@ -50,6 +50,7 @@ interface Props {
   minOrderAmt: number
   onPlaceOrder: () => void
   payMethod: 'razorpay' | 'cod'
+  payMethodChosen: boolean
   summaryOpen: boolean
   onToggleSummary: () => void
 }
@@ -62,7 +63,7 @@ const OrderSummary = memo(function OrderSummary({
   loyaltyBalance, loyaltyRedemption, onApplyLoyalty, onRemoveLoyalty,
   loyaltyLoading, loyaltyError,
   error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded, razorpayLoadFailed,
-  minOrderAmt, onPlaceOrder, payMethod, summaryOpen, onToggleSummary,
+  minOrderAmt, onPlaceOrder, payMethod, payMethodChosen, summaryOpen, onToggleSummary,
 }: Props) {
   const [showHints,      setShowHints]      = useState(false)
   const [showLoyalty,    setShowLoyalty]    = useState(false)
@@ -444,6 +445,8 @@ const OrderSummary = memo(function OrderSummary({
         >
           {placing ? (
             <><span className="os-spin os-spin--white" /> Placing Order…</>
+          ) : !payMethodChosen ? (
+            <><span>Choose a payment method</span><span className="os-cta-amt">{formatPrice(pricing.total)}</span></>
           ) : payMethod === 'razorpay' && razorpayLoadFailed ? (
             <><Icon name="warning" /> Retry payment gateway</>
           ) : payMethod === 'razorpay' && !razorpayLoaded ? (

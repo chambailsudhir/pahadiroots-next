@@ -241,7 +241,7 @@ export default function CartDrawer({ settings }: Props) {
       // makes focus() silently do nothing (seen on mobile, where the fallback is the bottom-nav cart button).
       if (wasOpenRef.current) {
         requestAnimationFrame(() => {
-          const fallbacks = Array.from(document.querySelectorAll<HTMLElement>('button[aria-label^="Open cart"]'))
+          const fallbacks = Array.from(document.querySelectorAll<HTMLElement>('button[data-cart-trigger]'))
           const target = [opener, remembered, ...fallbacks].find(usable)
           if (target && document.activeElement !== target) target.focus()
         })

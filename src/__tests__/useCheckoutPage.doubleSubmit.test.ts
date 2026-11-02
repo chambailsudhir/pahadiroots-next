@@ -177,4 +177,24 @@ describe('useCheckoutPage — double-submission guard on handlePlace', () => {
     await act(async () => { await result.current.handlePlace() })
     expect(ordersCallCount(fetchMock)).toBe(2)
   })
+
+  // Nov 2026: no payment method is preselected. Placing an order without choosing one must be refused with a clear message, and
+  // choosing must immediately unblock the very next click (regression: handlePlace once kept a stale "nothing chosen" closure).
+  it('refuses to place an order until a payment method is chosen, then places it once chosen', async () => {
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+    fetchMock.mockResolvedValue({ ok: true, status: 201, text: async () => '', json: async () => ({ order_number: 'ORD-TEST-3' }) })
+
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    fillValidAddress(result)
+    expect(result.current.payMethodChosen).toBe(false)
+
+    await act(async () => { await result.current.handlePlace() })
+    expect(ordersCallCount(fetchMock)).toBe(0)
+    expect(result.current.error).toMatch(/choose a payment method/i)
+
+    act(() => { result.current.setPayMethod('cod') })
+    expect(result.current.payMethodChosen).toBe(true)
+    await act(async () => { await result.current.handlePlace() })
+    expect(ordersCallCount(fetchMock)).toBe(1)
+  })
 })

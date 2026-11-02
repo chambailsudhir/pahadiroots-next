@@ -305,7 +305,7 @@ async function withCouponTokens(
       const val   = Number(c.value)
       const off   = c.type === 'percent' ? `${val}% off` : `₹${val} off`
       const cap   = c.type === 'percent' && c.max_discount != null ? ` (up to ₹${Number(c.max_discount)})` : ''
-      const min   = Number(c.min_order) > 0 ? ` on orders above ₹${Number(c.min_order)}` : ''
+      const min   = Number(c.min_order) > 0 ? ` on orders of ₹${Number(c.min_order)} or more` : ''
       const first = c.first_order_only ? ' — first order only' : ''
       terms.set(String(c.code).toUpperCase(), `${c.code} · ${off}${cap}${min}${first}`)
     }

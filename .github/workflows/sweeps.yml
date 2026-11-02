@@ -1,0 +1,45 @@
+# Background sweeps on the FREE plans.
+#
+# Vercel's free (Hobby) plan only runs a cron job once a day (vercel.json), but the app is designed for these to run every few
+# minutes (see vercel.pro.json: expiry every 10 min):
+#   • expire-pending-orders — releases stock held by an unpaid online order after ~30 min, and confirms a payment whose webhook was lost.
+#     Once a day, an abandoned prepaid checkout kept its stock locked for up to ~24 h.
+#   • retry-failed-emails   — re-sends confirmation e-mails that failed (retried with backoff; once a day meant up to a day's delay).
+# Both endpoints are protected by `Authorization: Bearer $CRON_SECRET`, are idempotent and single-winner, so running them here in
+# addition to Vercel's daily call is harmless.
+#
+# OPTIONAL: the shop already sweeps itself when orders/payments are placed (lib/server/backgroundSweeps.ts). This adds a heartbeat for
+# quiet periods. To enable it: GitHub → Settings → Secrets and variables → Actions → New repository secret:
+#   CRON_SECRET = the same value as the CRON_SECRET environment variable in Vercel.
+# Until that secret exists this workflow does nothing (it exits successfully), so merging it is safe.
+name: sweeps
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: sweeps
+  cancel-in-progress: false
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the sweep endpoints
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://www.pahadiroots.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set as a repository secret — skipping (see the comment at the top of this file)."
+            exit 0
+          fi
+          status=0
+          for path in expire-pending-orders retry-failed-emails; do
+            echo "→ $path"
+            curl --fail-with-body --silent --show-error --max-time 60 \
+              -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/v1/cron/$path" || status=1
+            echo
+          done
+          exit $status

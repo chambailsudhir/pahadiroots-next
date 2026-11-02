@@ -163,12 +163,12 @@ export async function checkStockAvailability(
   }
 
   // --- Check product stock (no-variant products) ---
-  const productStockMap = new Map<string, { available_stock: number; is_deleted: boolean; status: string }>()
+  const productStockMap = new Map<string, { available_stock: number; is_deleted: boolean; is_active?: boolean | null; status: string }>()
   if (productItems.length > 0) {
     const ids = productItems.map(i => isNaN(Number(i.productId!)) ? i.productId! : Number(i.productId!))
     const { data: prods, error } = await db
       .from('products')
-      .select('id, available_stock, is_deleted, status')
+      .select('id, available_stock, is_deleted, is_active, status')
       .in('id', ids)
     if (error) throw new Error('Stock check failed (products): ' + error.message)
     ;(prods || []).forEach(p => productStockMap.set(String(p.id), p))
@@ -177,7 +177,7 @@ export async function checkStockAvailability(
   for (const item of items) {
     if (isNoVariantItem(item)) {
       const prod = productStockMap.get(String(item.productId))
-      if (!prod || prod.is_deleted || prod.status !== 'active') {
+      if (!prod || prod.is_deleted || prod.is_active === false || prod.status !== 'active') {
         failedItems.push({ variantId: item.variantId, requested: item.qty, available: 0 })
         continue
       }

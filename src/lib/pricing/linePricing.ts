@@ -11,7 +11,7 @@
 
 export interface VariantRow { id: unknown; product_id: unknown; price?: unknown; original_price?: unknown; compare_at_price?: unknown; is_active?: unknown; available_stock?: unknown }
 export interface ProductRow {
-  id: unknown; name?: unknown; is_deleted?: unknown; status?: unknown
+  id: unknown; name?: unknown; is_deleted?: unknown; is_active?: unknown; status?: unknown
   selling_price?: unknown; price?: unknown; mrp?: unknown; available_stock?: unknown
 }
 

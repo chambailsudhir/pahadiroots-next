@@ -163,13 +163,15 @@ describe('MobileBottomNav — cart badge', () => {
   it('shows the item count once mounted and the cart has items', () => {
     useCartStore.getState().addItem(makeCartItem(3))
     const { container } = renderNav()
-    expect(container.querySelector('.mbn-badge')?.textContent).toBe('3')
+    expect(container.querySelector('.mbn-badge')?.getAttribute('data-count')).toBe('3')
+    // WCAG 2.5.3: accessible name starts with the visible word "Cart" and carries the count
+    expect(container.querySelector('button[data-cart-trigger]')?.getAttribute('aria-label')).toBe('Cart, 3 items')
   })
 
   it('caps the badge display at "9+" for large counts', () => {
     useCartStore.getState().addItem(makeCartItem(15))
     const { container } = renderNav()
-    expect(container.querySelector('.mbn-badge')?.textContent).toBe('9+')
+    expect(container.querySelector('.mbn-badge')?.getAttribute('data-count')).toBe('9+')
   })
 })
 
@@ -185,7 +187,7 @@ describe('MobileBottomNav — search/cart/menu wire into the shared useUIStore',
 
   it('Cart button opens the cart drawer', () => {
     render(<MobileBottomNav settings={settings} />)
-    const cartBtn = document.querySelector('button[aria-label="Open cart"]') as HTMLElement
+    const cartBtn = document.querySelector('button[data-cart-trigger]') as HTMLElement
     fireEvent.click(cartBtn)
     expect(useUIStore.getState().isCartOpen).toBe(true)
   })
