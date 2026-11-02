@@ -89,7 +89,7 @@ function StepItemCart({ index, label, state }: { index: number; label: string; s
     <>
       {index > 1 && <li className="cp-step-line" aria-hidden="true" />}
       <li className={cls} aria-current={state === 'active' ? 'step' : undefined}>
-        <span aria-hidden="true">{state === 'done' ? <Icon name="check" size="1em" /> : index}</span> {label}
+        <span aria-hidden="true">{state === 'done' ? <Icon name="check" size="1em" /> : index}</span> <b className="cp-step-label">{label}</b>
       </li>
     </>
   )
