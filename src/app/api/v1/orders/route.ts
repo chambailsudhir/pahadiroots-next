@@ -19,6 +19,7 @@ import { logger, captureError } from '@/lib/logger'
 // Was duplicated in payments/route.ts — single source of truth now.
 import { sanitize } from '@/lib/server/sanitize'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { runBackgroundSweepsIfDue } from '@/lib/server/backgroundSweeps'
 // The one source for every delivery / notification sentence (lib/shippingCopy). The confirmation e-mail used to compute its own
 // optimistic 'estimated delivery' date (5 business days from today + 2) that contradicted the published policy.
 import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
@@ -513,6 +514,9 @@ export async function POST(req: NextRequest) {
     })())
 
     await finalizeOrder(order, alreadyExists, customerId)
+    // OPS-001: housekeeping (expire abandoned online orders, retry failed e-mails) — throttled, after the response, never fatal.
+    const sweepOrigin = new URL(req.url).origin
+    after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))
 
     const successRes = NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },

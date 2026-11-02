@@ -19,6 +19,7 @@ import { sanitize } from '@/lib/server/sanitize'
 import { safeEqual, isRazorpayOrderId, fetchRazorpayPayment, checkPaymentAgainstOrder } from '@/lib/server/razorpay'
 import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects, storeRazorpayOrderId } from '@/lib/server/orderPayments'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { runBackgroundSweepsIfDue } from '@/lib/server/backgroundSweeps'
 
 // ─── Razorpay helper ───────────────────────────────────────────────────────────
 async function createRazorpayOrder(amountPaise: number, receiptId: string, dbOrderId: string) {
@@ -200,6 +201,10 @@ export async function POST(req: NextRequest) {
       }, settings)
 
       const db = getServiceClient()
+
+      // OPS-001: housekeeping (expire abandoned online orders, retry failed e-mails) — throttled, after the response, never fatal.
+      const sweepOrigin = new URL(req.url).origin
+      after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))
 
       // Bug-fix: when alreadyExists=true (idempotency retry), we must NOT create a
       // new Razorpay order. The original call already created one and stored its ID in

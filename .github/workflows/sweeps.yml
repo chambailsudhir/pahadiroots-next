@@ -8,7 +8,8 @@
 # Both endpoints are protected by `Authorization: Bearer $CRON_SECRET`, are idempotent and single-winner, so running them here in
 # addition to Vercel's daily call is harmless.
 #
-# SETUP (one time): GitHub → Settings → Secrets and variables → Actions → New repository secret:
+# OPTIONAL: the shop already sweeps itself when orders/payments are placed (lib/server/backgroundSweeps.ts). This adds a heartbeat for
+# quiet periods. To enable it: GitHub → Settings → Secrets and variables → Actions → New repository secret:
 #   CRON_SECRET = the same value as the CRON_SECRET environment variable in Vercel.
 # Until that secret exists this workflow does nothing (it exits successfully), so merging it is safe.
 name: sweeps

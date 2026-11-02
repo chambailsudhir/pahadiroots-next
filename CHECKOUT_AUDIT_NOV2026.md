@@ -16,8 +16,8 @@
 * No WhatsApp/SMS sender exists in the code. Customers with no e-mail address get only the on-screen confirmation page. E-mail stays optional at checkout (owner call).
 
 ## Found while reading production data (ops, not code)
-* `ORD-2026-00108` (Razorpay, ₹499, created 25 Aug): `order_status=confirmed` but `payment_status=pending`. Check it in the Razorpay dashboard.
-* Three ₹2 COD orders were placed today on the "Test" product — one 6 seconds *after* it was switched off in admin, which is exactly the `is_active` bug fixed here.
+* `ORD-2026-00108` (Razorpay order `order_TU5IDJReKvroM1`, ₹499, 25 Aug): `confirmed` but payment `pending`; no `payments` row, no payment event, and **no webhook for that Razorpay order id was ever logged** — so nothing in our data shows it was paid. It was moved pending→confirmed 11 minutes after creation by something other than the verify/webhook path. Confirm in the Razorpay dashboard before shipping or cancelling.
+* Three ₹2 COD orders were placed today on the "Test" product (test customer) — one 6 seconds *after* it was switched off in admin, which is exactly the `is_active` bug fixed here. `…00140` and `…00141` were still open and were cancelled through the normal status change (stock/journal triggers ran); `…00142` was already cancelled.
 * `failed_emails`: rows are QA addresses at `example.com` (Resend rejects them). A permanently-invalid recipient is retried like a transient failure until the attempt cap — harmless, but noisy.
 
 ## Still unverified (cannot be done safely on production)
