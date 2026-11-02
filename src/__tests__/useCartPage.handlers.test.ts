@@ -178,14 +178,24 @@ describe('useCartPage — handleRemove / handleUndoRemove', () => {
     expect(useCartStore.getState().items.map(i => i.variantId)).toEqual(['v1', 'v2'])
   })
 
-  it('fires trackItemRemoved analytics immediately on handleRemove', () => {
-    seedStore([{ ...makeItem({ variantId: 'v1' }), qty: 1 }])
-    const { result } = renderHook(() => useCartPage())
+  it('fires trackItemRemoved when the removal COMMITS (after the Undo window), not on click, and not at all if undone', () => {
+    vi.useFakeTimers()
+    try {
+      seedStore([{ ...makeItem({ variantId: 'v1' }), qty: 1 }, { ...makeItem({ variantId: 'v2' }), qty: 1 }])
+      const { result } = renderHook(() => useCartPage())
 
-    act(() => { result.current.handleRemove('v1', 'Test Ghee', 100) })
+      act(() => { result.current.handleRemove('v1', 'Test Ghee', 100) })
+      expect(trackItemRemoved).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(4100) })
+      // third arg = the full cart line mapped for GA4 remove_from_cart
+      expect(trackItemRemoved).toHaveBeenCalledWith('Test Ghee', 100, expect.objectContaining({ variantId: 'v1', price: expect.any(Number) }))
 
-    // third arg = the full cart line mapped for GA4 remove_from_cart
-    expect(trackItemRemoved).toHaveBeenCalledWith('Test Ghee', 100, expect.objectContaining({ variantId: 'v1', price: expect.any(Number) }))
+      ;(trackItemRemoved as ReturnType<typeof vi.fn>).mockClear()
+      act(() => { result.current.handleRemove('v2', 'Other', 50) })
+      act(() => { result.current.handleUndoRemove('v2') })
+      act(() => { vi.advanceTimersByTime(5000) })
+      expect(trackItemRemoved).not.toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
   })
 
   it('actually removes the item from the store after the 4s undo window elapses', () => {

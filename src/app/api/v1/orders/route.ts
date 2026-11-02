@@ -618,6 +618,9 @@ export async function POST(req: NextRequest) {
       || lowerMessage.includes('invalid cart item')
       || lowerMessage.includes('insufficient loyalty balance')
       || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
+      || lowerMessage.includes('minimum order is')          // admin min_order_amount
+      || lowerMessage.includes('online payment is not available')
+      || lowerMessage.includes('cannot be paid online')
       || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
     )
     const status  = isUserFacing ? 409 : 500

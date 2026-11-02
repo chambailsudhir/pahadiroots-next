@@ -27,7 +27,7 @@ const PaymentSection = memo(function PaymentSection({
   const payMethod = payMethodChosen ? payMethodRaw : null
   return (
     <div className={styles.root}>
-      <div className={styles.opts}>
+      <div className={styles.opts} role="radiogroup" aria-label="Payment method">
 
         {/* Online payment */}
         {razorpayEnabled && (

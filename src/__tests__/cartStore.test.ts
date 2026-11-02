@@ -105,6 +105,15 @@ describe('cartStore.addItem', () => {
     expect(key1).toBe(key2)
   })
 
+  it('a later add can never RAISE the cap, but a lower (fresher) stock figure lowers it', () => {
+    const store = useCartStore.getState()
+    store.addItem(makeItem({ variantId: 'v9', maxQty: 10, qty: 1 }))
+    store.addItem({ ...makeItem({ variantId: 'v9', maxQty: 2 }), qty: 5 })
+    const line = useCartStore.getState().items.find(i => i.variantId === 'v9')!
+    expect(line.maxQty).toBe(2)
+    expect(line.qty).toBe(2)
+  })
+
   it('uses maxQty from existing item when accumulating (not newItem.maxQty)', () => {
     // First add sets maxQty=3, second add tries maxQty=10 — cap must stay 3
     const store = useCartStore.getState()

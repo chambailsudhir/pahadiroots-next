@@ -168,7 +168,7 @@ export async function GET(
     const customerEmail  = escHtml(String(user.email || ''))
     const orderDate      = o.created_at ? escHtml(fmtDate(String(o.created_at))) : '—'
     const orderNum       = escHtml(String(o.order_number || o.id))
-    const paymentMethod  = String(o.payment_method || '').toUpperCase() === 'COD'
+    const paymentMethod  = /cod/i.test(String(o.payment_method || ''))   // also legacy 'whatsapp_cod'
       ? 'Cash on Delivery'
       : 'Online Payment'
     // order_status is DB-generated but escape defensively

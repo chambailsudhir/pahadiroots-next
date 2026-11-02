@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       customerId: await sessionCustomerId(req),
       pincode:    parsed.data.pincode,
       address:    parsed.data.address,
+      lines:      parsed.data.lines,
     })
     if (!result.valid) {
       return NextResponse.json({ error: result.error }, { status: 400 })

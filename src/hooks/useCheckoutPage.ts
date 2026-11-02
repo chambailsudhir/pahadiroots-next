@@ -44,6 +44,7 @@ import type {
 } from '@/types'
 import type { LoyaltyRedemption } from '@/components/checkout/OrderSummary'
 import type { PriceSummary }      from '@/lib/services/pricingService'
+import { couponLines } from '@/lib/couponLines'
 
 // ─── Razorpay minimal types ───────────────────────────────────────────────────
 interface RazorpayResponse {
@@ -428,7 +429,12 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     } catch { return BASE_ADDR }
   })
 
-  const [email, setEmail] = useState<string>(() => {
+  // Set when the CUSTOMER types in the email field: the background profile refresh must never overwrite what they typed.
+  const userEditedEmailRef = useRef(false)
+  // Latest cart lines for coupon requests, read inside callbacks/timers without making them depend on (and re-run for) every items change.
+  const itemsRef = useRef(items)
+  useEffect(() => { itemsRef.current = items }, [items])
+  const [email, setEmailState] = useState<string>(() => {
     if (typeof window === 'undefined') return ''
     try {
       const cache = _readProfileCache()
@@ -437,6 +443,10 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       return JSON.parse(raw || '{}')?.state?.user?.email || ''
     } catch { return '' }
   })
+  // Typed by the customer → remembered so the profile refresh leaves it alone.
+  const setEmail = useCallback((v: string) => { userEditedEmailRef.current = true; setEmailState(v) }, [])
+  // Used by the profile prefill only: ignored once the customer has typed an email.
+  const setEmailFromProfile = useCallback<React.Dispatch<React.SetStateAction<string>>>(fn => { if (!userEditedEmailRef.current) setEmailState(fn) }, [])
 
   // ── Mounted guard ──────────────────────────────────────────────────────────
   // BUG FIX: guards post-await setState calls in coupon handlers to prevent
@@ -573,9 +583,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       loyaltyRedemption?.points ?? 0,
       // ORD-ADDR (Nov 2026 audit): the delivery address is part of what an order IS. Without it a customer who opened Razorpay,
       // closed it, corrected the address and paid again reused the key and was handed the original order (old address).
-      [addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode].map(v => String(v ?? '').trim().toLowerCase()),
+      [addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode, email].map(v => String(v ?? '').trim().toLowerCase()),   // email too: the confirmation goes there, so fixing a typo must not resume the old order
     ]),
-    [items, payMethod, coupon?.code, loyaltyRedemption?.points, addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode],
+    [items, payMethod, coupon?.code, loyaltyRedemption?.points, email, addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode],
   )
   const lastOrderSignatureRef = useRef<string | null>(null)
   useEffect(() => {
@@ -669,7 +679,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         // stale-while-revalidate pattern actually work: the instant cache
         // fill (possibly hours/days old) gets silently corrected here if
         // anything changed, but ONLY while the customer hasn't taken over.
-        applyProfileDataRef.current(prof, all, setAddr, setEmail, setSavedAddrs, !userEditedAddrRef.current)
+        applyProfileDataRef.current(prof, all, setAddr, setEmailFromProfile, setSavedAddrs, !userEditedAddrRef.current)
         // Same guard: don't silently re-select "Home" out from under a
         // customer who's already chosen a different saved address or typed
         // their own — _writeProfileCache above still refreshes localStorage
@@ -695,7 +705,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if (mountedRef.current) setProfilePrefillLoading(false)
       })
     return () => { clearTimeout(timeoutId); ctrl.abort() }
-  }, [isSignedIn]) // runs on mount and again once the (late-hydrating) user store reports a signed-in customer
+  }, [isSignedIn, setEmailFromProfile]) // runs on mount and again once the (late-hydrating) user store reports a signed-in customer
 
   // Coupon hints
   useEffect(() => {
@@ -739,7 +749,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal, lines: couponLines(itemsRef.current), phone: addr.phone || undefined, ...couponAddressCtx() }),
         signal:  ac.signal,
       })
         .then(async res => {
@@ -755,7 +765,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           setCouponError(data.error || `Coupon ${code} no longer applies to this order`)
         })
         .catch(() => { /* aborted / offline — the order itself re-checks */ })
-    }, 1200)
+    }, 2500)   // was 1.2s: typing the address kept firing coupon checks and used up the 5-per-minute limit the shopper needs to swap a coupon
     return () => { clearTimeout(timer); ac.abort() }
   }, [coupon, couponIdentityKey, pricing.subtotal, addr.phone, couponAddressCtx, removeCouponFromStore])
 
@@ -804,7 +814,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
+        body:    JSON.stringify({ code, subtotal: pricing.subtotal, lines: couponLines(itemsRef.current), phone: addr.phone || undefined, ...couponAddressCtx() }),
         signal:  ac.signal,
       })
         .then(async res => {
@@ -992,7 +1002,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     try {
       const res  = await fetch('/api/v1/coupons', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal, phone: addr.phone || undefined, ...couponAddressCtx() }),
+        body: JSON.stringify({ code: upper, subtotal: pricing.subtotal, lines: couponLines(itemsRef.current), phone: addr.phone || undefined, ...couponAddressCtx() }),
       })
       if (!mountedRef.current) return
       const data = await res.json()
@@ -1081,14 +1091,20 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       name: 'Full Name', phone: 'Mobile Number', flat: 'Address',
       city: 'City', state: 'State', pincode: 'Pincode',
     }
-    for (const f of required) {
-      if (!addr[f]?.toString().trim()) { placingRef.current = false; setError(`Please fill in: ${fieldLabels[f]}`); return }
+    // Refuse and move keyboard / screen-reader focus to the field that needs fixing (it used to leave focus on the button, with the
+    // message far away in the order summary).
+    const refuse = (msg: string, fieldId?: string) => {
+      placingRef.current = false; setError(msg)
+      if (fieldId) setTimeout(() => document.getElementById(fieldId)?.focus(), 0)
     }
-    if (!payChoice) { placingRef.current = false; setError('Please choose a payment method — UPI / Card / Net Banking, or Cash on Delivery — to place your order.'); return }
-    if (!/^[6-9]\d{9}$/.test(addr.phone)) { placingRef.current = false; setError('Enter a valid 10-digit mobile number'); return }
-    if (!/^\d{6}$/.test(addr.pincode))     { placingRef.current = false; setError('Enter a valid 6-digit pincode'); return }
-    { const pinMsg = pinProblem(addr.pincode, addr.state); if (pinMsg) { placingRef.current = false; setError(pinMsg); return } }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { placingRef.current = false; setError('Enter a valid email address'); return }
+    for (const f of required) {
+      if (!addr[f]?.toString().trim()) { refuse(`Please fill in: ${fieldLabels[f]}`, `af-${f === 'flat' ? 'flat' : f}`); return }
+    }
+    if (!payChoice) { refuse('Please choose a payment method — UPI / Card / Net Banking, or Cash on Delivery — to place your order.'); return }
+    if (!/^[6-9]\d{9}$/.test(addr.phone)) { refuse('Enter a valid 10-digit mobile number', 'af-phone'); return }
+    if (!/^\d{6}$/.test(addr.pincode))     { refuse('Enter a valid 6-digit pincode', 'af-pincode'); return }
+    { const pinMsg = pinProblem(addr.pincode, addr.state); if (pinMsg) { refuse(pinMsg, 'af-pincode'); return } }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { refuse('Enter a valid email address', 'af-email'); return }
     setError(''); setPlacing(true)
     try {
       // C1: confirm against the server's CURRENT prices and stock before any order or payment
@@ -1182,7 +1198,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         const orderNumber = dbData.order_number || ''
         trackOrderPlaced(orderNumber, pricingTotal, 'cod')
 
-        window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
+        window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank', 'noopener,noreferrer')
         orderPlacedRef.current = true
         clearCart()
         router.replace(buildOrderSuccessUrl(orderNumber, dbData.confirmation_token))
@@ -1285,7 +1301,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
                 `\n📍 ${addr.flat}, ${addr.city}, ${addr.state} — ${addr.pincode}\n\n` +
                 `🛒 *Items*\n${itemLines}` + couponLine + coinsLine + shipLine +
                 `\n\n*Total Paid: ₹${pricingTotal}*`
-              window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank')
+              window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`, '_blank', 'noopener,noreferrer')
 
               trackPaymentVerified(verData.order_number, pricingTotal)
               orderPlacedRef.current = true
@@ -1311,6 +1327,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
             ondismiss: () => { placingRef.current = false; setPlacing(false) },
           },
         })
+        // A declined / failed attempt inside the modal: release the button right away (the modal itself offers Retry), instead of
+        // leaving "Placing Order…" disabled until the customer closes it.
+        try { (rzp as unknown as { on?: (ev: string, cb: () => void) => void }).on?.('payment.failed', () => { placingRef.current = false; setPlacing(false) }) } catch { /* older checkout.js */ }
         trackPaymentInitiated(pricingTotal)
         rzp.open()
         return
