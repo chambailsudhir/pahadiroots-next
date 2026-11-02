@@ -222,3 +222,13 @@ export function sanitizeHtml(dirty: string | null | undefined): string {
   }
   return out.trim()
 }
+
+/**
+ * True when a plain-text field (name, street, city ...) contains characters that never belong in one:
+ * `<` / `>` (tag-stripping regexes leave an UNTERMINATED `<img src=x onerror=...` behind), C0/C1 control characters
+ * including newlines and NUL, and invisible / bidi-override characters (zero-width space and joiners, LRM/RLM,
+ * U+2028/2029, embeddings and overrides, word joiner, BOM). Defence in depth next to escaping at render time.
+ */
+export function hasUnsafeTextChars(v: string): boolean {
+  return /[<>\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/.test(v)
+}

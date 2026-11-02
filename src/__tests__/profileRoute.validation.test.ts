@@ -13,15 +13,15 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
   sbAuth: vi.fn(), sbAdmin: vi.fn(), syncCustomerProfile: vi.fn(),
-  getToken: vi.fn(), tryRefresh: vi.fn(), checkRateLimit: vi.fn(), checkCsrf: vi.fn(),
+  getToken: vi.fn(), tryRefresh: vi.fn(), checkRateLimit: vi.fn(), checkRateLimitShared: vi.fn(), checkCsrf: vi.fn(),
 }))
 vi.mock('@/lib/api/serverUtils', async () => {
   const { NextResponse } = await import('next/server')
   return {
     ok:   (d: unknown) => NextResponse.json(d),
     fail: (status: number, msg: string, headers?: Record<string, string>) => NextResponse.json({ error: msg }, { status, headers }),
-    sbAuth: mocks.sbAuth, sbAdmin: mocks.sbAdmin, syncCustomerProfile: mocks.syncCustomerProfile,
-    getToken: mocks.getToken, tryRefresh: mocks.tryRefresh, checkRateLimit: mocks.checkRateLimit, checkCsrf: mocks.checkCsrf,
+    sbAuth: mocks.sbAuth, sbAdmin: (m: string, p: string, ...a: unknown[]) => (String(p).includes('/rpc/') ? Promise.reject({ status: 404, message: 'PGRST202' }) : (mocks.sbAdmin as (...x: unknown[]) => unknown)(m, p, ...a)), syncCustomerProfile: mocks.syncCustomerProfile,
+    getToken: mocks.getToken, tryRefresh: mocks.tryRefresh, checkRateLimit: mocks.checkRateLimit, checkRateLimitShared: mocks.checkRateLimitShared, checkCsrf: mocks.checkCsrf,
     applyNewCookies: (r: NextResponse) => r, toPublicProfile: (p: unknown) => p,
   }
 })
@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.checkCsrf.mockReturnValue(null)
   mocks.checkRateLimit.mockReturnValue(true)
+  mocks.checkRateLimitShared.mockResolvedValue(true)
   mocks.getToken.mockReturnValue('jwt')
   mocks.tryRefresh.mockResolvedValue(null)
   mocks.sbAuth.mockResolvedValue({ id: 'u1', email: 'a@b.com' })
@@ -85,14 +86,14 @@ describe('POST /api/profile — scalar fields (ACC-039)', () => {
 })
 
 describe('POST /api/profile — duplicate mobile number (live verification)', () => {
-  it('answers 409 with a clear message when the number already belongs to another account (unique normalized_phone)', async () => {
+  it('answers a GENERIC 400 (never discloses that the number belongs to another account) on a unique normalized_phone clash', async () => {
     mocks.sbAdmin.mockImplementation(async (m: string, p: string) => {
       if (m === 'PATCH' && p.startsWith('/rest/v1/customers?id=')) throw { status: 409, message: '{"code":"23505","message":"duplicate key value violates unique constraint \\"customers_normalized_phone_key\\""}' }
       return []
     })
     const res = await post({ phone: '9876543210' })
-    expect(res.status).toBe(409)
-    expect((await res.json()).error).toMatch(/already linked to another account/i)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).not.toMatch(/another account|already/i)
   })
 })
 

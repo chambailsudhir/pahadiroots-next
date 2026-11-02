@@ -69,6 +69,7 @@ async function withRetry<T>(
   fn: () => Promise<T>,
   retries = 3,
   delayMs = 800,
+  retryable: (err: unknown) => boolean = () => true,
 ): Promise<T> {
   let lastErr: unknown
   for (let i = 0; i < retries; i++) {
@@ -78,6 +79,7 @@ async function withRetry<T>(
       lastErr = err
       // Don't retry on 4xx (client errors) — only on network / 5xx
       if (err instanceof ServiceError && err.status && err.status < 500) throw err
+      if (!retryable(err)) throw err
       if (i < retries - 1) {
         await new Promise(r => setTimeout(r, delayMs * 2 ** i)) // 800ms, 1.6s, 3.2s
       }
@@ -146,12 +148,17 @@ export async function updateProfile(updates: Partial<Profile>): Promise<void> {
   const etag = 'saved_addresses' in updates ? getAddressEtag() : null
   const payload = etag ? { ...updates, saved_addresses_etag: etag } : updates
   try {
+    // A POST is not blindly repeatable: a generic 500 may mean the write half-ran. Retry only when the request provably
+    // did not complete (network error / timeout) or the service said it is unavailable (502/503/504). The server also
+    // answers a repeat of an already-applied address list with success, so a retried save never shows a false conflict.
     const res = await withRetry(() =>
       apiFetch('/api/profile', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
-      })
+      }),
+      2, 800,
+      (err) => !(err instanceof ServiceError) || err.status === undefined || [502, 503, 504].includes(err.status),
     )
     setAddressEtag((res as { saved_addresses_etag?: unknown } | null)?.saved_addresses_etag)
   } finally {

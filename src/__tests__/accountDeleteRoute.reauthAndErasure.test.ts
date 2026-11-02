@@ -83,8 +83,8 @@ describe('DELETE /api/account/delete — erasure (ACC-033)', () => {
     expect(body).not.toHaveProperty('postal_code')
     expect(body).toHaveProperty('auth_user_id', null)
     expect(body).toMatchObject({ first_name: 'Deleted', phone: null, email: null, is_deleted: true })
-    // the order snapshot (name, address, delivery phone) is nulled too
-    expect(adminCalls().some(([m, p, b]) => m === 'PATCH' && p.startsWith('/rest/v1/orders?customer_id=eq.42') && (b as { shipping_address: null }).shipping_address === null)).toBe(true)
+    // the delivery snapshot of closed orders is KEPT (invoice recipient); in-flight orders block deletion with a 409 instead
+    expect(adminCalls().some(([, , b]) => !!b && typeof b === 'object' && 'shipping_address' in (b as object))).toBe(false)
   })
 
   it('does NOT delete the login when the anonymising update fails (previously swallowed → FK 23503 → 500)', async () => {

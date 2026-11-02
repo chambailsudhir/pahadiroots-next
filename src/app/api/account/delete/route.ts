@@ -24,6 +24,7 @@
 // Rate limit: 3 req/hour per IP
 // ─────────────────────────────────────────────────────────────
 
+import { createHmac } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ok, fail,
@@ -42,9 +43,47 @@ const IS_PROD      = process.env.NODE_ENV === 'production'
 const RESEND_KEY   = process.env.RESEND_API_KEY
 const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
+// order_status_enum values after which nothing more happens to the parcel or the money (checked against the live enum:
+// pending, confirmed, processing, packed, shipped, out_for_delivery, delivered, cancelled, payment_failed, returned,
+// return_requested, return_approved, return_received, return_rejected, refund_initiated, refund_completed, refunded).
+// Everything NOT listed here is "open": the courier still needs the destination, or a return / refund is in flight.
+const TERMINAL_ORDER_STATUSES = ['delivered', 'cancelled', 'payment_failed', 'returned', 'return_rejected', 'refund_completed', 'refunded'] as const
+const EVIDENCE_BUCKET = 'return-evidence'
+const chunk = <T,>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
+
+// The audit row must prove WHEN and THAT an erasure happened without keeping the requester's IP (personal data) after
+// erasure. Keyed hash (service key as secret) truncated to 64 bits — not reversible by brute-forcing the IPv4 space.
+function hashIp(ip: string): string {
+  return createHmac('sha256', SUPABASE_KEY || 'no-key').update(ip).digest('hex').slice(0, 16)
+}
+
+// Delete every object under returns/<orderId>/ in the private return-evidence bucket (Storage REST API).
+async function deleteReturnEvidence(orderIds: Array<string | number>): Promise<void> {
+  const headers = { 'Content-Type': 'application/json', apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  for (const group of chunk(orderIds, 10)) {
+    await Promise.all(group.map(async (orderId) => {
+      const prefix = `returns/${orderId}`
+      const listRes = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${EVIDENCE_BUCKET}`, {
+        method: 'POST', headers, signal: AbortSignal.timeout(8_000),
+        body: JSON.stringify({ prefix, limit: 1000, offset: 0 }),
+      })
+      if (!listRes.ok) throw new Error(`return-evidence list failed (${listRes.status})`)
+      const items = await listRes.json().catch(() => []) as Array<{ name?: string }>
+      const paths = (Array.isArray(items) ? items : []).map(i => i?.name).filter((n): n is string => !!n).map(n => `${prefix}/${n}`)
+      if (paths.length === 0) return
+      const delRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${EVIDENCE_BUCKET}`, {
+        method: 'DELETE', headers, signal: AbortSignal.timeout(8_000),
+        body: JSON.stringify({ prefixes: paths }),
+      })
+      if (!delRes.ok) throw new Error(`return-evidence delete failed (${delRes.status})`)
+    }))
+  }
+}
+
 // ── Step 5.5: Send deletion confirmation email ────────────────
 // Non-fatal — deletion proceeds even if Resend is unreachable.
-// Called BEFORE deleteAuthUser so the email address is still valid.
+// Called AFTER the auth user was deleted, with the address captured before erasure (a failed deletion must never
+// produce a "your account has been deleted" mail).
 async function sendDeletionConfirmation(email: string): Promise<void> {
   if (!RESEND_KEY || !email) return
   try {
@@ -56,7 +95,7 @@ async function sendDeletionConfirmation(email: string): Promise<void> {
         from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
         to:      [email],
         subject: 'Your HimVeda by Pahadi Roots account has been deleted',
-        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account and all associated personal data have been permanently deleted, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>.</p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px"><li>Your name, phone, email and address have been erased</li><li>Saved delivery addresses have been removed</li><li>Order records are anonymised and retained for the period required under GST and tax law</li></ul><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account has been deleted and your personal data erased, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>, except for the records we are legally required to keep (below).</p><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Erased or anonymised</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Your name, phone number, e-mail, GSTIN and profile address, saved delivery addresses, wishlist and abandoned carts</li><li>Newsletter and back-in-stock subscriptions, and queued e-mails to this address</li><li>Return photos and your name and comments on return requests, order notes, and notes on Pahadi Coins entries</li></ul><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Retained as required by GST and tax law</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Invoices, credit notes and order records of completed orders, including the recipient name and delivery address printed on them, for the statutory retention period; they are not used for marketing</li></ul><p style="color:#555;font-size:14px;line-height:1.6">Product reviews you posted are public content that is not linked to your account; write to us if you would like one removed.</p><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
       }),
     })
   } catch (e) {
@@ -77,6 +116,8 @@ async function deleteAuthUser(userId: string): Promise<void> {
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    // 404 = already gone (e.g. a retry after a response was lost) — that is the desired end state.
+    if (res.status === 404) return
     throw new Error(`Auth user deletion failed (${res.status}): ${text}`)
   }
 }
@@ -163,7 +204,7 @@ export async function DELETE(req: NextRequest) {
     // still delete the login — the exact failure mode that left PII behind before.
     const customerRows = await sbAdmin(
       'GET',
-      `/rest/v1/customers?auth_user_id=eq.${userId}&select=id&limit=1`,
+      `/rest/v1/customers?auth_user_id=eq.${userId}&select=id,email&limit=1`,
     )
 
     // customers.id is bigint — cast to string for URL params
@@ -171,26 +212,79 @@ export async function DELETE(req: NextRequest) {
       ? String(customerRows[0].id)
       : null
 
+    // Captured BEFORE anything is erased: every address this person used (account + customer row).
+    const userEmail: string = typeof user.email === 'string' ? user.email : ''
+    const emailSet = new Set<string>()
+    for (const e of [userEmail, customerRows?.[0]?.email]) {
+      if (typeof e === 'string' && e.trim()) { emailSet.add(e.trim()); emailSet.add(e.trim().toLowerCase()) }
+    }
+
+    // ORDER OF STEPS (audit): nothing irreversible-and-visible happens until every check passed, and the step that
+    // UNLINKS the customer row (the one a retry cannot redo) is the last database write. Every earlier step is
+    // idempotent, so a failure leaves a still-active account the customer can simply retry.
+    let orderIds: Array<string | number> = []
     if (customerId) {
-      // AUDIT ACC-033 — ROOT CAUSE of "Account deletion failed (500)":
-      // every write below used to end in `.catch(() => null)`, and the anonymising PATCH sent a
-      // column that does not exist (`postal_code` — the real column is `pincode`). PostgREST
-      // rejected the whole update (PGRST204), the swallowed error hid it, `customers.auth_user_id`
-      // stayed set, and the later auth-user delete died on FK customers_auth_user_id_fkey (23503).
-      // Steps 2–3 are therefore FATAL now: if PII could not be erased we stop BEFORE the
-      // irreversible auth deletion and the customer can simply retry.
-
-      // ── Step 2: Null shipping_address on orders ─────────────────
-      // orders has NO customer_name/phone/email columns; shipping_address (JSONB — name, address
-      // and, since ACC-035, the delivery phone) is the per-order PII snapshot.
-      await sbAdmin(
-        'PATCH',
-        `/rest/v1/orders?customer_id=eq.${customerId}`,
-        { shipping_address: null },
-        'return=minimal',
+      // ── Step 2: refuse while any order is still in flight ────────
+      // The previous version NULLed orders.shipping_address for ALL orders — including shipped / packed / COD-confirmed
+      // ones — destroying the courier destination, and was not transactional. In-flight orders need the recipient;
+      // closed orders keep it too (invoice / credit-note retention, see PR note for counsel).
+      const open = await sbAdmin(
+        'GET',
+        `/rest/v1/orders?customer_id=eq.${customerId}&order_status=not.in.(${TERMINAL_ORDER_STATUSES.join(',')})&select=id&limit=1`,
       )
+      if (Array.isArray(open) && open.length > 0) {
+        return NextResponse.json({
+          error: 'You still have an order, return or refund in progress. We need your delivery details until it is completed, so your account cannot be deleted yet. Please wait until your open orders are delivered or cancelled, or contact support on WhatsApp and we will help.',
+          code:  'open_orders',
+        }, { status: 409 })
+      }
 
-      // ── Step 3: Anonymise customers row ──────────────────────────
+      // All of this customer's order ids (paged — PostgREST caps a response at 1000 rows).
+      for (let offset = 0; offset < 100_000; offset += 1000) {
+        const page = await sbAdmin('GET', `/rest/v1/orders?customer_id=eq.${customerId}&select=id&order=id.asc&limit=1000&offset=${offset}`)
+        if (!Array.isArray(page)) throw new Error('unexpected orders response')
+        orderIds.push(...page.map((o: { id: string | number }) => o.id))
+        if (page.length < 1000) break
+      }
+
+      // ── Step 3: return-evidence photos (private bucket) + free text on returns ──
+      if (orderIds.length > 0) await deleteReturnEvidence(orderIds)
+      for (const ids of chunk(orderIds, 100)) {
+        await sbAdmin(
+          'PATCH',
+          `/rest/v1/returns?order_id=in.(${ids.join(',')})`,
+          { customer_name: 'Deleted User', description: null, photo_urls: null },
+          'return=minimal',
+        )
+      }
+
+      // ── Step 4: customer-written free text on orders / ledger ────
+      // Closed orders keep shipping_address (recipient on the invoice) but not what the customer typed in the notes box.
+      await sbAdmin('PATCH', `/rest/v1/orders?customer_id=eq.${customerId}`, { notes: null }, 'return=minimal')
+      await sbAdmin('PATCH', `/rest/v1/loyalty_transactions?customer_id=eq.${customerId}`, { note: null }, 'return=minimal')
+
+      // ── Step 5: personal rows keyed by customer ──────────────────
+      // saved_addresses (table), wishlist and abandoned carts (name/email/phone snapshots).
+      for (const table of ['saved_addresses', 'wishlist', 'abandoned_carts']) {
+        await sbAdmin('DELETE', `/rest/v1/${table}?customer_id=eq.${customerId}`, null, 'return=minimal')
+      }
+    }
+
+    // ── Step 6: rows keyed by e-mail address (no customer link) ──
+    // Newsletter and back-in-stock subscriptions, and queued (undelivered) e-mails addressed to this person.
+    for (const email of emailSet) {
+      const q = encodeURIComponent(email)
+      await sbAdmin('DELETE', `/rest/v1/subscribers?email=eq.${q}`, null, 'return=minimal')
+      await sbAdmin('DELETE', `/rest/v1/stock_notifications?email=eq.${q}`, null, 'return=minimal')
+      await sbAdmin('DELETE', `/rest/v1/failed_emails?to_email=eq.${q}&status=in.(pending,retrying)`, null, 'return=minimal')
+    }
+
+    if (customerId) {
+      // ── Step 7: Anonymise customers row (LAST database write) ────
+      // AUDIT ACC-033 — ROOT CAUSE of "Account deletion failed (500)": every write used to end in
+      // `.catch(() => null)` and the PATCH sent a column that does not exist (`postal_code`); the error was swallowed,
+      // `customers.auth_user_id` stayed set and the auth-user delete died on FK customers_auth_user_id_fkey (23503).
+      // This step is FATAL and verified: if it did not apply we stop BEFORE the irreversible auth deletion.
       // Keep the row so order FK (customer_id) stays valid; strip every personal field.
       const anonymised = await sbAdmin(
         'PATCH',
@@ -210,6 +304,9 @@ export async function DELETE(req: NextRequest) {
           wishlist_items:  null,
           gstin:           null,
           notes:           null,
+          tags:            [],            // admin-assigned labels about the person
+          referral_code:   null,          // personal share code
+          source:          null,
           is_deleted:      true,
           deleted_at:      new Date().toISOString(),
           notif_email_orders:    false,
@@ -223,58 +320,50 @@ export async function DELETE(req: NextRequest) {
       if (!Array.isArray(anonymised) || anonymised.length !== 1 || anonymised[0]?.auth_user_id != null) {
         throw new Error('customer anonymisation did not apply (row not updated / still linked to auth user)')
       }
+    }
 
-      // ── Step 4: Delete personal rows keyed by customer ───────────
-      // saved_addresses (table), wishlist and abandoned carts (name/email/phone snapshots).
-      // Loyalty/coupon/order rows are financial records and stay (they hold no direct PII).
-      for (const table of ['saved_addresses', 'wishlist', 'abandoned_carts']) {
-        await sbAdmin(
-          'DELETE',
-          `/rest/v1/${table}?customer_id=eq.${customerId}`,
-          null,
-          'return=minimal',
-        )
+    // ── Step 8: DPDP audit log ────────────────────────────────────
+    // event_logs.entity_id is TEXT (not uuid). The requester's IP is stored only as a keyed hash.
+    // A failure is retried once and then LOGGED LOUDLY (it used to be swallowed); it does not block the erasure itself,
+    // which the data subject is entitled to.
+    const auditRow = {
+      entity_type: 'customer',
+      entity_id:   customerId ?? userId,
+      event:       'account.deleted.dpdp',
+      actor:       userId,
+      metadata: {
+        ip_hash:       hashIp(ip),
+        reason:        'user_requested',
+        dpdp_act_2023: true,
+        requested_at:  new Date().toISOString(),
+      },
+    }
+    let auditOk = false
+    for (let attempt = 0; attempt < 2 && !auditOk; attempt++) {
+      try { await sbAdmin('POST', '/rest/v1/event_logs', auditRow, 'return=minimal'); auditOk = true } catch (e) {
+        if (attempt === 1) console.error('[account/delete] AUDIT ROW NOT WRITTEN (erasure itself completed)', { entity_id: auditRow.entity_id, err: e })
       }
     }
 
-    // ── Step 5: DPDP audit log ────────────────────────────────────
-    // event_logs.entity_id is TEXT (not uuid) — pass as string
-    await sbAdmin(
-      'POST',
-      '/rest/v1/event_logs',
-      {
-        entity_type: 'customer',
-        entity_id:   customerId ?? userId,
-        event:       'account.deleted.dpdp',
-        actor:       userId,
-        metadata: {
-          ip,
-          reason:        'user_requested',
-          dpdp_act_2023: true,
-          requested_at:  new Date().toISOString(),
-        },
-      },
-      'return=representation',
-    ).catch(() => null)   // audit failure must never block deletion
+    // ── Step 9: Delete Supabase Auth user ─────────────────────────
+    // Irrecoverable — the very last step. Retried once; if it still fails the customer row is already unlinked, the
+    // person gets an error (no "deleted" e-mail) and support is pointed to the logged entity id.
+    try {
+      await deleteAuthUser(userId)
+    } catch (e) {
+      console.error('[account/delete] auth user deletion failed after database erasure', { userId, err: e })
+      await deleteAuthUser(userId)
+    }
 
-    // ── Step 5.5: Send deletion confirmation email ────────────────
-    // Must run BEFORE deleteAuthUser — the auth record (and its email)
-    // is wiped in Step 6 and can't be read afterwards.
-    // sendDeletionConfirmation is non-fatal: if Resend is down, deletion
-    // still completes and we log the failure internally.
-    const userEmail: string = typeof user.email === 'string' ? user.email : ''
+    // ── Step 10: confirmation e-mail — only now that the deletion succeeded ──
+    // Uses the address captured before erasure; non-fatal.
     await sendDeletionConfirmation(userEmail)
 
-    // ── Step 6: Delete Supabase Auth user ─────────────────────────
-    // Irrecoverable — always the very last step.
-    // If anything above failed partially, the user still has an account
-    // they can retry from or raise a support ticket about.
-    await deleteAuthUser(userId)
-
     // ── Step 7: Clear cookies + respond ──────────────────────────
-    const successMsg = userEmail
-      ? `Account deleted. A confirmation has been sent to ${userEmail}.`
-      : 'Account deleted successfully.'
+    const successMsg = (userEmail
+      ? `Account deleted. A confirmation has been sent to ${userEmail}. `
+      : 'Account deleted successfully. ')
+      + 'Your personal data has been erased. Invoices and order records of completed orders (including the recipient name and delivery address printed on them) are retained for the period GST and tax law require.'
     const res = clearAuthCookies(
       ok({ success: true, message: successMsg }) as NextResponse
     )
