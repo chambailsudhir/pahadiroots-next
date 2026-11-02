@@ -11,6 +11,7 @@
 
 import type { Review } from '@/types'
 import { formatDate } from '@/lib/utils'
+import VerifiedBadge from '@/components/product/VerifiedBadge'
 
 // ─── Stars ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export default function ReviewsSection({ reviews, stats }: Props) {
             <div className="text-xs font-semibold text-stone-700">
               {r.customer_name}{r.location ? ` · ${r.location}` : ''}
             </div>
+            <div className="mt-1"><VerifiedBadge review={r} /></div>
           </div>
         ))}
       </div>

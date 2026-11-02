@@ -270,6 +270,8 @@ export interface Review {
   is_approved?: boolean   // LEGACY — unused by any query in either codebase; the RLS policy that
                           // referenced it was dropped (duplicated status='approved', could drift out of sync)
   created_at: string
+  /** true only for reviews written by a customer whose order containing the product was delivered (db_migration_v23). May be absent. */
+  is_verified_purchase?: boolean
 }
 
 // ─── Site Settings Type ───────────────────────────────────────────────────────

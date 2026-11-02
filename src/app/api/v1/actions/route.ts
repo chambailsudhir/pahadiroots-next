@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { reviewSchema, notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
+import { notifyStockSchema, saveAbandonedCartSchema, markCartConvertedSchema } from '@/lib/schemas'
 import { getServiceClient } from '@/lib/supabase'
-import { checkCsrf, getToken } from '@/lib/api/serverUtils'
+import { checkCsrf } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { logger } from '@/lib/logger'
+import { submitVerifiedReview } from '@/lib/server/reviewSubmit'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
 // resolution errors in Next.js 14 App Router server routes. The original import
@@ -93,37 +94,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'submit_review') {
-      // ── Auth check — only logged-in users may submit reviews ─────────────
-      const token = getToken(req)
-      if (!token) {
-        return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-      }
-
-      const parsed = reviewSchema.safeParse(body)
-      if (!parsed.success) {
-        return NextResponse.json({ error: 'Invalid review data' }, { status: 400 })
-      }
-
-      const d = parsed.data
-
-      // Sanitize text: strip HTML tags before DB storage to prevent stored XSS
-      const comment = d.comment ? stripTags(d.comment) : null
-      const name    = stripTags(d.customer_name)
-
-      await db.from('reviews').insert({
-        product_id:    d.product_id,
-        customer_name: name,
-        rating:        d.rating,
-        review_text:   comment,  // main column
-        comment:       comment,  // added column (same value)
-        status:        'pending', // real column - 'pending' until admin approves
-        created_at:    new Date().toISOString(),
-      })
-
-      return NextResponse.json({ success: true, message: 'Review submitted for approval' })
+      // Verified-purchase reviews: the customer comes from the session, the order must be theirs, delivered and contain
+      // the product (lib/server/reviewSubmit.ts). Response shape unchanged: { success, message }.
+      return submitVerifiedReview(req, body)
     }
-
-
 
     if (action === 'contact') {
       // Log contact form to admin_logs or send email

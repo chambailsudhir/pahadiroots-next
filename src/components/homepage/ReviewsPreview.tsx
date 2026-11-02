@@ -1,5 +1,6 @@
 import { getLatestReviews, type HomepageReview } from '@/lib/homepageData'
 import { starsFor } from '@/lib/rating'
+import VerifiedBadge from '@/components/product/VerifiedBadge'
 
 // BUG FIX (P1 — trust/legal): this component previously rendered 3
 // hardcoded testimonials, each labeled "Verified Buyer", that were never
@@ -32,6 +33,10 @@ import { starsFor } from '@/lib/rating'
 // purchase verification (storing order_id, checking it against a
 // completed order containing that product) would be a good follow-up if
 // wanted, but is a schema change + feature build, not a one-line fix.
+//
+// NOV 2026: that follow-up is built (db_migration_v23, lib/server/reviewSubmit.ts). Reviews now store customer_id / order_id and
+// is_verified_purchase = true (order delivered and contains the product). The "Verified purchase" badge is shown ONLY when the
+// row says so; legacy rows and rows read before the migration carry no flag and show no badge.
 
 function initialOf(name: string | null | undefined): string {
   // BUG FIX (audit): customer_name can be NULL in the reviews table; the old
@@ -78,6 +83,7 @@ export default async function ReviewsPreview() {
                 <div>
                   <div className="ran">{r.customer_name?.trim() || 'Customer'}</div>
                   <div className="rloc">{r.location || 'Customer'}</div>
+                  <VerifiedBadge review={r} />
                 </div>
               </div>
             </div>
