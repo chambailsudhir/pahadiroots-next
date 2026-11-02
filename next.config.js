@@ -53,9 +53,6 @@ const nextConfig = {
     qualities: [60, 70, 75, 90],
   },
   experimental: {
-    // LCP (audit HOME-003): the two render-blocking stylesheets cost a full round trip before the hero could paint on a slow
-    // connection. Inlining the CSS into the HTML removes that round trip; the document grows by the CSS size but is one request.
-    inlineCss: true,
     // Enable server actions
     serverActions: {
       // Only allow our own domain + the exact Vercel preview URL injected per-deployment.
