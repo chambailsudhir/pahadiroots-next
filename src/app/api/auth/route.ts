@@ -22,6 +22,9 @@ import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 import { validate as validators } from '@/lib/account/validation'
+import { sendTransactionalEmail } from '@/lib/server/email'
+import { captureError } from '@/lib/logger'
+import { esc } from '@/lib/server/htmlEscape'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -245,6 +248,69 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204 })
 }
 
+// ── Sign-up verification e-mail fallback (account audit, Nov 2026 — ACC-025) ────────────────────────────
+// Supabase Auth sends the confirmation e-mail through the SMTP server configured in the Supabase dashboard.
+// When those credentials are invalid (live evidence: SMTP `535 Authentication credentials invalid`) EVERY
+// sign-up fails with 500 "Error sending confirmation email" and the user is rolled back. Password reset never
+// had this problem because it already avoids Supabase's mailer (admin generate_link + our own Resend sender).
+// Sign-up now does the same, but ONLY when Supabase reports that it could not send its own mail — so a healthy
+// SMTP setup keeps working exactly as before, and the day the credentials are fixed this path simply stops firing.
+function isSupabaseMailFailure(e: { status?: number; message?: string }): boolean {
+  return (e.status ?? 0) >= 500 && /sending|smtp|e-?mail|mailer/i.test(e.message || '')
+}
+
+async function signupViaOwnMailer(email: string, password: string, fullName: string) {
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+  const FRIENDLY = 'We created your account but could not send the verification e-mail right now. Please try again in a few minutes, or continue with Google.'
+  try {
+    // type "signup" creates the (unconfirmed) user AND returns the verification link WITHOUT sending any mail.
+    const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      body:    JSON.stringify({ type: 'signup', email, password, data: { full_name: fullName }, redirect_to: `${SITE_URL}/account?verified=1` }),
+      signal:  AbortSignal.timeout(8_000),
+    })
+    const gen = await genRes.json().catch(() => ({})) as {
+      id?: string; email?: string; phone?: string; msg?: string; error_code?: string
+      action_link?: string; properties?: { action_link?: string }
+    }
+    if (!genRes.ok) {
+      if (/already|registered|exists/i.test(`${gen.msg ?? ''} ${gen.error_code ?? ''}`)) {
+        return err(400, 'An account with this email already exists. Please login instead.')
+      }
+      captureError(new Error(`signup fallback: generate_link failed (${genRes.status})`), { action: 'auth.signup.fallback_generate_link', alert: true })
+      return err(503, FRIENDLY)
+    }
+    const link = gen.action_link || gen.properties?.action_link || ''
+    if (!gen.id || !link) {
+      captureError(new Error('signup fallback: generate_link returned no user/link'), { action: 'auth.signup.fallback_no_link', alert: true })
+      return err(503, FRIENDLY)
+    }
+    const profile = await syncCustomerProfile({ id: gen.id, email: gen.email || email, phone: gen.phone || undefined, user_metadata: { full_name: fullName } })
+
+    const firstName = esc(fullName.split(' ')[0] || 'there')
+    const safeLink  = link.replace(/"/g, '%22')
+    const mail = await sendTransactionalEmail({
+      type:    'signup_verification',
+      to:      email,
+      subject: 'Verify your email — HimVeda by Pahadi Roots',
+      html:    `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:32px 24px;text-align:center"><div style="font-size:36px">🌿</div><div style="font-size:22px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:36px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Welcome, ${firstName}!</h2><p style="color:#555;font-size:15px;line-height:1.6">Please confirm your email address to finish creating your account.</p><p style="text-align:center;margin:28px 0"><a href="${safeLink}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">Verify my email</a></p><p style="color:#888;font-size:13px;line-height:1.5">This link works once and expires soon. If you did not create an account, you can ignore this email.</p></div></div></body></html>`,
+      context: { user_id: gen.id },
+    })
+    if (!mail.sent && !mail.deadLettered) {
+      captureError(new Error('signup fallback: verification e-mail could not be sent or queued'), { action: 'auth.signup.fallback_email', alert: true, error: mail.error })
+      return err(503, FRIENDLY)
+    }
+    return ok({
+      success: true, verification_sent: true,
+      user: { id: gen.id, email: gen.email || email, phone: gen.phone || null }, profile: toPublicProfile(profile),
+    })
+  } catch (e) {
+    captureError(e, { action: 'auth.signup.fallback', alert: true })
+    return err(503, FRIENDLY)
+  }
+}
+
 export async function POST(req: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_KEY || !SUPABASE_ANON) {
     return err(500, 'Server misconfigured — check env vars')
@@ -341,6 +407,13 @@ export async function POST(req: NextRequest) {
       return res
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
+      // ACC-025: Supabase could not send ITS e-mail (bad SMTP credentials) → alert ops, then use our own mailer.
+      if (isSupabaseMailFailure(e2)) {
+        captureError(new Error(`Supabase Auth could not send the sign-up e-mail (${e2.message}) — SMTP credentials in Supabase → Auth → SMTP are probably invalid; using the Resend fallback`), {
+          action: 'auth.signup.supabase_smtp_failed', alert: true,
+        })
+        return signupViaOwnMailer(email, password, resolvedName)
+      }
       return err(e2.status || 400, e2.message || 'Signup failed')
     }
   }

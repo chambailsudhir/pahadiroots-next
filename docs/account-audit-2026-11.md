@@ -23,23 +23,25 @@ No real customer row was read or changed.
 | ACC-040 | Account-page Logout left `pr_checkout_profile` (name/phone/address) in localStorage | `clearClientPII()` on logout and after deletion |
 | ACC-041 | Export omitted loyalty/wishlist/prefs/returns; "once per 24 h" not enforced (in-process limiter) | Added those sections; per-account shared limiter |
 | ACC-027/028 | No consent notice at sign-up; "Join 10K+ …" with 20 customers | Terms/Privacy notice; claim removed |
+| ACC-025 | Every e-mail sign-up → HTTP 500 "Error sending confirmation email" (Supabase Auth SMTP `535 Authentication credentials invalid`) | Sign-up now falls back to the same mechanism password-reset already uses (admin `generate_link` + our Resend sender) **only when Supabase reports it could not send its own mail**; alert-level log tells ops the SMTP credentials are bad. A healthy SMTP setup is untouched. The credentials themselves still need fixing in the dashboard (§2) |
+| ACC-050 | No self-serve cancellation anywhere (UI or API) | `POST /api/orders/[id]/cancel` + "Cancel order" dialog on the order page. COD orders that are `pending`/`confirmed` only (policy: before dispatch, no fee); owner-scoped conditional update (single winner); the DB already releases stock and reverses the journal on the status change; the route adds coupon release + `reverse_loyalty_for_order` (**new, db_migration_v16, applied to prod, tested in a rolled-back transaction**) + customer/admin e-mails. Prepaid or already-packed orders get a WhatsApp prompt instead. Policy text updated |
+| ACC-045 | Account page said "Earn 1 coin per ₹1" and "100 bonus coins" (hard-coded) while the real settings are `loyalty_points_per_rupee = 0.01` and `referral_bonus_points = 100` | Copy now comes from the real settings via `/api/v1/loyalty` (`earn_per_rupee`, `referral_bonus`): "Earn 1 coin for every ₹100 you spend". *(Earlier I called this ~100 % cashback — wrong; it is a 1 % earn rate.)* |
+| ACC-032 follow-up | After a timed-out order the loyalty award and the confirmation / admin e-mails never ran | The post-order steps are one function used by both paths; the recovery path runs it once, guarded by an `order_events` marker (`post_order_finalized`), and the loyalty RPCs are idempotent per order |
 | ACC-044 | Account screens had no headings; track form labels not associated; tabs/alerts without ARIA; placeholder `PR-2024-0001` | `role=heading`, `htmlFor`, `role=tablist/tab/alert/status`, `ORD-2026-00123` |
 
 Tests: 60+ new/updated (`accountDeleteRoute.reauthAndErasure`, `authRoute.passwordPolicyAndLogin`,
 `profileRoute.validation`, `ordersRouteTimeoutRecovery`, `serverUtils.sbAuthSessionGone`, createOrder phone snapshot…).
 Suite: 2433 passed; `tsc` and `eslint` clean.
 
-## 2. Needs an owner decision / infrastructure (not code)
+## 2. Still needs the owner (credentials / money / policy — not code)
 
 | ID | Item |
 |---|---|
-| ACC-025 | **Email sign-up is broken in prod**: HTTP 500 "Error sending confirmation email". Auth log: SMTP `535 Authentication credentials invalid`. Regenerate the provider key and update Supabase → Auth → SMTP. (Also blocks reset/confirm emails.) |
-| ACC-032 (root cause) | Supabase compute is Micro/Nano class (60 connections, 224 MB shared_buffers). REST reads take 2–5 s at the API layer while the SQL runs ~19 ms; introspection queries average seconds. `vercel.json` already pins `bom1` (region is **not** the cause). ~30 timeouts / 2 h observed. Upgrade compute before launch — already noted as deferred in `orders/route.ts` |
-| ACC-045 | Pahadi Coins copy: earn 1 coin per ₹1 and 1 coin = ₹1 (≤ 20 %/order) + 100 coins per referral ⇒ ~100 % earn-back; confirm intent, add referral abuse controls |
+| ACC-025 | Regenerate the mail provider's SMTP key and update **Supabase → Authentication → SMTP Settings**. Sign-up works without it now (fallback above), but Supabase's own mails (email-change, magic links) still use that SMTP |
+| ACC-032 (root cause) | Supabase compute is Micro/Nano class (60 connections, 224 MB shared_buffers). REST reads take 2–5 s at the API layer while the SQL runs ~19 ms; order creation took 14–32 s. `vercel.json` already pins `bom1` (region is **not** the cause). Upgrade: **Supabase dashboard → Project Settings → Compute and Disk** (a billing decision; already noted as deferred in `orders/route.ts`). The code now survives slowness (recovery + post-order steps) but cannot make the database faster |
+| ACC-031 | GA4 / Consent Mode is **deliberate policy**: `cookie_consent_mode` (Admin → Settings) = `region` → opt-in in EEA/UK/CH, opt-out in India until DPDP starts (see `lib/consent.ts`). To require opt-in everywhere set it to `always`. Counsel's call; no code change |
 | ACC-002 / 001 | Test data in prod (119 orders / 20 customers, `/products/test` at ₹2 in the sitemap): clean before go-live |
-| ACC-031 | GA4 Consent Mode default `analytics_storage` is *granted* — counsel decision |
-| follow-up | Post-order steps (loyalty award, confirmation e-mail) run after `createOrder()` returns; when the route budget is exceeded they are skipped (the customer's retry hits `alreadyExists` and skips them too). `orders.timeout_recovered` is logged at alert level for reconciliation; a `post_processed_at` marker would close this properly |
-| feature | No self-serve order cancellation exists (UI or API) |
+| ACC-045 | Referral bonus is 100 coins each (₹100 each at ₹1/coin) — consider abuse controls (credit on delivery, one referral per phone/device) |
 
 ## 3. Claims made during the audit that live testing **disproved** (kept for transparency)
 
@@ -49,7 +51,7 @@ limited) · track-endpoint throttle (probe used a wrong path; per-IP and per-ord
 functions in the wrong region (deployment `regions: ["bom1"]`) · sign-in dialog without dialog semantics (the
 inner box has `role=dialog`) · password eye buttons unnamed (they have `aria-label`) · notification toggles
 without switch role (they have `role=switch`) · no deep links (`?tab=` works) · dual address store (the profile
-API writes the normalised `saved_addresses` table; the JSON is transport only).
+API writes the normalised `saved_addresses` table; the JSON is transport only) · loyalty "~100 % cashback" (real earn rate is 1 %) · password reset "probably broken by the SMTP problem" (it uses Resend, not Supabase's mailer) · analytics consent default (deliberate, configurable policy).
 
 ## 4. Post-deploy verification checklist
 
@@ -62,3 +64,6 @@ API writes the normalised `saved_addresses` table; the JSON is transport only).
 6. Sign-up with a weak password is refused client- and server-side; consent line visible.
 7. After SMTP is fixed: sign-up, confirmation and reset emails arrive.
 8. IDOR matrix (A vs B: order, invoice, return upload, search) still 404 — unchanged by this branch.
+9. Cancel: a confirmed COD order shows **Cancel order**; cancelling → status `cancelled`, stock restored, coupon released, coins reversed (`loyalty_transactions` type `adjustment`, note `Reversal:`), customer + admin e-mails. B cannot cancel A's order (404); a prepaid / packed order shows the WhatsApp prompt and the API answers 409.
+10. Sign-up with SMTP still broken → account created unconfirmed + verification e-mail through Resend (use a real inbox); with SMTP fixed → Supabase's own mail, no fallback alert in the logs.
+11. Loyalty page reads "Earn 1 coin for every ₹100 you spend" (matches `site_settings`).

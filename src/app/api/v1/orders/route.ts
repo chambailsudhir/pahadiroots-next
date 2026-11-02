@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
+import { createOrder, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
@@ -99,17 +99,72 @@ function orderRouteBudgetMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 34_000
 }
 
-async function findCommittedOrder(idempotencyKey: unknown): Promise<{ id: number | string; order_number: string; confirmation_token: string | null } | null> {
+interface CommittedOrder {
+  id: number | string; order_number: string; confirmation_token: string | null
+  total_amount: number; subtotal: number; shipping_charge: number; cod_surcharge: number; coupon_discount: number
+  customer_id: number | string | null
+}
+
+async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrder | null> {
   if (typeof idempotencyKey !== 'string' || !/^[0-9a-fA-F-]{36}$/.test(idempotencyKey)) return null
   try {
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token&limit=1`,
+      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token,total_amount,subtotal,shipping_charge,cod_surcharge,coupon_discount,customer_id&limit=1`,
     )
     const r = Array.isArray(rows) ? rows[0] : null
-    return r ? { id: r.id, order_number: r.order_number, confirmation_token: r.confirmation_token ?? null } : null
+    if (!r) return null
+    return {
+      id: r.id, order_number: r.order_number, confirmation_token: r.confirmation_token ?? null,
+      total_amount: Number(r.total_amount) || 0, subtotal: Number(r.subtotal) || 0,
+      shipping_charge: Number(r.shipping_charge) || 0, cod_surcharge: Number(r.cod_surcharge) || 0,
+      coupon_discount: Number(r.coupon_discount) || 0, customer_id: r.customer_id ?? null,
+    }
   } catch {
     return null
+  }
+}
+
+/**
+ * The request died before the post-order steps ran. Run them now for the committed order — once.
+ * `post_order_finalized` in order_events is the once-only marker (the e-mails have no natural idempotency key).
+ * Never throws: the customer must still be told their order exists.
+ */
+async function finalizeRecoveredOrder(
+  committed: CommittedOrder,
+  finalize: ((order: CreatedOrder, alreadyExists: boolean, customerId: string | null) => Promise<void>) | null,
+): Promise<void> {
+  if (!finalize) return
+  try {
+    const done = await sbAdmin('GET', `/rest/v1/order_events?order_id=eq.${committed.id}&event=eq.post_order_finalized&select=id&limit=1`)
+    if (Array.isArray(done) && done.length > 0) return
+
+    const items = await sbAdmin(
+      'GET',
+      `/rest/v1/order_items?order_id=eq.${committed.id}&select=quantity,price_at_time,product_name_snapshot,variant_value_snapshot,products(emoji,image_url)`,
+    ).catch(() => [])
+    const cartItems = (Array.isArray(items) ? items : []).map((i: {
+      quantity: number; price_at_time: number; product_name_snapshot: string | null; variant_value_snapshot: string | null
+      products?: { emoji?: string | null; image_url?: string | null } | null
+    }) => ({
+      name:  [i.product_name_snapshot, i.variant_value_snapshot].filter(Boolean).join(' · ') || 'Item',
+      emoji: i.products?.emoji || '🌿',
+      image: i.products?.image_url ?? null,
+      qty:   Number(i.quantity) || 1,
+      price: Number(i.price_at_time) || 0,
+    }))
+
+    // Marker FIRST: if the steps below crash half-way we prefer a missing e-mail (the admin sees the alert) over a double one.
+    await logOrderEvent(String(committed.id), 'post_order_finalized', 'system', { via: 'timeout_recovery' })
+
+    await finalize({
+      id: String(committed.id), order_number: committed.order_number,
+      total_amount: committed.total_amount, total: committed.total_amount, status: 'confirmed',
+      subtotal: committed.subtotal, shippingCharge: committed.shipping_charge, codSurcharge: committed.cod_surcharge,
+      discount: committed.coupon_discount, cartItems, confirmationToken: committed.confirmation_token,
+    }, false, committed.customer_id != null ? String(committed.customer_id) : null)
+  } catch (e) {
+    captureError(e, { action: 'orders.timeout_recovery_finalize', order_id: committed.id, alert: true })
   }
 }
 
@@ -139,6 +194,7 @@ export async function POST(req: NextRequest) {
 
   // Remembered outside the try so the catch can look the order up if createOrder() times out (ACC-032).
   let idempotencyKeyForRecovery: unknown = null
+  let finalizeForRecovery: ((order: CreatedOrder, alreadyExists: boolean, customerId: string | null) => Promise<void>) | null = null
   try {
     const body   = await req.json()
     idempotencyKeyForRecovery = (body as { idempotency_key?: unknown } | null)?.idempotency_key ?? null
@@ -237,6 +293,213 @@ export async function POST(req: NextRequest) {
       // Not logged in, or session expired — guest checkout, unaffected.
     }
 
+    // AUDIT ACC-032 (follow-up): everything that must happen once an order EXISTS — COD loyalty redeem/award,
+    // the customer + admin e-mails and the catalogue refresh — lives in this one function, so the normal path and the
+    // timeout-recovery path (below, in the catch) run exactly the same steps. Loyalty RPCs are idempotent per order
+    // (award/redeem skip an order that already has an 'earn'/'redeem' row) and the recovery path guards the e-mails
+    // with an order_events marker, so running it twice can never double-pay points or double-send mail.
+    const finalizeOrder = async (order: CreatedOrder, alreadyExists: boolean, customerId: string | null): Promise<void> => {
+      // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
+      if (!alreadyExists && d.payment_method === 'cod') {
+        // customerId comes directly from createOrder() return value — no need for
+        // the unsafe (order as any).customer_id fallback (order doesn't carry that field).
+        const cid = customerId
+        if (cid) {
+          if ((d.loyalty_points_redeemed ?? 0) > 0) {
+            const redeemed = await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
+            if (!redeemed) {
+              // Non-fatal: order is committed, but redemption was skipped (balance race).
+              // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
+              // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
+              // appears as a filterable JSON line in log aggregators, not a plain string.
+              // F-06: discount already granted → alert (not a quiet warn) + order event audit trail.
+              captureError(new Error('Loyalty redemption failed on COD order — discount granted without deduction'), {
+                action: 'orders.cod_loyalty_redeem_failed', order_id: order.id, points: d.loyalty_points_redeemed, alert: true,
+              })
+              await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: d.loyalty_points_redeemed }).catch(() => null)
+            }
+          }
+          await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
+        }
+      }
+
+      // BUG FIX (live 504 on checkout): both email sends below used to be awaited
+      // directly in the request path. Each has its own internal timeout+retry
+      // (up to ~10.4s worst case per email, see lib/server/email.ts), and there
+      // are two of them sequentially here (customer confirmation + admin notify)
+      // -- worst case ~20s, well past Vercel's default function timeout (this
+      // route has no maxDuration override). The order (and loyalty points) are
+      // already fully committed by this point; the client was seeing "Order
+      // save failed (504)" for orders that had, in fact, saved successfully.
+      // Fixed with after() (stable in Next.js 15+, this app is on 16.2.9): the
+      // response below returns to the client immediately, and Vercel keeps the
+      // function alive in the background just long enough to finish the emails
+      // -- same delivery guarantee as before (including the failed_emails
+      // dead-letter path), just no longer blocking the user-visible response.
+      after(async () => {
+        // ── Confirmation email ─────────────────────────────────────────────
+        const customerEmail = d.customer_email?.trim()
+        if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
+          try {
+            const emailItems = order.cartItems ?? []
+            const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
+            const estDate    = getDeliveryEstimate()
+            const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+
+            // ── All user-supplied strings are HTML-escaped before interpolation ──
+            const safeName    = esc(name)
+            const safeFlat    = esc(flat)
+            const safeArea    = esc(area)
+            const safeCity    = esc(city)
+            const safeState   = esc(state)
+            const safePincode = esc(a.pincode)
+
+            // BUG FIX (order-confirmation email showing an emoji instead of the
+            // real product photo): i.image was always undefined before —
+            // orderService.ts hardcoded `image: null` on every cart item
+            // regardless of whether the product actually had a photo (see
+            // orderService.ts fix). Now that image is populated, render an
+            // actual <img> thumbnail when available and fall back to the emoji
+            // only for the rare product with no photo — same fallback most
+            // major e-commerce order emails (Amazon, Myntra, BigBasket) use.
+            const itemsHtml = emailItems.map(i => {
+              const thumb = i.image
+                ? `<img src="${esc(i.image)}" width="44" height="44" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;vertical-align:middle;border:1px solid #eee" />`
+                : `<span style="display:inline-block;width:44px;height:44px;border-radius:8px;background:#f0f7f4;text-align:center;line-height:44px;font-size:20px;vertical-align:middle">${esc(i.emoji) || '🌿'}</span>`
+              return `<tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
+                  <table style="border-collapse:collapse"><tr>
+                    <td style="padding:0 10px 0 0">${thumb}</td>
+                    <td>
+                      <strong style="color:#1a1a1a">${esc(i.name)}</strong>
+                      <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
+                    </td>
+                  </tr></table>
+                </td>
+                <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
+                  ₹${(i.price * i.qty).toLocaleString('en-IN')}
+                </td>
+              </tr>`
+            }).join('')
+
+            const coinsHtml = settings.loyalty_enabled !== 'false' && coinsEarned > 0
+              ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
+                   <span style="font-size:18px">🪙</span>
+                   <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins on this order!</strong>
+                   <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them for discounts on your next order.</p>
+                 </div>`
+              : ''
+
+            const emailHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+  <body style="margin:0;padding:0;background:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
+  <div style="max-width:580px;margin:0 auto;padding:24px 16px">
+    <div style="background:linear-gradient(135deg,#1a3a1e,#2d5233);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center">
+      <div style="font-size:32px;margin-bottom:6px">🌿</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px">HimVeda by Pahadi Roots</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);letter-spacing:2px;text-transform:uppercase">Himalayan Natural Store</div>
+    </div>
+    <div style="background:#fff;padding:28px 32px;text-align:center;border-left:1px solid #eee;border-right:1px solid #eee">
+      <div style="font-size:44px;margin-bottom:10px">✅</div>
+      <h1 style="font-family:Georgia,serif;font-size:24px;color:#1a3a1e;margin:0 0 8px">Order Confirmed!</h1>
+      <p style="color:#666;font-size:14px;margin:0 0 16px">Thank you ${safeName}! Your mountain goodness is on its way 🌿</p>
+      <div style="display:inline-block;background:#f0f7f4;border:1.5px solid #c8e6c9;border-radius:20px;padding:8px 20px">
+        <span style="font-size:13px;font-weight:700;color:#1a3a1e">📋 ${esc(order.order_number)}</span>
+      </div>
+      ${coinsHtml}
+    </div>
+    <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
+      <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${esc(estDate)}</strong><br>
+      <span style="color:#888;font-size:12px">We&apos;ll notify you when it ships</span>
+    </div>
+    <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
+      <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
+      <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">
+        <tr><td style="padding:6px 0;color:#555">Subtotal</td><td style="text-align:right;color:#555">₹${(order.subtotal ?? 0).toLocaleString('en-IN')}</td></tr>
+        ${(order.discount ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#2d7a3a">Discount</td><td style="text-align:right;color:#2d7a3a">−₹${(order.discount ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
+        <tr><td style="padding:6px 0;color:#555">Shipping</td><td style="text-align:right;color:#555">${(order.shippingCharge ?? 0) === 0 ? 'FREE' : '₹' + (order.shippingCharge ?? 0).toLocaleString('en-IN')}</td></tr>
+        ${(order.codSurcharge ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#555">COD Charges</td><td style="text-align:right;color:#555">₹${(order.codSurcharge ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
+        <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${esc(payLabel)}</td></tr>
+        <tr>
+          <td style="padding:10px 0 0;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">Total</td>
+          <td style="text-align:right;padding-top:10px;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">₹${order.total_amount.toLocaleString('en-IN')}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="background:#f0f7f4;padding:16px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
+      <p style="margin:0;font-size:13px;color:#2d6a4f">
+        📍 <strong>Delivering to:</strong> ${safeFlat}${safeArea ? ', ' + safeArea : ''}, ${safeCity}, ${safeState} - ${safePincode}
+      </p>
+    </div>
+    <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
+      <div style="color:rgba(255,255,255,.5);font-size:12px;line-height:1.8">
+        🌿 HimVeda by Pahadi Roots — Pure Himalayan Goodness<br>
+        <a href="https://www.pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
+        &nbsp;·&nbsp;
+        <a href="https://wa.me/919899984895" style="color:#e8b84b;text-decoration:none">WhatsApp Us</a>
+      </div>
+    </div>
+  </div>
+  </body></html>`
+
+            // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
+            // directly inside this try/catch. The Resend SDK resolves (never
+            // rejects) on API-level failures, so this catch never fired for the
+            // most common failure mode — see lib/server/email.ts for the full
+            // explanation. sendTransactionalEmail() checks the resolved `error`
+            // field explicitly and dead-letters into `failed_emails` for retry
+            // via the cron sweep instead of the email simply vanishing.
+            await sendTransactionalEmail({
+              type:    'order_confirmation',
+              to:      customerEmail,
+              subject: `Order Confirmed - ${order.order_number}`,
+              html:    emailHtml,
+              context: { order_id: order.id, order_number: order.order_number },
+            })
+          } catch (e) {
+            // Catches errors from BUILDING the email (template interpolation,
+            // etc.) — sendTransactionalEmail() itself never throws.
+            logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+          }
+        }
+
+        // Notify admin
+        if (settings.admin_notify_email && !alreadyExists) {
+          try {
+            const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
+              ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
+            await sendTransactionalEmail({
+              type:    'admin_order_notify',
+              to:      settings.admin_notify_email,
+              subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
+              // Admin email — all user-supplied fields go through sanitize() above
+              // (name, flat, area, city, state) then esc() for HTML encoding.
+              html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
+              context: { order_id: order.id, order_number: order.order_number },
+            })
+          } catch (e) {
+            // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
+            // with zero logging — if the admin notification email failed (bad
+            // RESEND_API_KEY, rate limit, admin_notify_email misconfigured), there
+            // was NO trace anywhere that admin was never notified of a new order.
+            // The customer-email catch two blocks above already logs correctly;
+            // this one silently ate the same class of failure. Now logged for
+            // ops visibility, matching the customer-email path.
+            logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
+          }
+        }
+      })
+
+      // Homepage/listing cards are ISR-cached: if this order just sold a variant out, regenerate
+      // them now instead of waiting for the 5-minute window (see lib/server/catalogFreshness.ts).
+      // Deferred so the customer's response is never delayed; skipped for idempotent replays.
+      if (!alreadyExists) {
+        const orderedVariantIds = (d.items ?? []).map((i: { variantId: string }) => i.variantId)
+        try { after(() => { void refreshCatalogIfSoldOut(orderedVariantIds) }) } catch { /* outside a request scope (unit tests) */ }
+      }
+    }
+    finalizeForRecovery = finalizeOrder
+
     const { order, alreadyExists, customerId } = await withTimeout(createOrder({
       customerName:   name,
       customerPhone:  a.phone,
@@ -258,204 +521,7 @@ export async function POST(req: NextRequest) {
       return Math.max(Math.min(8_000, budget), budget - (Date.now() - requestStartedAt))
     })())
 
-    // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
-    if (!alreadyExists && d.payment_method === 'cod') {
-      // customerId comes directly from createOrder() return value — no need for
-      // the unsafe (order as any).customer_id fallback (order doesn't carry that field).
-      const cid = customerId
-      if (cid) {
-        if ((d.loyalty_points_redeemed ?? 0) > 0) {
-          const redeemed = await redeemLoyaltyPoints(cid, order.id, d.loyalty_points_redeemed!)
-          if (!redeemed) {
-            // Non-fatal: order is committed, but redemption was skipped (balance race).
-            // Mirrors the same guard in verify_payment. Ops can review loyalty_transactions.
-            // BUG FIX 14: use structured logger.warn (not raw console.warn) so this
-            // appears as a filterable JSON line in log aggregators, not a plain string.
-            // F-06: discount already granted → alert (not a quiet warn) + order event audit trail.
-            captureError(new Error('Loyalty redemption failed on COD order — discount granted without deduction'), {
-              action: 'orders.cod_loyalty_redeem_failed', order_id: order.id, points: d.loyalty_points_redeemed, alert: true,
-            })
-            await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: d.loyalty_points_redeemed }).catch(() => null)
-          }
-        }
-        await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
-      }
-    }
-
-    // BUG FIX (live 504 on checkout): both email sends below used to be awaited
-    // directly in the request path. Each has its own internal timeout+retry
-    // (up to ~10.4s worst case per email, see lib/server/email.ts), and there
-    // are two of them sequentially here (customer confirmation + admin notify)
-    // -- worst case ~20s, well past Vercel's default function timeout (this
-    // route has no maxDuration override). The order (and loyalty points) are
-    // already fully committed by this point; the client was seeing "Order
-    // save failed (504)" for orders that had, in fact, saved successfully.
-    // Fixed with after() (stable in Next.js 15+, this app is on 16.2.9): the
-    // response below returns to the client immediately, and Vercel keeps the
-    // function alive in the background just long enough to finish the emails
-    // -- same delivery guarantee as before (including the failed_emails
-    // dead-letter path), just no longer blocking the user-visible response.
-    after(async () => {
-      // ── Confirmation email ─────────────────────────────────────────────
-      const customerEmail = d.customer_email?.trim()
-      if (settings.order_email_enabled !== 'false' && customerEmail && !alreadyExists) {
-        try {
-          const emailItems = order.cartItems ?? []
-          const payLabel   = d.payment_method === 'cod' ? '💵 Cash on Delivery' : '💳 Paid Online'
-          const estDate    = getDeliveryEstimate()
-          const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
-
-          // ── All user-supplied strings are HTML-escaped before interpolation ──
-          const safeName    = esc(name)
-          const safeFlat    = esc(flat)
-          const safeArea    = esc(area)
-          const safeCity    = esc(city)
-          const safeState   = esc(state)
-          const safePincode = esc(a.pincode)
-
-          // BUG FIX (order-confirmation email showing an emoji instead of the
-          // real product photo): i.image was always undefined before —
-          // orderService.ts hardcoded `image: null` on every cart item
-          // regardless of whether the product actually had a photo (see
-          // orderService.ts fix). Now that image is populated, render an
-          // actual <img> thumbnail when available and fall back to the emoji
-          // only for the rare product with no photo — same fallback most
-          // major e-commerce order emails (Amazon, Myntra, BigBasket) use.
-          const itemsHtml = emailItems.map(i => {
-            const thumb = i.image
-              ? `<img src="${esc(i.image)}" width="44" height="44" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:cover;vertical-align:middle;border:1px solid #eee" />`
-              : `<span style="display:inline-block;width:44px;height:44px;border-radius:8px;background:#f0f7f4;text-align:center;line-height:44px;font-size:20px;vertical-align:middle">${esc(i.emoji) || '🌿'}</span>`
-            return `<tr>
-              <td style="padding:10px 0;border-bottom:1px solid #f0f0f0">
-                <table style="border-collapse:collapse"><tr>
-                  <td style="padding:0 10px 0 0">${thumb}</td>
-                  <td>
-                    <strong style="color:#1a1a1a">${esc(i.name)}</strong>
-                    <span style="color:#888;font-size:13px"> × ${esc(i.qty)}</span>
-                  </td>
-                </tr></table>
-              </td>
-              <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
-                ₹${(i.price * i.qty).toLocaleString('en-IN')}
-              </td>
-            </tr>`
-          }).join('')
-
-          const coinsHtml = settings.loyalty_enabled !== 'false' && coinsEarned > 0
-            ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
-                 <span style="font-size:18px">🪙</span>
-                 <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins on this order!</strong>
-                 <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them for discounts on your next order.</p>
-               </div>`
-            : ''
-
-          const emailHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
-<div style="max-width:580px;margin:0 auto;padding:24px 16px">
-  <div style="background:linear-gradient(135deg,#1a3a1e,#2d5233);border-radius:16px 16px 0 0;padding:28px 32px;text-align:center">
-    <div style="font-size:32px;margin-bottom:6px">🌿</div>
-    <div style="font-family:Georgia,serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:3px">HimVeda by Pahadi Roots</div>
-    <div style="font-size:11px;color:rgba(255,255,255,.6);letter-spacing:2px;text-transform:uppercase">Himalayan Natural Store</div>
-  </div>
-  <div style="background:#fff;padding:28px 32px;text-align:center;border-left:1px solid #eee;border-right:1px solid #eee">
-    <div style="font-size:44px;margin-bottom:10px">✅</div>
-    <h1 style="font-family:Georgia,serif;font-size:24px;color:#1a3a1e;margin:0 0 8px">Order Confirmed!</h1>
-    <p style="color:#666;font-size:14px;margin:0 0 16px">Thank you ${safeName}! Your mountain goodness is on its way 🌿</p>
-    <div style="display:inline-block;background:#f0f7f4;border:1.5px solid #c8e6c9;border-radius:20px;padding:8px 20px">
-      <span style="font-size:13px;font-weight:700;color:#1a3a1e">📋 ${esc(order.order_number)}</span>
-    </div>
-    ${coinsHtml}
-  </div>
-  <div style="background:#fff9e6;border-left:4px solid #c8920a;padding:16px 32px;border-right:1px solid #eee">
-    <strong style="color:#1a3a1e">🚚 Estimated Delivery: ${esc(estDate)}</strong><br>
-    <span style="color:#888;font-size:12px">We&apos;ll notify you when it ships</span>
-  </div>
-  <div style="background:#fff;padding:24px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
-    <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
-    <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
-    <table style="width:100%;border-collapse:collapse;margin-top:12px">
-      <tr><td style="padding:6px 0;color:#555">Subtotal</td><td style="text-align:right;color:#555">₹${(order.subtotal ?? 0).toLocaleString('en-IN')}</td></tr>
-      ${(order.discount ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#2d7a3a">Discount</td><td style="text-align:right;color:#2d7a3a">−₹${(order.discount ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
-      <tr><td style="padding:6px 0;color:#555">Shipping</td><td style="text-align:right;color:#555">${(order.shippingCharge ?? 0) === 0 ? 'FREE' : '₹' + (order.shippingCharge ?? 0).toLocaleString('en-IN')}</td></tr>
-      ${(order.codSurcharge ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#555">COD Charges</td><td style="text-align:right;color:#555">₹${(order.codSurcharge ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
-      <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${esc(payLabel)}</td></tr>
-      <tr>
-        <td style="padding:10px 0 0;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">Total</td>
-        <td style="text-align:right;padding-top:10px;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">₹${order.total_amount.toLocaleString('en-IN')}</td>
-      </tr>
-    </table>
-  </div>
-  <div style="background:#f0f7f4;padding:16px 32px;border-left:1px solid #eee;border-right:1px solid #eee">
-    <p style="margin:0;font-size:13px;color:#2d6a4f">
-      📍 <strong>Delivering to:</strong> ${safeFlat}${safeArea ? ', ' + safeArea : ''}, ${safeCity}, ${safeState} - ${safePincode}
-    </p>
-  </div>
-  <div style="background:#1a3a1e;border-radius:0 0 16px 16px;padding:18px 32px;text-align:center">
-    <div style="color:rgba(255,255,255,.5);font-size:12px;line-height:1.8">
-      🌿 HimVeda by Pahadi Roots — Pure Himalayan Goodness<br>
-      <a href="https://www.pahadiroots.com" style="color:#e8b84b;text-decoration:none">pahadiroots.com</a>
-      &nbsp;·&nbsp;
-      <a href="https://wa.me/919899984895" style="color:#e8b84b;text-decoration:none">WhatsApp Us</a>
-    </div>
-  </div>
-</div>
-</body></html>`
-
-          // AUDIT FIX [ERROR HANDLING]: previously called resend.emails.send()
-          // directly inside this try/catch. The Resend SDK resolves (never
-          // rejects) on API-level failures, so this catch never fired for the
-          // most common failure mode — see lib/server/email.ts for the full
-          // explanation. sendTransactionalEmail() checks the resolved `error`
-          // field explicitly and dead-letters into `failed_emails` for retry
-          // via the cron sweep instead of the email simply vanishing.
-          await sendTransactionalEmail({
-            type:    'order_confirmation',
-            to:      customerEmail,
-            subject: `Order Confirmed - ${order.order_number}`,
-            html:    emailHtml,
-            context: { order_id: order.id, order_number: order.order_number },
-          })
-        } catch (e) {
-          // Catches errors from BUILDING the email (template interpolation,
-          // etc.) — sendTransactionalEmail() itself never throws.
-          logger.error('orders: customer confirmation email failed', { action: 'orders.email.customer', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
-        }
-      }
-
-      // Notify admin
-      if (settings.admin_notify_email && !alreadyExists) {
-        try {
-          const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
-            ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
-          await sendTransactionalEmail({
-            type:    'admin_order_notify',
-            to:      settings.admin_notify_email,
-            subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
-            // Admin email — all user-supplied fields go through sanitize() above
-            // (name, flat, area, city, state) then esc() for HTML encoding.
-            html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
-            context: { order_id: order.id, order_number: order.order_number },
-          })
-        } catch (e) {
-          // BUG FIX [ERROR HANDLING]: previously a bare `catch { /* non-fatal */ }`
-          // with zero logging — if the admin notification email failed (bad
-          // RESEND_API_KEY, rate limit, admin_notify_email misconfigured), there
-          // was NO trace anywhere that admin was never notified of a new order.
-          // The customer-email catch two blocks above already logs correctly;
-          // this one silently ate the same class of failure. Now logged for
-          // ops visibility, matching the customer-email path.
-          logger.error('orders: admin notification email failed', { action: 'orders.email.admin', order_id: order.id, error: e instanceof Error ? e.message : String(e) })
-        }
-      }
-    })
-
-    // Homepage/listing cards are ISR-cached: if this order just sold a variant out, regenerate
-    // them now instead of waiting for the 5-minute window (see lib/server/catalogFreshness.ts).
-    // Deferred so the customer's response is never delayed; skipped for idempotent replays.
-    if (!alreadyExists) {
-      const orderedVariantIds = (d.items ?? []).map((i: { variantId: string }) => i.variantId)
-      try { after(() => { void refreshCatalogIfSoldOut(orderedVariantIds) }) } catch { /* outside a request scope (unit tests) */ }
-    }
+    await finalizeOrder(order, alreadyExists, customerId)
 
     const successRes = NextResponse.json(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },
@@ -482,6 +548,7 @@ export async function POST(req: NextRequest) {
       const committed = await findCommittedOrder(idempotencyKeyForRecovery)
       if (committed) {
         logger.warn('orders: outcome-unknown resolved — order was committed', { action: 'orders.recovered', order_id: committed.id, order_number: committed.order_number })
+        await finalizeRecoveredOrder(committed, finalizeForRecovery)
         return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
       return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
@@ -497,11 +564,10 @@ export async function POST(req: NextRequest) {
       // ACC-032: the RPC usually finishes a moment after we stop waiting. Check before reporting failure.
       const committed = await findCommittedOrder(idempotencyKeyForRecovery)
       if (committed) {
-        // Alert-level: loyalty award / confirmation e-mail run after createOrder() returns, and this request
-        // never got that far — ops can reconcile from this line (same gap the customer's retry would hit).
-        captureError(new Error('Order committed after route timeout — returned to customer; post-order steps (loyalty, e-mail) skipped'), {
-          action: 'orders.timeout_recovered', order_id: committed.id, order_number: committed.order_number, alert: true,
-        })
+        // The loyalty award and the confirmation / admin e-mails normally run right after createOrder() returns,
+        // which this request never reached — run them now, once, then tell the customer their order exists.
+        logger.warn('orders: create budget exceeded — order was committed, recovering', { action: 'orders.timeout_recovered', order_id: committed.id, order_number: committed.order_number })
+        await finalizeRecoveredOrder(committed, finalizeForRecovery)
         return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
       return NextResponse.json(

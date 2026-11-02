@@ -13,6 +13,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
 import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL } from '@/lib/account/constants'
+import { CANCEL_REASONS } from '@/lib/orderCancellation'
 import { computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 import styles from '../../styles/account.module.css'
 import Icon from '@/components/ui/Icon'
@@ -80,6 +81,8 @@ type OrderDetail = Record<string, unknown> & {
   items:            Array<{ name: string; qty: number; price: number; emoji: string; image_url: string | null }>
   tracking_number?: string | null
   courier?:         string | null
+  can_cancel?:         boolean
+  cancel_via_support?: boolean
 }
 
 export default function OrderDetailPage() {
@@ -87,6 +90,12 @@ export default function OrderDetailPage() {
   const [order,   setOrder]   = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
+  // ── Self-service cancellation (ACC-050) ─────────────────────────────
+  const [cancelOpen,   setCancelOpen]   = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelBusy,   setCancelBusy]   = useState(false)
+  const [cancelErr,    setCancelErr]    = useState('')
+  const [cancelledMsg, setCancelledMsg] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -101,6 +110,32 @@ export default function OrderDetailPage() {
       .finally(()=> { if (!ctrl.signal.aborted) setLoading(false) })
     return () => ctrl.abort()
   }, [id])
+
+  async function submitCancel() {
+    if (!order || !cancelReason || cancelBusy) return
+    setCancelBusy(true); setCancelErr('')
+    try {
+      const res  = await fetch(`/api/orders/${order.id}/cancel`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: cancelReason }),
+        signal: AbortSignal.timeout(40_000),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string; code?: string }
+      if (res.ok) {
+        setOrder(o => o ? { ...o, order_status: 'cancelled', _displayStatus: 'cancelled', can_cancel: false, cancel_via_support: false } : o)
+        setCancelledMsg('Your order has been cancelled. Nothing was charged, and any Pahadi Coins you used are back in your account.')
+        setCancelOpen(false)
+        return
+      }
+      // 409 / contact_support: keep the page, explain, and stop offering the button
+      if (res.status === 409) setOrder(o => o ? { ...o, can_cancel: false, cancel_via_support: data.code === 'contact_support' } : o)
+      setCancelErr(data.error || 'We could not cancel your order — please try again or message us on WhatsApp.')
+    } catch {
+      setCancelErr('That took too long. Please check My Orders before trying again — your order may already be cancelled.')
+    } finally {
+      setCancelBusy(false)
+    }
+  }
 
   if (loading) return (
     <div className={`${styles.odSkWrap} ${styles.odSkBlock}`}>
@@ -155,6 +190,51 @@ export default function OrderDetailPage() {
         >
           <Icon name="package" /> Invoice
         </a>
+      )}
+
+      {/* ── Cancel (COD, before packing) ─────────────────────── */}
+      {cancelledMsg && (
+        <div role="status" className={styles.odCard} style={{ borderColor: '#2d6a4f', marginBottom: 12 }}>{cancelledMsg}</div>
+      )}
+      {order.can_cancel && (
+        <button type="button" className={styles.odTrackChip} style={{ background: '#fff', color: '#b3261e', border: '1.5px solid #b3261e', marginRight: 8, cursor: 'pointer' }}
+          onClick={() => { setCancelOpen(true); setCancelErr(''); setCancelReason('') }}>
+          Cancel order
+        </button>
+      )}
+      {order.cancel_via_support && !order.can_cancel && (
+        <a className={styles.odTrackChip} style={{ background: '#fff', color: '#1a3a1e', border: '1.5px solid #1a3a1e', marginRight: 8 }}
+          href={`https://wa.me/${SUPPORT_WHATSAPP_NUMBER}?text=${encodeURIComponent(`Hi, I'd like to cancel order ${order.order_number}.`)}`}
+          target="_blank" rel="noopener noreferrer">
+          Need to cancel? Message us
+        </a>
+      )}
+      {cancelOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="cancel-title"
+          onKeyDown={e => { if (e.key === 'Escape' && !cancelBusy) setCancelOpen(false) }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 420 }}>
+            <h2 id="cancel-title" style={{ margin: '0 0 8px', fontSize: 20 }}>Cancel order {order.order_number}?</h2>
+            <p style={{ margin: '0 0 14px', color: '#555', fontSize: 14, lineHeight: 1.5 }}>
+              This is a Cash-on-Delivery order, so nothing has been charged. We&apos;ll release the items and return any Pahadi Coins you used. This can&apos;t be undone.
+            </p>
+            <label htmlFor="cancel-reason" style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Why are you cancelling?</label>
+            <select id="cancel-reason" autoFocus value={cancelReason} onChange={e => setCancelReason(e.target.value)} disabled={cancelBusy}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid #ddd', fontSize: 15, marginBottom: 12 }}>
+              <option value="">Select a reason…</option>
+              {CANCEL_REASONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
+            </select>
+            {cancelErr && <p role="alert" style={{ color: '#b3261e', fontSize: 14, fontWeight: 600, margin: '0 0 12px' }}>{cancelErr}</p>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setCancelOpen(false)} disabled={cancelBusy}
+                style={{ padding: '10px 16px', borderRadius: 10, border: '1.5px solid #ccc', background: '#fff', cursor: 'pointer' }}>Keep order</button>
+              <button type="button" onClick={submitCancel} disabled={!cancelReason || cancelBusy} aria-busy={cancelBusy}
+                style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#b3261e', color: '#fff', fontWeight: 700, cursor: !cancelReason || cancelBusy ? 'not-allowed' : 'pointer', opacity: !cancelReason || cancelBusy ? .6 : 1 }}>
+                {cancelBusy ? 'Cancelling…' : 'Yes, cancel order'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Tracking chip ───────────────────────────────────── */}

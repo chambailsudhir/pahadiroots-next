@@ -14,9 +14,10 @@ vi.mock('next/server', async () => {
 })
 
 const mockCreateOrder = vi.fn()
+const mockLogOrderEvent = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/services/orderService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/orderService')>()
-  return { ...actual, createOrder: mockCreateOrder, logOrderEvent: vi.fn().mockResolvedValue(undefined) }
+  return { ...actual, createOrder: mockCreateOrder, logOrderEvent: mockLogOrderEvent }
 })
 
 const mockSbAdmin = vi.fn()
@@ -25,10 +26,9 @@ vi.mock('@/lib/api/serverUtils', async (importOriginal) => {
   return { ...actual, sbAdmin: mockSbAdmin, checkCsrf: () => null }
 })
 
-vi.mock('@/lib/server/loyalty', () => ({
-  awardLoyaltyPoints:  vi.fn().mockResolvedValue(undefined),
-  redeemLoyaltyPoints: vi.fn().mockResolvedValue(true),
-}))
+const mockAward  = vi.fn().mockResolvedValue(undefined)
+const mockRedeem = vi.fn().mockResolvedValue(true)
+vi.mock('@/lib/server/loyalty', () => ({ awardLoyaltyPoints: mockAward, redeemLoyaltyPoints: mockRedeem }))
 vi.mock('@/lib/getSiteSettings', () => {
   const getSiteSettings = vi.fn().mockResolvedValue({
     cod_enabled: 'true', order_email_enabled: 'false', loyalty_enabled: 'false',
@@ -68,33 +68,74 @@ beforeEach(() => {
   mockCreateOrder.mockImplementation(() => new Promise(() => { /* hangs past the budget */ }))
 })
 
+const COMMITTED_ROW = { id: 163, order_number: 'ORD-2026-00140', confirmation_token: 'tok-1', total_amount: 500, subtotal: 500, shipping_charge: 0, cod_surcharge: 0, coupon_discount: 0, customer_id: 58 }
+
+/** Path-aware sbAdmin: the order row, the once-only marker (empty = not finalised yet) and the order items. */
+function wireDb(opts: { order?: unknown[]; finalised?: boolean } = {}) {
+  mockSbAdmin.mockImplementation(async (_m: string, path: string) => {
+    if (path.startsWith('/rest/v1/orders?idempotency_key=')) return opts.order ?? [COMMITTED_ROW]
+    if (path.startsWith('/rest/v1/order_events?')) return opts.finalised ? [{ id: 9 }] : []
+    if (path.startsWith('/rest/v1/order_items?')) return [{ quantity: 2, price_at_time: 250, product_name_snapshot: 'Wild Honey', variant_value_snapshot: '500g', products: { emoji: '🍯', image_url: null } }]
+    return []
+  })
+}
+
 describe('POST /api/v1/orders — recover a committed order after the create budget is exceeded (ACC-032)', () => {
   it('returns the already-committed order as a success instead of a 503', async () => {
-    mockSbAdmin.mockResolvedValue([{ id: 163, order_number: 'ORD-2026-00140', confirmation_token: 'tok-1' }])
-
+    wireDb()
     const res  = await callOrders()
     const json = await res.json()
 
     expect(res.status).toBe(200)
     expect(json).toEqual({ success: true, order_number: 'ORD-2026-00140', order_id: 163, confirmation_token: 'tok-1' })
-    // looked up by the idempotency key, with a UUID-validated value
     expect(mockSbAdmin).toHaveBeenCalledWith('GET', expect.stringContaining(`idempotency_key=eq.${KEY}`))
   })
 
   it('still answers a fast 503 when the order genuinely does not exist', async () => {
-    mockSbAdmin.mockResolvedValue([])
-
+    wireDb({ order: [] })
     const res = await callOrders()
 
     expect(res.status).toBe(503)
     expect(res.headers.get('Retry-After')).toBe('5')
+    expect(mockAward).not.toHaveBeenCalled()
   })
 
   it('treats a failing lookup as "not found" (503), never as an unhandled error', async () => {
     mockSbAdmin.mockRejectedValue({ status: 500, message: 'db down' })
-
     const res = await callOrders()
 
     expect(res.status).toBe(503)
+  })
+})
+
+describe('recovered order gets its post-order steps exactly once (loyalty + once-only marker)', () => {
+  it('awards the COD loyalty points, redeems requested coins, and records the marker BEFORE finalising', async () => {
+    wireDb()
+    const res = await callOrders()
+    expect(res.status).toBe(200)
+
+    expect(mockLogOrderEvent).toHaveBeenCalledWith('163', 'post_order_finalized', 'system', expect.objectContaining({ via: 'timeout_recovery' }))
+    // customer 58, order 163, the committed total — through the same helper the normal path uses
+    expect(mockAward).toHaveBeenCalledWith('58', '163', 500, expect.any(Object), 'Earned from COD order')
+    // marker is written before any of the steps run
+    const markerAt = mockLogOrderEvent.mock.invocationCallOrder[0]
+    expect(markerAt).toBeLessThan(mockAward.mock.invocationCallOrder[0])
+  })
+
+  it('does NOT run them again when the marker already exists (customer retried and timed out again)', async () => {
+    wireDb({ finalised: true })
+    const res = await callOrders()
+
+    expect(res.status).toBe(200)                       // the customer still gets their order
+    expect(mockAward).not.toHaveBeenCalled()
+    expect(mockLogOrderEvent).not.toHaveBeenCalled()
+  })
+
+  it('a crash inside the post-order steps never turns a committed order into an error', async () => {
+    wireDb()
+    mockAward.mockRejectedValueOnce(new Error('loyalty rpc down'))
+    const res = await callOrders()
+
+    expect(res.status).toBe(200)
   })
 })
