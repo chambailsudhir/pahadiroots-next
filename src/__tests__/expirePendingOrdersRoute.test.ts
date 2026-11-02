@@ -1,9 +1,9 @@
 /** I1 — cron route auth + wiring. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-const h = vi.hoisted(() => ({ sweep: vi.fn() }))
+const h = vi.hoisted(() => ({ sweep: vi.fn(), rpc: vi.fn() }))
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/supabase', () => ({ supabase: {}, getServiceClient: vi.fn(() => ({})) }))
+vi.mock('@/lib/supabase', () => ({ supabase: {}, getServiceClient: vi.fn(() => ({ rpc: (...a: unknown[]) => h.rpc(...a) })) }))
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, captureError: vi.fn() }))
 vi.mock('@/lib/server/pendingOrders', () => ({ expireStalePendingOrders: (...a: unknown[]) => h.sweep(...a) }))
 
@@ -12,7 +12,7 @@ const call = async (auth?: string) => {
   return GET(new Request('http://localhost/api/v1/cron/expire-pending-orders', { headers: auth ? { authorization: auth } : {} }) as any)
 }
 
-beforeEach(() => { h.sweep.mockReset(); vi.stubEnv('CRON_SECRET', 'sekret') })
+beforeEach(() => { h.sweep.mockReset(); h.rpc.mockReset(); h.rpc.mockResolvedValue({ data: 0, error: null }); vi.stubEnv('CRON_SECRET', 'sekret') })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('GET /api/v1/cron/expire-pending-orders', () => {
@@ -42,5 +42,18 @@ describe('GET /api/v1/cron/expire-pending-orders', () => {
   it('returns 500 when the sweep throws', async () => {
     h.sweep.mockRejectedValue(new Error('boom'))
     expect((await call('Bearer sekret')).status).toBe(500)
+  })
+
+  it('also releases earned referral coins, and a failure there never masks the stock sweep', async () => {
+    h.sweep.mockResolvedValue({ scanned: 0, expired: 0, recovered: 0, skipped: 0, errors: 0 })
+    h.rpc.mockImplementation(async (name: string) => name === 'process_referral_rewards' ? { data: { rewarded: 2, rejected: 1, waiting: 3 }, error: null } : { data: 0, error: null })
+    const ok = await (await call('Bearer sekret')).json()
+    expect(ok.referralRewards).toEqual({ rewarded: 2, rejected: 1, waiting: 3 })
+    expect(h.rpc).toHaveBeenCalledWith('process_referral_rewards', { p_limit: 50 })
+
+    h.rpc.mockImplementation(async (name: string) => name === 'process_referral_rewards' ? { data: null, error: { message: 'boom' } } : { data: 0, error: null })
+    const res = await call('Bearer sekret')
+    expect(res.status).toBe(200)
+    expect((await res.json()).referralRewards).toBeNull()
   })
 })

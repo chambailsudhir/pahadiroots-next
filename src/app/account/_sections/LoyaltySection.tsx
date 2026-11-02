@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react'
+import { normalizeReferralCode, referralMessage } from '@/lib/referral'
 import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import Icon, { AdminIcon } from '@/components/ui/Icon'
@@ -36,11 +37,19 @@ interface LoyaltyData {
   max_redeem_pct: number
   earn_per_rupee?: number
   referral_bonus?: number
+  referral_min_order?: number
+  referral_hold_days?: number
+  can_apply_referral?: boolean
   label:          string
   referral_code:  string | null
 }
 
 /** "Earn 1 coin per ₹1" / "Earn 1 coin for every ₹100 you spend" — built from the real earn rate (ACC-045). */
+/** Referral promise, built from the real settings: coins are paid after delivery + the return window, never at order time. */
+export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string {
+  return `You and your friend each get ${bonus} bonus coins once your friend's first order of ₹${minOrder.toLocaleString('en-IN')} or more is delivered and ${holdDays} days have passed without a return.`
+}
+
 export function earnCopy(rate: number | undefined): string {
   const r = typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 1
   if (r >= 1) return `Earn ${Number.isInteger(r) ? r : r.toFixed(2)} ${r === 1 ? 'coin' : 'coins'} per ₹1 spent on every order`
@@ -144,6 +153,24 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
     }
   }
 
+  const [friendCode, setFriendCode] = useState('')
+  const [applying,   setApplying]   = useState(false)
+  const [friendDone, setFriendDone] = useState(false)
+
+  // A friend's code can be added by a NEW customer (no order yet). The database decides; show its reason verbatim.
+  async function applyFriendCode() {
+    const code = normalizeReferralCode(friendCode)
+    if (!code) { showToast?.(referralMessage('invalid_code'), 'error'); return }
+    setApplying(true)
+    try {
+      const res  = await fetch('/api/v1/referral', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json.applied) { setFriendDone(true); showToast?.('Referral code added — your coins arrive after your first order is delivered.', 'success') }
+      else showToast?.(json.message || json.error || referralMessage(json.reason), 'error')
+    } catch { showToast?.('Could not apply the code — please try again.', 'error') }
+    finally { setApplying(false) }
+  }
+
   const [copyFallback, setCopyFallback] = useState(false)
   const fallbackInputRef = useRef<HTMLInputElement>(null)
 
@@ -236,7 +263,7 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
             <span className={styles.lyRefIcon}><Icon name="users" /></span>
             <div>
               <div className={styles.lyRefTitle}>Refer &amp; Earn</div>
-              <div className={styles.lyRefSub}>Both you and your friend earn {data.referral_bonus ?? 100} bonus coins when they place their first order.</div>
+              <div className={styles.lyRefSub}>{referralCopy(data.referral_bonus, data.referral_min_order, data.referral_hold_days)}</div>
             </div>
           </div>
           <div className={styles.lyRefRow}>
@@ -245,6 +272,24 @@ export default function LoyaltySection({ showToast }: { showToast?: (msg: string
               {copied ? '✓ Copied!' : 'Copy Link'}
             </button>
           </div>
+          {data.can_apply_referral && !friendDone && (
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <label htmlFor="friend-referral-code" style={{ fontSize: '13px', color: '#444', flexBasis: '100%' }}>Have a friend&apos;s referral code?</label>
+              <input
+                id="friend-referral-code"
+                type="text"
+                value={friendCode}
+                onChange={e => setFriendCode(e.target.value.toUpperCase())}
+                maxLength={12}
+                autoComplete="off"
+                placeholder="e.g. 1A2B3C4D"
+                style={{ flex: 1, minWidth: '140px', fontSize: '14px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #767676', background: '#fff' }}
+              />
+              <button type="button" className={styles.lyRefCopy} onClick={applyFriendCode} disabled={applying || !friendCode.trim()}>
+                {applying ? 'Adding…' : 'Add code'}
+              </button>
+            </div>
+          )}
           {/* Fallback for browsers/contexts where clipboard API is unavailable */}
           {copyFallback && (
             <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
