@@ -178,3 +178,12 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
   the `example.com` test addresses — not a production fault.
 * **Test data created by this pass** (delete before launch with the rest): auth user + customer `audit.f.20261102@example.com`
   (customer 71) and its `referrals` row.
+
+### 5.6 Order e-mail showed ₹266.67 for the item but ₹267 as Subtotal (found in a real inbox screenshot)
+
+* The confirmation printed the whole-rupee rounded figure as "Subtotal" and never showed the rounding (`orders.round_off = 0.33`), so the
+  rows did not add up on the page. Now: Subtotal = sum of the item lines, an explicit "Round off +₹0.33" row when rounding is the only
+  difference to the total, and every amount formatted with the same rules (`lib/emailMoney.ts`). A gap of ₹1 or more (e.g. redeemed coins,
+  which this e-mail does not itemise) is not shown as rounding; the stored subtotal is used instead.
+* The same screenshot confirmed delivery to the **Inbox** (not Spam) from `HimVeda by Pahadi Roots <noreply@pahadiroots.com>` with the
+  branded layout, coins line, delivery window, address and WhatsApp footer.

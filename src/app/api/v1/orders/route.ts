@@ -9,6 +9,7 @@ import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { esc } from '@/lib/server/htmlEscape'
+import { formatRupees, emailTotals } from '@/lib/emailMoney'
 // REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
 // Keys are unchanged so all existing middleware counters are preserved.
@@ -368,7 +369,7 @@ export async function POST(req: NextRequest) {
                   </tr></table>
                 </td>
                 <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:700;color:#1a3a1e">
-                  ₹${(i.price * i.qty).toLocaleString('en-IN')}
+                  ${formatRupees(i.price * i.qty)}
                 </td>
               </tr>`
             }).join('')
@@ -381,6 +382,11 @@ export async function POST(req: NextRequest) {
                  </div>`
               : ''
 
+            const totals = emailTotals({
+              items: emailItems.map(i => ({ price: Number(i.price), qty: Number(i.qty) })),
+              discount: order.discount ?? 0, shipping: order.shippingCharge ?? 0, codCharge: order.codSurcharge ?? 0,
+              total: order.total_amount, storedSubtotal: order.subtotal ?? 0,
+            })
             const emailHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
   <body style="margin:0;padding:0;background:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
   <div style="max-width:580px;margin:0 auto;padding:24px 16px">
@@ -407,14 +413,15 @@ export async function POST(req: NextRequest) {
       <p style="font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">YOUR ITEMS</p>
       <table style="width:100%;border-collapse:collapse">${itemsHtml}</table>
       <table style="width:100%;border-collapse:collapse;margin-top:12px">
-        <tr><td style="padding:6px 0;color:#555">Subtotal</td><td style="text-align:right;color:#555">₹${(order.subtotal ?? 0).toLocaleString('en-IN')}</td></tr>
+        <tr><td style="padding:6px 0;color:#555">Subtotal</td><td style="text-align:right;color:#555">${formatRupees(totals.subtotal)}</td></tr>
         ${(order.discount ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#2d7a3a">Discount</td><td style="text-align:right;color:#2d7a3a">−₹${(order.discount ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
         <tr><td style="padding:6px 0;color:#555">Shipping</td><td style="text-align:right;color:#555">${(order.shippingCharge ?? 0) === 0 ? 'FREE' : '₹' + (order.shippingCharge ?? 0).toLocaleString('en-IN')}</td></tr>
         ${(order.codSurcharge ?? 0) > 0 ? `<tr><td style="padding:6px 0;color:#555">COD Charges</td><td style="text-align:right;color:#555">₹${(order.codSurcharge ?? 0).toLocaleString('en-IN')}</td></tr>` : ''}
+        ${totals.roundOff !== null ? `<tr><td style="padding:6px 0;color:#555">Round off</td><td style="text-align:right;color:#555">${totals.roundOff < 0 ? '−' : '+'}${formatRupees(Math.abs(totals.roundOff))}</td></tr>` : ''}
         <tr><td style="padding:6px 0;color:#555">Payment</td><td style="text-align:right;color:#555">${esc(payLabel)}</td></tr>
         <tr>
           <td style="padding:10px 0 0;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">Total</td>
-          <td style="text-align:right;padding-top:10px;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">₹${order.total_amount.toLocaleString('en-IN')}</td>
+          <td style="text-align:right;padding-top:10px;font-size:17px;font-weight:900;color:#1a3a1e;border-top:1px solid #f0f0f0">${formatRupees(order.total_amount)}</td>
         </tr>
       </table>
     </div>
