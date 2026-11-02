@@ -74,64 +74,48 @@ describe('order-success page', () => {
     expect(screen.queryByText(/Order Confirmed/i)).toBeNull()
   })
 
-  it('footer links point to real routes, not the dead /our-story or /terms#section paths', async () => {
+  it('does not render its own header/footer/main (the site layout provides them) — no duplicate chrome or nested <main>', async () => {
     const { default: OrderSuccessPage } = await import('@/app/order-success/page')
-    render(React.createElement(OrderSuccessPage))
-
+    const { container } = render(React.createElement(OrderSuccessPage))
     await waitFor(() => {
-      expect(screen.getByText('Our Story').closest('a')?.getAttribute('href')).toBe('/our-stories')
+      expect(screen.getAllByText(/couldn.t verify this order/i).length).toBeGreaterThan(0)
     })
-    expect(screen.getByText('Returns & Refunds').closest('a')?.getAttribute('href')).toBe('/policies/returns')
-    expect(screen.getByText('Shipping Policy').closest('a')?.getAttribute('href')).toBe('/policies/shipping')
-    expect(screen.getByText('Privacy Policy').closest('a')?.getAttribute('href')).toBe('/policies/privacy')
-    expect(screen.getByText('Terms & Conditions').closest('a')?.getAttribute('href')).toBe('/policies/terms')
-
-    // None of the old dead paths should appear anywhere on the page.
-    const allHrefs = screen.getAllByRole('link').map(a => a.getAttribute('href'))
-    expect(allHrefs.some(h => h === '/our-story')).toBe(false)
-    expect(allHrefs.some(h => h?.startsWith('/terms'))).toBe(false)
+    expect(container.querySelector('nav.oc-nav')).toBeNull()
+    expect(container.querySelector('footer')).toBeNull()
+    expect(container.querySelector('main')).toBeNull()
+    expect(container.querySelector('h1')?.textContent).toMatch(/couldn.t verify this order/i)
+    // The unverified state points guests at Track Order.
+    expect(screen.getByText('Track Order').closest('a')?.getAttribute('href')).toBe('/track')
   })
 
-  it('clicking a rating star never calls the dead /api/admin-api endpoint, even when the order-details block is showing', async () => {
-    // Mock a SUCCESSFUL lookup so `order` becomes non-null and the
-    // order-details block (which contains the rating widget) actually
-    // renders — this is the exact condition that made rateOrder's dead
-    // call reachable in production once /api/v1/orders/lookup started
-    // working.
+  it('has no fake rating widget (it saved nothing yet said "thanks"), and shows ETA/tracking/print only for a confirmed order', async () => {
     fetchSpy.mockImplementation((url: string) => {
       if (String(url).includes('/api/v1/orders/lookup')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            success: true,
-            order: {
-              order_number: 'PRMR4OEQ', order_status: 'confirmed', payment_status: 'cod_pending',
-              payment_method: 'cod', total_amount: 262, items: [],
-            },
-          }),
-        })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, order: {
+          order_number: 'PRMR4OEQ', order_status: 'cancelled', payment_status: 'refunded', payment_method: 'razorpay', total_amount: 262, items: [],
+        } }) })
       }
       return Promise.reject(new Error(`unexpected fetch: ${url}`))
     })
+    const { default: OrderSuccessPage } = await import('@/app/order-success/page')
+    const { container } = render(React.createElement(OrderSuccessPage))
+    await waitFor(() => { expect(screen.getAllByText(/PRMR4OEQ/).length).toBeGreaterThan(0) })
+    expect(container.querySelector('.oc-review-star')).toBeNull()
+    expect(screen.queryByText(/Print Invoice/)).toBeNull()
+    expect(container.querySelector('.invoice-print-only')).toBeNull()
+    expect(screen.queryByText(/Estimated Delivery/i)).toBeNull()
+  })
 
+  it('a refunded online order is NOT shown as "Confirming your payment…"', async () => {
+    fetchSpy.mockImplementation((url: string) => String(url).includes('/api/v1/orders/lookup')
+      ? Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, order: {
+          order_number: 'PRMR4OEQ', order_status: 'returned', payment_status: 'refund_pending', payment_method: 'razorpay', total_amount: 262, items: [],
+        } }) })
+      : Promise.reject(new Error(`unexpected fetch: ${url}`)))
     const { default: OrderSuccessPage } = await import('@/app/order-success/page')
     render(React.createElement(OrderSuccessPage))
-
-    await waitFor(() => {
-      // getAllByText, not getByText: the hidden (CSS display:none) invoice
-      // block also renders the order number for printing — jsdom doesn't
-      // evaluate CSS visibility, so both the visible hero and the
-      // print-only invoice match this text query.
-      expect(screen.getAllByText(/PRMR4OEQ/).length).toBeGreaterThan(0)
-    })
-
-    fetchSpy.mockClear() // only care about calls AFTER this point
-    const stars = document.querySelectorAll('.oc-review-star')
-    expect(stars.length).toBeGreaterThan(0) // sanity: widget actually rendered
-    fireEvent.click(stars[3])
-
-    const adminApiCalls = fetchSpy.mock.calls.filter(([url]) => String(url).includes('/api/admin-api'))
-    expect(adminApiCalls).toHaveLength(0)
+    await waitFor(() => { expect(screen.getByText(/Payment refunded/i)).toBeTruthy() })
+    expect(screen.queryByText(/Confirming your payment/i)).toBeNull()
   })
 
   it('renders a real GST invoice (GSTIN, HSN, tax split) instead of just printing the confirmation page', async () => {

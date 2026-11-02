@@ -261,6 +261,30 @@ describe('GET /api/v1/orders/lookup — logged-in session auth (no token needed)
   })
 })
 
+describe('GET /api/v1/orders/lookup — recipient comes from the order itself', () => {
+  it("shows the order's own recipient name/phone, NOT the linked customer row's (a guest adopted onto an existing customer must not see that customer's details)", async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, shipping_address: { ...SAMPLE_ORDER_ROW.shipping_address, name: 'Asha Verma', phone: '9000000002' } }])
+    mocks.sbAdmin.mockResolvedValueOnce([{ first_name: 'Sudhir', last_name: 'Chambail', phone: '9717255662' }])
+
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
+
+    expect(body.order.customer_name).toBe('Asha Verma')
+    expect(body.order.customer_phone).toBe('9000000002')
+    expect(JSON.stringify(body)).not.toContain('Chambail')
+    expect(JSON.stringify(body)).not.toContain('9717255662')
+  })
+
+  it('never pairs the snapshot name with the account holder\'s phone', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([{ ...SAMPLE_ORDER_ROW, shipping_address: { ...SAMPLE_ORDER_ROW.shipping_address, name: 'Asha Verma' } }])
+    mocks.sbAdmin.mockResolvedValueOnce([{ first_name: 'Sudhir', last_name: 'Chambail', phone: '9717255662' }])
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
+    expect(body.order.customer_name).toBe('Asha Verma')
+    expect(body.order.customer_phone).toBeUndefined()
+  })
+})
+
 describe('GET /api/v1/orders/lookup — graceful degradation', () => {
   it('still returns the order (without customer_name) if the customer sub-fetch fails', async () => {
     mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])

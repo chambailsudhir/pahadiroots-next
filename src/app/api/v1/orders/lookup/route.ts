@@ -108,7 +108,7 @@ function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string;
     tracking_number:  raw.tracking_number ?? undefined,
     courier:          raw.courier         ?? undefined,
     customer_name:    customerName,
-    customer_phone:   snapPhone || customer?.phone || undefined,
+    customer_phone:   snapPhone || (snapName ? undefined : customer?.phone) || undefined,
     delivery_address: shippingAddress?.address_line1,
     city:             shippingAddress?.city,
     state:            shippingAddress?.state,

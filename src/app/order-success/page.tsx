@@ -9,7 +9,6 @@ import { BUSINESS_INFO, computeOrderInvoice, invoiceRows } from '@/lib/invoiceGs
 import { trackPurchase, markCartConverted } from '@/lib/analytics/track'
 import { resolveConfirmationToken } from '@/lib/confirmationToken'
 import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
-import { FALLBACK_QUICK_SELECTS } from '@/lib/footerQuickSelects'
 import Icon from '@/components/ui/Icon'
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -53,8 +52,8 @@ interface Order {
 /* ─── Helpers ───────────────────────────────────────────────── */
 const COURIER_URLS: Record<string, string> = {
   delhivery:  'https://www.delhivery.com/track/package/',
-  bluedart:   'https://www.bluedart.com/tracking',
-  dtdc:       'https://www.dtdc.in/tracking.asp',
+  bluedart:   'https://www.bluedart.com/tracking?trackfor=',
+  dtdc:       'https://www.dtdc.in/tracking.asp?strCnno=',
   ecom:       'https://ecomexpress.in/tracking/',
   xpressbees: 'https://www.xpressbees.com/shipment/tracking',
   shadowfax:  'https://track.shadowfax.in/',
@@ -63,12 +62,13 @@ const COURIER_URLS: Record<string, string> = {
 
 function getTrackingUrl(courier: string, num: string) {
   if (!courier || !num) return null
-  const base = COURIER_URLS[courier.toLowerCase().replace(/\s/g, '')] || null
-  return base ? base + num : null
+  const key = courier.toLowerCase().replace(/[^a-z]/g, '')
+  const base = COURIER_URLS[key] || COURIER_URLS[Object.keys(COURIER_URLS).find(k => key.startsWith(k)) ?? ''] || null
+  return base ? base + encodeURIComponent(num) : null
 }
 
 /* ─── Verification helpers (CF1 / CF2) ──────────────────────── */
-type View = 'loading' | 'unverified' | 'confirmed' | 'payment_pending' | 'payment_failed' | 'cancelled'
+type View = 'loading' | 'unverified' | 'confirmed' | 'payment_pending' | 'payment_failed' | 'cancelled' | 'refunded'
 
 const SAFE_REF = /^[A-Za-z0-9-]{4,32}$/
 const MAX_PAYMENT_POLLS = 8
@@ -81,6 +81,7 @@ const HERO: Record<View, { icon: string; title: string; sub: string; tone: 'ok' 
   payment_pending: { icon: '⏳', title: 'Confirming your payment…',      sub: "Please don't pay again — we'll confirm as soon as your bank responds.", tone: 'ok' },
   payment_failed:  { icon: '⚠️', title: 'Payment not completed',         sub: 'If any amount was debited, please contact us with your order number.', tone: 'warn' },
   cancelled:       { icon: '❌', title: 'Order cancelled',               sub: 'This order was cancelled.',                   tone: 'warn' },
+  refunded:        { icon: '↩️', title: 'Payment refunded',              sub: 'The money for this order is being or has been returned to your original payment method.', tone: 'warn' },
 }
 
 /** What the page may claim, derived ONLY from the server's lookup result. */
@@ -90,6 +91,7 @@ function deriveView(s: { loading: boolean; error: boolean; order: Order | null }
   if (s.error || !o) return 'unverified'
   if (o.order_status === 'cancelled') return 'cancelled'
   if (o.order_status === 'payment_failed' || o.payment_status === 'failed') return 'payment_failed'
+  if (o.payment_status === 'refund_pending' || o.payment_status === 'refunded') return 'refunded'
   if (o.payment_method === 'razorpay' && o.payment_status !== 'paid') return 'payment_pending'
   return 'confirmed'
 }
@@ -125,8 +127,6 @@ function SuccessContent() {
   const [order,   setOrder]   = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(false)
-  const [rating,  setRating]  = useState(0)
-  const [rated,   setRated]   = useState(false)
 
   // BUG FIX (React 19 / react-hooks/set-state-in-effect lint rule): the
   // "no order identifier" guard was the first statement inside loadOrder
@@ -209,12 +209,14 @@ function SuccessContent() {
 
   // Online order whose payment hasn't landed yet (verify returned 202 / webhook still in
   // flight): poll briefly so the page flips to Confirmed by itself. Bounded — never loops.
-  const pollsRef = useRef(0)
+  // `polls` is state (not a ref) so a poll that FAILS still re-arms the next one, and so the page can say so once the cap is hit.
+  const [polls, setPolls] = useState(0)
   useEffect(() => {
-    if (view !== 'payment_pending' || pollsRef.current >= MAX_PAYMENT_POLLS) return
-    const t = setTimeout(() => { pollsRef.current += 1; loadOrder(true) }, PAYMENT_POLL_MS)
+    if (view !== 'payment_pending' || polls >= MAX_PAYMENT_POLLS) return
+    const t = setTimeout(() => { void loadOrder(true).finally(() => setPolls(n => n + 1)) }, PAYMENT_POLL_MS)
     return () => clearTimeout(t)
-  }, [view, order, loadOrder])
+  }, [view, polls, loadOrder])
+  const pollsExhausted = view === 'payment_pending' && polls >= MAX_PAYMENT_POLLS
 
   // CF2: purchase analytics fire ONLY for a verified, genuinely confirmed order, with the
   // server's total, and at most once per order per browser (a refresh used to re-fire it,
@@ -222,11 +224,17 @@ function SuccessContent() {
   useEffect(() => {
     if (view !== 'confirmed' || !order?.order_number) return
     const num = order.order_number
-    if (alreadyTracked(num)) return
-    markTracked(num)
-    trackPurchase(num, Number(order.total_amount) || 0)
-    // GA4 `purchase`: server total, tax-inclusive; once per order (also guarded inside ga4Purchase).
-    ga4Purchase({
+    // First-party purchase tracking: once per order per browser.
+    if (!alreadyTracked(num)) {
+      markTracked(num)
+      trackPurchase(num, Number(order.total_amount) || 0)
+      markCartConverted()
+    }
+    // GA4 `purchase`: server total, tax-inclusive. Tracked separately because it needs analytics consent: with no consent yet
+    // (or gtag not loaded) ga4Purchase returns false, and marking it done anyway used to lose the sale for good once the visitor
+    // accepted the banner. Its own flag is set only when GA4 really sent the event.
+    if (alreadyTracked(num + ':ga4')) return
+    const sent = ga4Purchase({
       transactionId: num,
       value:    Number(order.total_amount) || 0,
       tax:      Number(order.tax) || 0,
@@ -236,31 +244,8 @@ function SuccessContent() {
         price: Number(i.price_at_time ?? i.price) || 0, quantity: Number(i.quantity ?? i.qty) || 1,
       })),
     })
-    markCartConverted()
+    if (sent) markTracked(num + ':ga4')
   }, [view, order])
-
-  /* rate order */
-  // BUG FIX (found via comprehensive final audit): this POSTed to
-  // /api/admin-api — the same dead OLD vanilla-site endpoint as loadOrder
-  // used to call (see the BUG FIX note above loadOrder). Unlike loadOrder,
-  // this was never reachable in production before now — the order-details
-  // block (including this rating widget) only renders when `order` is
-  // non-null, which required a working order-lookup endpoint that didn't
-  // exist until this session. Now that /api/v1/orders/lookup works, this
-  // widget DOES render for real customers, and was silently failing to
-  // persist every rating (customer sees "thanks!", nothing is ever saved).
-  //
-  // There is no order_ratings table or endpoint in this codebase yet, and
-  // building one properly needs a deliberate design decision (schema +
-  // an authorized endpoint, same as /api/v1/orders/lookup, so a rating
-  // can't be submitted against someone else's order) — not a silent
-  // add-on to this fix. For now: stop the guaranteed-to-fail network call
-  // and keep the optimistic "thanks" UI (harmless), but don't claim data
-  // was persisted anywhere. Flagged to the team as a follow-up decision.
-  function rateOrder(n: number) {
-    if (rated) return
-    setRating(n); setRated(true)
-  }
 
   /* ── status stepper ── */
   // BUG FIX (architecture): 'processing' is not a real order_status value —
@@ -299,8 +284,9 @@ function SuccessContent() {
            for one page, the base text below uses a system-font stack. */
 
         /* ── RESET / BASE ── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
+        /* Scoped to .oc-scope: these used to be global (*, body, a, :root) and restyled the site header/footer while this page was open. */
+        .oc-scope, .oc-scope *, .oc-scope *::before, .oc-scope *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        .oc-scope {
           --g:   #1a3a1e;
           --g2:  #2d6a4f;
           --g3:  #40916c;
@@ -311,11 +297,11 @@ function SuccessContent() {
           --bd:  #e8e0d0;
           --tx:  #1a1a1a;
           --tx2: #444;
-          --tx3: #888;
+          --tx3: #666;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--tx); }
-        a { text-decoration: none; color: inherit; }
-        button { cursor: pointer; font-family: inherit; }
+        .oc-scope { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--tx); }
+        .oc-scope a { text-decoration: none; color: inherit; }
+        .oc-scope button { cursor: pointer; font-family: inherit; }
 
         /* ── NAV ── */
         .oc-nav {
@@ -607,21 +593,8 @@ function SuccessContent() {
           .inv-footer-note { margin-top: 24px; font-size: 10.5px; color: #666; text-align: center; }
         }
       `}</style>
+      <div className="oc-scope">
 
-      {/* ── NAV ── */}
-      <nav className="oc-nav">
-        <Link href="/" className="oc-nav-logo">
-          <div style={{width:38,height:38,borderRadius:9,overflow:'hidden',background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HimVeda by Pahadi Roots" style={{width:38,height:38,objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-          </div>
-          <div>
-            <div className="oc-logo-name">HimVeda by Pahadi Roots</div>
-            <div className="oc-logo-tl">Himalayan Natural Store</div>
-          </div>
-        </Link>
-        <Link href="/" className="oc-nav-back">← Continue Shopping</Link>
-      </nav>
 
       {/* S1: the Cart ✓ → Checkout ✓ → Confirmation progress bar. Shown only while the page is
           making (or has verified) a success claim — never for an unverified, failed or cancelled
@@ -635,15 +608,21 @@ function SuccessContent() {
           "Order Confirmed!" without the customer having to hunt for the change. */}
       <div className={`oc-hero${hero.tone === 'warn' ? ' oc-hero-warn' : ''}`} data-view={view} role="status" aria-live="polite" aria-atomic="true">
         <div className="oc-check-circle">{hero.icon}</div>
-        <div className="oc-title">{hero.title}</div>
+        <h1 className="oc-title">{hero.title}</h1>
         <div className="oc-sub">{hero.sub}</div>
+        {pollsExhausted && (
+          <div className="oc-sub" style={{marginTop:10}}>
+            This is taking longer than usual. <button type="button" className="oc-btn-print" style={{display:'inline-block',width:'auto',padding:'6px 14px',margin:'0 6px'}} onClick={() => { setPolls(0); void loadOrder(true) }}>Check again</button>
+            or contact us with your order number. Please don&#39;t pay again.
+          </div>
+        )}
         {displayNum
           ? <div className="oc-badge">📋 {displayNum}</div>
           : (view === 'unverified' && urlRef ? <div className="oc-badge">Ref: {urlRef}</div> : null)}
       </div>
 
       {/* ── MAIN ── */}
-      <main className="oc-main">
+      <div className="oc-main">
 
         {/* Loading skeleton */}
         {loading && (
@@ -681,8 +660,9 @@ function SuccessContent() {
                 type="button"
                 className="oc-btn-primary"
                 style={{maxWidth:180,margin:0}}
-                onClick={() => { pollsRef.current = 0; setLoading(true); setError(false); void loadOrder() }}
+                onClick={() => { setPolls(0); setLoading(true); setError(false); void loadOrder() }}
               >Try again</button>
+              <Link href="/track" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>Track Order</Link>
               <Link prefetch={false} href="/account?tab=orders" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>My Orders</Link>
               <Link href="/" className="oc-btn-primary" style={{maxWidth:180,margin:0}}>← Back to Store</Link>
             </div>
@@ -726,7 +706,7 @@ function SuccessContent() {
               <div className="oc-card">
                 <div className="oc-card-title"><Icon name="cart" /> Order Items</div>
                 {items.length === 0
-                  ? <div style={{color:'#888',fontSize:13}}>Items loading…</div>
+                  ? <div style={{color:'#666',fontSize:13}}>The item list isn&#39;t available on this page — it is in your confirmation email and under Track Order.</div>
                   : items.map((item, i) => (
                     <div key={i} className="oc-item">
                       <div className="oc-item-img">
@@ -777,13 +757,13 @@ function SuccessContent() {
                   <div className="oc-del-field"><label>Name</label><span>{order.customer_name || '—'}</span></div>
                   <div className="oc-del-field"><label>Phone</label><span>{order.customer_phone || '—'}</span></div>
                   <div className="oc-del-field" style={{gridColumn:'1/-1'}}><label>Address</label><span>{addr || '—'}</span></div>
-                  <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {DELIVERY_WINDOWS_TEXT}</span></div>
+                  {view === 'confirmed' && <div className="oc-del-field"><label>Estimated Delivery</label><span>🗓 {DELIVERY_WINDOWS_TEXT}</span></div>}
                   <div className="oc-del-field"><label>Payment</label><span>{(order.payment_method === 'razorpay' || order.payment_method === 'razorpay_online') ? '💳 Online' : '💵 Cash on Delivery'}</span></div>
                 </div>
               </div>
 
-              {/* Tracking */}
-              <div className="oc-card">
+              {/* Tracking — only for an order that is actually going out */}
+              {view === 'confirmed' && <div className="oc-card">
                 <div className="oc-card-title"><Icon name="truck" /> Tracking</div>
                 <div className="oc-track-box">
                   <span className="oc-track-icon"><Icon name="truck" /></span>
@@ -802,24 +782,12 @@ function SuccessContent() {
                     )}
                   </div>
                 </div>
-              </div>
-
-              {/* Review */}
-              <div className="oc-review">
-                <div className="oc-review-title">How was your experience? 🌿</div>
-                <div className="oc-review-sub">Rate your order — takes 2 seconds!</div>
-                <div className="oc-review-stars">
-                  {[1,2,3,4,5].map(n => (
-                    <span key={n} className={`oc-review-star${rating >= n ? ' sel' : ''}`} onClick={() => rateOrder(n)}><Icon name="star" /></span>
-                  ))}
-                </div>
-                {rated && <div className="oc-review-thanks">🙏 Thanks for your feedback!</div>}
-              </div>
+              </div>}
 
               {/* Actions */}
               <div className="oc-actions">
                 <Link prefetch={false} href="/account" className="oc-btn-primary"><Icon name="package" /> View All Orders</Link>
-                <button onClick={() => window.print()} className="oc-btn-print">🧾 Print Invoice</button>
+                {view === 'confirmed' && <button onClick={() => window.print()} className="oc-btn-print">🧾 Print Invoice</button>}
                 <Link href="/" className="oc-btn-secondary"><Icon name="leaf" /> Continue Shopping</Link>
               </div>
 
@@ -831,7 +799,7 @@ function SuccessContent() {
                   codes, and a CGST+SGST (intra-state) or IGST (inter-state)
                   split, computed in lib/invoiceGst.ts from confirmed real
                   columns (products.hsn_code, products.gst_rate). */}
-              <div className="invoice-print-only">
+              {view === 'confirmed' && <div className="invoice-print-only">
                 {(() => {
                   // AUDIT S1-009 / S3-006 / F2-02 / F2-03: ONE shared computation (lib/invoiceGst
                   // computeOrderInvoice) from the STORED order columns — tax from orders.tax (split
@@ -934,162 +902,17 @@ function SuccessContent() {
                     </>
                   )
                 })()}
-              </div>
+              </div>}
             </>
           )
         })()}
-      </main>
+      </div>
 
       {/* CONF-001 (Nov 2026 audit): the newsletter block that used to sit here had no submit handler (a dead form) and
           pushed a sign-up at customers who had just paid or whose order could not be verified. The real newsletter form lives in the
           site Footer. */}
 
-      {/* ── FOOTER ── */}
-      <footer className="oc-footer">
-        {/* Himachali Frieze */}
-        <div className="oc-f-frieze">
-          <svg width="100%" viewBox="0 0 1440 68" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-            <rect width="1440" height="68" fill="#1a0d2e"/>
-            <line x1="0" y1="2.5" x2="1440" y2="2.5" stroke="#c8920a" strokeWidth="0.6" opacity="0.45"/>
-            <line x1="0" y1="65.5" x2="1440" y2="65.5" stroke="#c8920a" strokeWidth="0.6" opacity="0.45"/>
-            <defs>
-              <g id="fu1a">
-                <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#d4186c" opacity=".85"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#1e6bb0"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" strokeWidth="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" strokeWidth="1.3"/></g>
-                <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#f0a020" opacity=".85"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#c8340c"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" strokeWidth="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" strokeWidth="1.3"/></g>
-                <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#c8920a"/><circle cx="0" cy="-7" r="2.5" fill="#e8b050"/><circle cx="7" cy="0" r="2.5" fill="#e8b050"/><circle cx="0" cy="7" r="2.5" fill="#e8b050"/><circle cx="-7" cy="0" r="2.5" fill="#e8b050"/></g>
-              </g>
-              <g id="fu2a">
-                <g transform="translate(32,54)"><polygon points="0,0 -13,-7 -9,-18 0,-22 9,-18 13,-7" fill="#1e6bb0" opacity=".85"/><rect x="-3.5" y="-29" width="7" height="9" rx="2" fill="#d4186c"/><circle cx="0" cy="-34" r="3.5" fill="#d4956a"/><line x1="-3.5" y1="-27" x2="-10" y2="-21" stroke="#d4956a" strokeWidth="1.3"/><line x1="3.5" y1="-27" x2="10" y2="-21" stroke="#d4956a" strokeWidth="1.3"/></g>
-                <g transform="translate(56,54)"><polygon points="0,0 -9,-5 -5,-16 0,-14 5,-16 9,-5" fill="#56b848" opacity=".85"/><rect x="-3.5" y="-23" width="7" height="8" rx="2" fill="#6a3090"/><circle cx="0" cy="-28" r="3.2" fill="#c8905a"/><line x1="-3.5" y1="-21" x2="-10" y2="-15" stroke="#c8905a" strokeWidth="1.3"/><line x1="3.5" y1="-21" x2="10" y2="-15" stroke="#c8905a" strokeWidth="1.3"/></g>
-                <g transform="translate(98,34)"><circle cx="0" cy="0" r="4" fill="#d4186c"/><circle cx="0" cy="-7" r="2.5" fill="#f050a0"/><circle cx="7" cy="0" r="2.5" fill="#f050a0"/><circle cx="0" cy="7" r="2.5" fill="#f050a0"/><circle cx="-7" cy="0" r="2.5" fill="#f050a0"/></g>
-              </g>
-            </defs>
-            {[0,112,224,336,448,560,672,784,896,1008,1120,1232,1344].map((x,i) => (
-              <use key={x} href={i%2===0 ? '#fu1a' : '#fu2a'} x={x}/>
-            ))}
-          </svg>
-        </div>
-
-        {/* Brand row */}
-        <div className="oc-f-brand-row">
-          <div className="oc-f-vine">
-            <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg" style={{transform:'scaleX(-1)'}}>
-              <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" strokeWidth=".7" opacity=".25"/>
-              <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/></g>
-              <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/></g>
-              <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
-            </svg>
-          </div>
-          <div style={{flexShrink:0,marginLeft:20}}>
-            <svg width="104" height="104" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="55" cy="55" r="52" fill="none" stroke="#c8920a" strokeWidth="1.5" opacity=".6"/>
-              <circle cx="55" cy="55" r="48" fill="#1a0400" opacity=".95"/>
-              <g opacity=".7">
-                {[0,45,90,135,180,225,270,315].map((r,i) => (
-                  <ellipse key={i} cx="55" cy="13" rx="5" ry="9" fill={['#d4186c','#e87c3e','#1e6bb0','#56b848','#d4186c','#e87c3e','#1e6bb0','#56b848'][i]} transform={`rotate(${r} 55 55)`}/>
-                ))}
-              </g>
-              <circle cx="55" cy="55" r="12" fill="#0b160d"/>
-              <circle cx="55" cy="55" r="9" fill="none" stroke="#c8920a" strokeWidth="1.5"/>
-              <line x1="55" y1="47" x2="55" y2="63" stroke="#c8920a" strokeWidth="1.5"/>
-              <line x1="47" y1="55" x2="63" y2="55" stroke="#c8920a" strokeWidth="1.5"/>
-              <circle cx="55" cy="55" r="3" fill="#c8920a"/>
-            </svg>
-          </div>
-          <div className="oc-f-brand-col">
-            <div className="oc-f-brand-name">HimVeda by Pahadi Roots</div>
-            <div className="oc-f-brand-sub">Himalayan Natural Store</div>
-            <p className="oc-f-brand-desc">Born in the mountains, delivered to your doorstep. Pure Himalayan natural products, sourced with love from farming communities across the Himalayan states.</p>
-          </div>
-          <div className="oc-f-vine">
-            <svg width="52" height="120" viewBox="0 0 52 120" xmlns="http://www.w3.org/2000/svg">
-              <line x1="26" y1="0" x2="26" y2="120" stroke="#c8920a" strokeWidth=".7" opacity=".25"/>
-              <g transform="translate(26,14)"><circle cx="0" cy="0" r="5" fill="#d4186c" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#e87c3e" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#e87c3e" opacity=".65"/></g>
-              <g transform="translate(26,58)"><circle cx="0" cy="0" r="5" fill="#1e6bb0" opacity=".8"/><circle cx="-8" cy="0" r="3" fill="#c84090" opacity=".65"/><circle cx="8" cy="0" r="3" fill="#c84090" opacity=".65"/></g>
-              <g transform="translate(26,102)"><circle cx="0" cy="0" r="4" fill="#c8920a" opacity=".65"/><circle cx="-6" cy="0" r="2" fill="#e8b050" opacity=".5"/><circle cx="6" cy="0" r="2" fill="#e8b050" opacity=".5"/></g>
-            </svg>
-          </div>
-        </div>
-
-        {/* Links grid */}
-        <div className="oc-f-main">
-          <div>
-            <div className="oc-fh">Quick Selects</div>
-            <ul className="oc-ful">
-              {FALLBACK_QUICK_SELECTS.map(q => (
-                <li key={q.href}><Link href={q.href}>{q.emoji} {q.label}</Link></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <div className="oc-fh">Company</div>
-            <ul className="oc-ful">
-              <li><Link href="/our-stories">Our Story</Link></li>
-              <li><Link href="/#states">By Region</Link></li>
-              {/* BUG FIX (found via console 404s): these pointed to
-                  /terms#<section>, which doesn't exist — policy pages are
-                  separate routes under /policies/[type], not hash-anchored
-                  sections of a single /terms page. */}
-              <li><Link href="/policies/returns">Returns &amp; Refunds</Link></li>
-              <li><Link href="/policies/shipping">Shipping Policy</Link></li>
-              <li><Link href="/policies/privacy">Privacy Policy</Link></li>
-              <li><Link href="/policies/terms">Terms &amp; Conditions</Link></li>
-            </ul>
-          </div>
-          <div>
-            <div className="oc-fh">Connect With Us</div>
-            {[
-              {icon:'🌐', text:'pahadiroots.com', href:'https://www.pahadiroots.com'},
-              {icon:'📧', text:'hello@pahadiroots.com', href:'mailto:hello@pahadiroots.com'},
-              {icon:'📞', text:'+91 98999 84895', href:'tel:+919899984895'},
-              {icon:'📍', text:'Village Sakoh, PO Sakoh, Distt Kangra, Himachal Pradesh 176082', href:null},
-            ].map(c => (
-              <div key={c.icon} className="oc-f-contact-item">
-                <span className="oc-f-contact-icon">{c.icon}</span>
-                <div className="oc-f-contact-text">
-                  {c.href ? <a href={c.href}>{c.text}</a> : c.text}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Social bar */}
-        <div className="oc-f-social-bar">
-          <div className="oc-f-social-inner">
-            <div className="oc-f-soc-row">
-              {[
-                {href:'https://www.instagram.com/pahadiroots',label:'Instagram', svg:<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>},
-                {href:'https://www.facebook.com/HimVedaByPahadiRoots',label:'Facebook', svg:<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>},
-                {href:'https://twitter.com/pahadiroots',label:'X', svg:<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>},
-                {href:'https://www.youtube.com/@pahadiroots',label:'YouTube', svg:<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>},
-              ].map(s => (
-                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" className="oc-f-soc" title={s.label}>{s.svg}</a>
-              ))}
-            </div>
-            {/* AUDIT S3-005: the FSSAI badge is rendered by the main footers only when
-                settings.fssai_license is set; this page has no settings source, so the
-                old "Lic. No. — update karein" placeholder is removed rather than faked. */}
-          </div>
-        </div>
-
-        {/* Diamond divider */}
-        <svg viewBox="0 0 1440 22" preserveAspectRatio="xMidYMid slice" style={{display:'block',width:'100%'}} xmlns="http://www.w3.org/2000/svg">
-          <line x1="0" y1="11" x2="1440" y2="11" stroke="#c8920a" strokeWidth=".5" opacity=".18"/>
-          <g opacity=".45">
-            {Array.from({length:38},(_,i) => {
-              const cx = 18 + i*38
-              return <polygon key={i} points={`${cx},11 ${cx+6},5 ${cx+12},11 ${cx+6},17`} fill="none" stroke="#c8920a" strokeWidth=".8"/>
-            })}
-          </g>
-        </svg>
-
-        {/* Copyright */}
-        <div className="oc-f-bot">
-          <div className="oc-f-bot-left">© 2026 <strong>HimVeda by Pahadi Roots</strong> · Himachal Pradesh, India</div>
-          <div className="oc-f-bot-tag">Making India eat clean</div>
-        </div>
-      </footer>
+      </div>
     </>
   )
 }
