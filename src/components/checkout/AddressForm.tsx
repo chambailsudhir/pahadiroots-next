@@ -482,6 +482,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 aria-invalid={!!errors.phone}
                 aria-describedby={errors.phone ? 'af-phone-err' : undefined}
                 onChange={e => onChange('phone', e.target.value.replace(/\D/g, ''))}
+                onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); const d = t.replace(/\D/g, ''); onChange('phone', d.length >= 12 && d.startsWith('91') ? d.slice(-10) : d.slice(0, 10)) } }}
                 onBlur={() => onTouch('phone')}
                 placeholder="9876543210" maxLength={10}
               />
@@ -596,6 +597,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 pincodeError && !pincodeLoading   ? 'af-pincode-lookup-err' : '',
               ].filter(Boolean).join(' ') || undefined}
               onChange={e => handlePincodeChange(e.target.value)}
+              onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); handlePincodeChange(t.replace(/\D/g, '').slice(0, 6)) } }}
               onBlur={() => onTouch('pincode')}
               placeholder="248001" maxLength={6}
             />

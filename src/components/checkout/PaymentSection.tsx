@@ -120,7 +120,7 @@ const PaymentSection = memo(function PaymentSection({
               <span className={`${styles.optTitle} ${styles.optTitleOff}`}>Cash on Delivery</span>
             </div>
             <span className={styles.codReason} id="cod-disabled-reason">
-              {!codEnabled ? 'Unavailable' : total > codMax ? `Max ₹${codMax}` : 'Unavailable'}
+              {!codEnabled ? 'Unavailable' : `Max ₹${codMax}`}   {/* codOk is false while codEnabled ⇒ the COD total is over the cap */}
             </span>
           </div>
         )}

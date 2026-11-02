@@ -37,8 +37,10 @@ describe('guests do not call account-only APIs (they 401 and bill an invocation)
     const profile = code.indexOf("fetch('/api/profile', { signal: ctrl.signal })")
     expect(loyalty).toBeGreaterThan(0)
     expect(profile).toBeGreaterThan(0)
-    expect(code.slice(loyalty - 400, loyalty)).toContain('useUserStore.getState().user')
-    expect(code.slice(profile - 200, profile)).toContain('useUserStore.getState().user')
+    expect(code.slice(loyalty - 400, loyalty)).toContain('if (!isSignedIn) return')
+    expect(code.slice(profile - 200, profile)).toContain('if (!isSignedIn)')
+    // …and isSignedIn is the reactive store user, so a late-hydrating signed-in customer is not treated as a guest forever.
+    expect(code).toContain('const isSignedIn = !!user')
   })
 
   it('the account page treats a browser with no persisted user as a guest without a network call', () => {

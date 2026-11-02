@@ -297,7 +297,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
   const razorpayEnabled = useMemo(() => !!razorpayKeyId && upiAdminOn, [razorpayKeyId, upiAdminOn])
   const codMax      = useMemo(() => parseFloat(s.cod_max_value      || '3000'), [s.cod_max_value])
-  const prepaidPct  = useMemo(() => parseInt(s.prepaid_discount_pct || '5'),    [s.prepaid_discount_pct])
+  const prepaidPct  = useMemo(() => parseFloat(s.prepaid_discount_pct || '5'),    [s.prepaid_discount_pct])
   const freeShipMin = useMemo(() => getShippingPolicy(s).freeMin,                [s])
   const minOrderAmt = useMemo(() => parseFloat(s.min_order_amount   || '0'),    [s.min_order_amount])
   const waNumber    = useMemo(() => {
@@ -525,7 +525,11 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // but causes the effect dep-array on [codOk, razorpayEnabled] to see a
   // "changed" value even when it hasn't — triggering the payment-method
   // correction effect more often than necessary.
-  const codOk         = useMemo(() => codEnabled && pricing.subtotal <= codMax,        [codEnabled, pricing.subtotal, codMax])
+  // COD is capped on the total the SERVER checks: the cash-on-delivery total (shipping + COD fee, net of coupon and coins).
+  // It used to compare the raw subtotal, so ₹2,950 of goods + shipping + fee showed COD and then failed at Place Order, while a
+  // ₹3,400 cart with a ₹500 coupon hid COD that the server would have accepted.
+  const codTotal      = useMemo(() => calcPriceSummary(items, s, coupon, 'cod', loyaltyRedemption?.discount_inr ?? 0).total, [items, s, coupon, loyaltyRedemption])
+  const codOk         = useMemo(() => codEnabled && codTotal <= codMax,               [codEnabled, codTotal, codMax])
   const belowMinOrder = useMemo(() => minOrderAmt > 0 && pricing.subtotal < minOrderAmt, [minOrderAmt, pricing.subtotal])
   const bothPayOff    = useMemo(() => !codOk && !razorpayEnabled,                      [codOk, razorpayEnabled])
 
@@ -610,10 +614,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   }
 
   // Loyalty balance
+  // `isSignedIn` is a dependency on purpose: userStore uses skipHydration and is rehydrated a tick AFTER mount, so on a hard load /
+  // refresh of /checkout the first run sees "no user". Without re-running when the user appears, a signed-in customer never got
+  // their coin balance (or the background address refresh below).
+  const isSignedIn = !!user
   useEffect(() => {
     if (s.loyalty_enabled !== 'true') return
     // Guests have no points: skip the call (it would 401, log a console error and bill an invocation).
-    if (!useUserStore.getState().user) return
+    if (!isSignedIn) return
     const ac = new AbortController()
     fetch('/api/v1/loyalty', { signal: ac.signal })
       .then(r => r.ok ? r.json() : null)
@@ -622,7 +630,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if ((err as { name?: string }).name === 'AbortError') return
       })
     return () => ac.abort()
-  }, [s.loyalty_enabled])
+  }, [s.loyalty_enabled, isSignedIn])
 
   // Background profile refresh
   useEffect(() => {
@@ -636,7 +644,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     // user can just type their address manually; the cache write below still
     // benefits future page loads even after a timeout on this one.
     const timeoutId = setTimeout(() => ctrl.abort(), 6_000)
-    if (!useUserStore.getState().user) { clearTimeout(timeoutId); return }
+    if (!isSignedIn) { clearTimeout(timeoutId); return }
     fetch('/api/profile', { signal: ctrl.signal })
       .then(async r => {
         if (!r.ok || ctrl.signal.aborted) return
@@ -651,7 +659,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           city: prof.city||'', state: prof.state||'', pincode: prof.pincode||'',
           phone: cleanPhone||'',
         }] : []
-        const validLabels = new Set(['Home','Office','Parents','Friends','Others'])
+        const validLabels = new Set(['Home','Office','Parents','Friends','Others','Other','Partner','Warehouse'])
         const saved = parseSavedAddresses(prof.saved_addresses)
           .filter((a: SavedAddress) => validLabels.has(a.label ?? ''))
         const all = [...defaultAddr, ...saved]
@@ -687,7 +695,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         if (mountedRef.current) setProfilePrefillLoading(false)
       })
     return () => { clearTimeout(timeoutId); ctrl.abort() }
-  }, []) // mount-only: background profile prefill
+  }, [isSignedIn]) // runs on mount and again once the (late-hydrating) user store reports a signed-in customer
 
   // Coupon hints
   useEffect(() => {
@@ -913,7 +921,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     const validLabels = ['Home','Office','Parents','Friends','Others'] as const
     const lbl = validLabels.find(l => l === saved.label) || 'Home'
     setAddr(prev => ({
-      ...prev, name: saved.name||prev.name, phone: saved.phone||prev.phone,
+      ...prev, name: saved.name||prev.name, phone: (saved.phone || '').replace(/^\+91/, '').replace(/\D/g, '').slice(-10) || prev.phone,
       flat: saved.flat||saved.addr||'', area: saved.area||'', city: saved.city||'',
       state: matchState(saved.state), pincode: saved.pincode||saved.pin||'', label: lbl,
     }))
@@ -1247,6 +1255,15 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
                 return
               }
 
+              // A 429 or 5xx here says nothing about the payment — Razorpay only calls this handler once the customer HAS paid. Treat it like
+              // "confirming": the order page shows the server's truth and polls until the webhook lands. (A 400 is a genuine rejection.)
+              if ((verRes.status === 429 || verRes.status >= 500) && data.order_number) {
+                orderPlacedRef.current = true
+                clearCart()
+                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token, 'razorpay', pricingTotal))
+                return
+              }
+
               if (!verRes.ok) throw new Error(verData.error || `Verification failed (${verRes.status}). Please contact support.`)
               // BUG FIX: same class of guard as create_payment above — a 200
               // response with a malformed/non-JSON body would otherwise slip
@@ -1275,6 +1292,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               clearCart()
               router.replace(buildOrderSuccessUrl(verData.order_number || '', verData.confirmation_token))
             } catch (e: unknown) {
+              // The verify request itself failed to complete (network drop right after the UPI app returned, timeout…) — the customer has
+              // paid, so never show "failed / try again": send them to the order page, which confirms (or keeps polling) from the server.
+              if (e instanceof TypeError && data.order_number) {
+                orderPlacedRef.current = true
+                clearCart()
+                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token, 'razorpay', pricingTotal))
+                return
+              }
               const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
               setError(msg + ' Contact support with payment ID: ' + response.razorpay_payment_id)
               placingRef.current = false

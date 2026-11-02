@@ -240,7 +240,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="afterInteractive"
-        onLoad={() => setRazorpayLoaded(true)}
+        onLoad={() => { setRazorpayLoaded(true); setRazorpayLoadFailed(false) }}
         onError={() => {
           console.error('[checkout] Razorpay script failed to load')
           setRazorpayLoadFailed(true)

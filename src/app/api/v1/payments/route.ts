@@ -252,6 +252,9 @@ export async function POST(req: NextRequest) {
             success:           true,
             order_id:          String(order.id),
             razorpay_order_id: existingRow.payment_id,
+            // Lets the client land on the order page even if verification can't be completed (network drop / rate limit / 5xx).
+            order_number:      existingRow.order_number ?? order.order_number,
+            confirmation_token: existingRow.confirmation_token ?? order.confirmationToken,
             amount:            Math.round((existingRow.total_amount ?? order.total_amount) * 100),
             currency:          'INR',
             customer_id:       null,
@@ -275,6 +278,8 @@ export async function POST(req: NextRequest) {
         success:           true,
         order_id:          String(order.id),
         razorpay_order_id: rzpOrder.id,
+        order_number:      order.order_number,
+        confirmation_token: order.confirmationToken,
         amount:            rzpOrder.amount,   // authoritative paise value from Razorpay
         currency:          rzpOrder.currency,
         customer_id:       customerId ?? null,
