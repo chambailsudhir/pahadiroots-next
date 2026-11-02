@@ -17,6 +17,7 @@
 //     frame — which is the same technique large sites use to avoid
 //     scroll-jank from a naive `window.addEventListener('scroll', ...)`.
 
+import { useUserStore } from '@/store/userStore'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -34,6 +35,9 @@ export default function MobileBottomNav({ settings }: Props) {
   const openCart       = useUIStore(s => s.openCart)
   const openMobileMenu = useUIStore(s => s.openMobileMenu)
   const pathname = usePathname()
+  // ACC-018: /account only has its own tab bar for a SIGNED-IN customer. The sign-in gate has none, and the mobile header
+  // has no cart button — so a logged-out visitor on /account had no way to reach the cart or menu. Show this bar there.
+  const signedIn = useUserStore(s => !!s.user)
 
   // Mount guard for the same hydration-mismatch reason as Header.tsx —
   // cartCount is persisted (localStorage), so it must not render before
@@ -69,7 +73,7 @@ export default function MobileBottomNav({ settings }: Props) {
   // global bar on top of either would stack two fixed bottom bars on
   // the same screen. Large sites suppress the generic bottom nav on
   // these focused/contextual flows for exactly this reason.
-  if (pathname?.startsWith('/account') || pathname?.startsWith('/checkout')) return null
+  if ((pathname?.startsWith('/account') && signedIn) || pathname?.startsWith('/checkout')) return null
 
   return (
     <>

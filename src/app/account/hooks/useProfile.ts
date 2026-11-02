@@ -7,6 +7,7 @@
 //  ✅ Address CRUD delegated to shared useAddresses hook
 // ─────────────────────────────────────────────────────────────
 
+import { ga4AccountAction } from '@/lib/analytics/ga4'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { captureError } from '@/lib/logger'
 import {
@@ -153,6 +154,7 @@ export function useProfile(
       await apiChangePassword(pw.curp, pw.newp)
       setPw({ curp: '', newp: '', conf: '', showCur: false, showNew: false, showConf: false })
       toast('✅ Password updated!')
+      ga4AccountAction('password_changed')
     } catch (e: unknown) {
       handleError(e, 'Failed to update password')
     } finally {

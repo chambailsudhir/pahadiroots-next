@@ -1,5 +1,6 @@
 'use client'
 
+import { ga4Login, ga4SignUp, ga4AccountAction } from '@/lib/analytics/ga4'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useUIStore } from '@/store/uiStore'
@@ -130,6 +131,7 @@ export default function AuthModal() {
     setLoading(true); setError(''); setSuccess('')
     try {
       const data = await callAuth('email_login', { email: em, password: pass })
+      ga4Login('email')
       // SEC-FIX: removed localStorage.setItem('pr_auth_token' / 'pr_auth_refresh') calls.
       // The /api/auth route writes tokens only into httpOnly cookies — the response body
       // contains { success, user, profile }, never tokens. data.access_token is always
@@ -185,6 +187,7 @@ export default function AuthModal() {
         full_name: [fname.trim(), lname.trim()].filter(Boolean).join(' '),
         phone: phone ? '+91' + phone.replace(/\D/g,'') : '',
       })
+      ga4SignUp('email')
       setSuccess('✅ Account created! Check your email to verify.')
       setTimeout(() => setTab('email'), 2000)
     } catch (err: unknown) {
@@ -218,7 +221,7 @@ export default function AuthModal() {
     e.preventDefault()
     if (!fpEmail.trim()) { setError('Please enter your email'); return }
     setLoading(true); setError('')
-    try { await callAuth('forgot_password', { email: fpEmail.trim() }); setFPSent(true) }
+    try { await callAuth('forgot_password', { email: fpEmail.trim() }); setFPSent(true); ga4AccountAction('password_reset_requested') }
     catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed') }
     finally { setLoading(false) }
   }
@@ -380,13 +383,13 @@ export default function AuthModal() {
           .am-logo{font-family:var(--font-playfair),'Playfair Display',serif;font-size:18px;font-weight:900;color:#fff}
           .am-logo-sub{font-size:10px;color:rgba(255,255,255,.6);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
           .am-tabs{display:flex;border-bottom:1px solid #eee}
-          .am-tab{flex:1;padding:13px;border:none;background:#f9f9f9;font-size:13px;font-weight:700;color:#888;cursor:pointer;font-family:inherit;transition:all .2s;border-bottom:2.5px solid transparent}
+          .am-tab{flex:1;padding:13px;border:none;background:#f9f9f9;font-size:13px;font-weight:700;color:#666666;cursor:pointer;font-family:inherit;transition:all .2s;border-bottom:2.5px solid transparent}
           .am-tab.active{background:#fff;color:#1a3a1e;border-bottom-color:#1a3a1e}
           .am-body{padding:20px 24px 24px}
           .am-back{background:none;border:none;color:#1a3a1e;font-size:13px;font-weight:700;cursor:pointer;padding:0;margin-bottom:16px;font-family:inherit}
           .am-sec-title{font-family:var(--font-playfair),'Playfair Display',serif;font-size:20px;color:#1a3a1e;margin-bottom:16px}
           .am-greeting{font-family:var(--font-playfair),'Playfair Display',serif;font-size:17px;color:#1a1a1a;font-weight:700;margin-bottom:3px}
-          .am-greeting-sub{font-size:12px;color:#888;margin-bottom:16px}
+          .am-greeting-sub{font-size:12px;color:#666666;margin-bottom:16px}
           .am-google{width:100%;padding:12px;border:1.5px solid #e0e0e0;border-radius:10px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit;transition:all .2s;color:#333;margin-bottom:0}
           .am-google:hover{border-color:#1a3a1e;background:#f9fdf9}
           .am-divider{text-align:center;position:relative;margin:14px 0}
@@ -395,23 +398,23 @@ export default function AuthModal() {
           .am-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
           .am-inp-err{border-color:#e74c3c!important;background:#fff9f9}
           .am-field-err{font-size:11px;color:#e74c3c;font-weight:700;margin-top:2px}
-          .am-lbl{font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.5px}
+          .am-lbl{font-size:10px;font-weight:800;color:#666666;text-transform:uppercase;letter-spacing:.5px}
           .am-inp{padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;font-family:inherit;color:#1a1a1a;transition:border-color .2s;outline:none;width:100%;box-sizing:border-box}
           .am-inp:focus{border-color:#1a3a1e}
-          .am-fp-link{position:absolute;right:0;top:0;background:none;border:none;font-size:11px;color:#1a3a1e;cursor:pointer;font-weight:700;font-family:inherit}
+          .am-fp-link{position:absolute;right:0;top:-4px;padding:6px 0 6px 8px;min-height:24px;background:none;border:none;font-size:11px;color:#1a3a1e;cursor:pointer;font-weight:700;font-family:inherit}
           .am-err{background:#fdecea;border:1px solid #f5c6cb;border-radius:8px;padding:9px 13px;font-size:12px;color:#c0392b;font-weight:700;margin-bottom:10px}
           .am-success{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:9px 13px;font-size:12px;color:#2d6a4f;font-weight:700;margin-bottom:10px}
           .am-submit{width:100%;padding:13px;background:linear-gradient(135deg,#1a3a1e,#2d5233);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;margin-bottom:12px;letter-spacing:.2px}
           .am-submit:hover:not(:disabled){background:linear-gradient(135deg,#2d5233,#3a7042)}
           .am-submit:disabled{opacity:.6;cursor:not-allowed}
-          .am-switch{font-size:12px;color:#888;text-align:center;margin-bottom:16px}
+          .am-switch{font-size:12px;color:#666666;text-align:center;margin-bottom:16px}
           .am-switch-btn{background:none;border:none;color:#1a3a1e;font-weight:800;cursor:pointer;font-family:inherit;font-size:12px}
           .am-ql-wrap{border-top:1px solid #f0f0f0;padding-top:16px;margin-top:8px;display:flex;flex-direction:column;gap:2px}
           .am-ql-item{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;cursor:pointer;transition:background .15s;text-decoration:none;color:inherit}
           .am-ql-item:hover{background:#f9fdf9}
           .am-ql-icon{font-size:20px;width:32px;text-align:center;flex-shrink:0}
           .am-ql-lbl{font-size:13px;font-weight:700;color:#1a1a1a}
-          .am-ql-sub{font-size:11px;color:#888}
+          .am-ql-sub{font-size:11px;color:#666666}
           .am-ql-arr{margin-left:auto;color:#bbb;font-size:20px}
         `}</style>
       </div>

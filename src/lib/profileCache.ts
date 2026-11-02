@@ -18,6 +18,7 @@
  *   If cache is cold → checkout skeleton shows while fetch completes.
  */
 
+import { sharedProfileRequest, invalidateProfileRequest } from '@/lib/profileRequest'
 import type { RawProfile, SavedAddress } from '@/types'
 
 export const PROFILE_CACHE_KEY = 'pr_checkout_profile'
@@ -103,6 +104,7 @@ export function writeProfileCache(entry: CachedProfile): void {
 
 /** Wipe the cache (call on logout). */
 export function clearProfileCache(): void {
+  invalidateProfileRequest()   // never hand the previous user's profile to the next login (ACC-047)
   if (typeof window === 'undefined') return
   try { localStorage.removeItem(PROFILE_CACHE_KEY) } catch {}
 }
@@ -134,10 +136,13 @@ export function isProfileCacheStale(): boolean {
  */
 export async function prefetchProfileToCache(): Promise<CachedProfile | null> {
   try {
-    const res = await fetch('/api/profile')
-    if (!res.ok) return null
-    const data = await res.json()
-    if (!data.profile) return null
+    // ACC-047: shared with fetchProfile() (account page) — one request per login.
+    const data = await sharedProfileRequest(async () => {
+      const res = await fetch('/api/profile')
+      if (!res.ok) return null            // logged out / transient: stay quiet like before, and never cache it
+      return res.json()
+    }) as { profile?: Parameters<typeof buildCacheEntry>[0] }
+    if (!data?.profile) return null
     const entry = buildCacheEntry(data.profile)
     writeProfileCache(entry)
     return entry

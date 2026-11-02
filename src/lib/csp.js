@@ -68,7 +68,7 @@ function buildCsp(opts) {
                 // event hit would still have been silently blocked, which is the failure mode
                 // that's hardest to notice: no console error pattern a non-developer would
                 // recognize as "analytics is broken," GA4 Realtime just stays empty forever.
-                "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://api.postalpincode.in https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
+                "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
                 // SEO/ANALYTICS FIX: GTM's <noscript> fallback (rendered in layout.tsx
                 // immediately inside <body> for users with JS disabled or blocked) is an
                 // <iframe src="https://www.googletagmanager.com/ns.html?...">, which needs

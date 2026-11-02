@@ -10,6 +10,7 @@
 //   ✅ Cache-Control: no-store on GET (profile data must never be cached)
 // ─────────────────────────────────────────────────────────────
 
+import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ok, fail,
@@ -21,6 +22,7 @@ import {
   checkCsrf,
 } from '@/lib/api/serverUtils'
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
+import { addressesEtag, ADDRESS_SELECT } from '@/lib/server/addressEtag'
 
 // ── Server-side input rules (AUDIT ACC-039) ───────────────────────────────────
 // The account forms validate in the browser only; the API accepted a blank first name,
@@ -95,7 +97,7 @@ export async function GET(req: NextRequest) {
     }
 
     const profileWithAddresses = profile
-      ? { ...toPublicProfile(profile), saved_addresses: JSON.stringify(savedAddresses) }
+      ? { ...toPublicProfile(profile), saved_addresses: JSON.stringify(savedAddresses), saved_addresses_etag: addressesEtag(savedAddresses) }
       : null
 
     const res = ok({
@@ -168,6 +170,7 @@ export async function POST(req: NextRequest) {
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
 
+    let newAddressesEtag: string | undefined
     // ── saved_addresses → normalized table (not JSON blob) ────
     if ('saved_addresses' in body) {
       const incoming = body.saved_addresses
@@ -181,14 +184,26 @@ export async function POST(req: NextRequest) {
       if (!Array.isArray(addresses)) return fail(400, 'Invalid saved_addresses format')
       if (addresses.length > 10) return fail(400, 'Maximum 10 addresses allowed')
 
+      // Current stored list — used for (a) the lost-update check below and (b) telling legacy rows from new ones.
+      const existingRows = await sbAdmin(
+        'GET',
+        `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=${ADDRESS_SELECT}&limit=50`,
+      ).catch(() => [] as Array<{ id: string }>)
+      const existingList = Array.isArray(existingRows) ? existingRows : []
+
+      // ACC-043b: refuse to overwrite a list that changed (other tab / device) since the client loaded it.
+      // Clients that do not send an etag (older bundles) keep the previous last-write-wins behaviour.
+      if (typeof body.saved_addresses_etag === 'string' && body.saved_addresses_etag !== addressesEtag(existingList)) {
+        return NextResponse.json({
+          error: 'Your saved addresses were changed in another tab or device. Please reload this page to see the latest list, then try again.',
+          code:  'addresses_changed',
+        }, { status: 409 })
+      }
+
       if (addresses.length > 0) {
         // Rows already in the DB may pre-date the phone/pincode fields (migration v13) — they stay
         // editable without being forced to gain them. NEW rows must be complete.
-        const existingRows = await sbAdmin(
-          'GET',
-          `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=id&limit=50`,
-        ).catch(() => [] as Array<{ id: string }>)
-        const existingIds = new Set<string>((Array.isArray(existingRows) ? existingRows : []).map((r: { id: string }) => String(r.id)))
+        const existingIds = new Set<string>(existingList.map((r: { id: string }) => String(r.id)))
         const rows: Array<Record<string, unknown>> = []
         for (const a of addresses) {
           if (!a || typeof a !== 'object') return fail(400, 'Invalid saved_addresses format')
@@ -213,7 +228,10 @@ export async function POST(req: NextRequest) {
 
           rows.push({
             // Only accept a UUID-shaped id (it ends up inside a PostgREST `not.in.(...)` filter below).
-            ...(typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? { id: a.id } : {}),
+            // A row WITHOUT an id used to be inserted and then wiped by the cleanup below (`keptIds` was empty → "delete all"),
+            // i.e. the API reported success and stored nothing. The UI always sends client-made ids, so customers never hit it —
+            // but any other caller silently lost data. The server now mints the id.
+            id: typeof a.id === 'string' && /^[0-9a-fA-F-]{36}$/.test(a.id) ? a.id : randomUUID(),
             customer_id: profile.id,
             label,
             name:  name || null,
@@ -260,6 +278,8 @@ export async function POST(req: NextRequest) {
         )
       }
       delete body.saved_addresses
+      delete body.saved_addresses_etag
+      newAddressesEtag = addressesEtag(await sbAdmin('GET', `/rest/v1/saved_addresses?customer_id=eq.${profile.id}&select=${ADDRESS_SELECT}&limit=50`).catch(() => null))
     }
 
     // ── Scalar profile fields ──────────────────────────────────
@@ -324,7 +344,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const res = ok({ success: true })
+    const res = ok({ success: true, ...(newAddressesEtag ? { saved_addresses_etag: newAddressesEtag } : {}) })
     if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
     return res
 
