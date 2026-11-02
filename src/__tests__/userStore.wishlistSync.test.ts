@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 /**
- * ACC-047 — login applied the server wishlist twice (new array each time) → two identical PUT /api/wishlist.
- * Only a PUT the server confirmed is remembered, so nothing is ever lost.
+ * ACC-052 (found by live verification): the client uploaded its WHOLE local wishlist with PUT. On a device whose local list
+ * was empty, merely opening the home page sent `PUT {wishlist: []}` and the customer's saved wishlist on the server
+ * (live: [11,28]) became []. The storefront now sends only DELTAS (PATCH {add, remove}), which merge into the stored list.
+ * Also covers ACC-047 (no duplicate syncs on login).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -15,75 +17,87 @@ beforeEach(() => {
 })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
-async function loadStore() {
+async function loadStore(signedIn = true) {
   const { useUserStore } = await import('@/store/userStore')
-  useUserStore.setState({ user: { id: 'u1', email: 'a@b.com' } as never })
+  if (signedIn) useUserStore.setState({ user: { id: 'u1', email: 'a@b.com' } as never })
   return useUserStore
 }
-const puts = () => fetchMock.mock.calls.filter(c => String(c[0]) === '/api/wishlist' && c[1]?.method === 'PUT')
+const calls = () => fetchMock.mock.calls.filter(c => String(c[0]) === '/api/wishlist')
+const bodies = () => calls().map(c => JSON.parse(c[1].body))
+const tick = (ms = 900) => vi.advanceTimersByTimeAsync(ms)
 
-describe('wishlist sync de-duplication', () => {
-  it('sends ONE PUT when the same list is applied twice as new arrays (login merge, then account init)', async () => {
+describe('wishlist sync sends deltas, never the whole list', () => {
+  it('NEVER uploads an empty list: rehydrating an empty local wishlist for a signed-in user sends nothing', async () => {
     const store = await loadStore()
-    store.getState().setWishlist(['28', '31'])
-    await vi.advanceTimersByTimeAsync(900)
-    store.getState().setWishlist(['31', '28'])          // same content, new reference, different order
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(1)
+    store.setState({ wishlist: [] })                       // what a rehydrate of an empty local list looks like (new array)
+    await tick()
+    expect(calls()).toHaveLength(0)
   })
 
-  it('still syncs a genuinely different list', async () => {
+  it('uses PATCH with only what the customer changed', async () => {
     const store = await loadStore()
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    store.getState().setWishlist(['28', '31'])
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(2)
+    store.getState().addToWishlist('28')
+    await tick()
+    expect(calls()).toHaveLength(1)
+    expect(calls()[0][1].method).toBe('PATCH')
+    expect(bodies()[0]).toEqual({ add: ['28'], remove: [] })
   })
 
-  it('does NOT remember a failed PUT — the identical list is retried', async () => {
+  it('a removal is sent as a removal — and only for the id the customer removed', async () => {
+    const store = await loadStore()
+    store.setState({ wishlist: ['28', '31'] }); await tick(); fetchMock.mockClear()
+    store.getState().removeFromWishlist('28')
+    await tick()
+    expect(bodies()).toEqual([{ add: [], remove: ['28'] }])
+  })
+
+  it('rapid add then remove of the same id cancels out (nothing is sent)', async () => {
+    const store = await loadStore()
+    store.getState().addToWishlist('28'); store.getState().removeFromWishlist('28')
+    await tick()
+    expect(calls()).toHaveLength(0)
+  })
+
+  it('coalesces rapid taps into ONE request', async () => {
+    const store = await loadStore()
+    store.getState().addToWishlist('1'); store.getState().addToWishlist('2'); store.getState().addToWishlist('3')
+    await tick()
+    expect(calls()).toHaveLength(1)
+    expect(bodies()[0].add.sort()).toEqual(['1', '2', '3'])
+  })
+
+  it('the login merge (server list ∪ local list) only ADDS — it can never remove anything from the account', async () => {
+    const store = await loadStore()
+    store.setState({ wishlist: ['5'] }); await tick(); fetchMock.mockClear()
+    store.getState().setWishlist(['11', '28'])             // useAuth applying the server list
+    await tick()
+    for (const b of bodies()) expect(b.remove).toEqual([])
+  })
+
+  it('a failed request keeps the change and retries it with the next one', async () => {
     const store = await loadStore()
     fetchMock.mockResolvedValueOnce({ ok: false, status: 503 })
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(2)
+    store.getState().addToWishlist('28'); await tick()
+    store.getState().addToWishlist('31'); await tick()
+    expect(bodies()[1].add.sort()).toEqual(['28', '31'])
   })
 
-  it('a guest list uploaded for the first time after login is always sent', async () => {
-    const store = await loadStore()
-    store.getState().setWishlist(['7', '9'])
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(1)
-    expect(JSON.parse(puts()[0][1].body)).toEqual({ wishlist: ['7', '9'] })
+  it('a guest’s wishlist is uploaded once they sign in (as adds), but never while a guest', async () => {
+    const store = await loadStore(false)
+    store.getState().addToWishlist('7'); store.getState().addToWishlist('9'); await tick()
+    expect(calls()).toHaveLength(0)                        // guest: local only
+    store.setState({ user: { id: 'u1', email: 'a@b.com' } as never }); await tick()
+    expect(bodies()).toEqual([{ add: expect.arrayContaining(['7', '9']), remove: [] }])
   })
 
-  // live-verification find: two debounce timers fired ~1 s apart while the first PUT was still in flight (slow API)
-  it('does not send an identical list again while the first PUT is still in flight', async () => {
+  it('does not send the same work twice while a request is in flight (no double sync on login)', async () => {
     const store = await loadStore()
     let release!: (v: unknown) => void
-    fetchMock.mockReset(); fetchMock.mockResolvedValue({ ok: true })
-    fetchMock.mockImplementationOnce(() => new Promise(r => { release = r }))      // first PUT hangs
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)                                          // first PUT sent, not answered
-    store.getState().setWishlist(['28'])                                            // same content, new array
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(1)
-    release({ ok: true }); await vi.advanceTimersByTimeAsync(10)
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(1)                                                  // now confirmed → still skipped
-  })
-
-  it('a failed in-flight PUT does not block the retry', async () => {
-    const store = await loadStore()
-    fetchMock.mockReset(); fetchMock.mockResolvedValue({ ok: true })
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 503 })
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    store.getState().setWishlist(['28'])
-    await vi.advanceTimersByTimeAsync(900)
-    expect(puts()).toHaveLength(2)
+    fetchMock.mockImplementationOnce(() => new Promise(r => { release = r }))
+    store.getState().addToWishlist('28'); await tick()
+    store.getState().setWishlist(['28']); await tick()     // same content applied again
+    expect(calls()).toHaveLength(1)
+    release({ ok: true }); await tick(50)
+    expect(calls()).toHaveLength(1)
   })
 })

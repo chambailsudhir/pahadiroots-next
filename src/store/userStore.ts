@@ -112,63 +112,78 @@ export const useUserStore = create<UserStore>()(
 export const selectHasHydrated = (s: { _hasHydrated: boolean }): boolean =>
   s._hasHydrated
 
-// ── Wishlist auto-sync ────────────────────────────────────────────────────────
-// Subscribes to wishlist changes. Whenever the wishlist array reference changes
-// AND the user is logged in, it fires a debounced PUT /api/wishlist.
+// ── Wishlist auto-sync (deltas, never the whole list) ─────────────────────────
+// Whenever the wishlist changes AND the user is logged in, the CHANGE — the ids added and the ids removed — is sent to
+// PATCH /api/wishlist, which merges it into the list stored on the server.
 //
-// Key design choices:
-//   • prevWishlist reference equality check — Zustand creates a new array
-//     reference on every addToWishlist/removeFromWishlist/setWishlist call, so
-//     `state.wishlist !== prevWishlist` is true exactly when the wishlist mutates.
-//     Without this check, the subscriber fires on every state mutation (login,
-//     setAddresses, etc.), triggering needless PUT /api/wishlist calls.
-//   • 800 ms debounce — coalesces rapid add/remove taps into a single request.
-//   • Fire-and-forget — no UI feedback needed; next change retries on failure.
+// Why deltas (account audit, Nov 2026 — ACC-052, found by live verification): this used to upload the browser's whole list
+// with PUT. After the persisted store rehydrated on a device whose local wishlist was empty (new phone, cleared storage,
+// another browser), merely opening the home page sent `PUT {wishlist: []}` and the customer's saved wishlist on the server
+// went from [11,28] to []. A delta cannot erase what the customer did not touch:
+//   • rehydrating / the login merge (server list ∪ local list) only ever ADD ids → union, nothing is lost;
+//   • an id is only sent as "remove" when the customer actually removed it (removeFromWishlist).
+// Opposite changes to the same id cancel out; a failed request keeps its delta for the next attempt; identical work is
+// never sent twice (also fixes the double PUT seen on login, ACC-047). 800 ms debounce coalesces rapid taps.
 //
 // Only runs in the browser (subscribe is a no-op on the server).
 if (typeof window !== 'undefined') {
   let syncTimer: ReturnType<typeof setTimeout> | null = null
-  // Track the previous wishlist reference so we can skip unrelated state changes.
   let prevWishlist: string[] = useUserStore.getState().wishlist
-  // ACC-047: login applies the server wishlist TWICE (AuthModal merge, then the account page's own GET), each time as a
-  // new array → two identical PUTs. Remember the last list the server CONFIRMED (PUT returned ok) and skip an identical
-  // one. Only a successful PUT is remembered, so a failed sync — or a guest list that has never been uploaded — is
-  // never suppressed, and logout forgets it.
-  let lastConfirmedKey: string | null = null
-  let inflightKey: string | null = null            // the same list is already on its way — a second timer must not send it again
-  const wishlistKey = (w: string[]) => JSON.stringify([...w].sort())
+  const pendingAdd    = new Set<string>()
+  const pendingRemove = new Set<string>()
+  let sending = false
+
+  function flush() {
+    if (sending || (pendingAdd.size === 0 && pendingRemove.size === 0)) return
+    const add = [...pendingAdd], remove = [...pendingRemove]
+    sending = true
+    // Fire-and-forget — no UI feedback needed for background sync
+    fetch('/api/wishlist', {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ add, remove }),
+    }).then(res => {
+      if (res.ok) {
+        add.forEach(id => pendingAdd.delete(id))
+        remove.forEach(id => pendingRemove.delete(id))
+      }
+      // not ok (e.g. 401 logged out, 503): keep the delta — it is sent with the next change / retry
+    }).catch((err: unknown) => {
+      console.warn('[userStore] wishlist sync failed:', err)
+    }).finally(() => {
+      sending = false
+      if (pendingAdd.size > 0 || pendingRemove.size > 0) schedule()   // changes arrived while this request was in flight
+    })
+  }
+  function schedule() {
+    if (syncTimer) clearTimeout(syncTimer)
+    syncTimer = setTimeout(flush, 800)
+  }
+
+  let prevUserId: string | null = useUserStore.getState().user?.id ?? null
 
   useUserStore.subscribe(state => {
-    // Skip if wishlist array reference hasn't changed — this is the guard that
-    // prevents syncing on login, setAddresses, or any other unrelated mutation.
+    const userId = state.user?.id ?? null
+    const justSignedIn = !prevUserId && !!userId
+    prevUserId = userId
+    if (!userId) { pendingAdd.clear(); pendingRemove.clear() }                      // guests: local only
+    // A guest who built a wishlist and then signs in: those items are not a "change", yet they must reach the account.
+    // Offering them all as ADDS is safe — adds only ever union into the stored list.
+    if (justSignedIn) { state.wishlist.forEach(id => pendingAdd.add(id)); if (pendingAdd.size > 0) schedule() }
+
+    // Skip unrelated state changes (setAddresses, …) — only a new wishlist array is a wishlist change.
     if (state.wishlist === prevWishlist) return
+    const before = new Set(prevWishlist), after = new Set(state.wishlist)
     prevWishlist = state.wishlist
 
-    // Only sync when a user is logged in
-    if (!state.user?.id) { lastConfirmedKey = null; inflightKey = null; return }
+    if (!userId) return
 
-    if (syncTimer) clearTimeout(syncTimer)
-    syncTimer = setTimeout(() => {
-      const list = useUserStore.getState().wishlist
-      const key  = wishlistKey(list)
-      if (key === lastConfirmedKey || key === inflightKey) return   // the server has it / is about to have it
-      inflightKey = key
-      // Fire-and-forget — no UI feedback needed for background sync
-      fetch('/api/wishlist', {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ wishlist: list }),
-      }).then(res => { if (res.ok) lastConfirmedKey = key }).finally(() => { if (inflightKey === key) inflightKey = null }).catch((err: unknown) => {
-        // BUG FIX [ERROR HANDLING]: previously bare `.catch(() => {})` with
-        // zero logging. A persistent failure (e.g. the wishlist API broken,
-        // an expired auth token that never refreshes) meant wishlist updates
-        // silently never reached the server — the debounce comment "next change
-        // will retry" is only true for transient failures. A permanent break
-        // would quietly lose all wishlist changes with no ops visibility at all.
-        // Added a console.warn (not error — this is a background sync, not a
-        // critical path) so it shows up in Vercel logs without overwhelming them.
-        console.warn('[userStore] wishlist sync failed:', err)
-      })
-    }, 800)   // 800ms debounce — coalesces rapid add/remove taps
+    for (const id of after)  if (!before.has(id)) { pendingAdd.add(id);    pendingRemove.delete(id) }
+    for (const id of before) if (!after.has(id)) {
+      // added and removed again before anything was sent → the server never needs to hear about it
+      if (pendingAdd.has(id)) pendingAdd.delete(id)
+      else pendingRemove.add(id)
+    }
+    if (pendingAdd.size > 0 || pendingRemove.size > 0) schedule()
   })
 }

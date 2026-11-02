@@ -105,3 +105,22 @@ change in the admin app, so it is left for the owner.
 **Not tested** (and why): returns / refunds on a *delivered* order — moving a test order to `delivered` writes GST
 journal entries into the real books; real-device Safari / Firefox / Android — only Chromium is available in this
 environment (mobile *emulation* was used); e-mail content — no inbox.
+
+### 5.1 ACC-052 — wishlist erased on page load (found by live verification, fixed)
+
+* **What happened:** on a device whose local wishlist was empty (new phone, cleared storage, other browser), merely opening the
+  home page while signed in sent `PUT /api/wishlist {"wishlist": []}`. A customer's saved list `[11,28]` became `[]`.
+  Reproduced on a preview deployment before the fix.
+* **Fix:** the browser now sends only *deltas* (`PATCH /api/wishlist {add, remove}`), which the server merges into the stored list
+  with a conditional write (no lost updates; 409 if it keeps changing). `PUT` refuses to replace a non-empty list with an empty one
+  unless `x-wishlist-clear: 1` is sent, which protects old cached clients. A guest's wishlist is uploaded as *adds* on sign-in.
+* **Tests:** `wishlistRoute.merge.test.ts` (14), `userStore.wishlistSync.test.ts` (9).
+
+### 5.2 Other findings recorded in the follow-up pass
+
+* **Second `GET /api/profile` after login is inherent:** login does a full page reload, so the second request happens in a new
+  document and cannot be shared with the first. The shared-request helper still dedupes within one document.
+* **ACC-051 (owner decision):** return-evidence photos are stored in the shared *public* `pahadi-images` bucket (100 MB limit,
+  video/PDF allowed). Fix needs a private bucket and an admin-app change.
+* **Closed as by-design / not safe to change:** static-page CSP trade-off, Best Sellers cold-start (real fix = compute upgrade),
+  cosmetic labels, `vector` extension schema, backup tables (needs a retention decision).
