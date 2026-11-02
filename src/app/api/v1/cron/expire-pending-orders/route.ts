@@ -5,6 +5,8 @@
 // for the full safety rules (asks Razorpay first, never releases on uncertainty,
 // single-winner release, late payments still honoured).
 //
+// Also releases earned referral coins (process_referral_rewards) as a non-fatal extra step.
+//
 // Scheduled by vercel.json `crons`. AUTH: Bearer ${CRON_SECRET} (fails closed).
 // ─────────────────────────────────────────────────────────────────────────────
 import { refreshCatalogPages } from '@/lib/server/catalogFreshness'
@@ -35,6 +37,18 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.release_stale_coupon_claims', alert: true })
     }
 
+    // Referral coins whose friend's order is now delivered and past the return window (db_migration_v17_referral_controls.sql).
+    // Piggy-backs on this sweep because vercel.json is limited to two crons on the Hobby plan. Idempotent, single-winner and
+    // non-fatal: a failure here must not mask the stock sweep's result.
+    let referralRewards: { rewarded?: number; rejected?: number; waiting?: number } | null = null
+    try {
+      const { data, error } = await db.rpc('process_referral_rewards', { p_limit: 50 })
+      if (error) throw new Error(error.message)
+      referralRewards = (data ?? null) as typeof referralRewards
+    } catch (e) {
+      captureError(e, { action: 'cron.process_referral_rewards', alert: true })
+    }
+
     // Released stock can turn a "sold out" card buyable again — refresh the cached cards.
     // (One regeneration per sweep that actually released something, never per visitor.)
     if (stats.expired > 0) {
@@ -42,7 +56,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.
-    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased }, { status: stats.errors > 0 ? 500 : 200 })
+    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards }, { status: stats.errors > 0 ? 500 : 200 })
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders', alert: true })
     return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })

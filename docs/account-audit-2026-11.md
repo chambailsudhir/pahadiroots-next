@@ -125,6 +125,24 @@ environment (mobile *emulation* was used); e-mail content — no inbox.
 * **Closed as by-design / not safe to change:** static-page CSP trade-off, Best Sellers cold-start (real fix = compute upgrade),
   cosmetic labels, `vector` extension schema, backup tables (needs a retention decision).
 
+### 5.3 Referral programme + abuse controls (ACC-045 follow-up, `db_migration_v17_referral_controls.sql`)
+
+* **Finding:** the account page promised "you and your friend earn 100 coins", but nothing recorded a referral or paid it
+  (`customers.referred_by` was never set; no `referral` ledger row has ever existed). Nothing to abuse — and nothing worked.
+* **Now:** `?ref=CODE` is remembered 30 days in the browser and applied once after sign-in (`ReferralCapture`), or typed in on the
+  account page. Coins are paid by `process_referral_rewards()` (run by the expire-pending-orders sweep) — never at order time.
+* **Rules** (modelled on Myntra / Nykaa / Amazon: pay after delivery + return window; a little tighter for a small shop).
+  Adjustable without a deploy in `site_settings`: `referral_bonus_points` 100 · `referral_min_order` ₹499 · `referral_hold_days` 7 ·
+  `referral_max_per_month` 3 · `referral_max_lifetime` 10 · `referral_expiry_days` 90. Fixed rules: new customers only (no order
+  yet) · not your own code · one referrer per customer forever · not the referrer's phone / e-mail / delivery address · one delivery
+  address can be rewarded once · returned / refunded / cancelled orders never pay · when the referrer's cap is reached the friend is
+  still paid.
+* **Verified:** nine scenarios run against the production database inside a rolled-back transaction (qualifying, inside return
+  window, below minimum, returned, same address as referrer, address already rewarded, cap reached, idempotent re-run, attach
+  checks). Nothing was left behind (0 referrals, 0 test customers). Tests: `referral.lib`, `referralRoute`,
+  `ReferralCapture`.
+* **Note:** rewards are released by a non-fatal step inside the existing `expire-pending-orders` sweep (daily Vercel cron, plus the
+  self-sweep when orders are placed) because the Hobby plan allows only two crons. Release can lag by a little, never run early.
 ### 5.4 ACC-051 — return photos moved to a private bucket (fixed, `db_migration_v18_private_return_evidence_bucket.sql`)
 
 * **Was:** return-evidence photos went into the shared **public** `pahadi-images` bucket (100 MB, video/PDF allowed), whose
