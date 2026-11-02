@@ -78,6 +78,7 @@ export default function WhySection(_props: Props) {
                 height={p.h}
                 loading="lazy"
                 fetchPriority="low"
+                quality={60}
                 sizes="(max-width: 600px) 80vw, (max-width: 960px) 45vw, 25vw"
               />
             </div>
