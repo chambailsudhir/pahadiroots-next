@@ -333,6 +333,13 @@ export async function POST(req: NextRequest) {
     const isTransient = err.name === 'TimeoutError' || err.name === 'AbortError'
       || /timeout|fetch failed|network/i.test(err.message || '')
     console.error('[profile POST]', e)
+    // AUDIT ACC-039 (found in live verification): customers.normalized_phone is UNIQUE, so saving a mobile
+    // number that already belongs to another account made PostgREST answer 409 and the customer saw the
+    // opaque "Profile update failed". Say what actually happened (the whole update is rejected, so nothing
+    // else was saved either).
+    if ((err.status === 409 || /23505/.test(err.message || '')) && /phone/i.test(err.message || '')) {
+      return fail(409, 'This mobile number is already linked to another account. Please use a different number, or contact support if it is yours.')
+    }
     return fail(
       err.status || (isTransient ? 503 : 500),
       process.env.NODE_ENV === 'production'

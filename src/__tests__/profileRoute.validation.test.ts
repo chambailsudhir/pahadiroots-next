@@ -84,6 +84,18 @@ describe('POST /api/profile — scalar fields (ACC-039)', () => {
   })
 })
 
+describe('POST /api/profile — duplicate mobile number (live verification)', () => {
+  it('answers 409 with a clear message when the number already belongs to another account (unique normalized_phone)', async () => {
+    mocks.sbAdmin.mockImplementation(async (m: string, p: string) => {
+      if (m === 'PATCH' && p.startsWith('/rest/v1/customers?id=')) throw { status: 409, message: '{"code":"23505","message":"duplicate key value violates unique constraint \\"customers_normalized_phone_key\\""}' }
+      return []
+    })
+    const res = await post({ phone: '9876543210' })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/already linked to another account/i)
+  })
+})
+
 describe('POST /api/profile — saved addresses (ACC-039)', () => {
   const upsert = () => mocks.sbAdmin.mock.calls.find(([m, p]) => m === 'POST' && p === '/rest/v1/saved_addresses') as [string, string, Array<Record<string, unknown>>] | undefined
 
