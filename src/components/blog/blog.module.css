@@ -16,7 +16,7 @@
 .dateline{display:flex;justify-content:center;align-items:center;gap:1rem;font:700 .68rem/1 var(--font-lato),Lato,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:var(--mut);padding:.9rem 0;border-top:1px solid var(--forest);border-bottom:1px solid var(--line);margin-bottom:clamp(1.6rem,3vw,2.4rem)}
 .dateline i{width:4px;height:4px;border-radius:50%;background:var(--gold);display:block}
 .root .mast h1{font-size:clamp(2.6rem,7vw,5.2rem);letter-spacing:-.02em;margin-bottom:1rem}
-.root .mast h1 em{font-style:italic;color:var(--gold);font-weight:700}
+.root .mast h1 em{font-family:var(--font-playfair-italic),'Playfair Display',Georgia,serif;font-style:italic;color:var(--gold);font-weight:700}
 .mastSub{font-size:clamp(1rem,1.5vw,1.15rem);color:var(--mut);max-width:560px;margin:0 auto}
 
 /* ── Chips ── */

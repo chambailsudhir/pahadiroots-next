@@ -48,8 +48,15 @@ const playfair = localFont({
   display: 'swap',
   src: [
     { path: '../fonts/PlayfairDisplay-normal-400-900.woff2', style: 'normal', weight: '400 900' },
-    { path: '../fonts/PlayfairDisplay-italic-400-900.woff2', style: 'italic', weight: '400 900' },
   ],
+})
+// LCP (audit HOME-003): the italic face (38 KB) is only used by <em> on the blog and story pages, yet it was preloaded on every
+// page ahead of the hero image. It is its own family now, not preloaded: the browser fetches it only where a rule uses it.
+const playfairItalic = localFont({
+  variable: '--font-playfair-italic',
+  display: 'swap',
+  preload: false,
+  src: [{ path: '../fonts/PlayfairDisplay-italic-400-900.woff2', style: 'italic', weight: '400 900' }],
 })
 const lato = localFont({
   variable: '--font-lato',
@@ -340,7 +347,7 @@ export default async function RootLayout({
             `hv_geo` cookie set by proxy.ts, and only loads the Google tag when analytics is on. See lib/consent.ts. */}
         <script dangerouslySetInnerHTML={{ __html: consentBootstrapScript(tagId, consentMode) }} />
       </head>
-      <body className={`${playfair.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
+      <body className={`${playfair.variable} ${playfairItalic.variable} ${lato.variable}`} style={{ fontFamily: 'var(--font-lato, Lato, sans-serif)', background: 'var(--pm-bg, #fff)', color: 'var(--pm-text, #1a1a1a)' }}>
         {/* Sentinel for MobileBottomNav's scroll-to-top button — observed
             via IntersectionObserver instead of a scroll listener so the
             button's show/hide never runs on the scroll thread. Sits at
