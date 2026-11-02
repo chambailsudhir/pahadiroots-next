@@ -7,10 +7,12 @@
 //  ✅ Only delivered orders within the 48-hour window are returnable
 //  ✅ Idempotent: 409 if a return is already in progress for the same item
 //  ✅ Body: { reason, other_detail?, order_item_id?, variant_id?, product_id?,
-//            quantity?, resolution? ('refund' | 'replace'), photo_urls? }
-//  ✅ photo_urls: obtained via the sibling /return/upload-url route; only
-//     accepted here if they actually point at this order's own upload
-//     path — prevents attaching an arbitrary external URL as "evidence"
+//            quantity?, resolution? ('refund' | 'replace'), photo_paths? }
+//  ✅ photo_paths: object paths from the sibling /return/upload-url route; only
+//     accepted if they sit under this order's own returns/<id>/ prefix of the
+//     PRIVATE return-evidence bucket, and only kept if the object exists
+//     (signing it proves that). They are stored as signed read links in
+//     returns.photo_urls — see lib/server/returnEvidence.ts (ACC-051)
 //  ✅ Line-item aware: when an order has >1 item, the client identifies
 //     which one via variant_id/product_id (or order_item_id); server
 //     re-verifies it actually belongs to this order against order_items
@@ -49,6 +51,7 @@
 //  report) — a DB-level fix, not something this route needed to change.
 // ─────────────────────────────────────────────────────────────
 
+import { signEvidenceLinks } from '@/lib/server/returnEvidence'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ok, fail,
@@ -91,7 +94,8 @@ export async function POST(
   let productId:   string | number | null = null
   let quantity:    number | null          = null
   let resolution:  'refund' | 'replace'   = 'refund'
-  let photoUrls:   string[]               = []
+  let photoPaths:  string[]               = []
+  let photoUrls:   string[]               = []     // signed read links, filled in after the ownership check
   try {
     const body  = await req.json()
     reason      = (body?.reason       ?? '').trim()
@@ -108,19 +112,12 @@ export async function POST(
       if (Number.isFinite(q) && q > 0) quantity = Math.floor(q)
     }
     if (body?.resolution === 'replace') resolution = 'replace'
-    // Photo evidence — only accept URLs that actually point at this
-    // order's own upload-url path (returns/<id>/...) in our own bucket, so
-    // a crafted request can't attach an arbitrary external image URL as
-    // "evidence". Capped defensively even though upload-url also caps it,
-    // since this route doesn't otherwise know how many were issued.
-    if (Array.isArray(body?.photo_urls)) {
-      // AUDIT R2 SF-3: `includes()` accepted ANY URL that merely contained this path (e.g.
-      // `javascript:alert(1)//storage/v1/...` or an attacker's own host), and the admin panel renders
-      // these as links/images. Must START with this project's own public storage URL.
-      const expectedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/pahadi-images/returns/${id}/`
-      photoUrls = body.photo_urls
-        .filter((u: unknown) => typeof u === 'string' && !!process.env.NEXT_PUBLIC_SUPABASE_URL && u.startsWith(expectedPrefix) && !/[\s<>"']/.test(u))
-        .slice(0, 4)
+    // Photo evidence (ACC-051): the browser sends the object PATHS it was given by /return/upload-url, never URLs. Only
+    // paths under this order's own returns/<id>/ prefix of the PRIVATE return-evidence bucket are accepted; they are turned
+    // into signed read links below, after the customer has been authenticated and the order ownership checked.
+    if (Array.isArray(body?.photo_paths)) {
+      const pathRe = new RegExp(`^returns/${id}/[0-9]+-[A-Za-z0-9._-]{1,200}$`)
+      photoPaths = [...new Set<string>(body.photo_paths.filter((u: unknown): u is string => typeof u === 'string' && pathRe.test(u) && !u.includes('..')))].slice(0, 4)
     }
   } catch {
     return fail(400, 'Invalid request body')
@@ -255,6 +252,12 @@ export async function POST(
     )
     if (existing) {
       return fail(409, 'A return request is already in progress for this item')
+    }
+
+    // Photo evidence → signed read links (only now: authenticated, and the order is this customer's). A path that does not
+    // exist in the private bucket cannot be signed and is silently dropped.
+    if (photoPaths.length > 0) {
+      photoUrls = await signEvidenceLinks(photoPaths, { url: process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey: process.env.SUPABASE_SERVICE_KEY! })
     }
 
     // Only delivered orders can be returned
