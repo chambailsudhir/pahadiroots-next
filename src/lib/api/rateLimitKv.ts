@@ -122,6 +122,31 @@ export async function checkRateLimitKvStrict(
   return outcome
 }
 
+/**
+ * Read-only check: has `key` already reached `limit` hits? Does NOT consume a hit.
+ * Used for "count only failures" counters (e.g. failed logins per account) where the attempt must be
+ * refused up-front but only a failed attempt may increment. Upstash only — the Postgres fallback RPC
+ * increments on every call and has no read form, so without KV this answers false ("not blocked") and the
+ * caller relies on its other limiters. Never throws.
+ */
+export async function peekRateLimitKv(key: string, limit: number): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!kvUrl || !kvToken) return false
+  try {
+    const res = await fetch(`${kvUrl}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${kvToken}` },
+      signal:  AbortSignal.timeout(1500),
+    })
+    if (!res.ok) return false
+    const body  = await res.json() as { result?: string | number | null }
+    const count = Number(body.result ?? 0)
+    return Number.isFinite(count) && count >= limit
+  } catch {
+    return false
+  }
+}
+
 async function resolveRateLimit(
   key:      string,
   limit:    number,

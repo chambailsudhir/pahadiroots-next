@@ -17,8 +17,12 @@
 //     session cookie and enforces the 8-character policy.
 // ═══════════════════════════════════════════════════════════════
 
-import { NextRequest, NextResponse } from 'next/server'
-import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { COOKIE_TOKEN, COOKIE_REFRESH, COOKIE_OAUTH_VERIFIER, OAUTH_VERIFIER_MAX_AGE_SEC } from '@/lib/auth/cookies'
+import { generatePkceVerifier, pkceChallenge, isPlausibleVerifier } from '@/lib/auth/pkce'
+import { isRecoveryToken } from '@/lib/auth/recoveryToken'
+import { cleanEmail, cleanName, isPasswordString, LOGIN_PASSWORD_MAX } from '@/lib/auth/inputLimits'
+import { checkRateLimitKv, peekRateLimitKv } from '@/lib/api/rateLimitKv'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 import { validate as validators } from '@/lib/account/validation'
@@ -70,85 +74,23 @@ function clearAuthCookies(res: NextResponse): NextResponse {
   return res
 }
 
-// ── Distributed rate limiter ──────────────────────────────────
-// Primary:  Upstash KV REST API (works across all Vercel instances/regions).
-//           Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Vercel
-//           env vars (Vercel Dashboard → Storage → KV → Connect, or
-//           create a free Upstash account at upstash.com).
-//           Uses a sliding INCR + EXPIRE pipeline — no npm package needed.
-// Fallback: in-process Map used only when KV is not configured (local dev).
-//           ⚠️  In-process fallback is NOT reliable across Vercel instances;
-//           configure KV for production.
-type RateEntry = { count: number; reset: number }
-const rateLimitMap = new Map<string, RateEntry>()
-
+// ── Rate limiter ──────────────────────────────────────────────
+// AUDIT (auth-B #3): this route used to carry its own limiter that fell back to a per-instance in-process
+// Map when Upstash was unconfigured/erroring — useless across serverless instances. It now delegates to the
+// shared checkRateLimitKv (Upstash, then the Postgres rate_limit_check fallback; see rateLimitKv.ts).
+// true = allowed, false = blocked.
 async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<boolean> {
-  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
-  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
-
-  if (kvUrl && kvToken) {
-    // ── Upstash KV: INCR + EXPIRE pipeline ────────────────────
-    try {
-      const rlKey     = `rl:${key}`
-      const windowSec = Math.ceil(windowMs / 1000)
-      const res = await fetch(`${kvUrl}/pipeline`, {
-        method:  'POST',
-        headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify([
-          ['INCR',   rlKey],
-          ['EXPIRE', rlKey, windowSec, 'NX'],  // NX = only set expiry on first write
-        ]),
-        signal: AbortSignal.timeout(1500),  // never stall auth for more than 1.5 s
-      })
-      if (res.ok) {
-        // BUG FIX (CRITICAL — same class of bug found and fixed in
-        // rateLimitKv.ts): Upstash's pipeline REST API returns an array of
-        // RESULT OBJECTS — [{"result": 1}, {"result": "OK"}] — per Upstash's
-        // own documentation (upstash.com/blog/pipeline), not
-        // [["INCR", 1], ["EXPIRE", "OK"]] tuples. result[0][1] on a real
-        // {result: 1} object reads a nonexistent property → undefined, and
-        // `undefined <= maxHits` is ALWAYS false in JavaScript — so once
-        // Upstash was actually reachable, every single login attempt would
-        // have been rate-limited immediately, regardless of the true count.
-        // This is the login/auth route, so this bug would have blocked
-        // real customer logins outright, not just shown a confusing message.
-        const result = await res.json() as Array<{ result?: number | string; error?: string }>
-        const count  = result[0]?.result
-        if (typeof count === 'number') {
-          return count <= maxHits      // true = allowed, false = blocked
-        }
-        console.warn('[rateLimit] Upstash returned an unexpected response shape:', result[0])
-        // Falls through to the in-process fallback below rather than
-        // silently miscounting (and, previously, blocking) every request.
-      } else {
-        // KV returned an unexpected status — log and fall through to in-process
-        console.warn('[rateLimit] Upstash returned non-OK status:', res.status)
-      }
-    } catch (e) {
-      // KV unreachable (timeout / network) — fall through to in-process limiter
-      console.warn('[rateLimit] Upstash unreachable, falling back to in-process limiter:', e)
-    }
-  }
-
-  // ── In-process fallback (local dev / KV not yet configured) ─
-  const now   = Date.now()
-  const entry = rateLimitMap.get(key)
-  if (!entry || now > entry.reset) {
-    rateLimitMap.set(key, { count: 1, reset: now + windowMs })
-    return true
-  }
-  if (entry.count >= maxHits) return false
-  entry.count++
-  return true
+  return checkRateLimitKv(`mw:rl:auth_${key}`, maxHits, Math.ceil(windowMs / 1000))
 }
 
-// Prune stale in-process entries every 5 minutes (dev only — no-op in production with KV)
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, entry] of rateLimitMap) {
-    if (now > entry.reset) rateLimitMap.delete(key)
-  }
-}, 5 * 60_000)
+// Failed-login counter per account (see email_login). Only FAILED credential checks increment it.
+const LOGIN_FAIL_MAX    = 10
+const LOGIN_FAIL_WINDOW = 15 * 60
+const loginFailKey = (email: string) => `mw:rl:auth_login_fail:${email.toLowerCase()}`
+
+function isCredentialFailure(status: number | undefined): boolean {
+  return status === 400 || status === 401 || status === 422
+}
 
 async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {
   const url = `${SUPABASE_URL}/auth/v1${path}`
@@ -360,7 +302,7 @@ export async function POST(req: NextRequest) {
   }
 
   const RATE_LIMITED_ACTIONS = new Set([
-    'email_login', 'email_signup', 'change_password', 'forgot_password', 'reset_password',
+    'email_login', 'email_signup', 'change_password', 'forgot_password', 'reset_password', 'google_callback',
   ])
   if (RATE_LIMITED_ACTIONS.has(action || '')) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -375,20 +317,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // AUDIT R2 SF-1: per-ADDRESS cap on reset e-mails (the per-IP limit above does not stop a botnet).
-  if (action === 'forgot_password') {
-    const target = String((body as { email?: string }).email || '').trim().toLowerCase().slice(0, 254)
-    if (target && !await rateLimit(`forgot_password_email:${target}`, 3, 60 * 60_000)) {
-      // Same generic answer as a normal request: do not reveal whether the address exists.
-      return NextResponse.json({ success: true, message: 'If that email is registered, a reset link has been sent.' })
-    }
-  }
-
   // ── Email Signup — supports both old action name and new ──
   if (action === 'email_signup' || action === 'register_email') {
-    const { email, password, full_name, name } = body as Record<string, string>
-    const resolvedName = full_name || name || ''
-    if (!email || !password) return err(400, 'Email and password required')
+    // AUDIT (auth-B #4): values are untyped JSON — check type + length BEFORE any Supabase call (a
+    // non-string full_name used to throw in signupViaOwnMailer after the user already existed).
+    const email    = cleanEmail(body.email)
+    const password = body.password
+    const nameIn   = cleanName(body.full_name ?? body.name)
+    if (!email || typeof password !== 'string' || !password) return err(400, 'Email and password required')
+    if (nameIn === null) return err(400, 'Name must be text of at most 100 characters')
+    if (password.length > 128) return err(400, 'Password is too long')
+    const resolvedName = nameIn ?? ''
     // AUDIT ACC-029: one password policy for sign-up AND change-password (was 6 chars here vs
     // 8 + upper + number + special in the account UI; the server only ever checked length).
     if (!validators.password.isValid(password)) {
@@ -420,22 +359,21 @@ export async function POST(req: NextRequest) {
 
   // ── Email Login — supports both old action name and new ──
   if (action === 'email_login' || action === 'login_email') {
-    const { email, password } = body as { email?: string; password?: string }
-    if (!email || !password) return err(400, 'Email and password required')
-    // AUDIT ACC-034 (residual): the limiter above is per-IP, so a botnet could still hammer ONE
-    // account from many addresses. Add a per-account cap (same pattern forgot_password already uses).
-    // Generic wording — identical for real and non-existent accounts.
-    {
-      const target = String(email).trim().toLowerCase().slice(0, 254)
-      if (target && !await rateLimit(`email_login_acct:${target}`, 10, 15 * 60_000)) {
-        return NextResponse.json(
-          { error: 'Too many attempts. Please wait a few minutes before trying again.' },
-          { status: 429, headers: { 'Retry-After': '900' } },
-        )
-      }
+    const email    = cleanEmail(body.email)
+    const password = body.password
+    if (!email || !isPasswordString(password, LOGIN_PASSWORD_MAX)) return err(400, 'Email and password required')
+    // AUDIT ACC-034 (residual) + auth-B #3: besides the per-IP limiter, a botnet could hammer ONE account
+    // from many addresses. The per-account counter counts only FAILED credential checks (it used to be
+    // consumed before the password was checked, so a stranger sending 10 bad logins for a victim's e-mail
+    // locked the victim out). Generic wording — identical for real and non-existent accounts.
+    if (await peekRateLimitKv(loginFailKey(email), LOGIN_FAIL_MAX)) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please wait a few minutes before trying again.' },
+        { status: 429, headers: { 'Retry-After': '900' } },
+      )
     }
     try {
-      const data = await sbAuth('/token?grant_type=password', { email: email as string, password: password as string })
+      const data = await sbAuth('/token?grant_type=password', { email, password })
       const user = data.user || data
       if (!user || !user.id) return err(401, 'Invalid email or password')
       const profile = await syncCustomerProfile(user)
@@ -446,6 +384,15 @@ export async function POST(req: NextRequest) {
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
+      if (isCredentialFailure(e2.status)) {
+        const allowed = await checkRateLimitKv(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
+        if (!allowed) {
+          return NextResponse.json(
+            { error: 'Too many attempts. Please wait a few minutes before trying again.' },
+            { status: 429, headers: { 'Retry-After': '900' } },
+          )
+        }
+      }
       return err(e2.status || 401, e2.message || 'Invalid email or password')
     }
   }
@@ -495,32 +442,60 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Google OAuth — initiate ──
+  // ── Google OAuth — initiate (PKCE, bound to this browser) ──
   if (action === 'google_oauth') {
     // Redirect to /auth/google-callback (a Next.js page) — more reliably deployed than an API route.
     // Also add this URL to your Supabase Google OAuth Authorized Redirect URLs.
     const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
       ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/google-callback`
       : 'https://www.pahadiroots.com/auth/google-callback'
+    // AUDIT (auth-B #1): the old implicit flow returned tokens in the URL hash, with nothing tying the
+    // return to the browser that started the flow (login CSRF / session fixation). We now use PKCE: the
+    // verifier lives only in an HttpOnly cookie of THIS browser, the challenge goes to GoTrue, and the
+    // code that comes back is useless without that cookie. (GoTrue chooses PKCE by the presence of
+    // code_challenge; no dashboard switch is involved.)
+    const verifier  = generatePkceVerifier()
+    const challenge = pkceChallenge(verifier)
     const url = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`
-    return ok({ url })
+              + `&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=s256`
+    const res = ok({ url }) as NextResponse
+    res.cookies.set(COOKIE_OAUTH_VERIFIER, verifier, {
+      httpOnly: true, secure: IS_PROD, sameSite: 'lax', path: '/', maxAge: OAUTH_VERIFIER_MAX_AGE_SEC,
+    })
+    return res
   }
 
-  // ── Google Callback (token exchange) ──
+  // ── Google Callback (PKCE code exchange) ──
   if (action === 'google_callback') {
-    const { access_token, refresh_token } = body as { access_token?: string; refresh_token?: string }
-    if (!access_token) return err(400, 'No access_token provided')
+    // The verifier cookie is single-use: whatever happens below, it is cleared in the response.
+    const clearVerifier = (r: NextResponse) => {
+      r.cookies.set(COOKIE_OAUTH_VERIFIER, '', { httpOnly: true, secure: IS_PROD, sameSite: 'lax', path: '/', maxAge: 0 })
+      return r
+    }
+    // Tokens supplied by the client are NOT accepted any more (see google_oauth) — only a code that this
+    // browser's verifier cookie can redeem.
+    const code     = body.code
+    const verifier = req.cookies.get(COOKIE_OAUTH_VERIFIER)?.value
+    if (typeof code !== 'string' || !code || code.length > 2048) {
+      return clearVerifier(err(400, 'No authorization code provided') as NextResponse)
+    }
+    if (!isPlausibleVerifier(verifier)) {
+      return clearVerifier(err(400, 'Google sign-in expired or was started in another browser. Please try again.') as NextResponse)
+    }
     try {
-      const user = await sbAuth('/user', null, access_token as string)
+      const tokens = await sbAuth('/token?grant_type=pkce', { auth_code: code, code_verifier: verifier })
+      if (!tokens?.access_token) return clearVerifier(err(401, 'Google login failed') as NextResponse)
+      const user = tokens.user?.id ? tokens.user : await sbAuth('/user', null, tokens.access_token as string)
       const profile = await syncCustomerProfile(user)
       const res = ok({
         success: true,
         user: { id: user.id, email: user.email, phone: user.phone || null }, profile: toPublicProfile(profile),
-      })
-      return withAuthCookies(res as NextResponse, access_token as string, refresh_token)
+      }) as NextResponse
+      withAuthCookies(res, tokens.access_token as string, tokens.refresh_token)
+      return clearVerifier(res)
     } catch (e: unknown) {
       const e2 = e as { message?: string }
-      return err(401, 'Google login failed: ' + (e2.message || 'Unknown error'))
+      return clearVerifier(err(401, 'Google login failed: ' + (e2.message || 'Unknown error')) as NextResponse)
     }
   }
 
@@ -528,9 +503,24 @@ export async function POST(req: NextRequest) {
   if (action === 'logout') {
     const token = req.cookies.get(COOKIE_TOKEN)?.value
                || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    const rt = req.cookies.get(COOKIE_REFRESH)?.value
+    // AUDIT (auth-B #6): the access-token cookie lives 1 h (and is simply ABSENT after that), while the
+    // refresh token lives 30 days. Revoking only with the access token therefore did nothing once it had
+    // expired — the refresh token stayed valid server-side. Revoke with the access token when we have one;
+    // otherwise (or when it is rejected) mint a fresh access token from the refresh token and revoke with
+    // that. /logout defaults to scope=global, which kills the refresh token too.
+    let revoked = false
     if (token) {
-      try { await sbAuth('/logout', {}, token) }
-      catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed — local session still cleared:', e) }
+      try { await sbAuth('/logout', {}, token); revoked = true }
+      catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed:', e) }
+    }
+    if (!revoked && rt) {
+      try {
+        const fresh = await sbAuth('/token?grant_type=refresh_token', { refresh_token: rt })
+        if (fresh?.access_token) { await sbAuth('/logout', {}, fresh.access_token as string); revoked = true }
+      } catch (e: unknown) {
+        console.warn('[logout] could not revoke session via refresh token — local session still cleared:', e)
+      }
     }
     // SEC-FIX: the previous implementation returned ok({ success: true }) without
     // clearing the httpOnly cookies. pr_token and pr_refresh remained in the browser
@@ -541,67 +531,85 @@ export async function POST(req: NextRequest) {
 
   // ── Forgot Password ──
   if (action === 'forgot_password') {
-    const { email } = body as { email?: string }
+    const email = cleanEmail(body.email)
     if (!email) return err(400, 'Email required')
+    // AUDIT (auth-B #5): the answer must be IDENTICAL whether or not the address is registered, whether a
+    // mail was sent, or whether sending failed — no status / timing / error difference. The work therefore
+    // runs after the response (next/server `after`); failures are logged internally only. Outside a request
+    // scope (unit tests) `after` throws and the work simply runs inline.
+    const GENERIC = { success: true, message: 'If that email is registered, a reset link has been sent.' }
+
+    // AUDIT (auth-B #3): quota per e-mail + IP (an attacker only burns their OWN quota, never the victim's)
+    // plus a higher per-e-mail ceiling against distributed mail-bombing. A hit answers with the same generic
+    // success and sends nothing.
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
+    const target = email.toLowerCase()
+    const withinIpQuota   = await rateLimit(`forgot_password_email_ip:${target}:${ip}`, 3, 60 * 60_000)
+    const withinGlobalCap = await rateLimit(`forgot_password_email:${target}`, 10, 60 * 60_000)
+    if (!withinIpQuota || !withinGlobalCap) return ok(GENERIC)
+
     const RESEND_KEY = process.env.RESEND_API_KEY
     const SITE_URL   = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
-    if (!RESEND_KEY) {
-      console.error('[forgot_password] RESEND_API_KEY not set')
-      return err(500, 'Email service not configured')
-    }
-    try {
-      // BUG FIX: no timeout on either the generate_link or Resend fetch — a slow
-      // Supabase or Resend response would hang the serverless function until
-      // Vercel's hard 15 s limit.  Added AbortSignal.timeout(8_000) to both,
-      // matching the timeout used by every other auth fetch in this file.
-      const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
-        signal: AbortSignal.timeout(8_000),
-      })
-      const genText = await genRes.text()
-      interface GenLinkResponse {
-        action_link?: string
-        properties?: { action_link?: string }
-        data?: { action_link?: string }
-        [key: string]: unknown
+    const work = async () => {
+      if (!RESEND_KEY) {
+        captureError(new Error('RESEND_API_KEY not set — password reset e-mails cannot be sent'), { action: 'auth.forgot_password.no_resend_key', alert: true })
+        return
       }
-      let genData: GenLinkResponse = {}
-      try { genData = JSON.parse(genText) as GenLinkResponse }
-      catch (e: unknown) { console.warn('[forgot_password] failed to parse generate_link response:', e) }
-      if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return ok({ success: true }) }
-      const finalResetUrl = genData.action_link || genData.properties?.action_link || genData.data?.action_link || ''
-      if (!finalResetUrl) return err(500, 'Could not generate reset link — please try again')
-      const resendRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
-        signal: AbortSignal.timeout(8_000),
-        body: JSON.stringify({
-          from: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>', to: [email],
-          subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
-          html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 8px">Reset Your Password</h2><p style="color:#666;font-size:15px">Click the button below to set a new password.</p><div style="text-align:center;margin:32px 0"><a href="${finalResetUrl}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:18px 48px;border-radius:12px;text-decoration:none;font-weight:800;font-size:17px">🔑 Reset Password</a></div><p style="color:#aaa;font-size:12px;text-align:center">Need help? <a href="https://wa.me/919899984895" style="color:#2d6a4f">WhatsApp us</a></p></div></div></body></html>`,
-        }),
-      })
-      if (!resendRes.ok) { const t = await resendRes.text(); console.error('[forgot_password] Resend failed:', resendRes.status, t); return err(500, 'Could not send email — please try again') }
-      return ok({ success: true })
-    } catch (e: unknown) {
-      console.error('[forgot_password] Unexpected error:', e)
-      return err(500, 'Something went wrong — please try again')
+      try {
+        // Timeouts on every fetch: a slow Supabase/Resend response must not hang until Vercel's limit.
+        const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
+          signal: AbortSignal.timeout(8_000),
+        })
+        const genText = await genRes.text()
+        interface GenLinkResponse {
+          action_link?: string
+          properties?: { action_link?: string }
+          data?: { action_link?: string }
+          [key: string]: unknown
+        }
+        let genData: GenLinkResponse = {}
+        try { genData = JSON.parse(genText) as GenLinkResponse }
+        catch (e: unknown) { console.warn('[forgot_password] failed to parse generate_link response:', e) }
+        // 4xx = unknown address (or similar): nothing to send, and nothing to tell the caller.
+        if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return }
+        const finalResetUrl = genData.action_link || genData.properties?.action_link || genData.data?.action_link || ''
+        if (!finalResetUrl) { captureError(new Error('forgot_password: generate_link returned no link'), { action: 'auth.forgot_password.no_link', alert: true }); return }
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
+          signal: AbortSignal.timeout(8_000),
+          body: JSON.stringify({
+            from: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>', to: [email],
+            subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
+            html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 8px">Reset Your Password</h2><p style="color:#666;font-size:15px">Click the button below to set a new password.</p><div style="text-align:center;margin:32px 0"><a href="${finalResetUrl}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:18px 48px;border-radius:12px;text-decoration:none;font-weight:800;font-size:17px">🔑 Reset Password</a></div><p style="color:#aaa;font-size:12px;text-align:center">Need help? <a href="https://wa.me/919899984895" style="color:#2d6a4f">WhatsApp us</a></p></div></div></body></html>`,
+          }),
+        })
+        if (!resendRes.ok) {
+          const t = await resendRes.text()
+          captureError(new Error(`forgot_password: Resend failed (${resendRes.status})`), { action: 'auth.forgot_password.resend_failed', alert: true, detail: t.slice(0, 300) })
+        }
+      } catch (e: unknown) {
+        captureError(e, { action: 'auth.forgot_password.unexpected', alert: true })
+      }
     }
+    try { after(work) } catch { await work() }
+    return ok(GENERIC)
   }
 
   // ── Reset Password ──
   if (action === 'reset_password') {
-    // AUDIT S2-001: the recovery token from the e-mail link arrives as
-    // `Authorization: Bearer <access_token>` (set by /reset-password). It MUST
-    // win over the httpOnly session cookie: the old cookie-first order meant a
-    // browser already signed in as user A that opened B's recovery link reset
-    // A's password. The cookie is only a fallback when no bearer is supplied.
+    // AUDIT S2-001 / auth-B #2: the ONLY accepted credential is the recovery token from the e-mail link,
+    // sent by /reset-password as `Authorization: Bearer <access_token>`. The session-cookie fallback is
+    // gone, and the token must be a RECOVERY session (JWT `amr` = recovery) — an ordinary login session
+    // (unattended browser, stolen cookie, any bearer from a normal login) can no longer set a password
+    // without the current password; that is what change_password is for.
     const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
-    const token  = bearer || req.cookies.get(COOKIE_TOKEN)?.value || ''
     const { password } = body as { password?: unknown }
-    if (!token) return err(401, 'Invalid or expired reset link')
+    if (!bearer || !isRecoveryToken(bearer)) return err(401, 'Invalid or expired reset link')
+    const token = bearer
     // AUDIT S2-001: 8-character minimum (matches /reset-password's client policy).
     if (typeof password !== 'string' || password.length < RESET_PASSWORD_MIN_LENGTH) {
       return err(400, `Password must be at least ${RESET_PASSWORD_MIN_LENGTH} characters`)
@@ -621,6 +629,10 @@ export async function POST(req: NextRequest) {
       })
       const data = await res.json()
       if (!res.ok) throw { status: res.status, message: data.msg || data.message || 'Reset failed' }
+      // After a reset every other session of the account (a thief's included) must die. Best effort — the
+      // password is already changed; the customer simply signs in again with the new one.
+      try { await sbAuth('/logout?scope=global', {}, token) }
+      catch (e: unknown) { console.warn('[reset_password] could not revoke sessions after reset:', e) }
       return ok({ success: true })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
@@ -633,11 +645,11 @@ export async function POST(req: NextRequest) {
     // Read token from httpOnly cookie first, fall back to Authorization header
     const token = req.cookies.get(COOKIE_TOKEN)?.value
               || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-    const { current_password, new_password } = body as { current_password?: string; new_password?: string }
+    const { current_password, new_password } = body as { current_password?: unknown; new_password?: unknown }
 
     if (!token)            return err(401, 'Not logged in')
-    if (!current_password) return err(400, 'Current password is required')
-    if (!new_password || !validators.password.isValid(new_password as string)) {
+    if (!isPasswordString(current_password, LOGIN_PASSWORD_MAX)) return err(400, 'Current password is required')
+    if (typeof new_password !== 'string' || new_password.length > 128 || !validators.password.isValid(new_password)) {
       return err(400, 'New password must be at least 8 characters and include an uppercase letter, a number and a special character')
     }
     if (current_password === new_password) return err(400, 'New password must be different from current password')
@@ -652,7 +664,7 @@ export async function POST(req: NextRequest) {
       try {
         await sbAuth('/token?grant_type=password', {
           email:    user.email,
-          password: current_password as string,
+          password: current_password,
         })
       } catch {
         // AUDIT ACC-036: this used to be a 401. The account UI (and every other client of this
@@ -663,7 +675,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Step 3: update password via admin API (bypasses email confirmation)
-      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { password: new_password as string })
+      await sbAdmin('PUT', `/auth/v1/admin/users/${user.id}`, { password: new_password })
+      // AUDIT (auth-B #2): revoke every OTHER session of this account (a thief's included); this one stays.
+      // Best effort — the password change itself already succeeded.
+      try { await sbAuth('/logout?scope=others', {}, token) }
+      catch (e: unknown) { console.warn('[change_password] could not revoke other sessions:', e) }
       return ok({ success: true, message: 'Password updated successfully' })
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }

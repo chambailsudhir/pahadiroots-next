@@ -38,19 +38,18 @@ export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  let body: { action?: string; access_token?: string; refresh_token?: string } = {}
+  let body: { action?: string } = {}
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
+  // AUDIT (auth-B #1): `action: 'set'` (store caller-supplied tokens as the session) is REMOVED. It
+  // accepted arbitrary tokens with no validation and no binding to the browser that started a login, so a
+  // crafted /auth/google-callback#access_token=… link signed the victim into the attacker's account.
+  // Sessions are now only created server-side by /api/auth (email_login, email_signup, google_callback —
+  // the latter redeems a PKCE code with an HttpOnly verifier cookie), which set the cookies themselves.
   if (body.action === 'set') {
-    if (!body.access_token) return NextResponse.json({ error: 'access_token required' }, { status: 400 })
-    const res = NextResponse.json({ ok: true })
-    res.cookies.set(COOKIE_TOKEN,   body.access_token,  { ...cookieBase(), maxAge: 60 * 60 })
-    if (body.refresh_token) {
-      res.cookies.set(COOKIE_REFRESH, body.refresh_token, { ...cookieBase(), maxAge: 60 * 60 * 24 * 30 })
-    }
-    return res
+    return NextResponse.json({ error: 'This action is no longer available' }, { status: 410 })
   }
 
   if (body.action === 'clear') {

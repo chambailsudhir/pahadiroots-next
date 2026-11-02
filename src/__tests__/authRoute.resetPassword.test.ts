@@ -19,6 +19,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { NextRequest } from 'next/server'
 
+vi.mock('@/lib/api/rateLimitKv', async () => (await import('./helpers/inMemoryRateLimit')).rateLimitKvMock)
 vi.mock('@/lib/api/serverUtils', () => ({
   checkCsrf:           vi.fn(() => null),
   syncCustomerProfile: vi.fn(async () => null),
@@ -35,6 +36,16 @@ beforeAll(() => {
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
   vi.stubGlobal('fetch', fetchMock)
 })
+
+
+// A GoTrue-shaped access token (header.payload.sig) with the given `amr` methods. GoTrue verifies the
+// signature on PUT /user; the route only needs to read the claim.
+function jwt(methods: string[]) {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  return `${b64({ alg: 'HS256' })}.${b64({ sub: 'u1', amr: methods.map(m => ({ method: m, timestamp: 1 })) })}.sig`
+}
+const RECOVERY = jwt(['recovery'])
+const LOGIN    = jwt(['password'])
 
 let ipCounter = 0
 function makeRequest(body: unknown, opts: { bearer?: string; cookie?: string } = {}) {
@@ -63,35 +74,50 @@ beforeEach(() => {
 
 describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', () => {
   it('uses the Authorization bearer even when a pr_token session cookie is present', async () => {
-    fetchMock.mockResolvedValueOnce(supabaseOk())
+    fetchMock.mockResolvedValue(supabaseOk())
     const { POST } = await import('@/app/api/auth/route')
 
     const res = await POST(makeRequest(
       { action: 'reset_password', password: 'Correct-Horse-9!' },
-      { bearer: 'RECOVERY_TOKEN_FOR_B', cookie: 'SESSION_TOKEN_OF_A' },
+      { bearer: RECOVERY, cookie: 'SESSION_TOKEN_OF_A' },
     ))
 
     expect(res.status).toBe(200)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toBe('https://example.supabase.co/auth/v1/user')
     expect(init.method).toBe('PUT')
     // This is the bug: before the fix this header carried SESSION_TOKEN_OF_A.
-    expect(init.headers.Authorization).toBe('Bearer RECOVERY_TOKEN_FOR_B')
+    expect(init.headers.Authorization).toBe(`Bearer ${RECOVERY}`)
     expect(JSON.parse(init.body)).toEqual({ password: 'Correct-Horse-9!' })
   })
 
-  it('falls back to the session cookie only when no bearer is supplied', async () => {
-    fetchMock.mockResolvedValueOnce(supabaseOk())
+  it('REFUSES a session cookie (no fallback any more) — a live login session cannot set a password (auth-B #2)', async () => {
     const { POST } = await import('@/app/api/auth/route')
-
     const res = await POST(makeRequest(
       { action: 'reset_password', password: 'Correct-Horse-9!' },
-      { cookie: 'SESSION_TOKEN_OF_A' },
+      { cookie: LOGIN },
     ))
+    expect(res.status).toBe(401)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 
+  it('REFUSES a bearer that is an ordinary login session (amr=password / oauth), without calling Supabase', async () => {
+    const { POST } = await import('@/app/api/auth/route')
+    for (const t of [LOGIN, jwt(['oauth']), 'not-a-jwt', jwt([])]) {
+      const res = await POST(makeRequest({ action: 'reset_password', password: 'Correct-Horse-9!' }, { bearer: t }))
+      expect(res.status).toBe(401)
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts a recovery session and then revokes all sessions of the account', async () => {
+    fetchMock.mockResolvedValue(supabaseOk())
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(makeRequest({ action: 'reset_password', password: 'Correct-Horse-9!' }, { bearer: RECOVERY }))
     expect(res.status).toBe(200)
-    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer SESSION_TOKEN_OF_A')
+    const urls = fetchMock.mock.calls.map(c => String(c[0]))
+    expect(urls[0]).toBe('https://example.supabase.co/auth/v1/user')
+    expect(urls[1]).toBe('https://example.supabase.co/auth/v1/logout?scope=global')
   })
 
   it('401s with no token at all, without calling Supabase', async () => {
@@ -109,7 +135,7 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
     })
     const { POST } = await import('@/app/api/auth/route')
     const res = await POST(makeRequest(
-      { action: 'reset_password', password: 'Correct-Horse-9!' }, { bearer: 'EXPIRED' },
+      { action: 'reset_password', password: 'Correct-Horse-9!' }, { bearer: RECOVERY },
     ))
     expect(res.status).toBe(401)
     expect((await res.json()).success).toBeUndefined()
@@ -119,23 +145,23 @@ describe('POST /api/auth reset_password — token precedence (AUDIT S2-001)', ()
 describe('POST /api/auth reset_password — password policy (AUDIT S2-001)', () => {
   it.each(['', 'short', '1234567'])('400s for %j (fewer than 8 characters) without calling Supabase', async (pw) => {
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: pw }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: pw }, { bearer: RECOVERY }))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/at least 8 characters/)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('accepts exactly 8 characters when they satisfy the shared policy', async () => {
-    fetchMock.mockResolvedValueOnce(supabaseOk())
+    fetchMock.mockResolvedValue(supabaseOk())
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: 'Abcdef1!' }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: 'Abcdef1!' }, { bearer: RECOVERY }))
     expect(res.status).toBe(200)
   })
 
   // AUDIT ACC-029: the server now enforces the same policy as sign-up and Change Password.
   it.each(['12345678', 'abcdefgh', 'Abcdefgh1', 'abcdefg1!'])('400s for %j (meets the length floor but not the shared policy)', async (pw) => {
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: pw }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: pw }, { bearer: RECOVERY }))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/uppercase letter, a number and a special character/)
     expect(fetchMock).not.toHaveBeenCalled()
@@ -143,14 +169,14 @@ describe('POST /api/auth reset_password — password policy (AUDIT S2-001)', () 
 
   it('400s for a non-string password (e.g. an array) without calling Supabase', async () => {
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: ['a', 'b'] }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: ['a', 'b'] }, { bearer: RECOVERY }))
     expect(res.status).toBe(400)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('400s for an absurdly long password', async () => {
     const { POST } = await import('@/app/api/auth/route')
-    const res = await POST(makeRequest({ action: 'reset_password', password: 'x'.repeat(129) }, { bearer: 'T' }))
+    const res = await POST(makeRequest({ action: 'reset_password', password: 'x'.repeat(129) }, { bearer: RECOVERY }))
     expect(res.status).toBe(400)
     expect(fetchMock).not.toHaveBeenCalled()
   })
