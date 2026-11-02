@@ -368,6 +368,11 @@ export async function POST(req: NextRequest) {
         if (!isMobile(d)) return fail(400, 'Enter a valid 10-digit mobile number (starts with 6–9)')
         patch.phone = d
       }
+      // Ownership proof belongs to a specific number: any change (or clearing) drops it. Only written when the column exists
+      // (profile came from select=*) and a proof is actually held, so this is a no-op before db_migration_v25 is applied.
+      if (profile.phone_verified_at && patch.phone !== (typeof profile.phone === 'string' ? tenDigits(profile.phone) : null)) {
+        patch.phone_verified_at = null
+      }
       // customers_normalized_phone_key is UNIQUE, so a rejected number reveals that it is registered. Slow enumeration
       // down with shared (cross-instance) limits per account and per IP. (Proper fix = OTP ownership proof — owner decision.)
       if (patch.phone !== null) {
