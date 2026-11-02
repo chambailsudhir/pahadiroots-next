@@ -66,6 +66,20 @@ import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS, canReplace, canSelfServeR
 // constants.ts for the single source of truth shared with the client-side
 // eligibility check in useOrders.ts's canReturn()).
 
+/** Statuses the DB unique index ignores (ux_returns_active_order_item: status <> ALL('refunded','rejected')). */
+const INDEX_TERMINAL_RETURN_STATUSES = ['refunded', 'rejected']
+
+/** sbAdmin throws { status, message: <PostgREST JSON body> } — pull the SQLSTATE out of it. */
+function pgErrorCode(e: unknown): string | null {
+  const msg = (e as { message?: unknown })?.message
+  if (typeof msg !== 'string') return null
+  try {
+    const c = (JSON.parse(msg) as { code?: unknown }).code
+    if (typeof c === 'string') return c
+  } catch { /* not JSON */ }
+  return /"code"\s*:\s*"(\d{5})"/.exec(msg)?.[1] ?? null
+}
+
 export async function POST(
   req: NextRequest,
   // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
@@ -108,8 +122,10 @@ export async function POST(
     variantId = (body?.variant_id    ?? null) as string | number | null
     productId = (body?.product_id    ?? null) as string | number | null
     if (body?.quantity != null) {
-      const q = Number(body.quantity)
-      if (Number.isFinite(q) && q > 0) quantity = Math.floor(q)
+      // Floor FIRST, then validate: 0.5 used to pass `> 0` and then floor to 0 (stored as quantity 0).
+      const q = Math.floor(Number(body.quantity))
+      if (!Number.isFinite(q) || q < 1) return fail(400, 'Quantity must be a whole number of at least 1')
+      quantity = q
     }
     if (body?.resolution === 'replace') resolution = 'replace'
     // Photo evidence (ACC-051): the browser sends the object PATHS it was given by /return/upload-url, never URLs. Only
@@ -177,6 +193,21 @@ export async function POST(
       order_number: string
     }
 
+    // Only delivered orders can be returned (checked before any item lookup / photo signing).
+    if (order.order_status !== 'delivered') {
+      return fail(422, 'Only delivered orders can be returned')
+    }
+
+    // Enforce the 48-hour return window, measured from delivered_at ONLY. updated_at is bumped by every
+    // write to the order (trg_orders_updated), so using it as a fallback let any later update re-open the window.
+    if (!order.delivered_at) {
+      return fail(422, 'We could not confirm the delivery date for this order. Please contact support to raise a return.')
+    }
+    const hoursSince = (Date.now() - new Date(order.delivered_at).getTime()) / 3_600_000
+    if (!Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
+      return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from delivery)`)
+    }
+
     // Ownership check for line-item returns: if the customer specified
     // which item they're returning (order has >1 item), confirm that item
     // actually belongs to *this* order before trusting any of its fields.
@@ -211,6 +242,10 @@ export async function POST(
       productId       = match.product_id
       matchedQuantity = match.quantity
       if (quantity == null || quantity > match.quantity) quantity = match.quantity
+    } else {
+      // Whole-order return: guard_return_item skips rows with variant_id NULL, so a client value would be stored
+      // unchecked (and skew unit_refund_amount / the credit note). The amount is set by admin; quantity is fixed.
+      quantity = 1
     }
 
     // Idempotency check — confirmed real schema: a return "in progress" means
@@ -218,16 +253,10 @@ export async function POST(
     // (the admin's real 6-value lifecycle: requested → approved → received →
     // refunded/replaced, or rejected — see pahadi-admin/src/lib/returns.js
     // RETURN_STATUSES).
-    // FIX (Aug 18): 'replaced' used to be treated as still-blocking here
-    // (and in every mirror of this list — admin's three exclusion lists,
-    // and useOrders.ts's canReturn()) even though it's exactly as
-    // terminal/resolved as 'refunded' — a completed replacement, not an
-    // open return. That meant a customer whose replacement unit later
-    // arrived damaged too could never submit another return for that item
-    // — the same permanently-blocked bug already fixed once below for
-    // 'refunded', just not extended to 'replaced' when the replacement
-    // workflow was added afterward. Now only 'requested'/'approved'/
-    // 'received' (the genuinely open states) block a new return.
+    // NOTE (Nov 2026 audit): an Aug-18 change treated 'replaced' as terminal here, but the DB's unique index does
+    // not (only 'refunded'/'rejected' are exempt), so the INSERT then failed with 23505 and a generic 500. The
+    // pre-check below now mirrors the index; see the comment there. POLICY QUESTION for the owner: should a
+    // customer be able to return a replacement that arrives damaged? That needs a migration to the index.
     // BUG FIX: scoped to the same item (variant_id), matching admin's own
     // client-side duplicate check (pahadi-admin/src/app/admin/returns/page.jsx
     // — `(r.variant_id||null) === (form.variant_id||null)`). Without this, a
@@ -246,11 +275,21 @@ export async function POST(
     // RETURN_STATUSES usage + the three identical filters in
     // admin/returns/page.jsx) now excludes 'refunded', 'rejected', and
     // 'replaced' — matched here.
+    // The DB is the source of truth: unique index ux_returns_active_order_item is on
+    // (order_id, coalesce(variant_id,-1)) WHERE status <> ALL('refunded','rejected') — so 'replaced' is NOT
+    // terminal for it (a shipped replacement still occupies the slot) and a whole-order return (key -1) is a
+    // separate key from item returns. The route additionally refuses to mix the two kinds (open whole-order
+    // return + open item return) because they would double-count the same goods.
     const existingList = Array.isArray(existingReturns) ? existingReturns : []
-    const existing = existingList.find((r: { status: string; variant_id: string | number | null }) =>
-      !['refunded', 'rejected', 'replaced'].includes(r.status) && String(r.variant_id ?? '') === String(variantId ?? '')
+    const openList = existingList.filter((r: { status: string }) => !INDEX_TERMINAL_RETURN_STATUSES.includes(r.status))
+    const isWholeOrder = variantId == null
+    const existing = openList.find((r: { variant_id: string | number | null }) =>
+      isWholeOrder || r.variant_id == null || String(r.variant_id) === String(variantId)
     )
     if (existing) {
+      if (existing.status === 'replaced' && String(existing.variant_id ?? '') === String(variantId ?? '')) {
+        return fail(409, 'A replacement has already been sent for this item. If it arrived damaged, please contact support.')
+      }
       return fail(409, 'A return request is already in progress for this item')
     }
 
@@ -258,20 +297,6 @@ export async function POST(
     // exist in the private bucket cannot be signed and is silently dropped.
     if (photoPaths.length > 0) {
       photoUrls = await signEvidenceLinks(photoPaths, { url: process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey: process.env.SUPABASE_SERVICE_KEY! })
-    }
-
-    // Only delivered orders can be returned
-    if (order.order_status !== 'delivered') {
-      return fail(422, 'Only delivered orders can be returned')
-    }
-
-    // Enforce 48-hour return window
-    const deliveredDate = order.delivered_at || order.updated_at
-    if (deliveredDate) {
-      const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
-      if (hoursSince > RETURNABLE_WINDOW_HOURS) {
-        return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from delivery)`)
-      }
     }
 
     // customer_name — matches the field admin's own return-creation flow
@@ -301,6 +326,7 @@ export async function POST(
     // deliberately NOT touched here — per admin's STATUS_PAYMENT_MAP,
     // 'requested' has no payment-status side effect; only a later
     // admin-driven transition does.
+    try {
     await sbAdmin(
       'POST',
       '/rest/v1/returns',
@@ -319,6 +345,13 @@ export async function POST(
       },
       'return=minimal',
     )
+    } catch (insertErr) {
+      // Read-then-insert races (double click) and DB-only rules surface here, not in the pre-check.
+      const code = pgErrorCode(insertErr)
+      if (code === '23505') return fail(409, 'A return request is already in progress for this item')
+      if (code === '23514') return fail(422, 'This item has already been returned (or has a return in progress) for the full quantity you bought.')
+      throw insertErr
+    }
 
     const res = ok({
       success: true,

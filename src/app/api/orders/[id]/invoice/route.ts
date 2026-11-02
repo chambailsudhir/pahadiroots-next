@@ -62,6 +62,8 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+const NO_INVOICE_STATUSES = ['pending', 'cancelled', 'payment_failed']
+
 export async function GET(
   req: NextRequest,
   // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
@@ -105,6 +107,12 @@ export async function GET(
       : null
 
     const o = rows[0] as Record<string, unknown>
+
+    // A tax invoice only exists for an order that was actually confirmed: not while it is still pending (unpaid /
+    // not yet accepted), and never for a cancelled order or a failed payment.
+    if (NO_INVOICE_STATUSES.includes(String(o.order_status ?? '').toLowerCase())) {
+      return fail(409, 'An invoice is available once your order is confirmed.', requestId)
+    }
 
     const items = ((o.order_items as Array<{
       quantity:               number

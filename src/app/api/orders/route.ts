@@ -14,24 +14,12 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
-import { RETURNS_FILTER_SENTINEL, RETURN_STATUS_TO_DISPLAY } from '@/lib/account/constants'
+import { RETURNS_FILTER_SENTINEL, RETURN_STATUS_TO_DISPLAY, ORDER_STATUS_VALUES, ACTIVE_STATUSES } from '@/lib/account/constants'
 
-// All statuses that actually exist in the orders.order_status column.
-// ARCHITECTURE FIX (see PAHADI_ROOTS_SESSION_REPORT.md §2): confirmed live,
-// order_status_enum has exactly 7 values. There is no return_* or refund_*
-// value here — returns live entirely in the separate `returns` table, joined
-// in below. The "Returns" tab is now handled via RETURNS_FILTER_SENTINEL
-// (an inner join on `returns`), not by filtering order_status.
-// Sept 2026: 'payment_failed' added (migration 048 — real order_status_enum
-// value written by the Razorpay payment.failed webhook). This Set is the
-// allow-list for the ?status= filter; an unlisted value is silently dropped
-// from the query, so without this entry an order in that status could never
-// be filtered for at all. It is deliberately NOT in ACTIVE_STATUSES
-// (constants.ts) — a failed payment is terminal, not in-flight.
-const VALID_DB_STATUSES = new Set([
-  'pending', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled', 'returned',
-  'payment_failed',
-])
+// Allow-list for the ?status= filter: every value of the real order_status_enum (constants.ts) plus the shared
+// ACTIVE_STATUSES the Active tab sends. An unknown value is rejected with 400 (it used to be silently dropped, so the
+// Active tab lost `processing` / `out_for_delivery` orders and a lone unknown value returned EVERY order).
+const VALID_DB_STATUSES = new Set<string>([...ORDER_STATUS_VALUES, ...ACTIVE_STATUSES])
 
 async function getCustomerOrders(
   customerId: string | number,
@@ -53,7 +41,7 @@ async function getCustomerOrders(
     const validStatuses = status
       .split(',')
       .map(s => s.trim())
-      .filter(s => VALID_DB_STATUSES.has(s))
+      .filter(Boolean)
       .map(s => `order_status.eq.${s}`)
       .join(',')
     if (validStatuses) statusFilter = `&or=(${validStatuses})`
@@ -219,13 +207,21 @@ export async function GET(req: NextRequest) {
   if (refreshed) token = refreshed.token
 
   const { searchParams } = req.nextUrl
-  const page   = Math.max(1, parseInt(searchParams.get('page')  || '1', 10))
-  const limit  = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
+  // Non-numeric page/limit parse to NaN, which PostgREST rejects (400 → our 500): fall back to the defaults.
+  const pageRaw  = parseInt(searchParams.get('page')  || '1', 10)
+  const limitRaw = parseInt(searchParams.get('limit') || '20', 10)
+  const page   = Number.isFinite(pageRaw)  ? Math.max(1, pageRaw) : 1
+  const limit  = Number.isFinite(limitRaw) ? Math.min(50, Math.max(1, limitRaw)) : 20
   // BUG FIX: no length cap on the search param — an arbitrarily long value was
   // interpolated directly into the Supabase ilike filter URL (unbounded string
   // in a serverless HTTP call). Cap at 100 chars to match the searchSchema limit.
   const search = (searchParams.get('search') || '').trim().slice(0, 100)
   const status = (searchParams.get('status') || '').trim()
+
+  if (status && status !== RETURNS_FILTER_SENTINEL) {
+    const unknown = status.split(',').map(s => s.trim()).filter(Boolean).filter(s => !VALID_DB_STATUSES.has(s))
+    if (unknown.length > 0) return fail(400, 'Invalid status filter')
+  }
 
   try {
     const user    = await sbAuth('/user', null, token!)

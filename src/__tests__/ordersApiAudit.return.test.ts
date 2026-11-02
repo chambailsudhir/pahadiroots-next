@@ -1,0 +1,201 @@
+/**
+ * Nov 2026 orders-API audit (F): return route vs DB index/trigger semantics, quantity rules, window,
+ * upload-url gating, orders list status allow-list.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
+import { ACTIVE_STATUSES, ORDER_STATUS_VALUES } from '@/lib/account/constants'
+
+const mocks = vi.hoisted(() => ({
+  sbAdmin: vi.fn(), sbAdminCount: vi.fn(), sbAuth: vi.fn(), getToken: vi.fn(), tryRefresh: vi.fn(),
+  syncCustomerProfile: vi.fn(), applyNewCookies: vi.fn(), checkCsrf: vi.fn(), signEvidenceLinks: vi.fn(),
+  checkRateLimitKv: vi.fn(),
+}))
+vi.mock('@/lib/api/serverUtils', async () => {
+  const { NextResponse } = await import('next/server')
+  return {
+    ok: (d: unknown) => NextResponse.json(d),
+    fail: (status: number, msg: string) => NextResponse.json({ error: msg }, { status }),
+    sbAdmin: mocks.sbAdmin, sbAdminCount: mocks.sbAdminCount, sbAuth: mocks.sbAuth, getToken: mocks.getToken,
+    tryRefresh: mocks.tryRefresh, syncCustomerProfile: mocks.syncCustomerProfile, applyNewCookies: mocks.applyNewCookies,
+    checkCsrf: mocks.checkCsrf,
+  }
+})
+vi.mock('@/lib/server/returnEvidence', () => ({ signEvidenceLinks: mocks.signEvidenceLinks }))
+vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: mocks.checkRateLimitKv }))
+
+const ORDER = { id: 501, order_status: 'delivered', delivered_at: new Date().toISOString(), updated_at: new Date().toISOString(), order_number: 'PR-501' }
+const ITEMS = [{ id: 1, variant_id: 11, product_id: 7, quantity: 2 }, { id: 2, variant_id: 12, product_id: 8, quantity: 1 }]
+
+let order: Record<string, unknown> = ORDER
+let returnsRows: unknown[] = []
+let insertError: unknown = null
+const inserts = () => mocks.sbAdmin.mock.calls.filter(c => c[0] === 'POST' && String(c[1]).includes('/rest/v1/returns'))
+
+const post = async (body: object) => {
+  const { POST } = await import('@/app/api/orders/[id]/return/route')
+  return POST(new NextRequest('https://pahadiroots.com/api/orders/501/return', {
+    method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' }, body: JSON.stringify(body),
+  }), { params: Promise.resolve({ id: '501' }) })
+}
+
+function wireDefault() {
+  mocks.sbAdmin.mockImplementation(async (m: string, path: string) => {
+    if (m === 'GET' && path.includes('/rest/v1/orders?')) return [order]
+    if (m === 'GET' && path.includes('/rest/v1/order_items?')) return ITEMS
+    if (m === 'GET' && path.includes('/rest/v1/returns?')) return returnsRows
+    if (m === 'POST' && path.includes('/rest/v1/returns')) { if (insertError) throw insertError; return null }
+    if (m === 'GET' && path.includes('/rest/v1/site_settings')) return [{ value: 'true' }]
+    throw new Error(`unexpected ${m} ${path}`)
+  })
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  order = ORDER; returnsRows = []; insertError = null
+  mocks.checkCsrf.mockReturnValue(null); mocks.getToken.mockReturnValue('t'); mocks.tryRefresh.mockResolvedValue(null)
+  mocks.sbAuth.mockResolvedValue({ id: 'u' }); mocks.syncCustomerProfile.mockResolvedValue({ id: 'c1' })
+  mocks.signEvidenceLinks.mockResolvedValue([]); mocks.checkRateLimitKv.mockResolvedValue(true)
+  wireDefault()
+})
+
+describe('return route — DB index/trigger alignment', () => {
+  it("a 'replaced' return still blocks (the unique index does not exempt it) -> 409, no insert", async () => {
+    returnsRows = [{ id: 1, status: 'replaced', variant_id: 11 }]
+    const res = await post({ reason: 'damaged', variant_id: 11, product_id: 7 })
+    expect(res.status).toBe(409)
+    expect(inserts()).toHaveLength(0)
+  })
+
+  it('refunded / rejected are the only terminal statuses', async () => {
+    returnsRows = [{ id: 1, status: 'refunded', variant_id: 11 }, { id: 2, status: 'rejected', variant_id: 11 }]
+    expect((await post({ reason: 'damaged', variant_id: 11, product_id: 7 })).status).toBe(200)
+  })
+
+  it('maps a 23505 unique violation (double click race) to 409, not 500', async () => {
+    insertError = { status: 409, message: JSON.stringify({ code: '23505', message: 'duplicate key value violates unique constraint "ux_returns_active_order_item"' }) }
+    expect((await post({ reason: 'damaged' })).status).toBe(409)
+  })
+
+  it('maps guard_return_item check_violation (23514) to a 422 with a clear message', async () => {
+    insertError = { status: 400, message: JSON.stringify({ code: '23514', message: 'Return quantity 2 is more than can still be returned' }) }
+    const res = await post({ reason: 'damaged', variant_id: 11, product_id: 7 })
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/already been returned/i)
+  })
+
+  it('still 500s for an unrelated DB failure', async () => {
+    insertError = { status: 500, message: 'boom' }
+    expect((await post({ reason: 'damaged' })).status).toBe(500)
+  })
+
+  it('blocks a whole-order return while an item return is open, and the reverse', async () => {
+    returnsRows = [{ id: 1, status: 'requested', variant_id: 11 }]
+    expect((await post({ reason: 'damaged' })).status).toBe(409)
+    returnsRows = [{ id: 2, status: 'approved', variant_id: null }]
+    expect((await post({ reason: 'damaged', variant_id: 12, product_id: 8 })).status).toBe(409)
+  })
+
+  it('allows a return on a different item', async () => {
+    returnsRows = [{ id: 1, status: 'requested', variant_id: 11 }]
+    expect((await post({ reason: 'damaged', variant_id: 12, product_id: 8 })).status).toBe(200)
+  })
+})
+
+describe('return route — quantity rules', () => {
+  it('whole-order return ignores a client quantity (stored as 1)', async () => {
+    expect((await post({ reason: 'damaged', quantity: 1000000 })).status).toBe(200)
+    expect(inserts()[0][2]).toMatchObject({ quantity: 1, variant_id: null })
+  })
+  it('item return is clamped to the ordered quantity', async () => {
+    await post({ reason: 'damaged', variant_id: 11, product_id: 7, quantity: 99 })
+    expect(inserts()[0][2]).toMatchObject({ quantity: 2, variant_id: 11 })
+  })
+  it('0.5 floors to 0 and is rejected (400) instead of stored as 0', async () => {
+    const res = await post({ reason: 'damaged', variant_id: 11, product_id: 7, quantity: 0.5 })
+    expect(res.status).toBe(400)
+    expect(inserts()).toHaveLength(0)
+  })
+  it('keeps a valid fractional quantity floored (1.9 -> 1)', async () => {
+    await post({ reason: 'damaged', variant_id: 11, product_id: 7, quantity: 1.9 })
+    expect(inserts()[0][2]).toMatchObject({ quantity: 1 })
+  })
+})
+
+describe('return route — window and ordering', () => {
+  it('requires delivered_at: updated_at no longer extends the window', async () => {
+    order = { ...ORDER, delivered_at: null, updated_at: new Date().toISOString() }
+    expect((await post({ reason: 'damaged' })).status).toBe(422)
+    expect(inserts()).toHaveLength(0)
+  })
+  it('does not sign photos (outbound calls) for a non-delivered order or a closed window', async () => {
+    const paths = ['returns/501/1-a.jpg']
+    order = { ...ORDER, order_status: 'shipped' }
+    expect((await post({ reason: 'damaged', photo_paths: paths })).status).toBe(422)
+    order = { ...ORDER, delivered_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }
+    expect((await post({ reason: 'damaged', photo_paths: paths })).status).toBe(422)
+    expect(mocks.signEvidenceLinks).not.toHaveBeenCalled()
+  })
+  it('signs photos for a valid return', async () => {
+    await post({ reason: 'damaged', photo_paths: ['returns/501/1-a.jpg'] })
+    expect(mocks.signEvidenceLinks).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('upload-url — only for returnable orders', () => {
+  const upload = async () => {
+    const { POST } = await import('@/app/api/orders/[id]/return/upload-url/route')
+    return POST(new NextRequest('https://pahadiroots.com/api/orders/501/return/upload-url', {
+      method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://pahadiroots.com' },
+      body: JSON.stringify({ fileName: 'a.jpg', fileType: 'image/jpeg', fileSize: 1024 }),
+    }), { params: Promise.resolve({ id: '501' }) })
+  }
+  it.each([
+    ['not delivered', { order_status: 'shipped' }],
+    ['without delivered_at', { delivered_at: null }],
+    ['past the window', { delivered_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }],
+  ])('422s for an order that is %s, before any storage call', async (_n, over) => {
+    order = { ...ORDER, ...over }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    expect((await upload()).status).toBe(422)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+})
+
+describe('GET /api/orders — status allow-list and paging', () => {
+  const get = async (qs: string) => {
+    const { GET } = await import('@/app/api/orders/route')
+    return GET(new NextRequest(`https://pahadiroots.com/api/orders?${qs}`))
+  }
+  const ordersPaths = () => mocks.sbAdmin.mock.calls.map(c => String(c[1])).filter(p => p.startsWith('/rest/v1/orders?'))
+  beforeEach(() => {
+    mocks.sbAdminCount.mockResolvedValue(0)
+    mocks.sbAdmin.mockReset()
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => (path.includes('/rpc/') ? [{}] : []))
+  })
+
+  it('ACTIVE_STATUSES is a subset of the real enum list', () => {
+    for (const s of ACTIVE_STATUSES) expect(ORDER_STATUS_VALUES).toContain(s)
+  })
+  it('the Active tab filter keeps processing and out_for_delivery', async () => {
+    expect((await get(`status=${ACTIVE_STATUSES.join(',')}`)).status).toBe(200)
+    const p = decodeURIComponent(ordersPaths()[0])
+    expect(p).toContain('order_status.eq.processing')
+    expect(p).toContain('order_status.eq.out_for_delivery')
+  })
+  it('filtering only by processing filters (does not return everything)', async () => {
+    await get('status=processing')
+    expect(decodeURIComponent(ordersPaths()[0])).toContain('or=(order_status.eq.processing)')
+  })
+  it('rejects an unknown status with 400 and touches nothing', async () => {
+    expect((await get('status=pending,bogus')).status).toBe(400)
+    expect(mocks.sbAdmin).not.toHaveBeenCalled()
+  })
+  it('non-numeric page/limit fall back to 1 / 20', async () => {
+    expect((await get('page=abc&limit=xyz')).status).toBe(200)
+    const p = ordersPaths().find(x => x.includes('limit='))!
+    expect(p).toContain('limit=20')
+    expect(p).toContain('offset=0')
+  })
+})

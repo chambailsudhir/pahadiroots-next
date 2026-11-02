@@ -77,12 +77,14 @@ export async function POST(
       return NextResponse.json({ error: verdict.message, code: verdict.reason }, { status: 409 })
     }
 
-    // Single-winner conditional flip. 0 rows back = someone (packing / admin / a double click) got there first.
+    // Single-winner conditional flip. The filter re-checks dispatch (no AWB, not shipped) so an AWB added by ops after
+    // the eligibility read above cannot be cancelled by the customer.
+    // 0 rows back = someone (packing / admin / a double click) got there first.
     let updated: Array<{ id: number }> = []
     try {
       updated = await sbAdmin(
         'PATCH',
-        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&order_status=in.(pending,confirmed)`,
+        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&order_status=in.(pending,confirmed)&or=(tracking_number.is.null,tracking_number.eq.)&shipped_at=is.null`,
         { order_status: 'cancelled', updated_at: new Date().toISOString() },
         'return=representation',
       ) ?? []
@@ -101,11 +103,16 @@ export async function POST(
 
     // ── Post-cancel bookkeeping (best-effort; the cancellation itself is already committed) ──
     const results: Record<string, unknown> = {}
+    // Steps that failed are recorded ON the order's event log so ops can find and finish them (nothing retries them).
+    const followupFailed: string[] = []
     try { results.coupon = await sbAdmin('POST', '/rest/v1/rpc/release_coupon_for_order', { p_order_id: order.id }) }
-    catch (e) { captureError(e, { action: 'orders.cancel.coupon_release', order_id: order.id, alert: true }) }
+    catch (e) { followupFailed.push('coupon_release'); captureError(e, { action: 'orders.cancel.coupon_release', order_id: order.id, alert: true }) }
     try { results.loyalty = await sbAdmin('POST', '/rest/v1/rpc/reverse_loyalty_for_order', { p_order_id: order.id, p_note: `order ${order.order_number} cancelled by customer` }) }
-    catch (e) { captureError(e, { action: 'orders.cancel.loyalty_reversal', order_id: order.id, alert: true }) }
-    await logOrderEvent(String(order.id), 'customer_cancelled', 'customer', { reason, note: note || undefined, ...results }).catch(() => null)
+    catch (e) { followupFailed.push('loyalty_reversal'); captureError(e, { action: 'orders.cancel.loyalty_reversal', order_id: order.id, alert: true }) }
+    await logOrderEvent(
+      String(order.id), 'customer_cancelled', 'customer',
+      { reason, note: note || undefined, ...results, ...(followupFailed.length ? { followup_failed: followupFailed, needs_manual_followup: true } : {}) },
+    ).catch(e => { captureError(e, { action: 'orders.cancel.event_log', order_id: order.id, alert: true, followup_failed: followupFailed }) })
     logger.info('orders: customer cancelled order', { action: 'orders.cancel', order_id: order.id, order_number: order.order_number, reason })
 
     // Stock just came back → cached product cards may show "sold out" wrongly.

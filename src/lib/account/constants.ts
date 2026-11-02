@@ -121,6 +121,14 @@ export const STRIPE_CLASS: Record<string,string> = {
 // status. Matches the identical enum-drift bug already found and fixed this
 // session in pahadi-admin's PIPELINE_STATUSES/KNOWN_STATUSES.
 export const ACTIVE_STATUSES   = ['pending','confirmed','processing','packed','shipped','out_for_delivery']
+// Every value of the live Postgres enum order_status_enum (verified via pg_enum, Nov 2026 audit). The orders list
+// API uses this as the allow-list for ?status=; ACTIVE_STATUSES above must stay a subset of it.
+export const ORDER_STATUS_VALUES = [
+  'pending','confirmed','processing','packed','shipped','out_for_delivery','delivered','cancelled','payment_failed',
+  'returned','return_requested','return_approved','return_received','return_rejected',
+  'refund_initiated','refund_completed','refunded',
+] as const
+
 // Sentinel passed as the `status` query param to /api/orders — the API route
 // recognises this and does an inner join against `returns` (i.e. "orders that
 // have a linked return row") instead of filtering by order_status, since no
