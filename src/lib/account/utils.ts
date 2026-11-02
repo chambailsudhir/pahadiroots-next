@@ -86,7 +86,7 @@ export function formatPhone(raw: string): string {
 }
 
 export function formatCurrency(amount: number): string {
-  return '₹' + amount.toLocaleString('en-IN')
+  return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 export function formatDate(iso: string): string {

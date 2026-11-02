@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import { INDIA_STATES, ADDRESS_LABELS, CHECKOUT_PROFILE_CACHE_KEY } from '@/lib/account/constants'
 import { updateProfile } from '@/lib/services/profileService'
 import { useAddresses } from '@/app/account/hooks/useAddresses'
-import { safeLocalStorage } from '@/lib/account/utils'
+import { safeLocalStorage, getSavedAddresses } from '@/lib/account/utils'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from '../styles/account.module.css'
 import Icon from '@/components/ui/Icon'
@@ -40,7 +40,8 @@ export default function AddressesPage() {
         const data = await r.json()
         setAddressEtag(data.profile?.saved_addresses_etag)
         const raw  = data.profile?.saved_addresses
-        try { setAddresses(raw ? JSON.parse(raw) : []) } catch { setAddresses([]) }
+        // Shape-checked (id + addr required): a legacy/garbled entry must not crash the duplicate check later.
+        setAddresses(getSavedAddresses({ saved_addresses: typeof raw === 'string' ? raw : null }))
       })
       .catch(e => { if (!ctrl.signal.aborted) setError(e?.message || 'Failed to load') })
       .finally(() => { if (!ctrl.signal.aborted) setLoading(false) })

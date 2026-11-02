@@ -8,12 +8,13 @@
 //        consistency with the rest of the account module.
 // ─────────────────────────────────────────────────────────────
 import { ga4AccountAction } from '@/lib/analytics/ga4'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSWRConfig } from 'swr'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatCurrency, formatDate, getCourierTrackingUrl } from '@/lib/account/utils'
-import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL } from '@/lib/account/constants'
+import { SUPPORT_WHATSAPP_NUMBER, STATUS_LABEL, RETURN_REASONS } from '@/lib/account/constants'
 import { CANCEL_REASONS } from '@/lib/orderCancellation'
 import { computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 import styles from '../../styles/account.module.css'
@@ -91,6 +92,10 @@ export default function OrderDetailPage() {
   const [order,   setOrder]   = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
+  const [errorStatus, setErrorStatus] = useState(0)
+  const { mutate: mutateCache } = useSWRConfig()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
   // ── Self-service cancellation (ACC-050) ─────────────────────────────
   const [cancelOpen,   setCancelOpen]   = useState(false)
   const [cancelReason, setCancelReason] = useState('')
@@ -103,14 +108,43 @@ export default function OrderDetailPage() {
     const ctrl = new AbortController()
     fetch(`/api/orders/${id}`, { signal: ctrl.signal })
       .then(async res => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`)
+        if (!res.ok) {
+          const err = new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`) as Error & { status?: number }
+          err.status = res.status
+          throw err
+        }
         return res.json()
       })
       .then(data => { if (!ctrl.signal.aborted) setOrder(data.order ?? data) })
-      .catch(e  => { if (!ctrl.signal.aborted) setError(e?.message || 'Failed to load order') })
+      .catch(e  => { if (!ctrl.signal.aborted) { setErrorStatus(e?.status || 0); setError(e?.message || 'Failed to load order') } })
       .finally(()=> { if (!ctrl.signal.aborted) setLoading(false) })
     return () => ctrl.abort()
   }, [id])
+
+  // Cancel dialog: remember the opener and give focus back when it closes.
+  useEffect(() => {
+    if (!cancelOpen) return
+    // (captured by the opening click: the dialog's autoFocus select has already taken focus by the time effects run)
+    const opener = openerRef.current
+    return () => { if (opener && opener.isConnected) opener.focus() }
+  }, [cancelOpen])
+
+  // The SWR orders list (30 s dedupe) must not keep offering a cancelled order as cancellable.
+  function refreshOrdersCache() {
+    void mutateCache(key => Array.isArray(key) && key[0] === 'orders')
+  }
+
+  function onDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape' && !cancelBusy) { setCancelOpen(false); return }
+    if (e.key !== 'Tab') return
+    const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('select,button,[href],input,textarea,[tabindex]:not([tabindex="-1"])') ?? [])
+      .filter(n => !(n as HTMLButtonElement).disabled)
+    if (nodes.length === 0) return
+    const first = nodes[0], last = nodes[nodes.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && (active === first || !dialogRef.current?.contains(active))) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && (active === last || !dialogRef.current?.contains(active))) { e.preventDefault(); first.focus() }
+  }
 
   async function submitCancel() {
     if (!order || !cancelReason || cancelBusy) return
@@ -127,9 +161,11 @@ export default function OrderDetailPage() {
         ga4AccountAction('order_cancelled')
         setCancelledMsg('Your order has been cancelled. Nothing was charged, and any Pahadi Coins you used are back in your account.')
         setCancelOpen(false)
+        refreshOrdersCache()
         return
       }
       // 409 / contact_support: keep the page, explain, and stop offering the button
+      if (res.status === 409) refreshOrdersCache()
       if (res.status === 409) setOrder(o => o ? { ...o, can_cancel: false, cancel_via_support: data.code === 'contact_support' } : o)
       setCancelErr(data.error || 'We could not cancel your order — please try again or message us on WhatsApp.')
     } catch {
@@ -150,7 +186,10 @@ export default function OrderDetailPage() {
   if (error) return (
     <div className={styles.odError}>
       <div className={styles.odErrorIcon}><Icon name="warning" /></div>
-      <p className={styles.odErrorMsg}>{error}</p>
+      <p className={styles.odErrorMsg}>{errorStatus === 401 ? 'Please sign in to view this order.' : error}</p>
+      {errorStatus === 401 && (
+        <Link prefetch={false} href="/account" className={styles.odBackLink} style={{ fontWeight: 700, marginRight: 16 }}>Sign in</Link>
+      )}
       <Link prefetch={false} href="/account" className={styles.odBackLink}>← Back to Account</Link>
     </div>
   )
@@ -200,7 +239,7 @@ export default function OrderDetailPage() {
       )}
       {order.can_cancel && (
         <button type="button" className={styles.odTrackChip} style={{ background: '#fff', color: '#b3261e', border: '1.5px solid #b3261e', marginRight: 8, cursor: 'pointer' }}
-          onClick={() => { setCancelOpen(true); setCancelErr(''); setCancelReason('') }}>
+          onClick={e => { openerRef.current = e.currentTarget; setCancelOpen(true); setCancelErr(''); setCancelReason('') }}>
           Cancel order
         </button>
       )}
@@ -212,8 +251,9 @@ export default function OrderDetailPage() {
         </a>
       )}
       {cancelOpen && (
-        <div role="dialog" aria-modal="true" aria-labelledby="cancel-title"
-          onKeyDown={e => { if (e.key === 'Escape' && !cancelBusy) setCancelOpen(false) }}
+        <div role="dialog" aria-modal="true" aria-labelledby="cancel-title" ref={dialogRef}
+          onKeyDown={onDialogKeyDown}
+          onMouseDown={e => { if (e.target === e.currentTarget && !cancelBusy) setCancelOpen(false) }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
           <div style={{ background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 420 }}>
             <h2 id="cancel-title" style={{ margin: '0 0 8px', fontSize: 20 }}>Cancel order {order.order_number}?</h2>
@@ -334,7 +374,7 @@ export default function OrderDetailPage() {
           </div>
           {order._return.reason && (
             <div className={styles.odAddrLines} style={{ marginTop: '8px' }}>
-              <div>Reason: {order._return.reason}</div>
+              <div>Reason: {RETURN_REASONS.find(r => r.code === order._return?.reason)?.label || order._return.reason}</div>
               {order._return.description && <div>{order._return.description}</div>}
             </div>
           )}
@@ -372,14 +412,19 @@ export default function OrderDetailPage() {
             {order.shipping_address.name && (
               <div className={styles.odAddrName}>{order.shipping_address.name}</div>
             )}
+            {/* createOrder stores address_line1; flat/area are the legacy shape. */}
             <div>
-              {[order.shipping_address.flat, order.shipping_address.area]
+              {(order.shipping_address.address_line1
+                ? [order.shipping_address.address_line1]
+                : [order.shipping_address.flat, order.shipping_address.area])
                 .filter(Boolean)
                 .join(', ')}
             </div>
             <div>
-              {order.shipping_address.city}, {order.shipping_address.state} —{' '}
-              {order.shipping_address.pincode}
+              {[order.shipping_address.city, order.shipping_address.state].filter(Boolean).join(', ')}
+              {order.shipping_address.pincode
+                ? `${order.shipping_address.city || order.shipping_address.state ? ' — ' : ''}${order.shipping_address.pincode}`
+                : ''}
             </div>
             {order.shipping_address.phone && (
               <div className={styles.odAddrPhone}>{order.shipping_address.phone}</div>
@@ -395,7 +440,7 @@ export default function OrderDetailPage() {
           and the subtotal round-off that the order row does not store as columns. */}
       {(() => {
         const inv = computeOrderInvoice({
-          items:                   order.items.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+          items:                   (order.items ?? []).map(i => ({ name: i.name, qty: i.qty, price: i.price })),
           total_amount:            order.total_amount,
           subtotal:                order.subtotal,
           coupon_discount:         order.coupon_discount,

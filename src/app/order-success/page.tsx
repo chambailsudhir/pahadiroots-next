@@ -269,11 +269,13 @@ function SuccessContent() {
   // 'processing' either (see PAHADI_ROOTS_SESSION_REPORT.md §2/§3). The old
   // list also omitted 'packed' entirely, so an order sitting at that real
   // status showed no progress at all. Fixed to the real sequence.
-  const STATUS_ORDER = ['pending','confirmed','packed','shipped','delivered']
+  const STATUS_ORDER = ['pending','confirmed','processing','packed','shipped','out_for_delivery','delivered']
   const STEPS = [
     { key: 'confirmed',  icon: '✅', label: 'Confirmed' },
+    { key: 'processing', icon: '⚙️', label: 'Processing' },
     { key: 'packed',     icon: '📦', label: 'Packed' },
     { key: 'shipped',    icon: '🚚', label: 'Shipped' },
+    { key: 'out_for_delivery', icon: '🏍️', label: 'Out for delivery' },
     { key: 'delivered',  icon: '🎉', label: 'Delivered' },
   ]
 

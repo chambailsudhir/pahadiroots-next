@@ -38,6 +38,8 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   const [typed,       setTyped]       = useState('')
   const [password,    setPassword]    = useState('')
   const [delError,    setDelError]    = useState('')
+  const [delCode,     setDelCode]     = useState('')
+  const [deleted,     setDeleted]     = useState(false)
   const [deleting,    setDeleting]    = useState(false)
   const [downloading, setDownloading] = useState(false)
   const inputRef    = useRef<HTMLInputElement>(null)
@@ -52,6 +54,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     setTyped('')
     setPassword('')
     setDelError('')
+    setDelCode('')
   }, [deleting])
 
   // ── Focus trap: intercept Tab/Shift+Tab so keyboard focus stays inside the modal
@@ -73,10 +76,13 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     const first = focusable[0]
     const last  = focusable[focusable.length - 1]
 
+    // The box itself (tabIndex=-1) holds focus right after opening: from there Shift+Tab / Tab must stay inside too.
+    const active  = document.activeElement
+    const outside = active === modal || !focusable.includes(active as HTMLElement)
     if (e.shiftKey) {
-      if (document.activeElement === first) { e.preventDefault(); last.focus() }
+      if (active === first || outside) { e.preventDefault(); last.focus() }
     } else {
-      if (document.activeElement === last) { e.preventDefault(); first.focus() }
+      if (active === last || outside) { e.preventDefault(); first.focus() }
     }
   }, [closeModal])
 
@@ -121,6 +127,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
     setTyped('')
     setPassword('')
     setDelError('')
+    setDelCode('')
     setDeleting(false)
     setOpen(true)
     // BUG FIX: this only ever focused inputRef, but that input doesn't
@@ -137,7 +144,13 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
   }
 
   async function handleDelete() {
-    if (typed !== 'DELETE' || deleting) return
+    if (deleting) return
+    if (typed !== 'DELETE') {
+      // Enter in a field used to return silently — say why nothing happened.
+      setDelError('Type DELETE (in capital letters) in the box to confirm.')
+      requestAnimationFrame(() => inputRef.current?.focus())
+      return
+    }
     setDeleting(true)
     setDelError('')
 
@@ -161,7 +174,11 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       if (res.status === 403) {
         const data = await res.json().catch(() => ({})) as { error?: string; code?: string }
         setDeleting(false)
-        setDelError(data.error || 'Please confirm your identity to continue.')
+        setDelCode(data.code || '')
+        setDelError(
+          (data.error || 'Please confirm your identity to continue.') +
+          (data.code === 'reauth_failed' ? ' If you only ever signed in with Google, leave the password blank, or sign out and sign in with Google again, then retry.' : ''),
+        )
         if (data.code === 'password_required' || data.code === 'reauth_failed') {
           requestAnimationFrame(() => document.getElementById('del-password')?.focus())
         }
@@ -178,6 +195,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
       clearClientPII()   // AUDIT ACC-040: name/phone/address caches must not outlive the account
       storeLogout()
       setOpen(false)
+      setDeleted(true)   // block the (now signed-out) account UI until the redirect
 
       // Give the user a clear, final acknowledgment before redirect
       showToast('Your account has been deleted. Goodbye!', 'success')
@@ -268,6 +286,13 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
         </div>
       </div>
 
+      {deleted && (
+        <div role="status" aria-live="polite"
+          style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(255,255,255,.96)', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24, fontWeight: 700, color: '#1a3a1e' }}>
+          Your account has been deleted. Redirecting…
+        </div>
+      )}
+
       {/* ── Confirmation Modal ──────────────────────────────── */}
       {open && (
         <div
@@ -355,7 +380,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
                     className={styles.dangerConfirmInput}
                     placeholder="Type DELETE to confirm"
                     value={typed}
-                    onChange={e => setTyped(e.target.value)}
+                    onChange={e => { setTyped(e.target.value); if (delError) setDelError('') }}
                     onKeyDown={e => { if (e.key === 'Enter') handleDelete() }}
                     disabled={deleting}
                     autoComplete="off"
@@ -365,6 +390,11 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
                 </div>
                 {delError && (
                   <p role="alert" style={{ color: '#b3261e', fontSize: 14, fontWeight: 600, margin: '10px 0 0' }}>{delError}</p>
+                )}
+                {delCode === 'reauth_required' && (
+                  <button type="button" className={styles.btnSecondary} style={{ marginTop: 10 }} onClick={() => { closeModal(); onLogout() }}>
+                    Sign out and sign in again
+                  </button>
                 )}
                 <div className={styles.modalFooter}>
                   <button

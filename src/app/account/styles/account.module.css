@@ -16,7 +16,7 @@
 .sbAvatar { width: 100%; height: 100%; background: rgba(255,255,255,.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 900; color: #fff; }
 .sbName   { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; }
 .sbSub    { font-size: 12px; color: rgba(255,255,255,.6); word-break: break-all; }
-.sbMember { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 6px; }
+.sbMember { font-size: 11px; color: rgba(255,255,255,.85); margin-top: 6px; }
 .sbStats  { display: flex; align-items: center; justify-content: space-around; padding: 14px 12px; border-bottom: 1px solid #f0ece6; margin-top: -4px; }
 .sbStat   { text-align: center; flex: 1; }
 .sbStatVal { font-size: 18px; font-weight: 700; color: #1a3a1e; }
@@ -69,8 +69,8 @@
 .searchIcon    { position: absolute; left: 14px; font-size: 14px; }
 .ordersSearch  { width: 100%; padding: 11px 40px; border: 1.5px solid #e8e3db; border-radius: 12px; font-size: 14px; outline: none; transition: border-color .2s; background: #fafaf8; color: #1a1a1a; }
 .ordersSearch:focus { border-color: #1a3a1e; background: #fff; }
-.ordersSearch::placeholder { color: #bbb; }
-.searchClear   { position: absolute; right: 12px; background: none; border: none; cursor: pointer; font-size: 13px; color: #aaa; padding: 4px; }
+.ordersSearch::placeholder { color: #666666; }
+.searchClear   { position: absolute; right: 12px; background: none; border: none; cursor: pointer; font-size: 13px; color: #757575; padding: 4px; }
 .searchClear:hover { color: #555; }
 .filterRow     { display: flex; gap: 8px; flex-wrap: wrap; }
 .filterBtn     { padding: 8px 16px; border-radius: 10px; border: 1.5px solid #e8e3db; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s; color: #666; }
@@ -100,7 +100,7 @@
 .badgePacked    { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
 .badgeShipped   { background: #ede7f6; color: #4527a0; border: 1px solid #d1c4e9; }
 .badgeDelivered { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
-.badgePending   { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+.badgePending   { background: #fff8e1; color: #8f5200; border: 1px solid #ffe082; }
 .badgeCancelled { background: #fdecea; color: #b71c1c; border: 1px solid #ffcdd2; }
 .badgeReturn    { background: #fce4ec; color: #880e4f; border: 1px solid #f8bbd0; }
 .ocTotal  { font-weight: 700; font-size: 18px; color: #1a3a1e; }
@@ -119,7 +119,7 @@
 .ocItemsRow { margin-bottom: 12px; }
 .ocImgs     { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .ocImgBox   { width: 56px; height: 56px; border-radius: 10px; border: 1.5px solid #ede9e3; overflow: hidden; background: #f5f0e8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.ocImgMore  { width: 56px; height: 56px; border-radius: 10px; background: #f5f0e8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #888; border: 1.5px solid #ede9e3; }
+.ocImgMore  { width: 56px; height: 56px; border-radius: 10px; background: #f5f0e8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #666666; border: 1.5px solid #ede9e3; }
 .ocItemsNames { font-size: 13px; color: #666; line-height: 1.5; }
 .ocStatusMsg  { font-size: 12px; font-weight: 600; color: #2e7d32; margin-bottom: 10px; background: #f0faf0; padding: 7px 12px; border-radius: 8px; display: inline-block; }
 .trackChip    { display: inline-flex; align-items: center; gap: 6px; background: #1a3a1e; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-bottom: 12px; transition: background .2s; }
@@ -166,7 +166,7 @@
 .fHint       { font-size: 11px; color:#6b6b6b; margin-top: 5px; }
 .fHintLink   { color: #5a7a3a; text-decoration: none; font-weight: 500; }
 .fHintLink:hover { text-decoration: underline; }
-.errTxt      { font-size: 11px; color: #e74c3c; margin-top: 5px; font-weight: 600; }
+.errTxt      { font-size: 11px; color: #c0392b; margin-top: 5px; font-weight: 600; }
 .saveMsg     { font-size: 13px; color: #2d6a4f; font-weight: 600; }
 .phonePrefix { padding: 12px 13px; background: #f5f0e8; border-radius: 11px; font-size: 14px; font-weight: 700; color: #666; flex-shrink: 0; border: 1.5px solid #e8e3db; }
 .pwWrap      { position: relative; }
@@ -178,7 +178,7 @@
 .pwFair      { background: #ff9800; }
 .pwMedium    { background: #ffa726; }
 .pwStrong    { background: #43a047; }
-.pwStrengthLbl { font-size: 11px; font-weight: 700; color: #888; }
+.pwStrengthLbl { font-size: 11px; font-weight: 700; color: #666666; }
 .matchMsg    { font-size: 12px; color: #2e7d32; font-weight: 600; margin-top: 5px; }
 
 /* Buttons */
@@ -202,7 +202,7 @@
 
 /* Loading */
 .accLoading  { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f4f0eb; gap: 16px; }
-.loadingText { color: #aaa; font-size: 14px; }
+.loadingText { color: #666666; font-size: 14px; }
 .accSpinner  { width: 28px; height: 28px; border: 2.5px solid #e8e3db; border-top-color: #1a3a1e; border-radius: 50%; animation: accSpin 1s linear infinite; }
 @keyframes accSpin { to { transform: rotate(360deg); } }
 
@@ -468,7 +468,7 @@
 .lyRefHeader { display: flex; align-items: flex-start; gap: 14px; }
 .lyRefIcon   { font-size: 32px; line-height: 1; flex-shrink: 0; }
 .lyRefTitle  { font-size: 15px; font-weight: 800; color: #7a5800; }
-.lyRefSub    { font-size: 13px; color: #a08020; line-height: 1.5; margin-top: 3px; }
+.lyRefSub    { font-size: 13px; color: #7a5f00; line-height: 1.5; margin-top: 3px; }
 .lyRefRow    { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lyRefCode   {
   flex: 1;
@@ -548,7 +548,7 @@
 }
 .lyTxnInfo  { flex: 1; min-width: 0; }
 .lyTxnNote  { font-size: 13px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lyTxnDate  { font-size: 11px; color: #bbb; margin-top: 3px; }
+.lyTxnDate  { font-size: 11px; color: #666666; margin-top: 3px; }
 .lyTxnPts   { font-size: 16px; font-weight: 800; letter-spacing: -0.5px; flex-shrink: 0; }
 
 .lyEmpty { font-size: 13px; color:#6b6b6b; text-align: center; padding: 20px 0 8px; font-style: italic; }
@@ -572,7 +572,7 @@
 /* Error state */
 .odError      { text-align: center; padding: 64px 20px; }
 .odErrorIcon  { font-size: 40px; margin-bottom: 12px; }
-.odErrorMsg   { font-size: 14px; color: #888; margin-bottom: 16px; }
+.odErrorMsg   { font-size: 14px; color: #666666; margin-bottom: 16px; }
 
 /* Section card — wraps each content block */
 .odCard       { background: #fff; border: 1px solid #ede9e3; border-radius: 20px; padding: 20px; }
@@ -625,7 +625,7 @@
 /* Delivery address */
 .odAddrLines  { font-size: 13px; color: #555; line-height: 1.9; }
 .odAddrName   { font-weight: 700; color: #1a1a1a; }
-.odAddrPhone  { color: #aaa; }
+.odAddrPhone  { color: #666666; }
 
 /* Price breakdown */
 .odPriceRows  { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
@@ -642,12 +642,12 @@
 .wlRoot         { }
 .wlHeader       { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
 .wlTitle        { font-size: 18px; font-weight: 700; color: #1a1a1a; }
-.wlCount        { margin-left: 8px; font-size: 14px; font-weight: 400; color: #aaa; }
-.wlClearBtn     { font-size: 12px; color: #aaa; background: none; border: none; cursor: pointer; transition: color .2s; padding: 0; }
+.wlCount        { margin-left: 8px; font-size: 14px; font-weight: 400; color: #666666; }
+.wlClearBtn     { font-size: 12px; color: #666666; background: none; border: none; cursor: pointer; transition: color .2s; padding: 0; }
 .wlClearBtn:hover { color: #c0392b; }
 .wlEmpty        { text-align: center; padding: 64px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
 .wlEmptyIcon    { font-size: 40px; margin-bottom: 12px; }
-.wlEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.wlEmptyMsg     { font-size: 14px; color: #666666; margin-bottom: 12px; }
 .wlEmptyLink    { font-size: 14px; font-weight: 600; color: #2e7d32; text-decoration: none; }
 .wlEmptyLink:hover { text-decoration: underline; }
 .wlError        { text-align: center; padding: 32px 20px; font-size: 14px; color: #c0392b; }
@@ -665,7 +665,7 @@
 .saSkRow        { height: 96px; background: #f0ece4; border-radius: 14px; animation: skShine 1.5s infinite; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; }
 .saAuthWall     { text-align: center; padding: 64px 20px; }
 .saAuthIcon     { font-size: 36px; margin-bottom: 12px; }
-.saAuthMsg      { font-size: 14px; color: #888; margin-bottom: 16px; }
+.saAuthMsg      { font-size: 14px; color: #666666; margin-bottom: 16px; }
 .saAuthLink     { display: inline-block; background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 700; padding: 10px 20px; border-radius: 12px; text-decoration: none; transition: background .2s; }
 .saAuthLink:hover { background: #2e7d32; }
 .saError        { text-align: center; padding: 64px 20px; font-size: 14px; color: #c0392b; }
@@ -687,7 +687,7 @@
 .saCancelBtn:hover { background: #f5f0e8; }
 .saEmpty        { text-align: center; padding: 48px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
 .saEmptyIcon    { font-size: 36px; margin-bottom: 12px; }
-.saEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.saEmptyMsg     { font-size: 14px; color: #666666; margin-bottom: 12px; }
 .saEmptyBtn     { font-size: 14px; font-weight: 600; color: #2e7d32; background: none; border: none; cursor: pointer; padding: 0; }
 .saEmptyBtn:hover { text-decoration: underline; }
 .saList         { display: flex; flex-direction: column; gap: 12px; }
@@ -696,14 +696,14 @@
 .saCardTag      { font-size: 11px; font-weight: 700; color: #2e7d32; background: #e8f5e9; padding: 2px 8px; border-radius: 20px; display: inline-block; margin-bottom: 4px; }
 .saCardName     { font-size: 14px; font-weight: 600; color: #1a1a1a; }
 .saCardLine     { font-size: 13px; color: #666; }
-.saCardSub      { font-size: 13px; color: #999; }
+.saCardSub      { font-size: 13px; color: #666666; }
 .saCardActions  { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
-.saActBtn       { font-size: 12px; font-weight: 600; color: #888; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
+.saActBtn       { font-size: 12px; font-weight: 600; color: #666666; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
 .saActBtn:hover { color: #2e7d32; }
 .saDelConfirmTxt { font-size: 12px; color: #c0392b; font-weight: 500; }
 .saDelConfirmBtn { font-size: 12px; font-weight: 600; color: #c0392b; background: none; border: none; cursor: pointer; padding: 0; transition: color .2s; }
 .saDelConfirmBtn:hover { color: #a93226; }
-.saDelCancelBtn { font-size: 12px; font-weight: 600; color: #888; background: none; border: none; cursor: pointer; padding: 0; }
+.saDelCancelBtn { font-size: 12px; font-weight: 600; color: #666666; background: none; border: none; cursor: pointer; padding: 0; }
 .saToast        { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.2); z-index: 50; white-space: nowrap; }
 
 /* ─── Standalone orders list page (so*) ──────────────────────────── */
@@ -713,13 +713,13 @@
 .soSkRow        { height: 64px; background: linear-gradient(90deg,#e8e3db 25%,#f0ece4 50%,#e8e3db 75%); background-size: 200% 100%; animation: skShine 1.5s infinite; border-radius: 12px; }
 .soAuthWall     { text-align: center; padding: 64px 20px; }
 .soAuthIcon     { font-size: 36px; margin-bottom: 12px; }
-.soAuthMsg      { font-size: 14px; color: #888; margin-bottom: 16px; }
+.soAuthMsg      { font-size: 14px; color: #666666; margin-bottom: 16px; }
 .soAuthLink     { display: inline-block; background: #1a3a1e; color: #fff; font-size: 14px; font-weight: 700; padding: 10px 20px; border-radius: 12px; text-decoration: none; transition: background .2s; }
 .soAuthLink:hover { background: #2e7d32; }
 .soError        { text-align: center; padding: 64px 20px; font-size: 14px; color: #c0392b; }
 .soEmpty        { text-align: center; padding: 64px 20px; border: 1.5px dashed #e0d8cd; border-radius: 20px; }
 .soEmptyIcon    { font-size: 40px; margin-bottom: 12px; }
-.soEmptyMsg     { font-size: 14px; color: #aaa; margin-bottom: 12px; }
+.soEmptyMsg     { font-size: 14px; color: #666666; margin-bottom: 12px; }
 .soEmptyLink    { font-size: 14px; font-weight: 600; color: #2e7d32; text-decoration: none; }
 .soEmptyLink:hover { text-decoration: underline; }
 .soList         { display: flex; flex-direction: column; gap: 8px; }
@@ -727,7 +727,7 @@
 .soRow:hover    { border-color: #c8e6c9; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
 .soRowLeft      { }
 .soOrderNum     { font-size: 14px; font-weight: 700; color: #1a1a1a; font-family: 'Courier New', monospace; }
-.soOrderDate    { font-size: 12px; color: #aaa; margin-top: 2px; }
+.soOrderDate    { font-size: 12px; color: #666666; margin-top: 2px; }
 .soRowRight     { display: flex; align-items: center; gap: 12px; }
 .soTotal        { font-size: 14px; font-weight: 700; color: #1a1a1a; }
 .soChevron      { width: 16px; height: 16px; color: #ccc; flex-shrink: 0; }
