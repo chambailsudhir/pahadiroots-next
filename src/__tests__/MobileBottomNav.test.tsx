@@ -194,7 +194,7 @@ describe('MobileBottomNav — search/cart/menu wire into the shared useUIStore',
 
   it('More button opens the mobile menu', () => {
     render(<MobileBottomNav settings={settings} />)
-    fireEvent.click(document.querySelector('button[aria-label="Open menu"]') as HTMLElement)
+    fireEvent.click(document.querySelector('button[aria-label="More menu"]') as HTMLElement)
     expect(useUIStore.getState().isMobileMenuOpen).toBe(true)
   })
 })

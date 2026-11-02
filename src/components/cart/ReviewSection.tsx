@@ -7,7 +7,11 @@ interface Review {
   name: string
   location: string
   text: string
+  /** The review's own rating, 1–5 (never a hard-coded five stars). */
+  rating: number
 }
+
+const clampRating = (n: number) => Math.min(5, Math.max(1, Math.round(Number(n) || 0)))
 
 interface Props {
   reviews: Review[]
@@ -55,9 +59,11 @@ const ReviewSection = memo(function ReviewSection({ reviews }: Props) {
         aria-live="polite"
         aria-atomic="true"
       >
-        <div className={styles.stars} aria-label="5 out of 5 stars">★★★★★</div>
+        <div className={styles.stars} role="img" aria-label={`${clampRating(reviews[idx].rating)} out of 5 stars`}>
+          {'★'.repeat(clampRating(reviews[idx].rating))}{'☆'.repeat(5 - clampRating(reviews[idx].rating))}
+        </div>
         <p className={styles.text}>&quot;{reviews[idx].text}&quot;</p>
-        <div className={styles.author}>— {reviews[idx].name}, {reviews[idx].location}</div>
+        <div className={styles.author}>— {reviews[idx].name}{reviews[idx].location ? `, ${reviews[idx].location}` : ''}</div>
       </div>
       {reviews.length > 1 && (
         <div className={styles.dots} role="group" aria-label="Review navigation">

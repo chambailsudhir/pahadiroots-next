@@ -648,31 +648,40 @@ describe('useCartPage — mountedRef guard against post-unmount setState', () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useCartPage — settings/reviews fetch', () => {
-  it('uses fallback reviews when the settings fetch fails', async () => {
+  // Nov 2026: the cart used to fall back to three hard-coded testimonials ("Priya M., Delhi", …) that were not real reviews. There is no
+  // fallback any more: real reviews or nothing.
+  it('shows NO reviews (never a placeholder) when none can be loaded', async () => {
     seedStore([])
     global.fetch = makeFetchMock() // everything 500s
 
     const { result } = renderHook(() => useCartPage())
     await act(async () => { await vi.runAllTimersAsync() })
 
-    expect(result.current.reviews.length).toBeGreaterThan(0)
-    expect(result.current.reviews[0].name).toBe('Priya M.')
+    expect(result.current.reviews).toEqual([])
   })
 
-  it('uses DB-driven reviews when settings provide complete review fields', async () => {
+  it('shows the real reviews returned by /api/v1/cart-reviews, with their own rating', async () => {
     seedStore([])
     global.fetch = makeFetchMock({
-      '/api/v1/cart-settings': () => mockRes({
-        settings: {
-          review_1_name: 'Anjali R.', review_1_location: 'Pune', review_1_text: 'Loved the dal!',
-        },
-      }),
+      '/api/v1/cart-reviews': () => mockRes({ reviews: [{ name: 'Anjali R.', location: 'Pune', text: 'Loved the dal!', rating: 4 }] }),
     })
 
     const { result } = renderHook(() => useCartPage())
     await act(async () => { await vi.runAllTimersAsync() })
 
-    expect(result.current.reviews.some(r => r.name === 'Anjali R.')).toBe(true)
+    expect(result.current.reviews).toEqual([{ name: 'Anjali R.', location: 'Pune', text: 'Loved the dal!', rating: 4 }])
+  })
+
+  it('ignores the old admin-typed review_1..3 settings (those were not real reviews either)', async () => {
+    seedStore([])
+    global.fetch = makeFetchMock({
+      '/api/v1/cart-settings': () => mockRes({ settings: { review_1_name: 'Typed T.', review_1_location: 'X', review_1_text: 'typed by hand' } }),
+    })
+
+    const { result } = renderHook(() => useCartPage())
+    await act(async () => { await vi.runAllTimersAsync() })
+
+    expect(result.current.reviews).toEqual([])
   })
 
   it('exposes free_shipping_min via freeShipMin once settings load', async () => {
@@ -768,6 +777,6 @@ describe('useCartPage — fetchWithRetry retry behavior (BUG FIX: network errors
     // maxRetries=2 -> 1 initial attempt + 2 retries = 3 total calls, then give up
     expect(callCount).toBe(3)
     expect(result.current.freeShipMin).toBe(FALLBACK_FREE_SHIPPING_MIN) // corrected 0 -> 500, see useCartPage.ts
-    expect(result.current.reviews[0].name).toBe('Priya M.') // fallback reviews used
+    expect(result.current.reviews).toEqual([]) // no placeholder reviews, ever
   })
 })

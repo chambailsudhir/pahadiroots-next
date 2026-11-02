@@ -63,8 +63,8 @@ const PAYMENT_LOGOS: [string, string][] = [
   ['#6a1b9a', 'UPI'],
   ['#1a1f71', 'VISA'],
   ['#eb001b', 'MC'],
-  ['#008c44', 'RuPay'],
-  ['#4285f4', 'GPay'],
+  ['#00763a', 'RuPay'],
+  ['#1967d2', 'GPay'],
 ]
 
 interface Props {
