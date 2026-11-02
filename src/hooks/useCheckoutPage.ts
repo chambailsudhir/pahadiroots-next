@@ -1260,7 +1260,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               if ((verRes.status === 429 || verRes.status >= 500) && data.order_number) {
                 orderPlacedRef.current = true
                 clearCart()
-                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token, 'razorpay', pricingTotal))
+                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token))
                 return
               }
 
@@ -1297,7 +1297,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
               if (e instanceof TypeError && data.order_number) {
                 orderPlacedRef.current = true
                 clearCart()
-                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token, 'razorpay', pricingTotal))
+                router.replace(buildOrderSuccessUrl(data.order_number, data.confirmation_token))
                 return
               }
               const msg = e instanceof Error ? e.message : 'Payment verified but order save failed.'
