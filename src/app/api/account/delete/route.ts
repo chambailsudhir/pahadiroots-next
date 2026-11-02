@@ -14,12 +14,17 @@
 //
 // Erasure sequence (order matters — auth deletion is irrecoverable):
 //   1. Resolve customers.id from auth_user_id
-//   2. Null shipping_address on orders (standalone PII snapshot in JSONB)
-//   3. Anonymise customers row — name becomes "Deleted User", PII → NULL
-//   4. Delete saved_addresses table rows for this customer
+//   2. Refuse (409) while any order is still in progress
+//   3. Closed orders: reduce shipping_address to the invoice set (name, address lines, city, state, pincode, GSTIN) —
+//      phone, e-mail and every other key are erased; notes, return photos, ledger notes, wishlist, carts are erased
+//   4. Anonymise customers row — name becomes "Deleted User", PII → NULL (unlinks the login; last DB write)
 //   5. Write DPDP audit record to event_logs
 //   6. Delete Supabase Auth user  ← irrecoverable, always last
 //   7. Clear session cookies + respond
+//
+// RETENTION (owner decision, modelled on large marketplaces): invoices / credit notes must be kept for 72 months after
+// the due date of the annual return (CGST Act s.36, Rule 56(20)); DPDP Act allows retention required by law. So closed
+// orders keep ONLY what an invoice needs. Counsel to confirm — see PR.
 //
 // Rate limit: 3 req/hour per IP
 // ─────────────────────────────────────────────────────────────
@@ -49,6 +54,37 @@ const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroot
 // Everything NOT listed here is "open": the courier still needs the destination, or a return / refund is in flight.
 const TERMINAL_ORDER_STATUSES = ['delivered', 'cancelled', 'payment_failed', 'returned', 'return_rejected', 'refund_completed', 'refunded'] as const
 const EVIDENCE_BUCKET = 'return-evidence'
+
+// The ONLY keys of orders.shipping_address that survive on a closed order: what a GST invoice / credit note prints.
+// `state` and `pincode` MUST stay (DB trigger set_order_gst_split recomputes CGST/SGST/IGST from the address on
+// UPDATE OF shipping_address; dropping state would change the tax split of a historical invoice).
+const INVOICE_ADDRESS_KEYS = ['name', 'address_line1', 'address_line2', 'city', 'state', 'pincode', 'gstin'] as const
+
+/**
+ * Reduce a shipping_address snapshot to the invoice set. Returns `null` when nothing needs to be written
+ * (already minimal → idempotent, no trigger fired) and `'drop'` for a value that cannot be parsed.
+ */
+function minimiseShippingAddress(raw: unknown): Record<string, unknown> | null | 'drop' {
+  if (raw == null) return null
+  let obj: unknown = raw
+  if (typeof raw === 'string') {
+    try { obj = JSON.parse(raw) } catch { return 'drop' }
+  }
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return 'drop'
+  const src = obj as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of INVOICE_ADDRESS_KEYS) {
+    if (!(k in src)) continue
+    const v = src[k]
+    if (v === null || v === undefined) continue
+    if (k === 'gstin' && (typeof v !== 'string' || !v.trim())) continue
+    out[k] = v
+  }
+  const unchanged = typeof raw !== 'string'
+    && Object.keys(src).length === Object.keys(out).length
+    && Object.keys(out).every(k => src[k] === out[k])
+  return unchanged ? null : out
+}
 const chunk = <T,>(a: T[], n: number): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
 
 // The audit row must prove WHEN and THAT an erasure happened without keeping the requester's IP (personal data) after
@@ -95,7 +131,7 @@ async function sendDeletionConfirmation(email: string): Promise<void> {
         from:    'HimVeda by Pahadi Roots <noreply@pahadiroots.com>',
         to:      [email],
         subject: 'Your HimVeda by Pahadi Roots account has been deleted',
-        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account has been deleted and your personal data erased, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>, except for the records we are legally required to keep (below).</p><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Erased or anonymised</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Your name, phone number, e-mail, GSTIN and profile address, saved delivery addresses, wishlist and abandoned carts</li><li>Newsletter and back-in-stock subscriptions, and queued e-mails to this address</li><li>Return photos and your name and comments on return requests, order notes, and notes on Pahadi Coins entries</li></ul><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Retained as required by GST and tax law</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Invoices, credit notes and order records of completed orders, including the recipient name and delivery address printed on them, for the statutory retention period; they are not used for marketing</li></ul><p style="color:#555;font-size:14px;line-height:1.6">Product reviews you posted are public content that is not linked to your account; write to us if you would like one removed.</p><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Account deleted</h2><p style="color:#555;font-size:15px;line-height:1.6">Your account has been deleted and your personal data erased, in accordance with the <strong>Digital Personal Data Protection Act 2023</strong>, except for the records we are legally required to keep (below).</p><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Erased or anonymised</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>Your name, phone number, e-mail, GSTIN and profile address, saved delivery addresses, wishlist and abandoned carts</li><li>The phone number, e-mail and any other details stored with the delivery address of your past orders</li><li>Newsletter and back-in-stock subscriptions, and queued e-mails to this address</li><li>Return photos and your name and comments on return requests, order notes, and notes on Pahadi Coins entries</li></ul><p style="color:#555;font-size:14px;line-height:1.6;margin:16px 0 4px"><strong>Retained as required by GST and tax law</strong></p><ul style="color:#555;font-size:14px;line-height:2;padding-left:20px;margin-top:0"><li>For completed orders only: the recipient name, delivery address (lines, city, state, pincode) and, for business orders, the GSTIN printed on the invoice, together with the invoice and payment amounts. GST law (CGST Act s.36 and Rule 56) requires us to keep these for up to 6 years. Your phone number and e-mail are <strong>not</strong> kept on these orders, and the data is never used for marketing</li></ul><p style="color:#555;font-size:14px;line-height:1.6">Product reviews you posted stay on the product page but are no longer linked to you and appear anonymously; write to us if you would like one removed.</p><p style="color:#555;font-size:14px;margin-top:24px">If you didn't request this, please contact us immediately.</p><p style="text-align:center;margin-top:32px"><a href="https://wa.me/919899984895" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">💬 WhatsApp Support</a></p><p style="color:#aaa;font-size:12px;text-align:center;margin-top:24px">You can create a new account at <a href="${SITE_URL}" style="color:#2d6a4f">${SITE_URL}</a> at any time.</p></div></div></body></html>`,
       }),
     })
   } catch (e) {
@@ -259,9 +295,25 @@ export async function DELETE(req: NextRequest) {
       }
 
       // ── Step 4: customer-written free text on orders / ledger ────
-      // Closed orders keep shipping_address (recipient on the invoice) but not what the customer typed in the notes box.
+      // Closed orders keep only the invoice set of shipping_address (below) and not what the customer typed in the notes box.
       await sbAdmin('PATCH', `/rest/v1/orders?customer_id=eq.${customerId}`, { notes: null }, 'return=minimal')
       await sbAdmin('PATCH', `/rest/v1/loyalty_transactions?customer_id=eq.${customerId}`, { note: null }, 'return=minimal')
+
+      // ── Step 4b: minimise shipping_address on closed orders (read-modify-write per order) ──
+      // phone, e-mail and any other key are erased; the invoice set stays. Idempotent: an already-minimal snapshot is
+      // skipped, so a retry after a later failure re-writes nothing. Fatal on error (account stays active, retryable).
+      const terminalList = TERMINAL_ORDER_STATUSES.join(',')
+      for (let offset = 0; offset < 100_000; offset += 1000) {
+        const page = await sbAdmin('GET', `/rest/v1/orders?customer_id=eq.${customerId}&order_status=in.(${terminalList})&select=id,shipping_address&order=id.asc&limit=1000&offset=${offset}`)
+        if (!Array.isArray(page)) throw new Error('unexpected orders response')
+        for (const o of page as Array<{ id: string | number; shipping_address: unknown }>) {
+          const next = minimiseShippingAddress(o.shipping_address)
+          if (next === null) continue
+          if (next === 'drop') console.warn('[account/delete] unparseable shipping_address erased', { order_id: o.id })
+          await sbAdmin('PATCH', `/rest/v1/orders?id=eq.${o.id}`, { shipping_address: next === 'drop' ? null : next }, 'return=minimal')
+        }
+        if (page.length < 1000) break
+      }
 
       // ── Step 5: personal rows keyed by customer ──────────────────
       // saved_addresses (table), wishlist and abandoned carts (name/email/phone snapshots).
@@ -363,7 +415,7 @@ export async function DELETE(req: NextRequest) {
     const successMsg = (userEmail
       ? `Account deleted. A confirmation has been sent to ${userEmail}. `
       : 'Account deleted successfully. ')
-      + 'Your personal data has been erased. Invoices and order records of completed orders (including the recipient name and delivery address printed on them) are retained for the period GST and tax law require.'
+      + 'Your personal data has been erased. Retained on completed orders: only what a GST invoice needs (recipient name, delivery address and, for business orders, GSTIN) for up to 6 years, as required by GST law; your phone number and e-mail are not kept on those orders.'
     const res = clearAuthCookies(
       ok({ success: true, message: successMsg }) as NextResponse
     )

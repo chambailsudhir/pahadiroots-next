@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getInitials, formatCurrency } from '@/lib/account/utils'
 import { type Profile, type AuthUser } from '../hooks/useAuth'
 import styles from '../styles/account.module.css'
+import { ACCOUNT_PANEL_ID, sidebarTabId, onTabKeyDown } from './tabNav'
 
 export type Tab = 'orders' | 'addresses' | 'profile' | 'password' | 'notifications' | 'privacy' | 'loyalty'
 
@@ -83,10 +84,17 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
       )}
 
       <div className={styles.sbNav}>
+        <div role="tablist" aria-label="Account sections" aria-orientation="vertical">
         {NAV.map(it => (
           <button
             key={it.key}
             type="button"
+            role="tab"
+            id={sidebarTabId(it.key)}
+            aria-selected={tab === it.key}
+            aria-controls={ACCOUNT_PANEL_ID}
+            tabIndex={tab === it.key ? 0 : -1}
+            onKeyDown={e => onTabKeyDown(e, NAV.map(n => n.key), it.key, 'vertical', k => { setTab(k); if (k === 'orders') onOrdersClick() })}
             className={[
               styles.sbItem,
               tab === it.key ? styles.sbItemActive : '',
@@ -94,7 +102,6 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
               it.key === 'loyalty'  ? styles.sbLoyalty  : '',
             ].filter(Boolean).join(' ')}
             onClick={() => { setTab(it.key); if (it.key === 'orders') onOrdersClick() }}
-            aria-current={tab === it.key ? 'page' : undefined}
           >
             <span className={styles.sbIcon}>{it.icon}</span>
             <span className={styles.sbLabel}>{it.label}</span>
@@ -105,6 +112,7 @@ export default function Sidebar({ tab, setTab, profile, authUser, stats, onLogou
             ) : null}
           </button>
         ))}
+        </div>
         <div className={styles.sbDiv} />
         <Link prefetch={false} href="/wishlist" className={`${styles.sbItem} ${styles.sbWishlist}`}>
           <span className={styles.sbIcon}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>

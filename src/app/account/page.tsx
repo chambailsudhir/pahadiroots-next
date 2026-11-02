@@ -13,6 +13,7 @@ import { useOrders }     from './hooks/useOrders'
 import { useProfile }    from './hooks/useProfile'
 import { useToast }      from './hooks/useToast'
 import Sidebar           from './_components/Sidebar'
+import { ACCOUNT_PANEL_ID, sidebarTabId, mobileTabId, onTabKeyDown } from './_components/tabNav'
 import type { Tab }      from './_components/Sidebar'
 import OrdersSection     from './_sections/OrdersSection'
 import AddressSection    from './_sections/AddressSection'
@@ -94,6 +95,11 @@ function AccountPageInner() {
   // AUDIT E1-5: the persisted user store is rehydrated in a setTimeout(0) after mount (providers.tsx). init() reads
   // the store user, so running it before hydration made a logged-in user flash "Welcome Back / Sign In" as a guest.
   const storeHydrated = useUserStore(selectHasHydrated)
+  // Keep the selected tab of the horizontally scrolling mobile bar in view (deep links like ?tab=privacy).
+  useEffect(() => {
+    document.getElementById(mobileTabId(tab))?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+  }, [tab])
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (storeHydrated) auth.init() }, [storeHydrated, auth.init])
 
@@ -200,6 +206,8 @@ function AccountPageInner() {
     { key: 'privacy',       label: 'Privacy'   },
   ]
 
+  const selectTab = (k: Tab) => { navigateTo(k); if (k === 'orders' && !orders.hasFetched) orders.fetchOrders() }
+
   const userEmail = auth.authUser?.email || auth.profile?.email || ''
 
   return (
@@ -223,7 +231,7 @@ function AccountPageInner() {
           onOrdersClick={() => { if (!orders.hasFetched) orders.fetchOrders() }}
         />
 
-        <div className={styles.mainPanel}>
+        <div className={styles.mainPanel} role="tabpanel" id={ACCOUNT_PANEL_ID} aria-labelledby={sidebarTabId(tab)}>
           {tab === 'orders'        && <OrdersSection   orders={orders} showToast={showToast} />}
           {tab === 'loyalty'       && <LoyaltySection  showToast={showToast} markExpired={auth.markExpired} />}
           {tab === 'addresses'     && <AddressSection  authProfile={auth.profile} profile={profile} savedAddrs={savedAddrs} onEditAddress={() => navigateTo('profile')} />}
@@ -244,17 +252,22 @@ function AccountPageInner() {
       {/* Mobile bottom nav */}
       <nav aria-label="Account mobile navigation" className={styles.mobTabs}>
         <div className={styles.mobTabList}>
-          {/* ACC-017: a tablist may only contain tabs — the Wishlist LINK used to sit inside it (axe: aria-required-children).
-              `display: contents` keeps the flex layout of the bar unchanged. */}
-          <div role="tablist" aria-label="Account sections" style={{ display: 'contents' }}>
+          {/* The tablist holds tabs only (the Wishlist LINK navigates elsewhere, so it sits beside it). It is the
+              horizontally scrolling flex container itself — no `display: contents` wrapper, which loses roles in some browsers. */}
+          <div role="tablist" aria-label="Account sections" aria-orientation="horizontal" className={styles.mobTabScroll}>
           {MOB_TABS.map(it => (
             <button
               key={it.key}
+              type="button"
               role="tab"
+              id={mobileTabId(it.key)}
               aria-selected={tab === it.key}
+              aria-controls={ACCOUNT_PANEL_ID}
+              tabIndex={tab === it.key ? 0 : -1}
               aria-label={it.label}
               className={`${styles.mobTab}${tab === it.key ? ' ' + styles.mobTabActive : ''}`}
-              onClick={() => { navigateTo(it.key); if (it.key === 'orders' && !orders.hasFetched) orders.fetchOrders() }}
+              onClick={() => selectTab(it.key)}
+              onKeyDown={e => onTabKeyDown(e, MOB_TABS.map(t => t.key), it.key, 'horizontal', selectTab)}
             >
               <span className={styles.mtIcon}>{NAV_ICONS[it.key]}</span>
               {it.label}
