@@ -49,6 +49,8 @@ const STRIPE: Record<string, string> = {
   'oc-stripe-return_rejected': styles.ocStripeReturn,
 }
 
+const NO_INVOICE_STATUSES = ['cancelled', 'pending', 'pending_payment', 'payment_failed']
+
 interface Props {
   order:         Order
   canReturn:     (o: Order) => boolean
@@ -165,9 +167,13 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
             <Link prefetch={false} href={`/account/orders/${o.id}`} className={`${styles.actionBtn} ${styles.actionView}`}>
               View Details
             </Link>
-            <Link href={`/api/orders/${o.id}/invoice`} target="_blank" rel="noopener noreferrer" className={`${styles.actionBtn} ${styles.actionInvoice}`}>
-              Invoice
-            </Link>
+            {/* Plain anchor (not <Link>): Next would prefetch every in-viewport card's authenticated, DB-backed
+                invoice route. No invoice exists for orders that never completed. */}
+            {!NO_INVOICE_STATUSES.includes(ds) && (
+              <a href={`/api/orders/${o.id}/invoice`} target="_blank" rel="noopener noreferrer" className={`${styles.actionBtn} ${styles.actionInvoice}`}>
+                Invoice
+              </a>
+            )}
             {canReturn(o) && (
               <button className={`${styles.actionBtn} ${styles.actionReturn}`} onClick={e => onReturnClick(o.order_number || String(o.id), e.currentTarget)}>
                 Return

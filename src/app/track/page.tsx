@@ -3,24 +3,26 @@
 import { ga4AccountAction } from '@/lib/analytics/ga4'
 import { useState } from 'react'
 import { formatDate } from '@/lib/utils'
-import type { OrderStatus } from '@/types'
 import Icon from '@/components/ui/Icon'
 
-const STATUS_STEPS: { status: OrderStatus; label: string; icon: string }[] = [
+// 'processing' is a real order_status_enum value that sits between confirmed and packed (not in the OrderStatus type).
+const STATUS_STEPS: { status: string; label: string; icon: string }[] = [
   { status: 'confirmed',        label: 'Order Confirmed',    icon: '✅' },
+  { status: 'processing',       label: 'Processing',         icon: '⚙️' },
   { status: 'packed',           label: 'Packed',             icon: '📦' },
   { status: 'shipped',          label: 'Shipped',            icon: '🚛' },
   { status: 'out_for_delivery', label: 'Out for Delivery',   icon: '🏍️' },
   { status: 'delivered',        label: 'Delivered',          icon: '🎉' },
 ]
 
-const STATUS_INDEX: Partial<Record<OrderStatus, number>> = {
+const STATUS_INDEX: Record<string, number> = {
   pending_payment:  -1,
   confirmed:         0,
-  packed:            1,
-  shipped:           2,
-  out_for_delivery:  3,
-  delivered:         4,
+  processing:        1,
+  packed:            2,
+  shipped:           3,
+  out_for_delivery:  4,
+  delivered:         5,
 }
 
 interface TrackResult {
@@ -78,7 +80,7 @@ export default function TrackPage() {
     }
   }
 
-  const currentStep = result ? (STATUS_INDEX[result.order_status as OrderStatus] ?? -1) : -1
+  const currentStep = result ? (STATUS_INDEX[result.order_status] ?? -1) : -1
 
   return (
     <div className="max-w-xl mx-auto px-4 py-12">

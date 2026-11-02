@@ -11,6 +11,8 @@ import { validate as validators } from '@/lib/account/validation'
 
 type AuthTab = 'email' | 'signup'
 
+const UNAVAILABLE_MSG = 'Service temporarily unavailable, please try again'
+
 async function callAuth(action: string, body: Record<string, unknown> = {}, token?: string | null) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = 'Bearer ' + token
@@ -19,8 +21,11 @@ async function callAuth(action: string, body: Record<string, unknown> = {}, toke
     headers,
     body: JSON.stringify({ action, ...body }),
   })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Auth error')
+  // A 502/504 or an HTML error page is not JSON — never surface the parser's message to the customer.
+  let parsed = true
+  const data = await res.json().catch(() => { parsed = false; return {} }) as Record<string, any>
+  if (!res.ok) throw new Error(data.error || (parsed ? 'Auth error' : UNAVAILABLE_MSG))
+  if (!parsed) throw new Error(UNAVAILABLE_MSG)
   return data
 }
 
@@ -75,15 +80,41 @@ export default function AuthModal() {
     setPrevIsAuthOpen(isAuthOpen)
     if (isAuthOpen) {
       setError(''); setSuccess(''); setLoading(false)
+    } else {
+      // Do not keep the typed password in memory while the dialog is closed.
+      setPass(''); setShowPass(false)
     }
   }
 
   // Focusing the input is a genuine external-system side effect (the DOM),
   // so this still correctly belongs in an effect.
   useEffect(() => {
-    if (isAuthOpen) {
-      const t = setTimeout(() => emailRef.current?.focus(), 100)
-      return () => clearTimeout(t)
+    if (!isAuthOpen) return
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // The email input exists only on the login tab: fall back to the first field of whichever view is open.
+    const t = setTimeout(() => {
+      const target = emailRef.current
+        ?? modalRef.current?.querySelector<HTMLElement>('input:not([disabled])')
+        ?? modalRef.current
+      target?.focus()
+    }, 100)
+
+    // Make everything outside the dialog inert (screen-reader and keyboard users cannot reach the page behind it).
+    const inerted: Element[] = []
+    let node: Element | null = modalRef.current?.parentElement ?? null
+    while (node && node !== document.body && node.parentElement) {
+      const keep: Element = node
+      for (const sib of Array.from(node.parentElement.children)) {
+        if (sib === keep || sib.tagName === 'SCRIPT' || sib.tagName === 'STYLE' || sib.hasAttribute('inert')) continue
+        sib.setAttribute('inert', ''); inerted.push(sib)
+      }
+      node = node.parentElement
+    }
+
+    return () => {
+      clearTimeout(t)
+      inerted.forEach(el => el.removeAttribute('inert'))
+      if (opener && opener.isConnected) opener.focus()
     }
   }, [isAuthOpen])
 
@@ -118,6 +149,8 @@ export default function AuthModal() {
 
   if (!isAuthOpen) return null
 
+  function switchTab(t: AuthTab) { setTab(t); setError(''); setSuccess('') }
+
   // ── Validation helpers ──────────────────────────────────────────────
   function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e.trim()) }
   function isValidPhone(p: string) { return /^[6-9]\d{9}$/.test(p.replace(/\D/g,'')) }
@@ -129,6 +162,7 @@ export default function AuthModal() {
     if (!isValidEmail(em)) { setError('Please enter a valid email address (e.g. you@example.com)'); return }
     if (!pass)       { setError('Please enter your password'); return }
     setLoading(true); setError(''); setSuccess('')
+    let reloading = false
     try {
       const data = await callAuth('email_login', { email: em, password: pass })
       ga4Login('email')
@@ -158,6 +192,7 @@ export default function AuthModal() {
       prefetchProfileToCache()
 
       setSuccess('✅ Welcome back!')
+      reloading = true
       setTimeout(() => { closeAuth(); window.location.reload() }, 700)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : ''
@@ -167,7 +202,8 @@ export default function AuthModal() {
         setError(msg || 'Login failed. Please try again.')
       }
     }
-    finally { setLoading(false) }
+    // On success keep the button disabled until the page reloads (no double submit during the 700 ms delay).
+    finally { if (!reloading) setLoading(false) }
   }
 
   async function handleSignup(e: React.FormEvent) {
@@ -210,9 +246,9 @@ export default function AuthModal() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ action: 'google_oauth' }),
       })
-      const data = await res.json() as { url?: string; error?: string }
-      if (data.url) { window.location.href = data.url; return }
-      setError(data.error || 'Google login unavailable')
+      const data = await res.json().catch(() => null) as { url?: string; error?: string } | null
+      if (data?.url) { window.location.href = data.url; return }
+      setError(data?.error || (data ? 'Google login unavailable' : UNAVAILABLE_MSG))
     } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Google login failed') }
     setLoading(false)
   }
@@ -228,7 +264,7 @@ export default function AuthModal() {
 
   return (
     <div className="am-ov" onClick={e => e.target === e.currentTarget && closeAuth()} role="presentation">
-      <div className="am-box" ref={modalRef} role="dialog" aria-modal="true" aria-label={
+      <div className="am-box" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={
         // BUG FIX (P3): this used to be the fixed string "Sign in to 5
         // HimVeda by Pahadi Roots" regardless of whether the modal was showing
         // Login, Sign Up, or Reset Password — mislabeled for screen
@@ -263,8 +299,8 @@ export default function AuthModal() {
         ) : (
           <>
             <div className="am-tabs" role="tablist" aria-label="Sign in or create an account">
-              <button role="tab" aria-selected={tab === 'email'} className={`am-tab${tab === 'email' ? ' active' : ''}`} onClick={() => { setTab('email'); setError('') }}>✉️ Email</button>
-              <button role="tab" aria-selected={tab === 'signup'} className={`am-tab${tab === 'signup' ? ' active' : ''}`} onClick={() => { setTab('signup'); setError('') }}>Sign Up</button>
+              <button role="tab" aria-selected={tab === 'email'} className={`am-tab${tab === 'email' ? ' active' : ''}`} onClick={() => switchTab('email')}>✉️ Email</button>
+              <button role="tab" aria-selected={tab === 'signup'} className={`am-tab${tab === 'signup' ? ' active' : ''}`} onClick={() => switchTab('signup')}>Sign Up</button>
             </div>
 
             <div className="am-body">
@@ -297,7 +333,7 @@ export default function AuthModal() {
                     {error   && <div className="am-err" role="alert">{error}</div>}
                     {success && <div className="am-success" role="status">{success}</div>}
                     <button className="am-submit" disabled={loading}>{loading ? 'Logging in…' : 'Login'}</button>
-                    <p className="am-switch">Don&apos;t have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('signup'); setError('') }}>Sign Up</button></p>
+                    <p className="am-switch">Don&apos;t have an account? <button type="button" className="am-switch-btn" onClick={() => switchTab('signup')}>Sign Up</button></p>
                   </form>
                 : <form onSubmit={handleSignup}>
                     <div className="am-greeting">Create Account 🌿</div>
@@ -340,7 +376,7 @@ export default function AuthModal() {
                       <Link href="/policies/privacy" onClick={closeAuth} style={{ textDecoration: 'underline' }}>Privacy Policy</Link>.
                       We only send promotional e-mails if you opt in.
                     </p>
-                    <p className="am-switch">Already have an account? <button type="button" className="am-switch-btn" onClick={() => { setTab('email'); setError('') }}>Login</button></p>
+                    <p className="am-switch">Already have an account? <button type="button" className="am-switch-btn" onClick={() => switchTab('email')}>Login</button></p>
                   </form>}
 
               {/* Quick links.
@@ -376,6 +412,7 @@ export default function AuthModal() {
           .am-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:stretch;justify-content:flex-end;backdrop-filter:blur(2px)}
           .am-box{background:#fff;width:100%;max-width:400px;overflow-y:auto;position:relative;box-shadow:-8px 0 40px rgba(0,0,0,.2);animation:am-slide .28s cubic-bezier(.25,.46,.45,.94)}
           @keyframes am-slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
+          .am-box:focus{outline:none}
           @media(max-width:440px){.am-box{max-width:100%}}
           .am-close{position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;z-index:2;transition:background .2s}
           .am-close:hover{background:rgba(255,255,255,.35)}
@@ -394,10 +431,10 @@ export default function AuthModal() {
           .am-google:hover{border-color:#1a3a1e;background:#f9fdf9}
           .am-divider{text-align:center;position:relative;margin:14px 0}
           .am-divider::before{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:#eee}
-          .am-divider span{background:#fff;padding:0 12px;font-size:11px;color:#bbb;position:relative;font-weight:600}
+          .am-divider span{background:#fff;padding:0 12px;font-size:11px;color:#6b6b6b;position:relative;font-weight:600}
           .am-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
           .am-inp-err{border-color:#e74c3c!important;background:#fff9f9}
-          .am-field-err{font-size:11px;color:#e74c3c;font-weight:700;margin-top:2px}
+          .am-field-err{font-size:11px;color:#c0392b;font-weight:700;margin-top:2px}
           .am-lbl{font-size:10px;font-weight:800;color:#666666;text-transform:uppercase;letter-spacing:.5px}
           .am-inp{padding:11px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:14px;font-family:inherit;color:#1a1a1a;transition:border-color .2s;outline:none;width:100%;box-sizing:border-box}
           .am-inp:focus{border-color:#1a3a1e}
