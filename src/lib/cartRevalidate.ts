@@ -7,6 +7,7 @@
 // so a validation outage must never block a customer from checking out.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCartStore } from '@/store/cartStore'
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import { describeCartChanges, type CartChange, type LiveLineDTO } from '@/lib/cartReconcile'
 
 export interface RevalidationResult {
@@ -23,7 +24,7 @@ export async function revalidateCart(opts: { signal?: AbortSignal } = {}): Promi
     const res = await fetch('/api/v1/cart/validate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ items: items.map(i => ({ productId: String(i.productId), variantId: String(i.variantId), qty: i.qty })) }),
+      body:    JSON.stringify({ items: items.map(i => ({ productId: String(i.productId), variantId: String(i.variantId), qty: Math.min(i.qty, MAX_LINE_QTY) })) }),
       signal:  opts.signal,
     })
     if (!res.ok) return { ok: false, changes: [], messages: [] }

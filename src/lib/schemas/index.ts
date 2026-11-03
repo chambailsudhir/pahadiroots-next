@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 
 // Strict CSP on /checkout and /account forbids eval. Zod 4 probes `Function("")` at first use to decide whether it may
 // JIT-compile parsers; the probe itself is reported as a CSP violation. jitless skips the probe (and the JIT).
@@ -46,7 +47,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/
 export const orderItemSchema = z.object({
   productId:  z.string().regex(SAFE_ID, 'Invalid product id'),
   variantId:  z.string().regex(SAFE_ID, 'Invalid variant id'),
-  qty:        z.number().int().min(1).max(50),
+  qty:        z.number().int().min(1).max(MAX_LINE_QTY),
 })
 
 export const createOrderSchema = z.object({

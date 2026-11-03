@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { CartItem, AppliedCoupon } from '@/types'
 import { generateUUID } from '@/lib/utils'
@@ -75,7 +76,7 @@ export const useCartStore = create<CartStore>()(
             // The LOWER of the two: stock may have dropped since the line was first added (the PDP passes the live figure), and a
             // later add can never raise the cap.
             const known = [existing.maxQty, newItem.maxQty].filter((n): n is number => typeof n === 'number')
-            const cap = known.length ? Math.min(...known) : 99
+            const cap = Math.min(known.length ? Math.min(...known) : MAX_LINE_QTY, MAX_LINE_QTY)
             return {
               idempotencyKey: state.idempotencyKey || generateUUID(),
               items: state.items.map(i =>
@@ -154,7 +155,7 @@ export const useCartStore = create<CartStore>()(
         set(state => ({
           items: state.items.map(i =>
             i.variantId === variantId
-              ? { ...i, qty: Math.min(qty, i.maxQty ?? 99) }
+              ? { ...i, qty: Math.min(qty, i.maxQty ?? MAX_LINE_QTY, MAX_LINE_QTY) }
               : i
           ),
         }))
@@ -379,6 +380,8 @@ export const useCartStore = create<CartStore>()(
       // pre-hydration empty cart. Runs even if rehydrate() errors, so the UI
       // never gets stuck on a skeleton forever.
       onRehydrateStorage: () => () => {
+        // A persisted cart from before the limit (or edited by hand) may hold more of a line than an order can: clamp it.
+        useCartStore.setState(st => st.items.some(i => i.qty > MAX_LINE_QTY) ? { items: st.items.map(i => (i.qty > MAX_LINE_QTY ? { ...i, qty: MAX_LINE_QTY } : i)) } : {})
         useCartStore.getState().setHasHydrated(true)
       },
     }
