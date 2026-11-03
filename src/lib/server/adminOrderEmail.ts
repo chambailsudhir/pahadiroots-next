@@ -15,7 +15,6 @@ import { esc } from '@/lib/server/htmlEscape'
 import { brandHeaderRow } from '@/lib/server/emailShell'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-const SITE = 'https://www.pahadiroots.com'
 const ADMIN_URL = 'https://pahadi-admin.vercel.app'
 
 export type AdminOrderEmailKind = 'cod' | 'paid' | 'cancelled'
@@ -160,10 +159,9 @@ export function buildAdminOrderEmail(o: AdminOrderEmailInput): string {
   ${section('Order details', meta)}
   <tr><td align="center" bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 28px 26px;border-left:1px solid #eeeeee;border-right:1px solid #eeeeee">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td align="center" bgcolor="#2d6a4f" style="background-color:#2d6a4f;border-radius:24px"><a href="${ADMIN_URL}" target="_blank" style="display:inline-block;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-weight:700;font-size:14px;padding:12px 26px;border-radius:24px;border:1px solid #2d6a4f">Open admin</a></td>
+      <td align="center" bgcolor="#2d6a4f" style="background-color:#2d6a4f;border-radius:24px"><a href="${ADMIN_URL}/admin/orders?q=${encodeURIComponent(o.orderNumber)}&amp;days=365" target="_blank" style="display:inline-block;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-weight:700;font-size:14px;padding:12px 26px;border-radius:24px;border:1px solid #2d6a4f">Open order in admin</a></td>
       ${phone ? `<td width="10"></td><td align="center" bgcolor="#ffffff" style="background-color:#ffffff;border-radius:24px;border:1px solid #2d6a4f"><a href="https://wa.me/91${esc(phone)}" target="_blank" style="display:inline-block;color:#2d6a4f;text-decoration:none;font-family:Arial,sans-serif;font-weight:700;font-size:14px;padding:11px 24px">WhatsApp customer</a></td>` : ''}
     </tr></table>
-    <div style="margin-top:12px;font-size:12px;color:#8a8a8a">Order page: <a href="${SITE}/track?order=${encodeURIComponent(o.orderNumber)}" style="color:#8a8a8a">${SITE}/track?order=${esc(o.orderNumber)}</a></div>
   </td></tr>
   <tr><td align="center" bgcolor="#1a3a1e" style="background-color:#1a3a1e;border-radius:0 0 16px 16px;padding:14px 28px;color:#b9c7bb;font-size:12px">Shop-owner notification &middot; HimVeda by Pahadi Roots</td></tr>
 </table>
