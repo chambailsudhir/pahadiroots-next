@@ -554,6 +554,15 @@ export async function createOrder(
     }
   }
 
+  // 1a'. Release this signed-in customer's own abandoned online orders (see releaseOwnAbandonedOnlineOrders) BEFORE coupon / coin /
+  //      stock checks, so a retry after closing the payment modal is not blocked by their own earlier attempt. Best effort.
+  if (input.authenticatedCustomerId) {
+    try {
+      const { releaseOwnAbandonedOnlineOrders } = await import('@/lib/server/pendingOrders')
+      await releaseOwnAbandonedOnlineOrders(db, input.authenticatedCustomerId)
+    } catch { /* never blocks order creation */ }
+  }
+
   // 1b. I3 PRE-FLIGHT (before ANY stock is touched): a line whose variantId equals its
   //     productId means "this product has no variants" and is priced from the products
   //     table. The server used to take the client's word for it. A client could therefore

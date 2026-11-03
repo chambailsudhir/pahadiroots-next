@@ -41,7 +41,7 @@ vi.mock('@/lib/server/orderPayments', () => ({
   runPaidSideEffects:    (...a: unknown[]) => h.sideEffects(...a),
 }))
 
-import { expireStalePendingOrders, resolveExpiryMinutes } from '@/lib/server/pendingOrders'
+import { expireStalePendingOrders, resolveExpiryMinutes, releaseOwnAbandonedOnlineOrders } from '@/lib/server/pendingOrders'
 
 const NOW = new Date('2026-10-04T12:00:00Z')
 const minsAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString()
@@ -329,5 +329,47 @@ describe('expireStalePendingOrders — paging and time budget (Oct 2026 audit)',
     const { db } = makeDb({ candidates: [], pages })
     const stats = await expireStalePendingOrders(db, { now: NOW, olderThanMinutes: 30, batch: 2 })
     expect(stats).toMatchObject({ scanned: 2, skipped: 2, expired: 0 })
+  })
+})
+
+
+describe('releaseOwnAbandonedOnlineOrders (round-2 audit: own abandoned Razorpay order blocked the customer\'s retry)', () => {
+  it('releases the customer\'s own unpaid online order (stock restored once) and only looks at THEIR pending Razorpay orders older than the grace period', async () => {
+    h.fetchOrderPayments.mockResolvedValue([rzpPay({ status: 'failed' })])
+    const { db, log } = makeDb({ candidates: [order()], items: [{ product_id: 'p1', variant_id: 'v1', quantity: 1 }] })
+    const n = await releaseOwnAbandonedOnlineOrders(db, 'c1', { now: NOW, minAgeSeconds: 120 })
+    expect(n).toBe(1)
+    const sel = log.find(l => l.table === 'orders' && l.op === 'select')!
+    expect(sel.filters).toContainEqual(['customer_id', 'c1'])
+    expect(sel.filters).toContainEqual(['payment_method', 'razorpay'])
+    expect(sel.filters).toContainEqual(['payment_status', 'pending'])
+    expect(sel.filters).toContainEqual(['order_status', 'pending'])
+    expect(sel.filters).toContainEqual(['created_at<', new Date(NOW.getTime() - 120_000).toISOString()])
+    expect(h.restoreReporting).toHaveBeenCalledTimes(1)
+  })
+
+  it('NEVER releases an order that was actually paid: it is confirmed instead', async () => {
+    h.fetchOrderPayments.mockResolvedValue([rzpPay({ status: 'captured' })])
+    const { db, log } = makeDb({ candidates: [order()] })
+    const n = await releaseOwnAbandonedOnlineOrders(db, 'c1', { now: NOW })
+    expect(n).toBe(0)
+    expect(releaseUpdates(log)).toHaveLength(0)
+    expect(h.restoreReporting).not.toHaveBeenCalled()
+  })
+
+  it('leaves an order with a payment in flight alone, and never throws when Razorpay is unreachable', async () => {
+    h.fetchOrderPayments.mockResolvedValueOnce([rzpPay({ status: 'authorized' })])
+    const a = makeDb({ candidates: [order()] })
+    expect(await releaseOwnAbandonedOnlineOrders(a.db, 'c1', { now: NOW })).toBe(0)
+    expect(releaseUpdates(a.log)).toHaveLength(0)
+
+    h.fetchOrderPayments.mockRejectedValueOnce(new Error('rzp down'))
+    const b = makeDb({ candidates: [order()] })
+    expect(await releaseOwnAbandonedOnlineOrders(b.db, 'c1', { now: NOW })).toBe(0)
+    expect(releaseUpdates(b.log)).toHaveLength(0)
+  })
+
+  it('returns 0 (never throws) when the lookup itself fails', async () => {
+    expect(await releaseOwnAbandonedOnlineOrders({ from: () => { throw new Error('db down') } } as any, 'c1')).toBe(0)
   })
 })

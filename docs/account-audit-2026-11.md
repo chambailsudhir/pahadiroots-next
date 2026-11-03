@@ -285,3 +285,10 @@ transaction and idempotent). Apply it *before* deploying: until then `submit_rev
 - Auth: refresh-token cookies dropped on error paths (17 routes), account lockout design (stranger lockout), sign-up verification link never consumed, store user-id flip (auth uuid vs customers.id), CGNAT/IPv6 rate-limit buckets, strict-CSP scope.
 - Platform: proxy per-navigation DB reads (no single-flight/failure TTL), `revalidate` invalidation too wide with `expire: 0`, listing pages dynamic (searchParams), YouTube iframe blocked by CSP `frame-src`, public search-catalog / RelatedCard blocklist instead of allow-list.
 - Phone verification: claim outcome not shown to the customer, feature flag fails open on read error, `/status` polling unthrottled.
+
+### 8.1 Follow-ups shipped after round 2
+- Refresh-token cookies are queued by `tryRefresh` itself, so error responses also carry them (verified on production: a 400 response set both cookies).
+- Razorpay webhook: 30 s budget, INR-only captures, and a retry re-drives the paid side effects when the `payment_verified` marker is missing (loyalty RPCs verified idempotent per order in the live DB).
+- Failed-login lockout is per (account + network) with a 100/15 min per-account backstop; IPv6 collapses to /64 (`clientIpKey`).
+- Account sidebar scrolls inside itself (verified on production at 1366x650).
+- A signed-in customer's own abandoned online order (modal closed, then new key) is released before the new order's coupon / coin / stock checks (`releaseOwnAbandonedOnlineOrders`; Razorpay is asked first, so paid or in-flight orders are never released). Guests are not covered (no customer id before the order is created) — they still wait for the sweep.
