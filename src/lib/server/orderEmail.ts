@@ -10,9 +10,9 @@
 // mobile stack. Every dynamic value is HTML-escaped here — callers pass raw values.
 // ─────────────────────────────────────────────────────────────────────────────
 import { esc } from '@/lib/server/htmlEscape'
-import { brandHeaderRow } from '@/lib/server/emailShell'
+import { brandHeaderRow, emailSiteUrl } from '@/lib/server/emailShell'
 
-const SITE = 'https://www.pahadiroots.com'
+const SITE = emailSiteUrl()
 const WHATSAPP = 'https://wa.me/919899984895'
 
 export interface OrderEmailLine {

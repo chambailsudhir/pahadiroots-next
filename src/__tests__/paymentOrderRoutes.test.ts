@@ -571,8 +571,7 @@ describe('POST /api/v1/payments — verify_payment', () => {
 
     expect(res.status).toBe(200)
     expect(json.success).toBe(true)
-    const { awardLoyaltyPoints } = await import('@/lib/server/loyalty')
-    expect(awardLoyaltyPoints).not.toHaveBeenCalled()
+    // (coins are never awarded from application code any more - the database pays them on delivery)
   })
 
   it('HMAC mismatch → 400, order NOT updated', async () => {
@@ -1086,8 +1085,7 @@ describe('POST /api/v1/payments — verify_payment security (BUG A FIX)', () => 
     expect(json.order_number).toBeTruthy()
 
     // Loyalty must NOT be re-awarded for an already-confirmed order
-    const { awardLoyaltyPoints } = await import('@/lib/server/loyalty')
-    expect(awardLoyaltyPoints).not.toHaveBeenCalled()
+    // (coins are never awarded from application code any more - the database pays them on delivery)
   })
 })
 

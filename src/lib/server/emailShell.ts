@@ -7,7 +7,16 @@
 import 'server-only'
 import { esc } from '@/lib/server/htmlEscape'
 
-const SITE_URL = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+/**
+ * ONE place for "our public origin" in e-mails (links, logo). A trailing slash would give `https://x//email-logo.png`; a non-https or
+ * localhost value (a preview build, a mis-set env) would give a broken / blocked image in the customer's inbox - so only a clean https
+ * origin is accepted, everything else falls back to the canonical production host.
+ */
+export function emailSiteUrl(): string {
+  const raw = (process.env.NEXT_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '')
+  return /^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(raw) && !/localhost|127\.0\.0\.1/i.test(raw) ? raw : 'https://www.pahadiroots.com'
+}
+const SITE_URL = emailSiteUrl
 export const SUPPORT_WHATSAPP_URL = 'https://wa.me/919899984895'
 
 /**
@@ -20,7 +29,7 @@ export const SUPPORT_WHATSAPP_URL = 'https://wa.me/919899984895'
  * band must be LIGHT. Outlook blocks images until "show images": the alt text is styled (Georgia, dark green) so the brand name is still
  * readable then. `bgcolor` + `background-color` (no shorthand / gradient) so it also renders in Outlook.
  */
-const EMAIL_SITE = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+const EMAIL_SITE = emailSiteUrl
 export const BRAND_LOGO_PATH = '/email-logo.png'
 export function brandHeaderRow(): string {
   return `<tr><td align="center" bgcolor="#fffdf9" style="background-color:#fffdf9;border-radius:18px 18px 0 0;padding:22px 28px 14px;border-bottom:3px solid #c8962a">
@@ -35,7 +44,7 @@ export function brandedEmail(opts: { heading: string; bodyHtml: string; cta?: { 
   const cta = opts.cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0"><tr><td align="center" bgcolor="#2d6a4f" style="background-color:#2d6a4f;border-radius:24px"><a href="${esc(opts.cta.href)}" target="_blank" style="display:inline-block;background-color:#2d6a4f;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-weight:700;font-size:15px;line-height:20px;padding:13px 28px;border-radius:24px;border:1px solid #2d6a4f">${esc(opts.cta.label)}</a></td></tr></table>`
     : ''
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"></head>
 <body style="margin:0;padding:0;background-color:#f7f3ee;font-family:'Helvetica Neue',Arial,sans-serif">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f3ee" style="background-color:#f7f3ee"><tr><td align="center" style="padding:24px 16px">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">

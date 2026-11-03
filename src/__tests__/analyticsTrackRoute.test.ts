@@ -41,9 +41,9 @@ describe('analytics track route hardening', () => {
     expect(sbAdmin).not.toHaveBeenCalled()
   })
 
-  it('uses the shared limiter (240/min per IP) and answers 429 when exceeded', async () => {
+  it('uses the shared limiter (60/min per IP, IPv6 as its /64) and answers 429 when exceeded', async () => {
     await call(ev())
-    expect(rateLimit).toHaveBeenCalledWith('mw:rl:analytics_ip:10.2.2.2', 240, 60)
+    expect(rateLimit).toHaveBeenCalledWith('mw:rl:analytics_ip:10.2.2.2', 60, 60)
     rateLimit.mockResolvedValue(false)
     const res = await call(ev())
     expect(res.status).toBe(429)
@@ -78,5 +78,19 @@ describe('analytics track route hardening', () => {
   it('still de-duplicates purchase events by order id even when metadata is later capped', async () => {
     await call(ev({ event_type: 'purchase', metadata: { order_id: 'HV-1', value: 100 } }))
     expect(eventsWritten()![0]).toMatchObject({ dedupe_key: 'purchase:HV-1' })
+  })
+})
+
+describe('round-5 audit: write amplification', () => {
+  it('one request can never cause more than 2 session upserts (each distinct session is a sequential database write)', async () => {
+    const batch = Array.from({ length: 20 }, (_, i) => ev({ session_id: 'sess-number-' + String(i).padStart(16, '0'), visitor_id: 'v' + i }))
+    expect((await call({ events: batch })).status).toBe(200)
+    const sessionWrites = sbAdmin.mock.calls.filter(c => String(c[1]).includes('analytics_sessions'))
+    expect(sessionWrites.length).toBeLessThanOrEqual(2)
+    expect(eventsWritten()!.length).toBeLessThanOrEqual(2)     // events of dropped sessions are not stored either
+  })
+  it('an IPv6 client is bucketed by its /64', async () => {
+    await call(ev(), { 'x-forwarded-for': '2401:4900:1234:5678:aaaa:bbbb:cccc:dddd' })
+    expect(rateLimit).toHaveBeenCalledWith('mw:rl:analytics_ip:2401:4900:1234:5678::/64', 60, 60)
   })
 })

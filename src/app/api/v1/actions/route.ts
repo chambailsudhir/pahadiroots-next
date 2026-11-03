@@ -7,6 +7,7 @@ import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { logger } from '@/lib/logger'
 import { submitVerifiedReview } from '@/lib/server/reviewSubmit'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 // BUG-1 FIX: `isomorphic-dompurify` uses a browser DOM shim that triggers ESM
 // resolution errors in Next.js 14 App Router server routes. The original import
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
   // (sufficient here: these are low-risk, non-financial actions where a small
   // per-replica burst window is acceptable). 10 requests/min per IP covers all
   // legitimate use (a real user doesn't submit the contact form 10 times/min).
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim())   // IPv6 -> its /64
   // BUG FIX (audit C-11): this used the in-process `checkRateLimit` (a Map per serverless instance), so the real limit
   // was 10/min PER INSTANCE and a spread-out flood was never counted. The shared limiter (Upstash KV, DB fallback)
   // counts across all instances like the orders/coupons routes do.

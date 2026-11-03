@@ -166,10 +166,12 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY)
     let errMessage: string | null = null
 
     try {
+      // Constructed INSIDE the try: with RESEND_API_KEY unset the SDK throws "Missing API key", which used to escape after the row was
+      // already claimed ('retrying'), fail the whole cron and leave the row stuck for 15 minutes on every run.
+      const resend = new Resend(process.env.RESEND_API_KEY)
       const { error } = await withTimeout(
         resend.emails.send({
           from:    row.from_address,

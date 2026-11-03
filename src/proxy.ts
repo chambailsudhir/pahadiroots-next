@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
 import { STRICT_CSP_PATH, buildStrictCsp, makeNonce } from '@/lib/strictCsp'
 import { buildCsp } from '@/lib/csp'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 /**
  * middleware.ts — first-layer edge guardrail.
@@ -245,7 +246,7 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
   if (kvUrl && kvToken) {
-    const ip  = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    const ip  = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim())   // IPv6 -> its /64
     const key = `mw:rl:global:${ip}`
 
     try {

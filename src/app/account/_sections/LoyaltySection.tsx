@@ -248,7 +248,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
     <ErrorBoundary section="Loyalty">
     <div className={styles.secRoot}>
       <div className={styles.secTitle} role="heading" aria-level={1}><Icon name="coins" /> Pahadi Coins</div>
-      <p className={styles.secSub}>Earn coins on every order. Redeem for discounts at checkout.</p>
+      <p className={styles.secSub}>Earn coins on every delivered order. Redeem for discounts at checkout.</p>
 
       {/* ── Balance card ──────────────────────────────────────── */}
       <div className={styles.lyBalanceCard}>
@@ -265,7 +265,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          { icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order) },
+          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order) }]),
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },

@@ -41,59 +41,8 @@ async function callLoyaltyRpc(
   })
 }
 
-/** @deprecated Coins are no longer awarded at placement / payment (see lib/loyaltyCoins.ts): the database awards them on delivery. */
-export async function awardLoyaltyPoints(
-  customerId:  string | number,
-  orderId:     string | number,
-  orderTotal:  number,
-  settings:    Record<string, string>,
-  note = 'Earned from order',
-): Promise<void> {
-  if (settings.loyalty_enabled === 'false') return
-  // A blank / malformed setting falls back to the documented default of 1 point per rupee; a negative or
-  // non-finite rate or total never produces a NaN that would be sent to the database as null.
-  const parsed = parseFloat(settings.loyalty_points_per_rupee || '1')
-  const rate   = Number.isFinite(parsed) && parsed >= 0 ? parsed : 1
-  const pts    = Math.floor((Number.isFinite(orderTotal) ? orderTotal : 0) * rate + 1e-9)
-  if (!Number.isFinite(pts) || pts <= 0) return
-  // Nov 2026 audit (#5): never award on an order that was cancelled in the meantime (e.g. the ACC-032
-  // recovery path running after a cancel). Cheap single read; fail-open — the DB function is the backstop.
-  try {
-    const sres = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=eq.${encodeURIComponent(String(orderId))}&select=order_status&limit=1`, {
-      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
-      signal: AbortSignal.timeout(3_000),
-    })
-    if (sres.ok) {
-      const rows = await sres.json()
-      const st = Array.isArray(rows) ? rows[0]?.order_status : undefined
-      if (st === 'cancelled') return
-    }
-  } catch { /* fail-open */ }
-  try {
-    const res = await callLoyaltyRpc('award_loyalty_points', {
-      p_customer_id: String(customerId),
-      p_order_id:    String(orderId),
-      p_points:      pts,
-      p_note:        note,
-    })
-    // fetch() does not throw on HTTP 4xx/5xx — without this check a rejected award was completely silent.
-    // (The database function is idempotent per order, so a replay returns 200 and is not an error.)
-    if (!res.ok) {
-      captureError(new Error(`award_loyalty_points returned HTTP ${res.status}`), {
-        action: 'loyalty.awardLoyaltyPoints', customer_id: String(customerId), order_id: String(orderId), points: pts, alert: true,
-      })
-    }
-  } catch (e) {
-    // BUG FIX 8: alert:true — customer paid but points silently not awarded.
-    captureError(e, {
-      action:      'loyalty.awardLoyaltyPoints',
-      customer_id: String(customerId),
-      order_id:    String(orderId),
-      points:      pts,
-      alert:       true,
-    })
-  }
-}
+// Coins are NOT awarded from application code any more: the database pays them when an order is DELIVERED (trigger
+// trg_award_loyalty_on_delivered, db_migration_v28) and takes them back on return / refund. See lib/loyaltyCoins.ts.
 
 /** Atomically deduct redeemed points. Returns true on success, false on failure. */
 export async function redeemLoyaltyPoints(

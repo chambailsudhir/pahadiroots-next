@@ -10,7 +10,7 @@ export const CART_SETTING_KEYS = [
   'cod_max_value',
   'upi_enabled',
   'loyalty_enabled',
-  'loyalty_points_per_rupee',
+  'loyalty_coins_per_order',
   'loyalty_points_value',
   'loyalty_points_label',
   'loyalty_min_redeem',
