@@ -6,7 +6,7 @@
   "buildCommand": "node scripts/wait-for-db.cjs && next build",
   "outputDirectory": ".next",
   "installCommand": "npm ci",
-  "ignoreCommand": "if [ \"$VERCEL_ENV\" != \"production\" ]; then exit 0; fi; git diff --quiet HEAD^ HEAD -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)src/__tests__' ':(exclude).github'",
+  "ignoreCommand": "if [ \"$VERCEL_ENV\" != \"production\" ]; then exit 0; fi; [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] || exit 1; git cat-file -e \"$VERCEL_GIT_PREVIOUS_SHA\" 2>/dev/null || exit 1; git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)src/__tests__' ':(exclude).github'",
   "functions": {
     "src/app/api/v1/orders/route.ts": {
       "maxDuration": 40

@@ -29,6 +29,7 @@ jobs:
       # server-only code failed the Vercel build while every other check was green). Run the real compile phase; the later
       # page-data phase needs live Supabase and is not part of this check.
       - name: Next.js compile (Turbopack)
+        timeout-minutes: 8
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy
