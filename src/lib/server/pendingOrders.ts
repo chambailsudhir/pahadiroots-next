@@ -141,6 +141,51 @@ export async function expireStalePendingOrders(
   return stats
 }
 
+/**
+ * A signed-in customer starts a NEW order (new idempotency key) while an earlier unpaid ONLINE order of theirs is still pending —
+ * typically they closed the Razorpay modal and then changed payment method / address / coupon / coins. That abandoned order keeps
+ * its stock, coupon claim and held coins until the sweep expires it (30+ min) and then blocks their own retry ("You have already
+ * used this coupon", "Insufficient stock"). Release those orders now, through the SAME single-winner path the sweep uses: Razorpay
+ * is asked first, so an order that was actually paid (or has a payment in flight) is confirmed / left alone, never released.
+ * Only orders older than `minAgeSeconds` are touched, so a second browser tab that is mid-checkout is not pulled out from under
+ * itself. Never throws; returns how many orders were released.
+ */
+export async function releaseOwnAbandonedOnlineOrders(
+  db: Db,
+  customerId: string | number,
+  opts: { minAgeSeconds?: number; max?: number; now?: Date } = {},
+): Promise<number> {
+  const now    = opts.now ?? new Date()
+  const cutoff = new Date(now.getTime() - (opts.minAgeSeconds ?? 120) * 1000).toISOString()
+  try {
+    const { data } = await db
+      .from('orders')
+      .select('id, order_number, payment_id, total_amount, customer_id, loyalty_points_redeemed, created_at')
+      .eq('customer_id', customerId)
+      .eq('payment_method', 'razorpay')
+      .eq('payment_status', 'pending')
+      .eq('order_status', 'pending')
+      .lt('created_at', cutoff)
+      .order('created_at', { ascending: true })
+      .limit(opts.max ?? 3)
+    const rows = (data ?? []) as PendingRow[]
+    if (rows.length === 0) return 0
+    const settings = await getFreshSiteSettings().catch(() => ({} as Record<string, string>))
+    let released = 0
+    for (const order of rows) {
+      try {
+        if (await processOne(db, order, now, settings) === 'expired') released++
+      } catch (e) {
+        captureError(e, { action: 'pendingOrders.release_own.order', order_id: order.id, alert: false })
+      }
+    }
+    return released
+  } catch (e) {
+    captureError(e, { action: 'pendingOrders.release_own', alert: false })
+    return 0
+  }
+}
+
 async function processOne(
   db: Db,
   order: PendingRow,
