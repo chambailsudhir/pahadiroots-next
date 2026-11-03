@@ -9,7 +9,7 @@ import type { PriceSummary } from '@/lib/services/pricingService'
 import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block — was 18KB re-parsed on every render
 import Icon from '@/components/ui/Icon'
 import { useUserStore } from '@/store/userStore'
-import { coinsPerOrder } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue } from '@/lib/loyaltyCoins'
 
 interface CouponHint { code: string; label: string }
 
@@ -83,7 +83,7 @@ const OrderSummary = memo(function OrderSummary({
     const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
     const pointsValue    = parseFloat(settings.loyalty_points_value || '0.25')
     // Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), not a rate on the cart value.
-    const loyaltyPts     = loyaltyEnabled ? coinsPerOrder(settings as unknown as Record<string, string | undefined>) : 0
+    const loyaltyPts     = loyaltyEnabled ? coinsForOrderValue(pricing.total, settings as unknown as Record<string, string | undefined>) : 0
     const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
     const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
     const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)

@@ -53,7 +53,7 @@ describe('buildOrderEmail', () => {
   it('Pahadi Coins are mentioned ONLY when coinsEarned is passed (account holders), never for guests', () => {
     expect(buildOrderEmail({ ...base, coinsEarned: 0 })).not.toContain('Pahadi Coins')
     expect(buildOrderEmail(base)).not.toContain('Pahadi Coins')
-    expect(buildOrderEmail({ ...base, coinsEarned: 15, signedIn: true })).toContain('You can earn up to 15 Pahadi Coins')
+    expect(buildOrderEmail({ ...base, coinsEarned: 15, signedIn: true })).toContain('You will earn 15 Pahadi Coins')
   })
 
   it('invoice hint differs: account holders → My Orders, guests → tracking page / WhatsApp', () => {

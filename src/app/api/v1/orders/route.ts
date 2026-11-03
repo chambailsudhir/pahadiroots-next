@@ -11,7 +11,7 @@ import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, 
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
-import { coinsPerOrder } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue } from '@/lib/loyaltyCoins'
 import { esc } from '@/lib/server/htmlEscape'
 // REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
@@ -364,7 +364,7 @@ export async function POST(req: NextRequest) {
             // One shared, itemised template for COD and online orders (lib/server/orderEmail.ts). Coins are mentioned ONLY for a
             // signed-in customer — a guest has no account to spend them in.
             const coinsEarned = authenticatedCustomerId != null && settings.loyalty_enabled !== 'false'
-              ? coinsPerOrder(settings)   // announced as "you will earn", paid on delivery
+              ? coinsForOrderValue(order.total_amount, settings)   // announced as "up to", paid on delivery
               : 0
             const emailHtml = buildOrderEmail({
               kind: d.payment_method === 'cod' ? 'cod' : 'paid',

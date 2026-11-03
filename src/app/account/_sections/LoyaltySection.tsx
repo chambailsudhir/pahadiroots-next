@@ -38,6 +38,7 @@ interface LoyaltyData {
   max_redeem_pct: number
   earn_per_rupee?: number
   earn_per_order?: number
+  earn_step_rupees?: number
   referral_bonus?: number
   referral_min_order?: number
   referral_hold_days?: number
@@ -51,10 +52,11 @@ export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string 
   return `You and your friend each get ${bonus} bonus coins once your friend's first order of ₹${minOrder.toLocaleString('en-IN')} or more is delivered and ${holdDays} days have passed without a return.`
 }
 
-/** Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), taken back if the order is returned or refunded. */
-export function earnCopy(perOrder: number | undefined): string {
-  const n = typeof perOrder === 'number' && Number.isFinite(perOrder) && perOrder >= 0 ? Math.floor(perOrder) : 5
-  return `Earn up to ${n} ${n === 1 ? 'coin' : 'coins'} on every order once it is delivered (taken back if you return it)`
+/** Owner decision (Nov 2026): 1 coin per ₹`step` of order value, at most `max` per order, paid on DELIVERY, taken back on return / refund. */
+export function earnCopy(max: number | undefined, step?: number): string {
+  const m = typeof max === 'number' && Number.isFinite(max) && max >= 0 ? Math.floor(max) : 5
+  const st = typeof step === 'number' && Number.isFinite(step) && step >= 1 ? Math.floor(step) : 200
+  return `Earn 1 coin for every ₹${st.toLocaleString('en-IN')} of your order, up to ${m} ${m === 1 ? 'coin' : 'coins'} per order, once it is delivered (taken back if you return it)`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -265,7 +267,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order) }]),
+          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order, data.earn_step_rupees) }]),
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },
