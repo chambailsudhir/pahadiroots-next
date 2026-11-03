@@ -52,7 +52,11 @@ export interface OrderEmailInput {
   signedIn?:      boolean
 }
 
-const inr = (n: number | null | undefined): string => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+/** Whole rupees without decimals; any fraction with exactly two (₹266.67, never ₹266.5). */
+const inr = (n: number | null | undefined): string => {
+  const v = Math.round((Number(n) || 0) * 100) / 100
+  return '₹' + v.toLocaleString('en-IN', Number.isInteger(v) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 function absUrl(u: string | null | undefined): string | null {
   if (!u) return null
@@ -105,8 +109,16 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   const row = (label: string, value: string, opts: { color?: string; bold?: boolean } = {}) =>
     `<tr><td style="padding:5px 0;font-size:14px;color:${opts.color || '#4a4338'};${opts.bold ? 'font-weight:700;' : ''}">${label}</td>` +
     `<td align="right" style="padding:5px 0;font-size:14px;color:${opts.color || '#4a4338'};${opts.bold ? 'font-weight:700;' : ''}">${value}</td></tr>`
+  // Subtotal is the SUM OF THE LINES above, so the page adds up. Prices carry paise and the payable total is rounded to a whole rupee:
+  // the stored subtotal is the rounded figure, so a sub-₹1 gap is shown as an explicit "Round off" row (a gap of ₹1 or more is not dressed
+  // up as rounding — the stored subtotal is used as-is).
+  const itemsSum = Math.round(o.items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 0), 0) * 100) / 100
+  const gap = Math.round(((Number(o.subtotal) || 0) - itemsSum) * 100) / 100
+  const showRound = Math.abs(gap) > 0 && Math.abs(gap) < 1
+  const subtotalShown = showRound ? itemsSum : (Number(o.subtotal) || itemsSum)
   const rows = [
-    row('Subtotal', inr(o.subtotal)),
+    row('Subtotal', inr(subtotalShown)),
+    showRound ? row('Round off', (gap > 0 ? '+' : '−') + inr(Math.abs(gap))) : '',
     (o.couponDiscount ?? 0) > 0 ? row('Coupon discount', '−' + inr(o.couponDiscount), { color: '#2d6a4f' }) : '',
     (o.prepaidDiscount ?? 0) > 0 ? row('Prepaid discount', '−' + inr(o.prepaidDiscount), { color: '#2d6a4f' }) : '',
     (o.loyaltyDiscount ?? 0) > 0 ? row('Pahadi Coins redeemed', '−' + inr(o.loyaltyDiscount), { color: '#2d6a4f' }) : '',

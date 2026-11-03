@@ -88,4 +88,18 @@ describe('buildOrderEmail', () => {
     expect(orderEmailSubject('paid', 'PR1')).toMatch(/Payment received.*PR1/)
     expect(orderEmailSubject('cod', 'PR1')).toMatch(/Order confirmed.*PR1/)
   })
+
+  it('prices with paise: Subtotal = sum of lines, explicit Round off row, two decimals (real production case ₹266.67 → ₹267)', () => {
+    const h = buildOrderEmail({ ...base, items: [{ name: 'Honey', qty: 1, price: 266.67 }], subtotal: 267, couponDiscount: 0, shipping: 0, total: 267, gstIncluded: 12.7 })
+    expect(h).toContain('₹266.67')
+    expect(h).toContain('Round off')
+    expect(h).toContain('+₹0.33')
+    expect(h).toContain('₹267')
+  })
+
+  it('a gap of ₹1 or more is not shown as rounding', () => {
+    const h = buildOrderEmail({ ...base, items: [{ name: 'Honey', qty: 1, price: 100 }], subtotal: 105, couponDiscount: 0, shipping: 0, total: 105 })
+    expect(h).not.toContain('Round off')
+    expect(h).toContain('₹105')
+  })
 })
