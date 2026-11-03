@@ -148,7 +148,7 @@ export async function generateMetadata(): Promise<Metadata> {
 //     revalidateTag('store-data') and revalidatePath('/', 'page').
 // 300s matches the root layout window (the effective floor anyway) — it is
 // only the safety net for a missed revalidate call.
-export const revalidate = 300
+export const revalidate = 900   // was 300; a sold-out / restock event and every admin save still refresh it on demand
 
 export default async function HomePage() {
   const [baseSettings, storeData] = await Promise.all([

@@ -292,3 +292,9 @@ transaction and idempotent). Apply it *before* deploying: until then `submit_rev
 - Failed-login lockout is per (account + network) with a 100/15 min per-account backstop; IPv6 collapses to /64 (`clientIpKey`).
 - Account sidebar scrolls inside itself (verified on production at 1366x650).
 - A signed-in customer's own abandoned online order (modal closed, then new key) is released before the new order's coupon / coin / stock checks (`releaseOwnAbandonedOnlineOrders`; Razorpay is asked first, so paid or in-flight orders are never released). Guests are not covered (no customer id before the order is created) — they still wait for the sweep.
+
+### 8.2 Vercel Hobby usage (Nov 2026: deployment storage 9.15/10 GB, ISR writes 161K/200K, active CPU 2h39/4h)
+- Preview deployments disabled on the project (every PR branch push used to build and store a preview); `ignoreCommand` in vercel.json / vercel.pro.json skips production builds for docs-, tests- and workflow-only commits.
+- ISR windows: root layout 300 -> 1800 s (inherited by every page without its own export), `/regions` 60 -> 600 s, homepage 300 -> 900 s. Admin saves, sold-out / restock events still invalidate on demand.
+- Proxy `store_open` / CSP-settings reads are single-flight with a 5 s failure TTL (less CPU per navigation).
+- Owner action: Vercel dashboard -> Settings -> Deployment Retention (set e.g. 30 days for production, 7 for the rest) to free the existing ~9 GB; batch merges where possible, since every production merge is one more stored deployment.

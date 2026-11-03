@@ -140,7 +140,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Revalidate layout data every 5 minutes (picks up setting changes)
-export const revalidate = 300
+// Vercel usage (Nov 2026: ISR writes 161K/200K on the Hobby plan): this is inherited by every page without its own export and
+// each expiry is one ISR write per page. Admin saves invalidate on demand (/api/v1/revalidate), so 30 min is only the backstop.
+export const revalidate = 1800
 
 export default async function RootLayout({
   children,
