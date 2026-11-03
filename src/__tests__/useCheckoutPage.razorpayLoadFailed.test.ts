@@ -85,6 +85,8 @@ describe('useCheckoutPage — razorpayLoadFailed fallback', () => {
 
   it('sets razorpayLoadFailed = true after 10s if the script never signals loaded (covers a hung/silent script load)', () => {
     const { result } = renderHook(() => useCheckoutPage(settings))
+    // The script is requested only once online payment is chosen, so that is when the 10 s clock starts.
+    act(() => { result.current.setPayMethod('razorpay') })
     expect(result.current.razorpayLoadFailed).toBe(false)
 
     act(() => { vi.advanceTimersByTime(10_000) })
@@ -92,8 +94,15 @@ describe('useCheckoutPage — razorpayLoadFailed fallback', () => {
     expect(result.current.razorpayLoadFailed).toBe(true)
   })
 
+  it('does NOT start the failure clock while the customer has not chosen online payment (the script is not even requested)', () => {
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    act(() => { vi.advanceTimersByTime(30_000) })
+    expect(result.current.razorpayLoadFailed).toBe(false)
+  })
+
   it('does NOT set razorpayLoadFailed if razorpayLoaded becomes true before the timeout', () => {
     const { result } = renderHook(() => useCheckoutPage(settings))
+    act(() => { result.current.setPayMethod('razorpay') })
 
     act(() => {
       vi.advanceTimersByTime(3_000)
