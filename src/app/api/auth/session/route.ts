@@ -23,7 +23,7 @@ function cookieBase() {
 export async function GET(req: NextRequest) {
   const token   = req.cookies.get(COOKIE_TOKEN)?.value
   const refresh = req.cookies.get(COOKIE_REFRESH)?.value
-  return NextResponse.json({ loggedIn: !!token, hasRefresh: !!refresh })
+  return NextResponse.json({ loggedIn: !!token, hasRefresh: !!refresh }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 export async function POST(req: NextRequest) {
