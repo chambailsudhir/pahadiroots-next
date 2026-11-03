@@ -118,6 +118,9 @@ export const validateCouponSchema = z.object({
   // at this address is refused early. Lenient on purpose — a half-typed value must never turn into a 400 that strips a valid coupon.
   pincode: z.string().trim().max(10).optional(),
   address: z.string().trim().max(400).optional(),
+  // Per-line amounts so a coupon limited to certain categories is previewed on the eligible lines only (as createOrder does).
+  // Optional and lenient: an old client that omits it just gets the whole-cart preview; createOrder stays authoritative.
+  lines: z.array(z.object({ productId: z.union([z.string().max(64), z.number()]), amount: z.number().min(0).max(1_000_000) })).max(100).optional(),
 })
 
 // ─── Review Schema ─────────────────────────────────────────────────────────────

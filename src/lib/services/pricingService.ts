@@ -123,6 +123,8 @@ export interface CouponAsker {
   pincode?:    string
   /** House / flat + area as typed. */
   address?:    string
+  /** Cart lines (product + line amount) — lets a category-limited coupon be previewed on its eligible lines only. */
+  lines?:      Array<{ productId: string | number; amount: number }>
 }
 
 // Server-side: validate coupon code against DB
@@ -212,11 +214,25 @@ export async function validateCouponServer(
   // but if data.max_discount is ever null/undefined AND the subtotal is very large,
   // Math.round(Infinity) = Infinity which flows into total as -Infinity.
   // Cap at subtotal (can never discount more than the order value).
-  const MAX_DISCOUNT_FALLBACK = subtotal
+  // category_ids: the coupon applies only to lines whose product is in those categories (createOrder does the same, authoritatively).
+  let discountBase = subtotal
+  const rawCats: unknown = data.category_ids
+  const allowedCategories: string[] = (Array.isArray(rawCats) ? rawCats : typeof rawCats === 'string' ? rawCats.split(',') : []).map(x => String(x).trim()).filter(Boolean)
+  if (allowedCategories.length > 0 && who.lines?.length) {
+    try {
+      const ids = Array.from(new Set(who.lines.map(l => String(l.productId))))
+      const { data: prods, error: pErr } = await db.from('products').select('id, category_id').in('id', ids)
+      if (!pErr && prods) {
+        const catOf = new Map((prods as Array<{ id: unknown; category_id: unknown }>).map(p => [String(p.id), String(p.category_id)]))
+        discountBase = who.lines.reduce((sum, l) => allowedCategories.includes(catOf.get(String(l.productId)) ?? '') ? sum + l.amount : sum, 0)
+        if (discountBase <= 0) return { valid: false, error: 'This coupon does not apply to the items in your cart' }
+      }
+    } catch { /* category lookup failed → whole-cart preview; createOrder re-checks */ }
+  }
   const discount = data.type === 'percent'
-    ? Math.min(Math.round(subtotal * data.value / 100), data.max_discount ?? MAX_DISCOUNT_FALLBACK)
-    // round flat values — DB may store non-integer (e.g. 49.99); never more than the order value
-    : Math.min(Math.round(data.value), subtotal)
+    ? Math.min(Math.round(discountBase * data.value / 100), data.max_discount ?? discountBase)
+    // round flat values — DB may store non-integer (e.g. 49.99); never more than the eligible value
+    : Math.min(Math.round(data.value), discountBase)
 
   return {
     valid: true,

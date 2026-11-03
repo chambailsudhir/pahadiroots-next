@@ -140,4 +140,27 @@ describe('validateCouponServer — one person / one address, one time only', () 
     failTable = 'coupon_usage'
     expect((await validateCouponServer('WELCOME50', 700, { phone: '9876543210' })).valid).toBe(true)
   })
+
+  // Category-limited coupons are previewed on the eligible lines only (as createOrder does), not the whole cart.
+  describe('category_ids', () => {
+    beforeEach(() => {
+      db.coupon_usage = []; db.orders = []
+      db.products = [{ id: 1, category_id: 10 }, { id: 2, category_id: 20 }]
+    })
+    it('percent coupon discounts only the lines in the allowed category', async () => {
+      db.coupons = [coupon({ type: 'percent', value: 10, user_limit: null, category_ids: [10] })]
+      const r = await validateCouponServer('WELCOME50', 1000, { lines: [{ productId: 1, amount: 400 }, { productId: 2, amount: 600 }] })
+      expect(r.valid).toBe(true)
+      expect(r.coupon?.discount).toBe(40)   // 10% of ₹400, not of ₹1000
+    })
+    it('refuses when no line is in an allowed category', async () => {
+      db.coupons = [coupon({ type: 'percent', value: 10, user_limit: null, category_ids: [10] })]
+      const r = await validateCouponServer('WELCOME50', 600, { lines: [{ productId: 2, amount: 600 }] })
+      expect(r).toMatchObject({ valid: false, error: 'This coupon does not apply to the items in your cart' })
+    })
+    it('without lines (old client) the whole-cart preview is used; createOrder stays authoritative', async () => {
+      db.coupons = [coupon({ type: 'percent', value: 10, user_limit: null, category_ids: [10] })]
+      expect((await validateCouponServer('WELCOME50', 1000)).coupon?.discount).toBe(100)
+    })
+  })
 })

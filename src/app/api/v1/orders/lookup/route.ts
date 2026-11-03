@@ -59,7 +59,7 @@ interface RawOrderItem {
   products?: { name?: string; emoji?: string; image_url?: string; hsn_code?: string | null; gst_rate?: number | null }
 }
 
-function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string; last_name?: string; phone?: string } | null) {
+function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string; last_name?: string; phone?: string } | null, loyaltyPointValue: number | null = null) {
   const rawItems = (raw.order_items as RawOrderItem[]) || []
   const items = rawItems.map(i => ({
     product_id:     i.product_id ?? undefined,
@@ -104,11 +104,17 @@ function mapOrder(raw: Record<string, unknown>, customer: { first_name?: string;
     shipping_charge:  raw.shipping_charge != null ? Number(raw.shipping_charge) : undefined,
     cod_surcharge:    raw.cod_surcharge   != null ? Number(raw.cod_surcharge)   : undefined,
     tax:              raw.tax            != null ? Number(raw.tax)            : undefined,
+    // Stored GST split + coin figures so the on-page invoice states the same taxable value / CGST / SGST as the downloadable one.
+    cgst:             raw.cgst           != null ? Number(raw.cgst)           : undefined,
+    sgst:             raw.sgst           != null ? Number(raw.sgst)           : undefined,
+    igst:             raw.igst           != null ? Number(raw.igst)           : undefined,
+    loyalty_points_redeemed: raw.loyalty_points_redeemed != null ? Number(raw.loyalty_points_redeemed) : undefined,
+    loyalty_point_value:     loyaltyPointValue ?? undefined,
     created_at:       raw.created_at,
     tracking_number:  raw.tracking_number ?? undefined,
     courier:          raw.courier         ?? undefined,
     customer_name:    customerName,
-    customer_phone:   snapPhone || customer?.phone || undefined,
+    customer_phone:   snapPhone || (snapName ? undefined : customer?.phone) || undefined,
     delivery_address: shippingAddress?.address_line1,
     city:             shippingAddress?.city,
     state:            shippingAddress?.state,
@@ -129,6 +135,13 @@ async function fetchCustomer(customerId: unknown): Promise<{ first_name?: string
     `/rest/v1/customers?id=eq.${encodeURIComponent(String(customerId))}&select=first_name,last_name,phone&limit=1`,
   ).catch(() => null)
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null
+}
+
+// Best effort: ₹ value of one coin, so the invoice can separate coin redemption from the prepaid discount.
+async function fetchLoyaltyPointValue(): Promise<number | null> {
+  const rows = await Promise.resolve().then(() => sbAdmin('GET', '/rest/v1/site_settings?key=eq.loyalty_points_value&select=value&limit=1')).catch(() => null)
+  const v = Array.isArray(rows) && rows[0]?.value != null ? Number(rows[0].value) : NaN
+  return Number.isFinite(v) && v > 0 ? v : null
 }
 
 export async function GET(req: NextRequest) {
@@ -157,7 +170,7 @@ export async function GET(req: NextRequest) {
 
       if (Array.isArray(rows) && rows.length > 0 && !isConfirmationTokenExpired((rows[0] as Record<string, unknown>).created_at)) {
         const raw = rows[0] as Record<string, unknown>
-        const res = ok({ success: true, order: mapOrder(raw, null) })
+        const res = ok({ success: true, order: mapOrder(raw, null, await fetchLoyaltyPointValue()) })
         ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
         return res
       }
@@ -184,7 +197,7 @@ export async function GET(req: NextRequest) {
         if (Array.isArray(rows) && rows.length > 0) {
           const raw = rows[0] as Record<string, unknown>
           const customer = await fetchCustomer(raw.customer_id)
-          const res = ok({ success: true, order: mapOrder(raw, customer) })
+          const res = ok({ success: true, order: mapOrder(raw, customer, await fetchLoyaltyPointValue()) })
           ;(res as NextResponse).headers.set('Cache-Control', 'private, no-store')
           if (refreshed) applyNewCookies(res as NextResponse, refreshed.token, refreshed.refresh)
           return res

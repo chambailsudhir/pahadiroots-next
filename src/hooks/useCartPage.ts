@@ -143,6 +143,7 @@ import { useCartAnalytics }   from '@/hooks/useCheckoutAnalytics'
 import type { SiteSettings, UpsellItem } from '@/types'
 import { logger }             from '@/lib/logger'
 import { getShippingPolicy }  from '@/lib/shippingCopy'
+import { couponLines } from '@/lib/couponLines'
 
 // ─── Retry helper ─────────────────────────────────────────────────────────────
 // Retries a fetch up to `maxRetries` times on network / 5xx errors with
@@ -347,6 +348,9 @@ export function useCartPage() {
     () => items.filter(item => !pendingRemovals.has(item.variantId)),
     [items, pendingRemovals],
   )
+  // Latest visible lines for coupon requests, read inside callbacks/timers without making them re-run on every items change.
+  const visibleItemsRef = useRef(visibleItems)
+  useEffect(() => { visibleItemsRef.current = visibleItems }, [visibleItems])
 
   // ── Derived / memoised values ──────────────────────────────────────────────
   const pricing = useMemo(
@@ -416,6 +420,9 @@ export function useCartPage() {
   }
 
   // ── Settings + reviews fetch ───────────────────────────────────────────────
+  // False until /api/v1/cart-settings has answered (or failed): the summary waits for it so shipping / free-shipping / minimum order
+  // are never shown from placeholder defaults and then jump.
+  const [settingsSettled, setSettingsSettled] = useState(false)
   useEffect(() => {
     const ac = new AbortController()
 
@@ -426,11 +433,13 @@ export function useCartPage() {
 
         const ss = data.settings ?? {}
         setSettings(ss)
+        setSettingsSettled(true)
 
       })
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'AbortError') return
         logger.error('cart_settings_fetch_failed', { error: err instanceof Error ? err.message : String(err) })
+        setSettingsSettled(true)   // fall back to the defaults rather than show a skeleton forever; checkout re-reads live settings
       })
 
     return () => ac.abort()
@@ -552,7 +561,7 @@ export function useCartPage() {
   const handleRemove = useCallback((variantId: string, name: string, price: number) => {
     // GA4 remove_from_cart needs the full line; read it from the store (not a dep, keeps this callback stable).
     const gaLine = useCartStore.getState().items.find(i => i.variantId === variantId)
-    trackItemRemoved(name, price, gaLine ? cartItemsToGa4([gaLine])[0] : undefined)
+    // The analytics event fires when the removal COMMITS (end of the Undo window), so an undone removal is not counted.
     // FIX: also register in cartStore.pendingVariantIds so CartDrawer's
     // checkout CTA (which has no access to this component's state) can flush
     // ghost items before navigating to /checkout. cartStore.flushPendingRemovals
@@ -561,6 +570,7 @@ export function useCartPage() {
     // a safe no-op in the store).
     useCartStore.getState().markPendingRemoval(variantId)
     const timerId = setTimeout(() => {
+      trackItemRemoved(name, price, gaLine ? cartItemsToGa4([gaLine])[0] : undefined)
       removeItem(variantId)
       useCartStore.getState().cancelPendingRemoval(variantId)
       if (mountedRef.current) {
@@ -576,6 +586,12 @@ export function useCartPage() {
       if (existing) clearTimeout(existing.timerId)
       return new Map(prev).set(variantId, { name, timerId })
     })
+    // The Remove button unmounts with its row, which would drop keyboard / screen-reader focus to <body>. Move it to the Undo
+    // button (announces "Undo removal of …") once the toast is rendered.
+    if (typeof window !== 'undefined') window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const btns = document.querySelectorAll<HTMLElement>('.cp-undo-btn')
+      btns[btns.length - 1]?.focus()
+    }))
   }, [removeItem, trackItemRemoved])
 
   const handleUndoRemove = useCallback((variantId: string) => {
@@ -714,7 +730,7 @@ export function useCartPage() {
       const res  = await fetch('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, subtotal: requestSubtotal }),
+        body:    JSON.stringify({ code, subtotal: requestSubtotal, lines: couponLines(visibleItemsRef.current) }),
         signal:  AbortSignal.timeout(10_000),
       })
       // Guard: component may have unmounted while the request was in-flight.
@@ -844,12 +860,18 @@ export function useCartPage() {
       fetchWithRetry('/api/v1/coupons', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: coupon.code, subtotal: pricing.subtotal }),
+        body:    JSON.stringify({ code: coupon.code, subtotal: pricing.subtotal, lines: couponLines(visibleItemsRef.current) }),
         signal:  combinedSignal,
       }, /* maxRetries */ 1)
-        .then(r => r.json().then(data => ({ ok: r.ok, data })))
-        .then(({ ok, data }) => {
+        .then(r => r.json().catch(() => ({})).then(data => ({ ok: r.ok, status: r.status, data })))
+        .then(({ ok, status, data }) => {
           if (ac.signal.aborted || !mountedRef.current) return
+          // Only a 400 means "this coupon no longer applies". A 429 (rate limit — shared per IP with manual applies), a 5xx or any
+          // other hiccup says nothing about the coupon, so the shopper keeps it; the server re-validates at order creation anyway.
+          if (!ok && status !== 400) {
+            logger.error('coupon_revalidation_failed', { status })
+            return
+          }
           if (!ok) {
             // Coupon no longer valid for the new subtotal (min_order, expiry,
             // usage limit). Remove it so the UI never shows a discount the
@@ -930,7 +952,7 @@ export function useCartPage() {
 
     // reviews & settings
     reviews,
-    settings,
+    settings, settingsSettled,
 
     // ui state
     qtyAnim,

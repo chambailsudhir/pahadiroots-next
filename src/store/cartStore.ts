@@ -71,7 +71,10 @@ export const useCartStore = create<CartStore>()(
             // maxQty may be absent on hydrated items (stripped from localStorage).
             // Fall back to a high cap so qty can still increase; the server
             // enforces the real stock limit at order time.
-            const cap = existing.maxQty ?? newItem.maxQty ?? 99
+            // The LOWER of the two: stock may have dropped since the line was first added (the PDP passes the live figure), and a
+            // later add can never raise the cap.
+            const known = [existing.maxQty, newItem.maxQty].filter((n): n is number => typeof n === 'number')
+            const cap = known.length ? Math.min(...known) : 99
             return {
               idempotencyKey: state.idempotencyKey || generateUUID(),
               items: state.items.map(i =>
@@ -83,7 +86,7 @@ export const useCartStore = create<CartStore>()(
           }
           return {
             idempotencyKey: state.idempotencyKey || generateUUID(),
-            items: [...state.items, { ...newItem, qty: newItem.qty ?? 1 }],
+            items: [...state.items, { ...newItem, qty: newItem.maxQty != null ? Math.min(newItem.qty ?? 1, newItem.maxQty) : (newItem.qty ?? 1) }],
           }
         })
       },
@@ -395,7 +398,12 @@ if (typeof window !== 'undefined' && !window.__prCartStorageSync) {
     // key === null means storage.clear() in another tab — the cart is gone there too.
     if (e.key !== null && e.key !== CART_STORAGE_KEY) return
     if (!useCartStore.getState()._hasHydrated) return
-    void useCartStore.persist.rehydrate()
+    // The persisted copy has no maxQty (never stored). Carry the live caps across the re-read so the + button and "Only N left"
+    // do not silently disappear in this tab.
+    const caps = new Map(useCartStore.getState().items.map(i => [i.variantId, i.maxQty] as const))
+    void Promise.resolve(useCartStore.persist.rehydrate()).then(() => {
+      useCartStore.setState(st => ({ items: st.items.map(i => (i.maxQty == null && caps.get(i.variantId) != null) ? { ...i, maxQty: caps.get(i.variantId) as number } : i) }))
+    })
   })
 }
 

@@ -342,6 +342,8 @@ const STYLES = `
 // in useCheckoutPage; addr/touched change only on user input).
 const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, onEmailChange, onTouch, selectedSavedIdx, prefillLoading }: Props) {
   const [pincodeLoading, setPincodeLoading] = useState(false)
+  const [emailTouched, setEmailTouched] = useState(false)
+  const emailBad = emailTouched && email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
   const [pincodeMsg,     setPincodeMsg]     = useState('')
   // BUG FIX: lookup failures (timeout or genuine "not found") previously had
   // NO user-facing message at all — the spinner just stopped and city/state
@@ -378,7 +380,12 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
     onChange('pincode', clean)
     setPincodeMsg('')
     setPincodeError('')
-    if (clean.length !== 6) { setPincodeLoading(false); return }
+    if (clean.length !== 6) {
+      // Backspacing below 6 digits: cancel any lookup still in flight so its late result can't fill city/state for a half-typed PIN.
+      if (pinAbortRef.current) { pinAbortRef.current.abort(); pinAbortRef.current = null }
+      setPincodeLoading(false)
+      return
+    }
 
     // Cancel previous in-flight request
     if (pinAbortRef.current) pinAbortRef.current.abort()
@@ -419,7 +426,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
       {/* Label tag pills */}
       {selectedSavedIdx === null && (
         <div className="af-tags-wrap">
-          <span className="af-tags-label">Save as</span>
+          <span className="af-tags-label">Address type</span>
           <div className="af-tags">
             {LABEL_OPTIONS.map(lbl => (
               <button key={lbl} type="button"
@@ -482,6 +489,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 aria-invalid={!!errors.phone}
                 aria-describedby={errors.phone ? 'af-phone-err' : undefined}
                 onChange={e => onChange('phone', e.target.value.replace(/\D/g, ''))}
+                onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); const d = t.replace(/\D/g, ''); onChange('phone', d.length >= 12 && d.startsWith('91') ? d.slice(-10) : d.slice(0, 10)) } }}
                 onBlur={() => onTouch('phone')}
                 placeholder="9876543210" maxLength={10}
               />
@@ -596,6 +604,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 pincodeError && !pincodeLoading   ? 'af-pincode-lookup-err' : '',
               ].filter(Boolean).join(' ') || undefined}
               onChange={e => handlePincodeChange(e.target.value)}
+              onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); handlePincodeChange(t.replace(/\D/g, '').slice(0, 6)) } }}
               onBlur={() => onTouch('pincode')}
               placeholder="248001" maxLength={6}
             />
@@ -618,8 +627,12 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
             <input id="af-email" className="af-input" type="email"
               autoComplete="email" enterKeyHint="done" value={email}
               onChange={e => onEmailChange(e.target.value)}
+              onBlur={() => setEmailTouched(true)}
+              aria-invalid={emailBad}
+              aria-describedby={emailBad ? 'af-email-err' : undefined}
               placeholder="you@email.com"
             />
+            {emailBad && <span id="af-email-err" className="af-err" role="alert">Enter a valid email address</span>}
             <p className="af-note" style={{margin:'6px 0 0',fontSize:12,color:'#5F5648'}}>We keep your cart and contact details while you check out so you can finish your order. See our <a href="/policies/privacy" target="_blank" rel="noopener" style={{textDecoration:'underline'}}>Privacy Policy</a>.</p>
           </div>
         </div>

@@ -43,7 +43,7 @@ const SavedAddressSelector = memo(function SavedAddressSelector({ addresses, sel
             onClick={() => onSelect(a, i)}
             role="button"
             tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && onSelect(a, i)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(a, i) } }}
             aria-pressed={selectedIdx === i}
           >
             <div className="sas-check">

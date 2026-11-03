@@ -77,6 +77,7 @@ import { useCartStore } from '@/store/cartStore'
 import { useUIStore, takeCartOpener } from '@/store/uiStore'
 import { formatPrice } from '@/lib/utils'
 import { calcPriceSummary } from '@/lib/services/pricingService'
+import { couponLines } from '@/lib/couponLines'
 import type { CartItem, SiteSettings } from '@/types'
 import styles from './CartDrawer.module.css'
 import Icon from '@/components/ui/Icon'
@@ -283,6 +284,31 @@ export default function CartDrawer({ settings }: Props) {
       el.setAttribute('inert', '')
     }
   }, [isOpen])
+
+  // The coupon's ₹ discount is a snapshot taken when it was applied. Changing quantities here (on any page) must not leave a stale
+  // discount, a coupon whose minimum is no longer met, or a discount bigger than the cart. /cart and /checkout revalidate on their own, so
+  // this runs only elsewhere. Only a 400 ("no longer applies") removes the coupon; a 429/5xx/network error leaves it (createOrder re-checks).
+  const couponCode = coupon?.code
+  const couponDiscount = coupon?.discount
+  useEffect(() => {
+    if (!isOpen || !couponCode) return
+    if (typeof window !== 'undefined' && /^\/(cart|checkout)(\/|$)/.test(window.location.pathname)) return
+    const sub = Math.round(cartSubtotal(items))
+    if (sub <= 0) return
+    const ac = new AbortController()
+    const t = setTimeout(() => {
+      fetch('/api/v1/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ac.signal,
+        body: JSON.stringify({ code: couponCode, subtotal: sub, lines: couponLines(items) }) })
+        .then(async r => {
+          if (r.status === 400) { useCartStore.getState().removeCoupon(); return }
+          if (!r.ok) return
+          const d = await r.json().catch(() => null)
+          if (d?.coupon && d.coupon.discount !== couponDiscount) useCartStore.getState().applyCoupon(d.coupon)
+        })
+        .catch(() => { /* aborted / offline — leave the coupon as it is */ })
+    }, 800)
+    return () => { clearTimeout(t); ac.abort() }
+  }, [isOpen, items, couponCode, couponDiscount])
 
   const pricing = useMemo(
     // AUDIT S3-003: price with the method checkout will actually start on, not always COD.

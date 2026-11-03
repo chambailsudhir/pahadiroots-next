@@ -43,14 +43,13 @@ function fillValidAddress(result: { current: ReturnType<typeof useCheckoutPage> 
 
 let rzpHandler: ((r: Record<string, string>) => Promise<void>) | null = null
 
-async function payAndGetVerifyResult(verifyResponse: ReturnType<typeof res>) {
+async function payAndGetVerifyResult(verifyResponse: ReturnType<typeof res> | Error, createExtra: Record<string, unknown> = {}) {
   const fetchMock = global.fetch as ReturnType<typeof vi.fn>
   fetchMock.mockImplementation(async (url: string, init?: { body?: string }) => {
     if (url === '/api/v1/payments') {
       const body = JSON.parse(init?.body ?? '{}')
-      return body.action === 'verify_payment'
-        ? verifyResponse
-        : res(200, { success: true, order_id: 'db-1', razorpay_order_id: 'order_x', amount: 14300, currency: 'INR' })
+      if (body.action === 'verify_payment') { if (verifyResponse instanceof Error) throw verifyResponse; return verifyResponse }
+      return res(200, { success: true, order_id: 'db-1', razorpay_order_id: 'order_x', amount: 14300, currency: 'INR', ...createExtra })
     }
     return res(200, {})
   })
@@ -108,5 +107,29 @@ describe('useCheckoutPage — verify_payment pending (202 / 503) routes to the o
     const result = await payAndGetVerifyResult(res(503, { error: 'down' }))
     expect(h.replace).not.toHaveBeenCalled()
     expect(result.current.error).toMatch(/down/)
+  })
+
+  // The customer has ALREADY paid when Razorpay calls the handler: a dropped connection, a 429 or a 5xx on the verify call must
+  // not read "failed — try again"; it goes to the order page (which polls the server) using the order number from create_payment.
+  const CREATED = { order_number: 'PR9Z8Y7X6W', confirmation_token: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' }
+  it.each([429, 500, 502])('verify answers HTTP %i (no pending flag) → order page, cart cleared, no error', async (status) => {
+    const result = await payAndGetVerifyResult(res(status, { error: 'Too many requests' }), CREATED)
+    expect(h.replace).toHaveBeenCalledTimes(1)
+    expect(String(h.replace.mock.calls[0][0])).toContain('id=PR9Z8Y7X6W')
+    expect(result.current.error).toBe('')
+    expect(useCartStore.getState().items).toHaveLength(0)
+  })
+
+  it('verify request itself fails to complete (network drop) → order page, not an error', async () => {
+    const result = await payAndGetVerifyResult(new TypeError('Failed to fetch'), CREATED)
+    expect(h.replace).toHaveBeenCalledTimes(1)
+    expect(String(h.replace.mock.calls[0][0])).toContain('id=PR9Z8Y7X6W')
+    expect(result.current.error).toBe('')
+  })
+
+  it('a 400 is still a real rejection even when the order number is known', async () => {
+    const result = await payAndGetVerifyResult(res(400, { error: 'Payment verification failed' }), CREATED)
+    expect(h.replace).not.toHaveBeenCalled()
+    expect(result.current.error).toMatch(/verification failed/i)
   })
 })

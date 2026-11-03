@@ -27,7 +27,8 @@ import 'server-only'
 import { logOrderEvent } from '@/lib/services/orderService'
 import { reserveStockAtomicForOrder, orderItemsToStockItems } from '@/lib/services/inventoryService'
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
-import { esc } from '@/lib/server/htmlEscape'
+import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
+import { computeOrderInvoice } from '@/lib/invoiceGst'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
 import { DELIVERY_WINDOWS_TEXT, TRACKING_NOTIFICATION_TEXT } from '@/lib/shippingCopy'
@@ -239,46 +240,70 @@ export async function runPaidSideEffects(
   // E-mail is deferred so it can never delay the response (see lib/server/email.ts).
   defer(async () => {
     try {
-      const { data: customer } = await db
-        .from('customers').select('first_name, email').eq('id', order.customer_id).single()
+      // is_guest may not exist on older schemas: retry without it (coins are then simply not mentioned).
+      let customer: { first_name?: string | null; email?: string | null; is_guest?: boolean | null } | null = null
+      {
+        const r1 = await db.from('customers').select('first_name, email, is_guest').eq('id', order.customer_id).single()
+        if (r1.error) {
+          const r2 = await db.from('customers').select('first_name, email').eq('id', order.customer_id).single()
+          customer = r2.data
+        } else customer = r1.data
+      }
 
       if (customer?.email) {
-        const coinsEarned = Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
-        const coinsHtml   = settings.loyalty_enabled !== 'false' && coinsEarned > 0
-          ? `<div style="background:#fffbe8;border:1.5px solid #e8c940;border-radius:12px;padding:14px 20px;margin:16px 0;text-align:center">
-               <span style="font-size:18px">🪙</span>
-               <strong style="color:#7a5800;margin-left:6px">You earned ${coinsEarned} Pahadi Coins!</strong>
-               <p style="margin:4px 0 0;color:#a08020;font-size:12px">Use them on your next order.</p>
-             </div>`
-          : ''
+        // The same itemised e-mail COD customers get (lib/server/orderEmail.ts), built from the stored order.
+        const { data: full } = await db
+          .from('orders')
+          .select('order_number, created_at, subtotal, coupon_discount, shipping_charge, cod_surcharge, tax, cgst, sgst, igst, total_amount, loyalty_points_redeemed, shipping_address, order_items(quantity, price_at_time, product_name_snapshot, variant_value_snapshot, products(name, image_url, emoji, hsn_code))')
+          .eq('id', order.id)
+          .single()
+        type Row = { quantity: number; price_at_time: number; product_name_snapshot: string | null; variant_value_snapshot: string | null; products?: { name?: string; image_url?: string | null; emoji?: string | null } | null }
+        const rows = ((full?.order_items ?? []) as Row[])
+        const sa = (typeof full?.shipping_address === 'string' ? (() => { try { return JSON.parse(full.shipping_address) } catch { return null } })() : full?.shipping_address) as Record<string, string> | null
+        const inv = computeOrderInvoice({
+          items: rows.map(r => ({ name: r.product_name_snapshot || r.products?.name || 'Product', qty: r.quantity, price: r.price_at_time })),
+          total_amount: Number(full?.total_amount ?? order.total_amount) || 0,
+          subtotal: full?.subtotal != null ? Number(full.subtotal) : null,
+          coupon_discount: full?.coupon_discount != null ? Number(full.coupon_discount) : null,
+          shipping_charge: full?.shipping_charge != null ? Number(full.shipping_charge) : null,
+          cod_surcharge: full?.cod_surcharge != null ? Number(full.cod_surcharge) : null,
+          tax: full?.tax != null ? Number(full.tax) : null,
+          loyalty_points_redeemed: full?.loyalty_points_redeemed != null ? Number(full.loyalty_points_redeemed) : null,
+          state: sa?.state ?? null,
+        }, { loyaltyPointValue: parseFloat(settings.loyalty_points_value || '') || null })
+
+        // Coins are for account holders only: mention them ONLY when we positively know this is not a guest row.
+        const coinsEarned = customer.is_guest === false && settings.loyalty_enabled !== 'false'
+          ? Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+          : 0
 
         // sendTransactionalEmail() checks the resolved Resend `error` explicitly and
         // dead-letters into `failed_emails` for the cron sweep to retry.
         await sendTransactionalEmail({
           type:    'payment_confirmation',
           to:      customer.email,
-          subject: `Payment Confirmed #${order.order_number} — HimVeda by Pahadi Roots 🌿`,
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333">
-              <div style="background:#2C4A2E;padding:24px;text-align:center">
-                <h1 style="color:#fff;margin:0;font-size:22px">🌿 HimVeda by Pahadi Roots</h1>
-                <p style="color:#a8d5b5;margin:4px 0 0">Himalayan Natural Store</p>
-              </div>
-              <div style="padding:24px">
-                <h2 style="color:#2C4A2E">Payment Confirmed! ✅</h2>
-                <p>Hi <strong>${esc(customer.first_name)}</strong>, your payment was successful.</p>
-                <p><strong>Order #:</strong> ${esc(order.order_number)}<br>
-                   <strong>Payment ID:</strong> ${esc(razorpayPaymentId)}<br>
-                   <strong>Amount Paid:</strong> ₹${order.total_amount}<br>
-                   <strong>Delivery:</strong> ${esc(DELIVERY_WINDOWS_TEXT)}</p>
-                ${coinsHtml}
-                <p style="color:#666;font-size:14px">${esc(TRACKING_NOTIFICATION_TEXT)}</p>
-                <a href="https://www.pahadiroots.com/account?tab=orders" style="display:inline-block;background:#2C4A2E;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:8px">Track Order</a>
-              </div>
-              <div style="background:#f9f9f9;padding:16px;text-align:center;font-size:12px;color:#999">
-                HimVeda by Pahadi Roots | pahadiroots.com | WhatsApp: +91 98999 84895
-              </div>
-            </div>`,
+          subject: orderEmailSubject('paid', order.order_number ?? ''),
+          html: buildOrderEmail({
+            kind: 'paid',
+            orderNumber: order.order_number ?? '',
+            customerName: sa?.name || customer.first_name || '',
+            placedAt: full?.created_at ?? null,
+            items: rows.map(r => ({ name: r.product_name_snapshot || r.products?.name || 'Product', variant: r.variant_value_snapshot, qty: r.quantity, price: r.price_at_time, image: r.products?.image_url ?? null, emoji: r.products?.emoji ?? null })),
+            subtotal: inv.linesTotal + inv.roundOff,
+            couponDiscount: inv.couponDiscount,
+            prepaidDiscount: inv.discountSplitKnown ? inv.prepaidDiscount : inv.prepaidDiscount + inv.loyaltyDiscount,
+            loyaltyDiscount: inv.discountSplitKnown ? inv.loyaltyDiscount : 0,
+            shipping: inv.shipping,
+            codSurcharge: inv.codSurcharge,
+            gstIncluded: inv.tax,
+            total: inv.total,
+            address: { name: sa?.name, line1: sa?.address_line1, city: sa?.city, state: sa?.state, pincode: sa?.pincode, phone: sa?.phone },
+            paymentId: razorpayPaymentId,
+            deliveryText: DELIVERY_WINDOWS_TEXT,
+            trackingText: TRACKING_NOTIFICATION_TEXT,
+            coinsEarned,
+            signedIn: customer.is_guest === false,
+          }),
           context: { order_id: order.id, order_number: order.order_number },
         })
       }

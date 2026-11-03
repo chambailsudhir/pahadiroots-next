@@ -256,6 +256,7 @@ export interface CreateOrderInput {
 
 export interface OrderEmailItem {
   name:  string
+  variant?: string | null
   emoji: string
   image: string | null
   qty:   number
@@ -274,6 +275,10 @@ export interface CreatedOrder {
   shippingCharge: number
   codSurcharge:   number
   discount:       number
+  /** GST already included in the prices, and the prepaid / coin savings — for the itemised e-mail. */
+  gstIncluded?:     number
+  prepaidDiscount?: number
+  loyaltyDiscount?: number
   cartItems:    OrderEmailItem[]  // enriched items for email — real names + prices from DB
   // Guest-safe capability token for the order-success confirmation page —
   // null when token generation failed (non-fatal) or for the idempotency
@@ -620,7 +625,16 @@ export async function createOrder(
     input.items.map((i, idx) => ({ variantId: i.variantId, productId: i.productId, qty: i.qty, kind: lineKinds[idx] }))
   )
   if (!stockReservation.ok) {
-    throw new Error(`Insufficient stock for item ${stockReservation.failedVariantId ?? 'unknown'} — please reduce quantity or remove the item`)
+    // Name the product (not an internal variant id) so the customer knows which line to change.
+    let failedName: string | undefined
+    try {
+      const fi = input.items.find(i => String(i.variantId) === String(stockReservation.failedVariantId))
+      if (fi && /^[0-9a-zA-Z_-]{1,64}$/.test(String(fi.productId))) {
+        const rows = await sbGet('products', `select=name&id=eq.${encodeURIComponent(String(fi.productId))}&limit=1`)
+        failedName = Array.isArray(rows) ? rows[0]?.name : undefined
+      }
+    } catch { /* fall back to the generic wording */ }
+    throw new Error(`Insufficient stock for ${failedName ? `“${failedName}”` : 'one of the items'} — please reduce quantity or remove the item`)
   }
 
   // ── STOCK SAFETY WRAPPER ─────────────────────────────────────────────────
@@ -1050,6 +1064,14 @@ export async function createOrder(
     const codMaxValue = parseFloat(settings.cod_max_value || '3000')
     if (pricing.total > codMaxValue) {
       throw new Error(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`)
+    }
+  }
+
+  // 6b-2. min_order_amount (admin "minimum order value") was enforced only in the cart/checkout UI — a direct API call skipped it.
+  {
+    const minOrder = parseFloat(settings.min_order_amount || '0')
+    if (Number.isFinite(minOrder) && minOrder > 0 && pricing.subtotal < minOrder) {
+      throw new Error(`Minimum order is ₹${minOrder}. Please add more items.`)
     }
   }
 
@@ -1564,8 +1586,12 @@ export async function createOrder(
       shippingCharge:  pricing.shipping,
       codSurcharge:    pricing.codSurcharge,
       discount:        pricing.discount,
+      gstIncluded:     pricing.gstTotal,
+      prepaidDiscount: pricing.prepaidDiscount,
+      loyaltyDiscount: pricing.loyaltyDiscount,
       cartItems:    cartItems.map(i => ({
         name:  i.name,
+        variant: i.size || null,
         emoji: i.emoji ?? '🌿',
         image: i.image ?? null,
         qty:   i.qty,

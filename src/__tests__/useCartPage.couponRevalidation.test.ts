@@ -382,6 +382,21 @@ describe('useCartPage — coupon revalidation effect', () => {
     expect(useCartStore.getState().coupon?.discount).toBe(80)
   })
 
+  // ── 8b. 429 / 5xx (not a thrown error) → coupon kept; only 400 removes it ───
+
+  it.each([[429, 'Too many attempts'], [500, 'Server error'], [503, 'Unavailable']])('keeps the coupon when revalidation answers HTTP %i (it says nothing about the coupon)', async (status, msg) => {
+    const coupon: AppliedCoupon = { code: 'KEEP', discount: 80, type: 'flat' }
+    seedStore([{ ...makeItem(), qty: 8 }], coupon)
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => {
+      const u = url instanceof URL ? url.toString() : typeof url === 'string' ? url : (url as Request).url
+      return u.includes('/api/v1/coupons') ? mockRes({ error: msg }, false, status) : mockRes({}, false, 500)
+    }) as unknown as typeof globalThis.fetch
+    renderHook(() => useCartPage())
+    act(() => { useCartStore.getState().addItem({ ...makeItem({ variantId: 'v2' }), qty: 2 }) })
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(useCartStore.getState().coupon?.code).toBe('KEEP')
+  })
+
   // ── 9. Cleanup: debounce timer is cleared on unmount ─────────────────────
 
   it('cancels the pending debounce timer on unmount (no setState after cleanup)', async () => {

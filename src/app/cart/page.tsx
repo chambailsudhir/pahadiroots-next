@@ -97,7 +97,7 @@ export default function CartPage() {
     items, visibleItems, coupon, removeCoupon,
     couponCode, setCouponCode, couponLoading, couponError,
     upsellItems, upsellLoading, upsellError, addedUpsell,
-    reviews, settings,
+    reviews, settings, settingsSettled,
     qtyAnim, pendingRemovals,
     freeShipMin, pricing, progressPct, totalQty,
     handleQtyChange, handleRemove, handleUndoRemove, flushPendingRemovals,
@@ -183,6 +183,10 @@ export default function CartPage() {
                   onRemove={handleRemove}
                 />
               ))}
+
+              {visibleItems.length === 0 && (
+                <p className="cp-empty-note">Your cart is empty. <Link href="/products">Browse products</Link> or undo the removal below.</p>
+              )}
 
               {/* Undo toasts */}
               {[...pendingRemovals.entries()].map(([vid, entry]) => (
@@ -288,7 +292,11 @@ export default function CartPage() {
         </div>
 
         {/* ══ RIGHT ══════════════════════════════════════════════════════════ */}
-        <div className="cp-right">
+        {/* Last item removed (still inside the Undo window): nothing to price or check out — hide the summary so no ₹0 order with shipping can be started. */}
+        {totalQty > 0 && !settingsSettled && (
+          <div className="cp-right" aria-hidden="true"><div className="cp-right-inner"><div className="cp-card" style={{ minHeight: 360, background: 'linear-gradient(90deg,#f3ede2,#faf6ee,#f3ede2)' }} /></div></div>
+        )}
+        {totalQty > 0 && settingsSettled && <div className="cp-right">
           <div className="cp-right-inner">
             <CartSummary
               totalQty={totalQty}
@@ -306,16 +314,16 @@ export default function CartPage() {
               onCheckout={flushPendingRemovals}
             />
           </div>
-        </div>
+        </div>}
       </div>
 
-      <StickyCartCTA
+      {totalQty > 0 && settingsSettled && <StickyCartCTA
         total={pricing.total}
         orderSubtotal={pricing.subtotal}
         totalQty={totalQty}
         minOrderAmt={minOrderAmt}
         onCheckout={flushPendingRemovals}
-      />
+      />}
 
     </main>
   )
