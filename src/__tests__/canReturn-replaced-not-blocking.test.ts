@@ -42,6 +42,18 @@ describe('canReturn — replaced is terminal, not blocking (Aug 18 fix)', () => 
     expect(canReturn(order)).toBe(true)
   })
 
+  it('a replacement gets its own window: delivered long ago, but the replacement shipped 4 days ago → still returnable', () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+    const order = makeOrder({ delivered_at: daysAgo(20), _return: { status: 'replaced', replacement_shipped_at: daysAgo(4) } as never })
+    expect(canReturn(order)).toBe(true)
+  })
+
+  it('…and closes again 48 h after the replacement arrives (shipped 12 days ago)', () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+    const order = makeOrder({ delivered_at: daysAgo(20), _return: { status: 'replaced', replacement_shipped_at: daysAgo(12) } as never })
+    expect(canReturn(order)).toBe(false)
+  })
+
   it('still allows a new return when the existing return is refunded (unchanged behavior)', () => {
     const order = makeOrder({ _return: { status: 'refunded' } })
     expect(canReturn(order)).toBe(true)

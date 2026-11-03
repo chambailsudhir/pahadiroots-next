@@ -240,6 +240,19 @@ export function canSelfServeReturn(reason: string): boolean {
 // imported by both, so they can't drift apart again.
 export const RETURNABLE_WINDOW_HOURS = 48
 
+// A REPLACED item is a new unit that reaches the customer a few days after we ship it, and we only record the ship date.
+// The 48 h window for returning the replacement therefore starts REPLACEMENT_TRANSIT_DAYS after replacement_shipped_at
+// (never earlier than the original delivery). Shared by the return route and the client-side eligibility check.
+export const REPLACEMENT_TRANSIT_DAYS = 3
+
+/** The moment the return window starts: the original delivery, or — for a replaced item — the estimated replacement delivery. */
+export function returnWindowStart(deliveredAt: string | null | undefined, replacementShippedAt?: string | null): number | null {
+  const d = deliveredAt ? Date.parse(deliveredAt) : NaN
+  const r = replacementShippedAt ? Date.parse(replacementShippedAt) + REPLACEMENT_TRANSIT_DAYS * 86_400_000 : NaN
+  const best = Math.max(Number.isFinite(d) ? d : -Infinity, Number.isFinite(r) ? r : -Infinity)
+  return Number.isFinite(best) ? best : null
+}
+
 // ── localStorage keys ────────────────────────────────────────────────────────
 // Centralised so every consumer refers to the same string literal and a typo
 // in one place cannot silently leave stale cache keys behind.
