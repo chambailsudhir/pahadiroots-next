@@ -587,7 +587,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const policy = Object.hasOwn(POLICIES, type) ? POLICIES[type] : undefined
   if (!policy) return { title: 'Policy Not Found', robots: { index: false, follow: false } }
   return {
-    title: `${policy.title} — ${BRAND}`,
+    title: policy.title,   // brand appended by the layout's title template
+    openGraph: { title: `${policy.title} — ${BRAND}` },
     description: POLICY_DESCRIPTIONS[type] || `${policy.title} for ${BRAND}.`,
     alternates: { canonical: `/policies/${type}` },
   }
