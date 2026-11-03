@@ -18,14 +18,19 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useEffect } from 'react'
-import { recoveryLandingTarget } from '@/app/reset-password/resetPasswordHelpers'
+import { recoveryLandingTarget, isSignupConfirmationHash } from '@/app/reset-password/resetPasswordHelpers'
 
 export const GOOGLE_CALLBACK_PATH = '/auth/google-callback'
 
 export default function GoogleAuthHandler() {
   useEffect(() => {
     const forward = recoveryLandingTarget(window.location.pathname, window.location.hash)
-    if (forward) window.location.replace(forward)
+    if (forward) { window.location.replace(forward); return }
+    // Sign-up verification link: the e-mail address is now confirmed on Supabase's side; the customer just has to sign in.
+    // The tokens in the hash are never used — drop them from the URL right away (the page keeps ?verified=1 for its message).
+    if (isSignupConfirmationHash(window.location.hash)) {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* ignore */ }
+    }
   }, [])
 
   return null
