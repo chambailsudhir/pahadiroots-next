@@ -258,3 +258,15 @@ otherwise. Nothing in the storefront approves a review automatically.
 **Applying the migration:** column/table assumptions come from the repo, not the live schema - first confirm `reviews`, `customers.id`,
 `orders.id` (bigint) and `site_settings(key, value)` on the live database, then run the file in the Supabase SQL editor (it is one
 transaction and idempotent). Apply it *before* deploying: until then `submit_review` answers 503 and the cron's review step logs an alert.
+
+## 7. Bug hunt round 2 (3 Nov 2026) — black-box findings
+
+* **Per-user API answers were cacheable by shared caches.** A header probe with a logged-in test user showed `/api/v1/loyalty` and
+  `/api/v1/loyalty/history` (coin balance, referral code, full ledger) answering `Cache-Control: public, max-age=0, must-revalidate`
+  (Next's default), and the same for every 401/405 of routes that answer through the shared `ok()` / `fail()` helpers. `public` lets a
+  CDN or corporate proxy store them. Now the shared helpers (and the auth route's own helpers, and `/api/auth/session`) answer
+  `private, no-store`; routes that are genuinely public build their own response and keep their own headers.
+  Verified as already correct: `/api/profile`, `/api/orders*`, `/api/wishlist` (no-store), guest lookup / track (private, no-store).
+* **`/api/v1/search-catalog` exposes internal catalogue columns** to anyone (`initial_stock`, `available_stock`, `sku_backup`,
+  `hsn_code_id`, `state_id`, `sort_order`, …). No cost price or vendor data (checked the variant keys). Low severity; tracked.
+* Cross-customer order access re-checked with another customer's ids: 404. CORS: no `Access-Control-Allow-Origin` on any route.

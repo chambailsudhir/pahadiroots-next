@@ -41,8 +41,10 @@ const IS_PROD = process.env.NODE_ENV === 'production'
 const RESET_PASSWORD_MIN_LENGTH = 8
 
 // ── Response helpers ─────────────────────────────────────────
-function ok(data: unknown)                 { return NextResponse.json(data, { status: 200 }) }
-function fail(status: number, msg: string) { return NextResponse.json({ error: msg }, { status }) }
+// Auth answers (sessions, profiles, errors) are per-user: never cacheable by a shared cache.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
+function ok(data: unknown)                 { return NextResponse.json(data, { status: 200, headers: PRIVATE_HEADERS }) }
+function fail(status: number, msg: string) { return NextResponse.json({ error: msg }, { status, headers: PRIVATE_HEADERS }) }
 // Legacy alias — keeps all existing `err(...)` calls working
 const err = fail
 

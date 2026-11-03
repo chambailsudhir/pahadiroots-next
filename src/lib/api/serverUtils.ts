@@ -23,8 +23,13 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const IS_PROD       = process.env.NODE_ENV === 'production'
 
 // ── Response helpers ──────────────────────────────────────────
-export function ok(data: unknown)                    { return NextResponse.json(data) }
-export function fail(status: number, msg: string, headers?: Record<string, string>) { return NextResponse.json({ error: msg }, { status, headers }) }
+// Every API route that answers through these helpers returns PER-USER data (profile, orders, coins, wishlist, …) or an auth
+// error, so every answer is `private, no-store`. Without it Next.js defaults to `public, max-age=0, must-revalidate`, which
+// lets a shared cache (CDN / corporate proxy) store a customer's balance and history (found by a black-box header probe,
+// Nov 2026). A route that really is public builds its own NextResponse and sets its own headers.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
+export function ok(data: unknown)                    { return NextResponse.json(data, { headers: PRIVATE_HEADERS }) }
+export function fail(status: number, msg: string, headers?: Record<string, string>) { return NextResponse.json({ error: msg }, { status, headers: { ...PRIVATE_HEADERS, ...headers } }) }
 
 // ── CSRF protection ───────────────────────────────────────────
 // Validates the Origin (or Referer fallback) of state-mutating requests
