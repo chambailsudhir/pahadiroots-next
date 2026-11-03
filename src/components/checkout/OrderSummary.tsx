@@ -412,7 +412,7 @@ const OrderSummary = memo(function OrderSummary({
           {/* Coins are for account holders only — a guest has nowhere to spend them, so don't dangle them. */}
           {isSignedIn && loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
             <div className="os-loyalty-earn-strip">
-              <Icon name="star" /> Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> when this order is delivered
+              <Icon name="star" /> Earn up to <strong>{loyaltyPts} {loyaltyLabel}</strong> when this order is delivered
             </div>
           )}
         </div>

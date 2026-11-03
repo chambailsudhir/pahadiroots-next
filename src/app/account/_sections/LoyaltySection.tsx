@@ -54,7 +54,7 @@ export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string 
 /** Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), taken back if the order is returned or refunded. */
 export function earnCopy(perOrder: number | undefined): string {
   const n = typeof perOrder === 'number' && Number.isFinite(perOrder) && perOrder >= 0 ? Math.floor(perOrder) : 5
-  return `Earn ${n} ${n === 1 ? 'coin' : 'coins'} on every order once it is delivered (taken back if you return it)`
+  return `Earn up to ${n} ${n === 1 ? 'coin' : 'coins'} on every order once it is delivered (taken back if you return it)`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
