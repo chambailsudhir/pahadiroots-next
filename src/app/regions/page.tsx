@@ -19,7 +19,7 @@ const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 // so a product-count change could be live in the data cache for up to 4
 // minutes before this page's own ISR caught up. Aligned to 60s so this page
 // can never be staler than the data it reads.
-export const revalidate = 60
+export const revalidate = 600   // was 60 (up to 1440 ISR writes/day); catalogue changes still invalidate it through the store-data tag
 
 // BUG FIX (SEO): this page previously had only a title/description, with no
 // canonical or openGraph block — unlike /products/[slug], which explicitly
