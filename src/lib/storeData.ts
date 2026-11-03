@@ -594,6 +594,13 @@ export interface RelatedProduct extends Product {
 // ── Targeted related-products fetch (companion fix to getProductBySlug) ──
 // Same state OR category, excludes self — queried directly instead of
 // filtering the full in-memory catalog.
+const RELATED_CARD_FIELDS = [
+  'id', 'name', 'slug', 'emoji', 'card_bg', 'region', 'unit', 'unit_label', 'image_url',
+  'price', 'selling_price', 'mrp', 'gst_rate', 'available_stock',
+  'badges', 'review_count', 'category_id', 'state_id', 'is_active', 'sort_order',
+] as const
+const RELATED_CARD_VARIANT_FIELDS = ['id', 'product_id', 'size', 'variant_value', 'price', 'mrp', 'available_stock', 'is_active', 'sort_order'] as const
+
 export async function getRelatedProducts(opts: {
   productId:  number
   categoryId: number | null
@@ -682,13 +689,25 @@ export async function getRelatedProducts(opts: {
       }))
       .sort((a, b) => a.price - b.price)
     const badgeArr: string[] = Array.isArray(p.badges) ? p.badges : []
+    // ALLOW-LIST (round-2 audit): this object is serialised into the PDP for the client RelatedCard. It used to be the whole
+    // select('*') row minus a blocklist, which also shipped long_description, the AI text fields, hsn_code, sku_backup,
+    // initial_stock ... for 4 products on every PDP. Only what the card renders (+ what the cart needs) goes out.
+    const row = scrubProduct(p) as unknown as Record<string, unknown>
+    const slim: Record<string, unknown> = {}
+    for (const k of RELATED_CARD_FIELDS) if (row[k] !== undefined) slim[k] = row[k]
+    const slimVars = pVars.map(v => {
+      const o: Record<string, unknown> = {}
+      const src = v as unknown as Record<string, unknown>
+      for (const k of RELATED_CARD_VARIANT_FIELDS) if (src[k] !== undefined) o[k] = src[k]
+      return o
+    })
     return {
-      ...scrubProduct(p),
+      ...slim,
       badges_bestseller: badgeArr.includes('bestseller'),
       badges_new:        badgeArr.includes('new'),
       badges_organic:    badgeArr.includes('organic'),
       _firstImage:       pImgs[0]?.image_url || p.image_url || '',
-      _variants:         pVars,
-    }
+      _variants:         slimVars,
+    } as unknown as typeof p & { _firstImage: string; _variants: typeof pVars; badges_bestseller: boolean; badges_new: boolean; badges_organic: boolean }
   })
 }
