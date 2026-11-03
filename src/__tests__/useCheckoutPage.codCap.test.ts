@@ -44,3 +44,17 @@ describe('useCheckoutPage — COD availability uses the COD TOTAL (what the serv
     expect(result.current.codOk).toBe(true)
   })
 })
+
+describe('useCheckoutPage — no silently pre-selected state', () => {
+  beforeEach(() => {
+    useCartStore.getState().clearCart(); useCartStore.setState({ _hasHydrated: true })
+    useUserStore.setState({ user: null } as Partial<ReturnType<typeof useUserStore.getState>>)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, text: async () => '{}', json: async () => ({}) })))
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+  it('a new visitor starts with an empty state (it used to be Uttarakhand), so a wrong default can never be submitted unnoticed', () => {
+    useCartStore.getState().addItem(item(500))
+    const { result } = renderHook(() => useCheckoutPage(SETTINGS))
+    expect(result.current.addr.state).toBe('')
+  })
+})

@@ -157,4 +157,12 @@ describe('order-success page', () => {
     expect(screen.getAllByText('IGST').length).toBeGreaterThan(0)
     expect(screen.queryByText('CGST')).toBeNull()
   })
+
+  it('page-scoped reset rules use zero-specificity :where(), so button/link colours set by their own classes still win (contrast regression)', async () => {
+    const { readFileSync } = await import('fs')
+    const css = readFileSync('src/app/order-success/page.tsx', 'utf8')
+    expect(css).toContain(':where(.oc-scope) a {')
+    expect(css).not.toMatch(/\n\s*\.oc-scope a \{/)
+    expect(css).not.toMatch(/\n\s*\.oc-scope button \{/)
+  })
 })

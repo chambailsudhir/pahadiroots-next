@@ -261,3 +261,19 @@ describe('AddressForm — saved-address prefill loading indicator', () => {
     expect(screen.queryByText('Loading your saved details…')).toBeNull()
   })
 })
+
+describe('AddressForm — phone / PIN fields accept typed or pasted spaces and dashes', () => {
+  it('has no maxLength attribute (it counted spaces and cut the last digit off "98765 43210"), yet never emits more than 10 / 6 digits', () => {
+    const { onChange } = setup({ phone: '', pincode: '' })
+    const phone = document.getElementById('af-phone') as HTMLInputElement
+    const pin = document.getElementById('af-pincode') as HTMLInputElement
+    expect(phone.hasAttribute('maxlength')).toBe(false)
+    expect(pin.hasAttribute('maxlength')).toBe(false)
+    fireEvent.change(phone, { target: { value: '98765 43210' } })
+    expect(onChange).toHaveBeenCalledWith('phone', '9876543210')
+    fireEvent.change(phone, { target: { value: '98765432109999' } })
+    expect(onChange).toHaveBeenLastCalledWith('phone', '9876543210')
+    fireEvent.change(pin, { target: { value: '248 001' } })
+    expect(onChange).toHaveBeenCalledWith('pincode', '248001')
+  })
+})
