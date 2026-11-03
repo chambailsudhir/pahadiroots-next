@@ -208,22 +208,6 @@ export async function POST(
     if (!order.delivered_at) {
       return fail(422, 'We could not confirm the delivery date for this order. Please contact support to raise a return.')
     }
-    let replacementShippedAt: string | null = null
-    const replacedRows = await sbAdmin(
-      'GET',
-      `/rest/v1/returns?order_id=eq.${id}&status=eq.replaced&select=variant_id,replacement_shipped_at&order=replacement_shipped_at.desc.nullslast&limit=20`,
-    ).catch(() => null)
-    if (Array.isArray(replacedRows)) {
-      const match = replacedRows.find((r: { variant_id: string | number | null; replacement_shipped_at: string | null }) =>
-        r.replacement_shipped_at && (variantId == null ? r.variant_id == null : String(r.variant_id) === String(variantId)))
-      replacementShippedAt = match?.replacement_shipped_at ?? null
-    }
-    const windowStart = returnWindowStart(order.delivered_at, replacementShippedAt)
-    const hoursSince = windowStart == null ? NaN : (Date.now() - windowStart) / 3_600_000
-    if (!Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
-      return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from ${replacementShippedAt ? 'delivery of your replacement' : 'delivery'})`)
-    }
-
     // Ownership check for line-item returns: if the customer specified
     // which item they're returning (order has >1 item), confirm that item
     // actually belongs to *this* order before trusting any of its fields.
@@ -262,6 +246,28 @@ export async function POST(
       // Whole-order return: guard_return_item skips rows with variant_id NULL, so a client value would be stored
       // unchecked (and skew unit_refund_amount / the credit note). The amount is set by admin; quantity is fixed.
       quantity = 1
+    }
+
+    // Window check AFTER the item is resolved: the replacement extension must use the DB's variant for the item actually
+    // being returned, never the client-supplied variant_id (which could point at a different, replaced item).
+    let replacementShippedAt: string | null = null
+    const replacedRows = await sbAdmin(
+      'GET',
+      `/rest/v1/returns?order_id=eq.${id}&status=eq.replaced&select=variant_id,replacement_shipped_at&order=replacement_shipped_at.desc.nullslast&limit=20`,
+    ).catch(() => null)
+    if (Array.isArray(replacedRows)) {
+      const match = replacedRows.find((r: { variant_id: string | number | null; replacement_shipped_at: string | null }) =>
+        r.replacement_shipped_at && (variantId == null ? r.variant_id == null : String(r.variant_id) === String(variantId)))
+      replacementShippedAt = match?.replacement_shipped_at ?? null
+    }
+    const windowStart = returnWindowStart(order.delivered_at, replacementShippedAt)
+    const hoursSince = windowStart == null ? NaN : (Date.now() - windowStart) / 3_600_000
+    // hoursSince < 0: a replacement has been shipped but is not expected to have arrived yet - nothing to return yet.
+    if (Number.isFinite(hoursSince) && hoursSince < 0) {
+      return fail(422, 'Your replacement is still on its way. You can raise a return once it has been delivered.')
+    }
+    if (!Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
+      return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from ${replacementShippedAt ? 'delivery of your replacement' : 'delivery'})`)
     }
 
     // Idempotency check — confirmed real schema: a return "in progress" means

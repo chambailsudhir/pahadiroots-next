@@ -65,6 +65,7 @@ export const useCartStore = create<CartStore>()(
       setHasHydrated: (state) => set({ _hasHydrated: state }),
 
       addItem: (newItem) => {
+        if (newItem.maxQty != null && newItem.maxQty <= 0) return   // sold out: never store a zero-quantity line
         set(state => {
           const existing = state.items.find(i => i.variantId === newItem.variantId)
           if (existing) {

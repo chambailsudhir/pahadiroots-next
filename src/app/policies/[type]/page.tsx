@@ -584,7 +584,7 @@ const POLICY_DESCRIPTIONS: Record<string, string> = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { type } = await params
-  const policy = POLICIES[type]
+  const policy = Object.hasOwn(POLICIES, type) ? POLICIES[type] : undefined
   if (!policy) return { title: 'Policy Not Found', robots: { index: false, follow: false } }
   return {
     title: `${policy.title} — ${BRAND}`,
@@ -595,7 +595,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PolicyPage({ params }: Props) {
   const { type } = await params
-  const policy = POLICIES[type]
+  const policy = Object.hasOwn(POLICIES, type) ? POLICIES[type] : undefined
   if (!policy) notFound()
 
   const allPolicies = [

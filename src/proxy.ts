@@ -80,7 +80,7 @@ const WINDOW_SEC    = 60
 //    Supabase round-trip. Static files are never "pages" — exempt anything
 //    that ends in a known asset extension.
 export const MAINTENANCE_EXEMPT_PATTERN = new RegExp(
-  '^/(?:(?:api|auth|maintenance|_next)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml)$)' +
+  '^/(?:(?:api|auth|maintenance|reset-password|_next)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml)$)' +
   '|\\.(?:png|jpe?g|webp|avif|gif|svg|ico|css|js|mjs|map|json|txt|xml|webmanifest|woff2?|ttf|otf|mp4|webm)$',
   'i',
 )

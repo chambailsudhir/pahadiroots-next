@@ -513,16 +513,16 @@ export async function POST(req: NextRequest) {
     // refresh token lives 30 days. Revoking only with the access token therefore did nothing once it had
     // expired — the refresh token stayed valid server-side. Revoke with the access token when we have one;
     // otherwise (or when it is rejected) mint a fresh access token from the refresh token and revoke with
-    // that. /logout defaults to scope=global, which kills the refresh token too.
+    // that. scope=local ends THIS device's session (and its refresh token) without signing the customer out of their other devices.
     let revoked = false
     if (token) {
-      try { await sbAuth('/logout', {}, token); revoked = true }
+      try { await sbAuth('/logout?scope=local', {}, token); revoked = true }
       catch (e: unknown) { console.warn('[logout] Supabase session invalidation failed:', e) }
     }
     if (!revoked && rt) {
       try {
         const fresh = await sbAuth('/token?grant_type=refresh_token', { refresh_token: rt })
-        if (fresh?.access_token) { await sbAuth('/logout', {}, fresh.access_token as string); revoked = true }
+        if (fresh?.access_token) { await sbAuth('/logout?scope=local', {}, fresh.access_token as string); revoked = true }
       } catch (e: unknown) {
         console.warn('[logout] could not revoke session via refresh token — local session still cleared:', e)
       }
@@ -565,7 +565,7 @@ export async function POST(req: NextRequest) {
         const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-          body: JSON.stringify({ type: 'recovery', email, options: { redirect_to: `${SITE_URL}/reset-password` } }),
+          body: JSON.stringify({ type: 'recovery', email, redirect_to: `${SITE_URL}/reset-password` }),   // GoTrue reads redirect_to at the TOP level (an `options` wrapper is ignored)
           signal: AbortSignal.timeout(8_000),
         })
         const genText = await genRes.text()

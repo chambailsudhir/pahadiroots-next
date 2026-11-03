@@ -270,3 +270,18 @@ transaction and idempotent). Apply it *before* deploying: until then `submit_rev
 * **`/api/v1/search-catalog` exposes internal catalogue columns** to anyone (`initial_stock`, `available_stock`, `sku_backup`,
   `hsn_code_id`, `state_id`, `sort_order`, …). No cost price or vendor data (checked the variant keys). Low severity; tracked.
 * Cross-customer order access re-checked with another customer's ids: 404. CORS: no `Access-Control-Allow-Origin` on any route.
+## 8. Deep bug hunt, round 2 (five read-only audits, findings verified in code before fixing)
+
+**Fixed in this round (PR `fix/auth-round2`)**
+- Password-reset e-mail: `redirect_to` was sent inside `options` (GoTrue ignores it) — now top level; `/reset-password` exempt from the maintenance gate.
+- Logout now `scope=local` (logging out of one device no longer signs the customer out everywhere).
+- Customer lookup is case-insensitive (guest checkout stores `Priya@Gmail.com`, GoTrue lowercases), value quoted; first-login insert race re-reads the winner's row instead of returning "profile not found".
+- Returns: the replacement window check now runs AFTER the item is resolved from the DB (client `variant_id` could borrow another item's extended window) and refuses while the replacement is still in transit (negative elapsed time passed the `> 48 h` test); photo upload honours the replacement window and counts photos only on OPEN returns.
+- Account deletion is refused while a return / replacement / refund is open (orders stay `delivered` while returns live in their own table).
+- `/checkout` no longer serialises admin-only settings; `/policies/constructor` etc. 404; a blog DB blip no longer caches a 404 for a live article; ZWJ/ZWNJ allowed in names (Indic scripts); sold-out related card no longer adds a zero-quantity cart line.
+
+**Verified/confirmed but NOT fixed here (need a design decision, live DB access or owner action)**
+- Money path: Razorpay webhook side effects not re-drivable if the function is killed (10 s maxDuration); order abandoned in Razorpay modal holds coupon/coins/stock until the sweep; late payment after expiry recovers an order without re-claiming coupon/coins and no `expire_by` on the Razorpay order; `alreadyExists` retries skip coins/e-mail; COD has no per-IP/phone-verification abuse guard; stock decrement outside the create-order transaction; first-order-only coupon race; GST on COD fee/shipping and per-line rounding (CA decision). Needs `create_order_with_items` / `redeem_loyalty_points` / `release_coupon_for_order` source from the live DB.
+- Auth: refresh-token cookies dropped on error paths (17 routes), account lockout design (stranger lockout), sign-up verification link never consumed, store user-id flip (auth uuid vs customers.id), CGNAT/IPv6 rate-limit buckets, strict-CSP scope.
+- Platform: proxy per-navigation DB reads (no single-flight/failure TTL), `revalidate` invalidation too wide with `expire: 0`, listing pages dynamic (searchParams), YouTube iframe blocked by CSP `frame-src`, public search-catalog / RelatedCard blocklist instead of allow-list.
+- Phone verification: claim outcome not shown to the customer, feature flag fails open on read error, `/status` polling unthrottled.

@@ -262,7 +262,7 @@ describe('logout (#6) revokes the server session even after the access token exp
     expect(res.status).toBe(200)
     const calls = fetchMock.mock.calls.map(c => ({ url: String(c[0]), auth: c[1].headers.Authorization }))
     expect(calls[0].url).toContain('grant_type=refresh_token')
-    expect(calls[1].url).toBe('https://example.supabase.co/auth/v1/logout')
+    expect(calls[1].url).toBe('https://example.supabase.co/auth/v1/logout?scope=local')
     expect(calls[1].auth).toBe('Bearer FRESH')
     expect(setCookie(res).filter(c => /Max-Age=0/i.test(c)).length).toBeGreaterThanOrEqual(2)
   })
@@ -270,13 +270,13 @@ describe('logout (#6) revokes the server session even after the access token exp
   it('when the access token is rejected (401) it falls back to the refresh token', async () => {
     fetchMock.mockImplementation(async (url: string, init: { headers: Record<string, string> }) => {
       if (url.includes('grant_type=refresh_token')) return json(200, { access_token: 'FRESH' })
-      if (url.endsWith('/logout') && init.headers.Authorization === 'Bearer STALE') return json(401, { msg: 'expired' })
+      if (url.endsWith('/logout?scope=local') && init.headers.Authorization === 'Bearer STALE') return json(401, { msg: 'expired' })
       return json(204, {})
     })
     const res = await post(makeRequest({ action: 'logout' }, { cookies: { pr_token: 'STALE', pr_refresh: 'RT' } }))
     expect(res.status).toBe(200)
     const last = fetchMock.mock.calls.at(-1)!
-    expect(String(last[0])).toBe('https://example.supabase.co/auth/v1/logout')
+    expect(String(last[0])).toBe('https://example.supabase.co/auth/v1/logout?scope=local')
     expect(last[1].headers.Authorization).toBe('Bearer FRESH')
   })
 

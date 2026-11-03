@@ -293,7 +293,13 @@ export async function syncCustomerProfile(user: {
   // people legitimately sharing one phone number is the exact scenario
   // this fix now needs to support.
   const orParts = [`auth_user_id.eq.${user.id}`]
-  if (email) orParts.push(`email.eq.${encodeURIComponent(email)}`)
+  // Case-insensitive: guest checkout stores the address as typed ("Priya@Gmail.com") while GoTrue lowercases it. The value is
+  // double-quoted so commas / parentheses in it cannot change the filter; LIKE wildcards are escaped; the exact
+  // case-insensitive comparison below is still what decides adoption.
+  if (email) {
+    const q = email.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/([_%])/g, '\\\\$1')
+    orParts.push(`email.ilike.${encodeURIComponent(`"${q}"`)}`)
+  }
 
   // BUG FIX (observability, found while tracing a live 404 on /api/wishlist):
   // this lookup used to swallow ANY failure (network blip, Supabase timeout)
@@ -308,7 +314,7 @@ export async function syncCustomerProfile(user: {
   try {
     rows = await sbAdmin(
       'GET',
-      `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=3`,
+      `/rest/v1/customers?or=(${orParts.join(',')})&select=*&limit=5`,
     )
   } catch (e: unknown) {
     captureError(e, { action: 'syncCustomerProfile.lookup', userId: user.id })
@@ -384,6 +390,11 @@ export async function syncCustomerProfile(user: {
     captureError(e, { action: 'syncCustomerProfile.create', userId: user.id, alert: true })
     return null
   })
+  if (!created?.[0]) {
+    // Lost a first-login race (parallel /api/profile + /api/wishlist ... each tried to insert): the winner's row exists now.
+    const again = await sbAdmin('GET', `/rest/v1/customers?auth_user_id=eq.${user.id}&select=*&limit=1`).catch(() => null)
+    if (again?.[0]) return again[0]
+  }
   return created?.[0] ?? null
 }
 

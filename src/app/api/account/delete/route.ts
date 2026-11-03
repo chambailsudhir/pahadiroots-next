@@ -284,6 +284,18 @@ export async function DELETE(req: NextRequest) {
         if (page.length < 1000) break
       }
 
+      // An order can stay 'delivered' while a return / replacement / refund on it is still open (returns live in their own
+      // table). Erasing now would destroy the evidence and contact details that claim needs.
+      for (const ids of chunk(orderIds, 100)) {
+        const openRet = await sbAdmin('GET', `/rest/v1/returns?order_id=in.(${ids.join(',')})&status=not.in.(refunded,rejected,replaced)&select=id&limit=1`)
+        if (Array.isArray(openRet) && openRet.length > 0) {
+          return NextResponse.json({
+            error: 'You still have a return or refund in progress. We need your details until it is completed, so your account cannot be deleted yet. Please wait until it is finished, or contact support on WhatsApp.',
+            code:  'open_orders',
+          }, { status: 409 })
+        }
+      }
+
       // ── Step 3: return-evidence photos (private bucket) + free text on returns ──
       if (orderIds.length > 0) await deleteReturnEvidence(orderIds)
       for (const ids of chunk(orderIds, 100)) {

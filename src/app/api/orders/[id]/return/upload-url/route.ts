@@ -28,7 +28,7 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
-import { RETURNABLE_WINDOW_HOURS } from '@/lib/account/constants'
+import { RETURNABLE_WINDOW_HOURS, returnWindowStart } from '@/lib/account/constants'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -91,7 +91,11 @@ export async function POST(
     // Signed upload URLs only for orders that can still be returned (delivered, inside the window) — the
     // same rules as POST /return, so the bucket cannot be filled via arbitrary owned orders.
     const ord = rows[0] as { order_status?: string; delivered_at?: string | null }
-    const hoursSince = ord.delivered_at ? (Date.now() - new Date(ord.delivered_at).getTime()) / 3_600_000 : NaN
+    // A damaged REPLACEMENT can be returned later than 48 h after the original delivery (see returnWindowStart); the /return route
+    // makes the per-item decision, this only has to let evidence be uploaded for such a return.
+    const repl = await sbAdmin('GET', `/rest/v1/returns?order_id=eq.${id}&status=eq.replaced&select=replacement_shipped_at&order=replacement_shipped_at.desc.nullslast&limit=1`).catch(() => null)
+    const start = returnWindowStart(ord.delivered_at, Array.isArray(repl) ? repl[0]?.replacement_shipped_at : null)
+    const hoursSince = start == null ? NaN : (Date.now() - start) / 3_600_000
     if (ord.order_status !== 'delivered' || !Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
       return fail(422, 'Photos can only be uploaded for a delivered order that is still within its return window')
     }
@@ -109,7 +113,7 @@ export async function POST(
     // order's return, independent of whatever the client's own UI allows.
     const existingPhotoCount = await sbAdmin(
       'GET',
-      `/rest/v1/returns?order_id=eq.${id}&select=photo_urls&order=created_at.desc&limit=1`,
+      `/rest/v1/returns?order_id=eq.${id}&status=not.in.(refunded,rejected,replaced)&select=photo_urls&order=created_at.desc&limit=1`,
     ).catch(() => null)
     const existingCount = Array.isArray(existingPhotoCount) && existingPhotoCount[0]?.photo_urls
       ? (existingPhotoCount[0].photo_urls as string[]).length
