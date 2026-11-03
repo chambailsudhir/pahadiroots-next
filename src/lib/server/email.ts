@@ -37,6 +37,7 @@ import { Resend } from 'resend'
 import { getServiceClient } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { sanitizeHtml } from '@/lib/server/sanitize'
+import { emailSafeHtml } from '@/lib/server/emailSafeHtml'
 
 export type TransactionalEmailType =
   | 'order_confirmation'
@@ -123,7 +124,7 @@ export async function sendTransactionalEmail(
   // newsletter) individually — so it genuinely applies to "every
   // outgoing email" as claimed, not just the ones someone remembers to
   // update later.
-  let html = params.html
+  let html = emailSafeHtml(params.html)   // Outlook-safe backgrounds, see emailSafeHtml.ts
   try {
     const settings = await getSiteSettings()
     if (settings.email_footer_text?.trim()) {
