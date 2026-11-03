@@ -17,7 +17,7 @@ describe.each(['vercel.json', 'vercel.pro.json'])('%s', (file) => {
 })
 
 describe('scripts/vercel-ignore.sh', () => {
-  const run = (env: Record<string, string>) => spawnSync('sh', ['scripts/vercel-ignore.sh'], { env: { PATH: process.env.PATH ?? '', ...env } }).status
+  const run = (env: Record<string, string>) => spawnSync('sh', ['scripts/vercel-ignore.sh'], { env: { PATH: process.env.PATH ?? '', ...env } as unknown as NodeJS.ProcessEnv }).status
   it('skips previews, builds when it cannot compare', () => {
     expect(run({ VERCEL_ENV: 'preview' })).toBe(0)
     expect(run({ VERCEL_ENV: 'production' })).toBe(1)                                                    // no previous sha
