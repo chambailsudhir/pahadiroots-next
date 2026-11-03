@@ -390,6 +390,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Raise a grievance with us about how your data is handled</li>
           </ul>
           <p className="text-stone-500 text-xs mt-2">These rights follow the Digital Personal Data Protection Act, 2023. If we do not resolve your grievance, the Act allows you to complain to the Data Protection Board of India.</p>
+          <p className="text-stone-600 mt-2"><strong>Account deletion.</strong> When you delete your account we erase your name, phone number, e-mail, GSTIN, saved addresses, wishlist, carts, subscriptions, order notes and return photos, and the phone number and e-mail stored with past orders. For completed orders we are legally required to keep invoice records, so we retain only the recipient name, delivery address (and GSTIN for business orders) and the invoice amounts for up to 6 years, as required by GST law (CGST Act, 2017, section 36 and Rule 56); this data is used for no other purpose. Orders still in progress must be delivered or cancelled before an account can be deleted. Reviews you posted remain on the product page but are no longer linked to you.</p>
           <p className="text-stone-600 mt-2">To exercise any right: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a></p>
         </section>
 

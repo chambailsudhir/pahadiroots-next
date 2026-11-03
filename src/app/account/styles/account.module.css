@@ -210,7 +210,7 @@
 .mobTabs { display: none; }
 @media (max-width: 900px) {
   .mobTabs { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ede9e3; z-index: 100; box-shadow: 0 -2px 20px rgba(0,0,0,.08); }
-  .mobTab  { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 4px; border: none; background: none; cursor: pointer; font-size: 9px; font-weight: 700; color:#6b6b6b; gap: 3px; transition: color .2s; }
+  .mobTab  { flex: 1 0 64px; min-width: 64px; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 6px; border: none; background: none; cursor: pointer; font-size: 11px; font-weight: 700; white-space: nowrap; color:#6b6b6b; gap: 3px; transition: color .2s; }
   .mobTabActive { color: #1a3a1e; }
   .mtIcon  { font-size: 19px; }
 }
@@ -294,6 +294,11 @@
 
 /* ── Mobile nav updates ─────────────────────────────────────── */
 .mobTabList { display: flex; width: 100%; }
+/* The tablist scrolls sideways instead of squeezing nine items into 320px; Wishlist stays pinned beside it. */
+.mobTabScroll { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.mobTabScroll::-webkit-scrollbar { display: none; }
+.mobTabList > a.mobTab { flex: 0 0 64px; text-decoration: none; }
+.mobTab:focus-visible, .sbItem:focus-visible { outline: 2px solid #1a3a1e; outline-offset: -2px; }
 
 /* Mobile sign-out button — sits just above the tab bar, hidden on desktop */
 .mobSignOut { display: none; }

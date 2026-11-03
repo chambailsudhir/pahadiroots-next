@@ -4,7 +4,7 @@
 //
 // Flow:
 //  1. User clicks "Delete my account"
-//  2. Modal explains consequences (data anonymisation, no recovery)
+//  2. Modal explains consequences (what is erased, what is kept for GST, no recovery)
 //  3. User must type "DELETE" to unlock the confirm button
 //  4. Calls DELETE /api/account/delete with { confirm: "DELETE" }
 //  5. On success: clears local state + redirects to /
@@ -223,17 +223,24 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
           <p className={styles.dangerInfoText}>
             Under India&apos;s <strong>Digital Personal Data Protection Act 2023 (DPDP)</strong>,
             you have the right to request erasure of your personal data. When you delete your
-            account we will:
+            account we will <strong>erase</strong>:
           </p>
           <ul className={styles.dangerList}>
-            <li>Remove your name, phone number, email, and address from your profile</li>
-            <li>Anonymise personal details in past orders (required for accounting records)</li>
-            <li>Delete all saved delivery addresses</li>
-            <li>Permanently close your login — this cannot be undone</li>
+            <li>Your name, phone number, e-mail, GSTIN and profile address, and all saved delivery addresses</li>
+            <li>Your wishlist, abandoned carts, newsletter and back-in-stock subscriptions</li>
+            <li>Order notes, notes on Pahadi Coins entries, return photos and your comments on returns</li>
+            <li>The phone number, e-mail and any other details stored with the delivery address of your past orders</li>
+            <li>Your login — this cannot be undone</li>
           </ul>
+          <p className={styles.dangerInfoText}>
+            <strong>What we must keep:</strong> for completed orders, GST law requires us to keep the invoice details —
+            the <strong>recipient name and delivery address</strong> (and the GSTIN, if it was a business order) —
+            for <strong>up to 6 years</strong>. We keep nothing else on those orders, and never use it for marketing.
+          </p>
           <p className={styles.dangerInfoNote}>
-            Order records themselves are retained for the period required under GST and tax law,
-            but will contain no information that identifies you personally.
+            Orders that are still in progress (not yet delivered or cancelled, or with a return or refund open) must be
+            completed first — your account cannot be deleted until then. Product reviews you wrote stay on the
+            product page but become anonymous.
           </p>
           {userEmail && (
             <p className={styles.dangerInfoNote}>
@@ -322,12 +329,14 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
               <>
                 <p className={styles.modalDesc}>
                   This will <strong>permanently delete</strong> your HimVeda by Pahadi Roots account and
-                  anonymise all personal data stored by us, in line with India&apos;s DPDP Act 2023.
+                  erase your personal data, in line with India&apos;s DPDP Act 2023. We keep only what GST law requires.
                 </p>
                 <ul className={styles.dangerModalList}>
                   <li>You will be logged out immediately</li>
-                  <li>Your address book will be wiped</li>
-                  <li>Order history will be anonymised (not deleted — required by law)</li>
+                  <li>Your profile, address book, wishlist and phone/e-mail on past orders will be erased</li>
+                  <li>Completed orders keep only the recipient name and delivery address (and GSTIN for business orders) for up to 6 years, as GST law requires</li>
+                  <li>Orders still in progress must be delivered or cancelled first</li>
+                  <li>Your reviews stay but become anonymous</li>
                   <li>You can create a new account at any time</li>
                 </ul>
                 <div className={styles.modalFooter}>
