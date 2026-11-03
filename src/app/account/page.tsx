@@ -175,6 +175,11 @@ function AccountPageInner() {
         <div className={styles.lwIcon}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         </div>
+        {searchParams.get('verified') === '1' && (
+          <p role="status" style={{ background: '#e8f5e9', color: '#1b5e20', border: '1px solid #a5d6a7', borderRadius: 10, padding: '10px 14px', margin: '0 0 12px', fontSize: 14 }}>
+            Your e-mail is verified. Please sign in to continue.
+          </p>
+        )}
         <h1 className={styles.lwTitle}>Welcome Back</h1>
         <p className={styles.lwSub}>Please login to view your orders and manage your account.</p>
         <button className={styles.btnPrimary} onClick={openAuth}>Sign In to Continue</button>

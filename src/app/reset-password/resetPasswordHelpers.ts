@@ -58,6 +58,16 @@ export function recoveryLandingTarget(pathname: string, hash: string): string | 
   return null
 }
 
+/**
+ * The e-mail-verification (sign-up) link lands as `/account?verified=1#access_token=…&refresh_token=…&type=signup`. Nothing may
+ * consume those tokens (that would be login by an unbound token, see GoogleAuthHandler), and they must not sit in the address bar,
+ * history and anything that reads `location`. True when the hash is such a payload and should be scrubbed.
+ */
+export function isSignupConfirmationHash(hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ''))
+  return params.get('type') === 'signup' && !!params.get('access_token')
+}
+
 export function friendlyLinkError(raw: string | null): string {
   if (!raw) return 'This reset link is invalid or has expired.'
   if (/expired|invalid/i.test(raw)) return 'This reset link has expired or was already used. Reset links work only once and for a short time.'
