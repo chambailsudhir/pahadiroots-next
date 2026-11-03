@@ -1,0 +1,21 @@
+// Keys the cart page reads — shared by /api/v1/cart-settings (what the browser may fetch) and the cart layout (what the server pre-loads).
+export const CART_SETTING_KEYS = [
+  'free_shipping_min',
+  'flat_shipping_charge',
+  'min_order_amount',
+  'whatsapp_number',
+  'prepaid_discount_pct',
+  'cod_surcharge_amount',
+  'cod_enabled',
+  'cod_max_value',
+  'upi_enabled',
+  'loyalty_enabled',
+  'loyalty_points_per_rupee',
+  'loyalty_points_value',
+  'loyalty_points_label',
+  'loyalty_min_redeem',
+  'loyalty_max_redeem_pct',
+  'review_1_name',     'review_1_location',     'review_1_text',
+  'review_2_name',     'review_2_location',     'review_2_text',
+  'review_3_name',     'review_3_location',     'review_3_text',
+] as const

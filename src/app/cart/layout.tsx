@@ -1,4 +1,7 @@
 import type { Metadata } from 'next'
+import { getSiteSettings } from '@/lib/getSiteSettings'
+import { CART_SETTING_KEYS } from '@/lib/cartSettingKeys'
+import { CartSettingsSeed } from '@/components/cart/CartSettingsSeed'
 
 /**
  * Cart route metadata — explicitly noindex (cart is not a public landing page)
@@ -25,6 +28,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default function CartLayout({ children }: { children: React.ReactNode }) {
-  return children
+export default async function CartLayout({ children }: { children: React.ReactNode }) {
+  // Pre-load the cart's settings on the server (cached 5 min by getSiteSettings) so the order summary paints with the page.
+  let seed: Record<string, string> | null = null
+  try {
+    const all = (await getSiteSettings()) as unknown as Record<string, string>
+    seed = {}
+    for (const k of CART_SETTING_KEYS) if (all[k] != null) seed[k] = String(all[k])
+  } catch { seed = null }   // fall back to the browser fetch
+  return seed ? <CartSettingsSeed settings={seed}>{children}</CartSettingsSeed> : children
 }

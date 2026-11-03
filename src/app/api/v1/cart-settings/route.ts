@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server'
 import { logger }        from '@/lib/logger'
+import { CART_SETTING_KEYS } from '@/lib/cartSettingKeys'
 import { rememberGood, recallGood } from '@/lib/api/lastGood'
 
 // Use anon key for this read-only GET endpoint — the service key grants full DB
@@ -18,36 +19,7 @@ import { rememberGood, recallGood } from '@/lib/api/lastGood'
 // Ensure the `site_settings` table RLS policy allows anon SELECT on key+value.
 const SUPABASE_KEY  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-/** Keys the cart page actually reads — nothing more is returned to the client. */
-const CART_SETTING_KEYS = [
-  'free_shipping_min',
-  'flat_shipping_charge',
-  'min_order_amount',
-  'whatsapp_number',
-  'prepaid_discount_pct',
-  'cod_surcharge_amount',
-  'cod_enabled',
-  'cod_max_value',
-  // BUG FIX: upi_enabled and loyalty_enabled were missing but are consumed by
-  // CheckoutClient.tsx — their absence caused UPI/loyalty features to silently
-  // fall back to disabled state on the checkout page.
-  'upi_enabled',
-  'loyalty_enabled',
-  'loyalty_points_per_rupee',
-  // BUG FIX: the four keys below were absent from CART_SETTING_KEYS even though
-  // OrderSummary reads all of them from the settings prop. Their absence caused
-  // the loyalty panel to always use hardcoded defaults (0.25 ₹/coin, 20% cap,
-  // 40-coin minimum, "Pahadi Coins" label) instead of the admin-configured values,
-  // silently overriding any customisation made in the CMS.
-  'loyalty_points_value',
-  'loyalty_points_label',
-  'loyalty_min_redeem',
-  'loyalty_max_redeem_pct',
-  'review_1_name',     'review_1_location',     'review_1_text',
-  'review_2_name',     'review_2_location',     'review_2_text',
-  'review_3_name',     'review_3_location',     'review_3_text',
-] as const
-
+/** Keys the cart page actually reads — nothing more is returned to the client (list shared with the cart layout). */
 export type CartSettingKey = (typeof CART_SETTING_KEYS)[number]
 
 // BUG FIX: the filter string and URL were rebuilt on every request even though
