@@ -8,7 +8,8 @@ import StoryVideo from '@/components/story/StoryVideo'
 import { MountainMark } from '@/components/brand/BrandMotifs'
 import s from '@/components/story/mountainPage.module.css'
 
-const TITLE = 'Mountain Stories — HimVeda by Pahadi Roots'
+const TITLE = 'Mountain Stories'   // the layout's title template appends the brand to <title>; openGraph below adds it explicitly
+const OG_TITLE = 'Mountain Stories — HimVeda by Pahadi Roots'
 const DESC  = 'The dham feast, the Gaddi shepherds and the forests above the villages: three living Himalayan traditions behind HimVeda by Pahadi Roots.'
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
   description: DESC,
   alternates:  { canonical: '/mountain-stories' },
   openGraph: {
-    title:       TITLE,
+    title:       OG_TITLE,
     description: DESC,
     url:         'https://www.pahadiroots.com/mountain-stories',
     type:        'website',

@@ -59,7 +59,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     : activeCat ? activeCat.name
     : 'All Products'
   const pageSuffix = page > 1 ? ` — Page ${page}` : ''
-  const title = `${base}${pageSuffix} — Natural Himalayan Foods | HimVeda by Pahadi Roots`
+  const title = `${base}${pageSuffix} — Natural Himalayan Foods`   // the layout's title template appends the brand
   const description = activeCat
     ? `Shop ${activeCat.name} — natural Himalayan ${activeCat.name.toLowerCase()} sourced directly from mountain families.`
     : activeState
