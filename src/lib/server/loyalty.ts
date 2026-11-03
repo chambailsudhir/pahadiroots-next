@@ -54,7 +54,7 @@ export async function awardLoyaltyPoints(
   // non-finite rate or total never produces a NaN that would be sent to the database as null.
   const parsed = parseFloat(settings.loyalty_points_per_rupee || '1')
   const rate   = Number.isFinite(parsed) && parsed >= 0 ? parsed : 1
-  const pts    = Math.floor((Number.isFinite(orderTotal) ? orderTotal : 0) * rate)
+  const pts    = Math.floor((Number.isFinite(orderTotal) ? orderTotal : 0) * rate + 1e-9)
   if (!Number.isFinite(pts) || pts <= 0) return
   // Nov 2026 audit (#5): never award on an order that was cancelled in the meantime (e.g. the ACC-032
   // recovery path running after a cancel). Cheap single read; fail-open — the DB function is the backstop.

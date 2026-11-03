@@ -24,6 +24,12 @@ describe('buildMerchantFeed', () => {
     expect(x).toContain('<g:price>300.00 INR</g:price>')
     expect(x).toContain('<g:sale_price>250.00 INR</g:sale_price>')
   })
+  it('strips XML-illegal control characters so one pasted \\x0B cannot make the whole feed unparseable', () => {
+    const x = buildMerchantFeed([{ ...base, name: 'Honey\u000B\u0000 Jar', short_description: 'ok\u000Cdesc', variants: [{ id: 1, price: 10, available_stock: 1 }] }], o)
+    // eslint-disable-next-line no-control-regex
+    expect(/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(x)).toBe(false)
+    expect(x).toContain('Honey Jar')
+  })
   it('only sends valid GTINs, otherwise identifier_exists=no', () => {
     const ok = buildMerchantFeed([{ ...base, variants: [{ id: 1, price: 10, barcode: '8901234567890' }] }], o)
     const bad = buildMerchantFeed([{ ...base, variants: [{ id: 1, price: 10, barcode: 'ABC-12' }] }], o)

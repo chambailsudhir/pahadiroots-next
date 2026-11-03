@@ -7,7 +7,7 @@
 //  ✅ Token auth + ownership check (prevents IDOR)
 //  ✅ Returns text/html (browser renders + allows native print)
 //  ✅ No external PDF library — pure HTML + print CSS
-//  ✅ Cache-Control: private, max-age=60 (invoice rarely changes)
+//  ✅ Cache-Control: private, max-age=60 (personal data: no-store)
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -59,10 +59,14 @@ function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+  // IST, like the order e-mails: the server runs in UTC, so an order placed at 02:00 IST would otherwise show the previous day.
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
 }
 
 const NO_INVOICE_STATUSES = ['pending', 'cancelled', 'payment_failed']
+// A returned / refunded order no longer carries a valid tax invoice (the supply was reversed; that needs a credit note, which the
+// admin issues). Reprinting the original with the full GST would look like a live supply to a business buyer.
+const REVERSED_STATUS = /^(returned?|return_.*|refund.*)$/
 
 export async function GET(
   req: NextRequest,
@@ -110,8 +114,12 @@ export async function GET(
 
     // A tax invoice only exists for an order that was actually confirmed: not while it is still pending (unpaid /
     // not yet accepted), and never for a cancelled order or a failed payment.
-    if (NO_INVOICE_STATUSES.includes(String(o.order_status ?? '').toLowerCase())) {
+    const statusNow = String(o.order_status ?? '').toLowerCase()
+    if (NO_INVOICE_STATUSES.includes(statusNow)) {
       return fail(409, 'An invoice is available once your order is confirmed.', requestId)
+    }
+    if (REVERSED_STATUS.test(statusNow)) {
+      return fail(409, 'This order was returned or refunded, so the original invoice is no longer valid. Please contact support for the credit note.', requestId)
     }
 
     const items = ((o.order_items as Array<{
@@ -347,7 +355,7 @@ export async function GET(
       status: 200,
       headers: {
         'Content-Type':  'text/html; charset=utf-8',
-        'Cache-Control': 'private, max-age=60',
+        'Cache-Control': 'private, no-store',   // name, phone, e-mail and address: never kept on the device
         [REQUEST_ID_HEADER]: requestId,
       },
     })

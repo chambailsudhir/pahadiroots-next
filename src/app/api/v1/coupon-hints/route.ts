@@ -16,12 +16,11 @@ import { logger } from '@/lib/logger'
 import { rememberGood, recallGood } from '@/lib/api/lastGood'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-// Use the anon key for this public GET endpoint — the service key would grant
-// full DB write access if ever leaked. Row-level security on `coupons` must
-// allow anon SELECT on non-sensitive columns (code, type, value, min_order,
-// expires_at, is_active) for this to work. Internal fields (uses_count,
-// max_uses, max_discount, first_order_only) are excluded by the select list.
-const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// The `coupons` table is locked down (RLS policy `coupons_no_direct`: no row is visible to anon), so an anon read returns an EMPTY list
+// and the cart never showed a hint even though WELCOME50 / MYPAHADI are active public codes (found Nov 2026: this route answered
+// {"hints":[]} in production). The read therefore happens SERVER-SIDE with the service key; what leaves this route is only the
+// `code` and a human label of a public, multi-use code (isPublicHint below), never a column or a row of the table.
+const ANON_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // Only select the columns needed to render a hint label.
 // expires_at is fetched internally for server-side expiry filtering but is

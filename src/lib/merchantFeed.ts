@@ -31,8 +31,10 @@ export interface FeedOptions {
   siteDescription: string
 }
 
+// XML 1.0 forbids most control characters: ONE stray \x0B / \x00 (pasted from Word, a PDF ...) makes the whole feed unparseable and
+// Merchant Center rejects every item. Strip them before escaping.
 const xml = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+  v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 
 const stripHtml = (v: string) => v.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 const money = (n: number) => `${n.toFixed(2)} INR`

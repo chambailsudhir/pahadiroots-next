@@ -997,8 +997,13 @@ export async function createOrder(
   let loyaltyDiscountInr = 0
   let loyaltyPointsToStore = 0
   if ((input.loyaltyPointsRedeemed ?? 0) > 0) {
-    const pointsValue  = parseFloat(settings.loyalty_points_value   || '0.25') || 0.25
-    const maxRedeemPct = parseFloat(settings.loyalty_max_redeem_pct || '20')   || 20
+    // "Pahadi Coins" switched off in the admin must stop redemption here too, not only hide the UI (the validate route and the UI
+    // already respect it; a direct POST did not).
+    if (settings.loyalty_enabled === 'false') throw new Error('Pahadi Coins are not available right now — please remove them and try again')
+    // A setting of 0 means 0 (no redemption / worthless coins), NOT "use the default": `parseFloat(x) || 20` turned an admin's 0 into 20%.
+    const num = (raw: string | undefined, dflt: number) => { const n = parseFloat(raw ?? ''); return Number.isFinite(n) && n >= 0 ? n : dflt }
+    const pointsValue  = num(settings.loyalty_points_value,   0.25)
+    const maxRedeemPct = num(settings.loyalty_max_redeem_pct, 20)
     const subtotal     = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
 
     const requestedDiscount = Math.floor(input.loyaltyPointsRedeemed! * pointsValue)
@@ -1007,7 +1012,10 @@ export async function createOrder(
     // Clamp to the cap rather than throwing — the order still proceeds but
     // excess loyalty is silently capped.  The balance guard (step 7c) handles
     // the "more points than the customer owns" case.
-    loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed)
+    // Coins may only pay for what is still payable AFTER the coupon: with a flat coupon that already covers the goods, the coin
+    // discount used to be granted (and the coins deducted) although the total was clamped to 0 anyway - coins burned for nothing.
+    const payableAfterCoupon = Math.max(0, subtotal - (appliedCoupon ? appliedCoupon.discount : 0))
+    loyaltyDiscountInr = Math.min(requestedDiscount, maxAllowed, payableAfterCoupon)
 
     // Nov 2026 audit (#4): the minimum was only enforced by the UI / action=validate. A direct caller
     // could submit fewer coins; enforce it here too.
@@ -1018,7 +1026,7 @@ export async function createOrder(
     }
     // Charge only for the discount actually granted (never more than requested): a request clamped
     // by the max-% cap, or a points_value < 1 floor(), no longer burns coins for nothing.
-    loyaltyPointsToStore = loyaltyDiscountInr > 0
+    loyaltyPointsToStore = loyaltyDiscountInr > 0 && pointsValue > 0
       ? Math.min(input.loyaltyPointsRedeemed!, Math.ceil(loyaltyDiscountInr / pointsValue - 1e-9))
       : 0
   }

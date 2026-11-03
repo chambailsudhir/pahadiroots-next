@@ -85,7 +85,7 @@ export async function POST(
     try {
       updated = await sbAdmin(
         'PATCH',
-        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&order_status=in.(pending,confirmed)&or=(tracking_number.is.null,tracking_number.eq.)&shipped_at=is.null`,
+        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&payment_method=eq.cod&order_status=in.(pending,confirmed)&or=(tracking_number.is.null,tracking_number.eq.)&shipped_at=is.null`,
         { order_status: 'cancelled', updated_at: new Date().toISOString() },
         'return=representation',
       ) ?? []
@@ -130,7 +130,7 @@ export async function POST(
             subject: `Order ${order.order_number} cancelled`,
             html: brandedEmail({
               heading: 'Your order has been cancelled',
-              bodyHtml: `<p style="margin:0 0 12px">Order <strong>${esc(order.order_number)}</strong> was cancelled at your request. As this was a Cash-on-Delivery order, nothing was charged and no refund is needed. Any Pahadi Coins you used have been returned to your account.</p><p style="margin:0">Changed your mind? You can place a new order any time.</p>`,
+              bodyHtml: `<p style="margin:0 0 12px">Order <strong>${esc(order.order_number)}</strong> was cancelled at your request. As this was a Cash-on-Delivery order, nothing was charged and no refund is needed. ${followupFailed.includes('loyalty_reversal') ? 'If you used Pahadi Coins on this order, our team will confirm their return to your account shortly.' : 'Any Pahadi Coins you used have been returned to your account.'}</p><p style="margin:0">Changed your mind? You can place a new order any time.</p>`,
               cta: { label: 'Continue shopping', href: process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com' },
             }),
             context: { order_id: order.id, order_number: order.order_number },
