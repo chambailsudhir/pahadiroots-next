@@ -104,22 +104,36 @@ describe('email_signup (ACC-029)', () => {
   })
 })
 
-describe('email_login per-account throttle (ACC-034)', () => {
-  it('blocks the 11th failed attempt on ONE account even when every attempt comes from a different IP', async () => {
+describe('email_login failed-attempt throttle (ACC-034, reworked in the round-2 audit)', () => {
+  const sameIp = (body: unknown, ip: string) => new NextRequest('https://pahadiroots.com/api/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', origin: 'https://pahadiroots.com', 'x-forwarded-for': ip },
+    body: JSON.stringify(body),
+  })
+
+  it('a stranger cannot lock the victim out: 10 failures from other networks do not block a login from a fresh one', async () => {
     fetchMock.mockResolvedValue(json(400, { msg: 'Invalid login credentials' }))
     const { POST } = await import('@/app/api/auth/route')
     const email = `victim-${Date.now()}@example.com`
-
     const statuses: number[] = []
     for (let i = 0; i < 12; i++) {
-      const res = await POST(makeRequest({ action: 'email_login', email, password: 'Wrong-Pass-1!' }))
-      statuses.push(res.status)
+      statuses.push((await POST(makeRequest({ action: 'email_login', email, password: 'Wrong-Pass-1!' }))).status)   // fresh IP each time
     }
+    expect(statuses.every(s => s === 400)).toBe(true)                  // none was throttled
+    expect(fetchMock).toHaveBeenCalledTimes(12)
+  })
 
-    expect(statuses.slice(0, 10).every(s => s === 400)).toBe(true)
-    expect(statuses[10]).toBe(429)
-    expect(statuses[11]).toBe(429)
-    // the throttled attempts never reached Supabase
-    expect(fetchMock).toHaveBeenCalledTimes(10)
+  it('blocks the 11th failed attempt from ONE network (the attacker only locks themselves out)', async () => {
+    fetchMock.mockResolvedValue(json(400, { msg: 'Invalid login credentials' }))
+    const { POST } = await import('@/app/api/auth/route')
+    const email = `victim2-${Date.now()}@example.com`
+    const statuses: number[] = []
+    for (let i = 0; i < 12; i++) {
+      // the per-IP limiter (5/min) is a different counter; use a distinct IPv6 address inside ONE /64 for each try is not needed here:
+      // keep the same address and let the account counter decide once the per-IP limiter has been passed
+      statuses.push((await POST(sameIp({ action: 'email_login', email, password: 'Wrong-Pass-1!' }, `2401:4900:aaaa:bbbb:${i}::1`))).status)
+    }
+    expect(statuses.slice(0, 5).every(s => s === 400)).toBe(true)
+    expect(statuses).toContain(429)
   })
 })

@@ -9,7 +9,12 @@
 @media (max-width: 900px) { .accPage { grid-template-columns: minmax(0, 1fr); } .accWrap { padding: 16px 14px 90px; } }
 
 /* Sidebar */
-.sidebar { background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 2px 24px rgba(26,58,30,.1); border: 1px solid rgba(200,146,10,.18); position: sticky; top: 80px; }
+.sidebar { background: #fff; border-radius: 20px; overflow-x: hidden; overflow-y: auto; box-shadow: 0 2px 24px rgba(26,58,30,.1); border: 1px solid rgba(200,146,10,.18); position: sticky; top: 80px;
+  /* The sidebar is taller than a laptop viewport: scroll INSIDE it so the last items (Notifications, Log out ...) stay reachable. */
+  max-height: calc(100vh - 96px); max-height: calc(100dvh - 96px); overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(200,146,10,.45) transparent; }
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(200,146,10,.45); border-radius: 6px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
 .sbProfile { background: linear-gradient(160deg,#1a3a1e 0%,#2d5233 60%,#3a6b40 100%); padding: 28px 20px 20px; text-align: center; position: relative; }
 .sbProfile::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 20px; background: #fff; border-radius: 20px 20px 0 0; }
 .sbAvatarRing { width: 72px; height: 72px; border-radius: 50%; padding: 3px; background: linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,.1)); margin: 0 auto 12px; }
