@@ -243,6 +243,33 @@ export async function POST(req: Request) {
           })
         } else {
           logger.info('webhook: payment.captured order already confirmed', { paymentId, dbOrderId })
+          // RE-DRIVE (round-2 audit): the winner of the pending->paid flip owns the one-time side effects (coins, e-mails), and
+          // the function can be killed after the flip but before they finish — Razorpay's retry then lands HERE and used to just
+          // log. runPaidSideEffects writes a `payment_verified` order event as its marker; when the order has been paid for a
+          // while and that marker is missing, run them again. Loyalty redeem/award are idempotent per order in the database
+          // (verified against the live functions); the 90 s age guard keeps this from racing a still-running original.
+          try {
+            const [{ data: marker }, { data: fresh }] = await Promise.all([
+              db.from('order_events').select('id').eq('order_id', order.id).eq('event', 'payment_verified').limit(1),
+              db.from('orders').select('updated_at').eq('id', order.id).single(),
+            ])
+            const paidForMs = fresh?.updated_at ? Date.now() - Date.parse(String(fresh.updated_at)) : 0
+            if ((!marker || marker.length === 0) && paidForMs > 90_000) {
+              await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId })
+              const settings = await getFreshSiteSettings()
+              await runPaidSideEffects(db, {
+                order: {
+                  id: order.id, order_number: order.order_number, total_amount: order.total_amount,
+                  customer_id: order.customer_id, loyalty_points_redeemed: order.loyalty_points_redeemed,
+                },
+                razorpayOrderId: String(payment.order_id), razorpayPaymentId: paymentId,
+                settings, defer: (fn) => after(fn),
+              })
+            }
+          } catch (e) {
+            // never turn a harmless duplicate delivery into a 500 loop because the safety net itself failed
+            captureError(e, { action: 'webhook.razorpay.redrive_failed', order_id: order.id, alert: true })
+          }
         }
       } else {
         // notes.db_order_id is only a hint — it is NOT proof this payment belongs to this
