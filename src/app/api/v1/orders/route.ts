@@ -21,6 +21,7 @@ import { logger, captureError } from '@/lib/logger'
 // Was duplicated in payments/route.ts — single source of truth now.
 import { sanitize } from '@/lib/server/sanitize'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
+import { clientIpKey } from '@/lib/api/clientIp'
 import { runBackgroundSweepsIfDue } from '@/lib/server/backgroundSweeps'
 // The one source for every delivery / notification sentence (lib/shippingCopy). The confirmation e-mail used to compute its own
 // optimistic 'estimated delivery' date (5 business days from today + 2) that contradicted the published policy.
@@ -162,6 +163,10 @@ async function finalizeRecoveredOrder(
   }
 }
 
+// not exported: Next.js route modules may only export handlers/config
+const COD_PHONE_LIMIT_10M = 6
+const COD_IP_LIMIT_10M    = 20
+
 export async function POST(req: NextRequest) {
   const requestStartedAt = Date.now()
   // ── CSRF check ─────────────────────────────────────────────────────────────
@@ -170,7 +175,7 @@ export async function POST(req: NextRequest) {
 
   // ── Rate limit: IP-level pre-check (distributed via Upstash KV) ──────────
   // Applied before body parsing so bots are rejected cheaply without DB work.
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim())   // IPv6 collapsed to its /64
   const ipLimit = await checkRateLimitKvStrict(`mw:rl:orders_ip:${ip}`, 10)
   if (ipLimit === 'unavailable') return rateLimiterUnavailable()
   if (ipLimit === 'blocked') {
@@ -232,6 +237,18 @@ export async function POST(req: NextRequest) {
     if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
     if (phoneLimit === 'blocked') {
       return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
+    }
+
+    // ── Round-2 audit: the same 10-minute abuse caps the online path got in S1-003 ──────────────────────────────────────────
+    // A COD order is `confirmed` at once, decrements stock and never expires, so the per-minute limits alone still let a script
+    // reserve the catalogue by rotating phone numbers (10 orders/min/IP). A genuine customer places a handful of orders at most.
+    const [phone10m, ip10m] = await Promise.all([
+      checkRateLimitKvStrict(`mw:rl:cod_phone10m:${normalizePhoneForLookup(a.phone) || a.phone}`, COD_PHONE_LIMIT_10M, 600),
+      checkRateLimitKvStrict(`mw:rl:cod_ip10m:${ip}`, COD_IP_LIMIT_10M, 600),
+    ])
+    if (phone10m === 'unavailable' || ip10m === 'unavailable') return rateLimiterUnavailable()
+    if (phone10m === 'blocked' || ip10m === 'blocked') {
+      return NextResponse.json({ error: 'Too many order attempts — please wait a few minutes and try again' }, { status: 429, headers: { 'Retry-After': '600' } })
     }
 
     const name  = sanitize(a.name)

@@ -144,6 +144,38 @@ describe('S1-003 — create_payment per-phone / per-IP 10-minute caps', () => {
   })
 })
 
+describe('Round-2 audit — COD gets the same 10-minute per-phone / per-IP caps as the online path', () => {
+  it('per-phone 10-minute cap → 429 with a 600 s Retry-After, createOrder not called; key is normalised and the window is 600 s', async () => {
+    limiter({ cod_phone10m: 'blocked' })
+    const res = await callOrders()
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('600')
+    expect(h.createOrder).not.toHaveBeenCalled()
+    const call = h.strict.mock.calls.find(c => String(c[0]).startsWith('mw:rl:cod_phone10m:'))!
+    expect(call[0]).toBe('mw:rl:cod_phone10m:9876543210')
+    expect(call[2]).toBe(600)
+  })
+  it('per-IP 10-minute cap → 429', async () => {
+    limiter({ cod_ip10m: 'blocked' })
+    expect((await callOrders()).status).toBe(429)
+    expect(h.createOrder).not.toHaveBeenCalled()
+  })
+  it('limiter unavailable → 503 (never an uncapped order)', async () => {
+    limiter({ cod_phone10m: 'unavailable' })
+    expect((await callOrders()).status).toBe(503)
+    expect(h.createOrder).not.toHaveBeenCalled()
+  })
+  it('an IPv6 client is bucketed by its /64', async () => {
+    await callOrders(COD_BODY, { 'x-forwarded-for': '2401:4900:1234:5678:aaaa:bbbb:cccc:dddd' })
+    expect(keysCalled()).toContain('mw:rl:cod_ip10m:2401:4900:1234:5678::/64')
+  })
+  it('within the caps the COD order is created as before', async () => {
+    const res = await callOrders()
+    expect(res.status).toBe(201)
+    expect(h.createOrder).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('S1-016(a) — limiter unavailable → mutation refused with 503, never allowed', () => {
   it('payments: IP limiter unavailable → 503 + Retry-After, createOrder not called', async () => {
     limiter({ 'payments_ip:': 'unavailable' })
