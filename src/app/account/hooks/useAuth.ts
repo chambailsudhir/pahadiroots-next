@@ -53,7 +53,10 @@ export function useAuth() {
 
   const syncStore = useCallback((prof: Profile | null, user: AuthUser | null) => {
     storeSetUser({
-      id:    String(prof?.id    || user?.id    || ''),
+      // ONE canonical id for the store user: the AUTH uuid (what login / Google sign-in set). It used to be replaced here by the
+      // numeric customers.id the first time /account loaded, so `wishlistOwner` no longer matched and every re-login dropped the
+      // local wishlist (and a guest's hearts could be lost to the flip). The store id is only an opaque owner key.
+      id:    String(user?.id || prof?.id || ''),
       phone: (prof?.phone || user?.phone || '').replace(/^\+91/, ''),
       email: String(user?.email || prof?.email || ''),
       name:  prof?.first_name || '',
