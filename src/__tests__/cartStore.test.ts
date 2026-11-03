@@ -112,6 +112,15 @@ describe('cartStore.addItem', () => {
     expect(useCartStore.getState().items.find(i => i.variantId === 'v8')!.qty).toBe(4)
   })
 
+  it('a line can never exceed what an order accepts (MAX_LINE_QTY), even with no known stock cap or a huge cap', () => {
+    const store = useCartStore.getState()
+    store.addItem({ ...makeItem({ variantId: 'v50', maxQty: 500 }), qty: 40 })
+    store.addItem({ ...makeItem({ variantId: 'v50', maxQty: 500 }), qty: 40 })
+    expect(useCartStore.getState().items.find(i => i.variantId === 'v50')!.qty).toBeLessThanOrEqual(50)
+    store.updateQty('v50', 5000)
+    expect(useCartStore.getState().items.find(i => i.variantId === 'v50')!.qty).toBe(50)
+  })
+
   it('a later add can never RAISE the cap, but a lower (fresher) stock figure lowers it', () => {
     const store = useCartStore.getState()
     store.addItem(makeItem({ variantId: 'v9', maxQty: 10, qty: 1 }))
