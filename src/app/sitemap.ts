@@ -45,7 +45,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     products = await fetchAll(( from, to ) => supabase.from('products').select('slug, updated_at, image_url, category_id, is_active')
       .eq('is_deleted', false).eq('status', 'active').order('id').range(from, to))
     products = products.filter(p => (p as { is_active?: boolean | null }).is_active !== false)  // SEC-001: deactivated products are not submitted
-  } catch (e: unknown) { console.error('[sitemap] products fetch failed:', e) }
+  } catch (e: unknown) { console.error('[sitemap] products fetch failed:', e); throw e }
 
   const productPages: MetadataRoute.Sitemap = products.map(p => ({
     url:             `${BASE}/products/${p.slug}`,
@@ -61,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let categories: { id: number; slug: string }[] = []
   try {
     categories = await fetchAll(( from, to ) => supabase.from('categories').select('id, slug').eq('is_active', true).order('id').range(from, to))
-  } catch (e: unknown) { console.error('[sitemap] categories fetch failed:', e) }
+  } catch (e: unknown) { console.error('[sitemap] categories fetch failed:', e); throw e }
 
   // Nov 2026 audit: 7 of 10 collections had no products and were still submitted to Google — thin, empty pages that read as broken.
   // Only collections that hold at least one live product are listed; an empty one rejoins the sitemap the day it gets stock.
@@ -77,7 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let states: { id: string; updated_at: string | null }[] = []
   try {
     states = await fetchAll(( from, to ) => supabase.from('states').select('id, updated_at').eq('is_active', true).order('id').range(from, to))
-  } catch (e: unknown) { console.error('[sitemap] states fetch failed:', e) }
+  } catch (e: unknown) { console.error('[sitemap] states fetch failed:', e); throw e }
 
   const regionPages: MetadataRoute.Sitemap = states.map(s => ({
     url:             `${BASE}/regions/${s.id}`,
@@ -92,7 +92,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     blogPosts = await fetchAll(( from, to ) => supabase.from('blog_posts').select('slug, updated_at, published_at')
       .eq('is_published', true).order('published_at', { ascending: false }).range(from, to))
-  } catch (e: unknown) { console.error('[sitemap] blog fetch failed:', e) }
+  } catch (e: unknown) { console.error('[sitemap] blog fetch failed:', e); throw e }
 
   const blogPages: MetadataRoute.Sitemap = blogPosts.map(p => ({
     url:             `${BASE}/blog/${p.slug}`,

@@ -42,6 +42,8 @@ interface OfferProduct {
 export interface OfferPolicy {
   shippingCharge?: number | null
   returnDays?:     number | null
+  /** true => emit MerchantReturnNotPermitted (sealed food: no change-of-mind returns). Wins over returnDays. */
+  returnsNotPermitted?: boolean
 }
 
 function policyFields(policy?: OfferPolicy): Record<string, unknown> {
@@ -53,7 +55,15 @@ function policyFields(policy?: OfferPolicy): Record<string, unknown> {
       shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
     }
   }
-  if (policy?.returnDays != null && policy.returnDays > 0) {
+  if (policy?.returnsNotPermitted) {
+    // Edible, sealed products: no change-of-mind returns (only damaged / defective / not-as-described claims, handled by support).
+    // Claiming a finite return window here showed "2-day returns" on food listings, which contradicts the visible policy page.
+    out.hasMerchantReturnPolicy = {
+      '@type': 'MerchantReturnPolicy',
+      applicableCountry: 'IN',
+      returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+    }
+  } else if (policy?.returnDays != null && policy.returnDays > 0) {
     out.hasMerchantReturnPolicy = {
       '@type': 'MerchantReturnPolicy',
       applicableCountry: 'IN',

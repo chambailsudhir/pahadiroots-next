@@ -48,6 +48,20 @@ beforeEach(() => {
   fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ROWS })
 })
 
+describe('coupon-hints reads server-side (round-4: the anon key sees no coupon rows, the cart never showed a hint)', () => {
+  it('uses the service key for the read when it is configured, never the anon key', async () => {
+    vi.stubEnv('SUPABASE_SERVICE_KEY', 'service-role-key')
+    vi.resetModules()
+    const { GET } = await import('@/app/api/v1/coupon-hints/route')
+    await GET()
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers.apikey).toBe('service-role-key')
+    expect(headers.Authorization).toBe('Bearer service-role-key')
+    vi.unstubAllEnvs(); vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co'); vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon')
+    vi.resetModules()
+  })
+})
+
 describe('GET /api/v1/coupon-hints (AUDIT S1-010)', () => {
   it('never lists single-use (max_uses <= 1) or newsletter-welcome codes, even if the DB returns them', async () => {
     const { GET } = await import('@/app/api/v1/coupon-hints/route')

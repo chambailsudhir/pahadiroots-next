@@ -128,6 +128,11 @@ describe('buildOffersList policy fields', () => {
     expect(o.shippingDetails.shippingRate).toMatchObject({ value: '0', currency: 'INR' })
     expect(o.hasMerchantReturnPolicy).toMatchObject({ merchantReturnDays: 2, applicableCountry: 'IN' })
   })
+  it('sealed food: emits MerchantReturnNotPermitted (never a finite window that contradicts the visible policy)', () => {
+    const [o] = buildOffersList(product, vs, 299, true, null, { shippingCharge: 0, returnDays: 2, returnsNotPermitted: true }) as any[]
+    expect(o.hasMerchantReturnPolicy).toMatchObject({ returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted', applicableCountry: 'IN' })
+    expect(o.hasMerchantReturnPolicy.merchantReturnDays).toBeUndefined()
+  })
   it('leaves offers unchanged when no policy is passed', () => {
     const [o] = buildOffersList(product, vs, 299, true) as any[]
     expect(o.shippingDetails).toBeUndefined()

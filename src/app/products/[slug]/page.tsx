@@ -439,8 +439,8 @@ export default async function ProductPage({ params }: Props) {
     inStock,
     settings.site_name,
     // Same sources as the visible shipping/returns copy (shipPolicy above; the
-    // returns policy page states a 48-hour window for damaged/defective items).
-    { shippingCharge: shipPolicy.freeForAll ? 0 : shipPolicy.flat, returnDays: 2 },
+    // returns policy page: edible items are not returnable for change of mind; only damaged / defective claims within 48 h).
+    { shippingCharge: shipPolicy.freeForAll ? 0 : shipPolicy.flat, returnsNotPermitted: true },
   )
 
   const jsonLd: Record<string, unknown> = {
