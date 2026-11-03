@@ -1286,3 +1286,23 @@ describe('P3 — idempotency key reused for a different request', () => {
     expect(fetchMock.mock.calls.some(c => String(c[0]).includes('razorpay.com'))).toBe(false)
   })
 })
+
+describe('POST /api/v1/payments and /api/v1/orders — a body that is not JSON', () => {
+  const bad = () => new Request('http://localhost/api/v1/x', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1', origin: 'http://localhost:3000' },
+    body: '{bad',
+  })
+  it('payments answers 400 (caller mistake), not 500', async () => {
+    const { POST } = await import('@/app/api/v1/payments/route')
+    const res = await POST(bad() as any)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Invalid JSON')
+  })
+  it('orders answers 400 (caller mistake), not 500', async () => {
+    const { POST } = await import('@/app/api/v1/orders/route')
+    const res = await POST(bad() as any)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Invalid JSON')
+  })
+})

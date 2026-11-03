@@ -5,6 +5,7 @@ import { StockReservationError } from '@/lib/services/inventoryService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
+import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
@@ -189,7 +190,9 @@ export async function POST(req: NextRequest) {
   let idempotencyKeyForRecovery: unknown = null
   let finalizeForRecovery: ((order: CreatedOrder, alreadyExists: boolean, customerId: string | null) => Promise<void>) | null = null
   try {
-    const body   = await req.json()
+    // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
+    const body   = await req.json().catch(() => undefined)
+    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     idempotencyKeyForRecovery = (body as { idempotency_key?: unknown } | null)?.idempotency_key ?? null
     const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {
@@ -379,13 +382,14 @@ export async function POST(req: NextRequest) {
         }
 
         // Notify admin
-        if (settings.admin_notify_email && !alreadyExists) {
+        const adminTo = adminNotifyAddress(settings)
+        if (adminTo && !alreadyExists) {
           try {
             const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
               ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
             await sendTransactionalEmail({
               type:    'admin_order_notify',
-              to:      settings.admin_notify_email,
+              to:      adminTo,
               subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
               // Admin email — all user-supplied fields go through sanitize() above
               // (name, flat, area, city, state) then esc() for HTML encoding.

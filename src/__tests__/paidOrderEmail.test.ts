@@ -78,3 +78,23 @@ describe('payment confirmation e-mail — recipient', () => {
     expect(mail!.html).toContain('You earned 3 Pahadi Coins')
   })
 })
+
+describe('online-paid order — owner notification', () => {
+  it('the shop owner is e-mailed about a paid order too (ADMIN_EMAIL fallback)', async () => {
+    vi.stubEnv('ADMIN_EMAIL', 'owner@shop.test')
+    send.mockClear()
+    const single = vi.fn().mockResolvedValue({ data: { first_name: 'A', email: 'a@example.org', auth_user_id: null, shipping_address: { state: 'Himachal Pradesh' }, order_items: [] }, error: null })
+    const chain = { select: () => chain, eq: () => chain, single }
+    const deferred: Array<() => Promise<void>> = []
+    await runPaidSideEffects({ from: () => chain } as never, {
+      order: { id: '9', order_number: 'ORD-2026-00300', total_amount: 350, customer_id: 'c1', loyalty_points_redeemed: 0 },
+      razorpayOrderId: 'order_X', razorpayPaymentId: 'pay_X', settings: { loyalty_enabled: 'false' },
+      defer: fn => { deferred.push(fn) },
+    })
+    for (const fn of deferred) await fn()
+    const toOwner = send.mock.calls.map(c => c[0]).find((m: { type: string }) => m.type === 'admin_order_notify') as { to: string; subject: string } | undefined
+    expect(toOwner?.to).toBe('owner@shop.test')
+    expect(toOwner?.subject).toContain('ORD-2026-00300')
+    vi.unstubAllEnvs()
+  })
+})

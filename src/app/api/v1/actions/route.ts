@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body   = await req.json()
+    // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
+    const body   = await req.json().catch(() => undefined)
+    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
     // BUG FIX: `body.action as string` is an unsafe TypeScript cast with no
     // runtime effect — if a client sends action: null, action: 42, or omits

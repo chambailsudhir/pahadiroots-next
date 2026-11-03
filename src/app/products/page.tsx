@@ -186,7 +186,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           boxShadow: '0 2px 16px rgba(0,0,0,.06)', border: '1px solid rgba(0,0,0,.06)' }}>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
-            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Sort By</div>
+            letterSpacing: '2px', color: '#8a6a1f', marginBottom: '10px' }}>Sort By</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
             {SORT_OPTIONS.map(opt => (
               <Link key={opt.value} href={url({ sort: opt.value })} prefetch={false} style={{
@@ -201,7 +201,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           </div>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
-            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Price Range</div>
+            letterSpacing: '2px', color: '#8a6a1f', marginBottom: '10px' }}>Price Range</div>
           <div style={{ marginBottom: '24px' }}>
             <PriceRangeFilter
               key={`${minPrice ?? priceBounds.min}-${maxPrice ?? priceBounds.max}`}
@@ -212,7 +212,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           </div>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
-            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Collections</div>
+            letterSpacing: '2px', color: '#8a6a1f', marginBottom: '10px' }}>Collections</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '24px' }}>
             <Link href={url({ category: undefined, state: undefined })} prefetch={false} style={{
               display: 'block', fontSize: '13px', padding: '7px 10px', borderRadius: '10px',
@@ -233,7 +233,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           </div>
 
           <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase',
-            letterSpacing: '2px', color: '#a07830', marginBottom: '10px' }}>Availability</div>
+            letterSpacing: '2px', color: '#8a6a1f', marginBottom: '10px' }}>Availability</div>
           <Link href={url({ instock: instock ? 'false' : 'true' })} prefetch={false} style={{
             display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px',
             padding: '7px 10px', borderRadius: '10px', textDecoration: 'none',
@@ -288,7 +288,7 @@ export default async function ProductsPage({ searchParams }: Props) {
             </div>
           )}
 
-          <div style={{ fontSize: '12px', color: '#9a9a9a', marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#6b6b6b', marginBottom: '16px' }}>
             Showing {Math.min(offset + 1, count)}–{Math.min(offset + PAGE_SIZE, count)} of {count} products
           </div>
 

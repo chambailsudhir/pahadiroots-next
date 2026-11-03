@@ -41,12 +41,14 @@ const config: Config = {
           100: '#ede9e0',
           200: '#d9d1c1',
           300: '#c2b59a',
-          400: '#ab9776',
-          500: '#9a825f',
-          600: '#836d50',
-          700: '#6c5942',
-          800: '#5a4a38',
-          900: '#4c3e30',
+          // 400/500 were #ab9776 / #9a825f = 2.8:1 / 3.7:1 on white, so every text-stone-400/500 failed WCAG AA (4.5:1). Darkened to
+          // 4.7:1 / 5.5:1 and the darker steps nudged so the scale keeps its order.
+          400: '#85704f',
+          500: '#78664a',
+          600: '#6b5a41',
+          700: '#5c4d38',
+          800: '#4d4030',
+          900: '#3f3427',
         },
       },
       fontFamily: {

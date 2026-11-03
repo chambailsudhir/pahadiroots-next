@@ -124,8 +124,8 @@ function ContactCard({ title, note }: { title: string; note: string }) {
       <h3 className="font-bold text-stone-900">{title}</h3>
       <p className="text-sm text-stone-500">{note}</p>
       <div className="flex justify-center gap-3 flex-wrap pt-1">
-        <a href={WHATSAPP} className="text-sm font-semibold text-forest-700 hover:underline">💬 WhatsApp Us</a>
-        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-sm font-semibold text-forest-700 hover:underline">📧 Email Support</a>
+        <a href={WHATSAPP} className="text-sm font-semibold text-forest-700 underline">💬 WhatsApp Us</a>
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-sm font-semibold text-forest-700 underline">📧 Email Support</a>
       </div>
     </div>
   )
@@ -235,7 +235,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <h2 className="text-base font-bold text-stone-900 mb-2">7. Consumer Grievance Redressal</h2>
           <p className="text-stone-600">In compliance with the <strong>Consumer Protection (E-Commerce) Rules, 2020</strong>, you may contact us for any grievance. We acknowledge complaints within <strong>48 hours</strong> and resolve them within <strong>one month</strong> of receipt.</p>
           <p className="text-stone-600 mt-1"><strong>{GRIEVANCE_OFFICER_DESIGNATION}:</strong> {GRIEVANCE_OFFICER_NAME ? `${GRIEVANCE_OFFICER_NAME}, ` : ''}{LEGAL_ENTITY}</p>
-          <p className="text-stone-600 mt-1"><strong>Grievance Contact:</strong> <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 hover:underline">{SUPPORT_PHONE}</a></p>
+          <p className="text-stone-600 mt-1"><strong>Grievance Contact:</strong> <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 underline">{SUPPORT_PHONE}</a></p>
         </section>
 
         <MedicalDisclaimer />
@@ -341,7 +341,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           <p className="text-stone-600 mb-2"><strong>Essential storage (always on).</strong> We store a login session, your cart and checkout progress in your browser. The shop cannot work without these, so they do not need your consent.</p>
           <p className="text-stone-600 mb-2"><strong>Analytics.</strong> We use Google Analytics and our own anonymous visitor ID to understand which pages, products and searches are used and where shoppers drop off. This includes pages viewed, products viewed or added to cart, checkout steps and completed orders (order value and items &mdash; never your name, phone, email or address). If you are in the European Economic Area, the United Kingdom or Switzerland, this starts only after you click &ldquo;Accept analytics&rdquo;. Elsewhere (including India) it is on by default and you can switch it off at any time. We do not use advertising or retargeting cookies.</p>
           <p className="text-stone-600 mb-2"><strong>Your choice.</strong> You can change or withdraw your choice at any time using &ldquo;Cookie Settings&rdquo; in the footer. Switching analytics off stops it and removes the analytics cookies and visitor ID from your browser. Your choice is remembered for up to 12 months.</p>
-          <p className="text-stone-600">Our payment provider Razorpay may also set its own cookies &mdash; see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a>. You can also block cookies in your browser settings, though parts of the shop may stop working.</p>
+          <p className="text-stone-600">Our payment provider Razorpay may also set its own cookies &mdash; see <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 underline">Razorpay&apos;s Privacy Policy</a>. You can also block cookies in your browser settings, though parts of the shop may stop working.</p>
         </section>
 
         <section>
@@ -376,7 +376,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">6. International Data Transfers</h2>
-          <p className="text-stone-600">Data may be stored and processed in countries where our infrastructure partners (Supabase, Vercel) operate, which may include the United States and European Union. By using our website, you consent to such transfers. You may withdraw this consent at any time by contacting <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a>, after which we will delete your personal data within 30 days, subject to legal retention requirements.</p>
+          <p className="text-stone-600">Data may be stored and processed in countries where our infrastructure partners (Supabase, Vercel) operate, which may include the United States and European Union. By using our website, you consent to such transfers. You may withdraw this consent at any time by contacting <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a>, after which we will delete your personal data within 30 days, subject to legal retention requirements.</p>
         </section>
 
         <section>
@@ -391,7 +391,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
           </ul>
           <p className="text-stone-500 text-xs mt-2">These rights follow the Digital Personal Data Protection Act, 2023. If we do not resolve your grievance, the Act allows you to complain to the Data Protection Board of India.</p>
           <p className="text-stone-600 mt-2"><strong>Account deletion.</strong> When you delete your account we erase your name, phone number, e-mail, GSTIN, saved addresses, wishlist, carts, subscriptions, order notes and return photos, and the phone number and e-mail stored with past orders. For completed orders we are legally required to keep invoice records, so we retain only the recipient name, delivery address (and GSTIN for business orders) and the invoice amounts for up to 6 years, as required by GST law (CGST Act, 2017, section 36 and Rule 56); this data is used for no other purpose. Orders still in progress must be delivered or cancelled before an account can be deleted. Reviews you posted remain on the product page but are no longer linked to you.</p>
-          <p className="text-stone-600 mt-2">To exercise any right: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a></p>
+          <p className="text-stone-600 mt-2">To exercise any right: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a></p>
         </section>
 
         <section>
@@ -407,8 +407,8 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">10. Contact for Privacy Concerns</h2>
           <p className="text-stone-600"><strong>{OPERATOR_LINE}</strong> · {ADDRESS}<br />
-            📧 <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a><br />
-            💬 WhatsApp: <a href={WHATSAPP} className="text-forest-700 hover:underline">{SUPPORT_PHONE}</a>
+            📧 <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a><br />
+            💬 WhatsApp: <a href={WHATSAPP} className="text-forest-700 underline">{SUPPORT_PHONE}</a>
           </p>
         </section>
 
@@ -468,7 +468,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">5. Third-Party Services</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
-            <li><strong>Razorpay</strong> handles all payment processing — we never store card details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 hover:underline">Razorpay&apos;s Privacy Policy</a></li>
+            <li><strong>Razorpay</strong> handles all payment processing — we never store card details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 underline">Razorpay&apos;s Privacy Policy</a></li>
             <li>Our website is hosted on <strong>Vercel</strong> with data stored on <strong>Supabase</strong> (SOC 2 compliant)</li>
             <li>Third-party links on our site are not our responsibility — review their policies before transacting</li>
           </ul>
@@ -563,7 +563,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">18. Contact</h2>
-          <p className="text-stone-600">Questions about these Terms? Contact: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 hover:underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 hover:underline">{SUPPORT_PHONE}</a></p>
+          <p className="text-stone-600">Questions about these Terms? Contact: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 underline">{SUPPORT_PHONE}</a></p>
         </section>
 
         <MedicalDisclaimer />
@@ -636,7 +636,7 @@ export default async function PolicyPage({ params }: Props) {
             {policy.content}
           </div>
           <p className="text-xs text-stone-400 mt-4 text-center">
-            Questions? <Link href="/contact" className="text-forest-700 hover:underline">Contact us</Link>
+            Questions? <Link href="/contact" className="text-forest-700 underline">Contact us</Link>
           </p>
         </div>
       </div>

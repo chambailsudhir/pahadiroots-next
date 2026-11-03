@@ -193,7 +193,7 @@ export default function MobileFilterBar({
         .mfb-sheet-body { padding: 16px 20px 0; }
         .mfb-section-label {
           font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
-          color: #a07830; margin: 18px 0 8px;
+          color: #8a6a1f; margin: 18px 0 8px;
         }
         .mfb-link-list { display: flex; flex-direction: column; gap: 4px; }
         .mfb-link {
