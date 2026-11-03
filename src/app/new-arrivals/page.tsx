@@ -277,6 +277,25 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
             </div>
           )}
 
+          {/* Mobile: a sticky Filters & Sort bar under the header (it used to be a floating pill that covered the Add to Cart buttons) */}
+          <MobileFilterBar
+            categories={categoriesInNew}
+            activeCatSlug={catSlug}
+            activeStateId=""
+            activeStateName={null}
+            sort={sort}
+            instock={instock}
+            count={count}
+            sortOptions={SORT_OPTIONS}
+            priceBounds={priceBounds}
+            priceCurrent={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
+            minPriceParam={minPrice != null ? String(minPrice) : undefined}
+            maxPriceParam={maxPrice != null ? String(maxPrice) : undefined}
+            basePath={BASE_PATH}
+            allLabel="🆕 All New Arrivals"
+            clearAllHref={BASE_PATH}
+          />
+
           <div style={{ fontSize: '12px', color: '#6b6b6b', marginBottom: '16px' }}>
             Showing {Math.min(offset + 1, count)}–{Math.min(offset + PAGE_SIZE, count)} of {count} products
           </div>
@@ -322,24 +341,6 @@ export default async function NewArrivalsPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Mobile filter/sort drawer */}
-      <MobileFilterBar
-        categories={categoriesInNew}
-        activeCatSlug={catSlug}
-        activeStateId=""
-        activeStateName={null}
-        sort={sort}
-        instock={instock}
-        count={count}
-        sortOptions={SORT_OPTIONS}
-        priceBounds={priceBounds}
-        priceCurrent={{ min: minPrice ?? priceBounds.min, max: maxPrice ?? priceBounds.max }}
-        minPriceParam={minPrice != null ? String(minPrice) : undefined}
-        maxPriceParam={maxPrice != null ? String(maxPrice) : undefined}
-        basePath={BASE_PATH}
-        allLabel="🆕 All New Arrivals"
-        clearAllHref={BASE_PATH}
-      />
 
       <style>{`
         @media(max-width:768px){

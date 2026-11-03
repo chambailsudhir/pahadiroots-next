@@ -171,6 +171,13 @@ describe('sendReviewRequests', () => {
     expect(h.send).not.toHaveBeenCalled()
   })
 
+  it('does not ask about an order that has a return (the customer is already in touch about it)', async () => {
+    data.returns = [{ order_id: 1 }]
+    const r = await run()
+    expect(r.sent).toBe(0)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('never throws: a failing claim table (migration missing) is counted as an error', async () => {
     claimErr = { message: 'relation "review_requests" does not exist' }
     const stats = await run()

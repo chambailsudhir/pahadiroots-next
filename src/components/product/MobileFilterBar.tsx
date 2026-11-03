@@ -10,7 +10,7 @@
 // that reproduces the exact same links the desktop sidebar has — built from
 // the same buildProductsUrl() helper so the two never drift out of sync.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { buildProductsUrl, type ProductsUrlState } from '@/lib/buildProductsUrl'
 import PriceRangeFilter from '@/components/product/PriceRangeFilter'
@@ -44,6 +44,13 @@ export default function MobileFilterBar({
   allLabel = '🌿 All Products', clearAllHref,
 }: Props) {
   const [open, setOpen] = useState(false)
+  // The bar sticks just under the (sticky) site header, whatever its height on this device.
+  const [top, setTop] = useState(96)
+  useEffect(() => {
+    const h = () => { const el = document.querySelector('header.sticky'); if (el) setTop(Math.round(el.getBoundingClientRect().height)) }
+    h(); window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
   const urlState: ProductsUrlState = { sort, category: activeCatSlug, state: activeStateId, instock, minPrice: minPriceParam, maxPrice: maxPriceParam }
   const url = (overrides: Parameters<typeof buildProductsUrl>[1]) => buildProductsUrl(urlState, overrides, basePath)
 
@@ -52,8 +59,8 @@ export default function MobileFilterBar({
     + (minPriceParam || maxPriceParam ? 1 : 0)
 
   return (
-    <div className="mfb-root">
-      {/* Floating trigger bar — fixed at bottom of viewport, mobile only */}
+    <div className="mfb-root" style={{ top }}>
+      {/* Sticky bar under the header, mobile only — in the page flow, so it never floats over product cards */}
       <button
         type="button"
         className="mfb-trigger"
@@ -61,8 +68,8 @@ export default function MobileFilterBar({
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <span>⚙️ Filters &amp; Sort</span>
-        {activeCount > 0 && <span className="mfb-trigger-badge">{activeCount}</span>}
+        <span>⚙️ Filters &amp; Sort{activeCount > 0 && <span className="mfb-trigger-badge" style={{ marginLeft: 8 }}>{activeCount}</span>}</span>
+        <span className="mfb-trigger-count">{count} {count === 1 ? 'product' : 'products'}</span>
       </button>
 
       {open && (
@@ -150,23 +157,18 @@ export default function MobileFilterBar({
       <style>{`
         .mfb-root { display: none; }
         @media (max-width: 768px) {
-          .mfb-root { display: block; }
+          .mfb-root {
+            display: block; position: sticky; z-index: 35;
+            margin: 0 0 12px; padding: 8px 0;
+            background: #f9f4ec;   /* solid (no backdrop-filter: it would make the fixed sheet below position relative to this bar) */
+          }
         }
         .mfb-trigger {
-          position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 40;
-          display: flex; align-items: center; gap: 8px;
-          background: #1a3a1e; color: #fff; border: none; border-radius: 30px;
-          padding: 13px 26px; font-size: 14px; font-weight: 700;
-          box-shadow: 0 8px 24px rgba(26,58,30,.35); cursor: pointer;
+          display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+          background: #1a3a1e; color: #fff; border: none; border-radius: 12px;
+          padding: 12px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
         }
-        /* BUG FIX (found on re-check after adding the global mobile bottom
-           nav): this trigger was pinned at a flat bottom:18px, which now
-           sits inside the new 56px-tall bottom nav bar's footprint,
-           overlapping its icons. Lifted to clear the bar + safe area on
-           the same breakpoint the bar itself uses (900px). */
-        @media (max-width: 900px) {
-          .mfb-trigger { bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 14px); }
-        }
+        .mfb-trigger-count { font-size: 12px; font-weight: 600; color: #cfe3d2; }
         .mfb-trigger-badge {
           background: #c8920a; color: #fff; border-radius: 50%;
           width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;

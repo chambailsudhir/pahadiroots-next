@@ -199,6 +199,20 @@ export interface PaidOrderRow {
   loyalty_points_redeemed?: number | null
 }
 
+// ── Idempotent one-time e-mails ───────────────────────────────────────────────────────────────────────────────────────────────
+// The e-mails run in the deferred (after()) phase, which can be killed after the order was flipped to paid. Each e-mail therefore has its OWN
+// order event, written only AFTER it was handed to Resend (sent, or queued in failed_emails for the retry sweep). A re-drive (see the Razorpay
+// webhook) re-runs only what has no marker, so nothing is lost when the function dies and nothing is sent twice.
+export const PAID_EMAIL_CUSTOMER_SENT = 'paid_email_customer_sent'
+export const PAID_EMAIL_ADMIN_SENT    = 'paid_email_admin_sent'
+
+async function hasOrderEvent(db: Db, orderId: string, event: string): Promise<boolean> {
+  try {
+    const { data } = await db.from('order_events').select('id').eq('order_id', orderId).eq('event', event).limit(1)
+    return Array.isArray(data) && data.length > 0
+  } catch { return false }   // cannot tell -> treat as not sent (a duplicate is better than a lost confirmation)
+}
+
 /**
  * Side effects of a paid order: loyalty redeem/award, audit event, e-mail.
  * Call ONLY from the caller that won confirmOrderPayment (outcome confirmed/recovered).
@@ -240,26 +254,37 @@ export async function runPaidSideEffects(
   if (adminTo) {
     defer(async () => {
       try {
-        await sendTransactionalEmail({
+        if (await hasOrderEvent(db, order.id, PAID_EMAIL_ADMIN_SENT)) return
+        const r = await sendTransactionalEmail({
           type:    'admin_order_notify',
           to:      adminTo,
           subject: `New PAID Order #${order.order_number} - Rs.${order.total_amount}`,
           html:    `<p>Order: <b>#${esc(order.order_number ?? '')}</b><br>Total: Rs.${esc(order.total_amount)}<br>Payment: Razorpay (paid) ${esc(razorpayPaymentId)}</p>`,
           context: { order_id: order.id, order_number: order.order_number },
         })
+        // Marker only once Resend has it (sent, or dead-lettered for the retry sweep) — never before.
+        if (r?.sent || r?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_ADMIN_SENT, 'system', {}).catch(() => null)
       } catch (e) {
         logger.error('payments: admin notification failed', { action: 'payments.email.admin', error: e instanceof Error ? e.message : String(e) })
       }
     })
+  } else {
+    // No owner address configured: nothing to send, so record it (a re-drive must not wait for an e-mail that will never exist).
+    defer(async () => { if (!(await hasOrderEvent(db, order.id, PAID_EMAIL_ADMIN_SENT))) await logOrderEvent(order.id, PAID_EMAIL_ADMIN_SENT, 'system', { skipped: 'no_recipient' }).catch(() => null) })
   }
 
-  await logOrderEvent(order.id, 'payment_verified', 'razorpay', {
-    razorpay_payment_id: razorpayPaymentId, razorpay_order_id: razorpayOrderId,
-  }).catch(() => null)
+  // Marker for "loyalty done". `emails_tracked` says the per-e-mail markers above exist for this order, so a re-drive knows it can rely on them
+  // (orders paid before that was introduced have no e-mail markers and must not be re-mailed). Written once, even on a re-drive.
+  if (!(await hasOrderEvent(db, order.id, 'payment_verified'))) {
+    await logOrderEvent(order.id, 'payment_verified', 'razorpay', {
+      razorpay_payment_id: razorpayPaymentId, razorpay_order_id: razorpayOrderId, emails_tracked: true,
+    }).catch(() => null)
+  }
 
   // E-mail is deferred so it can never delay the response (see lib/server/email.ts).
   defer(async () => {
     try {
+      if (await hasOrderEvent(db, order.id, PAID_EMAIL_CUSTOMER_SENT)) return
       // An account holder has auth_user_id (there is no is_guest column on customers).
       const { data: customer } = await db.from('customers').select('first_name, email, auth_user_id').eq('id', order.customer_id).single()
       const hasAccount = customer?.auth_user_id != null
@@ -301,7 +326,7 @@ export async function runPaidSideEffects(
 
         // sendTransactionalEmail() checks the resolved Resend `error` explicitly and
         // dead-letters into `failed_emails` for the cron sweep to retry.
-        await sendTransactionalEmail({
+        const sentRes = await sendTransactionalEmail({
           type:    'payment_confirmation',
           to:      toEmail,
           subject: orderEmailSubject('paid', order.order_number ?? ''),
@@ -328,6 +353,10 @@ export async function runPaidSideEffects(
           }),
           context: { order_id: order.id, order_number: order.order_number },
         })
+        if (sentRes?.sent || sentRes?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_CUSTOMER_SENT, 'system', {}).catch(() => null)
+      } else {
+        // Nobody to mail: record that, so a re-drive does not keep trying.
+        await logOrderEvent(order.id, PAID_EMAIL_CUSTOMER_SENT, 'system', { skipped: 'no_recipient' }).catch(() => null)
       }
     } catch (e) {
       // Catches errors from BUILDING the e-mail; sendTransactionalEmail() itself never throws.

@@ -101,20 +101,24 @@ export async function sendReviewRequests(
 
       const orderIds = batch.map(o => o.id)
       const customerIds = [...new Set(batch.map(o => o.customer_id))]
-      const [{ data: custs, error: cerr }, { data: claimed, error: rerr }] = await Promise.all([
+      const [{ data: custs, error: cerr }, { data: claimed, error: rerr }, { data: rets, error: retErr }] = await Promise.all([
         db.from('customers').select('id, first_name, email, auth_user_id, notif_email_orders').in('id', customerIds),
         db.from('review_requests').select('order_id').in('order_id', orderIds),
+        // A customer who returned (or asked to return) something from this order should not get "How was your order?".
+        db.from('returns').select('order_id').in('order_id', orderIds),
       ])
       if (cerr) throw new Error('customers read failed: ' + cerr.message)
       if (rerr) throw new Error('review_requests read failed (migration applied?): ' + rerr.message)
       const byCustomer = new Map(((custs ?? []) as CustomerRow[]).map(c => [String(c.id), c]))
       const already = new Set(((claimed ?? []) as Array<{ order_id: number | string }>).map(r => String(r.order_id)))
+      if (retErr) logger.warn('review requests: returns lookup failed — not skipping returned orders this run', { action: 'cron.review_requests.returns', error: retErr.message })
+      const hasReturn = new Set(((rets ?? []) as Array<{ order_id: number | string }>).map(r => String(r.order_id)))
 
       for (const order of batch) {
         if (stats.sent >= limit) break
         if (Date.now() - startedAt > budget) { stats.timeBudgetHit = true; return stats }
         stats.scanned++
-        if (already.has(String(order.id))) { stats.skipped++; continue }
+        if (already.has(String(order.id)) || hasReturn.has(String(order.id))) { stats.skipped++; continue }
         if (mailedCustomers.has(String(order.customer_id))) { stats.skipped++; continue }   // their other orders wait for a later run
         const cust = byCustomer.get(String(order.customer_id))
         const email = (cust?.email ?? '').trim()
