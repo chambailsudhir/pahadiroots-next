@@ -4,6 +4,7 @@ import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
 import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
+import { releaseOwnAbandonedOnlineOrders } from '@/lib/server/pendingOrders'
 // AUDIT S1-004: the online path now resolves the signed-in customer exactly like /api/v1/orders does.
 import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
@@ -187,6 +188,16 @@ export async function POST(req: NextRequest) {
       const withAuthCookies = (res: NextResponse) => {
         if (refreshedAuth) applyNewCookies(res, refreshedAuth.token, refreshedAuth.refresh)
         return res
+      }
+
+
+      // Release this signed-in customer's own abandoned online orders (closed the Razorpay modal, then changed something => new key)
+      // BEFORE the coupon / coin / stock checks, so their retry is not blocked by their own earlier attempt. Best effort, never blocks.
+      // (Lives in the route, not in orderService: orderService is also imported by client components.)
+      if (authenticatedCustomerId != null) {
+        try {
+          await releaseOwnAbandonedOnlineOrders(getServiceClient(), authenticatedCustomerId, { excludeIdempotencyKey: pd.idempotency_key })
+        } catch { /* never blocks order creation */ }
       }
 
       const { order, alreadyExists, customerId } = await createOrder({

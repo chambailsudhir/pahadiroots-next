@@ -153,12 +153,12 @@ export async function expireStalePendingOrders(
 export async function releaseOwnAbandonedOnlineOrders(
   db: Db,
   customerId: string | number,
-  opts: { minAgeSeconds?: number; max?: number; now?: Date } = {},
+  opts: { minAgeSeconds?: number; max?: number; now?: Date; excludeIdempotencyKey?: string } = {},
 ): Promise<number> {
   const now    = opts.now ?? new Date()
   const cutoff = new Date(now.getTime() - (opts.minAgeSeconds ?? 120) * 1000).toISOString()
   try {
-    const { data } = await db
+    let q = db
       .from('orders')
       .select('id, order_number, payment_id, total_amount, customer_id, loyalty_points_redeemed, created_at')
       .eq('customer_id', customerId)
@@ -166,6 +166,9 @@ export async function releaseOwnAbandonedOnlineOrders(
       .eq('payment_status', 'pending')
       .eq('order_status', 'pending')
       .lt('created_at', cutoff)
+    // the order that belongs to the CURRENT request's idempotency key is a legitimate retry, never "abandoned"
+    if (opts.excludeIdempotencyKey) q = q.neq('idempotency_key', opts.excludeIdempotencyKey)
+    const { data } = await q
       .order('created_at', { ascending: true })
       .limit(opts.max ?? 3)
     const rows = (data ?? []) as PendingRow[]

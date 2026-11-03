@@ -65,6 +65,7 @@ function makeDb(cfg: Cfg) {
         eq:  (k: string, v: unknown) => { st.filters.push([k, v]); return b },
         lt:  (k: string, v: unknown) => { st.filters.push([`${k}<`, v]); return b },
         gt:  (k: string, v: unknown) => { st.filters.push([`${k}>`, v]); return b },
+        neq: (k: string, v: unknown) => { st.filters.push([`${k}!=`, v]); return b },
         order: () => b,
         limit: () => b,
         then: (res: (v: unknown) => unknown) => {
@@ -367,6 +368,12 @@ describe('releaseOwnAbandonedOnlineOrders (round-2 audit: own abandoned Razorpay
     const b = makeDb({ candidates: [order()] })
     expect(await releaseOwnAbandonedOnlineOrders(b.db, 'c1', { now: NOW })).toBe(0)
     expect(releaseUpdates(b.log)).toHaveLength(0)
+  })
+
+  it('never touches the order of the CURRENT request (same idempotency key = a legitimate retry)', async () => {
+    const { db, log } = makeDb({ candidates: [] })
+    await releaseOwnAbandonedOnlineOrders(db, 'c1', { now: NOW, excludeIdempotencyKey: 'key-123' })
+    expect(log.find(l => l.table === 'orders' && l.op === 'select')!.filters).toContainEqual(['idempotency_key!=', 'key-123'])
   })
 
   it('returns 0 (never throws) when the lookup itself fails', async () => {

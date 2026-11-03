@@ -25,6 +25,19 @@ jobs:
       - run: npm run type-check
       - run: npm run lint
       - run: npm test -- --reporter=dot
+      # tsc + vitest do NOT catch Turbopack's server/client boundary errors (a client component importing a module that pulls in
+      # server-only code failed the Vercel build while every other check was green). Run the real compile phase; the later
+      # page-data phase needs live Supabase and is not part of this check.
+      - name: Next.js compile (Turbopack)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          set +e
+          npx next build 2>&1 | tee build.log
+          if grep -q "Compiled successfully" build.log; then echo "compile OK"; exit 0; fi
+          echo "::error::next build failed at the compile phase"; exit 1
       - name: Production dependency audit (high+ fails the build)
         run: npm audit --omit=dev --audit-level=high
       - name: No secrets committed
