@@ -22,6 +22,8 @@ import { logger, captureError } from '@/lib/logger'
 import { sanitize } from '@/lib/server/sanitize'
 import { isStoreOpen } from '@/lib/siteSettingsHelpers'
 import { clientIpKey } from '@/lib/api/clientIp'
+import { releaseOwnAbandonedOnlineOrders } from '@/lib/server/pendingOrders'
+import { getServiceClient } from '@/lib/supabase'
 import { runBackgroundSweepsIfDue } from '@/lib/server/backgroundSweeps'
 // The one source for every delivery / notification sentence (lib/shippingCopy). The confirmation e-mail used to compute its own
 // optimistic 'estimated delivery' date (5 business days from today + 2) that contradicted the published policy.
@@ -435,6 +437,14 @@ export async function POST(req: NextRequest) {
       }
     }
     finalizeForRecovery = finalizeOrder
+
+    // A signed-in customer who closed the Razorpay modal and switched to COD (new key) must not be blocked by their own abandoned
+    // online order's coupon / coins / stock: release it first (Razorpay is asked, so a paid order is never released). Best effort.
+    if (authenticatedCustomerId != null) {
+      try {
+        await releaseOwnAbandonedOnlineOrders(getServiceClient(), authenticatedCustomerId, { excludeIdempotencyKey: d.idempotency_key })
+      } catch { /* never blocks order creation */ }
+    }
 
     const { order, alreadyExists, customerId } = await withTimeout(createOrder({
       customerName:   name,
