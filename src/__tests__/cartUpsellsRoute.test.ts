@@ -72,24 +72,22 @@ interface RouteTable {
   images?:   unknown[]
 }
 
-/** Routes fetch calls by inspecting the table name in the URL path. */
+/**
+ * The route now reads the shared cached catalogue (getStoreData) instead of three PostgREST calls, so the tables are served through a mock of
+ * that module. Products carry is_active / is_deleted like the real catalogue rows; an "inactive / soft-deleted" product in these tests is one
+ * that is absent from `products` (or flagged), exactly as before.
+ */
 function mockFetchByTable(tables: RouteTable, opts: { failOn?: keyof RouteTable } = {}) {
-  global.fetch = vi.fn(async (url: string) => {
-    const fail = opts.failOn
-    if (fail && url.includes(`/rest/v1/${fail === 'variants' ? 'product_variants' : fail === 'products' ? 'products' : 'product_images'}`)) {
-      return { ok: false, status: 500, json: async () => ({}) }
-    }
-    if (url.includes('/rest/v1/product_variants')) {
-      return { ok: true, status: 200, json: async () => tables.variants ?? [] }
-    }
-    if (url.includes('/rest/v1/products')) {
-      return { ok: true, status: 200, json: async () => tables.products ?? [] }
-    }
-    if (url.includes('/rest/v1/product_images')) {
-      return { ok: true, status: 200, json: async () => tables.images ?? [] }
-    }
-    return { ok: false, status: 404, json: async () => ({}) }
-  }) as unknown as typeof globalThis.fetch
+  vi.doMock('@/lib/storeData', () => ({
+    getStoreData: async () => {
+      if (opts.failOn) throw new Error('catalogue unavailable')
+      return {
+        products: (tables.products ?? []).map(p => ({ is_active: true, is_deleted: false, ...(p as object) })),
+        product_images: tables.images ?? [],
+        product_variants: tables.variants ?? [],
+      }
+    },
+  }))
 }
 
 function variant(overrides: Partial<{
@@ -225,18 +223,19 @@ describe('GET /api/v1/cart-upsells — happy path', () => {
     expect(json.upsells[0].mrp).toBe(199)
   })
 
-  it('defaults gstRate to 5 and maxQty to 10 when absent', async () => {
+  it('defaults gstRate to 5 when absent, and maxQty is the variant stock (out-of-stock variants are never suggested)', async () => {
     mockFetchByTable({
-      variants: [variant({ available_stock: undefined as unknown as number })],
-      products: [product({ gst_rate: undefined as unknown as number })],
+      variants: [variant({ available_stock: 7 }), variant({ id: 'zzzz9999', product_id: 'cccc2222', available_stock: 0 })],
+      products: [product({ gst_rate: undefined as unknown as number }), product({ id: 'cccc2222' })],
     })
 
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const res  = await GET(makeReq(''))
     const json = await res.json()
 
+    expect(json.upsells).toHaveLength(1)
     expect(json.upsells[0].gstRate).toBe(5)
-    expect(json.upsells[0].maxQty).toBe(10)
+    expect(json.upsells[0].maxQty).toBe(7)
   })
 })
 
@@ -392,23 +391,14 @@ describe('GET /api/v1/cart-upsells — badge priority', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/cart-upsells — early return when no candidates', () => {
-  it('returns empty upsells without ever fetching products/images when all variants are excluded', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('/rest/v1/product_variants')) {
-        return { ok: true, status: 200, json: async () => [variant({ id: 'aaaa1111', product_id: 'bbbb1111' })] }
-      }
-      // Should never be reached — fail loudly if products/images IS fetched.
-      throw new Error(`Unexpected fetch to ${url}`)
-    })
-    global.fetch = fetchMock as unknown as typeof globalThis.fetch
+  it('returns empty upsells when every candidate variant is already in the cart', async () => {
+    mockFetchByTable({ variants: [variant({ id: 'aaaa1111', product_id: 'bbbb1111' })], products: [product()] })
 
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const res  = await GET(makeReq('variantIds=aaaa1111'))
     const json = await res.json()
 
     expect(json.upsells).toEqual([])
-    // Only ONE fetch call (variants) — products/images never attempted.
-    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -440,7 +430,7 @@ describe('GET /api/v1/cart-upsells — failure handling', () => {
   })
 
   it('returns { upsells: [] } with status 500 on a network-level rejection', async () => {
-    global.fetch = vi.fn(async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof globalThis.fetch
+    mockFetchByTable({}, { failOn: 'variants' })
 
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
     const res  = await GET(makeReq(''))
