@@ -11,7 +11,7 @@ import styles from '../../../styles/account.module.css'
 
 const MAX = 1000
 
-interface Item { product_id: number; name: string; image: string | null; already_reviewed: boolean }
+interface Item { product_id: number; name: string; variant?: string | null; image: string | null; emoji?: string | null; already_reviewed: boolean }
 interface Eligible { order_id: number; order_number: string; delivered: boolean; items: Item[] }
 
 type LoadState =
@@ -54,13 +54,17 @@ function ReviewForm({ orderId, item }: { orderId: string; item: Item }) {
   return (
     <section className={styles.odCard} aria-label={`Review for ${item.name}`}>
       <div className={styles.rvItemHead}>
-        {item.image && (
-          <div className={styles.odItemImg}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item.image} alt="" loading="lazy" />
-          </div>
-        )}
-        <div className={styles.rvItemName}>{item.name}</div>
+        {/* Always show WHICH product this is: photo (or a tile when it has none), name and size. */}
+        <div className={styles.odItemImg} aria-hidden="true">
+          {item.image
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={item.image} alt="" loading="lazy" />
+            : <span style={{ fontSize: 22 }}>{item.emoji || '🌿'}</span>}
+        </div>
+        <div>
+          <div className={styles.rvItemName}>{item.name}</div>
+          {item.variant && <div className={styles.rvNote} style={{ margin: 0 }}>{item.variant}</div>}
+        </div>
       </div>
 
       {done === 'submitted' && <p role="status" className={styles.rvOk}>Thanks — your review will appear after moderation.</p>}

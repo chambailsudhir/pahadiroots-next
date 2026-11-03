@@ -137,17 +137,19 @@ export async function eligibleItems(req: NextRequest): Promise<NextResponse> {
     const base = { order_id: order.id, order_number: order.order_number, delivered }
     if (!delivered) return fin(NextResponse.json({ ...base, items: [] }))
 
-    const rows = await sbAdmin('GET', `/rest/v1/order_items?order_id=eq.${raw}&select=product_id,product_name_snapshot,products(name,image_url)&order=id.asc`)
+    const rows = await sbAdmin('GET', `/rest/v1/order_items?order_id=eq.${raw}&select=product_id,product_name_snapshot,variant_value_snapshot,products(name,image_url,emoji)&order=id.asc`)
     // One entry per product (the same product in two variants is one review).
     const seen = new Set<number>()
-    const items: Array<{ product_id: number; name: string; image: string | null; already_reviewed: boolean }> = []
-    for (const r of (Array.isArray(rows) ? rows : []) as Array<{ product_id: number; product_name_snapshot?: string | null; products?: { name?: string | null; image_url?: string | null } | null }>) {
+    const items: Array<{ product_id: number; name: string; variant: string | null; image: string | null; emoji: string | null; already_reviewed: boolean }> = []
+    for (const r of (Array.isArray(rows) ? rows : []) as Array<{ product_id: number; product_name_snapshot?: string | null; variant_value_snapshot?: string | null; products?: { name?: string | null; image_url?: string | null; emoji?: string | null } | null }>) {
       if (r.product_id == null || seen.has(r.product_id)) continue
       seen.add(r.product_id)
       items.push({
         product_id: r.product_id,
         name:       r.product_name_snapshot || r.products?.name || 'Product',
+        variant:    r.variant_value_snapshot || null,
         image:      r.products?.image_url || null,
+        emoji:      r.products?.emoji || null,
         already_reviewed: false,
       })
     }

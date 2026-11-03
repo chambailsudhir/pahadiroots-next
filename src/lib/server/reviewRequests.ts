@@ -3,8 +3,10 @@
 // Run from the daily expire-pending-orders sweep (Hobby plan: two crons only). Safety rules:
 //   * Only REGISTERED customers (auth_user_id set) with an e-mail address who have not turned off order e-mails
 //     (`customers.notif_email_orders !== false`); guests are never mailed (they cannot sign in to review anyway).
-//   * Only orders delivered between (now - 60 days) and (now - review_request_days): a backlog from before this feature
-//     existed is never mass-mailed.
+//   * Only orders delivered between (now - review_request_days - 14 days) and (now - review_request_days): a backlog from before
+//     this feature existed is never mass-mailed. On top of that a run sends at most 5 e-mails and at most ONE per customer, so even
+//     a first run after activation trickles out over a few days instead of arriving as a burst.
+//   * Products that are no longer listed (inactive) are not asked about - there is no page to show the review on.
 //   * The order is CLAIMED first (INSERT ... ON CONFLICT DO NOTHING into review_requests) and only the single winner
 //     sends, so overlapping runs can never mail twice. If the send fails outright (not even dead-lettered) the claim is
 //     released so the next run retries.
@@ -20,8 +22,8 @@ import { captureError, logger } from '@/lib/logger'
 type Db = ReturnType<typeof getServiceClient>
 
 export const REVIEW_REQUEST_DEFAULT_DAYS = 7
-export const REVIEW_REQUEST_WINDOW_DAYS = 60
-const DEFAULT_LIMIT = 20
+export const REVIEW_REQUEST_WINDOW_DAYS = 14   // width of the eligibility window, counted back from (now - review_request_days)
+const DEFAULT_LIMIT = 5
 const DEFAULT_TIME_BUDGET_MS = 25_000
 const PAGE = 100
 const MAX_PAGES = 20
@@ -65,7 +67,8 @@ export async function sendReviewRequests(
     }
     const days = resolveDays(settings.review_request_days)
     const until = new Date(now.getTime() - days * DAY).toISOString()
-    const since = new Date(now.getTime() - REVIEW_REQUEST_WINDOW_DAYS * DAY).toISOString()
+    const since = new Date(now.getTime() - (days + REVIEW_REQUEST_WINDOW_DAYS) * DAY).toISOString()
+    const mailedCustomers = new Set<string>()   // at most one e-mail per customer per run
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com').replace(/\/+$/, '')
 
     for (let page = 0; page < MAX_PAGES && stats.sent < limit; page++) {
@@ -98,6 +101,7 @@ export async function sendReviewRequests(
         if (Date.now() - startedAt > budget) { stats.timeBudgetHit = true; return stats }
         stats.scanned++
         if (already.has(String(order.id))) { stats.skipped++; continue }
+        if (mailedCustomers.has(String(order.customer_id))) { stats.skipped++; continue }   // their other orders wait for a later run
         const cust = byCustomer.get(String(order.customer_id))
         const email = (cust?.email ?? '').trim()
         if (!cust || !cust.auth_user_id || !email.includes('@') || cust.notif_email_orders === false) { stats.skipped++; continue }
@@ -105,11 +109,14 @@ export async function sendReviewRequests(
         try {
           // Items of this order that this customer has not reviewed yet.
           const { data: items, error: ierr } = await db
-            .from('order_items').select('product_id, product_name_snapshot').eq('order_id', order.id)
+            .from('order_items').select('product_id, product_name_snapshot, variant_value_snapshot, products(name, image_url, emoji, is_active)').eq('order_id', order.id)
           if (ierr) throw new Error('order_items read failed: ' + ierr.message)
-          const products = new Map<string, string>()
-          for (const it of (items ?? []) as Array<{ product_id: number | string | null; product_name_snapshot: string | null }>) {
-            if (it.product_id != null && !products.has(String(it.product_id))) products.set(String(it.product_id), it.product_name_snapshot || 'your item')
+          type Shown = { name: string; variant: string | null; image: string | null; emoji: string | null }
+          const products = new Map<string, Shown>()
+          for (const it of (items ?? []) as Array<{ product_id: number | string | null; product_name_snapshot: string | null; variant_value_snapshot?: string | null; products?: { name?: string | null; image_url?: string | null; emoji?: string | null; is_active?: boolean | null } | null }>) {
+            if (it.product_id == null || products.has(String(it.product_id))) continue
+            if (it.products?.is_active === false) continue   // not listed any more: nowhere to show a review
+            products.set(String(it.product_id), { name: it.product_name_snapshot || it.products?.name || 'your item', variant: it.variant_value_snapshot || null, image: it.products?.image_url || null, emoji: it.products?.emoji || null })
           }
           if (products.size === 0) { stats.skipped++; continue }
           const { data: mine, error: verr } = await db
@@ -126,9 +133,13 @@ export async function sendReviewRequests(
           if (claimErr) throw new Error('claim failed: ' + claimErr.message)
           if (!won || won.length === 0) { stats.skipped++; continue }
 
-          const names = [...products.values()]
-          const shown = names.slice(0, 3).map(n => `<li>${esc(n)}</li>`).join('')
-          const more = names.length > 3 ? `<li>and ${names.length - 3} more</li>` : ''
+          // Photo, name and size of each product, so the customer knows exactly what they are being asked to rate.
+          const list = [...products.values()]
+          const thumb = (p: Shown) => /^https:\/\//i.test(p.image ?? '')
+            ? `<img src="${esc(p.image)}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;border-radius:10px;object-fit:cover;border:1px solid #ece5d8" />`
+            : `<div style="width:56px;height:56px;border-radius:10px;background:#f0f4ee;text-align:center;line-height:56px;font-size:24px">${esc(p.emoji || '🌿')}</div>`
+          const shown = list.slice(0, 3).map(p => `<tr><td width="68" valign="middle" style="padding:6px 0">${thumb(p)}</td><td valign="middle" style="padding:6px 0"><strong style="font-size:15px;color:#1a1611">${esc(p.name)}</strong>${p.variant ? `<br><span style="font-size:12px;color:#6b6256">${esc(p.variant)}</span>` : ''}</td></tr>`).join('')
+          const more = list.length > 3 ? `<tr><td colspan="2" style="padding:6px 0;font-size:13px;color:#6b6256">and ${list.length - 3} more</td></tr>` : ''
           const orderNo = order.order_number || String(order.id)
           const greet = cust.first_name && cust.first_name !== 'Deleted' ? `Hi ${esc(cust.first_name)},` : 'Hi,'
           const result = await sendTransactionalEmail({
@@ -137,13 +148,14 @@ export async function sendReviewRequests(
             subject: `How was your order ${orderNo}?`,
             html: brandedEmail({
               heading: 'How was your order?',
-              bodyHtml: `<p style="margin:0 0 12px">${greet}</p><p style="margin:0 0 12px">Your order <strong>${esc(orderNo)}</strong> was delivered. We would love to hear what you think - your review helps other families choose, and it takes less than a minute.</p><ul style="margin:0 0 12px;padding-left:20px">${shown}${more}</ul><p style="margin:0">Reviews appear on the product page after a quick check by our team.</p>`,
+              bodyHtml: `<p style="margin:0 0 12px">${greet}</p><p style="margin:0 0 12px">Your order <strong>${esc(orderNo)}</strong> was delivered. We would love to hear what you think - your review helps other families choose, and it takes less than a minute.</p><table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;width:100%">${shown}${more}</table><p style="margin:0">Reviews appear on the product page after a quick check by our team.</p>`,
               cta: { label: 'Rate & review', href: `${siteUrl}/account/orders/${order.id}/review` },
             }),
             context: { order_id: order.id, order_number: orderNo },
           })
           if (result.sent || result.deadLettered) {
             stats.sent++
+            mailedCustomers.add(String(order.customer_id))
           } else {
             // Not sent and not queued for retry: release the claim so the next run tries again.
             await db.from('review_requests').delete().eq('order_id', order.id)
