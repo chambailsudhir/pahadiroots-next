@@ -4,6 +4,7 @@ import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
 import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
+import { clientIpKey } from '@/lib/api/clientIp'
 import { releaseOwnAbandonedOnlineOrders } from '@/lib/server/pendingOrders'
 // AUDIT S1-004: the online path now resolves the signed-in customer exactly like /api/v1/orders does.
 import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
   if (csrfError) return csrfError
 
   // ── IP-level rate limit — covers both actions (distributed via Upstash KV) ──
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim())   // IPv6 collapsed to its /64
   // verify_payment gets its own, larger bucket: Razorpay calls it only AFTER the customer has paid, so refusing it (many customers behind
   // one CGNAT / office IP share a limit) would strand a paid order on an error page. It is still bounded, and protected by the HMAC.
   // The action is peeked from a clone so the real body stays readable below.

@@ -17,6 +17,13 @@ describe('clientIpKey', () => {
     expect(clientIpKey('::1')).toBe('0:0:0:0::/64')
     expect(clientIpKey('2001:db8::')).toBe('2001:db8:0:0::/64')
   })
+  it('unwraps every spelling of an IPv4-mapped address and strips brackets / ports', () => {
+    expect(clientIpKey('::ffff:0102:0304')).toBe('1.2.3.4')
+    expect(clientIpKey('0:0:0:0:0:ffff:1.2.3.4')).toBe('1.2.3.4')
+    expect(clientIpKey('[::1]:443')).toBe('0:0:0:0::/64')
+    expect(clientIpKey('1.2.3.4:5678')).toBe('1.2.3.4')
+    expect(clientIpKey('2001:db8::1.2.3.4')).toBe('2001:db8:0:0::/64')
+  })
   it('never throws on junk; empty is "unknown"', () => {
     expect(clientIpKey('')).toBe('unknown')
     expect(clientIpKey(null)).toBe('unknown')

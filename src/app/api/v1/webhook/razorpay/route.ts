@@ -263,7 +263,9 @@ export async function POST(req: Request) {
             // Orders paid before e-mail markers existed carry no emails_tracked flag and are never re-mailed.
             const emailsMissing = !!verified?.metadata?.emails_tracked && (!has(PAID_EMAIL_CUSTOMER_SENT) || !has(PAID_EMAIL_ADMIN_SENT))
             const paidForMs = fresh?.updated_at ? Date.now() - Date.parse(String(fresh.updated_at)) : 0
-            if ((!verified || emailsMissing) && paidForMs > 90_000) {
+            // only for the SAME payment that confirmed this order (an order marked paid some other way — admin, or a different
+            // payment id — must not get coins / e-mails just because a capture event arrived)
+            if (paidWith === paymentId && (!verified || emailsMissing) && paidForMs > 90_000) {
               await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId, reason: verified ? 'emails_missing' : 'no_marker' })
               const settings = await getFreshSiteSettings()
               await runPaidSideEffects(db, {

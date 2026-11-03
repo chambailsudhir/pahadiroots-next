@@ -66,6 +66,7 @@ function makeDb(cfg: Cfg) {
         lt:  (k: string, v: unknown) => { st.filters.push([`${k}<`, v]); return b },
         gt:  (k: string, v: unknown) => { st.filters.push([`${k}>`, v]); return b },
         neq: (k: string, v: unknown) => { st.filters.push([`${k}!=`, v]); return b },
+        or:  (v: string) => { st.filters.push(['or', v]); return b },
         order: () => b,
         limit: () => b,
         then: (res: (v: unknown) => unknown) => {
@@ -346,6 +347,10 @@ describe('releaseOwnAbandonedOnlineOrders (round-2 audit: own abandoned Razorpay
     expect(sel.filters).toContainEqual(['payment_status', 'pending'])
     expect(sel.filters).toContainEqual(['order_status', 'pending'])
     expect(sel.filters).toContainEqual(['created_at<', new Date(NOW.getTime() - 120_000).toISOString()])
+    const dflt = makeDb({ candidates: [] })
+    await releaseOwnAbandonedOnlineOrders(dflt.db, 'c1', { now: NOW })
+    // default grace period is 10 minutes (a customer in the middle of OTP / a UPI app must not lose the order)
+    expect(dflt.log.find(l => l.table === 'orders' && l.op === 'select')!.filters).toContainEqual(['created_at<', new Date(NOW.getTime() - 600_000).toISOString()])
     expect(h.restoreReporting).toHaveBeenCalledTimes(1)
   })
 
@@ -356,6 +361,17 @@ describe('releaseOwnAbandonedOnlineOrders (round-2 audit: own abandoned Razorpay
     expect(n).toBe(0)
     expect(releaseUpdates(log)).toHaveLength(0)
     expect(h.restoreReporting).not.toHaveBeenCalled()
+  })
+
+  it('treats ANY non-failed Razorpay attempt (created / pending, not just authorized) as in flight on the request path', async () => {
+    h.fetchOrderPayments.mockResolvedValueOnce([rzpPay({ status: 'created' })])
+    const a = makeDb({ candidates: [order()] })
+    expect(await releaseOwnAbandonedOnlineOrders(a.db, 'c1', { now: NOW })).toBe(0)
+    expect(releaseUpdates(a.log)).toHaveLength(0)
+    // the background sweep keeps its own, looser rule (only 'authorized' protects an order)
+    h.fetchOrderPayments.mockResolvedValueOnce([rzpPay({ status: 'created' })])
+    const b = makeDb({ candidates: [order()] })
+    expect((await expireStalePendingOrders(b.db, { now: NOW, olderThanMinutes: 30 })).expired).toBe(1)
   })
 
   it('leaves an order with a payment in flight alone, and never throws when Razorpay is unreachable', async () => {
@@ -373,7 +389,7 @@ describe('releaseOwnAbandonedOnlineOrders (round-2 audit: own abandoned Razorpay
   it('never touches the order of the CURRENT request (same idempotency key = a legitimate retry)', async () => {
     const { db, log } = makeDb({ candidates: [] })
     await releaseOwnAbandonedOnlineOrders(db, 'c1', { now: NOW, excludeIdempotencyKey: 'key-123' })
-    expect(log.find(l => l.table === 'orders' && l.op === 'select')!.filters).toContainEqual(['idempotency_key!=', 'key-123'])
+    expect(log.find(l => l.table === 'orders' && l.op === 'select')!.filters).toContainEqual(['or', 'idempotency_key.is.null,idempotency_key.neq.key-123'])   // NULL keys stay eligible
   })
 
   it('returns 0 (never throws) when the lookup itself fails', async () => {

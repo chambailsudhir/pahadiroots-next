@@ -23,6 +23,7 @@ import NotificationsSection from './_sections/NotificationsSection'
 import DangerZoneSection from './_sections/DangerZoneSection'
 import LoyaltySection    from './_sections/LoyaltySection'
 import { getSavedAddresses } from '@/lib/account/utils'
+import { VERIFY_NOTICE_KEY, VERIFY_NOTICE_EVENT, type VerifyNotice } from '@/app/reset-password/resetPasswordHelpers'
 import type { SavedAddress } from '@/lib/account/utils'
 import styles from './styles/account.module.css'
 import Icon from '@/components/ui/Icon'
@@ -47,6 +48,17 @@ function getProfileSig(p: { first_name?: string | null; last_name?: string | nul
 function AccountPageInner() {
   const searchParams = useSearchParams()
   const router       = useRouter()
+
+  // E-mail verification result, decided by GoogleAuthHandler from the hash it actually received (not from a spoofable URL flag).
+  // The handler lives in the root layout, so its effect runs AFTER this page's: read what it already stored, and listen for it.
+  const [verifyNotice, setVerifyNotice] = useState<VerifyNotice | null>(null)
+  useEffect(() => {
+    const take = (v: unknown) => { if (v === 'ok' || v === 'expired') setVerifyNotice(v) }
+    try { take(sessionStorage.getItem(VERIFY_NOTICE_KEY)) } catch { /* storage blocked */ }
+    const onNotice = (e: Event) => take((e as CustomEvent).detail)
+    window.addEventListener(VERIFY_NOTICE_EVENT, onNotice)
+    return () => window.removeEventListener(VERIFY_NOTICE_EVENT, onNotice)
+  }, [])
 
   const urlTab   = searchParams.get('tab') as Tab | null
   const [tab, setTabState] = useState<Tab>(
@@ -175,9 +187,14 @@ function AccountPageInner() {
         <div className={styles.lwIcon}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         </div>
-        {searchParams.get('verified') === '1' && (
+        {verifyNotice === 'ok' && (
           <p role="status" style={{ background: '#e8f5e9', color: '#1b5e20', border: '1px solid #a5d6a7', borderRadius: 10, padding: '10px 14px', margin: '0 0 12px', fontSize: 14 }}>
             Your e-mail is verified. Please sign in to continue.
+          </p>
+        )}
+        {verifyNotice === 'expired' && (
+          <p role="alert" style={{ background: '#fff8e1', color: '#7a5200', border: '1px solid #ffe082', borderRadius: 10, padding: '10px 14px', margin: '0 0 12px', fontSize: 14 }}>
+            That verification link has expired or was already used. Try signing in; if it says your e-mail is not confirmed, use “Forgot password” to get a fresh link.
           </p>
         )}
         <h1 className={styles.lwTitle}>Welcome Back</h1>

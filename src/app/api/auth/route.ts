@@ -88,7 +88,7 @@ async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<b
 
 // Failed-login counter per account (see email_login). Only FAILED credential checks increment it.
 // Two counters (round-2 audit): a stranger must not be able to lock a customer out of their own account.
-//   • per (account + client network): 10 failures block THAT network only — a stranger can lock only themselves out;
+//   • per (account + client network): 10 attempts block THAT network only — a stranger can lock only themselves out;
 //   • per account across all networks: a much higher botnet backstop (100 / 15 min) that caps online guessing for one account
 //     at ~100 tries per window while making a deliberate lock-out ten times more expensive.
 const LOGIN_FAIL_MAX     = 10
@@ -378,7 +378,12 @@ export async function POST(req: NextRequest) {
     // consumed before the password was checked, so a stranger sending 10 bad logins for a victim's e-mail
     // locked the victim out). Generic wording — identical for real and non-existent accounts.
     const loginIp = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
-    if (await peekRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX) || await peekRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX)) {
+    // Per (account + network): an ATOMIC increment BEFORE the password is checked (checkRateLimitKv also works through the Postgres
+    // fallback when Upstash is not configured at runtime - a read-only "peek" is a no-op there, and N parallel guesses could all
+    // pass a check-then-increment). Counting every attempt is safe: it only ever limits the caller's own network. The account-wide
+    // backstop below counts only FAILED credential checks, so it cannot be used to lock a customer out cheaply.
+    const withinNetworkQuota = await checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
+    if (!withinNetworkQuota || await peekRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX)) {
       return NextResponse.json(
         { error: 'Too many attempts. Please wait a few minutes before trying again.' },
         { status: 429, headers: { 'Retry-After': '900' } },
@@ -397,11 +402,8 @@ export async function POST(req: NextRequest) {
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       if (isCredentialFailure(e2.status)) {
-        const [okHere, okAny] = await Promise.all([
-          checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW),
-          checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW),
-        ])
-        if (!okHere || !okAny) {
+        const okAny = await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
+        if (!okAny) {
           return NextResponse.json(
             { error: 'Too many attempts. Please wait a few minutes before trying again.' },
             { status: 429, headers: { 'Retry-After': '900' } },
@@ -557,7 +559,7 @@ export async function POST(req: NextRequest) {
     // AUDIT (auth-B #3): quota per e-mail + IP (an attacker only burns their OWN quota, never the victim's)
     // plus a higher per-e-mail ceiling against distributed mail-bombing. A hit answers with the same generic
     // success and sends nothing.
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
+    const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
     const target = email.toLowerCase()
     const withinIpQuota   = await rateLimit(`forgot_password_email_ip:${target}:${ip}`, 3, 60 * 60_000)
     const withinGlobalCap = await rateLimit(`forgot_password_email:${target}`, 10, 60 * 60_000)

@@ -166,8 +166,8 @@ async function finalizeRecoveredOrder(
 }
 
 // not exported: Next.js route modules may only export handlers/config
-const COD_PHONE_LIMIT_10M = 6
-const COD_IP_LIMIT_10M    = 20
+const COD_PHONE_LIMIT_10M = 8    // generous on purpose: every schema-valid attempt counts, and the phone is attacker-supplied
+const COD_IP_LIMIT_10M    = 40    // shared NAT / CGNAT / hostel addresses carry many real customers
 
 export async function POST(req: NextRequest) {
   const requestStartedAt = Date.now()
