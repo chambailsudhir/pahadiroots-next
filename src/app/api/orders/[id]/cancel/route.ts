@@ -16,6 +16,8 @@
 //     told so even if a follow-up step hiccups.
 // ─────────────────────────────────────────────────────────────────────────────
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
+import { loadAdminOrderEmail } from '@/lib/server/adminOrderEmail'
+import { getServiceClient } from '@/lib/supabase'
 import { NextRequest, NextResponse, after } from 'next/server'
 import {
   ok, fail,
@@ -139,10 +141,11 @@ export async function POST(
         const settings = await getFreshSiteSettings().catch(() => null)
         const adminTo = adminNotifyAddress(settings)
         if (adminTo) {
+          const built = await loadAdminOrderEmail(getServiceClient(), order.id, { kind: 'cancelled', cancelReason: reasonLabel, cancelNote: note || null }).catch(() => null)
           await sendTransactionalEmail({
             type: 'admin_order_notify', to: adminTo,
-            subject: `Order #${order.order_number} cancelled by customer`,
-            html: `<p>Order <b>#${esc(order.order_number)}</b> (COD, Rs.${esc(order.total_amount)}) was cancelled by the customer.<br>Reason: ${esc(reasonLabel)}${note ? `<br>Note: ${esc(note)}` : ''}<br>Stock released, coupon and coins reversed automatically.</p>`,
+            subject: built?.subject ?? `Order #${order.order_number} cancelled by customer`,
+            html: built?.html ?? `<p>Order <b>#${esc(order.order_number)}</b> (COD, Rs.${esc(order.total_amount)}) was cancelled by the customer.<br>Reason: ${esc(reasonLabel)}${note ? `<br>Note: ${esc(note)}` : ''}<br>Stock released, coupon and coins reversed automatically.</p>`,
             context: { order_id: order.id, order_number: order.order_number },
           })
         }

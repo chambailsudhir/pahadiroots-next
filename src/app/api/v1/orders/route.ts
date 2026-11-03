@@ -6,6 +6,7 @@ import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
+import { loadAdminOrderEmail, describeOrigin } from '@/lib/server/adminOrderEmail'
 import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
@@ -404,15 +405,20 @@ export async function POST(req: NextRequest) {
         const adminTo = adminNotifyAddress(settings)
         if (adminTo && !alreadyExists) {
           try {
+            // Where the order came from (city + device, no IP) is recorded once and read back by the owner mail, which is built from
+            // the stored order so it always matches the database.
+            const originText = describeOrigin(req.headers)
+            if (originText) await logOrderEvent(order.id, 'order_origin', 'system', { origin: originText }).catch(() => null)
+            const built = await loadAdminOrderEmail(getServiceClient(), order.id, { kind: 'cod' }).catch(() => null)
             const coinsLine = (d.loyalty_points_redeemed ?? 0) > 0
               ? ` | Coins redeemed: ${d.loyalty_points_redeemed}` : ''
             await sendTransactionalEmail({
               type:    'admin_order_notify',
               to:      adminTo,
-              subject: `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
-              // Admin email — all user-supplied fields go through sanitize() above
-              // (name, flat, area, city, state) then esc() for HTML encoding.
-              html:    `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
+              subject: built?.subject ?? `New ${d.payment_method.toUpperCase()} Order #${order.order_number} - Rs.${order.total_amount}`,
+              // All user-supplied fields are escaped inside buildAdminOrderEmail(). The one-line fallback below is only used if the
+              // order could not be read back (it still escapes everything).
+              html:    built?.html ?? `<p>Order: <b>#${esc(order.order_number)}</b><br>Customer: ${esc(name)} (+91${esc(a.phone)})<br>City: ${esc(city)}, ${esc(state)}<br>Total: Rs.${order.total_amount}<br>Payment: ${esc(d.payment_method)}${esc(coinsLine)}</p>`,
               context: { order_id: order.id, order_number: order.order_number },
             })
           } catch (e) {
