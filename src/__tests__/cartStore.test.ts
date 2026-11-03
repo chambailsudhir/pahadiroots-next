@@ -105,6 +105,13 @@ describe('cartStore.addItem', () => {
     expect(key1).toBe(key2)
   })
 
+  it('adding an item never SHRINKS an existing quantity, even when the fresher cap is below it', () => {
+    const store = useCartStore.getState()
+    store.addItem({ ...makeItem({ variantId: 'v8', maxQty: 10 }), qty: 4 })
+    store.addItem({ ...makeItem({ variantId: 'v8', maxQty: 2 }), qty: 1 })
+    expect(useCartStore.getState().items.find(i => i.variantId === 'v8')!.qty).toBe(4)
+  })
+
   it('a later add can never RAISE the cap, but a lower (fresher) stock figure lowers it', () => {
     const store = useCartStore.getState()
     store.addItem(makeItem({ variantId: 'v9', maxQty: 10, qty: 1 }))

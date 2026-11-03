@@ -1070,7 +1070,8 @@ export async function createOrder(
   // enforcement has to happen server-side; the client check remains as a
   // UX nicety (disabling the button before the customer even tries).
   if (input.paymentMethod === 'cod') {
-    const codMaxValue = parseFloat(settings.cod_max_value || '3000')
+    const codMaxRaw = parseFloat(settings.cod_max_value || '3000')
+    const codMaxValue = Number.isFinite(codMaxRaw) ? codMaxRaw : 3000   // a malformed admin value must not silently lift the cap
     if (pricing.total > codMaxValue) {
       throw new Error(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`)
     }
