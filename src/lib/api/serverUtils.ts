@@ -415,6 +415,11 @@ export function toPublicProfile<T extends Record<string, unknown> | null | undef
   for (const key of PUBLIC_PROFILE_FIELDS) {
     if (key in profile) out[key] = (profile as Record<string, unknown>)[key]
   }
+  // Phone-ownership proof (db_migration_v25): expose only the boolean, never the timestamp. Absent until the column exists.
+  if ('phone_verified_at' in profile) {
+    const p = profile as Record<string, unknown>
+    out.phone_verified = !!p.phone_verified_at && !!p.phone
+  }
   return out
 }
 

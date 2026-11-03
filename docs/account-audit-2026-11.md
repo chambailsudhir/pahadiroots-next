@@ -213,3 +213,13 @@ foreign key — no record was damaged.)
   states the earlier scan did not reach, focus traps, error handling, missing constraints, polish).
 * Database layer: **no critical or high** finding — RLS is on for all 104 tables, no money / points / stock function is callable by
   anon or authenticated.
+
+## 7. Proof of phone ownership via WhatsApp (feature-flagged, ships OFF)
+
+Problem (section 6): a customer could save any mobile number with no proof, and `customers.normalized_phone` is UNIQUE, so a squatter blocks the real owner. SMS OTP is unavailable at zero cost (TRAI/DLT), so ownership is proven with an **inbound** WhatsApp message instead; receiving user-initiated messages through the WhatsApp Cloud API is free and we never reply.
+
+* **Flow:** `POST /api/v1/phone-verify/start {phone}` stores an HMAC of a 6-digit code (10 min, one open code per customer, 5 starts/hour) and returns a `wa.me/<shop number>?text=VERIFY <code>` link. The customer sends it; Meta calls `/api/webhooks/whatsapp`; after the `X-Hub-Signature-256` check the sender number (`91` + 10 digits) and the code must both match an open verification, which is consumed atomically and passed to `claim_verified_phone()`. `GET /api/v1/phone-verify/status` is polled by the account page; `GET /api/v1/phone-verify/enabled` tells the UI whether to show the button.
+* **Squatters:** `claim_verified_phone` (db_migration_v25) gives the number to the proven owner and sets `phone = NULL` on any other REGISTERED, UNVERIFIED row holding it. It never touches a verified holder, and never a guest row (guest rows keep their phone so guest orders stay trackable); if a guest row holds the number the claim is refused (`phone_in_use`) and needs a manual merge.
+* **Hygiene:** changing or clearing the phone in `/api/profile` clears `phone_verified_at` (and a DB trigger does the same for any other writer). `toPublicProfile` exposes only the boolean `phone_verified`.
+* **Flag:** ON only if `WHATSAPP_VERIFY_NUMBER`, `WHATSAPP_APP_SECRET` and `WHATSAPP_VERIFY_TOKEN` are all set AND `site_settings.phone_verification_enabled` is not `false`. Otherwise the UI is hidden and start/status/webhook answer 404.
+* **Still open:** verified numbers are not yet *required* for anything (referral, COD limits, order attach); merging guest rows into the proven owner; a nightly cleanup of old `phone_verifications` rows.

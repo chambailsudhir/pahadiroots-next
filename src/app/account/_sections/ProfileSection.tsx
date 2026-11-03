@@ -5,6 +5,7 @@ import type { Profile }    from '../hooks/useAuth'
 import type { AuthUser }   from '../hooks/useAuth'
 import type { useProfile } from '../hooks/useProfile'
 import styles from '../styles/account.module.css'
+import PhoneVerify from '../_components/PhoneVerify'
 
 type ProfileHook = ReturnType<typeof useProfile>
 
@@ -134,6 +135,11 @@ export default function ProfileSection({ authProfile, authUser, profile }: Props
                 <input id="pf-phone" name="tel-national" autoComplete="tel-national" className={`${styles.fInp}${profile.pfErr.phone ? ' ' + styles.fErr : ''}`} style={{ flex: 1 }} value={profile.pf.phone} onChange={e => { profile.setPf(p => ({ ...p, phone: e.target.value.replace(/\D/g, '') })); profile.setPfErr(er => ({ ...er, phone: '' })) }} placeholder="10-digit mobile" maxLength={10} inputMode="numeric" />
               </div>
               {profile.pfErr.phone && <div className={styles.errTxt}>{profile.pfErr.phone}</div>}
+              <PhoneVerify
+                phone={profile.pf.phone}
+                initiallyVerified={authProfile?.phone_verified === true}
+                savedPhone={(authProfile?.phone || '').replace(/\D/g, '').slice(-10)}
+              />
             </div>
             <div>
               <label htmlFor="pf-email" className={styles.fLbl}>Email Address</label>
