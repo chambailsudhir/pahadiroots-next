@@ -5,7 +5,8 @@
 // for the full safety rules (asks Razorpay first, never releases on uncertainty,
 // single-winner release, late payments still honoured).
 //
-// Also releases earned referral coins (process_referral_rewards) as a non-fatal extra step.
+// Also releases earned referral coins (process_referral_rewards) and sends post-delivery review-request e-mails
+// (lib/server/reviewRequests.ts) as non-fatal extra steps.
 //
 // Scheduled by vercel.json `crons`. AUTH: Bearer ${CRON_SECRET} (fails closed).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ import { getServiceClient } from '@/lib/supabase'
 import { rejectUnlessCron } from '@/lib/server/cronAuth'
 import { expireStalePendingOrders } from '@/lib/server/pendingOrders'
 import { captureError } from '@/lib/logger'
+import { sendReviewRequests } from '@/lib/server/reviewRequests'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +51,15 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.process_referral_rewards', alert: true })
     }
 
+    // "How was your order?" e-mails for orders delivered a few days ago (db_migration_v23, setting review_request_enabled).
+    // Non-fatal and self-limiting (batch of 20, time-budgeted); sendReviewRequests never throws, the guard is belt and braces.
+    let reviewRequests = 0
+    try {
+      reviewRequests = (await sendReviewRequests(db)).sent
+    } catch (e) {
+      captureError(e, { action: 'cron.review_requests', alert: true })
+    }
+
     // Released stock can turn a "sold out" card buyable again — refresh the cached cards.
     // (One regeneration per sweep that actually released something, never per visitor.)
     if (stats.expired > 0) {
@@ -56,7 +67,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.
-    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards }, { status: stats.errors > 0 ? 500 : 200 })
+    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders', alert: true })
     return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })

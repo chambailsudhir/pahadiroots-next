@@ -20,6 +20,7 @@ import ProductGallery from '@/components/product/ProductGallery'
 import AddToCartSection from '@/components/product/AddToCartSection'
 import CertificateCard from '@/components/product/CertificateCard'
 import ReviewsSection from '@/components/product/ReviewsSection'
+import { withVerifiedFlag } from '@/lib/reviewVerified'
 import RelatedProducts from '@/components/product/RelatedProducts'
 import PincodeRow from '@/components/product/PincodeRow'
 import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
@@ -1842,7 +1843,8 @@ async function fetchProductDataInner(slug: string) {
       console.warn('[fetchProductData] review fetch failed:', reviewResult.error)
     } else if (reviewResult.data && reviewResult.data.length > 0) {
       const reviewRows = reviewResult.data
-      reviews = reviewRows as import('@/types').Review[]
+      // Best-effort "Verified purchase" flag (separate query so this page keeps working before db_migration_v23 is applied).
+      reviews = await withVerifiedFlag(anonClient as never, reviewRows as unknown as import('@/types').Review[])
       // Aggregate over ALL approved ratings; falls back to the visible rows only if that query failed.
       reviewStats = computeReviewStats(
         ratingResult.error ? null : (ratingResult.data as Array<{ rating: number | null }> | null),

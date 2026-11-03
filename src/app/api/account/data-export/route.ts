@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
       wishlist_product_ids: Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => w.product_id) : [],
       returns: returnsRows,
       reviews: {
-        note: 'Product reviews are stored with the display name typed at submission time and are not linked to your account, so they cannot be listed here automatically. Contact support to find or remove a review you wrote.',
+        note: 'Product reviews are public once approved and show your first name and last initial. Reviews written before verified-purchase reviews were introduced are not linked to your account and cannot be listed here automatically. If you delete your account your reviews stay (rating and text) under the name Anonymous customer. Contact support to find or remove a review you wrote.',
       },
       auth: {
         email:      user.email,

@@ -5,6 +5,8 @@ const h = vi.hoisted(() => ({ sweep: vi.fn(), rpc: vi.fn() }))
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/supabase', () => ({ supabase: {}, getServiceClient: vi.fn(() => ({ rpc: (...a: unknown[]) => h.rpc(...a) })) }))
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, captureError: vi.fn() }))
+const rr = vi.hoisted(() => ({ send: vi.fn() }))
+vi.mock('@/lib/server/reviewRequests', () => ({ sendReviewRequests: (...a: unknown[]) => rr.send(...a) }))
 vi.mock('@/lib/server/pendingOrders', () => ({ expireStalePendingOrders: (...a: unknown[]) => h.sweep(...a) }))
 
 const call = async (auth?: string) => {
@@ -12,7 +14,7 @@ const call = async (auth?: string) => {
   return GET(new Request('http://localhost/api/v1/cron/expire-pending-orders', { headers: auth ? { authorization: auth } : {} }) as any)
 }
 
-beforeEach(() => { h.sweep.mockReset(); h.rpc.mockReset(); h.rpc.mockResolvedValue({ data: 0, error: null }); vi.stubEnv('CRON_SECRET', 'sekret') })
+beforeEach(() => { rr.send.mockReset(); rr.send.mockResolvedValue({ sent: 0 }); h.sweep.mockReset(); h.rpc.mockReset(); h.rpc.mockResolvedValue({ data: 0, error: null }); vi.stubEnv('CRON_SECRET', 'sekret') })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('GET /api/v1/cron/expire-pending-orders', () => {
@@ -55,5 +57,17 @@ describe('GET /api/v1/cron/expire-pending-orders', () => {
     const res = await call('Bearer sekret')
     expect(res.status).toBe(200)
     expect((await res.json()).referralRewards).toBeNull()
+  })
+
+  it('sends review requests as a non-fatal step and reports the count', async () => {
+    h.sweep.mockResolvedValue({ scanned: 0, expired: 0, recovered: 0, skipped: 0, errors: 0 })
+    rr.send.mockResolvedValue({ enabled: true, scanned: 5, sent: 4, skipped: 1, errors: 0 })
+    const json = await (await call('Bearer sekret')).json()
+    expect(json.reviewRequests).toBe(4)
+
+    rr.send.mockRejectedValue(new Error('boom'))
+    const res = await call('Bearer sekret')
+    expect(res.status).toBe(200)
+    expect((await res.json()).reviewRequests).toBe(0)
   })
 })

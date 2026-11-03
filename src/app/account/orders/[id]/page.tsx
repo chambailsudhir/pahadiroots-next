@@ -233,6 +233,13 @@ export default function OrderDetailPage() {
         </a>
       )}
 
+      {/* ── Rate & review (verified purchase; delivered orders only) ── */}
+      {order.order_status === 'delivered' && (
+        <Link prefetch={false} href={`/account/orders/${order.id}/review`} className={styles.odTrackChip} style={{ marginRight: 8 }}>
+          Rate &amp; review
+        </Link>
+      )}
+
       {/* ── Cancel (COD, before packing) ─────────────────────── */}
       {cancelledMsg && (
         <div role="status" className={styles.odCard} style={{ borderColor: '#2d6a4f', marginBottom: 12 }}>{cancelledMsg}</div>

@@ -159,7 +159,7 @@ describe('DELETE /api/account/delete — erasure scope', () => {
     expect((await res.json()).message).toMatch(/retained.*up to 6 years.*GST law/i)
     const mail = fetchMock.mock.calls.find(([u]) => String(u).includes('api.resend.com'))!
     const html = JSON.parse(mail[1].body).html as string
-    expect(html).toMatch(/up to 6 years/); expect(html).toMatch(/not<\/strong> kept on these orders/); expect(html).toMatch(/anonymously/)
+    expect(html).toMatch(/up to 6 years/); expect(html).toMatch(/not<\/strong> kept on these orders/); expect(html).toMatch(/Anonymous customer/)
   })
 
   it('stores a hashed IP (never the raw address) in the audit row', async () => {
