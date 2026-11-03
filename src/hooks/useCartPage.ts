@@ -144,6 +144,7 @@ import type { SiteSettings, UpsellItem } from '@/types'
 import { logger }             from '@/lib/logger'
 import { getShippingPolicy }  from '@/lib/shippingCopy'
 import { couponLines } from '@/lib/couponLines'
+import { useCartSettingsSeed } from '@/components/cart/CartSettingsSeed'
 
 // ─── Retry helper ─────────────────────────────────────────────────────────────
 // Retries a fetch up to `maxRetries` times on network / 5xx errors with
@@ -242,7 +243,9 @@ export function useCartPage() {
   const [reviews,         setReviews]         = useState<CartReview[]>([])
   const [qtyAnim,         setQtyAnim]         = useState<Record<string, 'up' | 'down' | null>>({})
 
-  const [settings, setSettings] = useState<Partial<SiteSettings>>({})
+  // Seeded by the cart layout (server) so the summary can paint at once; refreshed from /api/v1/cart-settings below.
+  const seededSettings = useCartSettingsSeed()
+  const [settings, setSettings] = useState<Partial<SiteSettings>>(seededSettings ?? {})
 
   const [pendingRemovals, setPendingRemovals] = useState<
     Map<string, { name: string; timerId: ReturnType<typeof setTimeout> }>
@@ -422,7 +425,7 @@ export function useCartPage() {
   // ── Settings + reviews fetch ───────────────────────────────────────────────
   // False until /api/v1/cart-settings has answered (or failed): the summary waits for it so shipping / free-shipping / minimum order
   // are never shown from placeholder defaults and then jump.
-  const [settingsSettled, setSettingsSettled] = useState(false)
+  const [settingsSettled, setSettingsSettled] = useState(seededSettings != null)
   useEffect(() => {
     const ac = new AbortController()
 
