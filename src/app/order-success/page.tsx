@@ -290,7 +290,7 @@ function SuccessContent() {
 
         /* ── RESET / BASE ── */
         /* Scoped to .oc-scope: these used to be global (*, body, a, :root) and restyled the site header/footer while this page was open. */
-        .oc-scope, .oc-scope *, .oc-scope *::before, .oc-scope *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :where(.oc-scope), :where(.oc-scope) *, :where(.oc-scope) *::before, :where(.oc-scope) *::after { box-sizing: border-box; margin: 0; padding: 0; }
         .oc-scope {
           --g:   #1a3a1e;
           --g2:  #2d6a4f;
@@ -305,8 +305,8 @@ function SuccessContent() {
           --tx3: #666;
         }
         .oc-scope { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--tx); }
-        .oc-scope a { text-decoration: none; color: inherit; }
-        .oc-scope button { cursor: pointer; font-family: inherit; }
+        :where(.oc-scope) a { text-decoration: none; color: inherit; }   /* :where() = zero specificity, so .oc-btn-primary etc. keep their own colours */
+        :where(.oc-scope) button { cursor: pointer; font-family: inherit; }
 
         /* ── NAV ── */
         .oc-nav {
