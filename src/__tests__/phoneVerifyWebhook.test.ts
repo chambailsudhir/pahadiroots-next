@@ -24,9 +24,10 @@ vi.mock('@/lib/api/serverUtils', () => ({
       if (q.get('consumed_at') === 'is.null' && r.consumed_at !== null) return false
       if (q.get('expires_at')?.startsWith('gt.') && !(new Date(r.expires_at) > new Date(q.get('expires_at')!.slice(3)))) return false
       if (q.get('attempts') && r.attempts !== Number(q.get('attempts')!.replace('eq.', ''))) return false
+      if (q.get('code_hash') && r.code_hash !== q.get('code_hash')!.replace('eq.', '')) return false
       return true
     }
-    if (method === 'GET') return rows.filter(match).sort((a, b) => b.created_at.localeCompare(a.created_at))
+    if (method === 'GET') { const lim = Number(q.get('limit')) || 1000; return rows.filter(match).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, lim) }
     if (method === 'PATCH') { const hit = rows.filter(match); hit.forEach(r => Object.assign(r, body)); return hit }
     return null
   },
@@ -177,3 +178,17 @@ describe('POST verification', () => {
     err.mockRestore()
   })
 })
+
+describe('round-5 audit: a squatter cannot push the real owner out of the lookup', () => {
+  it('six newer open codes for the same number from other accounts do not stop the owner\'s correct VERIFY from matching', async () => {
+    const t0 = Date.now()
+    const mine = seed({ customer_id: 7, created_at: new Date(t0 - 60_000).toISOString() }, '482913')
+    for (let i = 0; i < 6; i++) seed({ customer_id: 100 + i, created_at: new Date(t0 - i * 1000).toISOString() }, String(111111 + i))
+    const raw = payload('919876543210', 'VERIFY 482913')
+    const res = await post(raw)
+    expect(res.status).toBe(200)
+    expect(db.claims).toEqual([expect.objectContaining({ p_customer_id: 7, p_phone10: '9876543210' })])
+    expect((db.rows as Row[]).find(r => r.id === mine.id)!.consumed_at).not.toBeNull()
+  })
+})
+

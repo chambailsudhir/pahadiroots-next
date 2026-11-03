@@ -169,7 +169,9 @@ export async function sbAdmin(
     signal: AbortSignal.timeout(8_000),
   })
   const text = await res.text()
-  if (!res.ok) throw { status: res.status, message: text }
+  // A real Error (with .status): a plain {status, message} object was logged as "[object Object]" with no stack by captureError, so every
+  // database failure in sbAdmin callers was undiagnosable. message stays the raw response text, as callers expect.
+  if (!res.ok) throw Object.assign(new Error(text || `Supabase HTTP ${res.status}`), { status: res.status })
   return text ? JSON.parse(text) : null
 }
 

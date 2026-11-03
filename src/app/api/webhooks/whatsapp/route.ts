@@ -77,16 +77,21 @@ async function handleVerifyMessage(from: string, body: string): Promise<void> {
   const phone10 = digits.slice(-10)
 
   const nowIso = new Date().toISOString()
-  const open: OpenVerification[] = await sbAdmin('GET',
-    `/rest/v1/phone_verifications?phone10=eq.${phone10}&consumed_at=is.null&expires_at=gt.${encodeURIComponent(nowIso)}`
-    + `&order=created_at.desc&limit=5&select=id,customer_id,code_hash,attempts`) ?? []
-  if (!Array.isArray(open) || open.length === 0) return   // nothing pending for this sender (or a replay): ignore
-
+  // Look the code up BY ITS HASH (bound to this sender's number) instead of scanning the newest 5 open rows: a squatter holding open codes
+  // for the victim's number from several accounts could push the victim's own row out of a "newest 5" window and make their correct
+  // message never match (round-5 audit).
   const expected = hashCode(code, phone10)
-  const hit = open.find(v => v.attempts < MAX_ATTEMPTS && safeEqual(v.code_hash, expected))
+  const matches: OpenVerification[] = await sbAdmin('GET',
+    `/rest/v1/phone_verifications?phone10=eq.${phone10}&consumed_at=is.null&expires_at=gt.${encodeURIComponent(nowIso)}`
+    + `&code_hash=eq.${encodeURIComponent(expected)}&order=created_at.desc&limit=3&select=id,customer_id,code_hash,attempts`) ?? []
+  const hit = Array.isArray(matches) ? matches.find(v => v.attempts < MAX_ATTEMPTS && safeEqual(v.code_hash, expected)) : undefined
 
   if (!hit) {
     // Wrong code from a number that has a pending verification: count it against the newest one; burn it at the cap.
+    const open: OpenVerification[] = await sbAdmin('GET',
+      `/rest/v1/phone_verifications?phone10=eq.${phone10}&consumed_at=is.null&expires_at=gt.${encodeURIComponent(nowIso)}`
+      + `&order=created_at.desc&limit=1&select=id,customer_id,code_hash,attempts`) ?? []
+    if (!Array.isArray(open) || open.length === 0) return   // nothing pending for this sender (or a replay): ignore
     const v = open[0]
     const next = v.attempts + 1
     await sbAdmin('PATCH',

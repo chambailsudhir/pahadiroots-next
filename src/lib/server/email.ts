@@ -130,7 +130,9 @@ export async function sendTransactionalEmail(
     if (settings.email_footer_text?.trim()) {
       // AUDIT (Oct 2026, System): this admin-editable text was injected into every e-mail as raw HTML. It now goes through the
       // same allow-list sanitiser as the announcement bar, so a stray <script>/<iframe>/on…= can never reach a customer's inbox.
-      html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888;">${sanitizeHtml(settings.email_footer_text)}</div>`
+      const footer = `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5e5;font-size:12px;color:#888;">${sanitizeHtml(settings.email_footer_text)}</div>`
+      // INSIDE the document (before </body>): content after </html> is dropped or misplaced by Outlook and some webmail.
+      html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${footer}</body>`) : html + footer
     }
   } catch {
     // Non-fatal — an email without the footer is far better than no

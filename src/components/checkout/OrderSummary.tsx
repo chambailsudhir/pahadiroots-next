@@ -9,6 +9,7 @@ import type { PriceSummary } from '@/lib/services/pricingService'
 import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block — was 18KB re-parsed on every render
 import Icon from '@/components/ui/Icon'
 import { useUserStore } from '@/store/userStore'
+import { coinsPerOrder } from '@/lib/loyaltyCoins'
 
 interface CouponHint { code: string; label: string }
 
@@ -73,23 +74,23 @@ const OrderSummary = memo(function OrderSummary({
 
   // useMemo — settings-derived values; only recalc when settings/pricing/loyalty change
   const {
-    savingsBadge, prepaidPct, loyaltyEnabled, loyaltyRate, loyaltyLabel,
+    savingsBadge, prepaidPct, loyaltyEnabled, loyaltyLabel,
     pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
   } = useMemo(() => {
     // AUDIT S3-006: parseFloat — pricingService applies '5.5' as 5.5%, so the label must too.
     const prepaidPct     = parseFloat(settings.prepaid_discount_pct || '5')
     const loyaltyEnabled = settings.loyalty_enabled === 'true'
-    const loyaltyRate    = parseFloat(settings.loyalty_points_per_rupee || '1')
     const loyaltyLabel   = settings.loyalty_points_label || 'Pahadi Coins'
     const pointsValue    = parseFloat(settings.loyalty_points_value || '0.25')
-    const loyaltyPts     = loyaltyEnabled ? Math.floor(pricing.total * loyaltyRate) : 0
+    // Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), not a rate on the cart value.
+    const loyaltyPts     = loyaltyEnabled ? coinsPerOrder(settings as unknown as Record<string, string | undefined>) : 0
     const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
     const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
     const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)
     const cappedBalance  = Math.min(loyaltyBalance, maxRedeemPts)
     const savingsBadge   = pricing.discount + pricing.prepaidDiscount + (loyaltyRedemption?.discount_inr ?? 0)
     return {
-      savingsBadge, prepaidPct, loyaltyEnabled, loyaltyRate, loyaltyLabel,
+      savingsBadge, prepaidPct, loyaltyEnabled, loyaltyLabel,
       pointsValue, loyaltyPts, maxRedeemPct, maxRedeemValue, maxRedeemPts, cappedBalance,
     }
   }, [settings, pricing, loyaltyBalance, loyaltyRedemption])
@@ -411,7 +412,7 @@ const OrderSummary = memo(function OrderSummary({
           {/* Coins are for account holders only — a guest has nowhere to spend them, so don't dangle them. */}
           {isSignedIn && loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
             <div className="os-loyalty-earn-strip">
-              <Icon name="star" /> Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
+              <Icon name="star" /> Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> when this order is delivered
             </div>
           )}
         </div>

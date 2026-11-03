@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   const denied = rejectUnlessCron(req, 'cron.expire_pending_orders')
   if (denied) return denied
 
+  const startedAt = Date.now()
   try {
     const db = getServiceClient()
     const stats = await expireStalePendingOrders(db)
@@ -51,11 +52,25 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.process_referral_rewards', alert: true })
     }
 
+    // Safety net for the delivery-coins trigger (db_migration_v30): orders delivered in the last 14 days whose award failed silently.
+    let missingCoinsAwarded = 0
+    try {
+      const { data, error } = await db.rpc('award_missing_delivery_coins', { p_limit: 50 })
+      if (error) throw new Error(error.message)
+      missingCoinsAwarded = Number(data ?? 0)
+    } catch (e) {
+      captureError(e, { action: 'cron.award_missing_delivery_coins', alert: true })
+    }
+
     // "How was your order?" e-mails for orders delivered a few days ago (db_migration_v23, setting review_request_enabled).
     // Non-fatal and self-limiting (batch of 20, time-budgeted); sendReviewRequests never throws, the guard is belt and braces.
+    // The function has a 30 s ceiling (vercel.json) shared by every step above, and a send is claimed BEFORE it happens: a kill in the
+    // middle of this step would leave a claim with no e-mail and that customer would never be asked. So give it only what is left
+    // (minus a safety margin), and skip it when too little remains - the next run picks the same orders up.
     let reviewRequests = 0
+    const remainingMs = 30_000 - (Date.now() - startedAt) - 4_000
     try {
-      reviewRequests = (await sendReviewRequests(db)).sent
+      if (remainingMs >= 8_000) reviewRequests = (await sendReviewRequests(db, { timeBudgetMs: remainingMs })).sent
     } catch (e) {
       captureError(e, { action: 'cron.review_requests', alert: true })
     }
@@ -67,7 +82,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.
-    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
+    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, missingCoinsAwarded, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders', alert: true })
     return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })

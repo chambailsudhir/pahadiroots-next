@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sbAdmin, hasForeignOrigin } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { captureError } from '@/lib/logger'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 const BOT_UA_PATTERN = /bot|crawl|spider|slurp|headless|curl|wget|python-requests|scrapy|facebookexternalhit|pingdom|uptimerobot|ahrefs|semrush|bytespider/i
 
@@ -32,9 +33,7 @@ function ok()                          { return NextResponse.json({ ok: true }) 
 function fail(status: number, msg = 'invalid') { return NextResponse.json({ ok: false, error: msg }, { status }) }
 
 function clientIp(req: NextRequest): string {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('x-real-ip')
-      || 'unknown'
+  return clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
 }
 
 // Ids are positive integers; anything else (negative, fractional, absurdly large, NaN) is dropped, not stored.
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest) {
   // BUG FIX (audit C-11): was the in-process limiter — a Map per serverless instance — so the real ceiling was 240/min
   // PER INSTANCE. The shared limiter counts across instances. Non-strict on purpose: if the limiter itself is down,
   // analytics keeps flowing (it must never take pages down), and the failure is alerted by rateLimitKv.
-  if (!(await checkRateLimitKv(`mw:rl:analytics_ip:${ip}`, 240, 60))) return fail(429, 'rate limited')
+  if (!(await checkRateLimitKv(`mw:rl:analytics_ip:${ip}`, 60, 60))) return fail(429, 'rate limited')   // a real page sends 1-3 events; was 240/min
 
   // Reject oversized bodies before parsing (a page-view batch is a few KB at most).
   const declared = Number(req.headers.get('content-length') || 0)
@@ -110,6 +109,9 @@ export async function POST(req: NextRequest) {
 
     // One session row per session in the batch. landing_page/referrer/utm only come from the FIRST event of a
     // session; omitting the keys otherwise keeps merge-duplicates from overwriting them with NULL.
+    // A browser batch is ONE session. Each distinct session costs a sequential database upsert, so one request could cause 20 writes:
+    // accept at most 2 distinct sessions per request and drop the rest.
+    if (!sessions.has(session_id) && sessions.size >= 2) continue
     const sess: Row = sessions.get(session_id) ?? { session_id, visitor_id, device_type }
     if (typeof landing_page === 'string') sess.landing_page = landing_page.slice(0, 500)
     if (typeof referrer === 'string')     sess.referrer     = referrer.slice(0, 500)
