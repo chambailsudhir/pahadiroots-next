@@ -10,6 +10,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
+const storeMock = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/storeData', () => ({ getStoreData: (...a: unknown[]) => storeMock(...a) }))
+
 import { rememberGood, recallGood, _clearLastGood } from '@/lib/api/lastGood'
 import { logger } from '@/lib/logger'
 
@@ -117,14 +120,15 @@ describe('GET /api/v1/cart-upsells', () => {
 
   it('serves the last good upsells for the same cart contents when the DB fails', async () => {
     const { GET } = await import('@/app/api/v1/cart-upsells/route')
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(ok([{ id: 'v1', product_id: 'p1', is_active: true, available_stock: 5, price: 100, original_price: 120, variant_value: '500g' }]))
-      .mockResolvedValueOnce(ok([{ id: 'p1', name: 'Honey', slug: 'honey', emoji: null, gst_rate: 5, state_id: null, badges: [] }]))
-      .mockResolvedValueOnce(ok([])))
+    storeMock.mockResolvedValueOnce({
+      products: [{ id: 'p1', name: 'Honey', slug: 'honey', emoji: null, gst_rate: 5, state_id: null, badges: [], is_active: true, is_deleted: false }],
+      product_images: [],
+      product_variants: [{ id: 'v1', product_id: 'p1', is_active: true, available_stock: 5, price: 100, original_price: 120, variant_value: '500g' }],
+    })
     const first = await (await GET(req('?variantIds=aaa'))).json()
     expect(first.upsells).toHaveLength(1)
 
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(down))
+    storeMock.mockRejectedValue(new Error('catalogue unavailable'))
     const res = await GET(req('?variantIds=aaa'))
     expect(res.status).toBe(200)
     expect(res.headers.get('X-Data-Stale')).toBe('1')
