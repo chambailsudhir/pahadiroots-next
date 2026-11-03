@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({ kv: vi.fn(), fetch: vi.fn() }))
+vi.mock('@/lib/chatStoreFacts', () => ({ buildLiveStoreFacts: async () => 'LIVE STORE FACTS (test)\n- Honey: ₹350' }))
 vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: mocks.kv }))
 
 function req(body: unknown, headers: Record<string, string> = {}) {

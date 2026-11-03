@@ -10,6 +10,7 @@ import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { verifyChatToken, chatTokenEnabled } from '@/lib/api/chatToken'
 import { verifyChatPow, verifyTurnstile, turnstileEnabled } from '@/lib/api/chatChallenge'
 import { buildChatSystemPrompt, resolveChatLang, CHAT_ROUTE_LIMITS } from './systemPrompt'
+import { buildLiveStoreFacts } from '@/lib/chatStoreFacts'
 import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
 
 export const dynamic = 'force-dynamic'
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
   }
   const contents = contentsClean
   const { code: langCode, name: langName } = resolveChatLang(parsed.body?.lang)
-  const systemText = buildChatSystemPrompt(langCode, langName)
+  const systemText = buildChatSystemPrompt(langCode, langName, await buildLiveStoreFacts())
   const system_instruction = { parts: [{ text: systemText }] }
 
   // ── 1. Try Gemini first ──────────────────────────────────
