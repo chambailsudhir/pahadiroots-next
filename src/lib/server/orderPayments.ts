@@ -30,6 +30,7 @@ import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { coinsPerOrder } from '@/lib/loyaltyCoins'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
+import { loadAdminOrderEmail } from '@/lib/server/adminOrderEmail'
 import { esc } from '@/lib/server/htmlEscape'
 import { computeOrderInvoice } from '@/lib/invoiceGst'
 import { sendTransactionalEmail } from '@/lib/server/email'
@@ -256,11 +257,12 @@ export async function runPaidSideEffects(
     defer(async () => {
       try {
         if (await hasOrderEvent(db, order.id, PAID_EMAIL_ADMIN_SENT)) return
+        const built = await loadAdminOrderEmail(db, order.id, { kind: 'paid' }).catch(() => null)
         const r = await sendTransactionalEmail({
           type:    'admin_order_notify',
           to:      adminTo,
-          subject: `New PAID Order #${order.order_number} - Rs.${order.total_amount}`,
-          html:    `<p>Order: <b>#${esc(order.order_number ?? '')}</b><br>Total: Rs.${esc(order.total_amount)}<br>Payment: Razorpay (paid) ${esc(razorpayPaymentId)}</p>`,
+          subject: built?.subject ?? `New PAID Order #${order.order_number} - Rs.${order.total_amount}`,
+          html:    built?.html ?? `<p>Order: <b>#${esc(order.order_number ?? '')}</b><br>Total: Rs.${esc(order.total_amount)}<br>Payment: Razorpay (paid) ${esc(razorpayPaymentId)}</p>`,
           context: { order_id: order.id, order_number: order.order_number },
         })
         // Marker only once Resend has it (sent, or dead-lettered for the retry sweep) — never before.
