@@ -20,6 +20,7 @@ interface RazorpayPaymentEntity {
   id: string
   order_id?: string | null
   amount: number
+  currency?: string
   error_reason?: string
   notes?: { db_order_id?: string }
 }
@@ -254,6 +255,7 @@ export async function POST(req: Request) {
           : !isRazorpayOrderId(order.payment_id)                            ? 'no_stored_razorpay_order_id'
           : !payment.order_id || !safeEqual(order.payment_id, payment.order_id) ? 'razorpay_order_id_mismatch'
           : payment.amount !== expectedPaise                                ? 'amount_mismatch'
+          : payment.currency && payment.currency !== 'INR'                  ? 'currency_mismatch'
           : null
 
         if (problem) {

@@ -14,7 +14,7 @@
       "maxDuration": 40
     },
     "src/app/api/v1/webhook/razorpay/route.ts": {
-      "maxDuration": 10
+      "maxDuration": 30
     },
     "src/app/api/v1/cron/retry-failed-emails/route.ts": {
       "maxDuration": 30
