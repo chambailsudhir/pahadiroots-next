@@ -300,13 +300,15 @@ export default function CartDrawer({ settings }: Props) {
       fetch('/api/v1/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ac.signal,
         body: JSON.stringify({ code: couponCode, subtotal: sub, lines: couponLines(items) }) })
         .then(async r => {
-          if (r.status === 400) { useCartStore.getState().removeCoupon(); return }
-          if (!r.ok) return
           const d = await r.json().catch(() => null)
+          // Only a COUPON refusal removes it. The route also answers 400 for a malformed / oversized request ("Invalid request", "Invalid JSON"),
+          // which says nothing about the coupon.
+          if (r.status === 400) { if (d?.error && !/^invalid (request|json)$/i.test(String(d.error))) useCartStore.getState().removeCoupon(); return }
+          if (!r.ok) return
           if (d?.coupon && d.coupon.discount !== couponDiscount) useCartStore.getState().applyCoupon(d.coupon)
         })
         .catch(() => { /* aborted / offline — leave the coupon as it is */ })
-    }, 800)
+    }, 1800)   // longer than the cart page's 800 ms: the coupon route allows only 5 requests a minute per IP, shared with manual applies
     return () => { clearTimeout(t); ac.abort() }
   }, [isOpen, items, couponCode, couponDiscount])
 

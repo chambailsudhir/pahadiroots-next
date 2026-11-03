@@ -302,7 +302,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // razorpayKeyId is a compile-time constant — no need to memoize
   const razorpayKeyId   = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
   const razorpayEnabled = useMemo(() => !!razorpayKeyId && upiAdminOn, [razorpayKeyId, upiAdminOn])
-  const codMax      = useMemo(() => parseFloat(s.cod_max_value      || '3000'), [s.cod_max_value])
+  const codMax      = useMemo(() => (() => { const n = parseFloat(s.cod_max_value || '3000'); return Number.isFinite(n) ? n : 3000 })(), [s.cod_max_value])
   const prepaidPct  = useMemo(() => parseFloat(s.prepaid_discount_pct || '5'),    [s.prepaid_discount_pct])
   const freeShipMin = useMemo(() => getShippingPolicy(s).freeMin,                [s])
   const minOrderAmt = useMemo(() => parseFloat(s.min_order_amount   || '0'),    [s.min_order_amount])

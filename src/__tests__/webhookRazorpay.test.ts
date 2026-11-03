@@ -126,6 +126,7 @@ function buildQueryBuilder(table: string) {
   const builder: Record<string, (...a: unknown[]) => unknown> = {
     select: () => builder,
     limit:  () => builder,
+    in:     () => builder,
     insert: (payload: unknown) => {
       mockDb.insertCalls.push({ table, payload })
       return builder
@@ -415,10 +416,34 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()   // never re-confirms the order itself
   })
 
+  // Proper fix (Nov 2026): the e-mails live in the deferred phase, which can be killed AFTER the loyalty marker was written. New runs flag
+  // emails_tracked and write one marker per e-mail only after the e-mail left; a re-drive re-runs when one is missing.
+  it('RE-DRIVES when the loyalty marker exists (emails_tracked) but an e-mail marker is missing', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: { emails_tracked: true } }, { event: 'paid_email_admin_sent', metadata: {} }]
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.objectContaining({ reason: 'emails_missing' }))
+  })
+
+  it('does NOT re-drive when both e-mail markers exist, nor for an order paid before e-mail markers existed (no emails_tracked flag)', async () => {
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: { emails_tracked: true } }, { event: 'paid_email_admin_sent', metadata: {} }, { event: 'paid_email_customer_sent', metadata: {} }]
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+
+    vi.resetModules()
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: {} }]   // legacy marker
+    const mod = await import('@/app/api/v1/webhook/razorpay/route')
+    await mod.POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+  })
+
   it('does NOT re-drive when the payment_verified marker exists, or when the order was only just paid', async () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
-    mockDb.responses['order_events'] = [{ id: 1 }]
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: {} }]
     await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
     expect(mockAward).not.toHaveBeenCalled()
 

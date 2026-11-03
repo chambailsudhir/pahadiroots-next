@@ -13,7 +13,7 @@ import { logOrderEvent } from '@/lib/services/orderService'
 import { logger, captureError } from '@/lib/logger'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { safeEqual, isRazorpayOrderId } from '@/lib/server/razorpay'
-import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects } from '@/lib/server/orderPayments'
+import { confirmOrderPayment, recordCapturedPayment, runPaidSideEffects, PAID_EMAIL_CUSTOMER_SENT, PAID_EMAIL_ADMIN_SENT } from '@/lib/server/orderPayments'
 
 // Minimal typed shape for Razorpay webhook events we handle
 interface RazorpayPaymentEntity {
@@ -249,13 +249,22 @@ export async function POST(req: Request) {
           // while and that marker is missing, run them again. Loyalty redeem/award are idempotent per order in the database
           // (verified against the live functions); the 90 s age guard keeps this from racing a still-running original.
           try {
-            const [{ data: marker }, { data: fresh }] = await Promise.all([
-              db.from('order_events').select('id').eq('order_id', order.id).eq('event', 'payment_verified').limit(1),
+            const [{ data: events }, { data: fresh }] = await Promise.all([
+              db.from('order_events').select('event, metadata').eq('order_id', order.id)
+                .in('event', ['payment_verified', PAID_EMAIL_CUSTOMER_SENT, PAID_EMAIL_ADMIN_SENT]),
               db.from('orders').select('updated_at').eq('id', order.id).single(),
             ])
+            const evs = (events ?? []) as Array<{ event: string; metadata: Record<string, unknown> | null }>
+            const verified = evs.find(e => e.event === 'payment_verified')
+            const has = (name: string) => evs.some(e => e.event === name)
+            // Two ways the original run can have been cut short:
+            //  1. it died before the loyalty step finished  -> no `payment_verified` marker;
+            //  2. it died in the deferred e-mail phase      -> marker present (new runs flag emails_tracked) but an e-mail marker missing.
+            // Orders paid before e-mail markers existed carry no emails_tracked flag and are never re-mailed.
+            const emailsMissing = !!verified?.metadata?.emails_tracked && (!has(PAID_EMAIL_CUSTOMER_SENT) || !has(PAID_EMAIL_ADMIN_SENT))
             const paidForMs = fresh?.updated_at ? Date.now() - Date.parse(String(fresh.updated_at)) : 0
-            if ((!marker || marker.length === 0) && paidForMs > 90_000) {
-              await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId })
+            if ((!verified || emailsMissing) && paidForMs > 90_000) {
+              await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId, reason: verified ? 'emails_missing' : 'no_marker' })
               const settings = await getFreshSiteSettings()
               await runPaidSideEffects(db, {
                 order: {

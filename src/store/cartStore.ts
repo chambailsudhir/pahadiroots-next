@@ -80,7 +80,7 @@ export const useCartStore = create<CartStore>()(
               idempotencyKey: state.idempotencyKey || generateUUID(),
               items: state.items.map(i =>
                 i.variantId === newItem.variantId
-                  ? { ...i, maxQty: cap, qty: Math.min(i.qty + (newItem.qty ?? 1), cap) }
+                  ? { ...i, maxQty: cap, qty: Math.max(i.qty, Math.min(i.qty + (newItem.qty ?? 1), cap)) }   // adding never SHRINKS an existing quantity
                   : i
               ),
             }
@@ -403,6 +403,8 @@ if (typeof window !== 'undefined' && !window.__prCartStorageSync) {
     // do not silently disappear in this tab.
     const caps = new Map(useCartStore.getState().items.map(i => [i.variantId, i.maxQty] as const))
     void Promise.resolve(useCartStore.persist.rehydrate()).then(() => {
+      // Another tab emptied the cart (order placed): drop the coupon here too, or the next item added would show the old discount.
+      if (useCartStore.getState().items.length === 0) useCartStore.getState().removeCoupon()
       useCartStore.setState(st => ({ items: st.items.map(i => (i.maxQty == null && caps.get(i.variantId) != null) ? { ...i, maxQty: caps.get(i.variantId) as number } : i) }))
     })
   })
