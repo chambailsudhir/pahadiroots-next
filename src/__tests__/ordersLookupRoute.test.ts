@@ -119,7 +119,7 @@ describe('GET /api/v1/orders/lookup — guest token auth', () => {
     expect(body.order.customer_name).toBe('Sudhir Chambail')
     expect(body.order.customer_phone).toBe('9717255662')
     expect(body.order.delivery_address).toBe('Flat 4B, Green Valley')
-    expect(mocks.sbAdmin).toHaveBeenCalledTimes(1)   // no customers lookup on the token path
+    expect(mocks.sbAdmin.mock.calls.filter(c => String(c[1]).includes('/customers')).length).toBe(0)   // no customers lookup on the token path (the settings read for the coin value is fine)
   })
 
   it('token path never reveals the linked account holder when the snapshot has no name/phone', async () => {
@@ -128,7 +128,7 @@ describe('GET /api/v1/orders/lookup — guest token auth', () => {
     const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
     expect(body.order.customer_name).toBeUndefined()
     expect(body.order.customer_phone).toBeUndefined()
-    expect(mocks.sbAdmin).toHaveBeenCalledTimes(1)
+    expect(mocks.sbAdmin.mock.calls.filter(c => String(c[1]).includes('/customers')).length).toBe(0)
   })
 
   it('never returns internal-only fields (customer_id, confirmation_token, payment_id)', async () => {
