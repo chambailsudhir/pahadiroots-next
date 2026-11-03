@@ -13,6 +13,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
+import { coinsPerOrder } from '@/lib/loyaltyCoins'
 
 // ── Helpers ───────────────────────────────────────────────────
 function asNumber(v: string | undefined, fallback: number) {
@@ -72,7 +73,8 @@ export async function GET(req: NextRequest) {
       points_value:  pointsValue,                        // per-point value in ₹
       min_redeem:    minRedeem,
       max_redeem_pct: maxRedeemPct,
-      earn_per_rupee:  earnPerRupee,                     // coins earned per ₹1 spent
+      earn_per_rupee:  earnPerRupee,                     // legacy (no longer used to earn)
+      earn_per_order:  coinsPerOrder(settings),           // flat coins per DELIVERED order
       referral_bonus:  referralBonus,                    // coins each side gets for a referral
       referral_min_order: asNumber(settings.referral_min_order, 499),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery

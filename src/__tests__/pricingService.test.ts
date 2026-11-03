@@ -200,26 +200,55 @@ describe('calcPriceSummary — percent coupon', () => {
 // ─── GST total ────────────────────────────────────────────────────────────────
 
 describe('calcPriceSummary — GST aggregation', () => {
+  // Free shipping (min 0) so these two isolate the GOODS part of the tax.
+  const NO_FEES = makeSettings({ free_shipping_min: '0' })
+
   it('sums GST across multiple items with different rates', () => {
     const items = [
-      makeItem({ price: 105, qty: 1, gstRate: 5 }),   // GST ≈ 5
+      makeItem({ price: 105, qty: 1, gstRate: 5 }),   // GST = 5
       makeItem({ variantId: 'v2', price: 118, qty: 1, gstRate: 18 }), // GST = 18
     ]
-    const result = calcPriceSummary(items, DEFAULT_SETTINGS, null)
-    // gstTotal must equal sum of per-item GST
-    const expectedGst = Math.round(105 * 5 / 105) + Math.round(118 * 18 / 118)
-    expect(result.gstTotal).toBe(expectedGst)
+    expect(calcPriceSummary(items, NO_FEES, null).gstTotal).toBe(23)
   })
 
-  it('scales GST with quantity — higher qty always yields higher or equal gstTotal', () => {
-    // calcGST rounds per item call, so double.gstTotal is not always exactly single*2.
-    // Verify monotonicity and that the formula is applied (not zero).
-    const single = calcPriceSummary([makeItem({ qty: 1 })], DEFAULT_SETTINGS, null)
-    const double = calcPriceSummary([makeItem({ qty: 2 })], DEFAULT_SETTINGS, null)
+  it('scales GST with quantity (exact: 200 x 2 at 5% -> 19.05 -> 19)', () => {
+    const single = calcPriceSummary([makeItem({ qty: 1 })], NO_FEES, null)
+    const double = calcPriceSummary([makeItem({ qty: 2 })], NO_FEES, null)
     expect(double.gstTotal).toBeGreaterThanOrEqual(single.gstTotal)
-    expect(double.gstTotal).toBeGreaterThan(0)
-    // Exact value: price=200, rate=5, qty=2 → round(200*2*5/105) = round(19.047) = 19
     expect(double.gstTotal).toBe(19)
+  })
+
+  // Nov 2026 (owner: "like the big marketplaces", researched): shipping and the COD fee are part of the value of the supply and
+  // follow the goods' rate; mixed-rate carts share the fee by value; rounding once per invoice. The customer's total never changes.
+  it('shipping carries GST at the goods rate: 100 @5% + 50 shipping -> (100+50) x 5/105 = 7.14 -> 7 (was 5)', () => {
+    const s = makeSettings({ free_shipping_min: '10000', flat_shipping_charge: '50' })
+    const r = calcPriceSummary([makeItem({ price: 100, qty: 1, gstRate: 5 })], s, null)
+    expect(r.shipping).toBe(50)
+    expect(r.gstTotal).toBe(7)
+    expect(r.total).toBe(150)                 // the total is unchanged by the tax carve-out
+  })
+
+  it('the COD fee carries GST too', () => {
+    const s = makeSettings({ free_shipping_min: '0', cod_surcharge_amount: '50' })
+    const r = calcPriceSummary([makeItem({ price: 100, qty: 1, gstRate: 5 })], s, null, 'cod')
+    expect(r.codSurcharge).toBe(50)
+    expect(r.gstTotal).toBe(7)                // 7.14 -> 7
+    expect(r.total).toBe(150)
+  })
+
+  it('mixed rates: the fee is shared by line value, each share at its own rate (100@5% + 100@18% + 40 shipping)', () => {
+    const s = makeSettings({ free_shipping_min: '10000', flat_shipping_charge: '40' })
+    const items = [makeItem({ price: 100, qty: 1, gstRate: 5 }), makeItem({ variantId: 'v2', price: 100, qty: 1, gstRate: 18 })]
+    const r = calcPriceSummary(items, s, null)
+    // goods 4.762 + 15.254 = 20.016 ; fee 20@5% = 0.952 + 20@18% = 3.051 ; total 24.02 -> 24
+    expect(r.gstTotal).toBe(24)
+  })
+
+  it('rounds ONCE per invoice, not per line (three lines of 0.4 GST each: 1.2 -> 1, per-line rounding gave 0)', () => {
+    const s = makeSettings({ free_shipping_min: '0' })
+    // price 8.4 @5% -> GST 0.4 per line
+    const items = [1, 2, 3].map(i => makeItem({ variantId: 'v' + i, price: 8.4, qty: 1, gstRate: 5 }))
+    expect(calcPriceSummary(items, s, null).gstTotal).toBe(1)
   })
 
   it('returns integer GST — no fractional paise', () => {

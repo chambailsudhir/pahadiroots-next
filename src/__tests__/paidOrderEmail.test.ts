@@ -76,7 +76,7 @@ describe('payment confirmation e-mail — recipient', () => {
   it('an account holder gets the coins line (account = auth_user_id; there is no is_guest column)', async () => {
     const mail = await run({ first_name: 'A', email: 'a@example.org', auth_user_id: 'u-1', shipping_address: { state: 'Himachal Pradesh' }, order_items: [] })
     expect(mail?.to).toBe('a@example.org')
-    expect(mail!.html).toContain('You earned 3 Pahadi Coins')
+    expect(mail!.html).toContain('You will earn 5 Pahadi Coins')
   })
 })
 

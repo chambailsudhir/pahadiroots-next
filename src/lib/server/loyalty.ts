@@ -41,7 +41,7 @@ async function callLoyaltyRpc(
   })
 }
 
-/** Award loyalty points after an order is confirmed. Non-fatal. */
+/** @deprecated Coins are no longer awarded at placement / payment (see lib/loyaltyCoins.ts): the database awards them on delivery. */
 export async function awardLoyaltyPoints(
   customerId:  string | number,
   orderId:     string | number,

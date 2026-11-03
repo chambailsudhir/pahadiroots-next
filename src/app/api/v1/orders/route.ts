@@ -9,7 +9,8 @@ import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
-import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { coinsPerOrder } from '@/lib/loyaltyCoins'
 import { esc } from '@/lib/server/htmlEscape'
 // REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
@@ -337,7 +338,7 @@ export async function POST(req: NextRequest) {
               }).catch(() => null)
             }
           }
-          await awardLoyaltyPoints(cid, order.id, order.total_amount, settings, 'Earned from COD order')
+          // No coins at placement: they are paid when the order is DELIVERED (database trigger) and taken back on return / refund.
         }
       }
 
@@ -362,7 +363,7 @@ export async function POST(req: NextRequest) {
             // One shared, itemised template for COD and online orders (lib/server/orderEmail.ts). Coins are mentioned ONLY for a
             // signed-in customer — a guest has no account to spend them in.
             const coinsEarned = authenticatedCustomerId != null && settings.loyalty_enabled !== 'false'
-              ? Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+              ? coinsPerOrder(settings)   // announced as "you will earn", paid on delivery
               : 0
             const emailHtml = buildOrderEmail({
               kind: d.payment_method === 'cod' ? 'cod' : 'paid',

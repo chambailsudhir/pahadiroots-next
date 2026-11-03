@@ -381,8 +381,8 @@ describe('POST /webhook/razorpay — payment.captured', () => {
       expect.objectContaining({ razorpay_payment_id: 'pay_xyz', amount: 500 }),
     )
     expect(mockDb.insertCalls.find(c => c.table === 'payments')).toBeDefined()
-    // O2: the webhook used to leave this to verify_payment only.
-    expect(mockAward).toHaveBeenCalledTimes(1)
+    // Coins are no longer awarded at payment: the database pays them when the order is DELIVERED (db_migration_v28).
+    expect(mockAward).not.toHaveBeenCalled()
   })
 
   it('does not touch the orders table when notes.db_order_id is missing', async () => {
@@ -412,7 +412,7 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
     expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
-    expect(mockAward).toHaveBeenCalled()
+    expect(mockRedeem).toHaveBeenCalledTimes(0)   // PAYABLE has no coins to redeem; the re-drive ran the shared side effects
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()   // never re-confirms the order itself
   })
 
@@ -539,7 +539,7 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     // a stored row is always a REAL variant (order_items.variant_id is a foreign key) → explicit kind
     expect(mockReserveStock).toHaveBeenCalledWith([{ variantId: 'v1', productId: 'p1', qty: 2, kind: 'variant' }])
     expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_recovered_after_failure', 'razorpay', expect.objectContaining({ stock_re_reserved: true }))
-    expect(mockAward).toHaveBeenCalledTimes(1)
+    expect(mockAward).not.toHaveBeenCalled()   // coins are paid on delivery, not at payment
   })
 
   it('recovered order whose stock is gone STAYS confirmed (customer paid) and ops are alerted via an event', async () => {
