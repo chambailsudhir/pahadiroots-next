@@ -237,15 +237,20 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
           recover except an accidental page refresh. Now sets
           razorpayLoadFailed, which drives a real, visible retry affordance
           (see the CTA button below and OrderSummary.tsx). */}
-      <Script
-        src="https://checkout.razorpay.com/v1/checkout.js"
-        strategy="afterInteractive"
-        onLoad={() => { setRazorpayLoaded(true); setRazorpayLoadFailed(false) }}
-        onError={() => {
-          console.error('[checkout] Razorpay script failed to load')
-          setRazorpayLoadFailed(true)
-        }}
-      />
+      {/* PERF: only requested once the customer picks online payment. checkout.js pulls in Razorpay's whole payment UI (about 70 requests:
+          cards, UPI, netbanking, wallets, EMI…), which slowed the page for everyone — including customers paying cash on delivery. */}
+      {payMethodChosen && payMethod === 'razorpay' && (
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="afterInteractive"
+          onLoad={() => { setRazorpayLoaded(true); setRazorpayLoadFailed(false) }}
+          onReady={() => { setRazorpayLoaded(true); setRazorpayLoadFailed(false) }}   // already cached/loaded earlier in this session
+          onError={() => {
+            console.error('[checkout] Razorpay script failed to load')
+            setRazorpayLoadFailed(true)
+          }}
+        />
+      )}
 
       <ShippingProgress
         progressBase={pricing.progressBase}

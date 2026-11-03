@@ -378,8 +378,10 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // still be stuck forever without this timeout. 10s is generous for a
   // ~60KB script even on a slow connection, while still failing well before
   // a customer gives up and abandons the cart.
+  // The script is requested only once the customer chooses online payment (CheckoutClient), so the clock starts then too — not at page load.
+  const razorpayWanted = payChoice === 'razorpay'
   useEffect(() => {
-    if (razorpayLoaded) return
+    if (razorpayLoaded || !razorpayWanted) return
     const timer = setTimeout(() => {
       setRazorpayLoaded(loaded => {
         if (!loaded) setRazorpayLoadFailed(true)
@@ -387,7 +389,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       })
     }, 10_000)
     return () => clearTimeout(timer)
-  }, [razorpayLoaded])
+  }, [razorpayLoaded, razorpayWanted])
 
   const [savedAddrs, setSavedAddrs] = useState<SavedAddress[]>(() => {
     if (typeof window === 'undefined') return []
