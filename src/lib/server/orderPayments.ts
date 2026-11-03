@@ -240,17 +240,17 @@ export async function runPaidSideEffects(
   // E-mail is deferred so it can never delay the response (see lib/server/email.ts).
   defer(async () => {
     try {
-      // is_guest may not exist on older schemas: retry without it (coins are then simply not mentioned).
-      let customer: { first_name?: string | null; email?: string | null; is_guest?: boolean | null } | null = null
-      {
-        const r1 = await db.from('customers').select('first_name, email, is_guest').eq('id', order.customer_id).single()
-        if (r1.error) {
-          const r2 = await db.from('customers').select('first_name, email').eq('id', order.customer_id).single()
-          customer = r2.data
-        } else customer = r1.data
-      }
+      // An account holder has auth_user_id (there is no is_guest column on customers).
+      const { data: customer } = await db.from('customers').select('first_name, email, auth_user_id').eq('id', order.customer_id).single()
+      const hasAccount = customer?.auth_user_id != null
 
-      if (customer?.email) {
+      // The order's own record of where its e-mails go is read first-class below; customers.email can be NULL for a guest whose address
+      // already belongs to an account.
+      const { data: full0 } = await db.from('orders').select('shipping_address').eq('id', order.id).single()
+      const sa0 = (typeof full0?.shipping_address === 'string' ? (() => { try { return JSON.parse(full0.shipping_address) } catch { return null } })() : full0?.shipping_address) as Record<string, string> | null
+      const toEmail = (customer?.email || sa0?.email || '').trim()
+
+      if (toEmail.includes('@')) {
         // The same itemised e-mail COD customers get (lib/server/orderEmail.ts), built from the stored order.
         const { data: full } = await db
           .from('orders')
@@ -273,7 +273,7 @@ export async function runPaidSideEffects(
         }, { loyaltyPointValue: parseFloat(settings.loyalty_points_value || '') || null })
 
         // Coins are for account holders only: mention them ONLY when we positively know this is not a guest row.
-        const coinsEarned = customer.is_guest === false && settings.loyalty_enabled !== 'false'
+        const coinsEarned = hasAccount && settings.loyalty_enabled !== 'false'
           ? Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
           : 0
 
@@ -281,12 +281,12 @@ export async function runPaidSideEffects(
         // dead-letters into `failed_emails` for the cron sweep to retry.
         await sendTransactionalEmail({
           type:    'payment_confirmation',
-          to:      customer.email,
+          to:      toEmail,
           subject: orderEmailSubject('paid', order.order_number ?? ''),
           html: buildOrderEmail({
             kind: 'paid',
             orderNumber: order.order_number ?? '',
-            customerName: sa?.name || customer.first_name || '',
+            customerName: sa?.name || customer?.first_name || '',
             placedAt: full?.created_at ?? null,
             items: rows.map(r => ({ name: r.product_name_snapshot || r.products?.name || 'Product', variant: r.variant_value_snapshot, qty: r.quantity, price: r.price_at_time, image: r.products?.image_url ?? null, emoji: r.products?.emoji ?? null })),
             subtotal: inv.linesTotal + inv.roundOff,
@@ -302,7 +302,7 @@ export async function runPaidSideEffects(
             deliveryText: DELIVERY_WINDOWS_TEXT,
             trackingText: TRACKING_NOTIFICATION_TEXT,
             coinsEarned,
-            signedIn: customer.is_guest === false,
+            signedIn: hasAccount,
           }),
           context: { order_id: order.id, order_number: order.order_number },
         })
