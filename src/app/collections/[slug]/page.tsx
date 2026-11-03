@@ -11,7 +11,7 @@ import type { Product } from '@/types'
 import Link from 'next/link'
 import OurPromiseSection from '@/components/homepage/WhySection'
 
-export const revalidate = 60
+export const revalidate = 180   // was 60: ISR-write budget (Hobby plan); admin edits revalidate on demand
 
 // BUG FIX (Next.js 15+/16 migration): both `params` and `searchParams` are
 // now Promises in Server Components — must be awaited before use.

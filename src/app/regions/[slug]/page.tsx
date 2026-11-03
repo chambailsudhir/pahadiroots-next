@@ -29,7 +29,7 @@ const REGION_SORT_OPTIONS = [
 
 // BUG FIX (#27): same alignment as /regions — 300s was looser than the
 // underlying 60s data cache TTL.
-export const revalidate = 60 // was 300 (5 min) — now matches data cache TTL
+export const revalidate = 180   // was 60/300: ISR-write budget (Hobby plan); admin edits revalidate on demand
 
 // BUG FIX (Next.js 15+/16 migration): `params` is now a Promise.
 interface Props { params: Promise<{ slug: string }>; searchParams: Promise<{ sort?: string }> }

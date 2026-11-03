@@ -14,7 +14,7 @@ import { formatPrice } from '@/lib/utils'
 import type { Product } from '@/types'
 import OurPromiseSection from '@/components/homepage/WhySection'
 
-export const revalidate = 60
+export const revalidate = 180   // was 60: ISR-write budget (Hobby plan); admin edits revalidate on demand
 
 const PAGE_SIZE = 24
 const BASE_PATH = '/new-arrivals'
