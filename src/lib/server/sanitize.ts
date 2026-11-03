@@ -230,5 +230,5 @@ export function sanitizeHtml(dirty: string | null | undefined): string {
  * U+2028/2029, embeddings and overrides, word joiner, BOM). Defence in depth next to escaping at render time.
  */
 export function hasUnsafeTextChars(v: string): boolean {
-  return /[<>\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/.test(v)
+  return /[<>\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u2028-\u202e\u2060-\u2064\ufeff]/.test(v)
 }

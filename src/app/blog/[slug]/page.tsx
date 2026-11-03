@@ -43,16 +43,19 @@ const POST_SELECT = 'id, title, slug, content, cover_image, og_image, published_
 
 async function fetchPost(slug: string): Promise<BlogPostRow | null> {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('blog_posts')
       .select(POST_SELECT)
       .eq('slug', slug)
       .eq('is_published', true)
       .single()
+    // PGRST116 = "no rows" (a real 404). Any other error (timeout, 5xx) must not become a cached 404 for a live article:
+    // throw so ISR keeps serving the last good page.
+    if (error && error.code !== 'PGRST116') throw error
     return data as BlogPostRow | null
   } catch (e) {
     console.error('[blog fetchPost] fetch failed:', e)
-    return null
+    throw e
   }
 }
 
