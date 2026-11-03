@@ -8,7 +8,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetchOrders, type Order, type OrdersResponse } from '@/lib/services/orderService'
 import { ServiceError } from '@/lib/services/profileService'
-import { ACTIVE_STATUSES, RETURNS_FILTER_SENTINEL, RETURNABLE_WINDOW_HOURS } from '@/lib/account/constants'
+import { ACTIVE_STATUSES, RETURNS_FILTER_SENTINEL, RETURNABLE_WINDOW_HOURS, returnWindowStart } from '@/lib/account/constants'
 import { captureError } from '@/lib/logger'
 
 export type OrderFilter = 'all' | 'active' | 'delivered' | 'returns' | 'cancelled'
@@ -67,7 +67,7 @@ export function canReturn(o: Order): boolean {
   // replacement unit later arrived damaged too could never get the
   // Return button back for that order. Matches the same fix just made
   // in admin's three duplicate-check exclusion lists.
-  const ret = (o as { _return?: { status?: string } | null })._return
+  const ret = (o as { _return?: { status?: string; replacement_shipped_at?: string | null } | null })._return
   if (ret && !['refunded', 'rejected', 'replaced'].includes(ret.status || '')) return false
   // BUG FIX: was `(o._displayStatus || o.order_status) !== 'delivered'`.
   // _displayStatus is intentionally sticky — it shows 'return_refunded'
@@ -79,14 +79,15 @@ export function canReturn(o: Order): boolean {
   // return is currently in progress is already covered by the ret.status
   // check above.
   if (o.order_status !== 'delivered') return false
-  const deliveredDate = o.delivered_at || o.updated_at
-  if (!deliveredDate) return true
+  // A replaced item gets its own window, counted from when the replacement was shipped (+ transit) — see returnWindowStart.
+  const windowStart = returnWindowStart(o.delivered_at || o.updated_at, ret?.status === 'replaced' ? ret.replacement_shipped_at : null)
+  if (windowStart == null) return true
   // BUG FIX (July 2026): was `<= 7` days — didn't match the API route's
   // actual 48-hour policy (RETURNABLE_WINDOW_HOURS, imported from the
   // same constants.ts as the route uses). The button used to stay visible
   // for 5 extra days after the real window closed, and clicking it always
   // failed server-side. See the constant's own comment for the full trace.
-  const hoursSince = (Date.now() - new Date(deliveredDate).getTime()) / 3_600_000
+  const hoursSince = (Date.now() - windowStart) / 3_600_000
   return hoursSince <= RETURNABLE_WINDOW_HOURS
 }
 

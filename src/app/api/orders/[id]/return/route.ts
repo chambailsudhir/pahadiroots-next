@@ -60,14 +60,17 @@ import {
   syncCustomerProfile,
   checkCsrf,
 } from '@/lib/api/serverUtils'
-import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS, canReplace, canSelfServeReturn } from '@/lib/account/constants'
+import { RETURN_REASON_CODES, RETURNABLE_WINDOW_HOURS, canReplace, canSelfServeReturn, returnWindowStart } from '@/lib/account/constants'
 
 // Return window: 48 hours from delivery (see RETURNABLE_WINDOW_HOURS in
 // constants.ts for the single source of truth shared with the client-side
 // eligibility check in useOrders.ts's canReturn()).
 
-/** Statuses the DB unique index ignores (ux_returns_active_order_item: status <> ALL('refunded','rejected')). */
-const INDEX_TERMINAL_RETURN_STATUSES = ['refunded', 'rejected']
+/**
+ * Statuses the DB unique index ignores (ux_returns_active_order_item: status <> ALL('refunded','rejected','replaced') —
+ * db_migration_v24). A REPLACED return is finished: the customer holds a new unit and may return it if it is damaged too.
+ */
+const INDEX_TERMINAL_RETURN_STATUSES = ['refunded', 'rejected', 'replaced']
 
 /** sbAdmin throws { status, message: <PostgREST JSON body> } — pull the SQLSTATE out of it. */
 function pgErrorCode(e: unknown): string | null {
@@ -198,14 +201,27 @@ export async function POST(
       return fail(422, 'Only delivered orders can be returned')
     }
 
-    // Enforce the 48-hour return window, measured from delivered_at ONLY. updated_at is bumped by every
-    // write to the order (trg_orders_updated), so using it as a fallback let any later update re-open the window.
+    // Enforce the 48-hour return window, measured from delivered_at ONLY (updated_at is bumped by every write to the order,
+    // so using it as a fallback let any later update re-open the window). For an item that was REPLACED the window is
+    // counted from the replacement instead (shipped + transit estimate, see returnWindowStart) so a damaged replacement
+    // can still be returned. The extension only ever comes from a replaced return stored in the DB for the SAME variant.
     if (!order.delivered_at) {
       return fail(422, 'We could not confirm the delivery date for this order. Please contact support to raise a return.')
     }
-    const hoursSince = (Date.now() - new Date(order.delivered_at).getTime()) / 3_600_000
+    let replacementShippedAt: string | null = null
+    const replacedRows = await sbAdmin(
+      'GET',
+      `/rest/v1/returns?order_id=eq.${id}&status=eq.replaced&select=variant_id,replacement_shipped_at&order=replacement_shipped_at.desc.nullslast&limit=20`,
+    ).catch(() => null)
+    if (Array.isArray(replacedRows)) {
+      const match = replacedRows.find((r: { variant_id: string | number | null; replacement_shipped_at: string | null }) =>
+        r.replacement_shipped_at && (variantId == null ? r.variant_id == null : String(r.variant_id) === String(variantId)))
+      replacementShippedAt = match?.replacement_shipped_at ?? null
+    }
+    const windowStart = returnWindowStart(order.delivered_at, replacementShippedAt)
+    const hoursSince = windowStart == null ? NaN : (Date.now() - windowStart) / 3_600_000
     if (!Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
-      return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from delivery)`)
+      return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from ${replacementShippedAt ? 'delivery of your replacement' : 'delivery'})`)
     }
 
     // Ownership check for line-item returns: if the customer specified
@@ -253,10 +269,8 @@ export async function POST(
     // (the admin's real 6-value lifecycle: requested → approved → received →
     // refunded/replaced, or rejected — see pahadi-admin/src/lib/returns.js
     // RETURN_STATUSES).
-    // NOTE (Nov 2026 audit): an Aug-18 change treated 'replaced' as terminal here, but the DB's unique index does
-    // not (only 'refunded'/'rejected' are exempt), so the INSERT then failed with 23505 and a generic 500. The
-    // pre-check below now mirrors the index; see the comment there. POLICY QUESTION for the owner: should a
-    // customer be able to return a replacement that arrives damaged? That needs a migration to the index.
+    // NOTE (Nov 2026 audit): 'replaced' is terminal — the customer holds a new unit and may return it if it is damaged too
+    // (db_migration_v24 made the unique index and guard_return_item agree). The pre-check below mirrors the index.
     // BUG FIX: scoped to the same item (variant_id), matching admin's own
     // client-side duplicate check (pahadi-admin/src/app/admin/returns/page.jsx
     // — `(r.variant_id||null) === (form.variant_id||null)`). Without this, a
@@ -276,9 +290,8 @@ export async function POST(
     // admin/returns/page.jsx) now excludes 'refunded', 'rejected', and
     // 'replaced' — matched here.
     // The DB is the source of truth: unique index ux_returns_active_order_item is on
-    // (order_id, coalesce(variant_id,-1)) WHERE status <> ALL('refunded','rejected') — so 'replaced' is NOT
-    // terminal for it (a shipped replacement still occupies the slot) and a whole-order return (key -1) is a
-    // separate key from item returns. The route additionally refuses to mix the two kinds (open whole-order
+    // (order_id, coalesce(variant_id,-1)) WHERE status <> ALL('refunded','rejected','replaced') and a whole-order
+    // return (key -1) is a separate key from item returns. The route additionally refuses to mix the two kinds (open whole-order
     // return + open item return) because they would double-count the same goods.
     const existingList = Array.isArray(existingReturns) ? existingReturns : []
     const openList = existingList.filter((r: { status: string }) => !INDEX_TERMINAL_RETURN_STATUSES.includes(r.status))
@@ -287,9 +300,6 @@ export async function POST(
       isWholeOrder || r.variant_id == null || String(r.variant_id) === String(variantId)
     )
     if (existing) {
-      if (existing.status === 'replaced' && String(existing.variant_id ?? '') === String(variantId ?? '')) {
-        return fail(409, 'A replacement has already been sent for this item. If it arrived damaged, please contact support.')
-      }
       return fail(409, 'A return request is already in progress for this item')
     }
 

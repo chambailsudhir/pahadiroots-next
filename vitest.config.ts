@@ -42,6 +42,9 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       'e2e/**',
+      // Claude Code agents work in git worktrees under .claude/worktrees/ — each is a full copy of the repo (stale or
+      // in progress). Without this, one run executes every copy's tests (thousands of duplicates, some stale).
+      '.claude/**',
     ],
     environmentOptions: {
       jsdom: {

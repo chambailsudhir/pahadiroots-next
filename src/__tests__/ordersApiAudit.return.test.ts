@@ -60,16 +60,40 @@ beforeEach(() => {
 })
 
 describe('return route — DB index/trigger alignment', () => {
-  it("a 'replaced' return still blocks (the unique index does not exempt it) -> 409, no insert", async () => {
-    returnsRows = [{ id: 1, status: 'replaced', variant_id: 11 }]
+  it("a 'replaced' return no longer blocks — the customer holds a new unit and may return it (db_migration_v24)", async () => {
+    returnsRows = [{ id: 1, status: 'replaced', variant_id: 11, replacement_shipped_at: null }]
     const res = await post({ reason: 'damaged', variant_id: 11, product_id: 7 })
-    expect(res.status).toBe(409)
+    expect(res.status).toBe(200)
+    expect(inserts()).toHaveLength(1)
+  })
+
+  it('refunded / rejected / replaced are the terminal statuses (they mirror the unique index)', async () => {
+    returnsRows = [{ id: 1, status: 'refunded', variant_id: 11 }, { id: 2, status: 'rejected', variant_id: 11 }, { id: 3, status: 'replaced', variant_id: 11 }]
+    expect((await post({ reason: 'damaged', variant_id: 11, product_id: 7 })).status).toBe(200)
+  })
+
+  it('a damaged REPLACEMENT is returnable even though the original delivery was long ago — the window restarts from the replacement', async () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+    order = { ...ORDER, delivered_at: daysAgo(20) }                       // original delivery: window closed 18 days ago
+    returnsRows = [{ id: 1, status: 'replaced', variant_id: 11, replacement_shipped_at: daysAgo(4) }]   // shipped 4 d ago + 3 d transit = arrived ~1 d ago
+    expect((await post({ reason: 'damaged', variant_id: 11, product_id: 7 })).status).toBe(200)
+  })
+
+  it('…but not for ever: the replacement has its own 48 h window', async () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+    order = { ...ORDER, delivered_at: daysAgo(30) }
+    returnsRows = [{ id: 1, status: 'replaced', variant_id: 11, replacement_shipped_at: daysAgo(12) }]
+    const res = await post({ reason: 'damaged', variant_id: 11, product_id: 7 })
+    expect(res.status).toBe(422)
+    expect((await res.json()).error).toMatch(/replacement/i)
     expect(inserts()).toHaveLength(0)
   })
 
-  it('refunded / rejected are the only terminal statuses', async () => {
-    returnsRows = [{ id: 1, status: 'refunded', variant_id: 11 }, { id: 2, status: 'rejected', variant_id: 11 }]
-    expect((await post({ reason: 'damaged', variant_id: 11, product_id: 7 })).status).toBe(200)
+  it('a replacement of a DIFFERENT item does not re-open the window for this one', async () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString()
+    order = { ...ORDER, delivered_at: daysAgo(20) }
+    returnsRows = [{ id: 1, status: 'replaced', variant_id: 12, replacement_shipped_at: daysAgo(4) }]
+    expect((await post({ reason: 'damaged', variant_id: 11, product_id: 7 })).status).toBe(422)
   })
 
   it('maps a 23505 unique violation (double click race) to 409, not 500', async () => {

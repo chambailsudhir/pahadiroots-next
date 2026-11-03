@@ -33,8 +33,8 @@ async function getCustomerOrders(
   // to orders that actually have at least one linked return row.
   const isReturnsTab = status === RETURNS_FILTER_SENTINEL
   const returnsEmbed = isReturnsTab
-    ? 'returns!inner(id,status,reason,description,refund_amount,created_at,updated_at)'
-    : 'returns(id,status,reason,description,refund_amount,created_at,updated_at)'
+    ? 'returns!inner(id,status,reason,description,refund_amount,created_at,updated_at,replacement_shipped_at)'
+    : 'returns(id,status,reason,description,refund_amount,created_at,updated_at,replacement_shipped_at)'
 
   let statusFilter = ''
   if (status && !isReturnsTab) {
