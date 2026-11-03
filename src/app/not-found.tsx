@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 // The 404 used to inherit the home page's title and its "index, follow" robots tag (next to the noindex Next adds).
 export const metadata: Metadata = {
-  title: 'Page not found | HimVeda by Pahadi Roots',
+  title: 'Page not found',   // the root layout's title template appends the brand
   robots: { index: false, follow: false },
 }
 
