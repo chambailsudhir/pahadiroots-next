@@ -125,6 +125,7 @@ function buildQueryBuilder(table: string) {
 
   const builder: Record<string, (...a: unknown[]) => unknown> = {
     select: () => builder,
+    limit:  () => builder,
     insert: (payload: unknown) => {
       mockDb.insertCalls.push({ table, payload })
       return builder
@@ -399,6 +400,33 @@ describe('POST /webhook/razorpay — payment.captured', () => {
 
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
     expect(mockLogOrderEvent).not.toHaveBeenCalled()
+    expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // Round-2 audit: the flip to paid can win and the function be killed before the side effects finish. Razorpay's retry used to
+  // hit the 'already paid' branch and only log. Re-drive them when the payment_verified marker is missing and the order is not fresh.
+  it('RE-DRIVES the paid side effects when a retry finds a paid order with no payment_verified marker', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = []
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+    expect(mockAward).toHaveBeenCalled()
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()   // never re-confirms the order itself
+  })
+
+  it('does NOT re-drive when the payment_verified marker exists, or when the order was only just paid', async () => {
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = [{ id: 1 }]
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(mockAward).not.toHaveBeenCalled()
+
+    vi.resetModules()
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date().toISOString() }
+    mockDb.responses['order_events'] = []
+    const mod = await import('@/app/api/v1/webhook/razorpay/route')
+    await mod.POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
     expect(mockAward).not.toHaveBeenCalled()
   })
 
