@@ -10,6 +10,7 @@
 // mobile stack. Every dynamic value is HTML-escaped here — callers pass raw values.
 // ─────────────────────────────────────────────────────────────────────────────
 import { esc } from '@/lib/server/htmlEscape'
+import { brandHeaderRow } from '@/lib/server/emailShell'
 
 const SITE = 'https://www.pahadiroots.com'
 const WHATSAPP = 'https://wa.me/919899984895'
@@ -176,10 +177,7 @@ export function buildOrderEmail(o: OrderEmailInput): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4efe6"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" class="wrap" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1a1611">
 
-  <tr><td align="center" style="background:#1a3a1e;border-radius:18px 18px 0 0;padding:26px 28px 22px">
-    <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:.3px">HimVeda <span style="font-weight:400;color:#e8c46a">by Pahadi Roots</span></div>
-    <div style="font-size:10px;letter-spacing:3px;color:#a9c3ad;margin-top:6px;text-transform:uppercase">Himalayan Natural Store</div>
-  </td></tr>
+  ${brandHeaderRow()}
 
   <tr><td class="px" align="center" style="background:#ffffff;padding:32px 28px 8px">
     <div style="width:56px;height:56px;line-height:56px;border-radius:50%;background:#e6f2e8;color:#1a3a1e;font-size:28px;margin:0 auto 14px">✓</div>
@@ -232,7 +230,6 @@ export function buildOrderEmail(o: OrderEmailInput): string {
       <li style="margin-bottom:6px">We pack your order with care and hand it to our courier partner.</li>
       <li style="margin-bottom:6px">You will get the tracking details as soon as it ships.</li>
       ${invoiceNote}
-      <li>Changed your mind or something is not right? See our <a href="${SITE}/policies/returns" style="color:#1a3a1e">returns &amp; refunds policy</a>.</li>
     </ul>
   </td></tr>
 

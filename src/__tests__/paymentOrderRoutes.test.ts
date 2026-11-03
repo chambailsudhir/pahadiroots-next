@@ -818,7 +818,9 @@ describe('POST /api/v1/orders — COD — confirmation email content', () => {
     await vi.waitFor(() => expect(send).toHaveBeenCalled())
     const html = send.mock.calls[0][0].html as string
 
-    expect(html).not.toContain('<img')
+    // the brand logo in the header is the only image; no PRODUCT thumbnail
+    expect((html.match(/<img /g) || []).length).toBe(1)
+    expect(html).toContain('email-logo.png')
     expect(html).toContain('🧂')
     expect(html).toContain('Rock Salt')
   })
@@ -848,7 +850,7 @@ describe('POST /api/v1/orders — COD — confirmation email content', () => {
     const html = send.mock.calls[0][0].html as string
 
     expect(html).toContain('<img src="https://cdn.example.com/honey.jpg"')
-    expect((html.match(/<img /g) || []).length).toBe(1) // exactly one real image, not two
+    expect((html.match(/<img /g) || []).length).toBe(2) // the brand logo + exactly one real product image, not two
     expect(html).toContain('🧂')
   })
 
