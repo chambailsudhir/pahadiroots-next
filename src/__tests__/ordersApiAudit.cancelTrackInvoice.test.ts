@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   checkCsrf: vi.fn(), checkRateLimitShared: vi.fn(), logOrderEvent: vi.fn(), sendTransactionalEmail: vi.fn(),
   checkRateLimitKv: vi.fn(), captureError: vi.fn(),
 }))
+vi.mock('@/lib/supabase', () => ({ getServiceClient: () => ({ from: () => { throw new Error('no db in this test') } }) }))
 vi.mock('next/server', async () => {
   const actual = await vi.importActual<typeof import('next/server')>('next/server')
   return { ...actual, after: (cb: () => unknown) => { void cb() } }
