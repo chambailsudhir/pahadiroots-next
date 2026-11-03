@@ -15,6 +15,7 @@
 //   • Every post-cancel step is best-effort and alert-logged — the order IS cancelled, so the customer is
 //     told so even if a follow-up step hiccups.
 // ─────────────────────────────────────────────────────────────────────────────
+import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { NextRequest, NextResponse, after } from 'next/server'
 import {
   ok, fail,
@@ -136,9 +137,10 @@ export async function POST(
           })
         }
         const settings = await getFreshSiteSettings().catch(() => null)
-        if (settings?.admin_notify_email) {
+        const adminTo = adminNotifyAddress(settings)
+        if (adminTo) {
           await sendTransactionalEmail({
-            type: 'admin_order_notify', to: settings.admin_notify_email,
+            type: 'admin_order_notify', to: adminTo,
             subject: `Order #${order.order_number} cancelled by customer`,
             html: `<p>Order <b>#${esc(order.order_number)}</b> (COD, Rs.${esc(order.total_amount)}) was cancelled by the customer.<br>Reason: ${esc(reasonLabel)}${note ? `<br>Note: ${esc(note)}` : ''}<br>Stock released, coupon and coins reversed automatically.</p>`,
             context: { order_id: order.id, order_number: order.order_number },

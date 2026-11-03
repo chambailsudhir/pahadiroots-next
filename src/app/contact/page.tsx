@@ -43,7 +43,9 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export default function ContactPage() {
   const { data: settingsRows } = useSWR('site_settings_contact', async () => {
-    const { data } = await supabase.from('site_settings').select('key, value')
+    // Only the 4 keys this page shows (it used to download all 262 settings rows, which delayed the address block - the page's
+    // largest content - and shifted the layout when it arrived).
+    const { data } = await supabase.from('site_settings').select('key, value').in('key', ['whatsapp_number', 'contact_email', 'contact_address', 'contact_phone'])
     return Object.fromEntries((data || []).map((r: { key: string; value: string }) => [r.key, r.value])) as SiteSettings
   })
   const settings = settingsRows || {} as SiteSettings
@@ -51,6 +53,7 @@ export default function ContactPage() {
 
   const [form, setForm]     = useState({ name: '', email: '', message: '' })
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
+  const [errMsg, setErrMsg] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -62,8 +65,12 @@ export default function ContactPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'contact', ...form }),
       })
-      setStatus(res.ok ? 'done' : 'error')
-    } catch { setStatus('error') }
+      if (res.ok) { setStatus('done'); return }
+      // Say WHY when the server told us (bad e-mail, too many messages) instead of one generic line for everything.
+      const j = await res.json().catch(() => ({} as { error?: string }))
+      setErrMsg(res.status === 400 || res.status === 429 ? (j.error || '') : '')
+      setStatus('error')
+    } catch { setErrMsg(''); setStatus('error') }
   }
 
   return (
@@ -136,7 +143,7 @@ export default function ContactPage() {
           <h2 className="text-base font-bold text-stone-900 mb-4">Send us a Message</h2>
 
           {status === 'done' ? (
-            <div className="text-center py-8">
+            <div className="text-center py-8" role="status">
               <div className="text-4xl mb-3">✅</div>
               <h3 className="font-semibold text-stone-800 mb-1">Message received!</h3>
               <p className="text-stone-500 text-sm">We&apos;ll get back to you within 24 hours.</p>
@@ -174,7 +181,7 @@ export default function ContactPage() {
                 />
               </div>
               {status === 'error' && (
-                <p className="text-xs text-red-500">Something went wrong. Please WhatsApp us instead.</p>
+                <p role="alert" className="text-xs text-red-700">{errMsg ? `${errMsg}. ` : 'Something went wrong. '}Please check your details, or WhatsApp us instead.</p>
               )}
               <button
                 type="submit"

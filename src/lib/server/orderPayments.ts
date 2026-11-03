@@ -28,6 +28,8 @@ import { logOrderEvent } from '@/lib/services/orderService'
 import { reserveStockAtomicForOrder, orderItemsToStockItems } from '@/lib/services/inventoryService'
 import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
+import { adminNotifyAddress } from '@/lib/server/adminNotify'
+import { esc } from '@/lib/server/htmlEscape'
 import { computeOrderInvoice } from '@/lib/invoiceGst'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
@@ -231,6 +233,24 @@ export async function runPaidSideEffects(
       }
     }
     await awardLoyaltyPoints(custId, order.id, order.total_amount ?? 0, settings, 'Earned from online payment')
+  }
+
+  // Tell the shop owner about an ONLINE-paid order too (COD orders already notify from /api/v1/orders; paid ones sent nothing).
+  const adminTo = adminNotifyAddress(settings)
+  if (adminTo) {
+    defer(async () => {
+      try {
+        await sendTransactionalEmail({
+          type:    'admin_order_notify',
+          to:      adminTo,
+          subject: `New PAID Order #${order.order_number} - Rs.${order.total_amount}`,
+          html:    `<p>Order: <b>#${esc(order.order_number ?? '')}</b><br>Total: Rs.${esc(order.total_amount)}<br>Payment: Razorpay (paid) ${esc(razorpayPaymentId)}</p>`,
+          context: { order_id: order.id, order_number: order.order_number },
+        })
+      } catch (e) {
+        logger.error('payments: admin notification failed', { action: 'payments.email.admin', error: e instanceof Error ? e.message : String(e) })
+      }
+    })
   }
 
   await logOrderEvent(order.id, 'payment_verified', 'razorpay', {
