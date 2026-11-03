@@ -264,7 +264,9 @@ export async function POST(
     const hoursSince = windowStart == null ? NaN : (Date.now() - windowStart) / 3_600_000
     // hoursSince < 0: a replacement has been shipped but is not expected to have arrived yet - nothing to return yet.
     if (Number.isFinite(hoursSince) && hoursSince < 0) {
-      return fail(422, 'Your replacement is still on its way. You can raise a return once it has been delivered.')
+      return fail(422, replacementShippedAt
+        ? 'Your replacement is still on its way. You can raise a return once it has been delivered.'
+        : 'We could not confirm the delivery date for this order. Please contact support to raise a return.')
     }
     if (!Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
       return fail(422, `Return window has closed (${RETURNABLE_WINDOW_HOURS} hours from ${replacementShippedAt ? 'delivery of your replacement' : 'delivery'})`)

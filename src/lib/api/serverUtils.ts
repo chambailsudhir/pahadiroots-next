@@ -309,7 +309,10 @@ export async function syncCustomerProfile(user: {
   // double-quoted so commas / parentheses in it cannot change the filter; LIKE wildcards are escaped; the exact
   // case-insensitive comparison below is still what decides adoption.
   if (email) {
-    const q = email.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/([_%])/g, '\\\\$1')
+    // 1) LIKE level: escape \ % _ ; PostgREST turns `*` into `%`, so map it to the single-char wildcard `_` instead (the exact
+    //    comparison below decides adoption anyway); 2) PostgREST quoting level: escape \ and ".
+    const likeEscaped = email.replace(/[\\%_]/g, '\\$&').replace(/\*/g, '_')
+    const q = likeEscaped.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     orParts.push(`email.ilike.${encodeURIComponent(`"${q}"`)}`)
   }
 

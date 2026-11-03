@@ -71,6 +71,23 @@ export function isSignupConfirmationHash(hash: string): boolean {
   return params.get('type') === 'signup' && !!params.get('access_token')
 }
 
+/** Any e-mail-link hash that carries LIVE tokens but is not a password reset (signup, magic link, invite, e-mail change): never used, scrubbed. */
+export function isLiveTokenHash(hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ''))
+  const type = params.get('type')
+  return !!params.get('access_token') && (type === 'signup' || type === 'magiclink' || type === 'invite' || type === 'email_change')
+}
+
+/** The hash of a failed / expired / already-used e-mail link (GoTrue redirects with #error=access_denied&error_code=otp_expired ...). */
+export function isLinkErrorHash(hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ''))
+  return !!(params.get('error') || params.get('error_code'))
+}
+
+export const VERIFY_NOTICE_KEY = 'pr_verify_notice'
+export const VERIFY_NOTICE_EVENT = 'pr:verify-notice'
+export type VerifyNotice = 'ok' | 'expired'
+
 export function friendlyLinkError(raw: string | null): string {
   if (!raw) return 'This reset link is invalid or has expired.'
   if (/expired|invalid/i.test(raw)) return 'This reset link has expired or was already used. Reset links work only once and for a short time.'

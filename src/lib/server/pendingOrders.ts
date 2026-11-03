@@ -156,7 +156,7 @@ export async function releaseOwnAbandonedOnlineOrders(
   opts: { minAgeSeconds?: number; max?: number; now?: Date; excludeIdempotencyKey?: string } = {},
 ): Promise<number> {
   const now    = opts.now ?? new Date()
-  const cutoff = new Date(now.getTime() - (opts.minAgeSeconds ?? 120) * 1000).toISOString()
+  const cutoff = new Date(now.getTime() - (opts.minAgeSeconds ?? 600) * 1000).toISOString()
   try {
     let q = db
       .from('orders')
@@ -167,17 +167,21 @@ export async function releaseOwnAbandonedOnlineOrders(
       .eq('order_status', 'pending')
       .lt('created_at', cutoff)
     // the order that belongs to the CURRENT request's idempotency key is a legitimate retry, never "abandoned"
-    if (opts.excludeIdempotencyKey) q = q.neq('idempotency_key', opts.excludeIdempotencyKey)
+    // (`neq` alone would drop rows whose key is NULL, SQL three-valued logic)
+    if (opts.excludeIdempotencyKey) q = q.or(`idempotency_key.is.null,idempotency_key.neq.${opts.excludeIdempotencyKey}`)
     const { data } = await q
       .order('created_at', { ascending: true })
-      .limit(opts.max ?? 3)
+      .limit(opts.max ?? 2)
     const rows = (data ?? []) as PendingRow[]
     if (rows.length === 0) return 0
     const settings = await getFreshSiteSettings().catch(() => ({} as Record<string, string>))
     let released = 0
+    // This runs INSIDE an order request (40 s function budget). Each order costs a Razorpay call (up to 8 s): stop after ~6 s in total.
+    const startedAt = Date.now()
     for (const order of rows) {
+      if (Date.now() - startedAt > 6_000) break
       try {
-        if (await processOne(db, order, now, settings) === 'expired') released++
+        if (await processOne(db, order, now, settings, { strictInFlight: true }) === 'expired') released++
       } catch (e) {
         captureError(e, { action: 'pendingOrders.release_own.order', order_id: order.id, alert: false })
       }
@@ -194,6 +198,7 @@ async function processOne(
   order: PendingRow,
   now: Date,
   settings: Record<string, string>,
+  opts: { strictInFlight?: boolean } = {},
 ): Promise<'expired' | 'recovered' | 'skipped'> {
   const ageHours = (now.getTime() - new Date(order.created_at).getTime()) / 3_600_000
 
@@ -242,7 +247,12 @@ async function processOne(
 
     // A payment is mid-flight (authorized, not yet captured): do not pull stock out from
     // under it — unless it has been stuck implausibly long.
-    const inFlight = payments.some(p => p.status === 'authorized')
+    // strictInFlight (own-order release on the request path): ANY attempt that is not definitively failed counts as in flight —
+    // 'created' / 'pending' attempts are a customer in the middle of OTP / a UPI app, and pulling the order from under them loses
+    // the coupon / coins / stock when they then pay.
+    const inFlight = opts.strictInFlight
+      ? payments.some(p => p.status !== 'failed')
+      : payments.some(p => p.status === 'authorized')
     if (inFlight && ageHours < AUTHORIZED_GRACE_HOURS) return 'skipped'
   }
   // (payment_id null / not an order_ id → create_payment never got as far as Razorpay:

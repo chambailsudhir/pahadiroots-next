@@ -18,7 +18,10 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { useEffect } from 'react'
-import { recoveryLandingTarget, isSignupConfirmationHash } from '@/app/reset-password/resetPasswordHelpers'
+import {
+  recoveryLandingTarget, isSignupConfirmationHash, isLiveTokenHash, isLinkErrorHash,
+  VERIFY_NOTICE_KEY, VERIFY_NOTICE_EVENT, type VerifyNotice,
+} from '@/app/reset-password/resetPasswordHelpers'
 
 export const GOOGLE_CALLBACK_PATH = '/auth/google-callback'
 
@@ -28,7 +31,17 @@ export default function GoogleAuthHandler() {
     if (forward) { window.location.replace(forward); return }
     // Sign-up verification link: the e-mail address is now confirmed on Supabase's side; the customer just has to sign in.
     // The tokens in the hash are never used — drop them from the URL right away (the page keeps ?verified=1 for its message).
-    if (isSignupConfirmationHash(window.location.hash)) {
+    // What the page may tell the customer is decided HERE, from the hash we actually received (never from a spoofable ?verified=1):
+    // a confirmed sign-up link → 'ok'; a failed / expired / already-used link on /account → 'expired'.
+    const hash = window.location.hash
+    const onAccount = window.location.pathname.replace(/\/+$/, '') === '/account'
+    const notice: VerifyNotice | null = isSignupConfirmationHash(hash) ? 'ok' : (onAccount && isLinkErrorHash(hash) ? 'expired' : null)
+    if (notice) {
+      try { sessionStorage.setItem(VERIFY_NOTICE_KEY, notice) } catch { /* ignore */ }
+      try { window.dispatchEvent(new CustomEvent(VERIFY_NOTICE_EVENT, { detail: notice })) } catch { /* ignore */ }
+    }
+    // Live tokens of any non-reset e-mail link (and the error hash) leave the address bar; the tokens are never used.
+    if (isLiveTokenHash(hash) || (onAccount && isLinkErrorHash(hash))) {
       try { window.history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* ignore */ }
     }
   }, [])
