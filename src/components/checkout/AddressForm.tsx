@@ -488,10 +488,10 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
                 aria-required="true"
                 aria-invalid={!!errors.phone}
                 aria-describedby={errors.phone ? 'af-phone-err' : undefined}
-                onChange={e => onChange('phone', e.target.value.replace(/\D/g, ''))}
+                onChange={e => onChange('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}   // no maxLength attribute: it counted typed spaces/dashes and cut the last digit off "98765 43210"
                 onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); const d = t.replace(/\D/g, ''); onChange('phone', d.length >= 12 && d.startsWith('91') ? d.slice(-10) : d.slice(0, 10)) } }}
                 onBlur={() => onTouch('phone')}
-                placeholder="9876543210" maxLength={10}
+                placeholder="9876543210"
               />
             </div>
             {errors.phone && <span id="af-phone-err" className="af-err" role="alert">{errors.phone}</span>}
@@ -548,6 +548,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
             <select id="af-state" className="af-input af-select"
               autoComplete="address-level1" value={addr.state}
               onChange={e => onChange('state', e.target.value)}>
+              <option value="" disabled>Select state</option>
               {INDIA_STATES.map(st => <option key={st} value={st}>{st}</option>)}
             </select>
           </div>
@@ -606,7 +607,7 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
               onChange={e => handlePincodeChange(e.target.value)}
               onPaste={e => { const t = e.clipboardData.getData('text'); if (/\D/.test(t)) { e.preventDefault(); handlePincodeChange(t.replace(/\D/g, '').slice(0, 6)) } }}
               onBlur={() => onTouch('pincode')}
-              placeholder="248001" maxLength={6}
+              placeholder="248001"
             />
             {errors.pincode && (
               <span id="af-pincode-err" className="af-err" role="alert">{errors.pincode}</span>

@@ -90,7 +90,7 @@ function buildOrderSuccessUrl(orderNumber: string, token: string | undefined): s
 }
 
 function matchState(stored: string | undefined | null): string {
-  if (!stored) return 'Uttarakhand'
+  if (!stored) return ''
   const s = stored.trim()
   const exact = INDIA_STATES.find(st => st === s); if (exact) return exact
   const ci    = INDIA_STATES.find(st => st.toLowerCase() === s.toLowerCase()); if (ci) return ci
@@ -101,7 +101,12 @@ function matchState(stored: string | undefined | null): string {
   if (prefix) return prefix
   const word = lower.split(' ')[0]
   const has  = INDIA_STATES.find(st => st.toLowerCase().includes(word) && word.length > 3)
-  return has || s
+  if (has) return has
+  // Old / alternative spellings people have saved. Anything still unknown becomes '' (the select shows "Select state") instead of a
+  // raw value the dropdown cannot display, which used to show the first state while submitting the stored text.
+  const ALIAS: Record<string, string> = { orissa: 'Odisha', pondicherry: 'Puducherry', 'nct of delhi': 'Delhi', 'new delhi': 'Delhi', uttaranchal: 'Uttarakhand' }
+  const al = ALIAS[lower]
+  return al && INDIA_STATES.includes(al) ? al : ''
 }
 
 function parseSavedAddresses(raw: string | undefined | null): SavedAddress[] {
@@ -397,7 +402,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
 
   const BASE_ADDR: OrderAddress = {
     name: '', phone: '', flat: '', area: '', city: '',
-    state: 'Uttarakhand', pincode: '', label: 'Home',
+    state: '', pincode: '', label: 'Home',
   }
 
   const [addr, setAddr] = useState<OrderAddress>(() => {

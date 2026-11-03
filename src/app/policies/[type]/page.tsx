@@ -629,7 +629,7 @@ export default async function PolicyPage({ params }: Props) {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-stone-900 mb-6">{policy.title}</h1>
           <div className="bg-white border border-stone-200 rounded-2xl p-6 sm:p-8">
             {policy.content}
@@ -637,7 +637,7 @@ export default async function PolicyPage({ params }: Props) {
           <p className="text-xs text-stone-400 mt-4 text-center">
             Questions? <Link href="/contact" className="text-forest-700 hover:underline">Contact us</Link>
           </p>
-        </main>
+        </div>
       </div>
     </div>
   )

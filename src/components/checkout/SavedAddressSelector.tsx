@@ -10,7 +10,7 @@ const LABEL_ICONS: Record<string, string> = {
 }
 
 function matchState(stored: string | undefined | null, states: string[]): string {
-  if (!stored) return 'Uttarakhand'
+  if (!stored) return ''
   const s = stored.trim()
   const exact = states.find(st => st === s); if (exact) return exact
   const ci    = states.find(st => st.toLowerCase() === s.toLowerCase()); if (ci) return ci

@@ -8,6 +8,7 @@ import type { SiteSettings, CartItem, AppliedCoupon } from '@/types'
 import type { PriceSummary } from '@/lib/services/pricingService'
 import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block — was 18KB re-parsed on every render
 import Icon from '@/components/ui/Icon'
+import { useUserStore } from '@/store/userStore'
 
 interface CouponHint { code: string; label: string }
 
@@ -65,6 +66,7 @@ const OrderSummary = memo(function OrderSummary({
   error, placing, bothPaymentsOff, belowMinOrder, razorpayLoaded, razorpayLoadFailed,
   minOrderAmt, onPlaceOrder, payMethod, payMethodChosen, summaryOpen, onToggleSummary,
 }: Props) {
+  const isSignedIn = useUserStore(s => !!s.user)
   const [showHints,      setShowHints]      = useState(false)
   const [showLoyalty,    setShowLoyalty]    = useState(false)
   const [loyaltyInput,   setLoyaltyInput]   = useState('')
@@ -406,7 +408,8 @@ const OrderSummary = memo(function OrderSummary({
               <span>You&apos;re saving <strong>{formatPrice(savingsBadge)}</strong> on this order</span>
             </div>
           )}
-          {loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
+          {/* Coins are for account holders only — a guest has nowhere to spend them, so don't dangle them. */}
+          {isSignedIn && loyaltyEnabled && loyaltyPts > 0 && !loyaltyRedemption && (
             <div className="os-loyalty-earn-strip">
               <Icon name="star" /> Earn <strong>{loyaltyPts} {loyaltyLabel}</strong> on this order
             </div>
