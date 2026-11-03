@@ -189,7 +189,9 @@ export async function POST(req: NextRequest) {
   let idempotencyKeyForRecovery: unknown = null
   let finalizeForRecovery: ((order: CreatedOrder, alreadyExists: boolean, customerId: string | null) => Promise<void>) | null = null
   try {
-    const body   = await req.json()
+    // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
+    const body   = await req.json().catch(() => undefined)
+    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     idempotencyKeyForRecovery = (body as { idempotency_key?: unknown } | null)?.idempotency_key ?? null
     const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {

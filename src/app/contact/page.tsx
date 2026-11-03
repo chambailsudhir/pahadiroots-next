@@ -91,7 +91,7 @@ export default function ContactPage() {
             <div>
               <div className="text-sm font-bold text-green-800 group-hover:text-green-900">WhatsApp us</div>
               <div className="text-xs text-green-700 mt-0.5">Fastest response — usually within 1 hour</div>
-              <div className="text-xs text-green-600 font-mono mt-1">+{waNumber}</div>
+              <div className="text-xs text-green-700 font-mono mt-1">+{waNumber}</div>
             </div>
           </a>
 

@@ -101,7 +101,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Request too large' }, { status: 413 })
     }
 
-    const body   = await req.json()
+    // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
+    const body   = await req.json().catch(() => undefined)
+    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
     // BUG FIX: `body.action as string` is an unsafe cast — if the client sends
     // action: null, action: 42, or omits the field entirely, TypeScript's type

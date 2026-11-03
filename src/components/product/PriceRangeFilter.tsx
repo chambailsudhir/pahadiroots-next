@@ -93,28 +93,28 @@ export default function PriceRangeFilter({ bounds, current, urlState, basePath =
           display: flex; justify-content: space-between; font-size: 12px;
           font-weight: 700; color: #1a3a1e; margin-bottom: 12px;
         }
-        .prf-track-wrap { position: relative; height: 20px; }
+        .prf-track-wrap { position: relative; height: 24px; }
         .prf-track {
-          position: absolute; top: 9px; left: 0; right: 0; height: 3px;
+          position: absolute; top: 10px; left: 0; right: 0; height: 3px;
           background: #e5ddd0; border-radius: 3px;
         }
         .prf-track-active {
-          position: absolute; top: 9px; height: 3px;
+          position: absolute; top: 10px; height: 3px;
           background: #1a3a1e; border-radius: 3px;
         }
         .prf-input {
           position: absolute; top: 0; left: 0; width: 100%; margin: 0;
           -webkit-appearance: none; appearance: none; background: transparent;
-          pointer-events: none; height: 20px;
+          pointer-events: none; height: 24px;
         }
         .prf-input::-webkit-slider-thumb {
           -webkit-appearance: none; pointer-events: auto;
-          width: 16px; height: 16px; border-radius: 50%;
+          width: 24px; height: 24px; border-radius: 50%;   /* 24px: WCAG 2.5.8 minimum target size */
           background: #fff; border: 2.5px solid #1a3a1e; cursor: pointer;
-          box-shadow: 0 1px 4px rgba(0,0,0,.2); margin-top: 2px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.2); margin-top: 0;
         }
         .prf-input::-moz-range-thumb {
-          pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+          pointer-events: auto; width: 24px; height: 24px; border-radius: 50%;
           background: #fff; border: 2.5px solid #1a3a1e; cursor: pointer;
           box-shadow: 0 1px 4px rgba(0,0,0,.2);
         }

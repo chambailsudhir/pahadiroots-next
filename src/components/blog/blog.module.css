@@ -32,7 +32,7 @@
 .fMedia{position:relative;min-height:340px;background:var(--forest)}
 .fMedia img{object-fit:cover;transition:transform 1.1s}
 .feat:hover .fMedia img{transform:scale(1.04)}
-.badge{position:absolute;left:18px;top:18px;z-index:2;background:var(--gold);color:#fff;font:800 .64rem/1 var(--font-lato),Lato,sans-serif;letter-spacing:.18em;text-transform:uppercase;padding:.55rem .9rem;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+.badge{position:absolute;left:18px;top:18px;z-index:2;background:#8f6606;color:#fff;font:800 .64rem/1 var(--font-lato),Lato,sans-serif;letter-spacing:.18em;text-transform:uppercase;padding:.55rem .9rem;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
 .fBody{padding:clamp(1.8rem,4vw,3.2rem);display:flex;flex-direction:column;justify-content:center;gap:1rem}
 .root .fBody h2{font-size:clamp(1.7rem,3.2vw,2.5rem)}
 .fBody p{color:var(--mut)}
