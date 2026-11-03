@@ -594,6 +594,18 @@
     if(isOpen) setTimeout(function(){ input.focus(); }, 300);
     if(isOpen) setTimeout(applyTheme, 60);
   });
+  // Phones: while the page is scrolling, fade the chat button out of the way so it never sits over an "Add to Cart" button; it comes back
+  // 700 ms after scrolling stops. Not while the chat is open.
+  (function(){
+    var t=null, mq=window.matchMedia ? window.matchMedia('(max-width:900px)') : null;
+    window.addEventListener('scroll', function(){
+      if(!mq || !mq.matches || isOpen) return;
+      fab.style.transition='opacity .2s'; fab.style.opacity='0.12'; fab.style.pointerEvents='none';
+      clearTimeout(t);
+      t=setTimeout(function(){ fab.style.opacity=''; fab.style.pointerEvents=''; }, 700);
+    }, {passive:true});
+  })();
+
   document.addEventListener('click', function(e) {
     if(isOpen && !panel.contains(e.target) && !fab.contains(e.target)) {
       isOpen=false; fab.classList.remove('open'); panel.classList.remove('open'); syncFabA11y();
