@@ -27,7 +27,7 @@ import 'server-only'
 import { logOrderEvent } from '@/lib/services/orderService'
 import { reserveStockAtomicForOrder, orderItemsToStockItems } from '@/lib/services/inventoryService'
 import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
-import { coinsPerOrder } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue } from '@/lib/loyaltyCoins'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { loadAdminOrderEmail } from '@/lib/server/adminOrderEmail'
@@ -324,7 +324,7 @@ export async function runPaidSideEffects(
 
         // Coins are for account holders only: mention them ONLY when we positively know this is not a guest row.
         const coinsEarned = hasAccount && settings.loyalty_enabled !== 'false'
-          ? coinsPerOrder(settings)   // announced as "you will earn", paid on delivery
+          ? coinsForOrderValue(order.total_amount ?? 0, settings)   // announced as "up to", paid on delivery
           : 0
 
         // sendTransactionalEmail() checks the resolved Resend `error` explicitly and

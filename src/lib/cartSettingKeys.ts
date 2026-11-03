@@ -11,6 +11,7 @@ export const CART_SETTING_KEYS = [
   'upi_enabled',
   'loyalty_enabled',
   'loyalty_coins_per_order',
+  'loyalty_coin_step_rupees',
   'loyalty_points_value',
   'loyalty_points_label',
   'loyalty_min_redeem',

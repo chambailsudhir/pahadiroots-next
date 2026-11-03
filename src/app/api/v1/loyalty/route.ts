@@ -13,7 +13,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
-import { coinsPerOrder } from '@/lib/loyaltyCoins'
+import { coinsPerOrder, coinStepRupees } from '@/lib/loyaltyCoins'
 
 // ── Helpers ───────────────────────────────────────────────────
 function asNumber(v: string | undefined, fallback: number) {
@@ -27,7 +27,7 @@ function asNumber(v: string | undefined, fallback: number) {
 async function getSettings(): Promise<Record<string, string>> {
   const rows: Array<{ key: string; value: string }> = await sbAdmin(
     'GET',
-    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days)',
+    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_coin_step_rupees,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days)',
   ).catch(() => [])
   return Object.fromEntries((rows || []).map(r => [r.key, r.value]))
 }
@@ -74,7 +74,8 @@ export async function GET(req: NextRequest) {
       min_redeem:    minRedeem,
       max_redeem_pct: maxRedeemPct,
       earn_per_rupee:  earnPerRupee,                     // legacy (no longer used to earn)
-      earn_per_order:  coinsPerOrder(settings),           // flat coins per DELIVERED order
+      earn_per_order:  coinsPerOrder(settings),           // MAXIMUM coins per DELIVERED order
+      earn_step_rupees: coinStepRupees(settings),         // 1 coin per this many ₹ of order value
       referral_bonus:  referralBonus,                    // coins each side gets for a referral
       referral_min_order: asNumber(settings.referral_min_order, 499),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery

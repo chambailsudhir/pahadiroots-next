@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { earnCopy } from '@/app/account/_sections/LoyaltySection'
 
-// Owner decision (Nov 2026): a flat number of coins per DELIVERED order (default 5), taken back on return / refund.
 describe('earnCopy', () => {
-  it('states the flat per-order amount and the delivery / return rule', () => {
-    expect(earnCopy(5)).toBe('Earn up to 5 coins on every order once it is delivered (taken back if you return it)')
-    expect(earnCopy(1)).toBe('Earn up to 1 coin on every order once it is delivered (taken back if you return it)')
+  it('states the per-₹ rule, the per-order maximum and the delivery / return rule', () => {
+    expect(earnCopy(5, 200)).toBe('Earn 1 coin for every ₹200 of your order, up to 5 coins per order, once it is delivered (taken back if you return it)')
+    expect(earnCopy(1, 1000)).toContain('for every ₹1,000')
+    expect(earnCopy(1, 1000)).toContain('up to 1 coin per order')
   })
-  it('falls back to the default of 5 for a missing / invalid value, and respects 0', () => {
-    expect(earnCopy(undefined)).toContain('Earn up to 5 coins')
-    expect(earnCopy(Number.NaN)).toContain('Earn up to 5 coins')
-    expect(earnCopy(0)).toContain('Earn up to 0 coins')
+  it('falls back to 5 coins / ₹200 for missing or invalid values', () => {
+    expect(earnCopy(undefined)).toContain('up to 5 coins')
+    expect(earnCopy(undefined)).toContain('₹200')
+    expect(earnCopy(Number.NaN, 0)).toContain('₹200')
   })
 })
