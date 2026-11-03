@@ -140,6 +140,8 @@ export function normalizeProducts(data: NormalizableRow[]): Product[] {
  * sites) with just the unused heavy fields nulled out.
  */
 const CARD_UNUSED_FIELDS = [
+  // internal / back-office columns no card renders (round-2 audit: the public search catalogue and listing payloads carried them)
+  'sku_backup', 'hsn_code', 'hsn_code_id', 'initial_stock', 'video_url',
   'short_description', 'long_description', 'tags',
   'ai_description', 'ai_health_benefits', 'ai_how_to_use', 'ai_storage_tips', 'ai_who_should_buy', 'ai_generated_at',
 ] as const
