@@ -1446,6 +1446,10 @@ export async function createOrder(
         city:          input.city    || null,
         state:         input.state   || null,
         pincode:       input.pincode || null,
+        // Where THIS order's e-mails go. A guest whose e-mail already belongs to an account is stored with customers.email NULL (the
+        // unique index), so the paid-order e-mail could not find an address; the snapshot is the per-order record. (Erased on account
+        // deletion: the snapshot is reduced to the invoice fields.)
+        email:         input.customerEmail?.trim() || null,
       },
     }),
     8_000,

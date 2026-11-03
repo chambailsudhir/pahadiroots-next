@@ -6,6 +6,7 @@
 //   * Only orders delivered between (now - review_request_days - 14 days) and (now - review_request_days): a backlog from before
 //     this feature existed is never mass-mailed. On top of that a run sends at most 5 e-mails and at most ONE per customer, so even
 //     a first run after activation trickles out over a few days instead of arriving as a burst.
+//   * A customer is mailed at most once every 7 days (REVIEW_REQUEST_COOLDOWN_DAYS), however many orders they have delivered.
 //   * Products that are no longer listed (inactive) are not asked about - there is no page to show the review on.
 //   * The order is CLAIMED first (INSERT ... ON CONFLICT DO NOTHING into review_requests) and only the single winner
 //     sends, so overlapping runs can never mail twice. If the send fails outright (not even dead-lettered) the claim is
@@ -22,6 +23,7 @@ import { captureError, logger } from '@/lib/logger'
 type Db = ReturnType<typeof getServiceClient>
 
 export const REVIEW_REQUEST_DEFAULT_DAYS = 7
+export const REVIEW_REQUEST_COOLDOWN_DAYS = 7    // never mail the same customer more often than this
 export const REVIEW_REQUEST_WINDOW_DAYS = 14   // width of the eligibility window, counted back from (now - review_request_days)
 const DEFAULT_LIMIT = 5
 const DEFAULT_TIME_BUDGET_MS = 25_000
@@ -69,6 +71,18 @@ export async function sendReviewRequests(
     const until = new Date(now.getTime() - days * DAY).toISOString()
     const since = new Date(now.getTime() - (days + REVIEW_REQUEST_WINDOW_DAYS) * DAY).toISOString()
     const mailedCustomers = new Set<string>()   // at most one e-mail per customer per run
+    // …and none for a customer who was already mailed in the last 7 days (an earlier run).
+    {
+      const cooldownSince = new Date(now.getTime() - REVIEW_REQUEST_COOLDOWN_DAYS * DAY).toISOString()
+      const { data: recent, error: rcErr } = await db.from('review_requests').select('order_id').gte('sent_at', cooldownSince)
+      if (rcErr) throw new Error('review_requests read failed (migration applied?): ' + rcErr.message)
+      const recentIds = ((recent ?? []) as Array<{ order_id: number | string }>).map(r => r.order_id)
+      if (recentIds.length > 0) {
+        const { data: ro, error: roErr } = await db.from('orders').select('customer_id').in('id', recentIds)
+        if (roErr) throw new Error('orders read failed: ' + roErr.message)
+        for (const o of (ro ?? []) as Array<{ customer_id: number | string | null }>) if (o.customer_id != null) mailedCustomers.add(String(o.customer_id))
+      }
+    }
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com').replace(/\/+$/, '')
 
     for (let page = 0; page < MAX_PAGES && stats.sent < limit; page++) {

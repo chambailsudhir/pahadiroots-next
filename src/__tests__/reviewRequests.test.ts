@@ -163,6 +163,14 @@ describe('sendReviewRequests', () => {
     expect(html).not.toContain('>Test<')
   })
 
+  it('does not mail a customer who was already mailed in the last 7 days (an earlier run)', async () => {
+    data.orders = [{ ...order, id: 99, order_number: 'ORD-99' }, { ...order, id: 1 }]   // 99 was mailed earlier; same customer 42
+    data.review_requests = [{ order_id: 99, sent_at: '2026-11-18T00:00:00Z' }]
+    const r = await run()
+    expect(r.sent).toBe(0)
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('never throws: a failing claim table (migration missing) is counted as an error', async () => {
     claimErr = { message: 'relation "review_requests" does not exist' }
     const stats = await run()

@@ -50,3 +50,31 @@ describe('payment confirmation e-mail', () => {
     expect(await sentHtml({ first_name: 'Ravi', email: null })).toBeUndefined()
   })
 })
+
+describe('payment confirmation e-mail — recipient', () => {
+  async function run(row: Record<string, unknown>) {
+    send.mockClear()
+    const single = vi.fn().mockResolvedValue({ data: row, error: null })
+    const chain = { select: () => chain, eq: () => chain, single }
+    const deferred: Array<() => Promise<void>> = []
+    await runPaidSideEffects({ from: () => chain } as never, {
+      order: { id: '9', order_number: 'ORD-2026-00201', total_amount: 350, customer_id: 'c1', loyalty_points_redeemed: 0 },
+      razorpayOrderId: 'order_X', razorpayPaymentId: 'pay_X', settings: { loyalty_enabled: 'true', loyalty_points_per_rupee: '0.01' },
+      defer: fn => { deferred.push(fn) },
+    })
+    for (const fn of deferred) await fn()
+    return send.mock.calls[0]?.[0] as { html: string; to: string } | undefined
+  }
+
+  it('a guest whose e-mail collided with an account (customers.email NULL) still gets the e-mail, at the address typed on the order', async () => {
+    const mail = await run({ first_name: 'T', email: null, auth_user_id: null, shipping_address: { name: 'T', email: 'typed@example.org', state: 'Himachal Pradesh' }, order_items: [] })
+    expect(mail?.to).toBe('typed@example.org')
+    expect(mail!.html).not.toContain('Pahadi Coins')       // guest: no coins promise
+  })
+
+  it('an account holder gets the coins line (account = auth_user_id; there is no is_guest column)', async () => {
+    const mail = await run({ first_name: 'A', email: 'a@example.org', auth_user_id: 'u-1', shipping_address: { state: 'Himachal Pradesh' }, order_items: [] })
+    expect(mail?.to).toBe('a@example.org')
+    expect(mail!.html).toContain('You earned 3 Pahadi Coins')
+  })
+})
