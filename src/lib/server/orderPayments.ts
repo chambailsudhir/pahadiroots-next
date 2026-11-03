@@ -268,7 +268,9 @@ export async function runPaidSideEffects(
       // already belongs to an account.
       const { data: full0 } = await db.from('orders').select('shipping_address').eq('id', order.id).single()
       const sa0 = (typeof full0?.shipping_address === 'string' ? (() => { try { return JSON.parse(full0.shipping_address) } catch { return null } })() : full0?.shipping_address) as Record<string, string> | null
-      const toEmail = (customer?.email || sa0?.email || '').trim()
+      // The address typed FOR THIS ORDER wins. A guest whose phone/e-mail collided with an existing account has the order attached to
+      // that account's row, and mailing that row's stored address would send this order's items, name and address to someone else.
+      const toEmail = (sa0?.email || customer?.email || '').trim()
 
       if (toEmail.includes('@')) {
         // The same itemised e-mail COD customers get (lib/server/orderEmail.ts), built from the stored order.

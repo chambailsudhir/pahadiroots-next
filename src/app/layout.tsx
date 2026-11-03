@@ -4,7 +4,7 @@ import './globals.css'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { stripServerOnlySettings, isStoreOpen, safeSocialUrl } from '@/lib/siteSettingsHelpers'
 import { sanitizeHtml } from '@/lib/server/sanitize'
-import { getCatalogMeta } from '@/lib/storeData'
+import { getCatalogMeta, getPopulatedCategoryIds } from '@/lib/storeData'
 import { logger } from '@/lib/logger'
 import { withLiveStateCount } from '@/lib/heroStats'
 import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
@@ -178,9 +178,13 @@ export default async function RootLayout({
   // PERF: these lists are handed to client components, so every field is serialised into the HTML (twice — Header and
   // the on-demand panels). The menus only read id / name / slug / is_active, so send just those (the rest — long
   // descriptions, SEO text, timestamps — was ~50 KB of the document that has to arrive before the hero image is requested).
-  const categories = (meta.categories as any[]).map((c: any) => ({
-    id: c.id, name: c.name, slug: c.slug, emoji: c.emoji ?? null, is_active: c.is_active,
-  })) as any[]
+  // Only categories that have a product to buy: an empty one is a dead end ("coming soon") from the menu and footer.
+  const populated = await getPopulatedCategoryIds()
+  const categories = (meta.categories as any[])
+    .filter((c: any) => !populated || populated.has(c.id))
+    .map((c: any) => ({
+      id: c.id, name: c.name, slug: c.slug, emoji: c.emoji ?? null, is_active: c.is_active,
+    })) as any[]
   const states = meta.states.map((s: any) => ({
     id: s.id, name: s.name,
     slug: s.id,  // In admin, the id IS the slug

@@ -79,6 +79,23 @@ describe('payment confirmation e-mail — recipient', () => {
   })
 })
 
+describe('payment confirmation e-mail — whose address', () => {
+  it('the address typed for THIS order wins over the (possibly someone else\'s) stored account e-mail', async () => {
+    send.mockClear()
+    const single = vi.fn().mockResolvedValue({ data: { first_name: 'Victim', email: 'victim@example.org', auth_user_id: 'u-9', shipping_address: { name: 'Buyer', email: 'buyer@example.org', state: 'Himachal Pradesh' }, order_items: [] }, error: null })
+    const chain = { select: () => chain, eq: () => chain, single }
+    const deferred: Array<() => Promise<void>> = []
+    await runPaidSideEffects({ from: () => chain } as never, {
+      order: { id: '9', order_number: 'ORD-2026-00400', total_amount: 350, customer_id: 'c1', loyalty_points_redeemed: 0 },
+      razorpayOrderId: 'order_X', razorpayPaymentId: 'pay_X', settings: { loyalty_enabled: 'false' },
+      defer: fn => { deferred.push(fn) },
+    })
+    for (const fn of deferred) await fn()
+    const customerMail = send.mock.calls.map(c => c[0]).find((m: { type: string }) => m.type === 'payment_confirmation') as { to: string } | undefined
+    expect(customerMail?.to).toBe('buyer@example.org')
+  })
+})
+
 describe('online-paid order — owner notification', () => {
   it('the shop owner is e-mailed about a paid order too (ADMIN_EMAIL fallback)', async () => {
     vi.stubEnv('ADMIN_EMAIL', 'owner@shop.test')
