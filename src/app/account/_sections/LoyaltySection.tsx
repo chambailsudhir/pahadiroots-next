@@ -37,6 +37,7 @@ interface LoyaltyData {
   min_redeem:     number
   max_redeem_pct: number
   earn_per_rupee?: number
+  earn_per_order?: number
   referral_bonus?: number
   referral_min_order?: number
   referral_hold_days?: number
@@ -45,17 +46,15 @@ interface LoyaltyData {
   referral_code:  string | null
 }
 
-/** "Earn 1 coin per ₹1" / "Earn 1 coin for every ₹100 you spend" — built from the real earn rate (ACC-045). */
 /** Referral promise, built from the real settings: coins are paid after delivery + the return window, never at order time. */
 export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string {
   return `You and your friend each get ${bonus} bonus coins once your friend's first order of ₹${minOrder.toLocaleString('en-IN')} or more is delivered and ${holdDays} days have passed without a return.`
 }
 
-export function earnCopy(rate: number | undefined): string {
-  const r = typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? rate : 1
-  if (r >= 1) return `Earn ${Number.isInteger(r) ? r : r.toFixed(2)} ${r === 1 ? 'coin' : 'coins'} per ₹1 spent on every order`
-  const per = Math.round(1 / r)
-  return `Earn 1 coin for every ₹${per.toLocaleString('en-IN')} you spend`
+/** Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), taken back if the order is returned or refunded. */
+export function earnCopy(perOrder: number | undefined): string {
+  const n = typeof perOrder === 'number' && Number.isFinite(perOrder) && perOrder >= 0 ? Math.floor(perOrder) : 5
+  return `Earn ${n} ${n === 1 ? 'coin' : 'coins'} on every order once it is delivered (taken back if you return it)`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -266,7 +265,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          { icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_rupee) },
+          { icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order) },
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },

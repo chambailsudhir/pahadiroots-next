@@ -79,15 +79,32 @@ export function calcPriceSummary(
   const grossLines   = items.reduce((sum, item) => sum + item.price * item.qty, 0)
   const taxableCut   = grossLines > 0 ? Math.min(grossLines, Math.max(0, discount) + prepaidDiscount) : 0
   const cutFraction  = grossLines > 0 ? taxableCut / grossLines : 0
-  const gstTotal = items.reduce(
-    (sum, item) => sum + calcGST(item.price * (1 - cutFraction), item.gstRate, item.qty), 0
-  )
 
   // Flat COD handling fee — folded into `total`. Shown as its own "COD
   // Charges" line in the cart drawer, cart page, and checkout summary (see
   // CartDrawer.tsx / CartSummary.tsx / OrderSummary.tsx) — no longer a
   // hidden add-on; it's itemized like everything else.
   const codSurcharge = paymentMethod === 'cod' ? Math.round(codSurchargeAmt) : 0
+
+  // GST (Nov 2026 — owner decision "do it like the big marketplaces", researched against the CGST Act):
+  //  • Shipping and the COD handling fee are charged by the seller together with the goods, so they are PART OF THE VALUE OF THE
+  //    SUPPLY (CGST Act s.15(2)(c): any amount charged for anything done in respect of the supply at or before delivery) and, being a
+  //    composite supply, follow the rate of the goods. With several rates in one cart the fee is shared across the lines in
+  //    proportion to their value (the usual marketplace practice), so each part carries its own line's rate. Before this the GST
+  //    line ignored both fees entirely.
+  //  • Rounding is done ONCE per invoice (CGST Act s.170: tax amounts to the nearest rupee), on the exact paise-level sum — not per
+  //    line, which drifted by up to 50 paise per line in either direction.
+  //  The customer's TOTAL is unchanged: prices and fees are GST-inclusive, only the tax carved out of them changes.
+  const lineGst = (value: number, rate: number) => {
+    const r = Number.isFinite(Number(rate)) && Number(rate) > 0 ? Number(rate) : 0
+    return (value * r) / (100 + r)
+  }
+  const lineValues  = items.map(item => ({ v: item.price * item.qty * (1 - cutFraction), r: item.gstRate }))
+  const goodsValue  = lineValues.reduce((s, l) => s + l.v, 0)
+  const feeValue    = shipping + codSurcharge
+  const gstExact    = lineValues.reduce(
+    (s, l) => s + lineGst(l.v, l.r) + (goodsValue > 0 ? lineGst(feeValue * (l.v / goodsValue), l.r) : 0), 0)
+  const gstTotal    = Math.round(gstExact)
 
   // BUG FIX: total could go negative if an admin sets prepaid_discount_pct > 100
   // (e.g. 150%). afterDiscount=100, prepaidDiscount=150 → total=-50.

@@ -47,7 +47,7 @@ export interface OrderEmailInput {
   paymentId?:     string | null
   deliveryText:   string
   trackingText:   string
-  /** Pahadi Coins earned — pass ONLY for a signed-in customer (guests cannot use coins). */
+  /** Pahadi Coins the customer WILL earn on delivery — pass ONLY for a signed-in customer (guests cannot use coins). */
   coinsEarned?:   number
   /** True when the customer has an account (invoice is available under My Orders). */
   signedIn?:      boolean
@@ -151,8 +151,8 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   const coins = (o.coinsEarned ?? 0) > 0
     ? `<tr><td style="padding:0 28px 20px">
         <div style="background:#fbf6e6;border:1px solid #ecd98a;border-radius:12px;padding:14px 18px;text-align:center">
-          <div style="font-size:15px;font-weight:700;color:#6b4a00">🪙 You earned ${esc(o.coinsEarned)} Pahadi Coins</div>
-          <div style="font-size:12px;color:#7a6320;margin-top:3px">Use them for a discount on your next order.</div>
+          <div style="font-size:15px;font-weight:700;color:#6b4a00">🪙 You will earn ${esc(o.coinsEarned)} Pahadi Coins when this order is delivered</div>
+          <div style="font-size:12px;color:#7a6320;margin-top:3px">Use them for a discount on your next order. (Coins are taken back if the order is returned.)</div>
         </div></td></tr>` : ''
 
   const invoiceNote = o.signedIn

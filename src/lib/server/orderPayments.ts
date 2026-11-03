@@ -26,7 +26,8 @@
 import 'server-only'
 import { logOrderEvent } from '@/lib/services/orderService'
 import { reserveStockAtomicForOrder, orderItemsToStockItems } from '@/lib/services/inventoryService'
-import { awardLoyaltyPoints, redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
+import { coinsPerOrder } from '@/lib/loyaltyCoins'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { esc } from '@/lib/server/htmlEscape'
@@ -246,7 +247,7 @@ export async function runPaidSideEffects(
         await logOrderEvent(order.id, 'loyalty_redeem_failed', 'system', { points: pointsRedeemed }).catch(() => null)
       }
     }
-    await awardLoyaltyPoints(custId, order.id, order.total_amount ?? 0, settings, 'Earned from online payment')
+    // No coins at payment: they are paid when the order is DELIVERED (database trigger) and taken back on return / refund.
   }
 
   // Tell the shop owner about an ONLINE-paid order too (COD orders already notify from /api/v1/orders; paid ones sent nothing).
@@ -321,7 +322,7 @@ export async function runPaidSideEffects(
 
         // Coins are for account holders only: mention them ONLY when we positively know this is not a guest row.
         const coinsEarned = hasAccount && settings.loyalty_enabled !== 'false'
-          ? Math.floor(order.total_amount * parseFloat(settings.loyalty_points_per_rupee || '1'))
+          ? coinsPerOrder(settings)   // announced as "you will earn", paid on delivery
           : 0
 
         // sendTransactionalEmail() checks the resolved Resend `error` explicitly and

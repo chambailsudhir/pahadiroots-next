@@ -109,17 +109,14 @@ describe('POST /api/v1/orders — recover a committed order after the create bud
 })
 
 describe('recovered order gets its post-order steps exactly once (loyalty + once-only marker)', () => {
-  it('awards the COD loyalty points, redeems requested coins, and records the marker BEFORE finalising', async () => {
+  it('redeems requested coins and records the marker BEFORE finalising (no coins are awarded at placement any more)', async () => {
     wireDb()
     const res = await callOrders()
     expect(res.status).toBe(200)
 
     expect(mockLogOrderEvent).toHaveBeenCalledWith('163', 'post_order_finalized', 'system', expect.objectContaining({ via: 'timeout_recovery' }))
-    // customer 58, order 163, the committed total — through the same helper the normal path uses
-    expect(mockAward).toHaveBeenCalledWith('58', '163', 500, expect.any(Object), 'Earned from COD order')
-    // marker is written before any of the steps run
-    const markerAt = mockLogOrderEvent.mock.invocationCallOrder[0]
-    expect(markerAt).toBeLessThan(mockAward.mock.invocationCallOrder[0])
+    // Coins are paid on DELIVERY by a database trigger (db_migration_v28), never at placement.
+    expect(mockAward).not.toHaveBeenCalled()
   })
 
   it('does NOT run them again when the marker already exists (customer retried and timed out again)', async () => {
