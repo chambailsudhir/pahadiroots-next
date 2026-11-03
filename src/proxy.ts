@@ -103,16 +103,24 @@ const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const STORE_OPEN_TTL_OK_MS   = 3_000
 const STORE_OPEN_TTL_FAIL_MS = 5_000
 let storeClosedCache: { closed: boolean; expiresAt: number } | null = null
+// Round-2 audit: when the cache expired, every concurrent navigation fired its OWN read (a burst of N requests = N queries on an
+// already slow database). All callers now share one in-flight read.
+let storeClosedInFlight: Promise<boolean> | null = null
 
-async function isStoreClosed(): Promise<boolean> {
-  if (!SUPABASE_URL || !SUPABASE_ANON) return false // not configured → fail-open
+function isStoreClosed(): Promise<boolean> {
+  if (!SUPABASE_URL || !SUPABASE_ANON) return Promise.resolve(false) // not configured → fail-open
+  if (storeClosedCache && storeClosedCache.expiresAt > Date.now()) return Promise.resolve(storeClosedCache.closed)
+  if (!storeClosedInFlight) storeClosedInFlight = readStoreClosed().finally(() => { storeClosedInFlight = null })
+  return storeClosedInFlight
+}
+
+async function readStoreClosed(): Promise<boolean> {
   const now = Date.now()
-  if (storeClosedCache && storeClosedCache.expiresAt > now) return storeClosedCache.closed
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/site_settings?key=eq.store_open&select=value`,
       {
-        headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        headers: { apikey: SUPABASE_ANON as string, Authorization: `Bearer ${SUPABASE_ANON as string}` },
         signal: AbortSignal.timeout(1_500),
         // Always hit Supabase when the in-memory cache above has expired.
         cache: 'no-store',
@@ -138,23 +146,37 @@ async function isStoreClosed(): Promise<boolean> {
 // values. Read them (anon key, same RLS-safe table as the store_open read above) at most once a minute.
 interface BootstrapSettings { google_tag_id: string; cookie_consent_mode: string }
 let bootstrapCache: { v: BootstrapSettings; expiresAt: number } | null = null
+// Failure TTL + single flight (round-2 audit): a failed read used to be retried by EVERY request on /products, /checkout, /account ...
+// (each waiting up to 1.5 s for the slow database). After a failure the last good value (or null) is served for 5 s, and
+// concurrent callers share one read.
+let bootstrapFailUntil = 0
+let bootstrapInFlight: Promise<BootstrapSettings | null> | null = null
 
-async function getBootstrapSettings(): Promise<BootstrapSettings | null> {
-  if (!SUPABASE_URL || !SUPABASE_ANON) return null
+function getBootstrapSettings(): Promise<BootstrapSettings | null> {
+  if (!SUPABASE_URL || !SUPABASE_ANON) return Promise.resolve(null)
   const now = Date.now()
-  if (bootstrapCache && bootstrapCache.expiresAt > now) return bootstrapCache.v
+  if (bootstrapCache && bootstrapCache.expiresAt > now) return Promise.resolve(bootstrapCache.v)
+  if (bootstrapFailUntil > now) return Promise.resolve(bootstrapCache?.v ?? null)
+  if (!bootstrapInFlight) bootstrapInFlight = readBootstrapSettings().finally(() => { bootstrapInFlight = null })
+  return bootstrapInFlight
+}
+
+async function readBootstrapSettings(): Promise<BootstrapSettings | null> {
+  const now = Date.now()
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/site_settings?key=in.(google_tag_id,cookie_consent_mode)&select=key,value`,
-      { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` }, signal: AbortSignal.timeout(1_500), cache: 'no-store' },
+      { headers: { apikey: SUPABASE_ANON as string, Authorization: `Bearer ${SUPABASE_ANON as string}` }, signal: AbortSignal.timeout(1_500), cache: 'no-store' },
     )
-    if (!res.ok) return bootstrapCache?.v ?? null
+    if (!res.ok) { bootstrapFailUntil = now + 5_000; return bootstrapCache?.v ?? null }
     const rows = await res.json() as { key: string; value: string }[]
     const v: BootstrapSettings = { google_tag_id: '', cookie_consent_mode: '' }
     for (const r of rows) if (r.key === 'google_tag_id' || r.key === 'cookie_consent_mode') v[r.key] = r.value ?? ''
     bootstrapCache = { v, expiresAt: now + 60_000 }
+    bootstrapFailUntil = 0
     return v
   } catch {
+    bootstrapFailUntil = now + 5_000
     return bootstrapCache?.v ?? null
   }
 }
