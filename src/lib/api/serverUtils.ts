@@ -210,7 +210,19 @@ export async function tryRefresh(req: NextRequest): Promise<RefreshResult | null
   try {
     const data = await sbAuth('/token?grant_type=refresh_token', { refresh_token: rt })
     if (!data.access_token) return null
-    return { token: data.access_token, refresh: data.refresh_token ?? rt }
+    const result = { token: data.access_token, refresh: data.refresh_token ?? rt }
+    // The refresh token is single-use: GoTrue has just rotated it. If the handler then fails (DB timeout, 4xx/5xx) without
+    // reaching applyNewCookies, the browser would keep the already-used token and the next request would be treated as token
+    // reuse. Queue the new cookies through Next's cookie store NOW so EVERY response of this request carries them, error
+    // paths included (success paths still call applyNewCookies explicitly — same values).
+    try {
+      const { cookies } = await import('next/headers')
+      const jar  = await cookies()
+      const base = { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const, path: '/' }
+      jar.set(COOKIE_TOKEN,   result.token,   { ...base, maxAge: 60 * 60 })
+      jar.set(COOKIE_REFRESH, result.refresh, { ...base, maxAge: 60 * 60 * 24 * 30 })
+    } catch { /* outside a request scope (unit tests, scripts) — the explicit applyNewCookies path still runs */ }
+    return result
   } catch {
     return null
   }
