@@ -20,6 +20,9 @@ describe('admin order e-mail', () => {
       expect(h).toContain(s)
     }
   })
+  it('the admin button opens THIS order', () => {
+    expect(buildAdminOrderEmail(base)).toContain('pahadi-admin.vercel.app/admin/orders?q=ORD-2026-00174&amp;days=365')
+  })
   it('escapes user-supplied text', () => {
     const h = buildAdminOrderEmail(base)
     expect(h).not.toContain('<b>Chambail</b>')
