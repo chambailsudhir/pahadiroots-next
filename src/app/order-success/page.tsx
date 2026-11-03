@@ -229,6 +229,10 @@ function SuccessContent() {
   useEffect(() => {
     if (view !== 'confirmed' || !order?.order_number) return
     const num = order.order_number
+    // Purchase events belong to the moment the order was placed. Opening an OLD order's page (another device, cleared browser, incognito)
+    // must not count it as a new sale; an order older than a day is never tracked here.
+    const placedAt = order.created_at ? new Date(order.created_at).getTime() : NaN
+    if (Number.isFinite(placedAt) && Date.now() - placedAt > 24 * 3_600_000) return
     // First-party purchase tracking: once per order per browser.
     if (!alreadyTracked(num)) {
       markTracked(num)
