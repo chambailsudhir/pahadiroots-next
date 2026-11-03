@@ -19,7 +19,11 @@ export const runtime = 'nodejs'
 const GEMINI_KEY = process.env.GEMINI_API_KEY
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+// gemini-2.0-flash has been RETIRED by Google ("This model is no longer available", seen in production logs Nov 2026), so every chat
+// request failed over to Claude. The model id is now an env var (GEMINI_MODEL) so the next retirement is a config change, not a deploy;
+// the default is the replacement Google's own error message names.
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').replace(/[^a-zA-Z0-9._-]/g, '')
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const UPSTREAM_TIMEOUT_MS = 20_000
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages'
 
