@@ -12,6 +12,9 @@ export const RESET_PASSWORD_MAX_LENGTH = 128
 // sessionStorage key — the hash is stripped from the URL on first render, so
 // a reload must still be able to show the outcome instead of "invalid link".
 export const RESET_RESULT_KEY = 'pr_reset_result'
+export const RESET_RESULT_AT_KEY = 'pr_reset_result_at'
+/** How long a finished reset is remembered for a reload of the page (a later bad link must not claim success). */
+export const RESET_RESULT_TTL_MS = 10 * 60_000
 
 /**
  * Parse a Supabase recovery hash. Only `type=recovery` tokens are accepted —
@@ -71,5 +74,6 @@ export function isSignupConfirmationHash(hash: string): boolean {
 export function friendlyLinkError(raw: string | null): string {
   if (!raw) return 'This reset link is invalid or has expired.'
   if (/expired|invalid/i.test(raw)) return 'This reset link has expired or was already used. Reset links work only once and for a short time.'
-  return raw
+  // anything else is attacker-controllable text from the URL: never render it inside our branded box (content spoofing)
+  return 'This reset link is invalid or has expired.'
 }

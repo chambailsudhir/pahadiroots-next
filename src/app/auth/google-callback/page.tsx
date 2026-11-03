@@ -42,7 +42,8 @@ export default function GoogleCallbackPage() {
         window.history.replaceState({}, '', window.location.pathname)
 
         if (failure) {
-          setErrMsg(failure.replace(/\+/g, ' '))
+          // never show provider / URL text in our UI (content spoofing): fixed wording only
+          setErrMsg(/access_denied|cancel/i.test(failure) ? 'Google sign-in was cancelled.' : 'Google sign-in could not be completed. Please try again.')
           setStatus('error')
           setTimeout(() => { window.location.href = '/account' }, 3000)
           return

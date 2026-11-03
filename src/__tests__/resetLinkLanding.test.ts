@@ -43,6 +43,6 @@ describe('friendlyLinkError', () => {
   })
   it('has a default for a missing description and passes unknown text through', () => {
     expect(friendlyLinkError(null)).toMatch(/invalid or has expired/)
-    expect(friendlyLinkError('Something else')).toBe('Something else')
+    expect(friendlyLinkError('Account locked, call +91 99999 00000')).toBe('This reset link is invalid or has expired.')   // URL text is never echoed
   })
 })

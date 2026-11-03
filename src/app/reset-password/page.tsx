@@ -26,14 +26,23 @@
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import {
-  RESET_PASSWORD_MIN_LENGTH, RESET_RESULT_KEY,
+  RESET_PASSWORD_MIN_LENGTH, RESET_RESULT_KEY, RESET_RESULT_AT_KEY, RESET_RESULT_TTL_MS,
   parseRecoveryHash, validateNewPassword, friendlyLinkError,
 } from './resetPasswordHelpers'
 
 type Phase = 'checking' | 'ready' | 'submitting' | 'done' | 'invalid'
 
 function readPersistedResult(): 'success' | null {
-  try { return sessionStorage.getItem(RESET_RESULT_KEY) === 'success' ? 'success' : null } catch { return null }
+  try {
+    if (sessionStorage.getItem(RESET_RESULT_KEY) !== 'success') return null
+    const at = Number(sessionStorage.getItem(RESET_RESULT_AT_KEY))
+    // entries written before the timestamp existed (no value) are still honoured; stale ones are not
+    if (Number.isFinite(at) && at > 0 && Date.now() - at > RESET_RESULT_TTL_MS) {
+      sessionStorage.removeItem(RESET_RESULT_KEY); sessionStorage.removeItem(RESET_RESULT_AT_KEY)
+      return null
+    }
+    return 'success'
+  } catch { return null }
 }
 
 export default function ResetPasswordPage() {
@@ -114,7 +123,7 @@ export default function ResetPasswordPage() {
         setPhase('ready')
         return
       }
-      try { sessionStorage.setItem(RESET_RESULT_KEY, 'success') } catch {}
+      try { sessionStorage.setItem(RESET_RESULT_KEY, 'success'); sessionStorage.setItem(RESET_RESULT_AT_KEY, String(Date.now())) } catch {}
       setToken(null)
       setPassword('')
       setConfirm('')

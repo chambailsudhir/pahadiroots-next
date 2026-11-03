@@ -105,7 +105,7 @@ describe('/auth/google-callback page', () => {
   it('a provider error in the query or hash is shown, no exchange attempted', async () => {
     land('?error=access_denied&error_description=User+cancelled', '')
     const { findByText } = render(<GoogleCallbackPage />)
-    await findByText('User cancelled')
+    await findByText('Google sign-in was cancelled.')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
