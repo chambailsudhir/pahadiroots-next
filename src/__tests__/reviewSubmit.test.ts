@@ -174,8 +174,8 @@ describe('GET /api/v1/reviews/eligible', () => {
     const json = await res.json()
     expect(json.delivered).toBe(true)
     expect(json.items).toEqual([
-      { product_id: 11, name: 'Honey', image: 'https://img/h.jpg', already_reviewed: false },
-      { product_id: 12, name: 'Ghee', image: null, already_reviewed: true },
+      { product_id: 11, name: 'Honey', variant: null, image: 'https://img/h.jpg', emoji: null, already_reviewed: false },
+      { product_id: 12, name: 'Ghee', variant: null, image: null, emoji: null, already_reviewed: true },
     ])
     expect(calls().find(([, p]) => p.startsWith('/rest/v1/orders?'))![1]).toContain('customer_id=eq.42')
   })

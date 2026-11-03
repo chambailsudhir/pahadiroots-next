@@ -73,12 +73,12 @@ describe('sendReviewRequests', () => {
     expect(upsert[1]).toMatchObject({ onConflict: 'order_id', ignoreDuplicates: true })
   })
 
-  it('queries delivered orders inside the [now-60d, now-7d] window', async () => {
+  it('queries delivered orders inside the [now-21d, now-7d] window (backlog guard)', async () => {
     await run()
     const q = log.find(o => o.table === 'orders')!.ops
     const get = (n: string) => q.filter(([x]) => x === n).map(([, a]) => a)
     expect(get('eq')).toContainEqual(['order_status', 'delivered'])
-    expect(get('gte')[0]).toEqual(['delivered_at', '2026-09-21T00:00:00.000Z'])
+    expect(get('gte')[0]).toEqual(['delivered_at', '2026-10-30T00:00:00.000Z'])
     expect(get('lte')[0]).toEqual(['delivered_at', '2026-11-13T00:00:00.000Z'])
   })
 
@@ -137,10 +137,30 @@ describe('sendReviewRequests', () => {
     expect(log.some(o => o.ops.some(([n]) => n === 'delete'))).toBe(false)
   })
 
-  it('respects the batch limit', async () => {
-    data.orders = [1, 2, 3].map(i => ({ ...order, id: i, order_number: 'ORD-' + i }))
+  it('respects the batch limit (orders of different customers)', async () => {
+    data.orders = [1, 2, 3].map(i => ({ ...order, id: i, order_number: 'ORD-' + i, customer_id: 40 + i }))
+    data.customers = [1, 2, 3].map(i => ({ ...customer, id: 40 + i, email: `c${i}@x.com` }))
     expect((await run({ limit: 2 })).sent).toBe(2)
     expect(h.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends at most ONE e-mail per customer per run (their other orders wait for a later run)', async () => {
+    data.orders = [1, 2, 3].map(i => ({ ...order, id: i, order_number: 'ORD-' + i }))   // all customer 42
+    expect((await run()).sent).toBe(1)
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows each product with its photo, name and size in the e-mail, and skips products that are no longer listed', async () => {
+    data.order_items = [
+      { product_id: 11, product_name_snapshot: 'Honey', variant_value_snapshot: '250g', products: { image_url: 'https://img/h.jpg', emoji: null, is_active: true } },
+      { product_id: 99, product_name_snapshot: 'Test', variant_value_snapshot: null, products: { image_url: null, emoji: null, is_active: false } },
+    ]
+    await run()
+    const html = String(h.send.mock.calls[0][0].html)
+    expect(html).toContain('https://img/h.jpg')
+    expect(html).toContain('Honey')
+    expect(html).toContain('250g')
+    expect(html).not.toContain('>Test<')
   })
 
   it('never throws: a failing claim table (migration missing) is counted as an error', async () => {
