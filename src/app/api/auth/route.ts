@@ -23,6 +23,7 @@ import { generatePkceVerifier, pkceChallenge, isPlausibleVerifier } from '@/lib/
 import { isRecoveryToken } from '@/lib/auth/recoveryToken'
 import { cleanEmail, cleanName, isPasswordString, LOGIN_PASSWORD_MAX } from '@/lib/auth/inputLimits'
 import { checkRateLimitKv, peekRateLimitKv } from '@/lib/api/rateLimitKv'
+import { clientIpKey } from '@/lib/api/clientIp'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 import { validate as validators } from '@/lib/account/validation'
@@ -86,9 +87,15 @@ async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<b
 }
 
 // Failed-login counter per account (see email_login). Only FAILED credential checks increment it.
-const LOGIN_FAIL_MAX    = 10
-const LOGIN_FAIL_WINDOW = 15 * 60
-const loginFailKey = (email: string) => `mw:rl:auth_login_fail:${email.toLowerCase()}`
+// Two counters (round-2 audit): a stranger must not be able to lock a customer out of their own account.
+//   • per (account + client network): 10 failures block THAT network only — a stranger can lock only themselves out;
+//   • per account across all networks: a much higher botnet backstop (100 / 15 min) that caps online guessing for one account
+//     at ~100 tries per window while making a deliberate lock-out ten times more expensive.
+const LOGIN_FAIL_MAX     = 10
+const LOGIN_FAIL_ANY_MAX = 100
+const LOGIN_FAIL_WINDOW  = 15 * 60
+const loginFailKey    = (email: string, ipKey: string) => `mw:rl:auth_login_fail:${email.toLowerCase()}:${ipKey}`
+const loginFailAnyKey = (email: string) => `mw:rl:auth_login_fail_any:${email.toLowerCase()}`
 
 function isCredentialFailure(status: number | undefined): boolean {
   return status === 400 || status === 401 || status === 422
@@ -304,9 +311,8 @@ export async function POST(req: NextRequest) {
     'email_login', 'email_signup', 'change_password', 'forgot_password', 'reset_password', 'google_callback',
   ])
   if (RATE_LIMITED_ACTIONS.has(action || '')) {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-              || req.headers.get('x-real-ip')
-              || 'unknown'
+    const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+              || req.headers.get('x-real-ip'))
     const rateLimitKey = `${action}:${ip}`
     if (!await rateLimit(rateLimitKey)) {
       return NextResponse.json(
@@ -371,7 +377,8 @@ export async function POST(req: NextRequest) {
     // from many addresses. The per-account counter counts only FAILED credential checks (it used to be
     // consumed before the password was checked, so a stranger sending 10 bad logins for a victim's e-mail
     // locked the victim out). Generic wording — identical for real and non-existent accounts.
-    if (await peekRateLimitKv(loginFailKey(email), LOGIN_FAIL_MAX)) {
+    const loginIp = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
+    if (await peekRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX) || await peekRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX)) {
       return NextResponse.json(
         { error: 'Too many attempts. Please wait a few minutes before trying again.' },
         { status: 429, headers: { 'Retry-After': '900' } },
@@ -390,8 +397,11 @@ export async function POST(req: NextRequest) {
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       if (isCredentialFailure(e2.status)) {
-        const allowed = await checkRateLimitKv(loginFailKey(email), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
-        if (!allowed) {
+        const [okHere, okAny] = await Promise.all([
+          checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW),
+          checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW),
+        ])
+        if (!okHere || !okAny) {
           return NextResponse.json(
             { error: 'Too many attempts. Please wait a few minutes before trying again.' },
             { status: 429, headers: { 'Retry-After': '900' } },
