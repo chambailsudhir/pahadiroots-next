@@ -30,6 +30,8 @@ import { validate as validators } from '@/lib/account/validation'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { captureError } from '@/lib/logger'
 import { esc } from '@/lib/server/htmlEscape'
+import { brandedEmail } from '@/lib/server/emailShell'
+import { emailSafeHtml } from '@/lib/server/emailSafeHtml'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -238,12 +240,15 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
       return err(503, FRIENDLY)
     }
     const firstName = esc(fullName.split(' ')[0] || 'there')
-    const safeLink  = link.replace(/"/g, '%22')
     const mail = await sendTransactionalEmail({
       type:    'signup_verification',
       to:      email,
       subject: 'Verify your email — HimVeda by Pahadi Roots',
-      html:    `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:32px 24px;text-align:center"><div style="font-size:36px">🌿</div><div style="font-size:22px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:36px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 12px">Welcome, ${firstName}!</h2><p style="color:#555;font-size:15px;line-height:1.6">Please confirm your email address to finish creating your account.</p><p style="text-align:center;margin:28px 0"><a href="${safeLink}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:14px 36px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px">Verify my email</a></p><p style="color:#888;font-size:13px;line-height:1.5">This link works once and expires soon. If you did not create an account, you can ignore this email.</p></div></div></body></html>`,
+      html:    brandedEmail({
+        heading: `Welcome, ${firstName}!`,
+        bodyHtml: `<p style="margin:0 0 12px">Please confirm your email address to finish creating your account.</p><p style="margin:18px 0 0;color:#888888;font-size:13px;line-height:1.5">This link works once and expires soon. If you did not create an account, you can ignore this email.</p>`,
+        cta: { label: 'Verify my email', href: link },
+      }),
       context: { user_id: gen.id },
     })
     if (!mail.sent && !mail.deadLettered) {
@@ -601,7 +606,11 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             from: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>', to: [email],
             subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
-            html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e8;font-family:Arial,sans-serif"><div style="max-width:520px;margin:32px auto;padding:0 16px"><div style="background:linear-gradient(135deg,#1a3a1e,#2d6a4f);border-radius:16px 16px 0 0;padding:36px 24px;text-align:center"><div style="font-size:40px;margin-bottom:8px">🌿</div><div style="font-size:24px;font-weight:900;color:#fff;font-family:Georgia,serif">HimVeda by Pahadi Roots</div></div><div style="background:#fff;border-radius:0 0 16px 16px;padding:40px 32px"><h2 style="font-family:Georgia,serif;color:#1a3a1e;margin:0 0 8px">Reset Your Password</h2><p style="color:#666;font-size:15px">Click the button below to set a new password.</p><div style="text-align:center;margin:32px 0"><a href="${finalResetUrl}" style="display:inline-block;background:linear-gradient(135deg,#1a5c2a,#2d6a4f);color:#fff;padding:18px 48px;border-radius:12px;text-decoration:none;font-weight:800;font-size:17px">🔑 Reset Password</a></div><p style="color:#aaa;font-size:12px;text-align:center">Need help? <a href="https://wa.me/919899984895" style="color:#2d6a4f">WhatsApp us</a></p></div></div></body></html>`,
+            html: emailSafeHtml(brandedEmail({
+              heading: 'Reset your password',
+              bodyHtml: '<p style="margin:0">Click the button below to set a new password. The link works once and expires soon. If you did not ask for this, you can ignore this email.</p>',
+              cta: { label: 'Reset password', href: finalResetUrl },
+            })),
           }),
         })
         if (!resendRes.ok) {

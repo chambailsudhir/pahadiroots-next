@@ -69,7 +69,9 @@ describe('email_signup — mail fallback (ACC-025)', () => {
 
     const mail = mocks.sendTransactionalEmail.mock.calls[0][0]
     expect(mail).toMatchObject({ type: 'signup_verification', to: 'new@user.com' })
-    expect(mail.html).toContain('https://example.supabase.co/auth/v1/verify?token=abc&type=signup')
+    expect(mail.html).toContain('https://example.supabase.co/auth/v1/verify?token=abc&amp;type=signup')   // HTML-escaped inside the href
+    expect(mail.html).toContain('Verify my email')
+    expect(mail.html).not.toMatch(/gradient/)   // Outlook drops gradient backgrounds (invisible header / button)
     expect(mocks.syncCustomerProfile).not.toHaveBeenCalled()      // the address is unproven: no customer row is touched at sign-up
   })
 
