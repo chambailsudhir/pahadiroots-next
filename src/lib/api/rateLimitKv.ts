@@ -124,10 +124,10 @@ export async function checkRateLimitKvStrict(
 
 /**
  * Read-only check: has `key` already reached `limit` hits? Does NOT consume a hit.
- * Used for "count only failures" counters (e.g. failed logins per account) where the attempt must be
- * refused up-front but only a failed attempt may increment. Upstash only — the Postgres fallback RPC
- * increments on every call and has no read form, so without KV this answers false ("not blocked") and the
- * caller relies on its other limiters. Never throws.
+ * Upstash only — the Postgres fallback RPC increments on every call and has no read form, so without KV this
+ * answers false ("not blocked"). VERIFY ROUND (F-9): because of that it must NOT guard anything on its own — the
+ * per-account login backstop that used it was inert whenever the KV env was missing at runtime (the live state)
+ * and now uses checkRateLimitKv (atomic increment on either backend). Kept for diagnostics only. Never throws.
  */
 export async function peekRateLimitKv(key: string, limit: number): Promise<boolean> {
   const kvUrl   = process.env.UPSTASH_REDIS_REST_URL

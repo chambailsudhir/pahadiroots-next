@@ -70,6 +70,24 @@ beforeEach(() => {
   fetchMock.mockResolvedValue({ ok: true, status: 200, text: async () => '' })
 })
 
+// VERIFY ROUND (L-7): the 3 / hour per-IP guard was the in-process checkRateLimit (one counter per serverless
+// instance — N instances meant N × 3). It is now the shared KV / Postgres limiter like export and profile.
+describe('DELETE /api/account/delete — per-IP limiter is shared across instances (L-7)', () => {
+  it('counts the IP through checkRateLimitShared (not the per-instance checkRateLimit) and 429s when it says no', async () => {
+    const { DELETE } = await import('@/app/api/account/delete/route')
+    await DELETE(req())
+    expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('account_delete:1.2.3.4', 3, 60 * 60_000)
+    expect(mocks.checkRateLimit.mock.calls.map(c => c[0])).not.toContain('account_delete:1.2.3.4')
+
+    vi.clearAllMocks()
+    mocks.checkRateLimitShared.mockImplementation(async (key: string) => !key.startsWith('account_delete:'))
+    const res = await DELETE(req())
+    expect(res.status).toBe(429)
+    expect(res.headers.get('retry-after')).toBe('3600')
+    expect(mocks.sbAuth).not.toHaveBeenCalled()
+  })
+})
+
 describe('DELETE /api/account/delete — erasure (ACC-033)', () => {
   it('anonymises with the REAL column name `pincode` (never `postal_code`) and unlinks auth_user_id', async () => {
     const { DELETE } = await import('@/app/api/account/delete/route')

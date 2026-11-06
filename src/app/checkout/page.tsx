@@ -6,10 +6,11 @@ import { CheckoutClient } from './CheckoutClient'
 // be live the moment they are saved. force-dynamic skips the 300s route cache
 // inherited from the root layout; getFreshSiteSettings() skips the settings
 // Data Cache for the payment-critical keys.
-import { stripServerOnlySettings } from '@/lib/siteSettingsHelpers'
+// VERIFY ROUND (L-09): allow-list, not blocklist — only the keys the checkout client reads are serialised into the page.
+import { settingsForCheckout } from '@/lib/siteSettingsHelpers'
 export const dynamic = 'force-dynamic'
 
 export default async function CheckoutPage() {
   const settings = await getFreshSiteSettings()
-  return <CheckoutClient settings={stripServerOnlySettings(settings)} />
+  return <CheckoutClient settings={settingsForCheckout(settings)} />
 }

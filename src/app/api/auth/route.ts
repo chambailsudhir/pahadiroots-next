@@ -22,13 +22,13 @@ import { COOKIE_TOKEN, COOKIE_REFRESH, COOKIE_OAUTH_VERIFIER, OAUTH_VERIFIER_MAX
 import { generatePkceVerifier, pkceChallenge, isPlausibleVerifier } from '@/lib/auth/pkce'
 import { isRecoveryToken } from '@/lib/auth/recoveryToken'
 import { cleanEmail, cleanName, isPasswordString, LOGIN_PASSWORD_MAX } from '@/lib/auth/inputLimits'
-import { checkRateLimitKv, peekRateLimitKv } from '@/lib/api/rateLimitKv'
+import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { clientIpKey } from '@/lib/api/clientIp'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 import { validate as validators } from '@/lib/account/validation'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { captureError } from '@/lib/logger'
+import { captureError, logger } from '@/lib/logger'
 import { esc } from '@/lib/server/htmlEscape'
 import { brandedEmail, emailSiteUrl } from '@/lib/server/emailShell'
 
@@ -46,7 +46,7 @@ const RESET_PASSWORD_MIN_LENGTH = 8
 // Auth answers (sessions, profiles, errors) are per-user: never cacheable by a shared cache.
 const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
 function ok(data: unknown)                 { return NextResponse.json(data, { status: 200, headers: PRIVATE_HEADERS }) }
-function fail(status: number, msg: string) { return NextResponse.json({ error: msg }, { status, headers: PRIVATE_HEADERS }) }
+function fail(status: number, msg: string, headers?: Record<string, string>) { return NextResponse.json({ error: msg }, { status, headers: { ...PRIVATE_HEADERS, ...headers } }) }
 // Legacy alias — keeps all existing `err(...)` calls working
 const err = fail
 
@@ -87,20 +87,15 @@ async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<b
   return checkRateLimitKv(`mw:rl:auth_${key}`, maxHits, Math.ceil(windowMs / 1000))
 }
 
-// Failed-login counter per account (see email_login). Only FAILED credential checks increment it.
-// Two counters (round-2 audit): a stranger must not be able to lock a customer out of their own account.
+// Login-attempt counters per account (see email_login). Two counters (round-2 audit, reworked in the verify round):
 //   • per (account + client network): 10 attempts block THAT network only — a stranger can lock only themselves out;
 //   • per account across all networks: a much higher botnet backstop (100 / 15 min) that caps online guessing for one account
-//     at ~100 tries per window while making a deliberate lock-out ten times more expensive.
+//     at 100 tries per window while making a deliberate lock-out ten times more expensive.
 const LOGIN_FAIL_MAX     = 10
 const LOGIN_FAIL_ANY_MAX = 100
 const LOGIN_FAIL_WINDOW  = 15 * 60
 const loginFailKey    = (email: string, ipKey: string) => `mw:rl:auth_login_fail:${email.toLowerCase()}:${ipKey}`
 const loginFailAnyKey = (email: string) => `mw:rl:auth_login_fail_any:${email.toLowerCase()}`
-
-function isCredentialFailure(status: number | undefined): boolean {
-  return status === 400 || status === 401 || status === 422
-}
 
 async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {
   const url = `${SUPABASE_URL}/auth/v1${path}`
@@ -211,6 +206,10 @@ function isSupabaseMailFailure(e: { status?: number; message?: string }): boolea
   return (e.status ?? 0) >= 500 && /sending|smtp|e-?mail|mailer/i.test(e.message || '')
 }
 
+// ONE answer for every address that is not signed in right away (new, unconfirmed, or already registered) — on the
+// Supabase path AND the SMTP-fallback path. A fresh object each time so nothing can be mutated between callers.
+const SIGNUP_GENERIC_OK = () => ok({ success: true, verification_sent: true })
+
 async function signupViaOwnMailer(email: string, password: string, fullName: string) {
   const SITE_URL = emailSiteUrl()   // finding F: a clean https origin only — never a preview / localhost value in the verification link
   const FRIENDLY = 'We created your account but could not send the verification e-mail right now. Please try again in a few minutes, or continue with Google.'
@@ -228,7 +227,11 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
     }
     if (!genRes.ok) {
       if (/already|registered|exists/i.test(`${gen.msg ?? ''} ${gen.error_code ?? ''}`)) {
-        return err(400, 'An account with this email already exists. Please login instead.')
+        // SECURITY (verify round, F-8): this used to answer 400 "already exists" while a new address got 200 — an
+        // enumeration oracle for every registered customer. The answer is now byte-identical to the new-address path;
+        // the real reason is only logged. (The registered customer gets no mail, exactly like the healthy Supabase path.)
+        logger.warn('[email_signup] fallback: address already registered — generic answer sent', { action: 'auth.signup.fallback_existing' })
+        return SIGNUP_GENERIC_OK()
       }
       captureError(new Error(`signup fallback: generate_link failed (${genRes.status})`), { action: 'auth.signup.fallback_generate_link', alert: true })
       return err(503, FRIENDLY)
@@ -256,7 +259,7 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
     }
     // SECURITY: nothing about any account is returned and no customer row is touched here — the address is not proven yet.
     // The customer row is created / linked on the first CONFIRMED login (syncCustomerProfile).
-    return ok({ success: true, verification_sent: true })
+    return SIGNUP_GENERIC_OK()
   } catch (e) {
     captureError(e, { action: 'auth.signup.fallback', alert: true })
     return err(503, FRIENDLY)
@@ -319,10 +322,7 @@ export async function POST(req: NextRequest) {
               || req.headers.get('x-real-ip'))
     const rateLimitKey = `${action}:${ip}`
     if (!await rateLimit(rateLimitKey)) {
-      return NextResponse.json(
-        { error: 'Too many attempts. Please wait a minute before trying again.' },
-        { status: 429, headers: { 'Retry-After': '60' } }
-      )
+      return fail(429, 'Too many attempts. Please wait a minute before trying again.', { 'Retry-After': '60' })
     }
   }
 
@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
         })
         return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
       }
-      return ok({ success: true, verification_sent: true })
+      return SIGNUP_GENERIC_OK()
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
       // ACC-025: Supabase could not send ITS e-mail (bad SMTP credentials) → alert ops, then use our own mailer.
@@ -368,7 +368,16 @@ export async function POST(req: NextRequest) {
         })
         return signupViaOwnMailer(email, password, resolvedName)
       }
-      return err(e2.status || 400, e2.message || 'Signup failed')
+      // SECURITY (F-8): GoTrue's message is never relayed. With e-mail confirmation OFF it says "User already registered"
+      // (422) for an existing address — the same oracle as above — so that case gets the generic 200 too. Any other
+      // rejection keeps its status but a fixed message (our own validation already ran, so there is nothing to explain).
+      if (/already|registered|exists/i.test(e2.message || '')) {
+        logger.warn('[email_signup] address already registered — generic answer sent', { action: 'auth.signup.existing', status: e2.status })
+        return SIGNUP_GENERIC_OK()
+      }
+      logger.warn('[email_signup] Supabase rejected the sign-up', { action: 'auth.signup.rejected', status: e2.status, message: e2.message })
+      const status = e2.status && e2.status >= 400 && e2.status < 500 ? e2.status : 400
+      return err(status, 'Signup failed. Please check your details and try again.')
     }
   }
 
@@ -382,16 +391,18 @@ export async function POST(req: NextRequest) {
     // consumed before the password was checked, so a stranger sending 10 bad logins for a victim's e-mail
     // locked the victim out). Generic wording — identical for real and non-existent accounts.
     const loginIp = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
-    // Per (account + network): an ATOMIC increment BEFORE the password is checked (checkRateLimitKv also works through the Postgres
-    // fallback when Upstash is not configured at runtime - a read-only "peek" is a no-op there, and N parallel guesses could all
-    // pass a check-then-increment). Counting every attempt is safe: it only ever limits the caller's own network. The account-wide
-    // backstop below counts only FAILED credential checks, so it cannot be used to lock a customer out cheaply.
+    // Both counters are ATOMIC increments BEFORE the password is checked, through checkRateLimitKv (Upstash, else the Postgres
+    // rate_limit_check RPC — so they work when the KV env is missing at runtime, which has been the live state).
+    //   • per (account + network), 10 / 15 min: only ever limits the caller's own network;
+    //   • per account across all networks, 100 / 15 min: the botnet backstop. VERIFY ROUND (F-9): this used to be a read-only
+    //     "peek" that is Upstash-only — without KV it always said "not blocked", so distributed guessing (one /64 per try) was
+    //     unbounded and GoTrue evaluated every password. It now counts every attempt up front and refuses the 101st. Trade-off,
+    //     accepted: a stranger needs 100 attempts in 15 minutes against ONE address to inconvenience its owner for 15 minutes
+    //     (ten times the per-network cost), versus an attacker otherwise getting unlimited tries.
     const withinNetworkQuota = await checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
-    if (!withinNetworkQuota || await peekRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX)) {
-      return NextResponse.json(
-        { error: 'Too many attempts. Please wait a few minutes before trying again.' },
-        { status: 429, headers: { 'Retry-After': '900' } },
-      )
+    const withinAccountQuota = await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
+    if (!withinNetworkQuota || !withinAccountQuota) {
+      return fail(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
     }
     try {
       const data = await sbAuth('/token?grant_type=password', { email, password })
@@ -405,15 +416,6 @@ export async function POST(req: NextRequest) {
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch (e: unknown) {
       const e2 = e as { status?: number; message?: string }
-      if (isCredentialFailure(e2.status)) {
-        const okAny = await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
-        if (!okAny) {
-          return NextResponse.json(
-            { error: 'Too many attempts. Please wait a few minutes before trying again.' },
-            { status: 429, headers: { 'Retry-After': '900' } },
-          )
-        }
-      }
       return err(e2.status || 401, e2.message || 'Invalid email or password')
     }
   }
@@ -701,7 +703,7 @@ export async function POST(req: NextRequest) {
         // API) treats 401 as "session expired" and signs the user out — so typing a wrong
         // CURRENT password logged the customer out of the page. The session is fine; the input
         // is wrong → 400 with a stable machine-readable code.
-        return NextResponse.json({ error: 'Current password is incorrect', code: 'wrong_current_password' }, { status: 400 })
+        return NextResponse.json({ error: 'Current password is incorrect', code: 'wrong_current_password' }, { status: 400, headers: PRIVATE_HEADERS })
       }
 
       // Step 3: update password via admin API (bypasses email confirmation)

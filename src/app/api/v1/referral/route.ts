@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
   if (!checkRateLimit(`referral_apply:${ip}`, 10, 60_000)) {
-    return NextResponse.json({ error: 'Too many attempts — please wait a minute.' }, { status: 429, headers: { 'Retry-After': '60' } })
+    return fail(429, 'Too many attempts — please wait a minute.', { 'Retry-After': '60' })
   }
 
   let token = getToken(req)

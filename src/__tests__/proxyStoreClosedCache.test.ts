@@ -66,6 +66,18 @@ describe('proxy store-closed cache', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  // VERIFY ROUND (L-9): the gate used to check `req.method === 'GET'` only, so a HEAD of a page while the store was
+  // closed answered 200 (no redirect) — a link checker / uptime probe saw an open store. HEAD is the same navigation.
+  it('also redirects a HEAD request for a page while the store is closed', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => storeOpenResponse('false'))
+    vi.stubGlobal('fetch', fetchMock)
+    const { proxy } = await loadProxy()
+    const head = await proxy(new NextRequest('https://pahadiroots.com/products/sea-buckthorn', { method: 'HEAD' }))
+    expect(head.status).toBeGreaterThanOrEqual(300)
+    expect(head.status).toBeLessThan(400)
+    expect(head.headers.get('location')).toContain('/maintenance')
+  })
+
   it('fails open on a network error and retries after the short failure TTL', async () => {
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new Error('network down'))

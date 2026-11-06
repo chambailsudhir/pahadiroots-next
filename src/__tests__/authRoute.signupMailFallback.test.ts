@@ -103,14 +103,50 @@ describe('email_signup — mail fallback (ACC-025)', () => {
     expect(urls().some(u => u.endsWith('/admin/generate_link'))).toBe(false)
   })
 
-  it('an already-registered address gets the normal "already exists" message, no mail', async () => {
+  // VERIFY ROUND (F-8): the fallback used to answer 400 "already exists" for a registered address while a new one got
+  // 200 — an enumeration oracle for every customer. Both now get the SAME 200 body; the real reason is only logged.
+  it('an already-registered address gets the identical generic 200 (no "already exists"), and no mail', async () => {
     generateLink = () => json(422, { msg: 'A user with this email address has already been registered', error_code: 'email_exists' })
     const { POST } = await import('@/app/api/auth/route')
     const res = await POST(req(SIGNUP))
 
-    expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/already exists/i)
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(JSON.parse(text)).toEqual({ success: true, verification_sent: true })
+    expect(text).not.toMatch(/already|exist|registered/i)
     expect(mocks.sendTransactionalEmail).not.toHaveBeenCalled()
+  })
+
+  it('fallback path: a NEW address and a REGISTERED address are indistinguishable from the answer (status, body, headers)', async () => {
+    const { POST } = await import('@/app/api/auth/route')
+    const fresh = await POST(req(SIGNUP))
+    generateLink = () => json(422, { msg: 'A user with this email address has already been registered', error_code: 'email_exists' })
+    const taken = await POST(req({ ...SIGNUP, email: 'taken@user.com' }))
+
+    expect(taken.status).toBe(fresh.status)
+    expect(await taken.text()).toBe(await fresh.text())
+    expect([...taken.headers.entries()].filter(([k]) => k !== 'date')).toEqual([...fresh.headers.entries()].filter(([k]) => k !== 'date'))
+  })
+
+  it('Supabase path: "User already registered" (auto-confirm projects) also gets the generic 200 — the message is never relayed', async () => {
+    fetchMock.mockImplementation(async (url: string) => url.endsWith('/auth/v1/signup') ? json(422, { msg: 'User already registered' }) : json(404, {}))
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(req(SIGNUP))
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, verification_sent: true })
+    expect(urls().some(u => u.endsWith('/admin/generate_link'))).toBe(false)
+  })
+
+  it('Supabase path: any other rejection keeps its 4xx status but never relays the upstream message', async () => {
+    fetchMock.mockImplementation(async (url: string) => url.endsWith('/auth/v1/signup') ? json(422, { msg: 'Database error finding user asha@internal (pool exhausted)' }) : json(404, {}))
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(req(SIGNUP))
+
+    expect(res.status).toBe(422)
+    const body = await res.json()
+    expect(body.error).not.toMatch(/pool|internal|Database/)
+    expect(body.error).toMatch(/Signup failed/)
   })
 
   it('503 with a friendly message when the verification mail can neither be sent nor queued', async () => {

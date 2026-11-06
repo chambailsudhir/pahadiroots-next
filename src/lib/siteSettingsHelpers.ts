@@ -90,6 +90,41 @@ export function stripServerOnlySettings<T extends object>(settings: T): T {
 }
 
 /**
+ * VERIFY ROUND (L-09): /checkout hands its settings to a 'use client' tree (CheckoutClient → useCheckoutPage, OrderSummary,
+ * pricingService, loyaltyCoins), so every key it receives is serialised into the page for every visitor. A blocklist
+ * (stripServerOnlySettings) only removes the keys someone remembered to list; this is the ALLOW-list of the keys that
+ * client code actually reads — anything else the admin adds to site_settings later never reaches the browser.
+ * Keep in sync with: useCheckoutPage.ts (cod / upi / cod_max_value / prepaid / min_order / whatsapp), pricingService.ts
+ * (shipping, prepaid, cod surcharge), OrderSummary.tsx + loyaltyCoins.ts (loyalty_*), CheckoutClient.tsx LIVE_SETTING_KEYS.
+ */
+export const CHECKOUT_CLIENT_SETTING_KEYS = [
+  'free_shipping_min',
+  'flat_shipping_charge',
+  'min_order_amount',
+  'whatsapp_number',
+  'prepaid_discount_pct',
+  'cod_surcharge_amount',
+  'cod_enabled',
+  'cod_max_value',
+  'upi_enabled',
+  'loyalty_enabled',
+  'loyalty_coins_per_order',
+  'loyalty_coin_step_rupees',
+  'loyalty_points_value',
+  'loyalty_points_label',
+  'loyalty_min_redeem',
+  'loyalty_max_redeem_pct',
+] as const
+
+/** The subset of `settings` the checkout client is allowed to see (see CHECKOUT_CLIENT_SETTING_KEYS). */
+export function settingsForCheckout<T extends object>(settings: T): T {
+  const src = settings as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of CHECKOUT_CLIENT_SETTING_KEYS) if (k in src) out[k] = src[k]
+  return out as T
+}
+
+/**
  * A social-profile link from settings, or '' when it must not be shown.
  * System audit (Oct 2026): footer links were written straight into href — a stored `javascript:` or `data:` value would have run
  * in the visitor's browser — and a BLANK admin field was replaced by a hard-coded guess (e.g. twitter.com/pahadiroots) so an icon

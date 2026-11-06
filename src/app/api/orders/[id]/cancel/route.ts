@@ -27,6 +27,9 @@ import {
   checkCsrf,
   checkRateLimitShared,
 } from '@/lib/api/serverUtils'
+// VERIFY ROUND (L-6): answers built here by hand (error bodies with a `code`) carry the same header as ok()/fail() — a
+// shared cache must never store a customer's answer. Local on purpose: route tests mock serverUtils wholesale.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
 import { cancelEligibility, CANCEL_REASONS, CANCEL_REASON_CODES } from '@/lib/orderCancellation'
 import { logOrderEvent } from '@/lib/services/orderService'
 import { sendTransactionalEmail } from '@/lib/server/email'
@@ -77,7 +80,7 @@ export async function POST(
 
     const verdict = cancelEligibility(order)
     if (!verdict.allowed) {
-      return NextResponse.json({ error: verdict.message, code: verdict.reason }, { status: 409 })
+      return NextResponse.json({ error: verdict.message, code: verdict.reason }, { status: 409, headers: PRIVATE_HEADERS })
     }
 
     // Single-winner conditional flip. The filter re-checks dispatch (no AWB, not shipped) so an AWB added by ops after
@@ -101,7 +104,7 @@ export async function POST(
       return NextResponse.json({
         error: 'This order can no longer be cancelled online — it may have just been packed. Please message us on WhatsApp.',
         code: 'contact_support',
-      }, { status: 409 })
+      }, { status: 409, headers: PRIVATE_HEADERS })
     }
 
     // ── Post-cancel bookkeeping (best-effort; the cancellation itself is already committed) ──

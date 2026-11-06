@@ -33,6 +33,9 @@ import {
   checkRateLimit,
   checkCsrf,
 } from '@/lib/api/serverUtils'
+// VERIFY ROUND (L-6): answers built here by hand (error bodies with a `code`) carry the same header as ok()/fail() — a
+// shared cache must never store a customer's answer. Local on purpose: route tests mock serverUtils wholesale.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
 
 const MAX_WISHLIST_SIZE = 200
 const MAX_BODY_BYTES    = 65_536
@@ -82,7 +85,7 @@ export async function PATCH(req: NextRequest) {
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
   if (!checkRateLimit(`wishlist_patch:${ip}`, 60, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests — please wait a moment.' }, { status: 429, headers: { 'Retry-After': '60' } })
+    return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 
   let token = getToken(req)
@@ -111,7 +114,7 @@ export async function PATCH(req: NextRequest) {
         // Previously the overflow was silently dropped and the request still reported success.
         return NextResponse.json(
           { error: `Your wishlist is full (max ${MAX_WISHLIST_SIZE} items)`, code: 'wishlist_full', wishlist: current },
-          { status: 409 },
+          { status: 409, headers: PRIVATE_HEADERS },   // carries the customer's wishlist — never cacheable by a shared cache
         )
       }
       if (JSON.stringify(merged) === JSON.stringify(current) && raw !== null) break          // nothing to write
@@ -204,10 +207,7 @@ export async function PUT(req: NextRequest) {
     'unknown'
   )
   if (!checkRateLimit(`wishlist_put:${ip}`, 60, 60_000)) {
-    return NextResponse.json(
-      { error: 'Too many requests — please wait a moment.' },
-      { status: 429, headers: { 'Retry-After': '60' } },
-    )
+    return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 
   let token = getToken(req)

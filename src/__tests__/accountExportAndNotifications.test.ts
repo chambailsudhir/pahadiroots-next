@@ -86,6 +86,33 @@ describe('GET /api/account/data-export', () => {
     expect(raw).not.toContain('admin_notes')
   })
 
+  // VERIFY ROUND (L-8): returns.photo_urls holds bare object paths; the export mints 15-minute links at read time.
+  // Rows written before the change hold year-long links and are passed through unchanged.
+  it('return photos: a stored object path becomes a fresh 15-minute signed link; a legacy full link passes through', async () => {
+    const legacy = 'https://example.supabase.co/storage/v1/object/sign/return-evidence/returns/6/1-old.jpg?token=year-long'
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [CUSTOMER]
+      if (path.startsWith('/rest/v1/orders?')) return [{ id: 7, order_number: 'ORD-1' }]
+      if (path.startsWith('/rest/v1/returns?')) return [{ id: 'r1', order_number: 'ORD-1', status: 'requested', photo_urls: ['returns/7/1-a.jpg', legacy] }]
+      return []
+    })
+    const storageFetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ signedURL: '/object/sign/return-evidence/returns/7/1-a.jpg?token=fresh' }) }))
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('SUPABASE_SERVICE_KEY', 'svc')
+    vi.stubGlobal('fetch', storageFetch)
+    try {
+      const body = JSON.parse(await (await exportReq()).text())
+      expect(body.returns[0].photo_urls).toEqual([
+        'https://example.supabase.co/storage/v1/object/sign/return-evidence/returns/7/1-a.jpg?token=fresh',
+        legacy,
+      ])
+      expect(storageFetch).toHaveBeenCalledTimes(1)
+      const [url, init] = storageFetch.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('https://example.supabase.co/storage/v1/object/sign/return-evidence/returns/7/1-a.jpg')
+      expect(JSON.parse(init.body as string)).toEqual({ expiresIn: 15 * 60 })
+    } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs() }
+  })
+
   it('pages past the 1000-row PostgREST cap', async () => {
     let page = 0
     mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {

@@ -22,6 +22,9 @@ import {
   checkRateLimitShared,
   checkCsrf,
 } from '@/lib/api/serverUtils'
+// VERIFY ROUND (L-6): answers built here by hand (error bodies with a `code`) carry the same header as ok()/fail() — a
+// shared cache must never store a customer's answer. Local on purpose: route tests mock serverUtils wholesale.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
 import { INDIA_STATES, ADDRESS_LABELS } from '@/lib/account/constants'
 import { addressesEtag, addressesContentKey, ADDRESS_SELECT } from '@/lib/server/addressEtag'
 import { hasUnsafeTextChars } from '@/lib/server/sanitize'
@@ -171,10 +174,7 @@ export async function POST(req: NextRequest) {
     'unknown'
   )
   if (!checkRateLimit(`profile_post:${ip}`, 20, 60_000)) {
-    return NextResponse.json(
-      { error: 'Too many requests — please wait a moment before trying again.' },
-      { status: 429, headers: { 'Retry-After': '60' } },
-    )
+    return fail(429, 'Too many requests — please wait a moment before trying again.', { 'Retry-After': '60' })
   }
 
   let token = getToken(req)
@@ -194,10 +194,7 @@ export async function POST(req: NextRequest) {
     // AUDIT (rate limits): the in-process IP limiter above is per serverless instance. The real, cross-instance
     // limit is per ACCOUNT (shared KV/Postgres-backed).
     if (!await checkRateLimitShared(`profile_post_user:${user.id}`, 20, 60_000)) {
-      return NextResponse.json(
-        { error: 'Too many requests — please wait a moment before trying again.' },
-        { status: 429, headers: { 'Retry-After': '60' } },
-      )
+      return fail(429, 'Too many requests — please wait a moment before trying again.', { 'Retry-After': '60' })
     }
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')
@@ -226,7 +223,7 @@ export async function POST(req: NextRequest) {
       const changed409 = () => NextResponse.json({
         error: 'Your saved addresses were changed in another tab or device. Please reload this page to see the latest list, then try again.',
         code:  'addresses_changed',
-      }, { status: 409 })
+      }, { status: 409, headers: PRIVATE_HEADERS })
 
       let rows: Array<Record<string, unknown>> = []
       if (addresses.length > 0) {
@@ -379,10 +376,7 @@ export async function POST(req: NextRequest) {
         const okUser = await checkRateLimitShared(`profile_phone_user:${user.id}`, 5, 60 * 60_000)
         const okIp   = await checkRateLimitShared(`profile_phone_ip:${ip}`, 20, 60 * 60_000)
         if (!okUser || !okIp) {
-          return NextResponse.json(
-            { error: 'Too many mobile-number changes — please try again later.' },
-            { status: 429, headers: { 'Retry-After': '3600' } },
-          )
+          return fail(429, 'Too many mobile-number changes — please try again later.', { 'Retry-After': '3600' })
         }
       }
     }

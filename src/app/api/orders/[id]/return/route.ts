@@ -11,8 +11,9 @@
 //  ✅ photo_paths: object paths from the sibling /return/upload-url route; only
 //     accepted if they sit under this order's own returns/<id>/ prefix of the
 //     PRIVATE return-evidence bucket, and only kept if the object exists
-//     (signing it proves that). They are stored as signed read links in
-//     returns.photo_urls — see lib/server/returnEvidence.ts (ACC-051)
+//     (signing it proves that). The bare object paths are stored in
+//     returns.photo_urls; a short-lived read link is minted whenever they are
+//     viewed — see lib/server/returnEvidence.ts (ACC-051, L-8)
 //  ✅ Line-item aware: when an order has >1 item, the client identifies
 //     which one via variant_id/product_id (or order_item_id); server
 //     re-verifies it actually belongs to this order against order_items
@@ -51,7 +52,7 @@
 //  report) — a DB-level fix, not something this route needed to change.
 // ─────────────────────────────────────────────────────────────
 
-import { signEvidenceLinks } from '@/lib/server/returnEvidence'
+import { verifyEvidencePaths } from '@/lib/server/returnEvidence'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ok, fail,
@@ -112,7 +113,7 @@ export async function POST(
   let quantity:    number | null          = null
   let resolution:  'refund' | 'replace'   = 'refund'
   let photoPaths:  string[]               = []
-  let photoUrls:   string[]               = []     // signed read links, filled in after the ownership check
+  let photoUrls:   string[]               = []     // verified object paths, filled in after the ownership check
   try {
     const body  = await req.json()
     reason      = (body?.reason       ?? '').trim()
@@ -132,8 +133,8 @@ export async function POST(
     }
     if (body?.resolution === 'replace') resolution = 'replace'
     // Photo evidence (ACC-051): the browser sends the object PATHS it was given by /return/upload-url, never URLs. Only
-    // paths under this order's own returns/<id>/ prefix of the PRIVATE return-evidence bucket are accepted; they are turned
-    // into signed read links below, after the customer has been authenticated and the order ownership checked.
+    // paths under this order's own returns/<id>/ prefix of the PRIVATE return-evidence bucket are accepted; they are verified
+    // against storage below, after the customer has been authenticated and the order ownership checked.
     if (Array.isArray(body?.photo_paths)) {
       const pathRe = new RegExp(`^returns/${id}/[0-9]+-[A-Za-z0-9._-]{1,200}$`)
       photoPaths = [...new Set<string>(body.photo_paths.filter((u: unknown): u is string => typeof u === 'string' && pathRe.test(u) && !u.includes('..')))].slice(0, 4)
@@ -311,10 +312,10 @@ export async function POST(
       return fail(409, 'A return request is already in progress for this item')
     }
 
-    // Photo evidence → signed read links (only now: authenticated, and the order is this customer's). A path that does not
-    // exist in the private bucket cannot be signed and is silently dropped.
+    // Photo evidence → verified object paths (only now: authenticated, and the order is this customer's). A path that does
+    // not exist in the private bucket cannot be signed and is silently dropped. Read links are minted on view (L-8).
     if (photoPaths.length > 0) {
-      photoUrls = await signEvidenceLinks(photoPaths, { url: process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey: process.env.SUPABASE_SERVICE_KEY! })
+      photoUrls = await verifyEvidencePaths(photoPaths, { url: process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey: process.env.SUPABASE_SERVICE_KEY! })
     }
 
     // customer_name — matches the field admin's own return-creation flow

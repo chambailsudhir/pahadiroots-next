@@ -8,7 +8,7 @@ import { ACTIVE_STATUSES, ORDER_STATUS_VALUES } from '@/lib/account/constants'
 
 const mocks = vi.hoisted(() => ({
   sbAdmin: vi.fn(), sbAdminCount: vi.fn(), sbAuth: vi.fn(), getToken: vi.fn(), tryRefresh: vi.fn(),
-  syncCustomerProfile: vi.fn(), applyNewCookies: vi.fn(), checkCsrf: vi.fn(), signEvidenceLinks: vi.fn(),
+  syncCustomerProfile: vi.fn(), applyNewCookies: vi.fn(), checkCsrf: vi.fn(), verifyEvidencePaths: vi.fn(),
   checkRateLimitKv: vi.fn(),
 }))
 vi.mock('@/lib/api/serverUtils', async () => {
@@ -21,7 +21,7 @@ vi.mock('@/lib/api/serverUtils', async () => {
     checkCsrf: mocks.checkCsrf,
   }
 })
-vi.mock('@/lib/server/returnEvidence', () => ({ signEvidenceLinks: mocks.signEvidenceLinks }))
+vi.mock('@/lib/server/returnEvidence', () => ({ verifyEvidencePaths: mocks.verifyEvidencePaths }))
 vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: mocks.checkRateLimitKv }))
 
 const ORDER = { id: 501, order_status: 'delivered', delivered_at: new Date().toISOString(), updated_at: new Date().toISOString(), order_number: 'PR-501' }
@@ -55,7 +55,7 @@ beforeEach(() => {
   order = ORDER; returnsRows = []; insertError = null
   mocks.checkCsrf.mockReturnValue(null); mocks.getToken.mockReturnValue('t'); mocks.tryRefresh.mockResolvedValue(null)
   mocks.sbAuth.mockResolvedValue({ id: 'u' }); mocks.syncCustomerProfile.mockResolvedValue({ id: 'c1' })
-  mocks.signEvidenceLinks.mockResolvedValue([]); mocks.checkRateLimitKv.mockResolvedValue(true)
+  mocks.verifyEvidencePaths.mockResolvedValue([]); mocks.checkRateLimitKv.mockResolvedValue(true)
   wireDefault()
 })
 
@@ -158,11 +158,50 @@ describe('return route — window and ordering', () => {
     expect((await post({ reason: 'damaged', photo_paths: paths })).status).toBe(422)
     order = { ...ORDER, delivered_at: new Date(Date.now() - 10 * 86_400_000).toISOString() }
     expect((await post({ reason: 'damaged', photo_paths: paths })).status).toBe(422)
-    expect(mocks.signEvidenceLinks).not.toHaveBeenCalled()
+    expect(mocks.verifyEvidencePaths).not.toHaveBeenCalled()
   })
-  it('signs photos for a valid return', async () => {
+  it('verifies photos for a valid return and stores the bare object PATHS (links are minted on view — L-8)', async () => {
+    mocks.verifyEvidencePaths.mockResolvedValue(['returns/501/1-a.jpg'])
     await post({ reason: 'damaged', photo_paths: ['returns/501/1-a.jpg'] })
-    expect(mocks.signEvidenceLinks).toHaveBeenCalledTimes(1)
+    expect(mocks.verifyEvidencePaths).toHaveBeenCalledTimes(1)
+    expect((inserts()[0][2] as { photo_urls: unknown }).photo_urls).toEqual(['returns/501/1-a.jpg'])
+  })
+})
+
+// VERIFY ROUND (R2-06): the window logic at return/route.ts (item resolution first, window after) had no tests for
+// a borrowed variant_id, a replacement still in transit (negative elapsed) or the closed window after a replacement.
+describe('return route — replacement window uses the DB item, never the client variant (R2-06)', () => {
+  const HOUR = 3_600_000
+  const oldDelivery = { ...ORDER, delivered_at: new Date(Date.now() - 30 * 86_400_000).toISOString() }   // original delivery long ago
+  const json = async (r: Response) => ({ status: r.status, body: await r.json() })
+
+  it('a borrowed variant_id (the REPLACED item, sent while returning a different item) is ignored — the DB row for the requested item wins → window closed', async () => {
+    order = oldDelivery
+    // variant 11 was replaced yesterday; the customer asks for order_item 2 (variant 12) but sends variant_id 11 alongside
+    returnsRows = [{ variant_id: 11, replacement_shipped_at: new Date(Date.now() - 24 * HOUR).toISOString(), status: 'replaced' }]
+    const { status, body } = await json(await post({ reason: 'damaged', order_item_id: 2, variant_id: 11 }))
+    expect(status).toBe(422)
+    expect(body.error).toMatch(/Return window has closed/)
+    expect(inserts()).toHaveLength(0)
+  })
+  it('negative elapsed time (replacement shipped, not yet expected to arrive) → 422 "still on its way"', async () => {
+    order = oldDelivery
+    returnsRows = [{ variant_id: 11, replacement_shipped_at: new Date(Date.now() - 1 * HOUR).toISOString(), status: 'replaced' }]
+    const { status, body } = await json(await post({ reason: 'damaged', variant_id: 11 }))
+    expect(status).toBe(422)
+    expect(body.error).toMatch(/still on its way/)
+    expect(inserts()).toHaveLength(0)
+  })
+  it('the replacement opens its own 48 h window: inside → accepted; more than 48 h after it arrived → 422 window closed', async () => {
+    const { REPLACEMENT_TRANSIT_DAYS } = await import('@/lib/account/constants')
+    order = oldDelivery
+    const arrivedHoursAgo = (h: number) => new Date(Date.now() - (REPLACEMENT_TRANSIT_DAYS * 24 + h) * HOUR).toISOString()
+    returnsRows = [{ variant_id: 11, replacement_shipped_at: arrivedHoursAgo(47), status: 'replaced' }]
+    expect((await post({ reason: 'damaged', variant_id: 11 })).status).toBe(200)
+    returnsRows = [{ variant_id: 11, replacement_shipped_at: arrivedHoursAgo(49), status: 'replaced' }]
+    const { status, body } = await json(await post({ reason: 'damaged', variant_id: 11 }))
+    expect(status).toBe(422)
+    expect(body.error).toMatch(/48 hours from delivery of your replacement/)
   })
 })
 
