@@ -102,6 +102,8 @@ interface CommittedOrder {
   id: number | string; order_number: string; confirmation_token: string | null
   total_amount: number; subtotal: number; shipping_charge: number; cod_surcharge: number; coupon_discount: number
   customer_id: number | string | null
+  /** Stored GST (written by the DB trigger) and the coins actually charged — the e-mail must show the same figures as the invoice. */
+  tax: number | null; loyalty_points_redeemed: number | null
 }
 
 async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrder | null> {
@@ -109,7 +111,7 @@ async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrd
   try {
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token,total_amount,subtotal,shipping_charge,cod_surcharge,coupon_discount,customer_id&limit=1`,
+      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token,total_amount,subtotal,shipping_charge,cod_surcharge,coupon_discount,customer_id,tax,loyalty_points_redeemed&limit=1`,
     )
     const r = Array.isArray(rows) ? rows[0] : null
     if (!r) return null
@@ -118,6 +120,8 @@ async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrd
       total_amount: Number(r.total_amount) || 0, subtotal: Number(r.subtotal) || 0,
       shipping_charge: Number(r.shipping_charge) || 0, cod_surcharge: Number(r.cod_surcharge) || 0,
       coupon_discount: Number(r.coupon_discount) || 0, customer_id: r.customer_id ?? null,
+      tax: r.tax != null && Number.isFinite(Number(r.tax)) ? Number(r.tax) : null,
+      loyalty_points_redeemed: r.loyalty_points_redeemed != null && Number.isFinite(Number(r.loyalty_points_redeemed)) ? Number(r.loyalty_points_redeemed) : null,
     }
   } catch {
     return null
@@ -161,6 +165,7 @@ async function finalizeRecoveredOrder(
       total_amount: committed.total_amount, total: committed.total_amount, status: 'confirmed',
       subtotal: committed.subtotal, shippingCharge: committed.shipping_charge, codSurcharge: committed.cod_surcharge,
       discount: committed.coupon_discount, cartItems, confirmationToken: committed.confirmation_token,
+      gstIncluded: committed.tax ?? undefined, loyaltyPointsRedeemed: committed.loyalty_points_redeemed ?? undefined,
     }, false, committed.customer_id != null ? String(committed.customer_id) : null)
   } catch (e) {
     captureError(e, { action: 'orders.timeout_recovery_finalize', order_id: committed.id, alert: true })
@@ -316,6 +321,15 @@ export async function POST(req: NextRequest) {
     // (award/redeem skip an order that already has an 'earn'/'redeem' row) and the recovery path guards the e-mails
     // with an order_events marker, so running it twice can never double-pay points or double-send mail.
     const finalizeOrder = async (order: CreatedOrder, alreadyExists: boolean, customerId: string | null): Promise<void> => {
+      // Verification F-1 (Nov 2026): a request that timed out BEFORE the commit landed answered 503; the customer's retry then hit this
+      // branch with alreadyExists=true and every post-order step (coupon-redeem, customer + owner e-mail) was skipped forever. The first
+      // successful request now writes the `post_order_finalized` marker (below), so a replay without that marker is exactly the
+      // "committed but never finalised" case and is finished here — once — through the same recovery path the timeout catch uses.
+      if (alreadyExists) {
+        const committed = await findCommittedOrder(d.idempotency_key)
+        if (committed) await finalizeRecoveredOrder(committed, finalizeOrder)
+        return
+      }
       // ── Loyalty redemption (COD only — Razorpay handled at verify_payment) ──
       if (!alreadyExists && d.payment_method === 'cod') {
         // customerId comes directly from createOrder() return value — no need for
@@ -366,6 +380,12 @@ export async function POST(req: NextRequest) {
             const coinsEarned = authenticatedCustomerId != null && settings.loyalty_enabled !== 'false'
               ? coinsForOrderValue(order.total_amount, settings)   // announced as "up to", paid on delivery
               : 0
+            // Verification F-6: orders.tax is computed by a database trigger (paise-exact, coupon-net, fee GST); the app's whole-rupee
+            // figure could differ by up to ₹0.50 from the invoice. Read the stored figure back for the e-mail; fall back if unreadable.
+            const storedTax = order.gstIncluded != null && Number.isFinite(Number(order.gstIncluded)) && String(order.id).length > 0
+              ? await sbAdmin('GET', `/rest/v1/orders?id=eq.${encodeURIComponent(String(order.id))}&select=tax&limit=1`)
+                  .then((rows: Array<{ tax?: unknown }> | null) => Number(rows?.[0]?.tax)).catch(() => Number.NaN)
+              : Number.NaN
             const emailHtml = buildOrderEmail({
               kind: d.payment_method === 'cod' ? 'cod' : 'paid',
               orderNumber: order.order_number,
@@ -377,7 +397,7 @@ export async function POST(req: NextRequest) {
               loyaltyDiscount: order.loyaltyDiscount ?? 0,
               shipping: order.shippingCharge ?? 0,
               codSurcharge: order.codSurcharge ?? 0,
-              gstIncluded: order.gstIncluded ?? 0,
+              gstIncluded: Number.isFinite(storedTax) ? storedTax : (order.gstIncluded ?? 0),
               total: order.total_amount,
               address: { name, line1: flat, line2: area, city, state, pincode: a.pincode, phone: a.phone },
               deliveryText: DELIVERY_WINDOWS_TEXT,
@@ -404,6 +424,12 @@ export async function POST(req: NextRequest) {
 
         // Notify admin
         const adminTo = adminNotifyAddress(settings)
+        if (!adminTo) {
+          // Verification L-4: silently skipping is how the owner once received no new-order mail for weeks. Alert, every order.
+          captureError(new Error('No owner notification address: set site_settings.admin_notify_email or the ADMIN_EMAIL env var'), {
+            action: 'orders.email.admin.no_recipient', order_id: order.id, alert: true,
+          })
+        }
         if (adminTo && !alreadyExists) {
           try {
             // Where the order came from (city + device, no IP) is recorded once and read back by the owner mail, which is built from
@@ -475,6 +501,9 @@ export async function POST(req: NextRequest) {
     })())
 
     await finalizeOrder(order, alreadyExists, customerId)
+    // F-1: the marker the replay / recovery paths check. Written after the steps were STARTED (the e-mails run in after()), never
+    // before createOrder returned, so a key whose first request died inside createOrder still finalises on retry.
+    if (!alreadyExists) await logOrderEvent(order.id, 'post_order_finalized', 'system', { via: 'request' }).catch(() => null)
     // OPS-001: housekeeping (expire abandoned online orders, retry failed e-mails) — throttled, after the response, never fatal.
     const sweepOrigin = new URL(req.url).origin
     after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))

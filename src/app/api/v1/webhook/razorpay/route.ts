@@ -212,7 +212,7 @@ export async function POST(req: Request) {
 
       const { data: order, error: orderLookupErr } = await db
         .from('orders')
-        .select('id, order_number, payment_status, payment_method, payment_id, total_amount, customer_id, loyalty_points_redeemed')
+        .select('id, order_number, payment_status, payment_method, payment_id, total_amount, customer_id, loyalty_points_redeemed, created_at')
         .eq('id', dbOrderId)
         .single()
       // BUG FIX (Oct 2026 audit): a database ERROR here used to look identical to "no such
@@ -265,7 +265,9 @@ export async function POST(req: Request) {
             const paidForMs = fresh?.updated_at ? Date.now() - Date.parse(String(fresh.updated_at)) : 0
             // only for the SAME payment that confirmed this order (an order marked paid some other way — admin, or a different
             // payment id — must not get coins / e-mails just because a capture event arrived)
-            if (paidWith === paymentId && (!verified || emailsMissing) && paidForMs > 90_000) {
+            // Verification L-3: never re-drive an order paid long ago (a late duplicate delivery for a pre-marker order must not mail it).
+            const REDRIVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+            if (paidWith === paymentId && (!verified || emailsMissing) && paidForMs > 90_000 && paidForMs < REDRIVE_MAX_AGE_MS) {
               await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId, reason: verified ? 'emails_missing' : 'no_marker' })
               const settings = await getFreshSiteSettings()
               await runPaidSideEffects(db, {
@@ -304,6 +306,13 @@ export async function POST(req: Request) {
           await logOrderEvent(order.id, 'payment_captured_unbound', 'razorpay', {
             razorpay_payment_id: paymentId, reason: problem, paid_paise: payment.amount, expected_paise: expectedPaise,
           })
+          // Verification L-1: a capture can arrive a few hundred ms BEFORE create_payment stored the Razorpay order id on our row.
+          // Acknowledging that with 200 left the customer at "Confirming your payment" until the next sweep (10 min+). For a brand-new
+          // Razorpay order, answer 500 instead so Razorpay retries (seconds later the id is stored and the capture binds normally).
+          const orderAgeMs = order.created_at ? Date.now() - Date.parse(String(order.created_at)) : Number.POSITIVE_INFINITY
+          if (problem === 'no_stored_razorpay_order_id' && order.payment_method === 'razorpay' && orderAgeMs < 2 * 60_000) {
+            throw new Error('payment.captured arrived before the Razorpay order id was stored — asking Razorpay to retry')
+          }
         } else {
           // MONEY FIRST: record the captured payment before flipping the order to paid. A failure
           // throws, the outer catch returns 500 and Razorpay retries this event.

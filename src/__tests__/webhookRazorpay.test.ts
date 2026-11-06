@@ -455,6 +455,16 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     expect(mockAward).not.toHaveBeenCalled()
   })
 
+  // Verification L-3: a late duplicate delivery for an order paid long ago (before markers existed) must never trigger a first-time mail.
+  it('does NOT re-drive an order that was paid more than 7 days ago, even without any marker', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = []
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+  })
+
   // PAY-DUP (Nov 2026 audit): a DIFFERENT payment captured for an order that is already paid = the customer was charged twice.
   it('flags a second, different payment captured on an already-paid order (double charge) and never re-confirms or re-awards', async () => {
     mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_first' }
@@ -751,6 +761,21 @@ describe('POST /webhook/razorpay — payment.captured is bound to our order (aud
 
   it('a capture against an order with no stored Razorpay order id is held', async () => {
     await expectHeld({ ...PAYABLE, payment_id: null }, makeEvent({ dbOrderId: PAYABLE.id }), 'no_stored_razorpay_order_id')
+  })
+
+  // Verification L-1: the capture can beat create_payment's UPDATE of our payment_id by a few hundred ms. For a brand-new order
+  // answer 500 so Razorpay retries (seconds later the id is stored); an OLD order with no id is still held for review.
+  it('a capture for a BRAND-NEW order with no stored Razorpay order id is answered 500 so Razorpay retries', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, payment_id: null, created_at: new Date().toISOString() }
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id })))
+    expect(res.status).toBe(500)
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith(PAYABLE.id, 'payment_captured_unbound', 'razorpay', expect.objectContaining({ reason: 'no_stored_razorpay_order_id' }))
+  })
+
+  it('…but an order created long ago with no stored id is held with 200 (manual review, no retry storm)', async () => {
+    await expectHeld({ ...PAYABLE, payment_id: null, created_at: new Date(Date.now() - 60 * 60_000).toISOString() }, makeEvent({ dbOrderId: PAYABLE.id }), 'no_stored_razorpay_order_id')
   })
 })
 

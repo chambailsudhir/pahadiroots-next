@@ -266,13 +266,18 @@ export async function runPaidSideEffects(
           context: { order_id: order.id, order_number: order.order_number },
         })
         // Marker only once Resend has it (sent, or dead-lettered for the retry sweep) — never before.
-        if (r?.sent || r?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_ADMIN_SENT, 'system', {}).catch(() => null)
+        if (r?.sent || r?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_ADMIN_SENT, 'system', {}).catch(e => captureError(e, { action: 'payments.email.marker_write_failed', order_id: order.id, marker: PAID_EMAIL_ADMIN_SENT, alert: true }))
       } catch (e) {
         logger.error('payments: admin notification failed', { action: 'payments.email.admin', error: e instanceof Error ? e.message : String(e) })
       }
     })
   } else {
-    // No owner address configured: nothing to send, so record it (a re-drive must not wait for an e-mail that will never exist).
+    // No owner address configured: nothing to send, so record it (a re-drive must not wait for an e-mail that will never exist) —
+    // and ALERT (verification L-4): a blank setting plus a missing ADMIN_EMAIL env used to be silent, which is exactly how the owner
+    // once went weeks without a single new-order mail.
+    captureError(new Error('No owner notification address: set site_settings.admin_notify_email or the ADMIN_EMAIL env var'), {
+      action: 'payments.email.admin.no_recipient', order_id: order.id, alert: true,
+    })
     defer(async () => { if (!(await hasOrderEvent(db, order.id, PAID_EMAIL_ADMIN_SENT))) await logOrderEvent(order.id, PAID_EMAIL_ADMIN_SENT, 'system', { skipped: 'no_recipient' }).catch(() => null) })
   }
 
@@ -356,7 +361,8 @@ export async function runPaidSideEffects(
           }),
           context: { order_id: order.id, order_number: order.order_number },
         })
-        if (sentRes?.sent || sentRes?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_CUSTOMER_SENT, 'system', {}).catch(() => null)
+        // Verification L-5: a swallowed marker failure meant a later duplicate webhook would re-send this mail; now it is at least alerted.
+        if (sentRes?.sent || sentRes?.deadLettered) await logOrderEvent(order.id, PAID_EMAIL_CUSTOMER_SENT, 'system', {}).catch(e => captureError(e, { action: 'payments.email.marker_write_failed', order_id: order.id, marker: PAID_EMAIL_CUSTOMER_SENT, alert: true }))
       } else {
         // Nobody to mail: record that, so a re-drive does not keep trying.
         await logOrderEvent(order.id, PAID_EMAIL_CUSTOMER_SENT, 'system', { skipped: 'no_recipient' }).catch(() => null)
