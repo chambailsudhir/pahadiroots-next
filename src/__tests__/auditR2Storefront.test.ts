@@ -101,8 +101,9 @@ describe('SF-2 legacy create_return ignores a customer-chosen refund', () => {
   })
 })
 
-describe('SF-3 / ACC-051 return photos: private bucket, only this order\'s own object paths, stored as signed links', () => {
-  it('accepts only this order\'s returns/<id>/ paths, signs them, and drops URLs, look-alikes, other orders\' paths and missing objects', async () => {
+// VERIFY ROUND (L-8): the verified object PATH is what gets stored (a read link is minted on view), no longer a year-long signed link.
+describe('SF-3 / ACC-051 return photos: private bucket, only this order\'s own object paths, stored as verified paths', () => {
+  it('accepts only this order\'s returns/<id>/ paths, verifies them against storage, and drops URLs, look-alikes, other orders\' paths and missing objects', async () => {
     let inserted: any = null
     const signed: string[] = []
     mocks.sbAdmin.mockImplementation(async (m: string, p: string, b?: any) => {
@@ -134,7 +135,7 @@ describe('SF-3 / ACC-051 return photos: private bucket, only this order\'s own o
     })
     const res = await POST(req, { params: Promise.resolve({ id: '501' }) })
     expect(res.status).toBe(200)
-    expect(inserted.photo_urls).toEqual([`https://proj.supabase.co/storage/v1/object/sign/return-evidence/${good}?token=T`])
+    expect(inserted.photo_urls).toEqual([good])                                   // bare path, never a token
     expect(signed).toEqual([good, 'returns/501/2-missing.jpg'])                  // nothing else was even offered to storage
     vi.unstubAllGlobals()
   })

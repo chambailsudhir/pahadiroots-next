@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
+import { evidenceReadLinks } from '@/lib/server/returnEvidence'
 import {
   ok, fail,
   sbAuth, sbAdmin,
@@ -146,7 +147,11 @@ export async function GET(req: NextRequest) {
         transactions: loyaltyTransactions,
       } : null,
       wishlist_product_ids: Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => w.product_id) : [],
-      returns: returnsRows,
+      // Return photos: stored as object paths of the private bucket; each export mints links that live 15 minutes (L-8).
+      returns: await Promise.all(returnsRows.map(async r => ({
+        ...r,
+        photo_urls: await evidenceReadLinks(r.photo_urls, { url: process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey: process.env.SUPABASE_SERVICE_KEY! }),
+      }))),
       reviews: {
         note: 'Product reviews are public once approved and show your first name and last initial. Reviews written before verified-purchase reviews were introduced are not linked to your account and cannot be listed here automatically. If you delete your account your reviews stay (rating and text) under the name Anonymous customer. Contact support to find or remove a review you wrote.',
       },

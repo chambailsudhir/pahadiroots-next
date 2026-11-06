@@ -79,10 +79,7 @@ export async function POST(req: NextRequest) {
     'unknown'
   )
   if (!checkRateLimit(`notif_post:${ip}`, 30, 60_000)) {
-    return NextResponse.json(
-      { error: 'Too many requests — please wait a moment.' },
-      { status: 429, headers: { 'Retry-After': '60' } },
-    )
+    return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 
   let token    = getToken(req)
@@ -112,10 +109,7 @@ export async function POST(req: NextRequest) {
     const user    = await sbAuth('/user', null, token!)
     // Cross-instance limit per account (the IP limiter above is per serverless instance only).
     if (!await checkRateLimitShared(`notif_post_user:${user.id}`, 30, 60_000)) {
-      return NextResponse.json(
-        { error: 'Too many requests — please wait a moment.' },
-        { status: 429, headers: { 'Retry-After': '60' } },
-      )
+      return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
     }
     const profile = await syncCustomerProfile(user)
     if (!profile) return fail(404, 'Profile not found')

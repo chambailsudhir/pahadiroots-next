@@ -36,11 +36,13 @@ import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh,
-  checkRateLimit,
   checkRateLimitShared,
   checkCsrf,
   applyNewCookies,
 } from '@/lib/api/serverUtils'
+// VERIFY ROUND (L-6): answers built here by hand (error bodies with a `code`) carry the same header as ok()/fail() — a
+// shared cache must never store a customer's answer. Local on purpose: route tests mock serverUtils wholesale.
+const PRIVATE_HEADERS = { 'Cache-Control': 'private, no-store' } as const
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 import { brandedEmail } from '@/lib/server/emailShell'
 import { emailSafeHtml } from '@/lib/server/emailSafeHtml'
@@ -187,7 +189,8 @@ export async function DELETE(req: NextRequest) {
     req.headers.get('x-real-ip') ||
     'unknown'
   )
-  if (!checkRateLimit(`account_delete:${ip}`, 3, 60 * 60_000)) {
+  // VERIFY ROUND (L-7): shared (KV / Postgres) limiter like export and profile — the in-process one was per serverless instance.
+  if (!await checkRateLimitShared(`account_delete:${ip}`, 3, 60 * 60_000)) {
     return fail(429, 'Too many requests — please wait before trying again.', { 'Retry-After': '3600' })
   }
 
@@ -220,7 +223,7 @@ export async function DELETE(req: NextRequest) {
 
     if (hasPassword) {
       if (typeof body.password !== 'string' || body.password.length === 0) {
-        return NextResponse.json({ error: 'Please enter your password to confirm deletion.', code: 'password_required' }, { status: 403 })
+        return NextResponse.json({ error: 'Please enter your password to confirm deletion.', code: 'password_required' }, { status: 403, headers: PRIVATE_HEADERS })
       }
       // Throttle password guesses made through this endpoint (per account, shared across instances).
       if (!await checkRateLimitShared(`account_delete_pw:${userId}`, 5, 15 * 60_000)) {
@@ -229,7 +232,7 @@ export async function DELETE(req: NextRequest) {
       try {
         await sbAuth('/token?grant_type=password', { email: user.email, password: body.password })
       } catch {
-        return NextResponse.json({ error: 'That password is incorrect.', code: 'reauth_failed' }, { status: 403 })
+        return NextResponse.json({ error: 'That password is incorrect.', code: 'reauth_failed' }, { status: 403, headers: PRIVATE_HEADERS })
       }
     } else {
       const lastSignIn = Date.parse(String(user.last_sign_in_at ?? ''))
@@ -238,7 +241,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({
           error: 'For your security, please sign out, sign in again with Google, and retry within 15 minutes.',
           code:  'reauth_required',
-        }, { status: 403 })
+        }, { status: 403, headers: PRIVATE_HEADERS })
       }
     }
 
@@ -279,7 +282,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({
           error: 'You still have an order, return or refund in progress. We need your delivery details until it is completed, so your account cannot be deleted yet. Please wait until your open orders are delivered or cancelled, or contact support on WhatsApp and we will help.',
           code:  'open_orders',
-        }, { status: 409 })
+        }, { status: 409, headers: PRIVATE_HEADERS })
       }
 
       // All of this customer's order ids (paged — PostgREST caps a response at 1000 rows).
@@ -298,7 +301,7 @@ export async function DELETE(req: NextRequest) {
           return NextResponse.json({
             error: 'You still have a return or refund in progress. We need your details until it is completed, so your account cannot be deleted yet. Please wait until it is finished, or contact support on WhatsApp.',
             code:  'open_orders',
-          }, { status: 409 })
+          }, { status: 409, headers: PRIVATE_HEADERS })
         }
       }
 

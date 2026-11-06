@@ -220,14 +220,16 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   const pathname = req.nextUrl.pathname
 
   // ── 1. Store maintenance gate ──────────────────────────────────────────
-  if (req.method === 'GET' && !MAINTENANCE_EXEMPT_PATTERN.test(pathname)) {
+  // GET and HEAD: a HEAD is the same page navigation without a body (VERIFY ROUND L-9 — both gates used to skip it).
+  const isPageRead = req.method === 'GET' || req.method === 'HEAD'
+  if (isPageRead && !MAINTENANCE_EXEMPT_PATTERN.test(pathname)) {
     if (await isStoreClosed()) {
       return NextResponse.redirect(new URL('/maintenance', req.url))
     }
   }
 
   // ── 1b. Strict per-request CSP for the payment and account pages ───────
-  if (req.method === 'GET' && STRICT_CSP_PATH.test(pathname)) {
+  if (isPageRead && STRICT_CSP_PATH.test(pathname)) {
     return withStrictCsp(req)
   }
 

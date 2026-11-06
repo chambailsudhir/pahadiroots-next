@@ -136,4 +136,24 @@ describe('email_login failed-attempt throttle (ACC-034, reworked in the round-2 
     expect(statuses.slice(0, 5).every(s => s === 400)).toBe(true)
     expect(statuses).toContain(429)
   })
+
+  // VERIFY ROUND (F-9): the 100 / 15 min per-ACCOUNT backstop was a read-only Upstash "peek" — with the KV env unset
+  // (the live state) it always said "not blocked", so one guess per /64 was unbounded and GoTrue checked every password.
+  // It is now an atomic increment BEFORE the password check on the same backend as every other limiter (KV, else Postgres).
+  it('botnet backstop: 150 failed attempts for ONE e-mail from 150 distinct IPv6 /64s (no KV env) → 429 from the 101st on, GoTrue never sees them', async () => {
+    fetchMock.mockResolvedValue(json(400, { msg: 'Invalid login credentials' }))
+    const { POST } = await import('@/app/api/auth/route')
+    const email = `victim3-${Date.now()}@example.com`
+    const statuses: number[] = []
+    for (let i = 0; i < 150; i++) {
+      const net = `2401:4900:${(0x1000 + i).toString(16)}:${(i * 7 % 0xffff).toString(16)}`   // a different /64 every time
+      statuses.push((await POST(sameIp({ action: 'email_login', email, password: 'Wrong-Pass-1!' }, `${net}::1`))).status)
+    }
+    expect(statuses.slice(0, 100).every(s => s === 400)).toBe(true)        // first 100: the password was checked
+    expect(statuses.slice(100).every(s => s === 429)).toBe(true)           // 101st…150th: refused up front
+    expect(fetchMock).toHaveBeenCalledTimes(100)                            // GoTrue was asked exactly 100 times
+    const last = await POST(sameIp({ action: 'email_login', email, password: 'Wrong-Pass-1!' }, '2401:4900:ffff:ffff::1'))
+    expect(last.headers.get('retry-after')).toBe('900')
+    expect(last.headers.get('cache-control')).toBe('private, no-store')
+  })
 })

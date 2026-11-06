@@ -84,3 +84,29 @@ describe('proxy strict CSP', () => {
     expect(f.mock.calls.filter(c => String(c[0]).includes('cookie_consent_mode')).length).toBe(1)
   })
 })
+
+// VERIFY ROUND (L-9): the strict policy was added for GET only — `curl -I /checkout` (HEAD) answered with NO CSP at all
+// while GET carried the nonce policy. A HEAD is the same navigation without a body, so it gets the same headers.
+describe('proxy strict CSP — HEAD is treated like GET (L-9)', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-01T10:00:00Z')) })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+
+  it('HEAD /checkout and HEAD /account carry the same nonce policy as GET', async () => {
+    stubFetch(settingsReply([{ key: 'google_tag_id', value: 'G-ABC123XYZ' }]))
+    const { proxy } = await loadProxy()
+    for (const p of ['/checkout', '/account']) {
+      const res = await proxy(req(p, 'HEAD'))
+      const csp = res.headers.get('content-security-policy')
+      expect(csp, `HEAD ${p}`).toBeTruthy()
+      expect(scriptSrc(csp)).toMatch(/'nonce-[^']+'/)
+      expect(scriptSrc(csp)).not.toContain("'unsafe-inline'")
+      expect(res.headers.get('x-middleware-request-content-security-policy')).toBe(csp)
+    }
+  })
+
+  it('a POST to a strict path is not a page navigation and gets no per-request policy', async () => {
+    stubFetch(settingsReply([]))
+    const { proxy } = await loadProxy()
+    expect((await proxy(req('/checkout', 'POST'))).headers.get('content-security-policy')).toBeNull()
+  })
+})
