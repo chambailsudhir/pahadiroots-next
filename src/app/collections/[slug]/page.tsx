@@ -1,40 +1,34 @@
 import type { Metadata } from 'next'
 import { collectionTitle } from '@/lib/collectionTitle'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
-import { filterProducts, sortProducts, paginateProducts } from '@/lib/filterAndSortProducts'
-import { parseBrowseParams } from '@/lib/browseParams'
-import ProductCard from '@/components/product/ProductCard'
+import { filterProducts, sortProducts } from '@/lib/filterAndSortProducts'
 import CategoryMotif from '@/components/collections/CategoryMotif'
-import type { Product } from '@/types'
+import CollectionListingClient, { COLLECTION_PAGE_SIZE } from '@/components/collections/CollectionListingClient'
 import Link from 'next/link'
 import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 180   // was 60: ISR-write budget (Hobby plan); admin edits revalidate on demand
 
-// BUG FIX (Next.js 15+/16 migration): both `params` and `searchParams` are
-// now Promises in Server Components — must be awaited before use.
+// PERF FIX (F-3, Nov 2026): this page (and generateMetadata) awaited
+// `searchParams`, which makes Next render the route on EVERY request
+// (`cache-control: private, no-store`, `x-vercel-cache: MISS` live), so every
+// visit and every crawler hit Supabase and `revalidate` above did nothing.
+// The Server Component now renders only the default view (newest, page 1, no
+// in-stock filter) and is served from the ISR cache; ?sort= / ?instock= /
+// ?page= are applied in the browser by CollectionListingClient (same URLs,
+// same helpers, same markup). `params` is a route segment, so awaiting it
+// keeps the page static.
 interface Props {
-  params:       Promise<{ slug: string }>
-  searchParams: Promise<{ sort?: string | string[]; page?: string | string[]; instock?: string | string[] }>
+  params: Promise<{ slug: string }>
 }
-
-const PAGE_SIZE = 24
-
-const SORT_OPTIONS = [
-  { value: 'newest',     label: 'Newest' },
-  { value: 'price_asc',  label: 'Price ↑' },
-  { value: 'price_desc', label: 'Price ↓' },
-  { value: 'popular',    label: 'Best Sellers' },
-]
 
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
-  const sp = await searchParams
   const storeData = await getStoreData()
   const cat = storeData.categories.find(c => c.slug === slug)
   if (!cat) return { title: 'Collection Not Found', robots: { index: false, follow: false } }
@@ -44,12 +38,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   // SEO FIX: no canonical previously — with ?sort=/?page=/?instock= all live
   // on this route, Google could index /collections/honey?sort=price_asc and
   // /collections/honey?page=2 as separate near-duplicate pages competing
-  // with the real category page. Same fix already applied on /products —
-  // canonical always points at the clean category URL, and any filtered/
-  // paginated variant is explicitly noindexed so it never competes.
-  const parsed = parseBrowseParams(sp)
-  const page = parsed.page
-  const isFiltered = page > 1 || parsed.instock || parsed.sort !== 'newest'
+  // with the real category page. The canonical always points at the clean
+  // category URL. (The per-variant `noindex` that used to accompany it read
+  // the query string, which is what made the route dynamic — the canonical
+  // alone already keeps filtered/paginated variants out of the index; the
+  // filtered view is applied client-side now and the HTML is identical.)
   // Nov 2026 audit: an empty collection is a thin page — keep it out of search results until it has products (links still followed).
   const isEmpty = !storeData.products.some(prod => String(prod.category_id) === String(cat.id))
 
@@ -58,7 +51,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     title:       collectionTitle(cat.name),
     description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
     alternates:  { canonical: canonicalUrl },
-    robots:      isFiltered || isEmpty ? { index: false, follow: true } : undefined,
+    robots:      isEmpty ? { index: false, follow: true } : undefined,
     openGraph: {
       title:       `${cat.name} | HimVeda by Pahadi Roots`,
       description: cat.description || `Shop pure ${cat.name} sourced from the Himalayas.`,
@@ -73,15 +66,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   }
 }
 
-export default async function CollectionPage({ params, searchParams }: Props) {
+export default async function CollectionPage({ params }: Props) {
   // BUG FIX (sync audit): getSiteSettings() was fetched here and never used
   // anywhere in this file — an unused settings read (and its own Supabase
   // hit / cache entry) on every single category-page load, unlike /products
   // and /products/[slug] which fetch it and actually consume the fields.
   // Removed; nothing else in this file referenced it.
-  const [{ slug }, sp, storeData] = await Promise.all([
-    params, searchParams, getStoreData(),
-  ])
+  const [{ slug }, storeData] = await Promise.all([params, getStoreData()])
 
   // Find category using SERVICE KEY data (no RLS issues)
   const cat = storeData.categories.find(c => c.slug === slug)
@@ -89,9 +80,6 @@ export default async function CollectionPage({ params, searchParams }: Props) {
 
   // All categories for the nav bar (apply images same way)
   const allCategories = buildBrowseCategories(storeData)
-
-  const { sort, page, instock } = parseBrowseParams(sp)
-  const offset  = (page - 1) * PAGE_SIZE
 
   // BUG FIX (price mismatch — this page showed a different price than the
   // homepage/products page/admin for the same product): was
@@ -113,29 +101,12 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   // base variant's), and the "popular" sort compared only the bestseller badge
   // with no tie-breaker, so equal items had unstable order. /products and
   // /new-arrivals already use the shared helpers; so does this page now.
-  const catProducts = sortProducts(
-    filterProducts(allNormalized, { categoryId: cat.id, inStockOnly: instock }),
-    sort,
-  )
+  const catProducts = sortProducts(filterProducts(allNormalized, { categoryId: cat.id }), 'newest')
 
-  const { pageItems, totalPages, totalCount: count } = paginateProducts(catProducts, page, PAGE_SIZE)
-  const products   = pageItems as Product[]
-  const catSlug    = cat.slug
-
-  function url(overrides: Record<string, string | undefined>) {
-    const p = new URLSearchParams()
-    const vals: Record<string, string | undefined> = { sort, instock: instock ? 'true' : undefined, page: '1', ...overrides }
-    // 'false' is how the toggle link says "turn off" — never emit it (Issue 6.4).
-    if (vals.instock !== 'true') vals.instock = undefined
-    if (vals.sort === 'newest') vals.sort = undefined
-    if (vals.page === '1') vals.page = undefined
-    Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v) })
-    const q = p.toString()
-    return `/collections/${catSlug}${q ? '?' + q : ''}`
-  }
-
-  // Past-the-last-page → last real page (Issue 6.3).
-  if (totalPages > 0 && page > totalPages) redirect(url({ page: String(totalPages) }))
+  // Default view: first page, card-sized rows only (the client fetches the rest on demand).
+  const count    = catProducts.length
+  const products = catProducts.slice(0, COLLECTION_PAGE_SIZE).map(toCardProductData)
+  const catSlug  = cat.slug
 
   // BUG FIX (Aug 23 2026 — user flagged the collection hero's product photo
   // as still looking wrong, circled on Himalayan Tea): the featured product
@@ -192,7 +163,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
               numberOfItems: count,
               itemListElement: products.map((p, i) => ({
                 '@type': 'ListItem',
-                position: offset + i + 1,
+                position: i + 1,
                 url: `${BASE}/products/${p.slug}`,
               })),
             },
@@ -284,85 +255,12 @@ export default async function CollectionPage({ params, searchParams }: Props) {
         </div>
       )}
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px 60px' }}>
-
-        {/* Sort bar */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-          justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
-          {/* Nov 2026 audit (F-5 / L6): #7a7a7a was 3.9:1 on the #f9f4ec page background; #5a5448 is 6.9:1. "1 products" pluralised. */}
-          <p style={{ fontSize: '13px', color: '#5a5448', margin: 0 }}>
-            {count} {count === 1 ? 'product' : 'products'} • Showing {Math.min(offset + 1, count)}–{Math.min(offset + PAGE_SIZE, count)}
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <Link href={url({ instock: instock ? 'false' : 'true' })} style={{
-              fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '20px',
-              border: '1.5px solid', textDecoration: 'none',
-              background: instock ? '#1a3a1e' : '#fff', color: instock ? '#fff' : '#555',
-              borderColor: instock ? '#1a3a1e' : '#ddd' }}>In Stock</Link>
-            {SORT_OPTIONS.map(opt => (
-              <Link key={opt.value} href={url({ sort: opt.value })} style={{
-                fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '20px',
-                border: '1.5px solid', textDecoration: 'none',
-                // F-5: white on #c8920a was 2.8:1; the darker brand gold #8a6508 (globals.css --pm-gold-text) is 5.3:1.
-                background: sort === opt.value ? '#8a6508' : '#fff',
-                color:      sort === opt.value ? '#fff'    : '#555',
-                borderColor: sort === opt.value ? '#8a6508' : '#ddd' }}>
-                {opt.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Grid */}
-        {products.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-            padding: '80px 20px', textAlign: 'center' }}>
-            {/* Nov 2026 audit: "Clear filters" was shown on a collection that is simply EMPTY (no filter set), which looked broken.
-                Only offer it when a filter is actually narrowing the list. */}
-            {instock ? (
-              <>
-                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
-                  No in-stock products here right now
-                </h3>
-                <Link href={`/collections/${catSlug}`} style={{ background: '#1a3a1e', color: '#fff',
-                  borderRadius: '20px', padding: '10px 24px', fontSize: '13px', fontWeight: 700,
-                  textDecoration: 'none', marginTop: '12px', display: 'inline-block' }}>
-                  Clear filters
-                </Link>
-              </>
-            ) : (
-              <>
-                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>
-                  {cat.name} is coming soon
-                </h3>
-                <p style={{ fontSize: '14px', color: '#5a5448', margin: '0 0 4px', maxWidth: '420px' }}>
-                  We are still sourcing this range from the mountains. Meanwhile, explore what is available now.
-                </p>
-                <Link href="/products" style={{ background: '#1a3a1e', color: '#fff',
-                  borderRadius: '20px', padding: '10px 24px', fontSize: '13px', fontWeight: 700,
-                  textDecoration: 'none', marginTop: '12px', display: 'inline-block' }}>
-                  Browse all products
-                </Link>
-              </>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="prod-page-grid">
-              {products.map((p, i) => <ProductCard key={p.id} product={toCardProductData(p)} priority={i < 4} />)}
-            </div>
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '40px', flexWrap: 'wrap' }}>
-                {page > 1 && <Link href={url({ page: String(page - 1) })} style={pagStyle(false)}>← Prev</Link>}
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pg => (
-                  <Link key={pg} href={url({ page: String(pg) })} style={pagStyle(pg === page)}>{pg}</Link>
-                ))}
-                {page < totalPages && <Link href={url({ page: String(page + 1) })} style={pagStyle(false)}>Next →</Link>}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {/* Sort bar + grid + pagination — applies the query string in the browser (see CollectionListingClient) */}
+      <CollectionListingClient
+        category={{ id: cat.id, slug: catSlug, name: cat.name }}
+        initialProducts={products}
+        totalCount={count}
+      />
       {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
           sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
       <OurPromiseSection />
@@ -370,15 +268,6 @@ export default async function CollectionPage({ params, searchParams }: Props) {
   )
 }
 
-function pagStyle(active: boolean): React.CSSProperties {
-  return {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    minWidth: '36px', height: '36px', padding: '0 10px', borderRadius: '10px',
-    fontSize: '13px', fontWeight: active ? 700 : 500, textDecoration: 'none',
-    background: active ? '#1a3a1e' : '#fff', color: active ? '#fff' : '#444',
-    border: `1.5px solid ${active ? '#1a3a1e' : '#e0e0e0'}`,
-  }
-}
 
 export async function generateStaticParams() {
   try {
