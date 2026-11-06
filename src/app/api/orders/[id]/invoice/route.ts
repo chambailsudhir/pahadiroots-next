@@ -118,7 +118,11 @@ export async function GET(
     if (NO_INVOICE_STATUSES.includes(statusNow)) {
       return fail(409, 'An invoice is available once your order is confirmed.', requestId)
     }
-    if (REVERSED_STATUS.test(statusNow)) {
+    // BUG FIX (Nov 2026 verification): a return is recorded in the `returns` table and the order itself usually STAYS
+    // 'delivered'; only payment_status moves to 'refunded'. Production had 10 such orders whose full GST invoice still
+    // printed. A fully refunded payment reverses the supply just like a 'returned' status does.
+    const paymentNow = String(o.payment_status ?? '').toLowerCase()
+    if (REVERSED_STATUS.test(statusNow) || paymentNow === 'refunded') {
       return fail(409, 'This order was returned or refunded, so the original invoice is no longer valid. Please contact support for the credit note.', requestId)
     }
 

@@ -259,6 +259,17 @@ async function processOne(
   //  there is nothing to pay, safe to release.)
 
   // ── Nothing was paid: release. Single-winner transition FIRST, restore only if we won. ──
+  // BUG FIX (Nov 2026 verification): trigger trg_release_coupon_on_order_end (v27) releases the coupon INSIDE the status
+  // update below, so the explicit release_coupon_for_order call afterwards always answered {released:false} and the event
+  // never recorded what was released — a late payment then kept the discount while the coupon use stayed freed (L-2 never
+  // ran in production). Read the usage row BEFORE the flip; it is what the trigger releases.
+  const { data: usageBefore } = await db
+    .from('coupon_usage')
+    .select('coupon_id, customer_id, discount_amount, identity_key')
+    .eq('order_id', order.id)
+    .limit(1)
+  const usageRow = (Array.isArray(usageBefore) ? usageBefore[0] : null) as
+    { coupon_id?: number | string | null; customer_id?: number | string | null; discount_amount?: number | null; identity_key?: string | null } | null
   const { data: rows, error: updErr } = await db
     .from('orders')
     .update({ order_status: 'payment_failed', payment_status: 'failed', updated_at: now.toISOString() })
@@ -283,7 +294,14 @@ async function processOne(
   try {
     const { data: rel, error: relErr } = await db.rpc('release_coupon_for_order', { p_order_id: order.id })
     if (relErr) throw relErr
-    if (rel && (rel as { released?: boolean }).released) couponReleased = rel
+    if (rel && (rel as { released?: boolean }).released) couponReleased = { ...(rel as object), identity_key: usageRow?.identity_key ?? null }
+    else if (usageRow && usageRow.coupon_id != null) {
+      // Released by the trigger during the status flip (the normal case since v27).
+      couponReleased = {
+        released: true, coupon_id: usageRow.coupon_id, customer_id: usageRow.customer_id ?? null,
+        discount_amount: usageRow.discount_amount ?? 0, identity_key: usageRow.identity_key ?? null, via: 'trigger',
+      }
+    }
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders.coupon_release', order_id: order.id, alert: false })
   }

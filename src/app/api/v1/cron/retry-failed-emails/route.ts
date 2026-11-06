@@ -41,6 +41,9 @@ export const CLAIM_STALE_MINUTES = 15
 // sending — this is what makes it safe to switch the sweep on over an existing backlog
 // (no flood of stale e-mails to customers). Ops can still replay a row by hand from its html.
 export const MAX_EMAIL_AGE_HOURS = 72
+// Nov 2026 verification: a password-reset mail carries a Supabase recovery link that expires after about an hour (the
+// project's OTP expiry). Retrying it for 72 h delivered dead links; it is closed once older than this instead.
+export const MAX_PASSWORD_RESET_AGE_MINUTES = 55
 
 // Exponential backoff between dead-letter retries: 5, 15, 45, 135 minutes
 // (attempts 1–4; attempt 5 hitting MAX_DLQ_ATTEMPTS marks the row 'dead'
@@ -156,10 +159,14 @@ export async function GET(req: NextRequest) {
 
     // Too old to be worth sending → close it out instead (see MAX_EMAIL_AGE_HOURS).
     const createdMs = row.created_at ? Date.parse(row.created_at) : NaN
-    if (Number.isFinite(createdMs) && createdMs < staleBefore) {
+    const resetTooOld = row.type === 'password_reset' && Number.isFinite(createdMs)
+      && createdMs < Date.now() - MAX_PASSWORD_RESET_AGE_MINUTES * 60_000
+    if (Number.isFinite(createdMs) && (createdMs < staleBefore || resetTooOld)) {
       await db.from('failed_emails').update({
         status:          'dead',
-        last_error:      `expired: not delivered within ${MAX_EMAIL_AGE_HOURS}h — closed without sending`,
+        last_error:      resetTooOld && createdMs >= staleBefore
+          ? `expired: password-reset link older than ${MAX_PASSWORD_RESET_AGE_MINUTES} min (link no longer valid) — closed without sending`
+          : `expired: not delivered within ${MAX_EMAIL_AGE_HOURS}h — closed without sending`,
         last_attempt_at: new Date().toISOString(),
       }).eq('id', row.id)
       expired++

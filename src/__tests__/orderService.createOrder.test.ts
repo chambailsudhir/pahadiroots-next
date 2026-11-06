@@ -210,7 +210,7 @@ function wireHappyPathFetch(opts: { variantPrice?: number; gstRate?: number } = 
   )
   // 3. customer lookup by phone / email (AUDIT S1-002: read-only guest identity) — not found
   route(
-    (url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')),
+    (url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')),
     []
   )
   // 4. customer insert
@@ -820,6 +820,17 @@ describe('createOrder — one person / one address, one time only (Nov 2026)', (
     expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
   })
 
+  // Nov 2026 verification: the e-mail history lookup was case-sensitive (`email=eq.`), so changing the capitalisation of the
+  // e-mail hid an earlier use from the per-person check.
+  it('refuses a GUEST matched by e-mail with different capitalisation (case-insensitive, wildcards escaped)', async () => {
+    routeFirst((url, m) => m === 'GET' && url.includes('/customers') && url.includes('email=ilike.'), [{ id: 'cust-by-email' }])
+    mockDb.responses['orders'] = priorOrders('cust-by-email', 'Somewhere Else 99, Other Colony', '110001')
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, customerEmail: 'Ramesh@Example.com', couponCode: 'WELCOME50' }, DEFAULT_SETTINGS))
+      .rejects.toThrow(/already used this coupon/i)
+    expect(fetchCalls.some(c => c.url.includes('email=ilike.Ramesh%40Example.com'))).toBe(true)
+  })
+
   it('refuses a DIFFERENT person at the SAME address, even if the address is typed differently', async () => {
     mockDb.responses['orders'] = priorOrders('someone-else', 'Flat No. 12, Pahadi Lane, Shimla Hills')
     const { createOrder } = await import('@/lib/services/orderService')
@@ -983,7 +994,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     // 3 in-flight COD orders already exist for this phone → guard should block.
     route(
@@ -1003,7 +1014,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     route(
       (url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'),
@@ -1027,7 +1038,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     wireOrderRpcSuccess()
 
@@ -1046,7 +1057,7 @@ describe('createOrder — cod_max_active_orders (fraud guard, previously unteste
       [{ id: VARIANT_ID, price: 200, original_price: 250, is_active: true, available_stock: 10, product_id: PRODUCT_ID }])
     route((url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }])
-    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     wireOrderRpcSuccess()
 
@@ -1113,7 +1124,7 @@ describe('createOrder — product image resolution (order-confirmation email fix
       (url, method) => method === 'GET' && url.includes('/products') && url.includes(PRODUCT_ID),
       [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', image_url: 'https://cdn.example.com/honey-fallback.jpg', gst_rate: 5, is_deleted: false, status: 'active', price: 200, mrp: 250, available_stock: 10 }],
     )
-    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.')), [])
+    route((url, method) => method === 'GET' && url.includes('/customers') && (url.includes('phone=eq.') || url.includes('email=eq.') || url.includes('email=ilike.')), [])
     route((url, method) => method === 'POST' && url.includes('/customers'), [{ id: 'cust-uuid-001' }])
     route((url, method) => method === 'GET' && url.includes('/orders') && url.includes('payment_method=in.'), [])
     route(

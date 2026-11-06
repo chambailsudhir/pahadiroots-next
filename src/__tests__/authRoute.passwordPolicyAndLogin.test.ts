@@ -156,4 +156,28 @@ describe('email_login failed-attempt throttle (ACC-034, reworked in the round-2 
     expect(last.headers.get('retry-after')).toBe('900')
     expect(last.headers.get('cache-control')).toBe('private, no-store')
   })
+
+  // Nov 2026 verification: a network that was already blocked kept feeding the account-wide counter, so a couple of /64s
+  // could lock any customer out. Now a blocked network adds nothing more to it.
+  it('requests from an already-blocked network do not count toward the account-wide lockout', async () => {
+    fetchMock.mockResolvedValue(json(400, { msg: 'Invalid login credentials' }))
+    const { POST } = await import('@/app/api/auth/route')
+    const email = `victim4-${Date.now()}@example.com`
+    // Two attacker /64s each send 60 attempts paced under the per-IP 5/min route limit (spread over 15 minutes). The in-memory
+    // limiter has no clock, so the per-IP route counter is treated as "window reset" — the login counters are real.
+    const { rateLimitKvMock } = await import('./helpers/inMemoryRateLimit')
+    const real = rateLimitKvMock.checkRateLimitKv.getMockImplementation()!
+    rateLimitKvMock.checkRateLimitKv.mockImplementation(async (key: string, limit: number) =>
+      key.startsWith('mw:rl:auth_email_login:') ? true : real(key, limit))
+    try {
+      for (const net of ['2401:4900:1:1', '2401:4900:2:2']) {
+        for (let i = 0; i < 60; i++) await POST(sameIp({ action: 'email_login', email, password: 'Wrong-Pass-1!' }, `${net}::1`))
+      }
+    } finally {
+      rateLimitKvMock.checkRateLimitKv.mockImplementation(real)
+    }
+    fetchMock.mockResolvedValue(json(200, { access_token: 'a', refresh_token: 'r', expires_in: 3600, user: { id: 'u1', email } }))
+    const owner = await POST(sameIp({ action: 'email_login', email, password: 'Right-Pass-1!' }, '2405:201:aaaa:bbbb::1'))
+    expect(owner.status).not.toBe(429)
+  })
 })

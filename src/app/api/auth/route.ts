@@ -399,8 +399,15 @@ export async function POST(req: NextRequest) {
     //     unbounded and GoTrue evaluated every password. It now counts every attempt up front and refuses the 101st. Trade-off,
     //     accepted: a stranger needs 100 attempts in 15 minutes against ONE address to inconvenience its owner for 15 minutes
     //     (ten times the per-network cost), versus an attacker otherwise getting unlimited tries.
+    // BUG FIX (Nov 2026 verification): both counters used to be bumped on every request, so a network that was ALREADY
+    // blocked kept feeding the account-wide counter (about 75 requests / 15 min per network under the 5/min route limit):
+    // two /64s could lock any customer out, again and again. The account-wide counter now only counts attempts the
+    // caller's network was still allowed to make, so each network adds at most LOGIN_FAIL_MAX (10) to it and locking an
+    // account needs ~10 distinct networks inside one window.
     const withinNetworkQuota = await checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
-    const withinAccountQuota = await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
+    const withinAccountQuota = withinNetworkQuota
+      ? await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
+      : true
     if (!withinNetworkQuota || !withinAccountQuota) {
       return fail(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
     }
@@ -693,6 +700,11 @@ export async function POST(req: NextRequest) {
 
       // Step 2: reauthenticate with current_password to prove ownership
       // This is the server-side equivalent of "verify current password"
+      // BUG FIX (Nov 2026 verification): only the per-IP 5/min limit guarded this, so a stolen session rotating /64s could
+      // guess the CURRENT password without bound. Per-account cap, like account deletion has.
+      if (!await checkRateLimitKv(`pwchange:${user.id}`, 10, 900)) {
+        return fail(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
+      }
       try {
         await sbAuth('/token?grant_type=password', {
           email:    user.email,

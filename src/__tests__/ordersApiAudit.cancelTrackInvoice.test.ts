@@ -139,10 +139,10 @@ describe('track route', () => {
 })
 
 describe('invoice route status gate', () => {
-  const invoice = async (status: string) => {
+  const invoice = async (status: string, paymentStatus = 'paid') => {
     mocks.sbAdmin.mockReset()
     mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
-      if (path.startsWith('/rest/v1/orders?')) return [{ id: 9, order_number: 'X', order_status: status, order_items: [], total_amount: 100, created_at: '2026-09-01T00:00:00Z', shipping_address: {} }]
+      if (path.startsWith('/rest/v1/orders?')) return [{ id: 9, order_number: 'X', order_status: status, payment_status: paymentStatus, order_items: [], total_amount: 100, created_at: '2026-09-01T00:00:00Z', shipping_address: {} }]
       return []
     })
     const { GET } = await import('@/app/api/orders/[id]/invoice/route')
@@ -163,4 +163,14 @@ describe('invoice route status gate', () => {
       expect(res.headers.get('content-type')).toMatch(/text\/plain/)
       expect(await res.text()).toMatch(/returned or refunded.*credit note/i)
     })
+  // Nov 2026 verification: a return lives in the `returns` table and the order stays 'delivered'; only payment_status
+  // becomes 'refunded'. Production had 10 such orders still printing a full GST invoice.
+  it('409s for a delivered order whose payment was refunded', async () => {
+    const res = await invoice('delivered', 'refunded')
+    expect(res.status).toBe(409)
+    expect(await res.text()).toMatch(/returned or refunded.*credit note/i)
+  })
+  it('still renders for a delivered COD order (payment not refunded)', async () => {
+    expect((await invoice('delivered', 'cod_pending')).status).toBe(200)
+  })
 })

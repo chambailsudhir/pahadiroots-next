@@ -852,7 +852,11 @@ export async function createOrder(
     }
     const email = input.customerEmail?.trim()
     if (email) {
-      const byEmail: Array<{ id: string | number }> = await sbGet('customers', `email=eq.${encodeURIComponent(email)}&select=id&limit=25`)
+      // Case-insensitive (Nov 2026 verification): `Priya@Gmail.com` must find the `priya@gmail.com` customer, or the
+      // first-order / per-person coupon history could be dodged by changing the capitalisation. ilike with LIKE wildcards
+      // escaped, so it is an exact match.
+      const exact = email.replace(/[\\%_*]/g, c => '\\' + c)
+      const byEmail: Array<{ id: string | number }> = await sbGet('customers', `email=ilike.${encodeURIComponent(exact)}&select=id&limit=25`)
       for (const r of byEmail ?? []) if (r?.id != null) ids.add(String(r.id))
     }
     relatedIdsMemo = Array.from(ids)

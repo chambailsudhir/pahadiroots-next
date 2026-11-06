@@ -146,7 +146,12 @@ export async function GET(req: NextRequest) {
         balance:      customer.loyalty_points,
         transactions: loyaltyTransactions,
       } : null,
-      wishlist_product_ids: Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => w.product_id) : [],
+      // BUG FIX (Nov 2026 verification): the live wishlist is customers.wishlist_items (JSON text, see /api/wishlist); the
+      // `wishlist` table only holds legacy rows. Both are exported, de-duplicated.
+      wishlist_product_ids: Array.from(new Set([
+        ...parseWishlistItems(customer?.wishlist_items),
+        ...(Array.isArray(wishlistRows) ? wishlistRows.map((w: { product_id: number }) => Number(w.product_id)) : []),
+      ].filter(n => Number.isFinite(n)))),
       // Return photos: stored as object paths of the private bucket; each export mints links that live 15 minutes (L-8).
       returns: await Promise.all(returnsRows.map(async r => ({
         ...r,
@@ -194,4 +199,13 @@ export async function GET(req: NextRequest) {
     if (err.status === 401) return fail(401, 'Session expired — please login again')
     return fail(500, 'Could not export your data — please try again. This attempt did not count towards your export limit.')
   }
+}
+
+/** customers.wishlist_items is a TEXT column holding a JSON array of product ids (legacy rows may be null or malformed). */
+function parseWishlistItems(raw: unknown): number[] {
+  if (raw == null || raw === '') return []
+  try {
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return Array.isArray(v) ? v.map(x => Number(x)).filter(n => Number.isFinite(n)) : []
+  } catch { return [] }
 }

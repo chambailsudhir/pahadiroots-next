@@ -96,7 +96,8 @@ export async function POST(
     const repl = await sbAdmin('GET', `/rest/v1/returns?order_id=eq.${id}&status=eq.replaced&select=replacement_shipped_at&order=replacement_shipped_at.desc.nullslast&limit=1`).catch(() => null)
     const start = returnWindowStart(ord.delivered_at, Array.isArray(repl) ? repl[0]?.replacement_shipped_at : null)
     const hoursSince = start == null ? NaN : (Date.now() - start) / 3_600_000
-    if (ord.order_status !== 'delivered' || !Number.isFinite(hoursSince) || hoursSince > RETURNABLE_WINDOW_HOURS) {
+    // hoursSince < 0: the replacement is still on its way (Nov 2026 verification — /return already refuses this case).
+    if (ord.order_status !== 'delivered' || !Number.isFinite(hoursSince) || hoursSince < 0 || hoursSince > RETURNABLE_WINDOW_HOURS) {
       return fail(422, 'Photos can only be uploaded for a delivered order that is still within its return window')
     }
 

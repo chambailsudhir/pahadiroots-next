@@ -71,6 +71,13 @@ describe('confirmOrderPayment — late payment after the sweep released the orde
     expect(rpc).toHaveBeenCalledWith('claim_coupon_use', { p_coupon_id: 7, p_customer_id: null, p_identity_key: null })
   })
 
+  it('a guest re-claim carries the identity key recorded at release, so the per-phone limit (v32) still applies', async () => {
+    const { confirmOrderPayment } = await import('@/lib/server/orderPayments')
+    const { db, rpc } = makeDb({ expiredEvent: { coupon_id: 7, customer_id: null, discount_amount: 50, identity_key: 'ph:abc', via: 'trigger' } })
+    await confirmOrderPayment(db, { orderId: 'o1', razorpayPaymentId: 'pay_late', source: 'webhook' })
+    expect(rpc).toHaveBeenCalledWith('claim_coupon_use', { p_coupon_id: 7, p_customer_id: null, p_identity_key: 'ph:abc' })
+  })
+
   it('does nothing when the release recorded no coupon', async () => {
     const { confirmOrderPayment } = await import('@/lib/server/orderPayments')
     const { db, rpc } = makeDb({})

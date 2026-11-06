@@ -86,6 +86,28 @@ describe('GET /api/account/data-export', () => {
     expect(raw).not.toContain('admin_notes')
   })
 
+  // Nov 2026 verification: the live wishlist is customers.wishlist_items (JSON text); the export only read the legacy table.
+  it('exports the live wishlist (customers.wishlist_items) merged with legacy wishlist rows, de-duplicated', async () => {
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [{ ...CUSTOMER, wishlist_items: '[11,28]' }]
+      if (path.startsWith('/rest/v1/wishlist?')) return [{ product_id: 28 }, { product_id: 40 }]
+      return []
+    })
+    const res = await exportReq()
+    expect(res.status).toBe(200)
+    expect(JSON.parse(await res.text()).wishlist_product_ids).toEqual([11, 28, 40])
+  })
+
+  it('a malformed wishlist_items value does not break the export', async () => {
+    mocks.sbAdmin.mockImplementation(async (_m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [{ ...CUSTOMER, wishlist_items: 'not json' }]
+      return []
+    })
+    const res = await exportReq()
+    expect(res.status).toBe(200)
+    expect(JSON.parse(await res.text()).wishlist_product_ids).toEqual([])
+  })
+
   // VERIFY ROUND (L-8): returns.photo_urls holds bare object paths; the export mints 15-minute links at read time.
   // Rows written before the change hold year-long links and are passed through unchanged.
   it('return photos: a stored object path becomes a fresh 15-minute signed link; a legacy full link passes through', async () => {
