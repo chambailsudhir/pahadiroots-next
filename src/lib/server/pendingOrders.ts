@@ -292,7 +292,7 @@ async function processOne(
     age_hours: Number(ageHours.toFixed(2)),
     stock_restore_failed_items: failed.length,
     ...(couponReleased ? { coupon_released: couponReleased } : {}),
-    note: 'Unpaid online order released by the expiry sweep; stock (and any coupon) returned. A late payment is still honoured, but a released coupon is NOT automatically re-applied.',
+    note: 'Unpaid online order released by the expiry sweep; stock (and any coupon) returned. A late payment is still honoured: stock is re-reserved and the released coupon is re-claimed for the order (confirmOrderPayment).',
   }).catch(() => null)
   return 'expired'
 }
