@@ -203,3 +203,16 @@ describe('POST /api/orders/[id]/cancel', () => {
     }
   })
 })
+
+// Finding F (Nov 2026): the "Continue shopping" button must never carry a raw NEXT_PUBLIC_SITE_URL (localhost / http / trailing slash).
+describe('cancellation e-mail link', () => {
+  it('uses the canonical https site origin even when NEXT_PUBLIC_SITE_URL is a dev value', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'http://localhost:3000/')
+    await call()
+    await new Promise(r => setTimeout(r, 0))
+    const mail = mocks.sendTransactionalEmail.mock.calls.map(c => c[0]).find((m: { type: string }) => m.type === 'order_cancelled')
+    expect(mail?.html).toContain('href="https://www.pahadiroots.com"')
+    expect(mail?.html).not.toContain('localhost')
+    vi.unstubAllEnvs()
+  })
+})
