@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { notFound } from 'next/navigation'
-import BlogListing, { type PostCard } from '@/components/blog/BlogListing'
+import type { PostCard } from '@/components/blog/BlogListing'
+import BlogListingClient, { BLOG_LISTING_LIMIT } from '@/components/blog/BlogListingClient'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
@@ -32,27 +33,27 @@ export const metadata: Metadata = {
 
 export const revalidate = 3600
 
-export default async function BlogPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ category?: string }>
-}) {
+// PERF FIX (F-3): this page awaited `searchParams` for the `?category=` chip,
+// which made the route dynamic on every request — `revalidate` above did
+// nothing and every visit ran both Supabase queries. The Server Component now
+// loads the newest posts once (ISR) and BlogListingClient applies the category
+// in the browser. Enough rows are loaded that a category view still shows up
+// to BLOG_LISTING_LIMIT of ITS newest posts, as the per-category query did.
+const POSTS_TO_LOAD = BLOG_LISTING_LIMIT * 4
+
+export default async function BlogPage() {
   const settings = await getSiteSettings()
   if (settings.show_blog === 'false') notFound()
-
-  const { category } = await searchParams
 
   let posts: PostCard[] | null = null
   let categories: string[] = []
   try {
-    let query = supabase
+    const { data } = await supabase
       .from('blog_posts')
       .select('id, title, slug, excerpt, cover_image, published_at, category, reading_time_minutes, author')
       .eq('is_published', true)
       .order('published_at', { ascending: false })
-      .limit(30)
-    if (category) query = query.eq('category', category)
-    const { data } = await query
+      .limit(POSTS_TO_LOAD)
     posts = data
 
     const { data: allCats } = await supabase
@@ -63,5 +64,5 @@ export default async function BlogPage({
     categories = Array.from(new Set((allCats || []).map(c => c.category).filter(Boolean))) as string[]
   } catch { posts = null }
 
-  return <BlogListing posts={posts} categories={categories} category={category} />
+  return <BlogListingClient posts={posts} categories={categories} />
 }

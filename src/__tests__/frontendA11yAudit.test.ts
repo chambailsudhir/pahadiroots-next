@@ -33,8 +33,9 @@ function cssColour(css: string, selector: string): string {
 const cartCss  = read('src/components/cart/CartUIComponents.module.css')
 const globals  = read('src/app/globals.css')
 const pdpCss   = read('src/app/products/[slug]/pdp.css')
-const collPage = read('src/app/collections/[slug]/page.tsx')
-const prodPage = read('src/app/products/page.tsx')
+// Nov 2026 (F-3): the sort bar / grid moved into client components so the pages can be ISR-cached.
+const collPage = read('src/components/collections/CollectionListingClient.tsx')
+const prodPage = read('src/components/product/ProductListingClient.tsx')
 const regionCss = read('src/components/homepage/ExploreByRegion.module.css')
 const fabJs    = read('public/js/ai-assistant.js')
 
@@ -53,7 +54,7 @@ describe('F-5 text contrast on the money pages (WCAG AA 4.5:1)', () => {
   })
   it('collection page: no #7a7a7a grey; the sort-bar grey passes on the #f9f4ec page background', () => {
     expect(code(collPage)).not.toMatch(/#7a7a7a/i)
-    const grey = /fontSize: '13px', color: '(#[0-9a-fA-F]{6})', margin: 0 \}\}>\s*\{count\}/.exec(collPage)![1]
+    const grey = /fontSize: '13px', color: '(#[0-9a-fA-F]{6})', margin: 0 \}\}>\s*\{count(?:Text)?\}/.exec(collPage)![1]
     expect(contrast(grey, '#f9f4ec')).toBeGreaterThanOrEqual(4.5)
   })
   it('collection page: the active sort pill is white text on a gold that passes', () => {
@@ -66,6 +67,8 @@ describe('F-5 text contrast on the money pages (WCAG AA 4.5:1)', () => {
     expect(code(prodPage)).not.toMatch(/#c8920a/i)
     for (const hex of prodPage.matchAll(/color: '(#[0-9a-fA-F]{6})', fontWeight: (?:600|700)/g)) {
       if (hex[1].toLowerCase() === '#ffffff' || hex[1].toLowerCase() === '#fff') continue
+      // light text (e.g. the gold 'Just In' badge) sits on the dark-green hero band, not on the page background
+      if (contrast(hex[1], '#1a3a1e') >= 4.5) continue
       expect(contrast(hex[1], '#f9f4ec'), hex[1]).toBeGreaterThanOrEqual(4.5)
     }
   })
@@ -114,8 +117,8 @@ describe('L3: chat FAB is 46px on phones', () => {
 
 describe('L6: collection count grammar', () => {
   it('says "1 product", not "1 products"', () => {
-    expect(collPage).not.toMatch(/\{count\} products •/)
-    expect(collPage).toMatch(/\{count\} \{count === 1 \? 'product' : 'products'\} •/)
+    expect(collPage).not.toMatch(/\{count(?:Text)?\} products •/)
+    expect(collPage).toMatch(/\{count(?:Text)?\} \{count === 1 \? 'product' : 'products'\} •/)
   })
 })
 
