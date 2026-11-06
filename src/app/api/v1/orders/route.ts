@@ -129,6 +129,25 @@ async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrd
 }
 
 /**
+ * Atomically claim the once-only `post_order_finalized` marker (Nov 2026 verification). db_migration_v33 makes it unique per
+ * order, so the INSERT is the claim: 'claimed' = this request runs the post-order steps, 'taken' = another request already
+ * did (HTTP 409 / 23505), 'error' = the claim could not be written (the caller decides).
+ */
+async function claimPostOrderMarker(orderId: string, via: string): Promise<'claimed' | 'taken' | 'error'> {
+  try {
+    await sbAdmin('POST', '/rest/v1/order_events', {
+      order_id: orderId, event: 'post_order_finalized', actor: 'system', metadata: { via }, created_at: new Date().toISOString(),
+    }, 'return=minimal')
+    return 'claimed'
+  } catch (e) {
+    const x = e as { status?: number; message?: unknown }
+    if (x?.status === 409 || /23505|duplicate key/i.test(String(x?.message ?? ''))) return 'taken'
+    captureError(e, { action: 'orders.post_order_marker_claim', order_id: orderId, alert: false })
+    return 'error'
+  }
+}
+
+/**
  * The request died before the post-order steps ran. Run them now for the committed order — once.
  * `post_order_finalized` in order_events is the once-only marker (the e-mails have no natural idempotency key).
  * Never throws: the customer must still be told their order exists.
@@ -139,8 +158,16 @@ async function finalizeRecoveredOrder(
 ): Promise<void> {
   if (!finalize) return
   try {
-    const done = await sbAdmin('GET', `/rest/v1/order_events?order_id=eq.${committed.id}&event=eq.post_order_finalized&select=id&limit=1`)
-    if (Array.isArray(done) && done.length > 0) return
+    // Atomic claim (v33 unique index): of two concurrent replays only one gets the marker and sends the e-mails. Marker FIRST:
+    // if the steps below crash half-way we prefer a missing e-mail (the admin sees the alert) over a double one.
+    const claim = await claimPostOrderMarker(String(committed.id), 'timeout_recovery')
+    if (claim === 'taken') return
+    if (claim === 'error') {
+      captureError(new Error('post-order marker could not be claimed; recovery skipped to avoid duplicate e-mails'), {
+        action: 'orders.timeout_recovery_marker_failed', order_id: committed.id, alert: true,
+      })
+      return
+    }
 
     const items = await sbAdmin(
       'GET',
@@ -156,9 +183,6 @@ async function finalizeRecoveredOrder(
       qty:   Number(i.quantity) || 1,
       price: Number(i.price_at_time) || 0,
     }))
-
-    // Marker FIRST: if the steps below crash half-way we prefer a missing e-mail (the admin sees the alert) over a double one.
-    await logOrderEvent(String(committed.id), 'post_order_finalized', 'system', { via: 'timeout_recovery' })
 
     await finalize({
       id: String(committed.id), order_number: committed.order_number,
@@ -500,10 +524,13 @@ export async function POST(req: NextRequest) {
       return Math.max(Math.min(8_000, budget), budget - (Date.now() - requestStartedAt))
     })())
 
-    await finalizeOrder(order, alreadyExists, customerId)
-    // F-1: the marker the replay / recovery paths check. Written after the steps were STARTED (the e-mails run in after()), never
-    // before createOrder returned, so a key whose first request died inside createOrder still finalises on retry.
-    if (!alreadyExists) await logOrderEvent(order.id, 'post_order_finalized', 'system', { via: 'request' }).catch(() => null)
+    // F-1: the marker the replay / recovery paths check, claimed atomically BEFORE the post-order steps (Nov 2026 verification:
+    // it used to be written after them, so a replay arriving while coins were being redeemed found no marker and sent the
+    // e-mails a second time). Never before createOrder returned, so a key whose first request died inside createOrder still
+    // finalises on retry. A failed claim (not a conflict) still runs the steps: the normal path must not lose its e-mails.
+    if (alreadyExists || (await claimPostOrderMarker(order.id, 'request')) !== 'taken') {
+      await finalizeOrder(order, alreadyExists, customerId)
+    }
     // OPS-001: housekeeping (expire abandoned online orders, retry failed e-mails) — throttled, after the response, never fatal.
     const sweepOrigin = new URL(req.url).origin
     after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))

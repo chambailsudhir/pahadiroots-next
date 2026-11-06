@@ -18,12 +18,13 @@ import { NextResponse } from 'next/server'
 import { getNormalizedProducts } from '@/lib/storeData'
 import { toCardProductData } from '@/lib/normalizeProduct'
 import { logger } from '@/lib/logger'
+import { toPublicCatalogProduct } from '@/lib/publicCatalog'
 
 export async function GET() {
   try {
     const all = await getNormalizedProducts()
-    // Card-sized payload: drop the long AI/description fields search never shows.
-    const products = all.map(toCardProductData)
+    // Card-sized payload: drop the long AI/description fields search never shows; then the public allow-list / stock cap.
+    const products = all.map(p => toPublicCatalogProduct(toCardProductData(p) as unknown as Record<string, unknown>))
     return NextResponse.json(
       { products },
       {
