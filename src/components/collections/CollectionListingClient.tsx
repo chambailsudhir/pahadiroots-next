@@ -14,7 +14,8 @@ import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import SearchParamsBridge from '@/components/ui/SearchParamsBridge'
 import { computeListing, isDefaultView, useBrowseParams, useCatalog, usePageOverflowRedirect } from '@/components/product/useBrowseListing'
 
-export const COLLECTION_PAGE_SIZE = 24
+import { COLLECTION_PAGE_SIZE } from '@/lib/listingLimits'
+export { COLLECTION_PAGE_SIZE }
 
 const SORT_OPTIONS = [
   { value: 'newest',     label: 'Newest' },

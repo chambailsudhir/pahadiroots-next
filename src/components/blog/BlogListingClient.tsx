@@ -9,8 +9,8 @@ import { useCallback, useMemo, useState } from 'react'
 import SearchParamsBridge from '@/components/ui/SearchParamsBridge'
 import BlogListing, { type PostCard } from './BlogListing'
 
-/** How many stories one listing shows — the limit the server query used to apply per view. */
-export const BLOG_LISTING_LIMIT = 30
+import { BLOG_LISTING_LIMIT } from '@/lib/listingLimits'
+export { BLOG_LISTING_LIMIT }
 
 /** The posts one view shows: newest `BLOG_LISTING_LIMIT` overall, or of the chosen category. */
 export function selectPosts(posts: PostCard[] | null, category: string | undefined): PostCard[] | null {
