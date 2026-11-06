@@ -36,7 +36,6 @@ interface LoyaltyData {
   points_value:   number
   min_redeem:     number
   max_redeem_pct: number
-  earn_per_rupee?: number
   earn_per_order?: number
   earn_step_rupees?: number
   referral_bonus?: number

@@ -477,6 +477,73 @@ describe('createOrder — stock reservation failure', () => {
   })
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// S-01 (Nov 2026 verification, L-15 test debt): server-side guards that the UI also applies but a direct API call skips.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createOrder — S-01 server-side guards (named stock error, NaN COD cap, min_order_amount)', () => {
+  beforeEach(() => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireOrderRpcSuccess()
+  })
+
+  it('a real stock shortfall names the PRODUCT (not a variant id) so the customer knows which line to change', async () => {
+    wireHappyPathFetch()
+    mockDb.rpcResponses['reserve_stock_at_order'] = false   // DB says available_stock < qty for VARIANT_ID
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(BASE_INPUT, DEFAULT_SETTINGS)).rejects.toThrow(/Insufficient stock for “Himalayan Honey”/)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('falls back to the generic wording when the product name cannot be read — never leaks the variant id', async () => {
+    wireHappyPathFetch()
+    mockDb.rpcResponses['reserve_stock_at_order'] = false
+    routeFirst((url, method) => method === 'GET' && url.includes('/products') && url.includes('select=name'), [])
+    const { createOrder } = await import('@/lib/services/orderService')
+    const err = await createOrder(BASE_INPUT, DEFAULT_SETTINGS).catch((e: Error) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toMatch(/Insufficient stock for one of the items/)
+    expect((err as Error).message).not.toContain(VARIANT_ID)
+  })
+
+  it('a malformed cod_max_value (NaN) falls back to the ₹3000 cap instead of silently lifting it', async () => {
+    wireHappyPathFetch({ variantPrice: 2000 })   // 2 × ₹2000 = ₹4000 > 3000, free shipping
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(BASE_INPUT, { ...DEFAULT_SETTINGS, cod_max_value: 'abc' }))
+      .rejects.toThrow(/COD is only available for orders up to ₹3000/)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('the same malformed cod_max_value still lets an order under ₹3000 through (the fallback is a cap, not a block)', async () => {
+    wireHappyPathFetch({ variantPrice: 200 })    // ₹400 + ₹99 shipping
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(BASE_INPUT, { ...DEFAULT_SETTINGS, cod_max_value: 'abc' })).resolves.toBeTruthy()
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeDefined()
+  })
+
+  it('a configured cod_max_value is enforced on the server (direct API call cannot bypass the UI check)', async () => {
+    wireHappyPathFetch({ variantPrice: 200 })    // total ₹499
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(BASE_INPUT, { ...DEFAULT_SETTINGS, cod_max_value: '450' }))
+      .rejects.toThrow(/COD is only available for orders up to ₹450/)
+  })
+
+  it('min_order_amount is enforced on the server against the goods subtotal', async () => {
+    wireHappyPathFetch({ variantPrice: 200 })    // subtotal ₹400
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder(BASE_INPUT, { ...DEFAULT_SETTINGS, min_order_amount: '500' }))
+      .rejects.toThrow(/Minimum order is ₹500/)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it.each([['exactly at the minimum', '400'], ['blank (disabled)', ''], ['malformed', 'abc'], ['zero', '0']])(
+    'min_order_amount %s → order proceeds', async (_n, value) => {
+      wireHappyPathFetch({ variantPrice: 200 })
+      const { createOrder } = await import('@/lib/services/orderService')
+      await expect(createOrder(BASE_INPUT, { ...DEFAULT_SETTINGS, min_order_amount: value })).resolves.toBeTruthy()
+    })
+})
+
 describe('createOrder — coupon server-side re-validation (defence in depth)', () => {
   beforeEach(() => {
     mockDb.responses['orders'] = null

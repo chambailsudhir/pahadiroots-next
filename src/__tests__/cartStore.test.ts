@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useCartStore, selectCartCount, selectHasHydrated } from '@/store/cartStore'
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import type { CartItem } from '@/types'
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -138,16 +139,16 @@ describe('cartStore.addItem', () => {
     expect(useCartStore.getState().items[0].qty).toBe(3) // capped at original maxQty
   })
 
-  it('falls back to 99 cap when existing item has no maxQty (stripped by persist)', () => {
+  it('falls back to the MAX_LINE_QTY (50) cap when existing item has no maxQty (stripped by persist)', () => {
     // Simulate a hydrated item without maxQty
     useCartStore.setState({
       items: [{ ...makeItem(), qty: 1, maxQty: undefined as unknown as number }],
     })
-    // Adding more should not crash — caps at 99
+    // Adding more should not crash — caps at MAX_LINE_QTY
     useCartStore.getState().addItem({ ...makeItem(), qty: 50 })
     const qty = useCartStore.getState().items[0].qty
     expect(qty).toBeGreaterThan(1)
-    expect(qty).toBeLessThanOrEqual(99)
+    expect(qty).toBeLessThanOrEqual(MAX_LINE_QTY)
   })
 })
 
@@ -666,6 +667,20 @@ describe('cartStore — _hasHydrated flag', () => {
     expect(typeof finishCallback).toBe('function')
 
     finishCallback?.(useCartStore.getState(), undefined)
+    expect(useCartStore.getState()._hasHydrated).toBe(true)
+  })
+
+  it('onRehydrateStorage clamps a persisted line above MAX_LINE_QTY (99 from a pre-limit cart → 50), leaving smaller lines alone', () => {
+    useCartStore.setState({ items: [
+      { ...makeItem({ variantId: 'v-old' }), qty: 99, maxQty: undefined as unknown as number },
+      { ...makeItem({ variantId: 'v-ok' }),  qty: 3,  maxQty: undefined as unknown as number },
+    ] })
+    const onRehydrateStorage = useCartStore.persist?.getOptions?.()?.onRehydrateStorage
+    const finish = onRehydrateStorage?.(useCartStore.getState())
+    finish?.(useCartStore.getState(), undefined)
+    const items = useCartStore.getState().items
+    expect(items.find(i => i.variantId === 'v-old')!.qty).toBe(MAX_LINE_QTY)
+    expect(items.find(i => i.variantId === 'v-ok')!.qty).toBe(3)
     expect(useCartStore.getState()._hasHydrated).toBe(true)
   })
 

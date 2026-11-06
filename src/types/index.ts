@@ -360,7 +360,7 @@ export interface SiteSettings {
 
   // Loyalty / coins programme
   loyalty_enabled: string               // 'true' | 'false'
-  loyalty_points_per_rupee: string      // coins earned per ₹ spent e.g. '1'
+  loyalty_points_per_rupee: string      // LEGACY — no longer used to earn (coins are per delivered order, by value: loyalty_coins_per_order / loyalty_coin_step_rupees)
   loyalty_points_value: string          // ₹ value of 1 coin e.g. '0.25'
   loyalty_points_label: string          // display name e.g. 'Pahadi Coins'
   loyalty_min_redeem: string            // minimum coins to redeem per order e.g. '40'

@@ -151,7 +151,16 @@ describe('invoice route status gate', () => {
   it.each(['pending', 'cancelled', 'payment_failed'])('409s for a %s order', async (s) => {
     expect((await invoice(s)).status).toBe(409)
   })
-  it.each(['confirmed', 'delivered'])('renders for a %s order', async (s) => {
+  it.each(['confirmed', 'delivered', 'shipped', 'processing'])('renders for a %s order', async (s) => {
     expect((await invoice(s)).status).toBe(200)
   })
+  // R4-03: the supply was reversed — the original tax invoice is no longer valid (a credit note is), so it is refused too.
+  // The route answers text/plain (not JSON) so the browser shows the message as-is.
+  it.each(['returned', 'RETURNED', 'return_requested', 'return_approved', 'refunded', 'refund_pending', 'refund_initiated'])(
+    '409s with the credit-note message for a %s order', async (s) => {
+      const res = await invoice(s)
+      expect(res.status).toBe(409)
+      expect(res.headers.get('content-type')).toMatch(/text\/plain/)
+      expect(await res.text()).toMatch(/returned or refunded.*credit note/i)
+    })
 })

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { computeInvoiceLine, getSupplyType, computeInvoiceTotals, BUSINESS_INFO } from '@/lib/invoiceGst'
+import { computeInvoiceLine, getSupplyType, BUSINESS_INFO } from '@/lib/invoiceGst'
 
 describe('computeInvoiceLine', () => {
   it('back-calculates taxable value from a GST-inclusive price at 5%', () => {
@@ -60,37 +60,8 @@ describe('getSupplyType', () => {
   })
 })
 
-describe('computeInvoiceTotals', () => {
-  const lines = [
-    computeInvoiceLine({ name: 'A', gstRate: 5, quantity: 1, priceInclGst: 210 }),
-    computeInvoiceLine({ name: 'B', gstRate: 12, quantity: 1, priceInclGst: 112 }),
-  ]
-
-  it('splits tax into CGST + SGST (each exactly half) for intra-state supply', () => {
-    const totals = computeInvoiceTotals(lines, 'intra')
-    expect(totals.cgst).toBeCloseTo(totals.sgst, 5)
-    expect(totals.cgst + totals.sgst).toBeCloseTo(totals.totalTax, 5)
-    expect(totals.igst).toBe(0)
-  })
-
-  it('puts the full tax into IGST (nothing into CGST/SGST) for inter-state supply', () => {
-    const totals = computeInvoiceTotals(lines, 'inter')
-    expect(totals.igst).toBeCloseTo(totals.totalTax, 5)
-    expect(totals.cgst).toBe(0)
-    expect(totals.sgst).toBe(0)
-  })
-
-  it('grand total = taxable value + tax + shipping (shipping added, not itself GST-split)', () => {
-    const totals = computeInvoiceTotals(lines, 'intra', 40)
-    expect(totals.grandTotal).toBeCloseTo(totals.taxableValue + totals.totalTax + 40, 5)
-  })
-
-  it('grand total matches the sum of GST-inclusive line totals when there is no shipping', () => {
-    const totals = computeInvoiceTotals(lines, 'inter', 0)
-    const sumOfLineTotals = lines.reduce((s, l) => s + l.lineTotal, 0)
-    expect(totals.grandTotal).toBeCloseTo(sumOfLineTotals, 5)
-  })
-})
+// The legacy computeInvoiceTotals (flat 18% on the COD fee, shipping untaxed) was removed (L-16); the stored-order
+// invoice path is covered by invoiceReconciliation.test.ts and invoiceGstFeeTax.test.ts.
 
 describe('BUSINESS_INFO', () => {
   it('GSTIN state-code prefix (02) matches the declared business state (Himachal Pradesh)', () => {

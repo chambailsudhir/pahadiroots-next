@@ -35,7 +35,9 @@ export function calcPriceSummary(
   // cart hooks and every piece of shipping copy — they previously disagreed (₹500 here, 0 in
   // DEFAULTS, ₹799 in marketing text). Fallbacks only apply when the admin row is missing/blank.
   const freeShippingMin  = Math.max(0, asNumber(settings.free_shipping_min, FALLBACK_FREE_SHIPPING_MIN))
-  const flatShipping     = Math.max(0, asNumber(settings.flat_shipping_charge, FALLBACK_FLAT_SHIPPING))
+  // L-10 (Nov 2026 verification): whole rupees, like codSurcharge below — a '49.5' admin value gave a paise total that Razorpay
+  // charged as Math.round(total*100) while the invoice showed ₹x.50.
+  const flatShipping     = Math.round(Math.max(0, asNumber(settings.flat_shipping_charge, FALLBACK_FLAT_SHIPPING)))
   const prepaidPct       = asNumber(settings.prepaid_discount_pct, 5)
   const codSurchargeAmt  = asNumber(settings.cod_surcharge_amount, 0)
 

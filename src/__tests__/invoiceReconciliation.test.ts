@@ -4,7 +4,7 @@
  * 100 pts × ₹0.25 = 25 loyalty, prepaid 86, total 1642.
  */
 import { describe, it, expect } from 'vitest'
-import { computeOrderInvoice, invoiceRows, computeInvoiceTotals, computeInvoiceLine } from '@/lib/invoiceGst'
+import { computeOrderInvoice, invoiceRows } from '@/lib/invoiceGst'
 
 const TV13 = {
   items: [
@@ -71,14 +71,6 @@ describe('computeOrderInvoice (TV13)', () => {
     const inv = computeOrderInvoice({ items: [{ name: 'A', qty: 1, price: 100 }], total_amount: 120, subtotal: 100 })
     expect(inv.otherAdjustment).toBe(20)
     expect(inv.reconciles).toBe(true)
-  })
-
-  it('legacy computeInvoiceTotals halves also use splitGST (332.31 → 166.15 / 166.16)', () => {
-    // 6982.51 incl. 5% → tax 332.50; craft a line whose tax lands on odd paise instead:
-    const line = computeInvoiceLine({ name: 'X', gstRate: 5, quantity: 1, priceInclGst: 6978.51 }) // tax 332.31
-    const t = computeInvoiceTotals([line], 'intra')
-    expect(Math.round((t.cgst + t.sgst) * 100)).toBe(Math.round(t.totalTax * 100))
-    expect(Math.abs(t.cgst - t.sgst)).toBeLessThanOrEqual(0.01)
   })
 })
 

@@ -12,7 +12,7 @@
  * for the last-good fallback and any RLS/column drift), while (c) still
  * returning only { code, label } per hint.
  */
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
@@ -48,17 +48,35 @@ beforeEach(() => {
   fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ROWS })
 })
 
+// The route picks its key at MODULE LOAD (`SUPABASE_SERVICE_KEY || NEXT_PUBLIC_SUPABASE_ANON_KEY`), so each case stubs the env
+// explicitly and re-imports; neither case may depend on what happens to be in the test runner's environment (L-16: the old
+// "must use the anon key" test only passed because SUPABASE_SERVICE_KEY was unset, and contradicted the service-key test).
+async function loadRouteWithServiceKey(serviceKey: string | undefined) {
+  vi.unstubAllEnvs()
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co')
+  vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon')
+  vi.stubEnv('SUPABASE_SERVICE_KEY', serviceKey ?? '')
+  vi.resetModules()
+  return import('@/app/api/v1/coupon-hints/route')
+}
+
 describe('coupon-hints reads server-side (round-4: the anon key sees no coupon rows, the cart never showed a hint)', () => {
+  afterEach(async () => { await loadRouteWithServiceKey(undefined) })
+
   it('uses the service key for the read when it is configured, never the anon key', async () => {
-    vi.stubEnv('SUPABASE_SERVICE_KEY', 'service-role-key')
-    vi.resetModules()
-    const { GET } = await import('@/app/api/v1/coupon-hints/route')
+    const { GET } = await loadRouteWithServiceKey('service-role-key')
     await GET()
     const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
     expect(headers.apikey).toBe('service-role-key')
     expect(headers.Authorization).toBe('Bearer service-role-key')
-    vi.unstubAllEnvs(); vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co'); vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon')
-    vi.resetModules()
+  })
+
+  it('falls back to the anon key only when no service key is configured (the read then returns no rows under RLS — a deploy misconfiguration, not a secret leak)', async () => {
+    const { GET } = await loadRouteWithServiceKey(undefined)
+    await GET()
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers.apikey).toBe('anon')
+    expect(headers.Authorization).toBe('Bearer anon')
   })
 })
 
@@ -103,12 +121,5 @@ describe('GET /api/v1/coupon-hints (AUDIT S1-010)', () => {
     expect(url).toMatch(/or\(expires_at\.is\.null,expires_at\.gte\./)
     // the filter columns are fetched so the JS guard can run
     expect(url).toMatch(/select=[^&]*max_uses/)
-  })
-
-  it('still uses the anon key (service key must not be used for a public GET)', async () => {
-    const { GET } = await import('@/app/api/v1/coupon-hints/route')
-    await GET()
-    const init = fetchMock.mock.calls[0][1]
-    expect(init.headers.apikey).toBe('anon')
   })
 })
