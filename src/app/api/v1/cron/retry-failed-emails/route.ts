@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
-import { MAX_DLQ_ATTEMPTS } from '@/lib/server/email'
+import { MAX_DLQ_ATTEMPTS, isPermanentEmailFailure } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
 
 // Cap per-invocation work so this stays comfortably inside Vercel's function
@@ -167,6 +167,9 @@ export async function GET(req: NextRequest) {
     }
 
     let errMessage: string | null = null
+    // Nov 2026 (finding H): a rejection no retry can fix (malformed recipient, missing field, unverified sender) is closed as 'dead' on
+    // this sweep instead of being re-sent 5× over ~3.3 h. A thrown error (timeout, network, missing API key) is always transient.
+    let permanent = false
 
     try {
       // Constructed INSIDE the try: with RESEND_API_KEY unset the SDK throws "Missing API key", which used to escape after the row was
@@ -182,6 +185,7 @@ export async function GET(req: NextRequest) {
         SEND_TIMEOUT_MS,
       )
       errMessage = error ? (error.message || JSON.stringify(error)) : null
+      permanent  = !!error && isPermanentEmailFailure(error)
     } catch (e: unknown) {
       errMessage = e instanceof Error ? e.message : String(e)
     }
@@ -197,24 +201,28 @@ export async function GET(req: NextRequest) {
     }
 
     const newAttempts = row.attempts + 1
-    if (newAttempts >= MAX_DLQ_ATTEMPTS) {
+    if (permanent || newAttempts >= MAX_DLQ_ATTEMPTS) {
+      const lastError = (permanent ? 'permanent: ' : '') + errMessage
       await db.from('failed_emails').update({
         status:          'dead',
         attempts:        newAttempts,
-        last_error:      errMessage.slice(0, 1000),
+        last_error:      lastError.slice(0, 1000),
         last_attempt_at: nowIso,
       }).eq('id', row.id)
       dead++
       // BUG FIX 15c: alert:true — a dead-letter email means a customer who
       // paid never received their receipt. Needs immediate ops attention.
       captureError(
-        new Error(`Email permanently dead: ${row.type} to ${row.to_email} after ${newAttempts} attempts`),
+        new Error(permanent
+          ? `Email permanently rejected: ${row.type} to ${row.to_email} (${errMessage.slice(0, 120)})`
+          : `Email permanently dead: ${row.type} to ${row.to_email} after ${newAttempts} attempts`),
         {
           action:     'cron.retry_failed_emails.dead',
           email_type: row.type,
           to_email:   row.to_email,
           attempts:   newAttempts,
-          last_error: errMessage.slice(0, 200),
+          permanent,
+          last_error: lastError.slice(0, 200),
           alert:      true,
         },
       )

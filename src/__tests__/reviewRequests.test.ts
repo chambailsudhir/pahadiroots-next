@@ -73,6 +73,15 @@ describe('sendReviewRequests', () => {
     expect(upsert[1]).toMatchObject({ onConflict: 'order_id', ignoreDuplicates: true })
   })
 
+  // Nov 2026 (finding F): the review link went through raw NEXT_PUBLIC_SITE_URL; a preview / localhost / trailing-slash value
+  // would have put a broken link in the customer's inbox. emailSiteUrl() falls back to the canonical origin.
+  it('the review link uses emailSiteUrl(): a localhost / http / trailing-slash env never reaches the mail', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'http://localhost:3000/')
+    await run()
+    expect(h.send.mock.calls[0][0].html).toContain('https://www.pahadiroots.com/account/orders/1/review')
+    expect(h.send.mock.calls[0][0].html).not.toContain('localhost')
+  })
+
   it('queries delivered orders inside the [now-21d, now-7d] window (backlog guard)', async () => {
     await run()
     const q = log.find(o => o.table === 'orders')!.ops

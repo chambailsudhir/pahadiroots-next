@@ -133,8 +133,10 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   const steps = ['Confirmed', 'Packed', 'Shipped', 'Delivered']
   const stepCells = steps.map((s, idx) => {
     const on = idx === 0
+    // Nov 2026 (finding B): a bgcolor table cell with a fixed width/height, not a div — Outlook ignores div backgrounds and
+    // border-radius, so the marker was missing there; as a cell it degrades to a coloured square and the number stays visible.
     return `<td align="center" width="25%" style="padding:0 2px">
-      <div style="width:26px;height:26px;line-height:26px;border-radius:50%;margin:0 auto;font-size:13px;font-weight:700;${on ? 'background:#1a3a1e;color:#ffffff' : 'background:#ece5d8;color:#6b6256'}">${on ? '✓' : idx + 1}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto"><tr><td width="26" height="26" align="center" valign="middle" bgcolor="${on ? '#1a3a1e' : '#ece5d8'}" style="width:26px;height:26px;line-height:26px;border-radius:50%;background-color:${on ? '#1a3a1e' : '#ece5d8'};color:${on ? '#ffffff' : '#6b6256'};font-size:13px;font-weight:700">${on ? '✓' : idx + 1}</td></tr></table>
       <div style="font-size:11px;margin-top:6px;color:${on ? '#1a3a1e' : '#6b6256'};font-weight:${on ? '700' : '500'}">${s}</div>
     </td>`
   }).join('')
@@ -180,7 +182,7 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   ${brandHeaderRow()}
 
   <tr><td class="px" align="center" style="background:#ffffff;padding:32px 28px 8px">
-    <div style="width:56px;height:56px;line-height:56px;border-radius:50%;background:#e6f2e8;color:#1a3a1e;font-size:28px;margin:0 auto 14px">✓</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 14px"><tr><td width="56" height="56" align="center" valign="middle" bgcolor="#e6f2e8" style="width:56px;height:56px;line-height:56px;border-radius:50%;background-color:#e6f2e8;color:#1a3a1e;font-size:28px">✓</td></tr></table>
     <h1 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;color:#1a3a1e;font-weight:700">${esc(headline)}</h1>
     <p style="margin:0 0 18px;font-size:15px;line-height:1.55;color:#4a4338">Hi ${esc(firstName)}, thank you for choosing the mountains. We are getting your order ready.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 6px"><tr>
@@ -190,7 +192,9 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   </td></tr>
 
   <tr><td class="px" align="center" style="background:#ffffff;padding:18px 28px 26px">
-    <a href="${trackUrl}" style="display:inline-block;background:#1a3a1e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 34px;border-radius:10px">Track your order</a>
+    <!-- "bulletproof" button (finding B, Nov 2026): the colour sits on the <td> (bgcolor + background-color), not on the <a> —
+         Outlook desktop ignores padding/background on an inline anchor, which made this white text on a white card. -->
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto"><tr><td align="center" bgcolor="#1a3a1e" style="background-color:#1a3a1e;border-radius:10px"><a href="${trackUrl}" target="_blank" style="display:inline-block;background-color:#1a3a1e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;line-height:20px;padding:14px 34px;border-radius:10px;border:1px solid #1a3a1e">Track your order</a></td></tr></table>
   </td></tr>
 
   <tr><td class="px" style="background:#ffffff;padding:0 28px 22px">
@@ -236,7 +240,7 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   <tr><td class="px" align="center" style="background:#ffffff;padding:24px 28px">
     <div style="font-size:15px;font-weight:700;color:#1a1611;margin-bottom:4px">Need help with this order?</div>
     <div style="font-size:13px;color:#4a4338;margin-bottom:12px">Message us on WhatsApp with order number ${esc(o.orderNumber)} — we usually reply the same day.</div>
-    <a href="${WHATSAPP}?text=${encodeURIComponent('Hi, I need help with order ' + o.orderNumber)}" style="display:inline-block;border:1.5px solid #1a3a1e;color:#1a3a1e;text-decoration:none;font-weight:700;font-size:14px;padding:10px 24px;border-radius:10px">Chat on WhatsApp</a>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto"><tr><td align="center" bgcolor="#ffffff" style="background-color:#ffffff;border:1.5px solid #1a3a1e;border-radius:10px"><a href="${WHATSAPP}?text=${encodeURIComponent('Hi, I need help with order ' + o.orderNumber)}" target="_blank" style="display:inline-block;background-color:#ffffff;color:#1a3a1e;text-decoration:none;font-weight:700;font-size:14px;line-height:20px;padding:10px 24px;border-radius:10px">Chat on WhatsApp</a></td></tr></table>
   </td></tr>
 
   <tr><td align="center" style="background:#1a3a1e;border-radius:0 0 18px 18px;padding:22px 28px">
