@@ -420,3 +420,66 @@ describe('GET /api/v1/cron/retry-failed-emails — expired e-mails page ops (Oct
     expect(mockCaptureError.mock.calls.find(c => (c[1] as { action?: string })?.action === 'cron.retry_failed_emails.expired')).toBeUndefined()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nov 2026 (e-mail verification, finding H): permanent Resend rejections are not retried
+// ─────────────────────────────────────────────────────────────────────────────
+describe('GET /api/v1/cron/retry-failed-emails — permanent vs transient failures (finding H)', () => {
+  beforeEach(() => { process.env.CRON_SECRET = 'test-cron-secret' })
+
+  it('a 4xx validation rejection ("Invalid `to` field") is marked dead on the FIRST sweep, with the error, and pages ops', async () => {
+    mockDb.candidates = [row({ id: 'fe-1', attempts: 0, to_email: 'not-an-address' })]
+    mockSend.mockResolvedValue({ data: null, error: { name: 'validation_error', message: 'Invalid `to` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format' } })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+
+    expect(json).toMatchObject({ claimed: 1, sent: 0, stillFailing: 0, dead: 1 })
+    const final = mockDb.updateCalls.at(-1)!
+    expect(final.payload.status).toBe('dead')
+    expect(final.payload.attempts).toBe(1)
+    expect(String(final.payload.last_error)).toMatch(/^permanent: Invalid `to` field/)
+    expect(final.payload.next_retry_at).toBeUndefined()
+    const alert = mockCaptureError.mock.calls.find(c => (c[1] as { action?: string })?.action === 'cron.retry_failed_emails.dead')!
+    expect(alert).toBeDefined()
+    expect(alert[1]).toMatchObject({ alert: true, permanent: true, to_email: 'not-an-address' })
+  })
+
+  it.each([
+    ['missing_required_field', 'Missing `from` field'],
+    ['invalid_from_address',   'The from address is not verified'],
+    ['not_found',              'Domain not found'],
+  ])('%s is permanent too', async (name, message) => {
+    mockDb.candidates = [row({ id: 'fe-1', attempts: 0 })]
+    mockSend.mockResolvedValue({ data: null, error: { name, message } })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+    expect(json).toMatchObject({ dead: 1, stillFailing: 0 })
+  })
+
+  it.each([
+    ['rate_limit_exceeded',   'Too many requests'],
+    ['application_error',     'Resend is having trouble'],
+    ['internal_server_error', 'boom'],
+    ['invalid_api_Key',       'API key is invalid'],
+  ])('%s keeps the backoff schedule (requeued as pending, not dead)', async (name, message) => {
+    mockDb.candidates = [row({ id: 'fe-1', attempts: 0 })]
+    mockSend.mockResolvedValue({ data: null, error: { name, message } })
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+    expect(json).toMatchObject({ dead: 0, stillFailing: 1 })
+    const final = mockDb.updateCalls.at(-1)!
+    expect(final.payload.status).toBe('pending')
+    expect(final.payload.attempts).toBe(1)
+    expect(typeof final.payload.next_retry_at).toBe('string')
+    expect(mockCaptureError.mock.calls.find(c => (c[1] as { action?: string })?.action === 'cron.retry_failed_emails.dead')).toBeUndefined()
+  })
+
+  it('a thrown network error (no Resend error code) is still transient', async () => {
+    mockDb.candidates = [row({ id: 'fe-1', attempts: 0 })]
+    mockSend.mockRejectedValue(new Error('fetch failed: ECONNRESET'))
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(makeReq('Bearer test-cron-secret'))).json()
+    expect(json).toMatchObject({ dead: 0, stillFailing: 1 })
+  })
+})

@@ -16,7 +16,7 @@
 import 'server-only'
 import type { getServiceClient } from '@/lib/supabase'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { brandedEmail } from '@/lib/server/emailShell'
+import { brandedEmail, emailSiteUrl } from '@/lib/server/emailShell'
 import { esc } from '@/lib/server/htmlEscape'
 import { captureError, logger } from '@/lib/logger'
 
@@ -83,7 +83,7 @@ export async function sendReviewRequests(
         for (const o of (ro ?? []) as Array<{ customer_id: number | string | null }>) if (o.customer_id != null) mailedCustomers.add(String(o.customer_id))
       }
     }
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com').replace(/\/+$/, '')
+    const siteUrl = emailSiteUrl()   // finding F: never a localhost / http / trailing-slash env value in a customer's inbox
 
     for (let page = 0; page < MAX_PAGES && stats.sent < limit; page++) {
       const { data: orders, error: oerr } = await db

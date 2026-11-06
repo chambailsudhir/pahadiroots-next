@@ -53,6 +53,8 @@ export type TransactionalEmailType =
   | 'newsletter_welcome'
   // Nov 2026: "How was your order?" mail sent a few days after delivery (lib/server/reviewRequests.ts).
   | 'review_request'
+  // Nov 2026 (finding G): the forgot-password link mail (api/auth/route.ts) — used to bypass this module and go to Resend directly.
+  | 'password_reset'
 
 export interface SendTransactionalEmailParams {
   type:      TransactionalEmailType
@@ -84,6 +86,29 @@ const INLINE_RETRY_DELAY_MS   = 400
 // and marking a row 'dead'. Exported so the cron route's backoff schedule
 // and any ops tooling stay in sync with this single source of truth.
 export const MAX_DLQ_ATTEMPTS = 5
+
+/**
+ * Nov 2026 (e-mail verification, finding H): a Resend rejection that NO retry can fix — a malformed recipient, a missing field, an
+ * unverified from address, an unknown resource. The dead-letter sweep used to retry these 5× over ~3.3 h before giving up; it now closes
+ * the row as 'dead' on the first sweep (with the error) so ops see it at once, while 5xx / rate-limit / API-key / network failures keep
+ * the backoff schedule. Classified by Resend's error `name` (https://resend.com/docs/api-reference/errors); only when there is no code
+ * (an older SDK, a hand-built error) does the message text decide. A known but non-permanent code always wins over the text.
+ */
+const PERMANENT_RESEND_ERROR_NAMES = new Set([
+  'validation_error',          // 403/422: e.g. "Invalid `to` field"
+  'missing_required_field',    // 422
+  'invalid_parameter',         // 422
+  'invalid_from_address',      // 403
+  'not_found',                 // 404
+  'invalid_attachment',        // 422
+])
+const PERMANENT_RESEND_MESSAGE = /invalid `?(to|from|cc|bcc|reply_to)`? field|not a valid email|missing `?\w+`? field|address is not verified/i
+export function isPermanentEmailFailure(error: { name?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const name = typeof error.name === 'string' ? error.name.trim() : ''
+  if (name) return PERMANENT_RESEND_ERROR_NAMES.has(name)
+  return PERMANENT_RESEND_MESSAGE.test(error.message || '')
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([

@@ -42,14 +42,14 @@ import {
   applyNewCookies,
 } from '@/lib/api/serverUtils'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
-import { brandedEmail } from '@/lib/server/emailShell'
+import { brandedEmail, emailSiteUrl } from '@/lib/server/emailShell'
 import { emailSafeHtml } from '@/lib/server/emailSafeHtml'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY!
 const IS_PROD      = process.env.NODE_ENV === 'production'
 const RESEND_KEY   = process.env.RESEND_API_KEY
-const SITE_URL     = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+const SITE_URL     = emailSiteUrl()   // finding F: a clean https origin only (never localhost / http / trailing slash) in the mail
 
 // order_status_enum values after which nothing more happens to the parcel or the money (checked against the live enum:
 // pending, confirmed, processing, packed, shipped, out_for_delivery, delivered, cancelled, payment_failed, returned,

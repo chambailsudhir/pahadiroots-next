@@ -230,3 +230,20 @@ describe('sendTransactionalEmail', () => {
     )
   })
 })
+
+// Nov 2026 (finding H): the classifier the retry sweep uses to close a row that no retry can fix.
+describe('isPermanentEmailFailure', () => {
+  it('classifies by the Resend error code, falling back to the message when there is none', async () => {
+    const { isPermanentEmailFailure } = await import('@/lib/server/email')
+    expect(isPermanentEmailFailure({ name: 'validation_error', message: 'Invalid `to` field' })).toBe(true)
+    expect(isPermanentEmailFailure({ name: 'missing_required_field', message: 'x' })).toBe(true)
+    expect(isPermanentEmailFailure({ name: 'invalid_parameter', message: 'x' })).toBe(true)
+    expect(isPermanentEmailFailure({ name: 'rate_limit_exceeded', message: 'x' })).toBe(false)
+    expect(isPermanentEmailFailure({ name: 'missing_api_key', message: 'x' })).toBe(false)
+    expect(isPermanentEmailFailure({ name: 'application_error', message: 'Invalid `to` field' })).toBe(false)   // a known code wins over the text
+    expect(isPermanentEmailFailure({ message: 'Invalid `to` field. The email address needs to follow...' })).toBe(true)
+    expect(isPermanentEmailFailure({ message: 'Timeout 5000ms' })).toBe(false)
+    expect(isPermanentEmailFailure(null)).toBe(false)
+    expect(isPermanentEmailFailure(undefined)).toBe(false)
+  })
+})

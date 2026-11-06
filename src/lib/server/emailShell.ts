@@ -41,7 +41,9 @@ export function brandHeaderRow(): string {
 export function brandedEmail(opts: { heading: string; bodyHtml: string; cta?: { label: string; href: string } }): string {
   // TABLE layout with `bgcolor` + `background-color` on the cells and a "bulletproof" button (a coloured table cell holding the link):
   // Outlook ignores div backgrounds / gradients / border-radius, which made the header and the button invisible there (Nov 2026).
-  const cta = opts.cta
+  // Nov 2026 (finding F): the button is rendered ONLY for an https link. Callers pass links built from env / Supabase responses;
+  // a javascript:, data:, http: or relative value must never become a clickable button in a customer's inbox, so it drops the button.
+  const cta = opts.cta && /^https:\/\//i.test(opts.cta.href)
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0"><tr><td align="center" bgcolor="#2d6a4f" style="background-color:#2d6a4f;border-radius:24px"><a href="${esc(opts.cta.href)}" target="_blank" style="display:inline-block;background-color:#2d6a4f;color:#ffffff;text-decoration:none;font-family:Arial,sans-serif;font-weight:700;font-size:15px;line-height:20px;padding:13px 28px;border-radius:24px;border:1px solid #2d6a4f">${esc(opts.cta.label)}</a></td></tr></table>`
     : ''
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"></head>

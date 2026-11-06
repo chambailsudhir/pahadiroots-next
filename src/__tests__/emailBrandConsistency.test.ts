@@ -36,3 +36,21 @@ describe('e-mail brand header', () => {
     expect(order).not.toMatch(/Changed your mind/i)
   })
 })
+
+// Nov 2026 (finding J): the admin repo (pahadi-admin src/lib/statusEmail.js brandHeaderHtml) carries a copy of this header because two
+// repos cannot share code. These are the canonical fragments BOTH copies must contain; change them here and in the admin together.
+describe('e-mail brand header — canonical fragments (cross-repo drift guard)', () => {
+  const header = brandHeaderRow()
+  it.each([
+    'https://www.pahadiroots.com/email-logo.png',
+    'width="240" height="90" alt="HimVeda by Pahadi Roots"',
+    'bgcolor="#fffdf9" style="background-color:#fffdf9;border-radius:18px 18px 0 0;padding:22px 28px 14px;border-bottom:3px solid #c8962a"',
+    'Pure Himalayan &middot; Natural &middot; Authentic',
+    'font-size:10px;letter-spacing:3px;color:#1a3a1e;margin-top:8px;text-transform:uppercase',
+  ])('contains %s', (fragment) => {
+    expect(header).toContain(fragment)
+  })
+  it('links the logo to the canonical https origin', () => {
+    expect(header).toMatch(/<a href="https:\/\/www\.pahadiroots\.com" target="_blank"/)
+  })
+})

@@ -30,8 +30,7 @@ import { validate as validators } from '@/lib/account/validation'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { captureError } from '@/lib/logger'
 import { esc } from '@/lib/server/htmlEscape'
-import { brandedEmail } from '@/lib/server/emailShell'
-import { emailSafeHtml } from '@/lib/server/emailSafeHtml'
+import { brandedEmail, emailSiteUrl } from '@/lib/server/emailShell'
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY!
@@ -213,7 +212,7 @@ function isSupabaseMailFailure(e: { status?: number; message?: string }): boolea
 }
 
 async function signupViaOwnMailer(email: string, password: string, fullName: string) {
-  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+  const SITE_URL = emailSiteUrl()   // finding F: a clean https origin only — never a preview / localhost value in the verification link
   const FRIENDLY = 'We created your account but could not send the verification e-mail right now. Please try again in a few minutes, or continue with Google.'
   try {
     // type "signup" creates the (unconfirmed) user AND returns the verification link WITHOUT sending any mail.
@@ -571,7 +570,7 @@ export async function POST(req: NextRequest) {
     if (!withinIpQuota || !withinGlobalCap) return ok(GENERIC)
 
     const RESEND_KEY = process.env.RESEND_API_KEY
-    const SITE_URL   = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
+    const SITE_URL   = emailSiteUrl()
     const work = async () => {
       if (!RESEND_KEY) {
         captureError(new Error('RESEND_API_KEY not set — password reset e-mails cannot be sent'), { action: 'auth.forgot_password.no_resend_key', alert: true })
@@ -599,23 +598,28 @@ export async function POST(req: NextRequest) {
         if (!genRes.ok) { console.warn('[forgot_password] generate_link failed:', genRes.status); return }
         const finalResetUrl = genData.action_link || genData.properties?.action_link || genData.data?.action_link || ''
         if (!finalResetUrl) { captureError(new Error('forgot_password: generate_link returned no link'), { action: 'auth.forgot_password.no_link', alert: true }); return }
-        const resendRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
-          signal: AbortSignal.timeout(8_000),
-          body: JSON.stringify({
-            from: 'HimVeda by Pahadi Roots <noreply@pahadiroots.com>', to: [email],
-            subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
-            html: emailSafeHtml(brandedEmail({
-              heading: 'Reset your password',
-              bodyHtml: '<p style="margin:0">Click the button below to set a new password. The link works once and expires soon. If you did not ask for this, you can ignore this email.</p>',
-              cta: { label: 'Reset password', href: finalResetUrl },
-            })),
+        // Nov 2026 (e-mail verification, finding G): this mail used to be POSTed to Resend directly and a failure was only logged —
+        // the customer waited for a reset link that never came, with no retry and no record. It now goes through
+        // sendTransactionalEmail like every other customer mail: inline retry, then a failed_emails row the cron sweep re-sends
+        // (the stored html carries the link; `context` deliberately does not). The response stays the neutral GENERIC answer.
+        const mail = await sendTransactionalEmail({
+          type:    'password_reset',
+          to:      email,
+          subject: '🔑 Reset Your Password — HimVeda by Pahadi Roots',
+          html:    brandedEmail({
+            heading: 'Reset your password',
+            bodyHtml: '<p style="margin:0">Click the button below to set a new password. The link works once and expires soon. If you did not ask for this, you can ignore this email.</p>',
+            cta: { label: 'Reset password', href: finalResetUrl },
           }),
+          context: { purpose: 'password_reset' },
         })
-        if (!resendRes.ok) {
-          const t = await resendRes.text()
-          captureError(new Error(`forgot_password: Resend failed (${resendRes.status})`), { action: 'auth.forgot_password.resend_failed', alert: true, detail: t.slice(0, 300) })
+        if (!mail.sent) {
+          captureError(
+            new Error(mail.deadLettered
+              ? 'forgot_password: Resend failed — queued for retry (failed_emails)'
+              : 'forgot_password: Resend failed and the mail could NOT be queued — reset link lost'),
+            { action: 'auth.forgot_password.resend_failed', alert: !mail.deadLettered, error: mail.error },
+          )
         }
       } catch (e: unknown) {
         captureError(e, { action: 'auth.forgot_password.unexpected', alert: true })

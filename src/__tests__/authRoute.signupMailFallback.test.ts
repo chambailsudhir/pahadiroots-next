@@ -75,6 +75,15 @@ describe('email_signup — mail fallback (ACC-025)', () => {
     expect(mocks.syncCustomerProfile).not.toHaveBeenCalled()      // the address is unproven: no customer row is touched at sign-up
   })
 
+  it('the redirect_to in the verification link uses emailSiteUrl(): a localhost env falls back to the canonical origin (finding F)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'http://localhost:3000/')
+    const { POST } = await import('@/app/api/auth/route')
+    await POST(req(SIGNUP))
+    const gen = fetchMock.mock.calls.find(c => String(c[0]).endsWith('/admin/generate_link'))!
+    expect(JSON.parse(gen[1].body).redirect_to).toBe('https://www.pahadiroots.com/account?verified=1')
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '')
+  })
+
   it('a healthy Supabase mailer is used exactly as before — the fallback never fires', async () => {
     smtpBroken = false
     const { POST } = await import('@/app/api/auth/route')

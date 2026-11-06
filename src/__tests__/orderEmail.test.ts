@@ -84,6 +84,32 @@ describe('buildOrderEmail', () => {
     expect(h).toContain('https://www.pahadiroots.com/uploads/b.jpg')
   })
 
+  // Nov 2026 (finding B): Outlook desktop ignores padding / background on an inline <a>, so a CTA that is only a styled anchor is
+  // white text on a white card there. Every CTA must be a "bulletproof" button: a <td> with bgcolor + background-color holding the link.
+  it('every CTA is a table-cell button (bgcolor + background-color on the <td>), never a bare styled <a> — Outlook-safe', () => {
+    const h = buildOrderEmail(base)
+    for (const cta of ['Track your order', 'Chat on WhatsApp']) {
+      const i = h.indexOf(`>${cta}</a>`)
+      expect(i).toBeGreaterThan(0)
+      const before = h.slice(Math.max(0, i - 700), i)
+      const td = before.lastIndexOf('<td ')
+      expect(td).toBeGreaterThan(before.lastIndexOf('</td>'))                    // the <a> is inside a <td>
+      expect(before.slice(td)).toMatch(/^<td align="center" bgcolor="#[0-9a-f]{6}" style="background-color:#[0-9a-f]{6};/)
+    }
+    // no anchor anywhere carries its own padding + background (the pattern Outlook drops) or the background shorthand
+    for (const a of h.match(/<a [^>]*>/g) ?? []) {
+      expect(a).not.toMatch(/background:/)
+      if (/padding:/.test(a)) expect(a).toMatch(/background-color:#[0-9a-f]{6}/)
+    }
+  })
+
+  it('the round step markers and the tick disc are table cells with bgcolor + fixed width/height (squares in Outlook, never missing)', () => {
+    const h = buildOrderEmail(base)
+    expect(h).not.toMatch(/<div style="[^"]*border-radius:50%/)
+    expect(h).toMatch(/<td width="56" height="56" align="center" valign="middle" bgcolor="#e6f2e8" style="width:56px;height:56px;[^"]*background-color:#e6f2e8/)
+    expect((h.match(/<td width="26" height="26" align="center" valign="middle" bgcolor="#(1a3a1e|ece5d8)"/g) ?? []).length).toBe(4)
+  })
+
   it('subject lines', () => {
     expect(orderEmailSubject('paid', 'PR1')).toMatch(/Payment received.*PR1/)
     expect(orderEmailSubject('cod', 'PR1')).toMatch(/Order confirmed.*PR1/)
