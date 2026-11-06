@@ -143,6 +143,22 @@ describe('sitemap()', () => {
     expect(at('/policies/privacy')).toBe('2026-10-01T00:00:00.000Z')    // fixed, not "now"
   })
 
+  it.each(['products', 'categories', 'states', 'blog_posts'])('R4-04: a %s read error is rethrown — a half-empty sitemap would tell Google those pages are gone', async (failing) => {
+    const boom = { message: `${failing} unavailable`, code: '57014' }
+    function chain(rows: unknown[], error: unknown) {
+      const c: any = { eq: () => c, order: () => c, range: () => c, then: (res: (v: unknown) => unknown) => Promise.resolve({ data: error ? null : rows, error }).then(res) }
+      return c
+    }
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: { from: (table: string) => ({ select: () => chain(table === 'states' ? [{ id: 'hp' }] : [], table === failing ? boom : null) }) },
+    }))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { default: sitemap } = await import('@/app/sitemap')
+    await expect(sitemap()).rejects.toBe(boom)
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('[sitemap]'), boom)
+    errSpy.mockRestore()
+  })
+
   it('Nov 2026 audit: a collection with no live products is NOT submitted to search engines', async () => {
     vi.doMock('@/lib/supabase', () => ({
       supabase: { from: (table: string) => ({ select: () => makeChain(

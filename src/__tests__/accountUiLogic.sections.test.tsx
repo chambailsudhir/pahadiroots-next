@@ -22,7 +22,7 @@ beforeEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); __resetLoyaltyCa
 const json = (body: unknown, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
 
 describe('LoyaltySection (E1-2)', () => {
-  const loyalty = { enabled: true, points: 120, value_inr: 120, points_value: 1, min_redeem: 50, max_redeem_pct: 20, label: 'Coins', referral_code: 'ABC', earn_per_rupee: 0.01, referral_bonus: 100 }
+  const loyalty = { enabled: true, points: 120, value_inr: 120, points_value: 1, min_redeem: 50, max_redeem_pct: 20, label: 'Coins', referral_code: 'ABC', referral_bonus: 100 }
 
   it('shows the content again after unmount/remount (no permanent skeleton)', async () => {
     const f = vi.fn(() => json(loyalty))

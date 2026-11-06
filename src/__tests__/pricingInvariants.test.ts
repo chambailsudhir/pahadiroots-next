@@ -47,6 +47,14 @@ describe('F-16 total invariant', () => {
     expect(at(101)).toBe(false)  // 499 < 500
   })
 
+  it('L-10: a paise-valued flat_shipping_charge (\'49.5\') is rounded to a whole rupee, so the Razorpay amount and the invoice agree', () => {
+    const s = calcPriceSummary([item({ price: 100, qty: 1 })], settings({ flat_shipping_charge: '49.5' }), null, 'razorpay')
+    expect(s.shipping).toBe(50)
+    expect(Number.isInteger(s.total)).toBe(true)
+    expect(Number.isInteger(s.total * 100)).toBe(true)
+    expect(s.total).toBe(150)
+  })
+
   it('free_shipping_min = 0 means every order ships free', () => {
     const s = calcPriceSummary([item({ price: 10, qty: 1 })], settings({ free_shipping_min: '0' }), null, 'cod')
     expect(s.isFreeShipping).toBe(true)

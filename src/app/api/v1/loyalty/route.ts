@@ -59,11 +59,10 @@ export async function GET(req: NextRequest) {
     const maxRedeemPct  = asNumber(settings.loyalty_max_redeem_pct, 20)
     const label         = settings.loyalty_points_label || 'Pahadi Coins'
     const points        = Number(customerRow?.loyalty_points ?? 0)
-    // AUDIT ACC-045: the page used to hard-code "Earn 1 coin per ₹1" and "100 bonus coins" while the real settings
-    // were 0.01 coins per ₹1 (1 coin per ₹100) — customers were promised 100x what they would earn. Send the real
-    // numbers so the copy can never drift from what awardLoyaltyPoints() actually does (same default: 1 per ₹).
-    const earnParsed    = parseFloat(settings.loyalty_points_per_rupee || '1')
-    const earnPerRupee  = Number.isFinite(earnParsed) && earnParsed >= 0 ? earnParsed : 1
+    // AUDIT ACC-045: the page used to hard-code "Earn 1 coin per ₹1" and "100 bonus coins". The copy is built from the real
+    // settings sent below (earn_per_order / earn_step_rupees, the same formula the delivery trigger uses — lib/loyaltyCoins.ts),
+    // so it can never drift from what is actually awarded. The legacy per-rupee rate (`earn_per_rupee`) is no longer sent:
+    // nothing reads it since coins moved to "per delivered order, by order value" (v28/v31).
     const referralBonus = asNumber(settings.referral_bonus_points, 100)
 
     const res = ok({
@@ -73,7 +72,6 @@ export async function GET(req: NextRequest) {
       points_value:  pointsValue,                        // per-point value in ₹
       min_redeem:    minRedeem,
       max_redeem_pct: maxRedeemPct,
-      earn_per_rupee:  earnPerRupee,                     // legacy (no longer used to earn)
       earn_per_order:  coinsPerOrder(settings),           // MAXIMUM coins per DELIVERED order
       earn_step_rupees: coinStepRupees(settings),         // 1 coin per this many ₹ of order value
       referral_bonus:  referralBonus,                    // coins each side gets for a referral

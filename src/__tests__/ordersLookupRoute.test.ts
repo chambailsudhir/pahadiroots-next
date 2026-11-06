@@ -285,6 +285,49 @@ describe('GET /api/v1/orders/lookup — recipient comes from the order itself', 
   })
 })
 
+describe('GET /api/v1/orders/lookup — S-10: the on-page invoice gets the STORED GST split, coin figures and HSN codes', () => {
+  const GST_ROW = {
+    ...SAMPLE_ORDER_ROW,
+    tax: 27, cgst: 13.5, sgst: 13.5, igst: 0, loyalty_points_redeemed: 100,
+    order_items: [{ ...SAMPLE_ORDER_ROW.order_items[0], products: { ...SAMPLE_ORDER_ROW.order_items[0].products, hsn_code: '15149120', gst_rate: 5 } }],
+  }
+
+  it('returns cgst/sgst/igst, loyalty_points_redeemed, loyalty_point_value (from settings) and the line hsn_code', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([GST_ROW])            // order (token path)
+    mocks.sbAdmin.mockResolvedValueOnce([{ value: '0.25' }])  // site_settings loyalty_points_value
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
+    expect(body.order).toMatchObject({ tax: 27, cgst: 13.5, sgst: 13.5, igst: 0, loyalty_points_redeemed: 100, loyalty_point_value: 0.25 })
+    expect(body.order.items[0]).toMatchObject({ hsn_code: '15149120', gst_rate: 5 })
+    expect(mocks.sbAdmin.mock.calls.some(c => String(c[1]).includes('site_settings?key=eq.loyalty_points_value'))).toBe(true)
+    // the SELECT reads the stored order row (`*` carries tax/cgst/sgst/igst/loyalty_points_redeemed) and the line's hsn_code —
+    // the split is NOT re-derived from live rates
+    expect(String(mocks.sbAdmin.mock.calls[0][1])).toMatch(/select=\*,/)
+    expect(String(mocks.sbAdmin.mock.calls[0][1])).toMatch(/select=[^&]*hsn_code/)
+  })
+
+  it('omits the split / coin fields (undefined, not 0) when the order row has none, and loyalty_point_value when the setting is unreadable or 0', async () => {
+    mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])
+    mocks.sbAdmin.mockResolvedValueOnce([{ value: '0' }])
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ&token=' + VALID_TOKEN))).json()
+    for (const k of ['cgst', 'sgst', 'igst', 'loyalty_points_redeemed', 'loyalty_point_value']) expect(body.order).not.toHaveProperty(k)
+    expect(body.order.items[0]).not.toHaveProperty('hsn_code')
+  })
+
+  it('serves the same fields on the signed-in owner path', async () => {
+    mocks.getToken.mockReturnValue('valid-access-token')
+    mocks.sbAuth.mockResolvedValue({ id: 'auth-user-1' })
+    mocks.syncCustomerProfile.mockResolvedValue({ id: 'cust-1' })
+    mocks.sbAdmin.mockResolvedValueOnce([GST_ROW])   // session query
+    mocks.sbAdmin.mockResolvedValueOnce([])          // customer sub-fetch
+    mocks.sbAdmin.mockResolvedValueOnce([{ value: '1' }])
+    const { GET } = await import('@/app/api/v1/orders/lookup/route')
+    const body = await (await GET(makeRequest('?order_number=PRMR4OEQ'))).json()
+    expect(body.order).toMatchObject({ cgst: 13.5, sgst: 13.5, igst: 0, loyalty_points_redeemed: 100, loyalty_point_value: 1 })
+  })
+})
+
 describe('GET /api/v1/orders/lookup — graceful degradation', () => {
   it('still returns the order (without customer_name) if the customer sub-fetch fails', async () => {
     mocks.sbAdmin.mockResolvedValueOnce([SAMPLE_ORDER_ROW])
