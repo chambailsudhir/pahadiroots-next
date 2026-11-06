@@ -36,7 +36,7 @@ import { sendTransactionalEmail } from '@/lib/server/email'
 import { refreshCatalogPages } from '@/lib/server/catalogFreshness'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { esc } from '@/lib/server/htmlEscape'
-import { brandedEmail } from '@/lib/server/emailShell'
+import { brandedEmail, emailSiteUrl } from '@/lib/server/emailShell'
 import { logger, captureError } from '@/lib/logger'
 
 export async function POST(
@@ -136,7 +136,8 @@ export async function POST(
             html: brandedEmail({
               heading: 'Your order has been cancelled',
               bodyHtml: `<p style="margin:0 0 12px">Order <strong>${esc(order.order_number)}</strong> was cancelled at your request. As this was a Cash-on-Delivery order, nothing was charged and no refund is needed. ${followupFailed.includes('loyalty_reversal') ? 'If you used Pahadi Coins on this order, our team will confirm their return to your account shortly.' : 'Any Pahadi Coins you used have been returned to your account.'}</p><p style="margin:0">Changed your mind? You can place a new order any time.</p>`,
-              cta: { label: 'Continue shopping', href: process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com' },
+              // Finding F (Nov 2026): always a clean https origin — brandedEmail drops the button for anything else.
+              cta: { label: 'Continue shopping', href: emailSiteUrl() },
             }),
             context: { order_id: order.id, order_number: order.order_number },
           })
