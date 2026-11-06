@@ -250,10 +250,17 @@ describe('AddressForm — pincode autofill', () => {
 })
 
 describe('AddressForm — saved-address prefill loading indicator', () => {
-  it('[BUG FIX] shows a loading status when prefillLoading=true so the form does not look frozen', () => {
+  it('[BUG FIX] shows a loading indicator when prefillLoading=true so the form does not look frozen', () => {
     setup({}, { prefillLoading: true })
     expect(screen.getByText('Loading your saved details…')).toBeTruthy()
-    expect(screen.getByRole('status', { name: '' })).toBeTruthy()
+  })
+
+  it('[EX-02] the indicator is visible but NOT a live region (no role="status" / aria-live), so screen readers are not interrupted', () => {
+    setup({}, { prefillLoading: true })
+    const el = screen.getByText('Loading your saved details…')
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(el.closest('[aria-live]')).toBeNull()
+    expect(el.getAttribute('role')).toBeNull()
   })
 
   it('shows nothing extra when prefillLoading is false/omitted', () => {

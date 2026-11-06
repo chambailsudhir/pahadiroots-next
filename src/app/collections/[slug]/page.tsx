@@ -289,8 +289,9 @@ export default async function CollectionPage({ params, searchParams }: Props) {
         {/* Sort bar */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
           justifyContent: 'space-between', gap: '12px', marginBottom: '20px' }}>
-          <p style={{ fontSize: '13px', color: '#7a7a7a', margin: 0 }}>
-            {count} products • Showing {Math.min(offset + 1, count)}–{Math.min(offset + PAGE_SIZE, count)}
+          {/* Nov 2026 audit (F-5 / L6): #7a7a7a was 3.9:1 on the #f9f4ec page background; #5a5448 is 6.9:1. "1 products" pluralised. */}
+          <p style={{ fontSize: '13px', color: '#5a5448', margin: 0 }}>
+            {count} {count === 1 ? 'product' : 'products'} • Showing {Math.min(offset + 1, count)}–{Math.min(offset + PAGE_SIZE, count)}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <Link href={url({ instock: instock ? 'false' : 'true' })} style={{
@@ -302,9 +303,10 @@ export default async function CollectionPage({ params, searchParams }: Props) {
               <Link key={opt.value} href={url({ sort: opt.value })} style={{
                 fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '20px',
                 border: '1.5px solid', textDecoration: 'none',
-                background: sort === opt.value ? '#c8920a' : '#fff',
+                // F-5: white on #c8920a was 2.8:1; the darker brand gold #8a6508 (globals.css --pm-gold-text) is 5.3:1.
+                background: sort === opt.value ? '#8a6508' : '#fff',
                 color:      sort === opt.value ? '#fff'    : '#555',
-                borderColor: sort === opt.value ? '#c8920a' : '#ddd' }}>
+                borderColor: sort === opt.value ? '#8a6508' : '#ddd' }}>
                 {opt.label}
               </Link>
             ))}

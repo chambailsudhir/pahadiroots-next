@@ -140,7 +140,7 @@
 .cardPrice { display: flex; align-items: baseline; gap: 8px; }
 .cardPrice strong { color: #141f17; font: 700 13.6px/1 var(--sans); }
 .cardPrice span { color: #5c655f; /* was 4.08:1 at 9.5px; now 6:1 */ font: 400 9.5px/1 var(--sans); }
-.cardCart { position: relative; z-index: 3; display: grid; place-items: center; width: 37px; height: 28px; border: 0; border-radius: 7px; background: #12301f; color: #fff; cursor: pointer; transition: background .2s ease; }
+.cardCart { position: relative; z-index: 3; display: grid; place-items: center; width: 37px; min-width: 24px; height: 28px; min-height: 24px; flex-shrink: 0; border: 0; border-radius: 7px; background: #12301f; color: #fff; cursor: pointer; transition: background .2s ease; }
 .cardCart:hover:not(:disabled) { background: #1b472d; }
 .cardCart:focus-visible { outline: 2px solid #c89427; outline-offset: 2px; }
 .cardCart:disabled { opacity: .4; cursor: not-allowed; }

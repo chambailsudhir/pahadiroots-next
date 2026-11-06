@@ -135,7 +135,7 @@
   font-family: var(--font-playfair, 'Playfair Display', serif);
   font-size: 13px;
   font-style: italic;
-  color: #c9a240;
+  color: #8a6508; /* F-5 (Nov 2026 audit): was #c9a240 = 2.4:1 on white; #8a6508 = 5.3:1 */
   margin-bottom: 28px;
   letter-spacing: 0.2px;
 }

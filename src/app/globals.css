@@ -35,7 +35,7 @@
   --gd3: #f5d98a;
   --tx:  #1a1a1a;
   --tx2: #4a4a4a;
-  --tx3: #7a7a7a;
+  --tx3: #666666; /* F-5 (Nov 2026 audit): #7a7a7a was 3.8:1 on the cream --pm-cream (#f5f0e8); #666 = 5.1:1 */
   --bd:  rgba(26,58,30,.12);
 }
 
@@ -441,15 +441,6 @@ footer.site-footer {
   position: relative;
   padding: 0;
 }
-.f-newsletter { background: linear-gradient(180deg,#0f2a14 0%,#1a3a1e 100%); padding: 40px 40px 44px; }
-.f-nl-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-.f-nl-text h4 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 20px; font-weight: 900; color: #fff; margin-bottom: 4px; }
-.f-nl-text p { font-size: 13px; color: rgba(255,255,255,.55); }
-.f-nl-form { display: flex; gap: 0; border-radius: 10px; overflow: hidden; border: 1.5px solid rgba(255,255,255,.18); min-width: 320px; }
-.f-nl-inp { flex: 1; padding: 13px 18px; background: rgba(255,255,255,.07); border: none; color: #fff; font-size: 13.5px; font-family: var(--font-lato), 'Lato', sans-serif; outline: none; }
-.f-nl-inp::placeholder { color: rgba(255,255,255,.35); }
-.f-nl-btn { padding: 13px 22px; background: var(--gd); color: #1a0800; font-weight: 800; font-size: 13px; border: none; cursor: pointer; font-family: var(--font-lato), 'Lato', sans-serif; transition: background .2s; white-space: nowrap; }
-.f-nl-btn:hover { background: var(--gd2); }
 .f-main { max-width: 1200px; margin: 0 auto; padding: 44px 40px 32px; display: grid; grid-template-columns: 2fr 1fr 1fr 1.3fr; gap: 40px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .f-logo-name { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 22px; font-weight: 900; color: #fff; }
 .f-logo-tag { font-size: 11px; color: var(--gd); font-weight: 600; }
@@ -469,7 +460,7 @@ footer.site-footer {
 .f-bot { max-width: 1200px; margin: 0 auto; padding: 18px 40px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; position: relative; z-index: 2; }
 .f-bot-left { font-size: 12px; color: rgba(255,255,255,.32); }
 .f-bot-tag { font-size: 11.5px; color: rgba(255,255,255,.3); font-style: italic; }
-@media(max-width:768px) { .f-main { grid-template-columns: 1fr 1fr; padding: 32px 20px; } .f-newsletter { padding: 32px 20px; } .f-nl-form { min-width: 0; width: 100%; } .f-nl-inner { flex-direction: column; } .f-bot { padding: 18px 20px; } }
+@media(max-width:768px) { .f-main { grid-template-columns: 1fr 1fr; padding: 32px 20px; } .f-bot { padding: 18px 20px; } }
 @media(max-width:480px) { .f-main { grid-template-columns: minmax(0, 1fr); } }
 
 /* BUG FIX (P3): this entire "State Stories / Regions" block was

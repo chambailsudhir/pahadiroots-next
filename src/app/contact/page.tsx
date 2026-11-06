@@ -50,6 +50,9 @@ export default function ContactPage() {
   })
   const settings = settingsRows || {} as SiteSettings
   const waNumber = settings.whatsapp_number || '919899984895'
+  // L2 (Nov 2026 audit, CLS 0.066 on phones): the e-mail and address cards only appear once the settings arrive (~2.7 s on a
+  // cold start) and pushed the form card down. Until then two same-height placeholders hold their space so nothing moves.
+  const settingsLoading = settingsRows === undefined
 
   const [form, setForm]     = useState({ name: '', email: '', message: '' })
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
@@ -101,6 +104,18 @@ export default function ContactPage() {
               <div className="text-xs text-green-700 font-mono mt-1">+{waNumber}</div>
             </div>
           </a>
+
+          {settingsLoading && [0, 1].map(i => (
+            <div key={i} data-testid="contact-card-placeholder" aria-hidden="true"
+              className="flex items-center gap-4 p-5 bg-stone-50 border border-stone-100 rounded-2xl animate-pulse">
+              <div className="w-12 h-12 bg-stone-200 rounded-xl shrink-0" />
+              <div className="flex-1">
+                <div className="h-4 w-24 bg-stone-200 rounded mb-2" />
+                <div className="h-3 w-40 bg-stone-100 rounded mb-2" />
+                <div className="h-3 w-32 bg-stone-100 rounded" />
+              </div>
+            </div>
+          ))}
 
           {/* Email */}
           {settings.contact_email && (

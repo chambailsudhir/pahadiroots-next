@@ -201,7 +201,7 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-vcard:disabled{opacity:.4;cursor:not-allowed}
 .pdp-vc-size{font-size:13px;font-weight:800;color:#1a1a1a;display:block;margin-bottom:3px}
 .pdp-vc-price{font-size:14px;font-weight:900;color:#1a3a1e;display:block}
-.pdp-vc-orig{font-size:11px;color:#6b6b6b;text-decoration:line-through;margin-left:4px}
+.pdp-vc-orig{font-size:11px;color:#5a5448;text-decoration:line-through;margin-left:4px}
 .pdp-vc-save{font-size:10.5px;color:#8a6205;font-weight:800;display:block;margin-top:2px}
 .pdp-vcard-tag{position:absolute;top:-8px;left:10px;font-size:9px;font-weight:900;padding:3px 9px;border-radius:4px;letter-spacing:.5px;color:#fff;font-family:'Josefin Sans',sans-serif;text-transform:uppercase;z-index:3}
 .pdp-vcard-tag.best{background:#1a3a1e}
