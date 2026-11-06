@@ -21,7 +21,8 @@ import { ProductGridSkeleton } from '@/components/ui/Skeleton'
 import SearchParamsBridge from '@/components/ui/SearchParamsBridge'
 import { computeListing, isDefaultView, useBrowseParams, useCatalog, usePageOverflowRedirect } from './useBrowseListing'
 
-export const LISTING_PAGE_SIZE = 24
+import { LISTING_PAGE_SIZE } from '@/lib/listingLimits'
+export { LISTING_PAGE_SIZE }
 
 export interface CategoryLite { id: number | string; slug: string; name: string }
 export interface StateLite    { id: string; name: string }

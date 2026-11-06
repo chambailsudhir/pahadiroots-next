@@ -3,7 +3,8 @@ import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/li
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { sortProducts } from '@/lib/filterAndSortProducts'
 import { filterNewArrivals, isJustAdded } from '@/lib/newArrivals'
-import ProductListingClient, { LISTING_PAGE_SIZE } from '@/components/product/ProductListingClient'
+import ProductListingClient from '@/components/product/ProductListingClient'
+import { LISTING_PAGE_SIZE } from '@/lib/listingLimits'
 import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 180   // was 60: ISR-write budget (Hobby plan); admin edits revalidate on demand

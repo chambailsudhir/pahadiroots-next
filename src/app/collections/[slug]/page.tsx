@@ -5,7 +5,8 @@ import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/li
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { filterProducts, sortProducts } from '@/lib/filterAndSortProducts'
 import CategoryMotif from '@/components/collections/CategoryMotif'
-import CollectionListingClient, { COLLECTION_PAGE_SIZE } from '@/components/collections/CollectionListingClient'
+import CollectionListingClient from '@/components/collections/CollectionListingClient'
+import { COLLECTION_PAGE_SIZE } from '@/lib/listingLimits'
 import Link from 'next/link'
 import OurPromiseSection from '@/components/homepage/WhySection'
 

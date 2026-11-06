@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { notFound } from 'next/navigation'
 import type { PostCard } from '@/components/blog/BlogListing'
-import BlogListingClient, { BLOG_LISTING_LIMIT } from '@/components/blog/BlogListingClient'
+import BlogListingClient from '@/components/blog/BlogListingClient'
+import { BLOG_LISTING_LIMIT } from '@/lib/listingLimits'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 

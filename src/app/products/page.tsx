@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { getStoreData, buildBrowseCategories, getProductsWithImages } from '@/lib/storeData'
 import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { sortProducts } from '@/lib/filterAndSortProducts'
-import ProductListingClient, { LISTING_PAGE_SIZE } from '@/components/product/ProductListingClient'
+import ProductListingClient from '@/components/product/ProductListingClient'
+import { LISTING_PAGE_SIZE } from '@/lib/listingLimits'
 import OurPromiseSection from '@/components/homepage/WhySection'
 
 export const revalidate = 180   // was 60: ISR-write budget (Hobby plan); admin edits revalidate on demand
