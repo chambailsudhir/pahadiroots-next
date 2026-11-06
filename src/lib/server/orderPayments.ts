@@ -113,8 +113,45 @@ export async function confirmOrderPayment(
     captureError(e, { action: 'orderPayments.recover.reserve_threw', order_id: orderId, alert: true })
   }
 
+  // Verification L-2 (Nov 2026): the expiry sweep released the coupon together with the order (release_coupon_for_order) and recorded
+  // what it released on the `pending_order_expired` event. The customer has now genuinely paid the discounted total, so take the
+  // coupon back for them — through the same row-locked claim every checkout uses — and attach it to this order. If the coupon is
+  // gone meanwhile (cap reached, expired, used by someone else) the discount stays granted and ops are alerted.
+  let couponReclaim: 'reclaimed' | 'refused' | 'none' | 'error' = 'none'
+  try {
+    const { data: ev } = await db
+      .from('order_events')
+      .select('metadata')
+      .eq('order_id', orderId)
+      .eq('event', 'pending_order_expired')
+      .limit(1)
+    const first = (Array.isArray(ev) ? ev[0] : ev) as { metadata?: { coupon_released?: unknown } } | null
+    const rel = (first?.metadata?.coupon_released ?? null) as { coupon_id?: number | string; customer_id?: number | string | null; discount_amount?: number } | null
+    if (rel && rel.coupon_id != null) {
+      const custId = rel.customer_id == null ? null : Number(rel.customer_id)
+      const { data: claim, error: claimErr } = await db.rpc('claim_coupon_use', {
+        p_coupon_id: Number(rel.coupon_id), p_customer_id: custId !== null && Number.isFinite(custId) ? custId : null, p_identity_key: null,
+      })
+      if (claimErr) throw new Error(claimErr.message)
+      const c = (claim ?? {}) as { ok?: boolean; usage_id?: number; error?: string }
+      if (c.ok && typeof c.usage_id === 'number') {
+        const { error: attachErr } = await db.from('coupon_usage').update({ order_id: orderId, discount_amount: Number(rel.discount_amount) || 0 }).eq('id', c.usage_id)
+        if (attachErr) throw new Error('coupon re-claimed but could not be attached: ' + attachErr.message)
+        couponReclaim = 'reclaimed'
+      } else {
+        couponReclaim = 'refused'
+        captureError(new Error('Coupon could not be re-claimed after a late payment: ' + (c.error || 'refused')), {
+          action: 'orderPayments.recover.coupon_refused', order_id: orderId, coupon_id: rel.coupon_id, alert: true,
+        })
+      }
+    }
+  } catch (e) {
+    couponReclaim = 'error'
+    captureError(e, { action: 'orderPayments.recover.coupon_reclaim', order_id: orderId, alert: true })
+  }
+
   await logOrderEvent(orderId, 'payment_recovered_after_failure', source === 'webhook' ? 'razorpay' : 'system', {
-    razorpay_payment_id: razorpayPaymentId, source, stock_re_reserved: stockReReserved,
+    razorpay_payment_id: razorpayPaymentId, source, stock_re_reserved: stockReReserved, coupon_reclaim: couponReclaim,
   })
   if (!stockReReserved) {
     // Money is taken; the order stays confirmed. Ops must fulfil from new stock or refund.
