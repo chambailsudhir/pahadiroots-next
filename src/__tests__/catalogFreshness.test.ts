@@ -19,6 +19,9 @@ describe('catalogFreshness', () => {
     expect(revalidateTag).toHaveBeenCalledWith('store-data', { expire: 0 })
     expect(revalidatePath).toHaveBeenCalledWith('/', 'page')
     expect(revalidatePath).toHaveBeenCalledWith('/products', 'page')
+    // F-3: the cached collection / new-arrivals listings are expired as well
+    expect(revalidatePath).toHaveBeenCalledWith('/collections/[slug]', 'page')
+    expect(revalidatePath).toHaveBeenCalledWith('/new-arrivals', 'page')
   })
   it('refreshes when an ordered variant hit zero', async () => {
     rows = { data: [{ id: 1, available_stock: 5 }, { id: 2, available_stock: 0 }], error: null }

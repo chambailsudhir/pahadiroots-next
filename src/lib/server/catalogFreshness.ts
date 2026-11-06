@@ -23,6 +23,9 @@ export function refreshCatalogPages(): void {
   revalidateTag('store-data', { expire: 0 })
   revalidatePath('/', 'page')
   revalidatePath('/products', 'page')
+  // F-3 (Nov 2026): the collection and new-arrivals listings are ISR-cached as well — a sold-out / restocked card must leave them too.
+  revalidatePath('/collections/[slug]', 'page')
+  revalidatePath('/new-arrivals', 'page')
 }
 
 /** After an order reserved stock: refresh only if one of the ordered variants is now sold out. */

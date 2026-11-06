@@ -100,11 +100,19 @@ export async function POST(req: NextRequest) {
 
       // 2. Invalidate Next's ISR cache so the next request rebuilds the page
       //    instead of serving the stale cached HTML.
+      // F-3 (Nov 2026): /collections/[slug] and /new-arrivals are now ISR-cached listing pages too (they used to be dynamic, so
+      // an admin save reached them on the next request). Expire them with the rest, or a saved price / stock / new product would
+      // sit stale there for up to the page's revalidate window.
+      const listingPages = () => {
+        revalidatePath('/collections/[slug]', 'page')
+        revalidatePath('/new-arrivals', 'page')
+      }
       if (all) {
         revalidatePath('/products', 'page')
         revalidatePath('/products/[slug]', 'page')
         revalidatePath('/', 'page')
-        revalidated.push('/products', '/products/[slug] (all)', '/')
+        listingPages()
+        revalidated.push('/products', '/products/[slug] (all)', '/', '/collections/[slug] (all)', '/new-arrivals')
       } else if (slug) {
         revalidatePath(`/products/${slug}`)
         revalidatePath('/products', 'page') // listing card (price/stock) also changed
@@ -112,7 +120,8 @@ export async function POST(req: NextRequest) {
         // product save used to leave it stale for up to 5 minutes; one regeneration per admin
         // save is the cost of making "saved in admin" mean "live on the homepage".
         revalidatePath('/', 'page')
-        revalidated.push(`/products/${slug}`, '/products', '/')
+        listingPages()
+        revalidated.push(`/products/${slug}`, '/products', '/', '/collections/[slug] (all)', '/new-arrivals')
       }
     }
 

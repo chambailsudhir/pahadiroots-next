@@ -33,6 +33,7 @@ const revalidatePathMock = vi.fn()
 
 vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
+  revalidateTag: vi.fn(),
 }))
 
 vi.mock('@/lib/storeData', () => ({
@@ -118,5 +119,30 @@ describe('POST /api/v1/revalidate — { settings: true }', () => {
     expect(res.status).toBe(401)
     expect(clearSiteSettingsCacheMock).not.toHaveBeenCalled()
     expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+})
+
+// F-3 (Nov 2026): /collections/[slug] and /new-arrivals became ISR-cached listing pages; an admin product save must expire them too.
+describe('POST /api/v1/revalidate — product saves reach every cached listing page', () => {
+  beforeEach(() => { revalidatePathMock.mockClear(); process.env.REVALIDATE_SECRET = SECRET })
+
+  it('{ slug } expires the product, /products, the homepage, the collection listings and /new-arrivals', async () => {
+    const { POST } = await import('@/app/api/v1/revalidate/route')
+    const res = await POST(makeRequest({ slug: 'himalayan-wild-manali-honey' }))
+    expect(res.status).toBe(200)
+    const calls = revalidatePathMock.mock.calls.map(c => c.join(' '))
+    expect(calls).toContain('/products/himalayan-wild-manali-honey')
+    expect(calls).toContain('/products page')
+    expect(calls).toContain('/ page')
+    expect(calls).toContain('/collections/[slug] page')
+    expect(calls).toContain('/new-arrivals page')
+  })
+
+  it('{ all: true } expires them as well', async () => {
+    const { POST } = await import('@/app/api/v1/revalidate/route')
+    await POST(makeRequest({ all: true }))
+    const calls = revalidatePathMock.mock.calls.map(c => c.join(' '))
+    expect(calls).toContain('/collections/[slug] page')
+    expect(calls).toContain('/new-arrivals page')
   })
 })
