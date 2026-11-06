@@ -91,8 +91,6 @@
   /* AI fab: desktop column from the bottom is scroll-to-top (24), WhatsApp (78), AI chat (142). Mobile: WhatsApp is in the bottom nav, so the fab sits above the nav. */
   :root { --pr-fab-bottom: 142px; }
   @media(max-width:900px) { :root { --pr-fab-bottom: calc(126px + env(safe-area-inset-bottom,0px)); } }
-  /* Phones: a smaller, slightly see-through button covers less of the page (it used to sit on top of the cart's "+ Add" buttons). */
-  @media(max-width:600px) { #pr-ai-fab { width:46px; height:46px; right:12px; opacity:.9 } #pr-ai-fab.open { opacity:1 } }
   #pr-ai-fab {
     position:fixed; bottom:var(--pr-fab-bottom); right:16px;
     width:56px; height:56px; border-radius:50%;
@@ -102,6 +100,9 @@
     animation:pr-pulse 3s ease-out infinite;
     z-index:2147483645;
   }
+  /* Phones: a smaller, slightly see-through button covers less of the page (it used to sit on top of the cart's "+ Add" buttons).
+     Must come AFTER the base #pr-ai-fab rule: same specificity, so source order decides (it used to come first and lost -> 56px on phones). */
+  @media(max-width:600px) { #pr-ai-fab { width:46px; height:46px; right:12px; opacity:.9 } #pr-ai-fab.open { opacity:1 } }
   #pr-ai-fab:hover { transform:translateY(-6px) }
   #pr-ai-fab:active { transform:translateY(-2px) }
   #pr-ai-fab.open  { animation:none }

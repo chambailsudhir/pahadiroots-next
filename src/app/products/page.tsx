@@ -252,7 +252,7 @@ export default async function ProductsPage({ searchParams }: Props) {
           {/* Active filters */}
           {(catSlug || stateId || instock || sort !== 'newest' || minPrice != null || maxPrice != null) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: '#7a7a7a', fontWeight: 600 }}>Filters:</span>
+              <span style={{ fontSize: '12px', color: '#5a5448', fontWeight: 600 }}>Filters:</span>
               {activeCat && (
                 <Link href={url({ category: undefined })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
                   background: '#1a3a1e', color: '#fff', borderRadius: '20px', padding: '4px 12px',
@@ -277,12 +277,12 @@ export default async function ProductsPage({ searchParams }: Props) {
               )}
               {sort !== 'newest' && (
                 <Link href={url({ sort: 'newest' })} prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  background: '#c8920a', color: '#fff', borderRadius: '20px', padding: '4px 12px',
+                  background: '#8a6508', color: '#fff', borderRadius: '20px', padding: '4px 12px',
                   fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>
                   {SORT_OPTIONS.find(o => o.value === sort)?.label} ×
                 </Link>
               )}
-              <Link href="/products" prefetch={false} style={{ fontSize: '12px', color: '#c8920a', fontWeight: 700, textDecoration: 'underline' }}>
+              <Link href="/products" prefetch={false} style={{ fontSize: '12px', color: '#8a6508', fontWeight: 700, textDecoration: 'underline' }}>
                 Clear all
               </Link>
             </div>
@@ -313,7 +313,7 @@ export default async function ProductsPage({ searchParams }: Props) {
               justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
               <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>No products found</h3>
-              <p style={{ color: '#7a7a7a', fontSize: '14px', marginBottom: '20px' }}>Try changing your filters</p>
+              <p style={{ color: '#5a5448', fontSize: '14px', marginBottom: '20px' }}>Try changing your filters</p>
               <Link href="/products" style={{ background: '#1a3a1e', color: '#fff', borderRadius: '20px',
                 padding: '10px 24px', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>
                 Clear all filters

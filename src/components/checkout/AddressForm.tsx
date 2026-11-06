@@ -451,10 +451,12 @@ const AddressForm = memo(function AddressForm({ addr, email, touched, onChange, 
       {/* BUG FIX: the background saved-address fetch (useCheckoutPage.ts)
           previously gave zero feedback while in flight — the form just sat
           blank, indistinguishable from being broken, for however long the
-          fetch took. aria-live="polite" so screen readers hear it once,
-          not on every re-render. */}
+          fetch took. EX-02 (Nov 2026 audit): deliberately NOT a live region
+          (no role="status" / aria-live) - the fields fill in silently and a
+          spoken "loading" at form-focus time interrupted screen-reader users
+          mid-form. It stays visible for sighted users. */}
       {prefillLoading && (
-        <div className="af-prefill-status" role="status" aria-live="polite">
+        <div className="af-prefill-status">
           <span className="af-prefill-spin" aria-hidden="true">↻</span>
           Loading your saved details…
         </div>

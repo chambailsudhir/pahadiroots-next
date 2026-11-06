@@ -505,17 +505,6 @@ function SuccessContent() {
         .oc-error h2 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 24px; color: var(--g); margin-bottom: 8px; }
         .oc-error p  { color: #666; font-size: 14px; margin-bottom: 24px; }
 
-        /* ── NEWSLETTER ── */
-        .oc-newsletter { border-top: 2px solid #c8920a; border-bottom: 2px solid rgba(200,146,10,.2); box-shadow: 0 -6px 32px rgba(0,0,0,.18), inset 0 1px 0 rgba(200,146,10,.15); }
-        .oc-nl-inner-wrap { background: linear-gradient(180deg,#0f2a14 0%,#1a3a1e 100%); padding: 32px 40px 36px; }
-        .oc-nl-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-        .oc-nl-text h4 { font-family: var(--font-playfair), 'Playfair Display', serif; font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 4px; }
-        .oc-nl-text p  { font-size: 13px; color: rgba(255,255,255,.55); }
-        .oc-nl-form { display: flex; border-radius: 10px; overflow: hidden; border: 1.5px solid rgba(255,255,255,.18); min-width: 300px; }
-        .oc-nl-inp { flex: 1; padding: 12px 16px; background: rgba(255,255,255,.07); border: none; color: #fff; font-size: 13px; outline: none; }
-        .oc-nl-inp::placeholder { color: rgba(255,255,255,.35); }
-        .oc-nl-btn { padding: 12px 20px; background: #c8920a; color: #1a0800; font-weight: 800; font-size: 13px; border: none; cursor: pointer; transition: background .2s; white-space: nowrap; }
-        .oc-nl-btn:hover { background: #f4a261; }
 
         /* ── FOOTER ── */
         .oc-footer { background: #132b17; padding: 0; overflow: hidden; }
@@ -555,8 +544,6 @@ function SuccessContent() {
           .oc-f-main { grid-template-columns: 1fr 1fr; gap: 28px; padding: 28px 28px 20px; }
           .oc-f-social-bar { padding: 20px 28px 24px; }
           .oc-f-social-inner { flex-direction: column; align-items: flex-start; gap: 16px; }
-          .oc-nl-inner { flex-direction: column; align-items: flex-start; }
-          .oc-nl-form { min-width: 100%; width: 100%; }
         }
         @media (max-width: 480px) {
           .oc-title { font-size: 26px; }
@@ -566,7 +553,6 @@ function SuccessContent() {
           .oc-f-main { grid-template-columns: minmax(0, 1fr); padding: 20px 20px 16px; }
           .oc-f-brand-row { padding: 20px; flex-direction: column; align-items: flex-start; }
           .oc-f-social-bar { padding: 20px 20px 24px; }
-          .oc-nl-inner-wrap { padding: 24px 20px; }
           .oc-f-bot { padding: 12px 20px; flex-direction: column; text-align: center; gap: 6px; }
         }
 

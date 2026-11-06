@@ -13,7 +13,9 @@
  *      took, with no bound.
  *   2. [BUG FIX — no feedback] There was zero loading indicator while this
  *      fetch was in flight — the form just looked frozen. `profilePrefillLoading`
- *      is now exposed so the UI can show a "Loading your saved details…" status.
+ *      is now exposed so the UI can show a "Loading your saved details…" indicator
+ *      (visible only — EX-02: AddressForm renders it WITHOUT role="status"/aria-live,
+ *      asserted in AddressForm.autofill.test.ts).
  *   3. `profilePrefillLoading` must clear on EVERY exit path — success, HTTP
  *      error, network error, and timeout — never get stuck "on".
  *   4. `profilePrefillLoading` must start `false` when the cache was already

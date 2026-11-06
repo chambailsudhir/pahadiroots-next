@@ -3,19 +3,35 @@ import type { SiteSettings } from '@/types'
 /**
  * Settings are serialised into the page for every client component that receives them, and the whole document has to
  * arrive before the browser can ask for the hero image. The full object has ~150 keys; the interactive shell
- * (Header, bottom nav, cart/search/menu/login panels) never reads the groups below, so they are left out of what those
- * components receive. The server-rendered footer and sections still get the complete object.
+ * (Header, bottom nav, cart/search/menu/login panels) reads only the keys below, so only those are sent to it. The
+ * server-rendered footer and sections still get the complete object.
+ *
+ * L4 (Nov 2026 audit): this used to be a DENY-list of admin-only groups, so every new admin key leaked to visitors by
+ * default (and `/^stat_/` silently dropped `stat_himalayan_states`, which AnnouncementBar reads). It is now an
+ * ALLOW-list: a key reaches the shell only if a shell component is known to read it. Add a key here when you add a read.
  */
-const UNUSED_BY_SHELL = [
-  /^blog_/, /^about_(?!page_enabled$)/, /^coll_(img|hidden)_/, /^catalogue_health/, /^stat_/, /^hero_/, /^founder_/, /^og_image$/,
-  /^meta_/, /^email_footer_text$/, /^google_site_verification$/, /^seller_state$/, /^batch_tracking_enabled$/,
-  /^return_photo_/, /^order_prefix$/, /^brand_disambiguation$/, /^maintenance_message$/, /^social_/, /^fssai_/,
+export const SHELL_SETTING_KEYS: readonly string[] = [
+  // Header / MobileMenu / MegaMenu
+  'site_name', 'logo_url', 'show_wishlist', 'show_blog', 'show_track_order_page', 'about_page_enabled',
+  // MobileBottomNav / MobileMenu (WhatsApp link)
+  'whatsapp_number',
+  // AnnouncementBar (getStatesCovered reads stat_himalayan_states)
+  'ann_hide', 'ann_text', 'ann_bg_color', 'ann_text_color', 'stat_himalayan_states', 'stat_hide_stat_himalayan_states',
+  // TickerBar (ticker_hide, ticker_bg_color, ticker_text_color, ticker_N_text, ticker_N_hide) — see SHELL_SETTING_PREFIXES
+  // CartDrawer -> calcPriceSummary / likelyPaymentMethod
+  'free_shipping_min', 'flat_shipping_charge', 'prepaid_discount_pct', 'cod_surcharge_amount', 'cod_max_value',
+  'cod_enabled', 'upi_enabled',
 ]
+export const SHELL_SETTING_PREFIXES: readonly string[] = ['ticker_']
+
+export function isShellSettingKey(key: string): boolean {
+  return SHELL_SETTING_KEYS.includes(key) || SHELL_SETTING_PREFIXES.some(p => key.startsWith(p))
+}
 
 export function settingsForShell(settings: SiteSettings): SiteSettings {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(settings as Record<string, unknown>)) {
-    if (!UNUSED_BY_SHELL.some(re => re.test(k))) out[k] = v
+    if (isShellSettingKey(k)) out[k] = v
   }
   return out as SiteSettings
 }
