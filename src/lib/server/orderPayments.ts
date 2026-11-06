@@ -126,11 +126,11 @@ export async function confirmOrderPayment(
       .eq('event', 'pending_order_expired')
       .limit(1)
     const first = (Array.isArray(ev) ? ev[0] : ev) as { metadata?: { coupon_released?: unknown } } | null
-    const rel = (first?.metadata?.coupon_released ?? null) as { coupon_id?: number | string; customer_id?: number | string | null; discount_amount?: number } | null
+    const rel = (first?.metadata?.coupon_released ?? null) as { coupon_id?: number | string; customer_id?: number | string | null; discount_amount?: number; identity_key?: string | null } | null
     if (rel && rel.coupon_id != null) {
       const custId = rel.customer_id == null ? null : Number(rel.customer_id)
       const { data: claim, error: claimErr } = await db.rpc('claim_coupon_use', {
-        p_coupon_id: Number(rel.coupon_id), p_customer_id: custId !== null && Number.isFinite(custId) ? custId : null, p_identity_key: null,
+        p_coupon_id: Number(rel.coupon_id), p_customer_id: custId !== null && Number.isFinite(custId) ? custId : null, p_identity_key: typeof rel.identity_key === 'string' && rel.identity_key ? rel.identity_key : null,   // guest limit (v32)
       })
       if (claimErr) throw new Error(claimErr.message)
       const c = (claim ?? {}) as { ok?: boolean; usage_id?: number; error?: string }

@@ -335,6 +335,21 @@ describe('GET /api/v1/cron/retry-failed-emails — stale e-mails are closed, not
     expect(json).toMatchObject({ sent: 1, expired: 0, deferred: 0 })
   })
 
+  // Nov 2026 verification: a password-reset link expires after about an hour; retrying it for 72 h delivered dead links.
+  it('a password-reset row older than 55 minutes is closed without sending; a fresh one is still sent', async () => {
+    mockSend.mockResolvedValue({ error: null })
+    mockDb.candidates = [
+      row({ id: 'r-old', type: 'password_reset', created_at: hoursAgo(2) }),
+      row({ id: 'r-new', type: 'password_reset', created_at: hoursAgo(0.25) }),
+    ]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(auth())).json()
+    expect(json).toMatchObject({ sent: 1, expired: 1 })
+    expect(mockSend).toHaveBeenCalledTimes(1)
+    const closed = mockDb.updateCalls.find(c => (c.payload as { status?: string }).status === 'dead')
+    expect(String((closed!.payload as { last_error?: string }).last_error)).toMatch(/password-reset link older than 55 min/)
+  })
+
   it('exactly at the boundary side: 71h is sent, 73h is closed', async () => {
     mockSend.mockResolvedValue({ error: null })
     mockDb.candidates = [row({ id: 'a', created_at: hoursAgo(71) }), row({ id: 'b', created_at: hoursAgo(73) })]

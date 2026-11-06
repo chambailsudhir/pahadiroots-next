@@ -52,6 +52,7 @@ interface Cfg {
   pages?: Array<Array<Record<string, unknown>>>
   releaseRows?: Array<{ id: string }> | Error   // result of the conditional release UPDATE
   items?: Array<Record<string, unknown>>
+  usage?: Array<Record<string, unknown>>        // coupon_usage rows of the order, read before the status flip
 }
 function makeDb(cfg: Cfg) {
   let selectCalls = 0
@@ -81,6 +82,7 @@ function makeDb(cfg: Cfg) {
             return Promise.resolve({ data: cfg.releaseRows ?? [{ id: 'x' }], error: null }).then(res)
           }
           if (table === 'order_items') return Promise.resolve({ data: cfg.items ?? [], error: null }).then(res)
+          if (table === 'coupon_usage' && st.op === 'select') return Promise.resolve({ data: cfg.usage ?? [], error: null }).then(res)
           return Promise.resolve({ data: null, error: null }).then(res)
         },
       }
@@ -267,7 +269,34 @@ describe('expireStalePendingOrders — coupon release (Oct 2026 audit)', () => {
 
     expect(h.couponRpc).toHaveBeenCalledTimes(1)
     expect(h.couponRpc).toHaveBeenCalledWith('release_coupon_for_order', { p_order_id: 'o1' })
-    expect(h.logEvent).toHaveBeenCalledWith('o1', 'pending_order_expired', 'system', expect.objectContaining({ coupon_released: released }))
+    expect(h.logEvent).toHaveBeenCalledWith('o1', 'pending_order_expired', 'system', expect.objectContaining({ coupon_released: { ...released, identity_key: null } }))
+  })
+
+  it('records the coupon the v27 trigger released during the status flip (the RPC then answers released:false)', async () => {
+    // Production behaviour: trg_release_coupon_on_order_end deletes the usage row inside the payment_failed UPDATE, so the
+    // explicit RPC finds nothing. The row read BEFORE the flip is what a late payment must re-claim (with the guest key).
+    h.fetchOrderPayments.mockResolvedValue([])
+    h.couponRpc.mockResolvedValue({ data: { released: false }, error: null })
+    const usage = [{ coupon_id: 7, customer_id: null, discount_amount: 50, identity_key: 'ph:abc' }]
+    const { db, log } = makeDb({ candidates: [order({ customer_id: null })], items: [], usage })
+
+    await expireStalePendingOrders(db, { now: NOW, olderThanMinutes: 30 })
+
+    const usageRead = log.findIndex(l => l.table === 'coupon_usage')
+    const flip = log.findIndex(l => l.table === 'orders' && l.op === 'update')
+    expect(usageRead).toBeGreaterThanOrEqual(0)
+    expect(usageRead).toBeLessThan(flip)
+    expect(h.logEvent).toHaveBeenCalledWith('o1', 'pending_order_expired', 'system', expect.objectContaining({
+      coupon_released: expect.objectContaining({ released: true, coupon_id: 7, discount_amount: 50, identity_key: 'ph:abc', via: 'trigger' }),
+    }))
+  })
+
+  it('records no coupon when the order had none', async () => {
+    h.fetchOrderPayments.mockResolvedValue([])
+    const { db } = makeDb({ candidates: [order()], items: [], usage: [] })
+    await expireStalePendingOrders(db, { now: NOW, olderThanMinutes: 30 })
+    const meta = h.logEvent.mock.calls.find(c => c[1] === 'pending_order_expired')?.[3] as Record<string, unknown>
+    expect(meta.coupon_released).toBeUndefined()
   })
 
   it('a failing coupon release is NOT fatal: order still released, stats.expired counted, not paged as an error', async () => {

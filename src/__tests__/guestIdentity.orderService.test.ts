@@ -115,7 +115,7 @@ function wireHappyPath(opts: { customerMatches?: Array<{ id: string }>; variantP
     [{ id: PRODUCT_ID, name: 'Himalayan Honey', emoji: '🍯', gst_rate: 5, is_deleted: false, status: 'active', price, mrp: price + 50, available_stock: 10 }])
   route((u, m) => m === 'GET' && u.includes('/product_images'), [])
   route((u, m) => m === 'GET' && u.includes('/customers') && u.includes('normalized_phone=eq.'), opts.customerMatches ?? [])
-  route((u, m) => m === 'GET' && u.includes('/customers') && u.includes('email=eq.'), [])
+  route((u, m) => m === 'GET' && u.includes('/customers') && (u.includes('email=eq.') || u.includes('email=ilike.')), [])
   route((u, m) => m === 'POST' && u.includes('/customers'), [{ id: NEW_GUEST }])
   route((u, m) => m === 'GET' && u.includes('/orders') && u.includes('payment_method=in.'), [])
   route((u, m) => m === 'GET' && u.includes('/coupon_usage'), [])

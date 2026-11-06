@@ -221,7 +221,7 @@ export default function OrderDetailPage() {
       </div>
 
       {/* ── Invoice (AUDIT ACC-038: only reachable from the list card before) ── */}
-      {!CANCELLED_STATUSES.includes(order.order_status) && (
+      {!CANCELLED_STATUSES.includes(order.order_status) && String((order as { payment_status?: string }).payment_status ?? '').toLowerCase() !== 'refunded' && (
         <a
           href={`/api/orders/${order.id}/invoice`}
           target="_blank"

@@ -250,7 +250,7 @@ export async function DELETE(req: NextRequest) {
     // still delete the login — the exact failure mode that left PII behind before.
     const customerRows = await sbAdmin(
       'GET',
-      `/rest/v1/customers?auth_user_id=eq.${userId}&select=id,email&limit=1`,
+      `/rest/v1/customers?auth_user_id=eq.${userId}&select=id,email,phone&limit=1`,
     )
 
     // customers.id is bigint — cast to string for URL params
@@ -368,6 +368,15 @@ export async function DELETE(req: NextRequest) {
       await sbAdmin('DELETE', `/rest/v1/subscribers?email=eq.${q}`, null, 'return=minimal')
       await sbAdmin('DELETE', `/rest/v1/stock_notifications?email=eq.${q}`, null, 'return=minimal')
       await sbAdmin('DELETE', `/rest/v1/failed_emails?to_email=eq.${q}&status=in.(pending,retrying)`, null, 'return=minimal')
+      // BUG FIX (Nov 2026 verification): abandoned carts are saved per browser session with name / email / phone and no
+      // customer_id (api/v1/actions), so the customer_id delete in step 5 never reached them.
+      await sbAdmin('DELETE', `/rest/v1/abandoned_carts?email=eq.${q}`, null, 'return=minimal')
+    }
+    {
+      const phone = String(customerRows?.[0]?.phone ?? '').replace(/\D/g, '').slice(-10)
+      if (phone.length === 10) {
+        await sbAdmin('DELETE', `/rest/v1/abandoned_carts?or=(phone.eq.${phone},phone.eq.%2B91${phone},phone.eq.91${phone},phone.eq.0${phone})`, null, 'return=minimal')
+      }
     }
 
     if (customerId) {

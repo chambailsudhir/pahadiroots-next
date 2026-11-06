@@ -148,6 +148,21 @@ describe('DELETE /api/account/delete — erasure (ACC-033)', () => {
       expect(adminCalls().some(([m, p]) => m === 'DELETE' && p === `/rest/v1/${t}?customer_id=eq.42`)).toBe(true)
     }
   })
+
+  // Nov 2026 verification: abandoned carts are saved per browser session with email / phone / name and NO customer_id,
+  // so the customer_id delete above never reached them.
+  it('also erases abandoned carts saved under the e-mail and the phone number (they carry no customer_id)', async () => {
+    mocks.sbAdmin.mockImplementation(async (m: string, path: string) => {
+      if (path.startsWith('/rest/v1/customers?auth_user_id=')) return [{ id: 42, email: 'Asha@Example.com', phone: '+91 98765 43210' }]
+      if (m === 'PATCH' && path.startsWith('/rest/v1/customers?id=')) return [{ id: 42, auth_user_id: null }]
+      return []
+    })
+    const { DELETE } = await import('@/app/api/account/delete/route')
+    await DELETE(req())
+    const deletes = adminCalls().filter(([m, p]) => m === 'DELETE' && p.startsWith('/rest/v1/abandoned_carts?')).map(([, p]) => p)
+    expect(deletes).toContain('/rest/v1/abandoned_carts?email=eq.asha%40example.com')
+    expect(deletes.some(p => p.includes('phone.eq.9876543210') && p.includes('phone.eq.%2B919876543210'))).toBe(true)
+  })
 })
 
 describe('DELETE /api/account/delete — re-authentication (ACC-023)', () => {
