@@ -4,14 +4,17 @@
 // (it uses Function/eval internally), which is loaded on /checkout only (src/app/checkout/CheckoutClient.tsx). The
 // homepage and every other page are now served without it; /checkout keeps it so payments cannot break.
 // 'unsafe-inline' is unchanged on purpose (see the note near the end of the list).
-// Routes served with the per-request nonce policy by src/proxy.ts. Every one of them is ALREADY rendered per request
-// (force-dynamic, or it reads searchParams), so the nonce costs no caching: /checkout, /account, the catalogue listings
-// (/products, /collections/<slug>, /new-arrivals), the blog index, /lab-reports and the region pages. Product detail pages,
-// blog posts and the homepage are ISR-cached and keep the static policy below.
-const STRICT_CSP_PATH_SOURCE = '^/(?:(?:checkout|account|lab-reports|new-arrivals)(?:/|$)|(?:blog|products)/?$|(?:collections|regions)/[^/]+/?$)'
+// Routes served with the per-request nonce policy by src/proxy.ts. A nonce policy is ONLY safe on a route that is rendered
+// per request (force-dynamic, or it awaits searchParams): a prerendered / ISR page carries no nonce on Next's inline
+// bootstrap scripts, so the browser blocks them and the page never hydrates (no filters, no Add to Cart).
+// BUG FIX (Nov 2026 verification): #146 made /products, /collections/<slug>, /new-arrivals, /blog and /lab-reports ISR
+// while they were still listed here — on production every one of them logged 4–12 blocked inline scripts and did not
+// hydrate. They are back on the static policy; only /checkout, /account and the region pages (which still await
+// searchParams) keep the nonce policy. strictCsp.test.ts pins this list against the routes' `revalidate` exports.
+const STRICT_CSP_PATH_SOURCE = '^/(?:(?:checkout|account)(?:/|$)|regions/[^/]+/?$)'
 const STRICT_CSP_PATH = new RegExp(STRICT_CSP_PATH_SOURCE)
 // next.config.js `source` for the static header: everything the proxy does NOT cover, so exactly one CSP header is sent.
-const STATIC_CSP_HEADER_SOURCE = '/((?!(?:checkout|account|lab-reports|new-arrivals)(?:/|$)|(?:blog|products)/?$|(?:collections|regions)/[^/]+/?$).*)'
+const STATIC_CSP_HEADER_SOURCE = '/((?!(?:checkout|account)(?:/|$)|regions/[^/]+/?$).*)'
 
 // Cloudflare Turnstile (chat CAPTCHA) is optional: hosts are added only when a site key is configured.
 const TURNSTILE_HOST = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? ' https://challenges.cloudflare.com' : ''

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { buildStrictCsp, layoutScriptHashes, sha256b64, STRICT_CSP_PATH, makeNonce } from '@/lib/strictCsp'
 import { PREMIUM_BOOT_SCRIPT } from '@/lib/premiumMode'
 import { ANALYTICS_URL_GUARD_SCRIPT } from '@/lib/analyticsGuard'
@@ -9,10 +11,23 @@ const scriptSrc = (csp: string) => csp.split('; ').find(d => d.startsWith('scrip
 
 describe('strict CSP for checkout and account', () => {
   it('applies to /checkout and /account (and below), not to look-alikes or other pages', () => {
-    // Every route here is already rendered per request, so the nonce policy costs no caching.
-    for (const p of ['/checkout', '/checkout/pay', '/account', '/account/orders/1', '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals', '/regions/hp']) expect(STRICT_CSP_PATH.test(p), p).toBe(true)
-    // ISR-cached pages keep the static policy: homepage, product detail, blog posts, region index, and look-alike paths.
-    for (const p of ['/', '/accountant', '/checkout-help', '/products/checkout', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/order-success', '/cart']) expect(STRICT_CSP_PATH.test(p), p).toBe(false)
+    // Every route here is rendered per request, so the nonce reaches Next's inline scripts.
+    for (const p of ['/checkout', '/checkout/pay', '/account', '/account/orders/1', '/regions/hp']) expect(STRICT_CSP_PATH.test(p), p).toBe(true)
+    // ISR-cached pages keep the static policy. The listings became ISR in #146: under the nonce policy their prerendered
+    // inline scripts were blocked in production and the pages never hydrated (Nov 2026 verification).
+    for (const p of ['/', '/accountant', '/checkout-help', '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals', '/products/checkout', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/order-success', '/cart']) expect(STRICT_CSP_PATH.test(p), p).toBe(false)
+  })
+
+  it('every strict-CSP page is rendered per request (a prerendered page has no nonce and would not hydrate)', () => {
+    const page = (rel: string) => readFileSync(join(process.cwd(), 'src/app', rel), 'utf8')
+    const perRequest = (src: string) => /export const dynamic\s*=\s*['"]force-dynamic['"]/.test(src) || /await\s+searchParams/.test(src)
+    expect(perRequest(page('checkout/page.tsx')), 'checkout').toBe(true)
+    expect(perRequest(page('account/layout.tsx')), 'account').toBe(true)
+    expect(perRequest(page('regions/[slug]/page.tsx')), 'regions/[slug]').toBe(true)
+    // And the ISR listings must NOT be on the strict list while they stay ISR.
+    for (const [rel, path] of [['products/page.tsx', '/products'], ['new-arrivals/page.tsx', '/new-arrivals'], ['blog/page.tsx', '/blog'], ['lab-reports/page.tsx', '/lab-reports'], ['collections/[slug]/page.tsx', '/collections/x']] as const) {
+      if (!perRequest(page(rel))) expect(STRICT_CSP_PATH.test(path), path).toBe(false)
+    }
   })
 
   it('has a nonce and hashes but NO unsafe-inline in script-src', () => {
