@@ -161,7 +161,7 @@ import { assertPaymentMethodAvailable } from '@/lib/siteSettingsHelpers'
 import { checkServiceability } from '@/lib/serviceability'
 import { countPriorCouponUse, couponReuseProblem } from '@/lib/couponHistory'
 import { sameDeliveryAddress } from '@/lib/addressMatch'
-import { claimCouponUse, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
+import { claimCouponUse, couponIdentityKey, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
 
 // ── Module-level Supabase REST helpers ───────────────────────
 // Declared once here so createOrder() doesn't re-create closures
@@ -955,7 +955,8 @@ export async function createOrder(
     // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a
     // customer-readable message on refusal; the claim is released in `finally` if the order fails.
     // S1-002: only a VERIFIED identity is attached to the claim — never a phone-matched row.
-    const claim = await claimCouponUse(db, coupon.id, input.authenticatedCustomerId ?? null)
+    // v32 (verification F-2): the phone-derived identity key makes the per-person limit race-free for GUESTS too.
+    const claim = await claimCouponUse(db, coupon.id, input.authenticatedCustomerId ?? null, couponIdentityKey(normalizedPhone))
     if (!claim.ok) throw new Error(claim.error)
     couponClaimUsageId = claim.usageId
     couponDbRow = { id: coupon.id, code: coupon.code }
@@ -1019,8 +1020,10 @@ export async function createOrder(
 
     // Nov 2026 audit (#4): the minimum was only enforced by the UI / action=validate. A direct caller
     // could submit fewer coins; enforce it here too.
-    const minRedeemRaw = parseFloat(settings.loyalty_min_redeem || '40')
-    const minRedeem    = Number.isFinite(minRedeemRaw) && minRedeemRaw > 0 ? minRedeemRaw : 40
+    // Verification F-7: an admin value of 0 means "no minimum" (the /api/v1/loyalty pre-check already honoured 0; this path turned it
+    // into 40, so the UI accepted 1-39 coins and Place Order then refused them). Missing / unparsable → 40.
+    const minRedeemRaw = parseFloat(String(settings.loyalty_min_redeem ?? '').trim() || '40')
+    const minRedeem    = Number.isFinite(minRedeemRaw) && minRedeemRaw >= 0 ? minRedeemRaw : 40
     if (input.loyaltyPointsRedeemed! < minRedeem) {
       throw new Error(`Minimum ${minRedeem} points required to redeem`)
     }

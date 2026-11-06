@@ -136,3 +136,41 @@ describe('recovered order gets its post-order steps exactly once (loyalty + once
     expect(res.status).toBe(200)
   })
 })
+
+// Verification F-1 (Nov 2026): the first request timed out BEFORE the commit landed -> 503; the customer retried with the same key,
+// createOrder answered alreadyExists and every post-order step was skipped forever. Now the first successful request records the
+// once-only marker and a replay WITHOUT that marker finishes the steps through the recovery path.
+describe('a replay of a committed-but-never-finalised order finishes its post-order steps once (F-1)', () => {
+  it('replay with alreadyExists and NO marker -> runs the recovery finaliser and writes the marker', async () => {
+    mockCreateOrder.mockResolvedValue({
+      order: { id: '163', order_number: 'ORD-2026-00140', total_amount: 500, total: 500, status: 'confirmed', subtotal: 0, shippingCharge: 0, codSurcharge: 0, discount: 0, cartItems: [], confirmationToken: 'tok-1' },
+      alreadyExists: true, customerId: null,
+    })
+    wireDb()
+    const res = await callOrders()
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).toHaveBeenCalledWith('163', 'post_order_finalized', 'system', expect.objectContaining({ via: 'timeout_recovery' }))
+  })
+
+  it('replay with alreadyExists and the marker present -> nothing runs again', async () => {
+    mockCreateOrder.mockResolvedValue({
+      order: { id: '163', order_number: 'ORD-2026-00140', total_amount: 500, total: 500, status: 'confirmed', subtotal: 0, shippingCharge: 0, codSurcharge: 0, discount: 0, cartItems: [], confirmationToken: 'tok-1' },
+      alreadyExists: true, customerId: null,
+    })
+    wireDb({ finalised: true })
+    const res = await callOrders()
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith('163', 'post_order_finalized', 'system', expect.anything())
+  })
+
+  it('a normal first-time order records the marker so a later replay is a no-op', async () => {
+    mockCreateOrder.mockResolvedValue({
+      order: { id: '164', order_number: 'ORD-2026-00141', total_amount: 500, total: 500, status: 'confirmed', subtotal: 500, shippingCharge: 0, codSurcharge: 0, discount: 0, cartItems: [], confirmationToken: 'tok-2' },
+      alreadyExists: false, customerId: null,
+    })
+    wireDb()
+    const res = await callOrders()
+    expect(res.status).toBe(201)
+    expect(mockLogOrderEvent).toHaveBeenCalledWith('164', 'post_order_finalized', 'system', expect.objectContaining({ via: 'request' }))
+  })
+})

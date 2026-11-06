@@ -172,6 +172,26 @@ describe('#4 — minimum redeem and stored coin count', () => {
     expect(rpc('create_order_with_items')).toHaveLength(0)
   })
 
+  // Verification F-7: an admin minimum of 0 means "no minimum" — the UI pre-check already accepted 1-39 coins, createOrder refused them.
+  it('loyalty_min_redeem = 0 is respected: 10 coins are accepted', async () => {
+    wireHappyPath()
+    mockDb.responses['customers'] = { loyalty_points: 500 }
+    ordersAnswer({})
+    const { createOrder } = await import('@/lib/services/orderService')
+    const r = await createOrder({ ...AUTHED, loyaltyPointsRedeemed: 10 }, { ...SET, loyalty_min_redeem: '0' })
+    expect(r.alreadyExists).toBe(false)
+    // the order went through with coins (the stored count is the clamped ceil(discount / points_value), covered above)
+    expect((rpc('create_order_with_items')[0].args as any).p_loyalty_points_redeemed).toBeGreaterThan(0)
+  })
+
+  it('a blank / unparsable loyalty_min_redeem still falls back to 40', async () => {
+    wireHappyPath()
+    mockDb.responses['customers'] = { loyalty_points: 500 }
+    ordersAnswer({})
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...AUTHED, loyaltyPointsRedeemed: 10 }, { ...SET, loyalty_min_redeem: '' })).rejects.toThrow(/minimum 40/i)
+  })
+
   it('stores ceil(clampedDiscount / pointsValue): 4000 coins asked, 20% cap of Rs400 = Rs80 -> 320 coins stored', async () => {
     wireHappyPath()   // 2 x Rs200 = Rs400 subtotal
     mockDb.responses['customers'] = { loyalty_points: 5000 }

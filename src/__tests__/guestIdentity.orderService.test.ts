@@ -291,6 +291,8 @@ describe('S1-002 / B1-16 — coupons for guests', () => {
     const { createOrder } = await import('@/lib/services/orderService')
     await createOrder({ ...GUEST_INPUT, couponCode: 'WELCOME50' }, SETTINGS)
     expect((rpc('claim_coupon_use')[0].args as any).p_customer_id).toBeNull()
+    // v32 (verification F-2): the guest's phone-derived key makes the per-person limit race-free inside the database
+    expect((rpc('claim_coupon_use')[0].args as any).p_identity_key).toMatch(/^ph:[0-9a-f]{64}$/)
     // the usage row is booked on the guest's own new row, not the victim
     expect(mockDb.updateCalls.find(u => u.table === 'coupon_usage')?.payload).toMatchObject({ customer_id: NEW_GUEST })
   })
