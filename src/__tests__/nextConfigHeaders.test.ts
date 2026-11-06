@@ -21,14 +21,16 @@ const headersFor = async (path: string) => {
 describe('next.config.js headers', () => {
   it('hides the X-Powered-By header', () => { expect(config.poweredByHeader).toBe(false) })
 
-  it.each(['/', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/cart', '/order-success', '/api/v1/orders'])(
+  it.each(['/', '/products/sea-buckthorn', '/blog/some-post', '/regions', '/collections', '/cart', '/order-success', '/api/v1/orders',
+    // ISR listings (#146): they need the static policy — a nonce cannot reach a prerendered page (Nov 2026 verification).
+    '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals'])(
     'sends exactly one CSP for %s and it has NO unsafe-eval', async path => {
       const { csp } = await headersFor(path)
       expect(csp).toHaveLength(1)
       expect(csp[0]).not.toContain('unsafe-eval')
     })
 
-  it.each(['/checkout', '/checkout/', '/checkout/pay', '/account', '/account/', '/account/orders/1', '/products', '/products/', '/collections/himalayan-honey', '/blog', '/lab-reports', '/new-arrivals', '/regions/hp'])(
+  it.each(['/checkout', '/checkout/', '/checkout/pay', '/account', '/account/', '/account/orders/1', '/regions/hp'])(
     'sends NO static CSP on %s — the proxy sends a strict per-request one there', async path => {
       expect((await headersFor(path)).csp).toHaveLength(0)
     })
