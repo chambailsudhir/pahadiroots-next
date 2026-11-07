@@ -25,6 +25,7 @@ import AddToCartSection from '@/components/product/AddToCartSection'
 import ProductGallery from '@/components/product/ProductGallery'
 import { PdpVariantProvider } from '@/components/product/PdpVariantContext'
 import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
+import { formatPrice } from '@/lib/utils'
 
 const product = {
   id: 1, name: 'Spiti Honey', slug: 'spiti-honey', emoji: '🍯', state_id: 'himachal', unit_label: '250g', gst_rate: 5,
@@ -75,7 +76,7 @@ describe('hero price block follows the selected pack', () => {
     const { container } = render(<Page />)
     fireEvent.click(screen.getByLabelText(/500g/))
     expect(heroPrice(container)).toBe('₹900')
-    expect(heroMrp(container)).toBe('₹1200')
+    expect(heroMrp(container)).toBe('₹1,200')   // en-IN grouping, like the cards (formatPrice)
     expect(badge(container)).toBe('SAVE 25%')
     expect(container.querySelector('.pdp-tax-note')!.textContent).toContain('500g')
     expect(container.textContent).toContain('-25%')       // gallery badge, no longer stuck on the server value (-17%)
@@ -85,7 +86,7 @@ describe('hero price block follows the selected pack', () => {
   it('hides MRP/SAVE when the chosen pack has no discount (mrp == price)', () => {
     const { container } = render(<Page />)
     fireEvent.click(screen.getByLabelText(/1kg/))
-    expect(heroPrice(container)).toBe('₹1700')
+    expect(heroPrice(container)).toBe('₹1,700')
     expect(heroMrp(container)).toBeNull()
     expect(badge(container)).toBeNull()
   })
@@ -95,7 +96,7 @@ describe('hero price block follows the selected pack', () => {
     fireEvent.click(screen.getByLabelText(/500g/))
     fireEvent.click(screen.getByLabelText(/Add Spiti Honey to cart/i))
     const item = useCartStore.getState().items[0]
-    expect(`₹${item.price}`).toBe(heroPrice(container))
+    expect(formatPrice(item.price)).toBe(heroPrice(container))
     expect(String(item.variantId)).toBe('12')
   })
 })
@@ -132,3 +133,19 @@ describe('outside a provider (QuickView, tests) nothing crashes', () => {
     expect(container.textContent).toContain('-17%')
   })
 })
+
+// Nov 2026 verification: the PDP hero printed raw numbers (₹266.67, ₹1200) while cards used formatPrice.
+describe('PDP hero price uses the same formatting as the product cards', () => {
+  it('fractional and 4-digit prices render via formatPrice (en-IN grouping, whole rupees)', () => {
+    const { container } = render(
+      <PdpVariantProvider variants={[{ id: 1, price: 266.67, mrp: 1234, available_stock: 40, initial_stock: null, size: '250g' }]}
+        initialVariantId={1} fallback={{ price: 266.67, mrp: 1234, stock: 40, initialStock: null }}>
+        <PdpPriceBlock hasVariants />
+      </PdpVariantProvider>,
+    )
+    expect(heroPrice(container)).toBe(formatPrice(266.67))
+    expect(heroPrice(container)).toBe('₹267')
+    expect(heroMrp(container)).toBe('₹1,234')
+  })
+})
+

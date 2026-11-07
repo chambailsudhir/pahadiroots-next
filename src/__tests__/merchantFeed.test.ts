@@ -26,7 +26,6 @@ describe('buildMerchantFeed', () => {
   })
   it('strips XML-illegal control characters so one pasted \\x0B cannot make the whole feed unparseable', () => {
     const x = buildMerchantFeed([{ ...base, name: 'Honey\u000B\u0000 Jar', short_description: 'ok\u000Cdesc', variants: [{ id: 1, price: 10, available_stock: 1 }] }], o)
-    // eslint-disable-next-line no-control-regex
     expect(/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(x)).toBe(false)
     expect(x).toContain('Honey Jar')
   })
@@ -44,4 +43,28 @@ describe('buildMerchantFeed', () => {
     ], o)
     expect(x).not.toContain('<item>')
   })
+
+  // Nov 2026 verification
+  it('strips U+FFFE/U+FFFF and lone surrogates, including one left by the 150-char title cut', () => {
+    const name = 'a'.repeat(149) + '\u{1F36F}'   // honey-pot emoji: a surrogate pair straddling char 150
+    const x = buildMerchantFeed([{ ...base, name, short_description: 'bad￾￿\uD800x\uDC00y', variants: [{ id: 1, price: 10, available_stock: 1 }] }], o)
+    expect(/[￾￿]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(x)).toBe(false)
+    expect(x).toContain(`<title>${'a'.repeat(149)}</title>`)
+    expect(x).toContain('<description>badxy</description>')
+  })
+  it('uses the site MRP rule (variantDisplayMrp): products.mrp strikes through the headline variant, original_price does not', () => {
+    const headline = buildMerchantFeed([{ ...base, mrp: 400, selling_price: 250, variants: [{ id: 1, price: 250, available_stock: 1 }] }], o)
+    expect(headline).toContain('<g:price>400.00 INR</g:price>')
+    expect(headline).toContain('<g:sale_price>250.00 INR</g:sale_price>')
+    // original_price alone is not shown struck-through on the site, so it must not invent a sale in the feed either
+    const legacy = buildMerchantFeed([{ ...base, variants: [{ id: 1, price: 250, original_price: 999, available_stock: 1 }] }], o)
+    expect(legacy).toContain('<g:price>250.00 INR</g:price>')
+    expect(legacy).not.toContain('<g:sale_price>')
+  })
+  it('marks every item out_of_stock while the store is closed', () => {
+    const x = buildMerchantFeed([{ ...base, variants: [{ id: 1, price: 10, available_stock: 50 }] }], { ...o, storeClosed: true })
+    expect(x).toContain('<g:availability>out_of_stock</g:availability>')
+    expect(x).not.toContain('in_stock')
+  })
 })
+

@@ -50,32 +50,42 @@ describe('proxy store-closed cache', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('redirects pages to /maintenance when store_open is false, but never static files', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => storeOpenResponse('false'))
+  // Nov 2026 verification: the gate used to 307 every page to /maintenance (a robots-disallowed URL). It now answers a 503
+  // with Retry-After IN PLACE so crawlers keep the URL indexed and simply retry later.
+  it('answers pages with an in-place 503 (Retry-After, no-store, no redirect) when store_open is false, but never static files', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) =>
+      String(url).includes('store_open')
+        ? storeOpenResponse('false')
+        : new Response(JSON.stringify([{ key: 'maintenance_message', value: 'Back <b>Monday</b>' }, { key: 'whatsapp_number', value: '919000000000' }]), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const { proxy } = await loadProxy()
 
     const page = await proxy(pageReq('/products/sea-buckthorn'))
-    expect(page.status).toBeGreaterThanOrEqual(300)
-    expect(page.status).toBeLessThan(400)
-    expect(page.headers.get('location')).toContain('/maintenance')
+    expect(page.status).toBe(503)
+    expect(page.headers.get('location')).toBeNull()
+    expect(page.headers.get('x-middleware-rewrite')).toBeNull()
+    expect(page.headers.get('retry-after')).toBe('3600')
+    expect(page.headers.get('cache-control')).toBe('no-store')
+    const html = await page.text()
+    expect(html).toContain('Back &lt;b&gt;Monday&lt;/b&gt;')   // admin copy, escaped
+    expect(html).toContain('+919000000000')
+    expect(html).toContain('noindex')
 
     const asset = await proxy(pageReq('/logo.png'))
-    expect(asset.headers.get('location')).toBeNull()
-    // The asset request must not even have asked Supabase (one call, for the page).
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(asset.status).not.toBe(503)
+    // The asset request must not even have asked Supabase (one store_open read, for the page).
+    expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('store_open'))).toHaveLength(1)
   })
 
   // VERIFY ROUND (L-9): the gate used to check `req.method === 'GET'` only, so a HEAD of a page while the store was
-  // closed answered 200 (no redirect) — a link checker / uptime probe saw an open store. HEAD is the same navigation.
-  it('also redirects a HEAD request for a page while the store is closed', async () => {
+  // closed answered 200 — a link checker / uptime probe saw an open store. HEAD is the same navigation.
+  it('also answers 503 to a HEAD request for a page while the store is closed', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => storeOpenResponse('false'))
     vi.stubGlobal('fetch', fetchMock)
     const { proxy } = await loadProxy()
     const head = await proxy(new NextRequest('https://pahadiroots.com/products/sea-buckthorn', { method: 'HEAD' }))
-    expect(head.status).toBeGreaterThanOrEqual(300)
-    expect(head.status).toBeLessThan(400)
-    expect(head.headers.get('location')).toContain('/maintenance')
+    expect(head.status).toBe(503)
+    expect(head.headers.get('location')).toBeNull()
   })
 
   it('fails open on a network error and retries after the short failure TTL', async () => {
@@ -86,7 +96,7 @@ describe('proxy store-closed cache', () => {
     const { proxy } = await loadProxy()
 
     const first = await proxy(pageReq('/products/sea-buckthorn'))
-    expect(first.headers.get('location')).toBeNull() // fail-open: site stays up
+    expect(first.status).not.toBe(503) // fail-open: site stays up
 
     // Within 5 s the failure is remembered — no hammering Supabase.
     vi.advanceTimersByTime(2_000)
@@ -96,7 +106,7 @@ describe('proxy store-closed cache', () => {
     // After the failure TTL it asks again and now sees the closed flag.
     vi.advanceTimersByTime(4_000)
     const later = await proxy(pageReq('/products/sea-buckthorn'))
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(later.headers.get('location')).toContain('/maintenance')
+    expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('store_open'))).toHaveLength(2)
+    expect(later.status).toBe(503)
   })
 })

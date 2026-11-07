@@ -71,6 +71,19 @@ describe('generateMetadata', () => {
     expect(meta.robots).toEqual({ index: false, follow: false })
   })
 
+  // Nov 2026 verification: /regions/jk (0 products) was indexable — a thin "coming soon" page.
+  it('Nov 2026 verification — a region with no live products is noindex (follow); one with products stays indexable', async () => {
+    vi.doMock('@/lib/storeData', () => ({
+      getStoreData: vi.fn(async () => ({ states: [HP_STATE, { id: 'jk', name: 'Jammu & Kashmir' }], state_images: [] })),
+      getNormalizedProducts: vi.fn(async () => ([{ id: 1, state_id: 'HP' }])),
+    }))
+    const { generateMetadata } = await import('@/app/regions/[slug]/page')
+    const empty = await generateMetadata({ params: Promise.resolve({ slug: 'jk' }), searchParams: Promise.resolve({}) })
+    expect(empty.robots).toEqual({ index: false, follow: true })
+    const full = await generateMetadata({ params: Promise.resolve({ slug: 'hp' }), searchParams: Promise.resolve({}) })
+    expect(full.robots).toBeUndefined()
+  })
+
   it('#3 follow-on — SEO description matches the curated meta.description, not just the raw DB value, ' +
      'so the search snippet and the on-page copy don\'t silently disagree', async () => {
     vi.doMock('@/lib/storeData', () => ({

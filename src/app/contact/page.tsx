@@ -54,13 +54,16 @@ export default function ContactPage() {
   // cold start) and pushed the form card down. Until then two same-height placeholders hold their space so nothing moves.
   const settingsLoading = settingsRows === undefined
 
-  const [form, setForm]     = useState({ name: '', email: '', message: '' })
+  // Nov 2026 verification: `website` is a honeypot (hidden from people, filled by form bots); the server drops such posts.
+  const [form, setForm]     = useState({ name: '', email: '', message: '', website: '' })
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [errMsg, setErrMsg] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.name || !form.email || !form.message) return
+    if (!form.name.trim() || !form.email || !form.message) return
+    // Same rule as the server (actions/route.ts): say it here instead of a round-trip 400.
+    if (form.message.trim().length < 10) { setErrMsg('Please write a message of at least 10 characters'); setStatus('error'); return }
     setStatus('sending')
     try {
       const res = await fetch('/api/v1/actions', {
@@ -191,8 +194,22 @@ export default function ContactPage() {
                   onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                   placeholder="Tell us how we can help…"
                   required
+                  minLength={10}
                   rows={4}
                   className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-forest-500 resize-none transition-colors"
+                />
+              </div>
+              {/* Honeypot: off-screen and out of the tab order / accessibility tree, so only bots fill it. */}
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
+                <label htmlFor="contact-website">Website</label>
+                <input
+                  id="contact-website"
+                  name="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={form.website}
+                  onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
                 />
               </div>
               {status === 'error' && (

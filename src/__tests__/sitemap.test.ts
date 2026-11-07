@@ -16,10 +16,18 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const settingsState: { v: Record<string, string> } = { v: { show_blog: 'true' } }
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
+  settingsState.v = { show_blog: 'true' }
+  vi.doMock('@/lib/getSiteSettings', async () => ({
+    getSiteSettings: vi.fn(async () => settingsState.v),
+    isEnabled: (await import('@/lib/siteSettingsHelpers')).isEnabled,
+  }))
 })
+// Regions are only listed when they hold at least one live product (Nov 2026 verification), so the region tests seed one.
+const HP_PRODUCT = { slug: 'apple', updated_at: null, image_url: null, category_id: 9, state_id: 'hp' }
 
 function makeChain(rows: unknown[], capturedFilters: Record<string, unknown>[]) {
   const chain: any = {
@@ -37,7 +45,7 @@ describe('sitemap()', () => {
     vi.doMock('@/lib/supabase', () => ({
       supabase: {
         from: (table: string) => ({
-          select: () => makeChain(table === 'states' ? [{ id: 'hp' }] : [], filters),
+          select: () => makeChain(table === 'states' ? [{ id: 'hp' }] : table === 'products' ? [HP_PRODUCT] : [], filters),
         }),
       },
     }))
@@ -54,7 +62,7 @@ describe('sitemap()', () => {
     vi.doMock('@/lib/supabase', () => ({
       supabase: {
         from: (table: string) => ({
-          select: () => makeChain(table === 'states' ? [{ id: 'hp' }] : [], filters),
+          select: () => makeChain(table === 'states' ? [{ id: 'hp' }] : table === 'products' ? [HP_PRODUCT] : [], filters),
         }),
       },
     }))
@@ -80,7 +88,7 @@ describe('sitemap()', () => {
     vi.doMock('@/lib/supabase', () => ({
       supabase: {
         from: (table: string) => ({
-          select: () => (table === 'states' ? fullChain([{ id: 'hp' }]) : fullChain([])),
+          select: () => (table === 'states' ? fullChain([{ id: 'hp' }]) : table === 'products' ? fullChain([HP_PRODUCT]) : fullChain([])),
         }),
       },
     }))
@@ -98,7 +106,7 @@ describe('sitemap()', () => {
       supabase: {
         from: (table: string) => ({
           select: () => makeChain(
-            table === 'states' ? [{ id: 'hp', updated_at: knownDate }] : [],
+            table === 'states' ? [{ id: 'hp', updated_at: knownDate }] : table === 'products' ? [HP_PRODUCT] : [],
             []
           ),
         }),
@@ -169,5 +177,33 @@ describe('sitemap()', () => {
     const urls = (await sitemap()).map(x => x.url)
     expect(urls.some(u => u.endsWith('/collections/honey'))).toBe(true)
     expect(urls.some(u => u.endsWith('/collections/shilajit'))).toBe(false)   // empty → left out until it has stock
+  })
+
+  it('Nov 2026 verification: a region with no live products is left out of the sitemap', async () => {
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: { from: (table: string) => ({ select: () => makeChain(
+        table === 'products' ? [{ ...HP_PRODUCT, state_id: 'HP' }] : table === 'states' ? [{ id: 'hp' }, { id: 'jk' }] : [], []) }) },
+    }))
+    const { default: sitemap } = await import('@/app/sitemap')
+    const urls = (await sitemap()).map(x => x.url)
+    expect(urls.some(u => u.endsWith('/regions/hp'))).toBe(true)
+    expect(urls.some(u => u.endsWith('/regions/jk'))).toBe(false)
+    expect(urls.some(u => u.endsWith('/regions'))).toBe(true)   // the hub stays
+  })
+
+  it('Nov 2026 verification: /blog (+ posts), /our-stories and /mountain-stories follow their admin toggles', async () => {
+    vi.doMock('@/lib/supabase', () => ({
+      supabase: { from: (table: string) => ({ select: () => makeChain(table === 'blog_posts' ? [{ slug: 'post-1', updated_at: null, published_at: null }] : [], []) }) },
+    }))
+    settingsState.v = { show_blog: 'false', about_page_enabled: 'false', show_life_in_mountains: 'False' }
+    let { default: sitemap } = await import('@/app/sitemap')
+    let urls = (await sitemap()).map(x => x.url)
+    for (const gone of ['/blog', '/blog/post-1', '/our-stories', '/mountain-stories']) expect(urls.some(u => u.endsWith(gone))).toBe(false)
+
+    vi.resetModules()
+    settingsState.v = { show_blog: 'true' }
+    ;({ default: sitemap } = await import('@/app/sitemap'))
+    urls = (await sitemap()).map(x => x.url)
+    for (const there of ['/blog', '/blog/post-1', '/our-stories', '/mountain-stories']) expect(urls.some(u => u.endsWith(there))).toBe(true)
   })
 })

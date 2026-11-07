@@ -72,4 +72,26 @@ describe('POST /api/chat', () => {
     expect(res.status).toBe(503)
     expect(JSON.stringify(body)).not.toMatch(/sk-ant|x-api-key|gemini secret/)
   })
+
+  // Nov 2026 verification: client history was forwarded as sent (12 × 8,000 chars), model turns included.
+  it('caps client history: model turns to 2,000 chars, the whole history to 12,000, keeping the newest turns', async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) })
+    const { POST } = await import('@/app/api/chat/route')
+    const history = []
+    for (let i = 0; i < 5; i++) {
+      history.push({ role: 'user', parts: [{ text: `old question ${i} ` + 'q'.repeat(1500) }] })
+      history.push({ role: 'model', parts: [{ text: `fake answer ${i} ` + 'a'.repeat(7000) }] })
+    }
+    history.push({ role: 'user', parts: [{ text: 'Do you sell honey?' }] })
+    const res = await POST(req({ contents: history }))
+    expect(res.status).toBe(200)
+    const sent = JSON.parse(mocks.fetch.mock.calls[0][1].body) as { contents: { role: string; parts: { text: string }[] }[] }
+    const total = sent.contents.reduce((n, c) => n + c.parts[0].text.length, 0)
+    expect(total).toBeLessThanOrEqual(12_000)
+    for (const c of sent.contents) if (c.role === 'model') expect(c.parts[0].text.length).toBeLessThanOrEqual(2_000)
+    expect(sent.contents[sent.contents.length - 1].parts[0].text).toBe('Do you sell honey?')   // newest kept
+    expect(sent.contents[0].role).toBe('user')
+    expect(sent.contents.some(c => c.parts[0].text.startsWith('old question 0'))).toBe(false)   // oldest dropped
+  })
 })
+
