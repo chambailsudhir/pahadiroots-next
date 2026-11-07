@@ -172,6 +172,22 @@ async function claimPostOrderMarker(orderId: string, via: string): Promise<'clai
   }
 }
 
+/** Idempotently redeem the coins stored on a committed COD order (R3-1). Never throws; a failure is flagged for ops. */
+async function ensureCodCoinsRedeemed(committed: CommittedOrder): Promise<void> {
+  const points = Number(committed.loyalty_points_redeemed ?? 0)
+  if (!(points > 0) || committed.customer_id == null) return
+  let ok = false
+  try { ok = await redeemLoyaltyPoints(String(committed.customer_id), String(committed.id), points) } catch { ok = false }
+  if (!ok) {
+    captureError(new Error('Loyalty redemption failed on recovered COD order — discount granted without deduction'), {
+      action: 'orders.cod_loyalty_redeem_failed', order_id: committed.id, points, alert: true,
+    })
+    await logOrderEvent(String(committed.id), 'loyalty_redeem_failed', 'system', {
+      points, needs_ops_review: true, discount_granted: true, via: 'recovery',
+    }).catch(() => null)
+  }
+}
+
 /**
  * The request died before the post-order steps ran. Run them now for the committed order — once.
  * `post_order_finalized` in order_events is the once-only marker (the e-mails have no natural idempotency key).
@@ -183,6 +199,12 @@ async function finalizeRecoveredOrder(
 ): Promise<void> {
   if (!finalize) return
   try {
+    // R3-1 (Nov 2026): settle the coin deduction BEFORE looking at the once-only marker. The normal path claims the marker and
+    // then redeems; a request killed between the two left a replay that saw 'taken' and returned, so the customer kept the
+    // coin discount AND the coins, with no alert. redeem_loyalty_points is idempotent per order (an existing 'redeem' row
+    // returns true), so running it here as well can never deduct twice. This route only places COD orders.
+    await ensureCodCoinsRedeemed(committed)
+
     // Atomic claim (v33 unique index): of two concurrent replays only one gets the marker and sends the e-mails. Marker FIRST:
     // if the steps below crash half-way we prefer a missing e-mail (the admin sees the alert) over a double one.
     const claim = await claimPostOrderMarker(String(committed.id), 'timeout_recovery')
