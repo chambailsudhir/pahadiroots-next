@@ -259,7 +259,7 @@ export interface CreateOrderInput {
    * components import it). Called for a COD order once the customer and the COD total are known; throws a
    * CheckoutRejectedError to refuse (COD_NOT_AVAILABLE) or to ask for a verification code (COD_VERIFICATION_REQUIRED).
    */
-  codRiskGate?: (ctx: { customerIds: string[]; codTotal: number; phone10: string | null }) => Promise<void>
+  codRiskGate?: (ctx: import('@/lib/server/codVerification').CodGateContext) => Promise<void>
 }
 
 export interface OrderEmailItem {
@@ -1365,7 +1365,10 @@ export async function createOrder(
   //        a large COD total needs the verification code. Runs before any stock or coupon is committed to the order.
   if (input.paymentMethod === 'cod' && input.codRiskGate) {
     const ids = Array.from(new Set([String(custId), ...(await resolveRelatedCustomerIds()).map(String)]))
-    await input.codRiskGate({ customerIds: ids, codTotal: pricing.total, phone10: normalizePhoneForLookup(input.customerPhone) || null })
+    await input.codRiskGate({
+      customerIds: ids, codTotal: pricing.total, phone10: normalizePhoneForLookup(input.customerPhone) || null,
+      email: input.customerEmail ?? null, orderKey: input.idempotencyKey, authenticatedCustomerId: input.authenticatedCustomerId ?? null,
+    })
   }
 
   // 7c. Loyalty balance guard — verify the customer still holds enough points
