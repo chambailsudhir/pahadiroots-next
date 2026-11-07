@@ -9,7 +9,7 @@ import type { PriceSummary } from '@/lib/services/pricingService'
 import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block — was 18KB re-parsed on every render
 import Icon from '@/components/ui/Icon'
 import { useUserStore } from '@/store/userStore'
-import { coinsForOrderValue } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue, maxCoinDiscountInr } from '@/lib/loyaltyCoins'
 import CoinNudge from '@/components/loyalty/CoinNudge'
 
 interface CouponHint { code: string; label: string }
@@ -86,7 +86,8 @@ const OrderSummary = memo(function OrderSummary({
     // Owner decision (Nov 2026): a flat amount per DELIVERED order (default 5), not a rate on the cart value.
     const loyaltyPts     = loyaltyEnabled ? coinsForOrderValue(pricing.total, settings as unknown as Record<string, string | undefined>) : 0
     const maxRedeemPct   = parseFloat(settings.loyalty_max_redeem_pct || '20')
-    const maxRedeemValue = Math.floor(pricing.subtotal * maxRedeemPct / 100)
+    // Coupon + coins together ≤ maxRedeemPct% of the subtotal (owner rule Nov 2026; same helper as the server).
+    const maxRedeemValue = maxCoinDiscountInr(pricing.subtotal, pricing.discount, settings as unknown as Record<string, string | undefined>)
     const maxRedeemPts   = Math.floor(maxRedeemValue / pointsValue)
     const cappedBalance  = Math.min(loyaltyBalance, maxRedeemPts)
     const savingsBadge   = pricing.discount + pricing.prepaidDiscount + (loyaltyRedemption?.discount_inr ?? 0)

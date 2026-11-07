@@ -49,7 +49,7 @@ interface LoyaltyData {
 }
 
 /** Referral promise, built from the real settings: coins are paid after delivery + the return window, never at order time. */
-export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string {
+export function referralCopy(bonus = 50, minOrder = 999, holdDays = 7): string {   // fallbacks = owner rule Nov 2026 (50 + 50, first order ₹999+)
   return `You and your friend each get ${bonus} bonus coins once your friend's first order of ₹${minOrder.toLocaleString('en-IN')} or more is delivered and ${holdDays} days have passed without a return.`
 }
 
@@ -59,7 +59,7 @@ export function earnCopy(perStep: number | undefined, step?: number, max?: numbe
   const p  = typeof perStep === 'number' && Number.isFinite(perStep) && perStep >= 0 ? Math.floor(perStep) : 5
   const st = typeof step === 'number' && Number.isFinite(step) && step >= 1 ? Math.floor(step) : 500
   const cap = typeof max === 'number' && Number.isFinite(max) && max > 0 ? `, up to ${Math.floor(max)} coins per order` : ''
-  return `Earn ${p} ${p === 1 ? 'coin' : 'coins'} for every ₹${st.toLocaleString('en-IN')} of your order${cap}, once it is delivered (orders below ₹${st.toLocaleString('en-IN')} earn none; coins are taken back if you return the order)`
+  return `Earn ${p} ${p === 1 ? 'coin' : 'coins'} for every ₹${st.toLocaleString('en-IN')} of your order${cap}, once it is delivered (orders below ₹${st.toLocaleString('en-IN')} earn none; coins are taken back if you return the order). Coins expire 12 months after you earn them.`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {

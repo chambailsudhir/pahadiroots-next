@@ -542,7 +542,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // pricing.subtotal, exactly the class of bug already fixed for /cart in
   // useCartPage's coupon-revalidation effect. These refs mirror that pattern.
   const lastValidatedCouponSubtotalRef  = useRef<number | null>(null)
-  const lastValidatedLoyaltySubtotalRef = useRef<number | null>(null)
+  // Key = subtotal + coupon discount (Nov 2026: coupon + coins share one cap, so a coupon change re-checks the coins too).
+  const lastValidatedLoyaltySubtotalRef = useRef<string | null>(null)
+  const couponDiscountInr = coupon?.discount ?? 0
 
 
   // PERF FIX: memoized — these are derived from `pricing` (already memoized)
@@ -909,7 +911,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       lastValidatedLoyaltySubtotalRef.current = null
       return
     }
-    if (lastValidatedLoyaltySubtotalRef.current === pricing.subtotal) return
+    if (lastValidatedLoyaltySubtotalRef.current === `${pricing.subtotal}|${couponDiscountInr}`) return
 
     const ac = new AbortController()
     const points = loyaltyRedemption.points
@@ -921,6 +923,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           action:           'validate',
           points_to_redeem: points,
           order_subtotal:   pricing.subtotal,
+          coupon_discount:  couponDiscountInr,   // coupon + coins together ≤ the max-% (Nov 2026)
         }),
         signal: ac.signal,
       })
@@ -938,7 +941,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
             return
           }
           setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
-          lastValidatedLoyaltySubtotalRef.current = pricing.subtotal
+          lastValidatedLoyaltySubtotalRef.current = `${pricing.subtotal}|${couponDiscountInr}`
         })
         .catch((err: unknown) => {
           if ((err as { name?: string }).name === 'AbortError') return
@@ -946,7 +949,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     }, 800)
 
     return () => { clearTimeout(timer); ac.abort() }
-  }, [loyaltyRedemption, pricing.subtotal])
+  }, [loyaltyRedemption, pricing.subtotal, couponDiscountInr])
 
   // Wrap the store's removeCoupon to also clear revalidation tracking —
   // otherwise a stale lastValidatedCouponSubtotalRef value could suppress
@@ -1102,6 +1105,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           action:           'validate',
           points_to_redeem: ptsToRedeem,
           order_subtotal:   pricing.subtotal,
+          coupon_discount:  couponDiscountInr,   // coupon + coins together ≤ the max-% (Nov 2026)
         }),
       })
       if (!mountedRef.current) return
@@ -1111,14 +1115,14 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       setLoyaltyRedemption({ points: data.points, discount_inr: data.discount_inr })
       // Seed revalidation tracking with the subtotal this discount was
       // computed against — see the revalidation effect below.
-      lastValidatedLoyaltySubtotalRef.current = pricing.subtotal
+      lastValidatedLoyaltySubtotalRef.current = `${pricing.subtotal}|${couponDiscountInr}`
     } catch {
       if (!mountedRef.current) return
       setLoyaltyError('Failed to apply coins')
     } finally {
       if (mountedRef.current) setLoyaltyLoading(false)
     }
-  }, [loyaltyLoading, pricing.subtotal])
+  }, [loyaltyLoading, pricing.subtotal, couponDiscountInr])
 
   // PERF FIX: wrapped in useCallback. No external deps — only calls stable
   // state dispatchers and writes to a ref.

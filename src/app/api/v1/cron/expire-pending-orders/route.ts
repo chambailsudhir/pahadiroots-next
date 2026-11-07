@@ -62,6 +62,16 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.award_missing_delivery_coins', alert: true })
     }
 
+    // Pahadi Coins left unused for loyalty_expiry_days (default 365) expire, oldest first (db_migration_v37, owner decision Nov 2026).
+    let coinsExpiredCustomers = 0
+    try {
+      const { data, error } = await db.rpc('expire_old_loyalty_points', { p_limit: 200 })
+      if (error) throw new Error(error.message)
+      coinsExpiredCustomers = Number(data ?? 0)
+    } catch (e) {
+      captureError(e, { action: 'cron.expire_old_loyalty_points', alert: true })
+    }
+
     // "How was your order?" e-mails for orders delivered a few days ago (db_migration_v23, setting review_request_enabled).
     // Non-fatal and self-limiting (batch of 20, time-budgeted); sendReviewRequests never throws, the guard is belt and braces.
     // The function has a 30 s ceiling (vercel.json) shared by every step above, and a send is claimed BEFORE it happens: a kill in the
@@ -82,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.
-    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, missingCoinsAwarded, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
+    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, missingCoinsAwarded, coinsExpiredCustomers, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders', alert: true })
     return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })

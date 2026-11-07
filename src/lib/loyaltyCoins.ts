@@ -56,3 +56,16 @@ export function coinNudge(orderValue: number, settings: Settings): { addRupees: 
   const coins = max != null ? Math.min(perStep, max - now) : perStep
   return { addRupees: Math.max(1, Math.ceil(nextAt - v)), coins, more: now > 0 }
 }
+
+/**
+ * Most a customer may take off with coins on one order (₹), owner rule Nov 2026: the coupon and the coins TOGETHER may not exceed
+ * `loyalty_max_redeem_pct` (default 20%) of the goods subtotal — a ₹500 order with WELCOME50 (₹50) leaves ₹50 for coins.
+ * Used by the checkout display, /api/v1/loyalty (validate) and createOrder (authoritative), so the three always agree.
+ */
+export function maxCoinDiscountInr(subtotal: number, couponDiscount: number, settings: Settings): number {
+  const pctRaw = parseFloat(String(settings.loyalty_max_redeem_pct ?? ''))
+  const pct = Number.isFinite(pctRaw) && pctRaw >= 0 ? pctRaw : 20
+  const s = Number.isFinite(subtotal) && subtotal > 0 ? subtotal : 0
+  const c = Number.isFinite(couponDiscount) && couponDiscount > 0 ? couponDiscount : 0
+  return Math.max(0, Math.floor(s * pct / 100) - Math.ceil(c))
+}

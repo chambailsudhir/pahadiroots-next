@@ -929,6 +929,23 @@ describe('createOrder — loyalty enforcement', () => {
     expect(result.alreadyExists).toBe(false)
   })
 
+  // Owner rule (Nov 2026): the coupon and the coins together stay within loyalty_max_redeem_pct (20%) of the subtotal.
+  it('a coupon uses up part of the 20% cap: ₹2000 subtotal, ₹100 coupon → coins can take at most ₹300', async () => {
+    mockDb.responses['customers'] = { loyalty_points: 100_000 }
+    mockDb.responses['orders'] = (terminal: string) => (terminal === 'then' ? [] : null)
+    mockDb.responses['coupons'] = {
+      id: 9, code: 'FLAT100', value: 100, type: 'flat', max_uses: 100, uses_count: 0,
+      is_active: true, expires_at: null, min_order: null, max_discount: null,
+    }
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: true, usage_id: 91 }
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...AUTHED_INPUT, couponCode: 'FLAT100', loyaltyPointsRedeemed: 5000 }, DEFAULT_SETTINGS)
+    const args = mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')!.args as Record<string, number>
+    expect(args.p_coupon_discount).toBe(100)
+    expect(args.p_total_amount).toBe(1600)                 // 2000 − 100 coupon − 300 coins
+    expect(args.p_loyalty_points_redeemed).toBe(1200)      // ₹300 at ₹0.25 a coin, never the 1600 the old 20%-only cap allowed
+  })
+
   it('throws when requested loyalty points exceed the live DB balance (race-condition guard)', async () => {
     mockDb.responses['customers'] = { loyalty_points: 50 }  // small balance
     const { createOrder } = await import('@/lib/services/orderService')

@@ -13,7 +13,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
-import { coinsMaxPerOrder, coinStepRupees, coinsPerStep } from '@/lib/loyaltyCoins'
+import { coinsMaxPerOrder, coinStepRupees, coinsPerStep, maxCoinDiscountInr } from '@/lib/loyaltyCoins'
 
 // ── Helpers ───────────────────────────────────────────────────
 function asNumber(v: string | undefined, fallback: number) {
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     // settings sent below (earn_per_order / earn_step_rupees, the same formula the delivery trigger uses — lib/loyaltyCoins.ts),
     // so it can never drift from what is actually awarded. The legacy per-rupee rate (`earn_per_rupee`) is no longer sent:
     // nothing reads it since coins moved to "per delivered order, by order value" (v28/v31).
-    const referralBonus = asNumber(settings.referral_bonus_points, 100)
+    const referralBonus = asNumber(settings.referral_bonus_points, 50)
 
     const res = ok({
       enabled:       loyaltyEnabled,
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       earn_max_per_order: coinsMaxPerOrder(settings),
       earn_per_order:     coinsMaxPerOrder(settings) === 0 || coinsPerStep(settings) === 0 ? 0 : (coinsMaxPerOrder(settings) ?? coinsPerStep(settings)),
       referral_bonus:  referralBonus,                    // coins each side gets for a referral
-      referral_min_order: asNumber(settings.referral_min_order, 499),   // friend's order must be at least this (₹)
+      referral_min_order: asNumber(settings.referral_min_order, 999),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery
       // can this customer still add a friend's code? (new customers only — the database re-checks every rule)
       can_apply_referral: !customerRow?.referred_by && Number(customerRow?.total_orders ?? 0) === 0,
@@ -134,7 +134,8 @@ export async function POST(req: NextRequest) {
 
     // ── action=validate ────────────────────────────────────────
     if (action === 'validate') {
-      const { points_to_redeem, order_subtotal } = body as {
+      const { points_to_redeem, order_subtotal, coupon_discount } = body as {
+        coupon_discount?: number
         points_to_redeem: number
         order_subtotal:   number
       }
@@ -173,11 +174,15 @@ export async function POST(req: NextRequest) {
         return fail(400, `Insufficient balance — you have ${balance} points`)
       }
 
-      // Max redemption cap: points_to_redeem * pointsValue ≤ maxRedeemPct% of subtotal
-      const maxValueCap = Math.floor(order_subtotal * maxRedeemPct / 100)
+      // Max redemption cap (owner rule Nov 2026): coupon + coins together ≤ maxRedeemPct% of the subtotal. createOrder applies the
+      // same rule (maxCoinDiscountInr) and is authoritative; this is the pre-check the checkout shows.
+      const couponOff   = typeof coupon_discount === 'number' && Number.isFinite(coupon_discount) && coupon_discount > 0 ? coupon_discount : 0
+      const maxValueCap = maxCoinDiscountInr(order_subtotal, couponOff, { loyalty_max_redeem_pct: String(maxRedeemPct) })
       const redeemValue = Math.floor(points_to_redeem * pointsValue)
       if (redeemValue > maxValueCap) {
-        return fail(400, `Maximum redemption is ₹${maxValueCap} (${maxRedeemPct}% of order)`)
+        return fail(400, couponOff > 0
+          ? `With your coupon, coins can take off at most ₹${maxValueCap} on this order (coupon + coins up to ${maxRedeemPct}% of the order)`
+          : `Maximum redemption is ₹${maxValueCap} (${maxRedeemPct}% of order)`)
       }
 
       const res = ok({
