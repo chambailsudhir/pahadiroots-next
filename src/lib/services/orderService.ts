@@ -9,6 +9,7 @@ import { captureError, logger } from '@/lib/logger'
 //  ✅ Zod schema validation
 //  ✅ Independent of React — testable
 // ─────────────────────────────────────────────────────────────
+import { maxCoinDiscountInr } from '@/lib/loyaltyCoins'
 import { z } from 'zod'
 import { ServiceError } from './profileService'
 
@@ -1114,7 +1115,8 @@ export async function createOrder(
     const subtotal     = cartItems.reduce((s, i) => s + i.price * i.qty, 0)
 
     const requestedDiscount = Math.floor(input.loyaltyPointsRedeemed! * pointsValue)
-    const maxAllowed        = Math.floor(subtotal * maxRedeemPct / 100)
+    // Owner rule (Nov 2026): coupon + coins together stay within loyalty_max_redeem_pct of the subtotal (lib/loyaltyCoins.ts).
+    const maxAllowed        = maxCoinDiscountInr(subtotal, appliedCoupon ? appliedCoupon.discount : 0, { loyalty_max_redeem_pct: String(maxRedeemPct) })
 
     // Clamp to the cap rather than throwing — the order still proceeds but
     // excess loyalty is silently capped.  The balance guard (step 7c) handles

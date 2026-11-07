@@ -4,7 +4,7 @@ import { earnCopy } from '@/app/account/_sections/LoyaltySection'
 // Owner rule (Nov 2026, second revision): 5 coins for every full ₹500, nothing below ₹500, no per-order limit.
 describe('earnCopy', () => {
   it('states the per-₹500 rule, that smaller orders earn none, and the delivery / return rule', () => {
-    expect(earnCopy(5, 500)).toBe('Earn 5 coins for every ₹500 of your order, once it is delivered (orders below ₹500 earn none; coins are taken back if you return the order)')
+    expect(earnCopy(5, 500)).toBe('Earn 5 coins for every ₹500 of your order, once it is delivered (orders below ₹500 earn none; coins are taken back if you return the order). Coins expire 12 months after you earn them.')
     expect(earnCopy(1, 1000)).toContain('Earn 1 coin for every ₹1,000')
   })
   it('mentions a per-order limit only when one is set', () => {

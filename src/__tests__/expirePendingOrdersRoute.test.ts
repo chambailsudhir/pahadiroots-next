@@ -59,6 +59,17 @@ describe('GET /api/v1/cron/expire-pending-orders', () => {
     expect((await res.json()).referralRewards).toBeNull()
   })
 
+  // Owner decision (Nov 2026): coins unused for 12 months expire (db_migration_v37), as a daily, non-fatal step.
+  it('expires year-old unused coins daily and reports how many customers were affected; a failure never masks the sweep', async () => {
+    h.sweep.mockResolvedValue({ scanned: 0, expired: 0, recovered: 0, skipped: 0, errors: 0 })
+    h.rpc.mockImplementation(async (name: string) => name === 'expire_old_loyalty_points' ? { data: 3, error: null } : { data: 0, error: null })
+    const ok = await (await call('Bearer sekret')).json()
+    expect(h.rpc).toHaveBeenCalledWith('expire_old_loyalty_points', { p_limit: 200 })
+    expect(ok.coinsExpiredCustomers).toBe(3)
+    h.rpc.mockImplementation(async (name: string) => name === 'expire_old_loyalty_points' ? { data: null, error: { message: 'boom' } } : { data: 0, error: null })
+    expect((await call('Bearer sekret')).status).toBe(200)
+  })
+
   it('sends review requests as a non-fatal step and reports the count', async () => {
     h.sweep.mockResolvedValue({ scanned: 0, expired: 0, recovered: 0, skipped: 0, errors: 0 })
     rr.send.mockResolvedValue({ enabled: true, scanned: 5, sent: 4, skipped: 1, errors: 0 })

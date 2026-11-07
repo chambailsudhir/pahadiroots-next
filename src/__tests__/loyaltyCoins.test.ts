@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coinsForOrderValue, coinsMaxPerOrder, coinStepRupees, coinsPerStep, coinNudge } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue, coinsMaxPerOrder, coinStepRupees, coinsPerStep, coinNudge, maxCoinDiscountInr } from '@/lib/loyaltyCoins'
 
 // Owner rule (Nov 2026, second revision): no coins below ₹500; 5 coins for every full ₹500; no per-order limit. Paid on delivery.
 // The SQL function delivery_coins_for (db_migration_v36) holds the same formula and gave these exact numbers on production.
@@ -41,5 +41,19 @@ describe('coinNudge — "add ₹X more to earn N coins"', () => {
     expect(coinNudge(300, { loyalty_coins_per_order: '0' })).toBeNull()
     expect(coinNudge(2000, { loyalty_coins_per_order: '20' })).toBeNull()
     expect(coinNudge(1600, { loyalty_coins_per_order: '18' })).toEqual({ addRupees: 400, coins: 3, more: true })
+  })
+})
+
+// Owner rule (Nov 2026): coupon + coins together may not exceed loyalty_max_redeem_pct (default 20%) of the subtotal.
+describe('maxCoinDiscountInr — coupon and coins share one cap', () => {
+  it('₹500 order: 20% = ₹100; with WELCOME50 (₹50) coins can take ₹50; a ₹100+ coupon leaves nothing', () => {
+    expect(maxCoinDiscountInr(500, 0, {})).toBe(100)
+    expect(maxCoinDiscountInr(500, 50, {})).toBe(50)
+    expect(maxCoinDiscountInr(500, 120, {})).toBe(0)
+  })
+  it('follows the admin percentage; junk input never goes negative or NaN', () => {
+    expect(maxCoinDiscountInr(1000, 50, { loyalty_max_redeem_pct: '10' })).toBe(50)
+    expect(maxCoinDiscountInr(Number.NaN, 50, {})).toBe(0)
+    expect(maxCoinDiscountInr(1000, Number.NaN, {})).toBe(200)
   })
 })
