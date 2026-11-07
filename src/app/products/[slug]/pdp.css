@@ -38,6 +38,8 @@
    style but zero matching CSS rules to reveal it on hover. Added here. */
 .pdp-gallery-trigger:hover .pdp-gallery-zoom-icon{opacity:1!important;transform:translate(-50%,-50%) scale(1)!important}
 .pdp-page-bg{background:#faf6ee}
+/* Premium (dark) mode leaves the product page light, so stop it inheriting the theme's cream body text ("12 in stock" was 1.1:1). */
+html.premium .pdp-page-bg{color:#1a1a1a}
 
 /* ── Two-column grid ── */
 .pdp-wrap{max-width:1320px;margin:0 auto;padding:0 32px 32px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:44px;align-items:start}
@@ -571,5 +573,4 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
 .pdp-save-badge{background:none!important;color:#1a3a1e!important;font-size:15px!important;font-weight:800!important;padding:0!important;border-radius:0!important;box-shadow:none!important;letter-spacing:0!important}
 .pdp-vc-save{color:#1a3a1e!important}
 .pdp-mob-save{font-size:12px;font-weight:800;color:#1a3a1e;white-space:nowrap}
-html.premium .pdp-save-badge,html.premium .pdp-vc-save,html.premium .pdp-mob-save{color:var(--gd2)!important}
 .pdp-mob-price-col{flex-wrap:wrap;row-gap:0;flex-shrink:1;min-width:0}

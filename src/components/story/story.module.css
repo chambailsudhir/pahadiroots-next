@@ -113,4 +113,5 @@
 
 /* Premium mode (html.premium) — these sections are fully token-driven, so
    flipping the tokens re-themes every one of them. */
+:global(html.premium) .tab small{color:#f1d98a;background:rgba(212,175,55,.2)}
 :global(html.premium) .root{--g:#f1d98a;--g3:#d9c27a;--gd:#d4af37;--gdt:#e3c25f;--ivory:#0e1d14;--ivory2:#11231a;--cream:#0f2016;--tx:#efe7d2;--tx2:#cfc7ad;--mute:#a29b82;--line:rgba(212,175,55,.26)}

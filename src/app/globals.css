@@ -1288,4 +1288,21 @@ html.premium .mob-nav-logo { color: #f1d98a; }
 
 /* Product card: discount next to the price (ProductCard.tsx .psave). Same green as the price. */
 .psave { font-size:12px; font-weight:800; color:var(--g); white-space:nowrap; }
-html.premium .psave { color:var(--gd2); }
+html.premium .pcard .psave { color:var(--gd2); }
+
+/* ── Premium (dark) mode: pages beyond the homepage (Nov 2026 contrast audit) ─────────────────────────────────────
+   The dark theme only restyled the header, bottom bar, homepage sections and product cards. Plain pages (track order,
+   contact, search, wishlist, policies, lab reports, 404, product breadcrumb) kept Tailwind's dark text colours on the
+   near-black page, down to 1.5:1. These remap those text colours to the theme's light tones, except inside boxes that
+   stay light in this theme (white or cream cards), where the original dark text is still the readable choice.
+   Measured on #0b1710: #efe7d2 14.9:1, #cfc7ad 10.9:1, #a29b82 6.6:1, #e3c25f 10.6:1, #8fd9b5 11.2:1. */
+html.premium :is(.text-stone-900,.text-stone-800):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { color:#efe7d2; }
+html.premium :is(.text-stone-700,.text-stone-600):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { color:#cfc7ad; }
+html.premium :is(.text-stone-500,.text-stone-400):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { color:#a29b82; }
+html.premium :is(.text-forest-600,.text-forest-700,.text-forest-800,.text-forest-900):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { color:#e3c25f; }
+html.premium :is(.text-emerald-700,.text-emerald-800,.text-emerald-900):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { color:#8fd9b5; }
+html.premium :is(.border-stone-300,.border-stone-400):not(:is(.bg-white,.bg-stone-50,.bg-stone-100,.bg-earth-50,.bg-forest-50,.bg-amber-50,.pdp-page-bg) *) { border-color:rgba(212,175,55,.4); }
+
+/* Product cards on the dark card surface */
+html.premium .atc-hint { color:#e3c25f; }                 /* "View Details →" was dark green on dark, 1.3:1 */
+html.premium .stock-label.low { color:#ff9b8f; }         /* "Only N left" was 3.4:1 */
