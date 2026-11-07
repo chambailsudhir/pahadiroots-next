@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.award_missing_delivery_coins', alert: true })
     }
 
-    // Pahadi Coins left unused for loyalty_expiry_days (default 365) expire, oldest first (db_migration_v37, owner decision Nov 2026).
+    // Pahadi Coins left unused for loyalty_expiry_days (now 120) expire, oldest first, aged from loyalty_expiry_start (db_migration_v37 + v38 review-round-5 fixes).
     let coinsExpiredCustomers = 0
     try {
       const { data, error } = await db.rpc('expire_old_loyalty_points', { p_limit: 200 })
