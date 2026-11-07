@@ -54,6 +54,8 @@ export type TransactionalEmailType =
   | 'newsletter_welcome'
   // Nov 2026: "How was your order?" mail sent a few days after delivery (lib/server/reviewRequests.ts).
   | 'review_request'
+  // Nov 2026: "your coins expire on …" ~15 days ahead (lib/server/coinExpiryReminders.ts).
+  | 'coin_expiry_reminder'
   // Nov 2026 (finding G): the forgot-password link mail (api/auth/route.ts) — used to bypass this module and go to Resend directly.
   | 'password_reset'
   // Nov 2026: 6-digit code for a risky cash-on-delivery order (lib/server/codVerification.ts). Useless after 10 minutes.

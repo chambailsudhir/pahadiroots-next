@@ -5,6 +5,7 @@ import { getSiteSettings } from '@/lib/getSiteSettings'
 import { shippingPolicySentence, RETURNS_TIMING } from '@/lib/shippingCopy'
 import { parseServiceableStates } from '@/lib/serviceability'
 import { isCodEnabled } from '@/lib/siteSettingsHelpers'
+import { coinStepRupees, coinsPerStep, coinsMaxPerOrder, expirySpan } from '@/lib/loyaltyCoins'
 
 export const revalidate = 86400 // 24hr
 
@@ -70,6 +71,32 @@ async function PaymentTermsItems() {
         ? 'Orders are confirmed upon successful payment or WhatsApp acknowledgement (COD)'
         : 'Orders are confirmed upon successful payment'}</li>
       <li>We accept <strong>UPI, credit/debit cards, net banking</strong> (via Razorpay){cod && <> and <strong>Cash on Delivery</strong></>}</li>
+    </>
+  )
+}
+
+// Nov 2026 (owner): the Pahadi Coins rules customers agree to — built from the live settings so the terms can never drift from what
+// the checkout, the delivery trigger and the nightly expiry actually do (lib/loyaltyCoins.ts, db_migration_v37–v40).
+async function CoinTermsItems() {
+  const st = (await getSiteSettings({ strict: true })) as unknown as Record<string, string | undefined>
+  const num = (k: string, d: number) => { const n = parseFloat(String(st[k] ?? '')); return Number.isFinite(n) && n >= 0 ? n : d }
+  const step = coinStepRupees(st), per = coinsPerStep(st), max = coinsMaxPerOrder(st)
+  const span = expirySpan(st.loyalty_expiry_days)
+  const pct = num('loyalty_max_redeem_pct', 15), minRedeem = num('loyalty_min_redeem', 10), value = num('loyalty_points_value', 1)
+  const bonus = num('referral_bonus_points', 50), refMin = num('referral_min_order', 999), hold = num('referral_hold_days', 7)
+  const perMonth = num('referral_max_per_month', 3), lifetime = num('referral_max_lifetime', 10)
+  const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`
+  if (st.loyalty_enabled === 'false') return <li>The Pahadi Coins programme is currently paused. Coins already in your account stay there.</li>
+  return (
+    <>
+      <li>Pahadi Coins are available to registered customers only. They are a loyalty reward, not money: they have no cash value, cannot be withdrawn, transferred, sold or exchanged, and earn no interest.</li>
+      <li><strong>Earning:</strong> {per} {per === 1 ? 'coin' : 'coins'} for every full {inr(step)} of products in an order{max != null && max > 0 ? `, up to ${max} coins per order` : ''}. Orders below {inr(step)} earn none. Coins are credited only after the order is <strong>delivered</strong>. Coins are counted on what you pay for the products after any coupon and coins; delivery charges and the COD fee do not count.</li>
+      <li><strong>Using coins:</strong> 1 coin = {inr(value)} off at checkout. At least {minRedeem} coins must be used at a time. Your coupon and your coins together can take at most <strong>{pct}%</strong> off the order&apos;s product value.</li>
+      <li><strong>Expiry:</strong> {span ? <>coins expire <strong>{span}</strong> after they are earned (coins earned before 7 November 2026 count from that date). When you use coins, your oldest coins are used first. We e-mail you about 15 days before coins expire; your account page shows the next expiry date. Expired coins cannot be restored.</> : 'coins currently do not expire.'}</li>
+      <li><strong>Cancellations and returns:</strong> if an order is cancelled, coins you used on it are returned to your account (with their original expiry). If an order is returned or refunded, the coins it earned are taken back.</li>
+      <li><strong>Referrals:</strong> you and your friend each get {bonus} coins when your friend&apos;s first order has at least {inr(refMin)} of products (delivery charges do not count), is delivered, and {hold} days pass without a return. A referral counts only for a genuinely new customer; it is not given for your own other accounts, the same phone number, e-mail or address. The person who refers can earn referral coins for up to {perMonth} friends a month and {lifetime} in total.</li>
+      <li>We may withhold, reverse or cancel coins obtained through fraud, abuse, errors or a breach of these terms, and may suspend the account involved.</li>
+      <li>We may change or end the Pahadi Coins programme or these rules at any time. Changes are published on this page and apply from the date shown.</li>
     </>
   )
 }
@@ -422,7 +449,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Terms of Service',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <p className="text-stone-500 text-xs">Last updated: March 2026 · Effective immediately upon use of pahadiroots.com</p>
+        <p className="text-stone-500 text-xs">Last updated: 7 November 2026 · Effective immediately upon use of pahadiroots.com</p>
 
         <section>
           <h2 className="text-base font-bold text-stone-900 mb-2">1. Overview &amp; Acceptance</h2>
@@ -466,7 +493,14 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">5. Third-Party Services</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">5. Pahadi Coins &amp; Referrals</h2>
+          <ul className="list-disc list-inside text-stone-600 space-y-1">
+            <CoinTermsItems />
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-base font-bold text-stone-900 mb-2">6. Third-Party Services</h2>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
             <li><strong>Razorpay</strong> handles all payment processing — we never store card details. See <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener" className="text-forest-700 underline">Razorpay&apos;s Privacy Policy</a></li>
             <li>Our website is hosted on <strong>Vercel</strong> with data stored on <strong>Supabase</strong> (SOC 2 compliant)</li>
@@ -475,12 +509,12 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">6. Intellectual Property</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">7. Intellectual Property</h2>
           <p className="text-stone-600">All content on pahadiroots.com — text, images, logo, brand name, product descriptions, and design — is the intellectual property of <strong>{LEGAL_ENTITY}</strong>. Unauthorised reproduction, duplication, or commercial use without written permission is strictly prohibited.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">7. Prohibited Uses</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">8. Prohibited Uses</h2>
           <p className="text-stone-600 mb-2">You are prohibited from using this website for:</p>
           <ul className="list-disc list-inside text-stone-600 space-y-1">
             <li>Any unlawful, fraudulent, or harmful purpose</li>
@@ -495,7 +529,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">8. Product Quality Warranty &amp; Disclaimer</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">9. Product Quality Warranty &amp; Disclaimer</h2>
           <p className="text-stone-600 mb-2"><strong>Website / Digital Service:</strong> Provided <strong>&quot;as is&quot;</strong> and <strong>&quot;as available&quot;</strong> without warranty of uninterrupted or error-free access.</p>
           <p className="text-stone-600 mb-2"><strong>Physical Products — Limited Quality Warranty.</strong> We warrant that products dispatched from our facility are:</p>
           <ul className="list-disc list-inside text-stone-600 space-y-1 mb-3">
@@ -517,52 +551,52 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">9. Indemnification</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">10. Indemnification</h2>
           <p className="text-stone-600">You agree to indemnify and hold harmless {LEGAL_ENTITY} and its officers, employees, and agents from any claims, damages, or expenses (including reasonable legal fees) arising from your breach of these Terms, violation of any law, or infringement of any third-party rights.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">10. Accuracy of Information &amp; Errors</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">11. Accuracy of Information &amp; Errors</h2>
           <p className="text-stone-600">We strive to keep product descriptions, pricing, and availability accurate. Errors may occasionally occur. We reserve the right to correct typographical errors, pricing mistakes, or inaccuracies, and to cancel any order if information was incorrect — with a full refund.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">11. User Submissions &amp; Feedback</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">12. User Submissions &amp; Feedback</h2>
           <p className="text-stone-600">If you send us reviews, suggestions, contest entries, or other creative material, you grant {LEGAL_ENTITY} the right to use, publish, translate, or distribute such content without compensation or obligation of confidentiality. You agree submissions will not violate third-party rights or contain unlawful content.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">12. Optional Third-Party Tools</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">13. Optional Third-Party Tools</h2>
           <p className="text-stone-600">We may provide access to third-party tools (analytics, payment gateways, logistics APIs) on an &quot;as is&quot; and &quot;as available&quot; basis without warranty. Use of such tools is at your own risk — review their terms before use.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">13. Severability</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">14. Severability</h2>
           <p className="text-stone-600">If any provision of these Terms is found unlawful or unenforceable, it shall be severed from the rest — the remaining Terms remain fully valid and enforceable.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">14. Termination</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">15. Termination</h2>
           <p className="text-stone-600">We reserve the right to terminate your access to this website at any time, without notice, if you breach these Terms. Obligations incurred before termination remain in effect.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">15. Entire Agreement</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">16. Entire Agreement</h2>
           <p className="text-stone-600">These Terms, together with our Returns, Shipping, and Privacy policies, constitute the entire agreement between you and {LEGAL_ENTITY} regarding your use of this website and supersede all prior communications or agreements.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">16. Policy Updates</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">17. Policy Updates</h2>
           <p className="text-stone-600">We reserve the right to update these Terms at any time. Updated versions will be published on this page with the revision date. Continued use of our website after changes constitutes acceptance of the revised Terms.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">17. Governing Law &amp; Jurisdiction</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">18. Governing Law &amp; Jurisdiction</h2>
           <p className="text-stone-600">These Terms are governed by the <strong>laws of India</strong>. All disputes are subject to the exclusive jurisdiction of the competent courts in <strong>{JURISDICTION}</strong>.</p>
         </section>
 
         <section>
-          <h2 className="text-base font-bold text-stone-900 mb-2">18. Contact</h2>
+          <h2 className="text-base font-bold text-stone-900 mb-2">19. Contact</h2>
           <p className="text-stone-600">Questions about these Terms? Contact: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a> · WhatsApp: <a href={WHATSAPP} className="text-forest-700 underline">{SUPPORT_PHONE}</a></p>
         </section>
 

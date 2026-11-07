@@ -49,6 +49,11 @@ export async function GET(req: NextRequest) {
       getSettings(),
     ])
     if (!profile) return fail(404, 'Profile not found')
+    // Next batch of coins to expire (db_migration_v40, same ledger walk as the nightly expiry). Non-fatal: no line on failure.
+    const sched: Array<{ expires_on: string; coins: number }> = await sbAdmin(
+      'POST', '/rest/v1/rpc/loyalty_expiry_schedule', { p_customer: profile.id, p_limit: 1 },
+    ).catch(() => [])
+    const nextExpiry = Array.isArray(sched) && sched[0] && Number(sched[0].coins) > 0 ? { date: String(sched[0].expires_on), coins: Number(sched[0].coins) } : null
 
     // syncCustomerProfile already fetches select=* so loyalty_points
     // and referral_code are already on the profile object — no extra query needed
@@ -82,6 +87,7 @@ export async function GET(req: NextRequest) {
       referral_min_order: asNumber(settings.referral_min_order, 999),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery
       expiry_days:     asNumber(settings.loyalty_expiry_days, 120),       // coins unused this long expire (0 = never) — v37 cron
+      next_expiry:     nextExpiry,                                         // { date: 'YYYY-MM-DD' (IST), coins } or null
       // can this customer still add a friend's code? (new customers only — the database re-checks every rule)
       can_apply_referral: !customerRow?.referred_by && Number(customerRow?.total_orders ?? 0) === 0,
       label,
