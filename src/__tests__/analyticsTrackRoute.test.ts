@@ -76,6 +76,9 @@ describe('analytics track route hardening', () => {
   })
 
   it('still de-duplicates purchase events by order id even when metadata is later capped', async () => {
+    sbAdmin.mockImplementation(async (method: string, path: string) => method === 'GET' && String(path).startsWith('/rest/v1/orders')
+      ? [{ order_number: 'HV-1', total_amount: 100, payment_status: 'paid', payment_method: 'razorpay', order_status: 'confirmed', created_at: new Date().toISOString() }]
+      : [])
     await call(ev({ event_type: 'purchase', metadata: { order_id: 'HV-1', value: 100 } }))
     expect(eventsWritten()![0]).toMatchObject({ dedupe_key: 'purchase:HV-1' })
   })

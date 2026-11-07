@@ -16,6 +16,7 @@
 //    — soft abuse protection, not a security boundary.
 // ─────────────────────────────────────────────────────────────
 
+import { verifyPurchaseRows } from '@/lib/analytics/verifyPurchase'
 import { NextRequest, NextResponse } from 'next/server'
 import { sbAdmin, hasForeignOrigin } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
@@ -143,6 +144,12 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // H2-3 (Nov 2026): this endpoint is unauthenticated, and a purchase is deduplicated per order number. Anyone could
+  // pre-insert `purchase:<upcoming order number>` with a made-up value, so the real purchase was silently dropped and
+  // fake revenue landed in the funnel reports. A purchase event is now kept only for a real, recent, paid (or confirmed
+  // COD) order, and its value is the order's stored total, never the browser's.
+  const verified = await verifyPurchaseRows(eventRows)
+  eventRows.splice(0, eventRows.length, ...verified)
   if (!eventRows.length) return fail(400, 'no valid events')
 
   try {
@@ -160,3 +167,4 @@ export async function POST(req: NextRequest) {
 
   return ok()
 }
+
