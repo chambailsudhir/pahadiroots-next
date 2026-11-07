@@ -132,7 +132,7 @@ describe('syncCustomerProfile — email match still correctly links a returning 
     vi.stubGlobal('fetch', fetchMock)
 
     const { syncCustomerProfile } = await import('@/lib/api/serverUtils')
-    const result = await syncCustomerProfile({ id: 'auth-returning', email: 'returning@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' })
+    const result = await syncCustomerProfile({ id: 'auth-returning', email: 'returning@example.com', email_confirmed_at: '2026-11-02T00:00:00Z', created_at: '2026-11-01T23:50:00Z' })
 
     expect(result.first_name).toBe('Returning')
     expect(result.auth_user_id).toBe('auth-returning')
@@ -158,7 +158,7 @@ describe('syncCustomerProfile — an e-mail match is adopted only for a CONFIRME
   })
   it('confirmed e-mail + a guest row with no owner yet: adopted (case-insensitive)', async () => {
     const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [ROW])).mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: 'u-real' }]))
-    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z', created_at: '2026-11-01T23:50:00Z' }, f)
     expect(result!.first_name).toBe('Victim')
     expect(patched(f)).toBe(true)
   })
@@ -167,7 +167,7 @@ describe('syncCustomerProfile — an e-mail match is adopted only for a CONFIRME
     const f = vi.fn()
       .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: owner }]))
       .mockResolvedValueOnce(jsonResponse(200, { id: owner }))             // admin API: that user exists
-    const result = await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    const result = await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z', created_at: '2026-11-01T23:50:00Z' }, f)
     expect(result).toBeNull()
     expect(patched(f)).toBe(false)
     expect(captureErrorMock).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ action: 'syncCustomerProfile.email_conflict' }))
@@ -178,14 +178,14 @@ describe('syncCustomerProfile — an e-mail match is adopted only for a CONFIRME
       .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: dead }]))
       .mockResolvedValueOnce(jsonResponse(404, {}))
       .mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: 'u-real' }]))
-    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z' }, f)
+    const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z', created_at: '2026-11-01T23:50:00Z' }, f)
     expect(result!.first_name).toBe('Victim')
     expect(patched(f)).toBe(true)
   })
   it('an admin-API hiccup counts as "owner exists" — a row is never taken on uncertainty', async () => {
     const owner = '11111111-2222-3333-4444-555555555555'
     const f = vi.fn().mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: owner }])).mockRejectedValueOnce(new Error('network'))
-    expect(await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: 'x' }, f)).toBeNull()
+    expect(await call({ id: 'someone-else', email: 'victim@example.com', email_confirmed_at: '2026-11-02T00:00:00Z', created_at: '2026-11-01T23:50:00Z' }, f)).toBeNull()
     expect(patched(f)).toBe(false)
   })
   it('there is no "first row" fallback: a returned row whose e-mail differs is never adopted', async () => {
@@ -193,5 +193,53 @@ describe('syncCustomerProfile — an e-mail match is adopted only for a CONFIRME
     const result = await call({ id: 'u-real', email: 'victim@example.com', email_confirmed_at: 'x' }, f)
     expect(result).not.toMatchObject({ id: 'other' })
     expect(patched(f)).toBe(false)
+  })
+})
+
+// ── AUTH-1 (Nov 2026 audit): "confirmed" must mean PROVEN. With Supabase auto-confirm on, a password sign-up gets email_confirmed_at
+// stamped at creation, so a stranger signing up with the victim's e-mail would inherit the victim's guest history. ──────────────
+describe('syncCustomerProfile — AUTH-1: adopt by e-mail only after a clicked link or an OAuth identity', () => {
+  const ROW = { id: 'cust-9', auth_user_id: null, email: 'victim@example.com', first_name: 'Victim', phone: '9111111111' }
+  const call = async (user: Record<string, unknown>, fetchMock: ReturnType<typeof vi.fn>) => {
+    vi.stubGlobal('fetch', fetchMock)
+    const { syncCustomerProfile } = await import('@/lib/api/serverUtils')
+    return syncCustomerProfile(user as never)
+  }
+  const patched = (f: ReturnType<typeof vi.fn>) => f.mock.calls.some(c => (c[1] as RequestInit | undefined)?.method === 'PATCH')
+  const adoptFetch = () => vi.fn().mockResolvedValueOnce(jsonResponse(200, [ROW])).mockResolvedValueOnce(jsonResponse(200, [{ ...ROW, auth_user_id: 'u-real' }]))
+
+  it('auto-confirmed password sign-up (confirmed_at == created_at, email identity): NOT adopted', async () => {
+    const f = adoptFetch()
+    const t = '2026-11-02T10:00:00.000Z'
+    const result = await call({ id: 'attacker', email: 'victim@example.com', email_confirmed_at: t, created_at: t, identities: [{ provider: 'email' }], app_metadata: { provider: 'email', providers: ['email'] } }, f)
+    expect(result).toBeNull()
+    expect(patched(f)).toBe(false)
+  })
+  it('auto-confirm stamped ~1 s after creation: still NOT adopted (2-second threshold)', async () => {
+    const f = adoptFetch()
+    const result = await call({ id: 'attacker', email: 'victim@example.com', created_at: '2026-11-02T10:00:00.000Z', email_confirmed_at: '2026-11-02T10:00:01.400Z', identities: [{ provider: 'email' }] }, f)
+    expect(result).toBeNull()
+    expect(patched(f)).toBe(false)
+  })
+  it('confirmed e-mail sign-up (link clicked minutes later): adopted', async () => {
+    const f = adoptFetch()
+    const result = await call({ id: 'u-real', email: 'victim@example.com', created_at: '2026-11-02T10:00:00Z', email_confirmed_at: '2026-11-02T10:04:12Z', identities: [{ provider: 'email' }] }, f)
+    expect(result!.first_name).toBe('Victim')
+    expect(patched(f)).toBe(true)
+  })
+  it('Google sign-in (confirmed at creation, google identity): adopted', async () => {
+    const f = adoptFetch()
+    const t = '2026-11-02T10:00:00Z'
+    const result = await call({ id: 'u-real', email: 'victim@example.com', created_at: t, email_confirmed_at: t, identities: [{ provider: 'google' }], app_metadata: { provider: 'google', providers: ['google'] } }, f)
+    expect(result!.first_name).toBe('Victim')
+    expect(patched(f)).toBe(true)
+  })
+  it('emailOwnershipProven: unconfirmed, missing or unparsable timestamps fail closed; a phone identity is no proof', async () => {
+    const { emailOwnershipProven } = await import('@/lib/api/serverUtils')
+    expect(emailOwnershipProven({ email_confirmed_at: null, identities: [{ provider: 'google' }] })).toBe(false)
+    expect(emailOwnershipProven({ email_confirmed_at: '2026-11-02T10:00:00Z' })).toBe(false)
+    expect(emailOwnershipProven({ email_confirmed_at: 'x', created_at: 'y' })).toBe(false)
+    expect(emailOwnershipProven({ email_confirmed_at: '2026-11-02T10:00:00Z', created_at: '2026-11-02T10:00:00Z', identities: [{ provider: 'phone' }] })).toBe(false)
+    expect(emailOwnershipProven({ email_confirmed_at: '2026-11-02T10:00:03Z', created_at: '2026-11-02T10:00:00Z' })).toBe(true)
   })
 })

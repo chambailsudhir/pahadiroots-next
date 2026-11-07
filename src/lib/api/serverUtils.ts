@@ -258,14 +258,49 @@ async function authUserStillExists(authUserId: string): Promise<boolean> {
 // If none exists, upserts a new row (race-safe via merge-duplicates
 // on the UNIQUE auth_user_id constraint — two concurrent first-logins
 // won't create duplicate customer rows).
-export async function syncCustomerProfile(user: {
+/** The GoTrue user fields syncCustomerProfile reads. */
+export interface SyncableAuthUser {
   id:            string
   phone?:        string
   email?:        string
   user_metadata?: Record<string, string>
-  /** GoTrue sets this once the address is PROVEN (link clicked, or an OAuth provider vouching for it). */
+  /** GoTrue sets this once the address is PROVEN (link clicked, or an OAuth provider vouching for it) — or, with auto-confirm, at sign-up. */
   email_confirmed_at?: string | null
-}) {
+  created_at?:   string | null
+  identities?:   Array<{ provider?: string | null } | null> | null
+  app_metadata?: { provider?: string | null; providers?: Array<string | null> | null } | null
+}
+
+/** Auto-confirm stamps email_confirmed_at at (or within ~1 s of) created_at; a clicked link comes later than this. */
+const EMAIL_CONFIRM_MIN_DELAY_MS = 2_000
+/** Providers that do NOT prove control of the e-mail address. */
+const NON_EMAIL_PROOF_PROVIDERS = new Set(['email', 'phone', 'anonymous'])
+
+/**
+ * AUTH-1 (Nov 2026 audit): may this auth user ADOPT an existing customers row (guest / orphan history) just because the e-mail
+ * matches? Only when the user has actually PROVEN they control the address:
+ *   • an OAuth identity (Google…) vouches for it — any provider other than email/phone/anonymous; or
+ *   • the address was confirmed by clicking the link — email_confirmed_at is STRICTLY LATER than created_at by > 2 s.
+ * Why the timing rule: with Supabase "auto-confirm" turned on, a plain password sign-up gets email_confirmed_at stamped at
+ * creation (equal to created_at, or within about a second) although nobody clicked anything — so `email_confirmed_at is set`
+ * alone would let anyone sign up with someone else's e-mail and inherit their orders, addresses and coins. A real confirmation
+ * needs a mail round-trip, which is never that fast. Missing/unparsable timestamps → not proven (fail closed).
+ */
+export function emailOwnershipProven(user: Pick<SyncableAuthUser, 'email_confirmed_at' | 'created_at' | 'identities' | 'app_metadata'>): boolean {
+  if (!user.email_confirmed_at) return false
+  const providers = [
+    ...(user.identities ?? []).map(i => i?.provider),
+    ...(user.app_metadata?.providers ?? []),
+    user.app_metadata?.provider,
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0).map(p => p.toLowerCase())
+  if (providers.some(p => !NON_EMAIL_PROOF_PROVIDERS.has(p))) return true
+  const confirmedAt = Date.parse(user.email_confirmed_at)
+  const createdAt   = user.created_at ? Date.parse(user.created_at) : NaN
+  if (!Number.isFinite(confirmedAt) || !Number.isFinite(createdAt)) return false
+  return confirmedAt - createdAt > EMAIL_CONFIRM_MIN_DELAY_MS
+}
+
+export async function syncCustomerProfile(user: SyncableAuthUser) {
   const phone = user.phone || ''
   const email = user.email || ''
 
@@ -346,14 +381,16 @@ export async function syncCustomerProfile(user: {
     // matched customer's name, phone, address and coins to an anonymous caller. (The attempt to re-point the row at the fake id
     // was stopped by the customers_auth_user_id_fkey foreign key, so no record was damaged — but the data was already returned.)
     // Now an e-mail match is adopted only when ALL of these hold:
-    //   • the auth user's e-mail is CONFIRMED (GoTrue's email_confirmed_at — set after the link is clicked / by Google);
+    //   • the auth user has PROVEN the e-mail (AUTH-1, emailOwnershipProven: an OAuth identity, or email_confirmed_at more than
+    //     2 s after created_at — Supabase auto-confirm would otherwise stamp it at sign-up without any proof);
     //   • the row is not claimed by a DIFFERENT live auth user (defence in depth; a row whose owner no longer exists can still be
     //     taken back by a confirmed owner of that e-mail);
     //   • the comparison is exact (case-insensitive) — no "first row" fallback.
     let match = rows.find((r: Record<string, unknown>) => r.auth_user_id === user.id)
     if (!match) {
       const byEmail = email ? rows.find((r: Record<string, unknown>) => typeof r.email === 'string' && r.email.toLowerCase() === email.toLowerCase()) : undefined
-      if (byEmail && user.email_confirmed_at) {
+      // AUTH-1: "confirmed" must mean PROVEN (OAuth, or a clicked link) — not auto-confirmed at sign-up. See emailOwnershipProven.
+      if (byEmail && emailOwnershipProven(user)) {
         const owner = byEmail.auth_user_id as string | null | undefined
         if (!owner || !(await authUserStillExists(owner))) match = byEmail
         else captureError(new Error('syncCustomerProfile: e-mail matches a customer already linked to another live auth user — not adopted'), { action: 'syncCustomerProfile.email_conflict', userId: user.id, alert: true })
