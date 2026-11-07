@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
 import { useUIStore } from '@/store/uiStore'
+import { formatPrice } from '@/lib/utils'
 
 // Normalised shape produced by RelatedProducts / normalizeProduct
 interface RelatedProduct {
@@ -141,9 +142,9 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
           {p.name}
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', rowGap: '2px', flexWrap: 'wrap', marginBottom: '10px' }}>
-          <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a3a1e' }}>₹{price}</span>
+          <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a3a1e' }}>{formatPrice(price)}</span>
           {mrp && mrp > price && (
-            <span style={{ fontSize: '12px', color: '#6b6b6b', textDecoration: 'line-through' }}>₹{mrp}</span>
+            <span style={{ fontSize: '12px', color: '#6b6b6b', textDecoration: 'line-through' }}>{formatPrice(mrp)}</span>
           )}
           {disc >= 5 && <span className="psave">{disc}% off</span>}
         </div>

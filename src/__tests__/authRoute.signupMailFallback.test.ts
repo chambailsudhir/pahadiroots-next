@@ -198,7 +198,8 @@ describe('email_signup — mail fallback caps (round 8: the fallback must not be
     expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(5)
     resetPerMinuteLimiter()
     const sixth = await POST(same(5))
-    expect(sixth.status).toBe(503)
+    expect(sixth.status).toBe(200)   // generic answer, so a capped NEW address looks like a registered one (no oracle)
+    expect(await sixth.json()).toMatchObject({ success: true, verification_sent: true })
     expect(genCalls()).toBe(5)                              // no 6th user created
     expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(5)
   })
@@ -206,14 +207,14 @@ describe('email_signup — mail fallback caps (round 8: the fallback must not be
   it('one address gets at most 3 fallback e-mails a day, whatever network asks', async () => {
     const { POST } = await import('@/app/api/auth/route')
     for (let n = 0; n < 3; n++) expect((await POST(reqFrom(`203.0.113.${n + 1}`, SIGNUP))).status).toBe(200)
-    expect((await POST(reqFrom('203.0.113.99', SIGNUP))).status).toBe(503)
+    expect((await POST(reqFrom('203.0.113.99', SIGNUP))).status).toBe(200)
     expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(3)
   })
 
   it('at most 50 fallback e-mails an hour across all networks and addresses', async () => {
     const { POST } = await import('@/app/api/auth/route')
     for (let n = 0; n < 50; n++) expect((await POST(reqFrom(`10.0.${n}.1`, { ...SIGNUP, email: `bulk${n}@example.com` }))).status).toBe(200)
-    expect((await POST(reqFrom('10.1.0.1', { ...SIGNUP, email: 'bulk-over@example.com' }))).status).toBe(503)
+    expect((await POST(reqFrom('10.1.0.1', { ...SIGNUP, email: 'bulk-over@example.com' }))).status).toBe(200)
     expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(50)
   })
 

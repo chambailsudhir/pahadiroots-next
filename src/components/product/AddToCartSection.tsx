@@ -268,8 +268,8 @@ export default function AddToCartSection({ product, variants }: Props) {
               // users saying the visible words did not match. Visible words first, status after.
               const variantLabel = [
                 v.size,
-                `₹${v.price}`,
-                v.mrp && v.mrp > v.price ? `₹${v.mrp}` : null,
+                formatPrice(v.price),
+                v.mrp && v.mrp > v.price ? formatPrice(v.mrp) : null,
                 savePct > 0 ? `${savePct}% off` : null,
                 oos ? 'Out of stock' : null,
               ].filter(Boolean).join(' ')

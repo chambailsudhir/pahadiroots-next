@@ -164,7 +164,7 @@ export function buildOrderEmail(o: OrderEmailInput): string {
   return `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+<meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">
 <title>${esc(orderEmailSubject(o.kind, o.orderNumber))}</title>
 <style>
   @media only screen and (max-width:520px){

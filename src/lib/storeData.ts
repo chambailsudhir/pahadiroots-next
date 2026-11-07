@@ -12,6 +12,7 @@ import { getServiceClient } from './supabase'
 import { applyProductImages, normalizeProducts } from './normalizeProduct'
 import { logger } from './logger'
 import { scrubProduct, scrubVariant } from './privateFields'
+import { capStock } from './publicCatalog'
 import type { Product, Category, State } from '@/types'
 
 // Minimal shapes for related tables (not full DB types)
@@ -697,10 +698,13 @@ export async function getRelatedProducts(opts: {
     const row = scrubProduct(p) as unknown as Record<string, unknown>
     const slim: Record<string, unknown> = {}
     for (const k of RELATED_CARD_FIELDS) if (row[k] !== undefined) slim[k] = row[k]
+    // Verification (Nov 2026): this payload is public page data — cap stock like the public catalogue (lib/publicCatalog.ts).
+    if ('available_stock' in slim) slim.available_stock = capStock(slim.available_stock)
     const slimVars = pVars.map(v => {
       const o: Record<string, unknown> = {}
       const src = v as unknown as Record<string, unknown>
       for (const k of RELATED_CARD_VARIANT_FIELDS) if (src[k] !== undefined) o[k] = src[k]
+      if ('available_stock' in o) o.available_stock = capStock(o.available_stock)
       return o
     })
     return {

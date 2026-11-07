@@ -1,7 +1,7 @@
 'use client'
 // "Add ₹X more to earn N Pahadi Coins" (Nov 2026, owner request). Coins come in full ₹500 steps (no coins below ₹500), so a small
 // top-up can unlock the next 5 coins. Shown to signed-in customers only (a guest has no account to keep coins in) and only while
-// coins are switched on. The amount is measured on the order total, the same figure the delivery trigger pays coins on.
+// coins are switched on. The amount is the goods value (total − shipping − COD fee, coinBaseValue), the same figure the delivery trigger pays coins on.
 import { useUserStore } from '@/store/userStore'
 import { coinNudge } from '@/lib/loyaltyCoins'
 import { formatPrice } from '@/lib/utils'

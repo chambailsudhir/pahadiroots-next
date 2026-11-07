@@ -32,6 +32,7 @@ import { variantDisplayMrp } from '@/lib/pricing/linePricing'
 import { NextRequest, NextResponse } from 'next/server'
 import type { Product } from '@/types'
 import { getStoreData } from '@/lib/storeData'
+import { capStock } from '@/lib/publicCatalog'
 import type { UpsellItem } from '@/types'
 import { logger }                from '@/lib/logger'
 import { rememberGood, recallGood } from '@/lib/api/lastGood'
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
           emoji:       p.emoji   ?? null,
           image:       imgMap[String(v.product_id)] ?? null,
           gstRate:     p.gst_rate    ?? 5,
-          maxQty:      v.available_stock ?? 10,
+          maxQty:      capStock(v.available_stock ?? 10),   // public answer: never the real inventory level
           badge,
           isOrganic,
           isHimalayan:  !!p.state_id,

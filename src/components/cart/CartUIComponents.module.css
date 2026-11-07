@@ -182,3 +182,9 @@
   transform: translateY(-2px);
   box-shadow: 0 10px 28px rgba(26, 58, 30, 0.38);
 }
+
+/* Premium (dark) theme — the empty cart sits on the dark page background (#0b1710); the light-theme colours above were 1.0–3.5:1
+   there (verification, Nov 2026). Same palette as the other premium overrides (story.module.css). */
+:global(html.premium) .ecTitle   { color: #efe7d2; }
+:global(html.premium) .ecSub     { color: #cfc7ad; }
+:global(html.premium) .ecTagline { color: #f1d98a; }
