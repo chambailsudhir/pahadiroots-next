@@ -28,6 +28,7 @@ import { PdpPriceBlock, PdpStockRow } from '@/components/product/PdpLivePrice'
 import { certifiedParameters, joinParameters, mergeCertificateFlags, isCurrentCertificate } from '@/lib/certificateCopy'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import Link from 'next/link'
+import { capStock, soldPercent } from '@/lib/publicCatalog'
 import Image from 'next/image'
 import OurPromiseSection from '@/components/homepage/WhySection'
 import Icon from '@/components/ui/Icon'
@@ -301,7 +302,7 @@ export default async function ProductPage({ params }: Props) {
   const clientProduct = {
     id: product.id, name: product.name, slug: product.slug, image_url: product.image_url, emoji: product.emoji,
     unit_label: product.unit_label, state_id: product.state_id, gst_rate: product.gst_rate,
-    price: product.price, selling_price: product.selling_price, mrp: product.mrp, available_stock: product.available_stock,
+    price: product.price, selling_price: product.selling_price, mrp: product.mrp, available_stock: capStock(product.available_stock),
     badges_bestseller: product.badges_bestseller, badges_organic: product.badges_organic,
   } as unknown as Product
 
@@ -356,8 +357,10 @@ export default async function ProductPage({ params }: Props) {
   // reserved/damaged/blocked stock, barcode). The buy box reads id, price, mrp, size and available_stock.
   const clientVariants = activeVariants.map((v: any) => ({
     id: v.id, product_id: v.product_id, size: v.size, variant_type: v.variant_type, variant_value: v.variant_value,
-    price: v.price, mrp: v.mrp, original_price: v.original_price ?? null, available_stock: v.available_stock,
-    initial_stock: v.initial_stock ?? null, sku: v.sku ?? null, is_active: v.is_active, sort_order: v.sort_order ?? 0,
+    // R3-2 (Nov 2026): no sku / initial_stock and a capped stock — the buy box only needs "in stock?", "low?" and the
+    // per-line maximum, and the exact inventory must not ship in the page.
+    price: v.price, mrp: v.mrp, original_price: v.original_price ?? null, available_stock: capStock(v.available_stock),
+    is_active: v.is_active, sort_order: v.sort_order ?? 0,
   })) as unknown as ProductVariant[]
 
   const baseVariant = activeVariants.length > 0
@@ -549,11 +552,12 @@ export default async function ProductPage({ params }: Props) {
               gallery badge. Renders no DOM, so layout is unchanged. */}
           <PdpVariantProvider
             variants={activeVariants.map((v: any) => ({
-              id: v.id, price: Number(v.price), mrp: Number(v.mrp ?? v.price), available_stock: Number(v.available_stock ?? 0),
-              initial_stock: v.initial_stock ?? null, size: v.size,
+              // R3-2: the sold-% bar is computed here, so neither the exact stock nor initial_stock reaches the browser.
+              id: v.id, price: Number(v.price), mrp: Number(v.mrp ?? v.price), available_stock: capStock(v.available_stock),
+              sold_pct: soldPercent(v.available_stock, v.initial_stock), size: v.size,
             }))}
             initialVariantId={baseVariant?.id ?? null}
-            fallback={{ price: Number(displayPrice) || 0, mrp: Number(displayMRP ?? displayPrice) || 0, stock: stockCount, initialStock: (product as any).initial_stock ?? null }}
+            fallback={{ price: Number(displayPrice) || 0, mrp: Number(displayMRP ?? displayPrice) || 0, stock: capStock(stockCount), soldPct: soldPercent(stockCount, (product as any).initial_stock) }}
           >
 
           {/* LEFT: Gallery */}

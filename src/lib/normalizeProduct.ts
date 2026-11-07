@@ -1,6 +1,7 @@
 import { scrubProduct, PRIVATE_PRODUCT_FIELDS, PRIVATE_VARIANT_FIELDS, COST_LIKE_KEY } from './privateFields'
 import { variantDisplayMrp, type VariantRow, type ProductRow } from '@/lib/pricing/linePricing'
 import type { Product } from '@/types'
+import { toPublicCatalogProduct, capStock } from '@/lib/publicCatalog'
 
 /**
  * PRODUCT_SELECT — used for queries that still use the anon supabase client.
@@ -164,7 +165,10 @@ export function toCardProductData(p: Product): Product {
   if (Array.isArray(out.product_variants)) {
     out.product_variants = out.product_variants.map(v => dropKeys(v as object, PRIVATE_VARIANT_FIELDS))
   }
-  return out as unknown as Product
+  // R3-2 (Nov 2026): every public listing (/products, /new-arrivals, /search, /collections, /regions, blog, wishlist) ships
+  // these cards in its page payload, so they get the same allow-list and stock cap as /api/v1/search-catalog: no variant
+  // sku / initial_stock and no exact inventory count.
+  return toPublicCatalogProduct(out) as unknown as Product
 }
 
 // Homepage cards (ProductCard, QuickViewModal, BestSellersClient's filter/sort) read only these fields. Everything else on
@@ -188,9 +192,11 @@ export function toHomeCardData(p: Product): Product {
     out.product_variants = (src.product_variants as Record<string, unknown>[]).map(v => {
       const o: Record<string, unknown> = {}
       for (const k of HOME_CARD_VARIANT_FIELDS) if (v[k] !== undefined) o[k] = v[k]
+      if ('available_stock' in o) o.available_stock = capStock(o.available_stock)   // R3-2: no exact inventory
       return o
     })
   }
+  if ('available_stock' in out) out.available_stock = capStock(out.available_stock)
   return out as unknown as Product
 }
 

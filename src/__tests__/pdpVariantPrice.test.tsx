@@ -8,6 +8,7 @@
  */
 // @vitest-environment jsdom
 
+import { soldPercent } from '@/lib/publicCatalog'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, fireEvent, screen } from '@testing-library/react'
 import React from 'react'
@@ -41,9 +42,9 @@ const variants = [v(11, '250g', 500, 600, 40), v(12, '500g', 900, 1200, 8, 20), 
 function Page() {
   return (
     <PdpVariantProvider
-      variants={variants.map(x => ({ id: x.id, price: x.price, mrp: Number((x as any).mrp), available_stock: x.available_stock, initial_stock: (x as any).initial_stock, size: (x as any).size }))}
+      variants={variants.map(x => ({ id: x.id, price: x.price, mrp: Number((x as any).mrp), available_stock: x.available_stock, sold_pct: soldPercent(x.available_stock, (x as any).initial_stock), size: (x as any).size }))}
       initialVariantId={11}
-      fallback={{ price: 500, mrp: 600, stock: 40, initialStock: null }}
+      fallback={{ price: 500, mrp: 600, stock: 40, soldPct: null }}
     >
       <ProductGallery images={[{ url: '/a.jpg', alt: 'a' }]} productName="Spiti Honey" savings={17} />
       <PdpPriceBlock hasVariants />
@@ -138,8 +139,8 @@ describe('outside a provider (QuickView, tests) nothing crashes', () => {
 describe('PDP hero price uses the same formatting as the product cards', () => {
   it('fractional and 4-digit prices render via formatPrice (en-IN grouping, whole rupees)', () => {
     const { container } = render(
-      <PdpVariantProvider variants={[{ id: 1, price: 266.67, mrp: 1234, available_stock: 40, initial_stock: null, size: '250g' }]}
-        initialVariantId={1} fallback={{ price: 266.67, mrp: 1234, stock: 40, initialStock: null }}>
+      <PdpVariantProvider variants={[{ id: 1, price: 266.67, mrp: 1234, available_stock: 40, sold_pct: null, size: '250g' }]}
+        initialVariantId={1} fallback={{ price: 266.67, mrp: 1234, stock: 40, soldPct: null }}>
         <PdpPriceBlock hasVariants />
       </PdpVariantProvider>,
     )

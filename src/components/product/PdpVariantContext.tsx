@@ -19,16 +19,17 @@ export interface PdpVariantLite {
   price: number
   mrp: number
   available_stock: number
-  initial_stock?: number | null
+  /** Server-computed sold percentage (0–95) or null — the raw initial stock never reaches the browser (R3-2). */
+  sold_pct?: number | null
   size?: string
 }
-export interface PdpFallback { price: number; mrp: number; stock: number; initialStock?: number | null }
+export interface PdpFallback { price: number; mrp: number; stock: number; soldPct?: number | null }
 
 export interface PdpSelected {
   price: number
   mrp: number
   stock: number
-  initialStock: number | null
+  soldPct: number | null
   size: string
   savings: number
 }
@@ -47,16 +48,16 @@ export function PdpVariantProvider({
     const price = Number(v ? v.price : fallback.price) || 0
     const mrpRaw = Number(v ? v.mrp : fallback.mrp) || price
     const mrp = mrpRaw > price ? mrpRaw : price
-    const initial = v ? v.initial_stock : fallback.initialStock
+    const sold = v ? v.sold_pct : fallback.soldPct
     return {
       price,
       mrp,
       stock: Number(v ? v.available_stock : fallback.stock) || 0,
-      initialStock: initial != null && Number(initial) > 0 ? Number(initial) : null,
+      soldPct: sold != null && Number.isFinite(Number(sold)) ? Number(sold) : null,
       size: v?.size ?? '',
       savings: savingsPercent(mrp, price),
     }
-  }, [selectedId, variants, fallback.price, fallback.mrp, fallback.stock, fallback.initialStock])
+  }, [selectedId, variants, fallback.price, fallback.mrp, fallback.stock, fallback.soldPct])
 
   const value = useMemo<Ctx>(() => ({ selected, selectVariant }), [selected, selectVariant])
   return <PdpVariantCtx.Provider value={value}>{children}</PdpVariantCtx.Provider>
