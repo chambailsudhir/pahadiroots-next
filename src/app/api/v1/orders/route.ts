@@ -13,7 +13,7 @@ import { privateJson } from '@/lib/api/privateJson'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
-import { coinsForOrderValue } from '@/lib/loyaltyCoins'
+import { coinBaseValue, coinsForOrderValue } from '@/lib/loyaltyCoins'
 import { esc } from '@/lib/server/htmlEscape'
 // REFACTOR: replaced two inline checkOrderIpLimit / checkOrderPhoneLimit functions
 // (~80 lines of duplicated Upstash boilerplate) with the shared helper.
@@ -452,7 +452,7 @@ export async function POST(req: NextRequest) {
             // One shared, itemised template for COD and online orders (lib/server/orderEmail.ts). Coins are mentioned ONLY for a
             // signed-in customer — a guest has no account to spend them in.
             const coinsEarned = authenticatedCustomerId != null && settings.loyalty_enabled !== 'false'
-              ? coinsForOrderValue(order.total_amount, settings)   // announced as "up to", paid on delivery
+              ? coinsForOrderValue(coinBaseValue(order.total_amount, order.shippingCharge, order.codSurcharge), settings)   // announced as "up to", paid on delivery
               : 0
             // Verification F-6: orders.tax is computed by a database trigger (paise-exact, coupon-net, fee GST); the app's whole-rupee
             // figure could differ by up to ₹0.50 from the invoice. Read the stored figure back for the e-mail; fall back if unreadable.

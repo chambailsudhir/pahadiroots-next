@@ -57,3 +57,15 @@ describe('maxCoinDiscountInr — coupon and coins share one cap', () => {
     expect(maxCoinDiscountInr(1000, Number.NaN, {})).toBe(200)
   })
 })
+
+import { coinBaseValue } from '@/lib/loyaltyCoins'
+describe('coinBaseValue (coins on goods value, owner rule Nov 2026)', () => {
+  it('leaves out shipping and the COD fee', () => {
+    expect(coinBaseValue(1050, 99, 0)).toBe(951)
+    expect(coinBaseValue(1059, 60, 0)).toBe(999)
+    expect(coinBaseValue(600, 99, 49)).toBe(452)
+    expect(coinBaseValue(500)).toBe(500)
+    expect(coinBaseValue(50, 99, 0)).toBe(0)
+    expect(coinBaseValue(NaN, 10, 0)).toBe(0)
+  })
+})

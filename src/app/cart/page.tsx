@@ -62,6 +62,7 @@ import CheckoutStepper                  from '@/components/checkout/CheckoutStep
 import Icon, { AdminIcon } from '@/components/ui/Icon'
 import UpsellSection from '@/components/cart/UpsellSection'
 import PahadiStoryCard from '@/components/cart/PahadiStoryCard'
+import { coinBaseValue } from '@/lib/loyaltyCoins'
 
 // UpsellSection / PahadiStoryCard are imported statically: lazy chunks with a null fallback made the cards below jump when they arrived (CLS).
 const ReviewSection   = lazy(() => import('@/components/cart/ReviewSection'))
@@ -314,7 +315,7 @@ export default function CartPage() {
               minOrderAmt={minOrderAmt}
               onCheckout={flushPendingRemovals}
             />
-            <CoinNudge total={pricing.total} settings={settings as unknown as Record<string, string | undefined>} style={{ marginTop: 12 }} />
+            <CoinNudge total={coinBaseValue(pricing.total, pricing.shipping, pricing.codSurcharge)} settings={settings as unknown as Record<string, string | undefined>} style={{ marginTop: 12 }} />
           </div>
         </div>}
       </div>
