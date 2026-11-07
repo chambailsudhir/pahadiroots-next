@@ -1,7 +1,9 @@
 /* HimVeda story sections — tokens mirror the existing storefront palette. */
 .root{--g:#1a3a1e;--g3:#3d6b42;--gd:#c8920a;--gdt:#8a6508;--ivory:#faf6ee;--ivory2:#f2eadc;--cream:#f4eed6;--tx:#1a1a1a;--tx2:#4a4a4a;--mute:#5f6b5e;--line:rgba(26,58,30,.14);
   --serif:var(--font-playfair,'Playfair Display',Georgia,serif);--sans:var(--font-lato,Lato,sans-serif);font-family:var(--sans)}
-.rvArm{opacity:0;transform:translateY(14px);transition:opacity .9s ease,transform .9s ease}
+/* Nov 2026 redesign: content is never invisible while it waits for the observer (full-page captures, link previews and
+   slow devices used to see blank bands). Only a short upward slide plays; the text is readable throughout. */
+.rvArm{transform:translateY(12px);transition:transform .6s cubic-bezier(.2,.7,.2,1)}
 .rvIn{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.rvArm{opacity:1;transform:none;transition:none}}
 .eyebrow{margin:0 0 16px;font-size:12.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gdt);display:flex;align-items:center;gap:14px}

@@ -340,7 +340,6 @@ export interface SiteSettings {
   show_origin_stories: string
   show_life_in_mountains: string
   show_reviews_section: string
-  show_newsletter_bar: string
   show_blog_section: string
   show_wishlist: string
   show_reviews_on_pdp: string

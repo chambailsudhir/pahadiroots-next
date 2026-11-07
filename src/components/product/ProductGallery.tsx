@@ -139,7 +139,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
 
   return (
     <>
-      {/* Main image */}
+      {/* Main image (class used by pdp.css for the square frame on phones) */}
       <div
         style={{
           position: 'relative', borderRadius: '20px', overflow: 'hidden',
@@ -148,7 +148,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
         }}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
-        className="pdp-gallery-trigger"
+        className="pdp-gallery-trigger pdp-gallery-frame"
       >
         {/* A11Y (axe nested-interactive): the zoom trigger used to be a role="button" container holding the prev/next
             buttons. It is now a real button laid over the image; the arrows are its siblings, not its children. */}
@@ -215,11 +215,12 @@ export default function ProductGallery({ images, productName, savings: serverSav
               style={{
                 position: 'absolute', top: '50%', left: '12px',
                 transform: 'translateY(-50%)', width: '44px', height: '44px',
-                background: 'rgba(192,57,43,.88)', color: '#fff', border: 'none',
+                // Nov 2026 redesign: ivory with a forest chevron (was terracotta red, the only red control on the page).
+                background: 'rgba(255,253,248,.92)', color: '#1F3B2D', border: '1px solid rgba(31,59,45,.12)',
                 borderRadius: '50%', fontSize: '20px', fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 zIndex: 5, cursor: 'pointer', backdropFilter: 'blur(6px)',
-                boxShadow: '0 2px 14px rgba(192,57,43,.35)',
+                boxShadow: '0 2px 10px rgba(36,39,31,.14)',
               }}
             >‹</button>
             <button
@@ -229,11 +230,12 @@ export default function ProductGallery({ images, productName, savings: serverSav
               style={{
                 position: 'absolute', top: '50%', right: '12px',
                 transform: 'translateY(-50%)', width: '44px', height: '44px',
-                background: 'rgba(192,57,43,.88)', color: '#fff', border: 'none',
+                // Nov 2026 redesign: ivory with a forest chevron (was terracotta red, the only red control on the page).
+                background: 'rgba(255,253,248,.92)', color: '#1F3B2D', border: '1px solid rgba(31,59,45,.12)',
                 borderRadius: '50%', fontSize: '20px', fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 zIndex: 5, cursor: 'pointer', backdropFilter: 'blur(6px)',
-                boxShadow: '0 2px 14px rgba(192,57,43,.35)',
+                boxShadow: '0 2px 10px rgba(36,39,31,.14)',
               }}
             >›</button>
             <div style={{

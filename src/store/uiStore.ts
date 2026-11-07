@@ -7,6 +7,8 @@ interface UIStore {
   isSearchOpen:     boolean
   isMobileMenuOpen: boolean
   isAuthOpen:       boolean
+  /** Help sheet (WhatsApp + Pahadi_AI), see components/layout/HelpLauncher.tsx. */
+  isHelpOpen:       boolean
   searchQuery:      string
 
   openCart:         () => void
@@ -17,6 +19,8 @@ interface UIStore {
   closeMobileMenu:  () => void
   openAuth:         () => void
   closeAuth:        () => void
+  openHelp:         () => void
+  closeHelp:        () => void
   setSearchQuery:   (q: string) => void
 }
 
@@ -33,6 +37,7 @@ const CLOSED_PANELS = {
   isSearchOpen:     false,
   isMobileMenuOpen: false,
   isAuthOpen:       false,
+  isHelpOpen:       false,
 }
 
 let cartOpener: HTMLElement | null = null
@@ -48,6 +53,7 @@ export const useUIStore = create<UIStore>((set) => ({
   isSearchOpen:     false,
   isMobileMenuOpen: false,
   isAuthOpen:       false,
+  isHelpOpen:       false,
   searchQuery:      '',
 
   openCart:         () => {
@@ -65,5 +71,7 @@ export const useUIStore = create<UIStore>((set) => ({
   closeMobileMenu:  () => set({ isMobileMenuOpen: false }),
   openAuth:         () => set({ ...CLOSED_PANELS, isAuthOpen:       true }),
   closeAuth:        () => set({ isAuthOpen:       false }),
+  openHelp:         () => set({ ...CLOSED_PANELS, isHelpOpen:       true }),
+  closeHelp:        () => set({ isHelpOpen:       false }),
   setSearchQuery:   (q) => set({ searchQuery: q }),
 }))

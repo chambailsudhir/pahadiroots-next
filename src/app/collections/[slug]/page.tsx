@@ -6,6 +6,7 @@ import { normalizeProducts, toCardProductData } from '@/lib/normalizeProduct'
 import { filterProducts, sortProducts } from '@/lib/filterAndSortProducts'
 import CategoryMotif from '@/components/collections/CategoryMotif'
 import CollectionListingClient from '@/components/collections/CollectionListingClient'
+import ComingLaterCollection from '@/components/collections/ComingLaterCollection'
 import { COLLECTION_PAGE_SIZE } from '@/lib/listingLimits'
 import Link from 'next/link'
 import OurPromiseSection from '@/components/homepage/WhySection'
@@ -108,6 +109,11 @@ export default async function CollectionPage({ params }: Props) {
   const count    = catProducts.length
   const products = catProducts.slice(0, COLLECTION_PAGE_SIZE).map(toCardProductData)
   const catSlug  = cat.slug
+  // Redesign (Nov 2026): an empty collection shows a "coming later" note and the products available now, instead of
+  // "0 Products" and an empty sort bar. Same WhatsApp number fallback as layout.tsx.
+  const isEmpty   = count === 0
+  const available = isEmpty ? sortProducts(allNormalized, 'popular').slice(0, 8).map(toCardProductData) : []
+  const waNumber  = String(storeData.settings?.whatsapp_number || '').replace(/\D/g, '') || '919899984895'
 
   // BUG FIX (Aug 23 2026 — user flagged the collection hero's product photo
   // as still looking wrong, circled on Himalayan Tea): the featured product
@@ -226,11 +232,11 @@ export default async function CollectionPage({ params }: Props) {
                 {cat.description}
               </p>
             )}
-            <span style={{ background: 'rgba(201,168,76,.25)', border: '1px solid rgba(201,168,76,.5)',
+            {!isEmpty && <span style={{ background: 'rgba(201,168,76,.25)', border: '1px solid rgba(201,168,76,.5)',
               borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#f0d080', fontWeight: 700,
               whiteSpace: 'nowrap' }}>
               {count} Products
-            </span>
+            </span>}
           </div>
         </div>
       </div>
@@ -257,11 +263,15 @@ export default async function CollectionPage({ params }: Props) {
       )}
 
       {/* Sort bar + grid + pagination — applies the query string in the browser (see CollectionListingClient) */}
-      <CollectionListingClient
-        category={{ id: cat.id, slug: catSlug, name: cat.name }}
-        initialProducts={products}
-        totalCount={count}
-      />
+      {isEmpty ? (
+        <ComingLaterCollection categoryName={cat.name} whatsappNumber={waNumber} products={available} />
+      ) : (
+        <CollectionListingClient
+          category={{ id: cat.id, slug: catSlug, name: cat.name }}
+          initialProducts={products}
+          totalCount={count}
+        />
+      )}
       {/* "Our Promise — From the Himalayas. With Nothing to Hide." (shared with the homepage). Full-width, so it
           sits outside the padded page shell. Replaces the old per-page "Why HimVeda by Pahadi Roots" block. */}
       <OurPromiseSection />

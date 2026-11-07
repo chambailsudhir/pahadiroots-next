@@ -81,7 +81,6 @@ function makeSettings(overrides: Partial<SiteSettings> = {}): SiteSettings {
     show_origin_stories:    'true',
     show_life_in_mountains: 'true',
     show_reviews_section:   'true',
-    show_newsletter_bar:    'true',
     show_blog_section:      'true',
     show_wishlist:          'true',
     show_reviews_on_pdp:    'true',

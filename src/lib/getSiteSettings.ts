@@ -25,8 +25,8 @@ const DEFAULTS: Partial<SiteSettings> = {
   ann_text_color:          '#d4af37',
   // Ticker — real keys confirmed
   ticker_hide:             'false',
-  // AUDIT S3-005: the welcome coupon minted by lib/welcomeCoupon.ts is 5% (WELCOME5-xxxxxx), not ₹50/WELCOME50.
-  ticker_1_text:           '🎁 First order? Get 5% off with your welcome code',
+  // Nov 2026: the newsletter (and its WELCOME5 welcome code) no longer exists, so the fallback promises no code.
+  ticker_1_text:           '🏔️ Sourced directly from Himalayan farming families',
   // F-02: no hard-coded amount — expanded from the live free_shipping_min by reconcileShippingCopy().
   ticker_2_text:           '🚚 {{free_shipping}}',
   ticker_3_text:           '🌿 100% Natural · No preservatives, no additives',
@@ -71,11 +71,6 @@ const DEFAULTS: Partial<SiteSettings> = {
   show_origin_stories:     'true',
   show_life_in_mountains:  'true',
   show_reviews_section:    'true',
-  // Now unused on the main site — NewsletterBar.tsx (the only reader)
-  // was deleted as a confirmed duplicate of Footer.tsx's own newsletter
-  // form. Left here rather than removed since the admin panel may still
-  // have a toggle referencing this key.
-  show_newsletter_bar:     'true',
   show_blog_section:       'false',
   show_wishlist:           'true',
   show_reviews_on_pdp:     'true',

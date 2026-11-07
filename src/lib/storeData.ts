@@ -386,9 +386,22 @@ export function imgFor(cat: Category, settings: Record<string, string>): string 
 // way images silently broke). categories.show_on_homepage is now the single
 // source of truth. Legacy settings kept as a logged fallback for the same
 // admin-deploy transition window as imgFor().
+// ── Only categories with something to buy (Nov 2026 redesign, P0) ───────────────────────────────────────────────────
+// The homepage tiles and the shop filter chips listed every active category, but most had no product yet, so a shopper
+// tapping "Himalayan Tea" or "Shilajit" landed on an empty page. The header and footer already drop empty categories via
+// getPopulatedCategoryIds() in layout.tsx; this applies the same rule from the products already loaded here. The
+// collection URLs themselves stay live (collections/[slug] looks the category up in storeData.categories directly) and
+// show a "coming later" state, so shared links and SEO keep working. If the product list is empty (a failed or partial
+// read) nothing is hidden: showing a dead end is better than an empty menu.
+export function withProducts<T extends { id: number }>(categories: T[], products: Pick<Product, 'category_id'>[] | undefined): T[] {
+  if (!products?.length) return categories
+  const ids = new Set(products.map(p => p.category_id).filter(id => id != null).map(Number))
+  return categories.filter(c => ids.has(Number(c.id)))
+}
+
 export function buildCategories(storeData: StoreData) {
   const { categories, settings } = storeData
-  return categories
+  return withProducts(categories, storeData.products)
     .filter(c => {
       if (c.show_on_homepage === false) return false
       if (c.show_on_homepage === true) return true
@@ -419,7 +432,7 @@ export function buildCategories(storeData: StoreData) {
 // buildCategories().
 export function buildBrowseCategories(storeData: StoreData) {
   const { categories, settings } = storeData
-  return [...categories]
+  return [...withProducts(categories, storeData.products)]
     .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
     .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
 }

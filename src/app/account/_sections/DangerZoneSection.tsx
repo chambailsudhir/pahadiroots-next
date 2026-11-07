@@ -227,7 +227,7 @@ export default function DangerZoneSection({ userEmail, onLogout, showToast, mark
           </p>
           <ul className={styles.dangerList}>
             <li>Your name, phone number, e-mail, GSTIN and profile address, and all saved delivery addresses</li>
-            <li>Your wishlist, abandoned carts, newsletter and back-in-stock subscriptions</li>
+            <li>Your wishlist, abandoned carts and back-in-stock alerts</li>
             <li>Order notes, notes on Pahadi Coins entries, return photos and your comments on returns</li>
             <li>The phone number, e-mail and any other details stored with the delivery address of your past orders</li>
             <li>Your login — this cannot be undone</li>

@@ -141,13 +141,6 @@ export const reviewSchema = z.object({
   comment:       z.string().max(5000).optional(),
 })
 
-// ─── Newsletter Schema ─────────────────────────────────────────────────────────
-
-export const newsletterSchema = z.object({
-  email: z.string().email(),
-  name:  z.string().trim().max(100).optional(),
-})
-
 // ─── Stock Notification Schema ──────────────────────────────────────────────
 // BUG FIX (P1, homepage audit): backs the "Notify Me" button on out-of-stock
 // products (ProductCard.tsx), which previously had no capture mechanism at

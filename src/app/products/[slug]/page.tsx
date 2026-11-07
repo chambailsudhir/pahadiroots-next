@@ -640,27 +640,6 @@ export default async function ProductPage({ params }: Props) {
             {/* Price block — follows the selected pack size (PDP audit P1-2) */}
             <PdpPriceBlock hasVariants={activeVariants.length > 0} />
 
-            {/* Key Benefits card */}
-            {benefits.length > 0 && (
-              <div className="pdp-benefits-card">
-                <div className="pdp-benefits-title"><Icon name="sparkle" size="1em" /> Highlights</div>
-                {benefits.map((b: any, i: number) => (
-                  <div key={i} className="pdp-ben-item">
-                    <div className="pdp-ben-icon">{typeof b === 'object' ? (b.icon || '✓') : '✓'}</div>
-                    <div>
-                      <div className="pdp-ben-title">{typeof b === 'object' ? b.title : b}</div>
-                      {typeof b === 'object' && b.desc && (
-                        <div className="pdp-ben-desc">{b.desc}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <p style={{ fontSize: '12px', color: '#666', margin: '10px 0 0', lineHeight: 1.5 }}>
-                  Traditional use and general information. Not medical advice and not intended to diagnose, treat, cure or prevent any disease.
-                </p>
-              </div>
-            )}
-
             {/* Variant + Qty + Buttons — Client Component */}
             <AddToCartSection product={clientProduct} variants={clientVariants} />
 
@@ -709,6 +688,28 @@ export default async function ProductPage({ params }: Props) {
                   attributes?.packaging_type ? `Packaging: ${attributes.packaging_type}` : '',
                 ].filter(Boolean).join(' · ')}
               </p>
+            )}
+
+            {/* Key Benefits card. Nov 2026 redesign: moved below the buy box (it sat between the price and the pack sizes and,
+                at ~600px tall on a phone, pushed Add to Cart onto the third screen). */}
+            {benefits.length > 0 && (
+              <div className="pdp-benefits-card">
+                <div className="pdp-benefits-title"><Icon name="sparkle" size="1em" /> Highlights</div>
+                {benefits.map((b: any, i: number) => (
+                  <div key={i} className="pdp-ben-item">
+                    <div className="pdp-ben-icon">{typeof b === 'object' ? (b.icon || '✓') : '✓'}</div>
+                    <div>
+                      <div className="pdp-ben-title">{typeof b === 'object' ? b.title : b}</div>
+                      {typeof b === 'object' && b.desc && (
+                        <div className="pdp-ben-desc">{b.desc}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <p style={{ fontSize: '12px', color: '#666', margin: '10px 0 0', lineHeight: 1.5 }}>
+                  Traditional use and general information. Not medical advice and not intended to diagnose, treat, cure or prevent any disease.
+                </p>
+              </div>
             )}
 
             {/* Certificate moved up near the top — see stat trio above */}

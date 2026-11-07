@@ -550,3 +550,18 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
   /* the breadcrumb already links to All Products: drop the duplicate pill on phones */
   .pdp-back-pill{display:none}
 }
+/* ── Nov 2026 redesign: buy box higher on phones ─────────────────────────────────────────────────────────────────
+   Measured on the live Manali honey page at 390×844: price started at 949px and Add to Cart ended at ~1,900px.
+   The Highlights card now follows the buy box (page.tsx). On phones the photo frame is square (most product shots are
+   square originals), the breadcrumb row and thumbnails are compact, and the italic tagline, share row and delivery
+   note follow Add to Cart instead of preceding the price. The sticky buy bar (AddToCartSection) is unchanged. */
+@media(max-width:640px){
+  .pdp-nav-row{padding:2px 16px}
+  .pdp-breadcrumb{padding:6px 0!important}
+  .pdp-gallery-frame{aspect-ratio:1/1!important;border-radius:12px!important;box-shadow:none!important}
+  .pdp-thumbs{margin-top:8px!important;gap:8px!important}
+  .pdp-thumbs>button{width:56px!important;height:56px!important;border-radius:8px!important;flex:0 0 auto}
+  .pdp-info-col{display:flex;flex-direction:column}
+  .pdp-info-col>.pdp-tagline{order:1;margin:18px 0 8px;font-size:15px;line-height:1.65}
+  .pdp-info-col>.pdp-share-row,.pdp-info-col>.pdp-delivery-bar,.pdp-info-col>.pdp-fine-print,.pdp-info-col>.pdp-benefits-card{order:2}
+}
