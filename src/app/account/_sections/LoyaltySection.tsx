@@ -43,6 +43,7 @@ interface LoyaltyData {
   referral_bonus?: number
   referral_min_order?: number
   referral_hold_days?: number
+  expiry_days?: number
   can_apply_referral?: boolean
   label:          string
   referral_code:  string | null
@@ -54,12 +55,20 @@ export function referralCopy(bonus = 50, minOrder = 999, holdDays = 7): string {
 }
 
 /** Owner decision (Nov 2026): 1 coin per ₹`step` of order value, at most `max` per order, paid on DELIVERY, taken back on return / refund. */
-export function earnCopy(perStep: number | undefined, step?: number, max?: number | null): string {
+/** "Coins expire 4 months after you earn them." from loyalty_expiry_days (0 = never → no sentence). */
+export function expiryCopy(days?: number): string {
+  const d = typeof days === 'number' && Number.isFinite(days) && days >= 0 ? Math.floor(days) : 120
+  if (d === 0) return ''
+  const span = d === 365 || d === 366 ? '12 months' : d % 30 === 0 ? `${d / 30} ${d === 30 ? 'month' : 'months'}` : `${d} days`
+  return ` Coins expire ${span} after you earn them.`
+}
+
+export function earnCopy(perStep: number | undefined, step?: number, max?: number | null, expiryDays?: number): string {
   // Owner rule (Nov 2026): `perStep` coins for every full ₹`step` of a delivered order, nothing below one step; `max` null = no limit.
   const p  = typeof perStep === 'number' && Number.isFinite(perStep) && perStep >= 0 ? Math.floor(perStep) : 5
   const st = typeof step === 'number' && Number.isFinite(step) && step >= 1 ? Math.floor(step) : 500
   const cap = typeof max === 'number' && Number.isFinite(max) && max > 0 ? `, up to ${Math.floor(max)} coins per order` : ''
-  return `Earn ${p} ${p === 1 ? 'coin' : 'coins'} for every ₹${st.toLocaleString('en-IN')} of your order${cap}, once it is delivered (orders below ₹${st.toLocaleString('en-IN')} earn none; coins are taken back if you return the order). Coins expire 12 months after you earn them.`
+  return `Earn ${p} ${p === 1 ? 'coin' : 'coins'} for every ₹${st.toLocaleString('en-IN')} of your order${cap}, once it is delivered (orders below ₹${st.toLocaleString('en-IN')} earn none; coins are taken back if you return the order).${expiryCopy(expiryDays)}`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -270,7 +279,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_step ?? 5, data.earn_step_rupees, data.earn_max_per_order) }]),
+          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_step ?? 5, data.earn_step_rupees, data.earn_max_per_order, data.expiry_days) }]),
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },

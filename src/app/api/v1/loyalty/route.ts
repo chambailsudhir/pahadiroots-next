@@ -27,7 +27,7 @@ function asNumber(v: string | undefined, fallback: number) {
 async function getSettings(): Promise<Record<string, string>> {
   const rows: Array<{ key: string; value: string }> = await sbAdmin(
     'GET',
-    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_coin_step_rupees,loyalty_coins_per_step,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days)',
+    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_coin_step_rupees,loyalty_coins_per_step,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days,loyalty_expiry_days)',
   ).catch(() => [])
   return Object.fromEntries((rows || []).map(r => [r.key, r.value]))
 }
@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
       referral_bonus:  referralBonus,                    // coins each side gets for a referral
       referral_min_order: asNumber(settings.referral_min_order, 999),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery
+      expiry_days:     asNumber(settings.loyalty_expiry_days, 120),       // coins unused this long expire (0 = never) — v37 cron
       // can this customer still add a friend's code? (new customers only — the database re-checks every rule)
       can_apply_referral: !customerRow?.referred_by && Number(customerRow?.total_orders ?? 0) === 0,
       label,
