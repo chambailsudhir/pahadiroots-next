@@ -20,6 +20,7 @@ import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
 import { MAX_DLQ_ATTEMPTS, isPermanentEmailFailure, emailIdempotencyKey, sendWithIdempotency } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
+import { sendCoinExpiryReminders } from '@/lib/server/coinExpiryReminders'
 
 // Cap per-invocation work so this stays comfortably inside Vercel's function
 // timeout even if a large backlog accumulates during an extended Resend outage.
@@ -262,7 +263,21 @@ export async function GET(req: NextRequest) {
   logger.metric('email.dlq.dead',          dead,         'count')
   logger.metric('email.dlq.expired',       expired,      'count')
 
+  // R6-1 (Nov 2026): "your coins expire on …" e-mails ~15 days ahead. They used to run at the END of expire-pending-orders and
+  // got 6–14 s after the Razorpay checks and the coin RPCs — often too little for even one worst-case send (~10.4 s), so few or
+  // none went out, silently. This 04:00 run has its own 30 s and only light work before this point. Claimed before sending,
+  // never fatal; sendCoinExpiryReminders alerts when candidates are left unsent.
+  let coinExpiryReminders = 0
+  const reminderBudget = 30_000 - (Date.now() - startedAt) - 3_000
+  try {
+    if (reminderBudget >= 13_000) coinExpiryReminders = (await sendCoinExpiryReminders(db, { timeBudgetMs: reminderBudget })).sent
+    else captureError(new Error('coin expiry reminders skipped: no time left in this run'), { action: 'cron.coin_expiry_reminders.skipped', alert: true, remaining_ms: reminderBudget })
+  } catch (e) {
+    captureError(e, { action: 'cron.coin_expiry_reminders', alert: true })
+  }
+
   return NextResponse.json({
+    coinExpiryReminders,
     candidates: candidates?.length ?? 0,
     claimed,
     sent,

@@ -67,3 +67,17 @@ describe('sendCoinExpiryReminders', () => {
     expect((await sendCoinExpiryReminders(fakeDb({ settings: { loyalty_enabled: 'false' }, candidates: [cand] }).db)).enabled).toBe(false)
   })
 })
+
+// R6-1 (Nov 2026): a time-budget shortfall must alert instead of silently leaving customers un-reminded.
+describe('sendCoinExpiryReminders — budget shortfall', () => {
+  it('alerts when the budget runs out with candidates still unsent', async () => {
+    const { captureError } = await import('@/lib/logger')
+    vi.mocked(captureError).mockClear()
+    const cands = [1, 2, 3].map(i => ({ customer_id: i, email: `c${i}@example.com`, first_name: 'C', expires_on: '2027-03-06', coins: 20, balance: 30 }))
+    const r = await sendCoinExpiryReminders(fakeDb({ candidates: cands }).db, { timeBudgetMs: 1_000 })
+    expect(r.timeBudgetHit).toBe(true)
+    expect(r.sent).toBe(0)
+    expect(vi.mocked(captureError)).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ action: 'cron.coin_expiry_reminders.budget', alert: true, unsent: 3 }))
+  })
+})
+

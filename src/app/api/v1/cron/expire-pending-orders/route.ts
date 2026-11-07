@@ -17,7 +17,6 @@ import { rejectUnlessCron } from '@/lib/server/cronAuth'
 import { expireStalePendingOrders } from '@/lib/server/pendingOrders'
 import { captureError } from '@/lib/logger'
 import { sendReviewRequests } from '@/lib/server/reviewRequests'
-import { sendCoinExpiryReminders } from '@/lib/server/coinExpiryReminders'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,17 +72,6 @@ export async function GET(req: NextRequest) {
       captureError(e, { action: 'cron.expire_old_loyalty_points', alert: true })
     }
 
-    // "Your coins expire on …" e-mails ~15 days ahead (db_migration_v40). Claimed before sending, time-budgeted, never fatal.
-    let coinExpiryReminders = 0
-    {
-      const left = 30_000 - (Date.now() - startedAt) - 4_000
-      try {
-        if (left >= 14_000) coinExpiryReminders = (await sendCoinExpiryReminders(db, { timeBudgetMs: Math.min(left - 8_000, 14_000) })).sent
-      } catch (e) {
-        captureError(e, { action: 'cron.coin_expiry_reminders', alert: true })
-      }
-    }
-
     // "How was your order?" e-mails for orders delivered a few days ago (db_migration_v23, setting review_request_enabled).
     // Non-fatal and self-limiting (batch of 20, time-budgeted); sendReviewRequests never throws, the guard is belt and braces.
     // The function has a 30 s ceiling (vercel.json) shared by every step above, and a send is claimed BEFORE it happens: a kill in the
@@ -104,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 500 when anything errored so the failure is visible in Vercel's cron history.
-    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, missingCoinsAwarded, coinsExpiredCustomers, coinExpiryReminders, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
+    return NextResponse.json({ ok: stats.errors === 0, ...stats, staleCouponClaimsReleased, referralRewards, missingCoinsAwarded, coinsExpiredCustomers, reviewRequests }, { status: stats.errors > 0 ? 500 : 200 })
   } catch (e) {
     captureError(e, { action: 'cron.expire_pending_orders', alert: true })
     return NextResponse.json({ error: 'Sweep failed' }, { status: 500 })
