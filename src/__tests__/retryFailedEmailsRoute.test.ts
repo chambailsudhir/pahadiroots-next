@@ -39,6 +39,9 @@ vi.mock('@/lib/logger', () => ({
 
 // ─── Mock: resend — controllable per-row via mockSend ─────────────────────────
 const mockSend = vi.fn()
+const mockReminders = vi.fn(async (_db: unknown, _opts?: unknown) => ({ enabled: true, candidates: 0, sent: 0, skipped: 0, errors: 0 }))
+vi.mock('@/lib/server/coinExpiryReminders', () => ({ sendCoinExpiryReminders: (db: unknown, opts?: unknown) => mockReminders(db, opts) }))
+
 vi.mock('resend', () => ({
   // Must be a real `function`, not an arrow function — arrow functions have
   // no [[Construct]] slot and throw "is not a constructor" under `new`.
@@ -200,7 +203,8 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
+    expect(json).toEqual({
+      coinExpiryReminders: 0, candidates: 0, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
   })
 
   it('happy path: a pending row sends successfully and is marked sent', async () => {
@@ -211,7 +215,8 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
+    expect(json).toEqual({
+      coinExpiryReminders: 0, candidates: 1, claimed: 1, sent: 1, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('sent')
   })
@@ -236,7 +241,8 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0, expired: 0, deferred: 0 })
+    expect(json).toEqual({
+      coinExpiryReminders: 0, candidates: 1, claimed: 1, sent: 0, stillFailing: 1, dead: 0, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('pending')
     expect(finalUpdate.payload.attempts).toBe(2)
@@ -254,7 +260,8 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1, expired: 0, deferred: 0 })
+    expect(json).toEqual({
+      coinExpiryReminders: 0, candidates: 1, claimed: 1, sent: 0, stillFailing: 0, dead: 1, expired: 0, deferred: 0 })
     const finalUpdate = mockDb.updateCalls.at(-1)!
     expect(finalUpdate.payload.status).toBe('dead')
     expect(finalUpdate.payload.attempts).toBe(MAX_DLQ_ATTEMPTS)
@@ -269,7 +276,8 @@ describe('GET /api/v1/cron/retry-failed-emails — processing', () => {
     const res  = await GET(makeReq('Bearer test-cron-secret'))
     const json = await res.json()
 
-    expect(json).toEqual({ candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
+    expect(json).toEqual({
+      coinExpiryReminders: 0, candidates: 1, claimed: 0, sent: 0, stillFailing: 0, dead: 0, expired: 0, deferred: 0 })
     expect(mockSend).not.toHaveBeenCalled()
   })
 
@@ -506,3 +514,20 @@ describe('GET /api/v1/cron/retry-failed-emails — permanent vs transient failur
     expect(json).toMatchObject({ dead: 0, stillFailing: 1 })
   })
 })
+
+// R6-1 (Nov 2026): coin expiry reminders run in this 04:00 cron (own 30 s), not squeezed at the end of expire-pending-orders.
+describe('GET /api/v1/cron/retry-failed-emails — coin expiry reminders', () => {
+  it('runs the reminders with a real time budget after the DLQ work', async () => {
+    mockReminders.mockClear()
+    mockReminders.mockResolvedValueOnce({ enabled: true, candidates: 2, sent: 2, skipped: 0, errors: 0 })
+    process.env.CRON_SECRET = 'test-cron-secret'
+    mockDb.candidates = []
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const res = await GET(makeReq('Bearer test-cron-secret'))
+    expect(mockReminders).toHaveBeenCalledTimes(1)
+    const budget = (mockReminders.mock.calls[0][1] as { timeBudgetMs: number }).timeBudgetMs
+    expect(budget).toBeGreaterThanOrEqual(13_000)
+    expect((await res.json()).coinExpiryReminders).toBe(2)
+  })
+})
+

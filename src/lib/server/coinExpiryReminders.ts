@@ -100,6 +100,12 @@ export async function sendCoinExpiryReminders(db: Db, opts: { limit?: number; ti
     stats.errors++
     captureError(e, { action: 'cron.coin_expiry_reminders', alert: true })
   }
+  if (stats.timeBudgetHit && stats.candidates > stats.sent + stats.skipped + stats.errors) {
+    // R6-1: never a silent shortfall — customers in the 15-day window who were not mailed this run.
+    captureError(new Error('coin expiry reminders: time budget ran out with reminders still unsent'), {
+      action: 'cron.coin_expiry_reminders.budget', alert: true, unsent: stats.candidates - stats.sent - stats.skipped - stats.errors,
+    })
+  }
   logger.info('cron: coin expiry reminders finished', { action: 'cron.coin_expiry_reminders', ...stats })
   return stats
 }
