@@ -327,7 +327,6 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // refusals/RTO). `payMethod` stays a concrete value because pricing/analytics need one: until a choice is made it is
   // 'cod' (the no-discount, no-gateway basis), and `payMethodChosen` says whether the customer has actually picked.
   const [payChoice, setPayChoice] = useState<'razorpay' | 'cod' | null>(null)
-  const payMethod: 'razorpay' | 'cod' = payChoice ?? 'cod'
   const payMethodChosen = payChoice !== null
   const setPayMethod = setPayChoice as (m: 'razorpay' | 'cod') => void
   const [placing,        setPlacing]        = useState(false)
@@ -525,14 +524,6 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   const lastValidatedCouponSubtotalRef  = useRef<number | null>(null)
   const lastValidatedLoyaltySubtotalRef = useRef<number | null>(null)
 
-  // ── Pricing ────────────────────────────────────────────────────────────────
-  const pricing = useMemo(
-    () => calcPriceSummary(
-      items, s, coupon, payMethod,
-      loyaltyRedemption?.discount_inr ?? 0,
-    ),
-    [items, s, coupon, payMethod, loyaltyRedemption],
-  )
 
   // PERF FIX: memoized — these are derived from `pricing` (already memoized)
   // and the settings constants above (also memoized). Without useMemo they
@@ -547,6 +538,18 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // ₹3,400 cart with a ₹500 coupon hid COD that the server would have accepted.
   const codTotal      = useMemo(() => calcPriceSummary(items, s, coupon, 'cod', loyaltyRedemption?.discount_inr ?? 0).total, [items, s, coupon, loyaltyRedemption])
   const codOk         = useMemo(() => codEnabled && codTotal <= codMax,               [codEnabled, codTotal, codMax])
+  // Until a method is chosen, price as the method the customer CAN pay with (Nov 2026 verification): with COD off or over its
+  // cap, the page priced as 'cod' anyway — a COD fee for a method they cannot pick and a higher total than the cart showed.
+  const payMethod: 'razorpay' | 'cod' = payChoice ?? (!codOk && razorpayEnabled ? 'razorpay' : 'cod')
+
+  // ── Pricing ────────────────────────────────────────────────────────────────
+  const pricing = useMemo(
+    () => calcPriceSummary(
+      items, s, coupon, payMethod,
+      loyaltyRedemption?.discount_inr ?? 0,
+    ),
+    [items, s, coupon, payMethod, loyaltyRedemption],
+  )
   const belowMinOrder = useMemo(() => minOrderAmt > 0 && pricing.subtotal < minOrderAmt, [minOrderAmt, pricing.subtotal])
   const bothPayOff    = useMemo(() => !codOk && !razorpayEnabled,                      [codOk, razorpayEnabled])
 
@@ -594,13 +597,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     ]),
     [items, payMethod, coupon?.code, loyaltyRedemption?.points, email, addr.name, addr.phone, addr.flat, addr.area, addr.city, addr.state, addr.pincode],
   )
-  const lastOrderSignatureRef = useRef<string | null>(null)
+  // Nov 2026 verification: the last signature lived in a ref that started empty on every mount, so the FIRST signature after
+  // returning to checkout never reset the key. Open Razorpay for ₹1000, close it, apply a coupon on /cart, come back to a ₹900
+  // checkout and Pay → the server resumed the ₹1000 order under the old key. The signature is now persisted with the key.
+  const setOrderSignature = useCartStore(s => s.setOrderSignature)
   useEffect(() => {
     if (!storeReady || items.length === 0) return   // hydrating / cart just cleared after success
-    const prev = lastOrderSignatureRef.current
-    lastOrderSignatureRef.current = orderSignature
-    if (prev !== null && prev !== orderSignature) resetIdempotencyKey()
-  }, [orderSignature, storeReady, items.length, resetIdempotencyKey])
+    const prev = useCartStore.getState().orderSignature
+    if (prev === orderSignature) return
+    setOrderSignature(orderSignature)
+    if (prev) resetIdempotencyKey()
+  }, [orderSignature, storeReady, items.length, resetIdempotencyKey, setOrderSignature])
 
   useEffect(() => {
     if (items.length === 0 && storeReady && !orderPlacedRef.current) {
@@ -764,6 +771,17 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           lastCouponIdentityCheckRef.current = sig
           // Only a definite "no" (400) takes the discount off. A rate limit or a server hiccup must not strip a valid coupon —
           // createOrder re-checks it authoritatively at Place Order anyway.
+          // Nov 2026 verification: a 200 carrying a DIFFERENT discount (the server now knows more: delivery address, lines) was
+          // thrown away, so the page kept showing the old discount. Apply what the server computed.
+          if (res.ok) {
+            const ok = await res.json().catch(() => null) as { coupon?: { code?: string; discount?: number } } | null
+            if (!mountedRef.current) return
+            if (ok?.coupon && ok.coupon.code === code && typeof ok.coupon.discount === 'number' && ok.coupon.discount !== coupon.discount) {
+              applyCoupon(ok.coupon as Parameters<typeof applyCoupon>[0])
+              lastValidatedCouponSubtotalRef.current = pricing.subtotal
+            }
+            return
+          }
           if (res.status !== 400) return
           const data = await res.json().catch(() => ({} as { error?: string }))
           if (!mountedRef.current) return
@@ -774,7 +792,7 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         .catch(() => { /* aborted / offline — the order itself re-checks */ })
     }, 2500)   // was 1.2s: typing the address kept firing coupon checks and used up the 5-per-minute limit the shopper needs to swap a coupon
     return () => { clearTimeout(timer); ac.abort() }
-  }, [coupon, couponIdentityKey, pricing.subtotal, addr.phone, couponAddressCtx, removeCouponFromStore])
+  }, [coupon, couponIdentityKey, pricing.subtotal, addr.phone, couponAddressCtx, removeCouponFromStore, applyCoupon])
 
   // DATA INTEGRITY FIX — coupon revalidation on checkout.
   //
@@ -887,6 +905,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
       })
         .then(async res => {
           if (!mountedRef.current) return
+          // Only a definite "no" (400) takes the coins off (Nov 2026 verification): a rate limit or a server hiccup used to remove
+          // them too. createOrder re-checks the redemption authoritatively at Place Order, as it does for coupons.
+          if (!res.ok && res.status !== 400) return
           const data = await res.json()
           if (!mountedRef.current) return
           if (!res.ok) {
@@ -963,6 +984,10 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         body: JSON.stringify({
           code:     couponCode.trim().toUpperCase(),
           subtotal: pricing.subtotal,
+          // Nov 2026 verification: this was the one caller without the cart lines. A category-limited coupon was then priced
+          // on the WHOLE subtotal (10% of ₹2000 shown) while the order applied it to the eligible lines only (10% of ₹1000):
+          // a COD customer was billed more than the total on screen.
+          lines:    couponLines(itemsRef.current),
           phone:    addr.phone || undefined,
           ...couponAddressCtx(),
         }),

@@ -43,6 +43,19 @@ describe('useCheckoutPage — COD availability uses the COD TOTAL (what the serv
     const { result } = renderHook(() => useCheckoutPage(SETTINGS))
     expect(result.current.codOk).toBe(true)
   })
+
+  // Nov 2026 verification: before a method was chosen the page priced as COD even when COD could not be picked, adding the ₹50 COD
+  // fee to a total the customer could never pay and showing more than the cart did.
+  it('with COD unavailable and nothing chosen yet, the total carries no COD fee (priced as the online payment)', () => {
+    vi.stubEnv('NEXT_PUBLIC_RAZORPAY_KEY_ID', 'rzp_test_x')
+    try {
+      useCartStore.getState().addItem(item(2950))
+      const { result } = renderHook(() => useCheckoutPage({ ...SETTINGS, upi_enabled: 'true' } as unknown as SiteSettings))
+      expect(result.current.codOk).toBe(false)
+      expect(result.current.pricing.codSurcharge).toBe(0)
+      expect(result.current.payMethod).toBe('razorpay')
+    } finally { vi.unstubAllEnvs() }
+  })
 })
 
 describe('useCheckoutPage — no silently pre-selected state', () => {

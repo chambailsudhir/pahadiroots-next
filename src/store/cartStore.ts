@@ -11,6 +11,10 @@ interface CartStore {
   items:             CartItem[]
   coupon:            AppliedCoupon | null
   idempotencyKey:    string           // generated on first item add, reset after order
+  /** What the current idempotencyKey was last used for at checkout (items, method, coupon, coins, address). Persisted with the
+   *  key so a checkout that is opened again after the cart changed elsewhere gets a fresh key (Nov 2026 verification). */
+  orderSignature:    string
+  setOrderSignature: (sig: string) => void
 
   // BUG FIX: hydration-race flag. See setHasHydrated below.
   _hasHydrated:      boolean
@@ -61,6 +65,7 @@ export const useCartStore = create<CartStore>()(
       items:          [],
       coupon:         null,
       idempotencyKey: '',
+      orderSignature: '',
       lastAppliedCouponCode: '',
       _hasHydrated:   false,
       setHasHydrated: (state) => set({ _hasHydrated: state }),
@@ -86,9 +91,12 @@ export const useCartStore = create<CartStore>()(
               ),
             }
           }
+          // Nov 2026 verification: a NEW line was clamped to the stock only, never to MAX_LINE_QTY (the existing-line branch above
+          // was). The PDP passes the real stock (e.g. 187), so 60 could go in the cart and Place Order then failed with a 400.
+          const cap = Math.min(newItem.maxQty ?? MAX_LINE_QTY, MAX_LINE_QTY)
           return {
             idempotencyKey: state.idempotencyKey || generateUUID(),
-            items: [...state.items, { ...newItem, qty: newItem.maxQty != null ? Math.min(newItem.qty ?? 1, newItem.maxQty) : (newItem.qty ?? 1) }],
+            items: [...state.items, { ...newItem, maxQty: cap, qty: Math.max(1, Math.min(newItem.qty ?? 1, cap)) }],
           }
         })
       },
@@ -143,7 +151,7 @@ export const useCartStore = create<CartStore>()(
         set(state => {
           const items = state.items.filter(i => i.variantId !== variantId)
           return items.length === 0
-            ? { items, idempotencyKey: '', coupon: null, lastAppliedCouponCode: '' }
+            ? { items, idempotencyKey: '', orderSignature: '', coupon: null, lastAppliedCouponCode: '' }
             : { items }
         }),
 
@@ -174,6 +182,7 @@ export const useCartStore = create<CartStore>()(
         // a duplicate order. With '' the key is generated lazily on the next
         // addItem() call, which is the only safe moment to do it.
         idempotencyKey: '',
+        orderSignature: '',
         // FIX: clear pending-removal registry. Without this, if useCartPage's
         // undo-toast timers are still in flight when clearCart fires (e.g. order
         // success clears the cart), cartStore.pendingVariantIds retains stale ids.
@@ -188,12 +197,13 @@ export const useCartStore = create<CartStore>()(
         // Always write (maxQty is refreshed even when nothing visible changed), but an
         // emptied cart resets key + coupon exactly like removeItem/clearCart do.
         set(items.length === 0
-          ? { items, idempotencyKey: '', coupon: null, lastAppliedCouponCode: '' }
+          ? { items, idempotencyKey: '', orderSignature: '', coupon: null, lastAppliedCouponCode: '' }
           : { items })
         return changes
       },
 
       resetIdempotencyKey: () => set({ idempotencyKey: generateUUID() }),
+      setOrderSignature: (sig) => set({ orderSignature: sig }),
       ensureIdempotencyKey: () => {
         const current = get().idempotencyKey
         if (current) return current
@@ -279,6 +289,7 @@ export const useCartStore = create<CartStore>()(
           return rest
         }),
         idempotencyKey: state.idempotencyKey,
+        orderSignature: state.orderSignature,
         // Persist code string only — the discount is never trusted from storage.
         // On hydration CartPage checks this and pre-fills the coupon input so
         // the user knows to re-apply rather than wondering why their discount vanished.

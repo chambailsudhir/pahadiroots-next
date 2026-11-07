@@ -97,6 +97,31 @@ describe('useCheckoutPage — idempotency key lifecycle (P3)', () => {
     expect(key()).not.toBe(before)
   })
 
+  // Nov 2026 verification: the last signature lived in a ref that started empty on every mount, so a change made OFF the checkout
+  // page (cart drawer, /cart) was never noticed and the next Pay resumed the old order at the old amount.
+  it('mints a NEW key when the cart changed while the checkout page was closed', async () => {
+    const first = renderHook(() => useCheckoutPage(settings))
+    await act(async () => { await Promise.resolve() })
+    const before = key()
+    first.unmount()
+    await act(async () => { useCartStore.getState().updateQty('v1', 2) })   // e.g. on /cart
+    // updateQty itself must not be what resets the key: put the old one back to model a page that only edits the cart
+    useCartStore.setState({ idempotencyKey: before })
+    renderHook(() => useCheckoutPage(settings))
+    await act(async () => { await Promise.resolve() })
+    expect(key()).not.toBe(before)
+  })
+
+  it('keeps the key across a remount when nothing changed (a retried order reuses it)', async () => {
+    const first = renderHook(() => useCheckoutPage(settings))
+    await act(async () => { await Promise.resolve() })
+    const before = key()
+    first.unmount()
+    renderHook(() => useCheckoutPage(settings))
+    await act(async () => { await Promise.resolve() })
+    expect(key()).toBe(before)
+  })
+
   it('does not touch the key when the cart is emptied after a successful order (clearCart sets it to "")', async () => {
     renderHook(() => useCheckoutPage(settings))
     await act(async () => { useCartStore.getState().clearCart() })

@@ -72,6 +72,9 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
   const slug  = p.slug || String(p.id)
 
   function handleATC(e: React.MouseEvent) {
+    // preventDefault too (Nov 2026 verification): the button sits inside the card's <Link>; stopPropagation only stopped Next's
+    // handler, the browser still followed the anchor and hard-navigated to the product right after adding it to the cart.
+    e.preventDefault()
     e.stopPropagation()
     addItem({
       productId: String(p.id),
