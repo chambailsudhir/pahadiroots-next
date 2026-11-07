@@ -71,7 +71,7 @@ export async function submitVerifiedReview(req: NextRequest, body: unknown): Pro
 
   try {
     // 1. The order must belong to THIS customer (a foreign / unknown order is just "not found").
-    const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${order_id}&customer_id=eq.${customerId}&select=id,order_status&limit=1`)
+    const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${order_id}&customer_id=eq.${customerId}&is_deleted=not.is.true&select=id,order_status&limit=1`)
     const order = Array.isArray(orders) ? orders[0] : null
     if (!order) return fin(err(404, 'Order not found', 'order_not_found'))
 
@@ -129,7 +129,7 @@ export async function eligibleItems(req: NextRequest): Promise<NextResponse> {
   const customerId = auth.profile.id
 
   try {
-    const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${raw}&customer_id=eq.${customerId}&select=id,order_number,order_status&limit=1`)
+    const orders = await sbAdmin('GET', `/rest/v1/orders?id=eq.${raw}&customer_id=eq.${customerId}&is_deleted=not.is.true&select=id,order_number,order_status&limit=1`)
     const order = Array.isArray(orders) ? orders[0] : null
     if (!order) return fin(err(404, 'Order not found', 'order_not_found'))
 

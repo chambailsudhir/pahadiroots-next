@@ -93,7 +93,7 @@ export async function GET(
     // Fetch order — customer_id guard prevents IDOR
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,products(name,hsn_code))&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,products(name,hsn_code))&limit=1`,
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {

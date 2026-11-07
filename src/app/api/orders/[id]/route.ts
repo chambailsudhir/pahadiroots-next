@@ -59,7 +59,7 @@ export async function GET(
     // reading order_status values that never actually occur for a return.
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url)),returns(id,status,reason,description,refund_amount,created_at,updated_at)&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&select=*,order_items(quantity,price_at_time,product_name_snapshot,variant_value_snapshot,product_id,products(name,emoji,image_url)),returns(id,status,reason,description,refund_amount,created_at,updated_at)&limit=1`,
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
