@@ -113,7 +113,8 @@ function OrderCard({ order: o, canReturn, onReturnClick }: Props) {
                 className={[
                   styles.otlStep,
                   i <= timelineIdx ? styles.otlStepDone    : '',
-                  i === timelineIdx ? styles.otlStepCurrent : '',
+                  // the last step reached is "in progress" — except Delivered, which is finished (a filled dot, not an open ring)
+                  i === timelineIdx && i < TIMELINE.length - 1 ? styles.otlStepCurrent : '',
                 ].filter(Boolean).join(' ')}
               >
                 <div className={styles.otlDot} />

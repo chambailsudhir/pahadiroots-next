@@ -52,7 +52,9 @@ async function getCustomerOrders(
     searchFilter = `&order_number=ilike.*${encodeURIComponent(search)}*`
   }
 
-  const baseFilter = `/rest/v1/orders?customer_id=eq.${customerId}${statusFilter}${searchFilter}`
+  // Orders the shop deleted (is_deleted — test orders, mistakes) are not the customer's: coins, referrals and analytics already
+  // ignore them, so the list, its count and the stats must too (Nov 2026: a deleted ₹1,200 order showed as Delivered with no coins).
+  const baseFilter = `/rest/v1/orders?customer_id=eq.${customerId}&is_deleted=not.is.true${statusFilter}${searchFilter}`
 
   // BUG FIX: sbAdminCount does a plain HEAD count against `baseFilter` with no
   // embed — fine for order_status-based tabs, but for the Returns tab the
