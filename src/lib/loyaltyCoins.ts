@@ -31,6 +31,16 @@ export function coinsPerStep(settings: Settings): number {
   return n != null ? n : 5
 }
 
+/**
+ * The value coins (and the ₹999 referral minimum) are measured on: the GOODS the customer paid for — order total minus shipping and
+ * the COD fee (coupon, prepaid discount and coins are already off the total). Same as big marketplaces, which never reward delivery
+ * charges. The database uses the same formula (order_goods_value, db_migration_v39).
+ */
+export function coinBaseValue(total: number, shipping?: number | null, codSurcharge?: number | null): number {
+  const n = (x: unknown) => { const v = Number(x); return Number.isFinite(v) && v > 0 ? v : 0 }
+  return Math.max(0, n(total) - n(shipping) - n(codSurcharge))
+}
+
 /** Coins an order of `orderValue` ₹ earns on delivery: floor(value / step) × coins per step, capped only when a maximum is set. */
 export function coinsForOrderValue(orderValue: number, settings: Settings): number {
   const max = coinsMaxPerOrder(settings)
