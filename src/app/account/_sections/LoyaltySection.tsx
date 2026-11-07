@@ -106,6 +106,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
   const cached = loyaltyCache && loyaltyCache.uid === uid ? loyaltyCache.data : null
   const [data,    setData]    = useState<LoyaltyData | null>(cached)
   const [txns,    setTxns]    = useState<Transaction[]>([])
+  const [txnLoaded, setTxnLoaded] = useState(false)   // "No transactions yet" only once the history was actually fetched
   const [loading, setLoading] = useState(!cached)
   const [copied,  setCopied]  = useState(false)
   const [txnLoad, setTxnLoad] = useState(false)
@@ -171,6 +172,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
         const fetched: Transaction[] = json.transactions ?? []
         setTxns(prev => page === 1 ? fetched : [...prev, ...fetched])
         setTxnPage(page)
+        setTxnLoaded(true)
         // Use total from API when available; fall back to a safe page-full heuristic.
         // Bug fix: was `fetched.length === 20` — when exactly 20 txns exist total,
         // this showed "Load more" and fired one extra empty fetch.
@@ -366,7 +368,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       <div className={styles.lyHistory}>
         <div className={styles.lyHistHeader}>
           <strong className={styles.lyHistTitle}>Transaction History</strong>
-          {txns.length === 0 && !txnLoad && (
+          {txns.length === 0 && !txnLoad && !txnLoaded && (
             <button className={styles.lyHistLoad} onClick={() => loadHistory(1)} type="button">
               Load History
             </button>
@@ -422,8 +424,11 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
           </>
         )}
 
-        {txns.length === 0 && !txnLoad && !txnErr && (
+        {txns.length === 0 && !txnLoad && !txnErr && txnLoaded && (
           <p className={styles.lyEmpty}>No transactions yet — start earning coins on your next order!</p>
+        )}
+        {txns.length === 0 && !txnLoad && !txnErr && !txnLoaded && (
+          <p className={styles.lyEmpty}>Tap &ldquo;Load History&rdquo; to see the coins you have earned, used and had expire.</p>
         )}
       </div>
     </div>
