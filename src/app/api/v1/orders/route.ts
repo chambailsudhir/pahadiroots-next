@@ -2,6 +2,7 @@ import { NextRequest, after } from 'next/server'
 import { createOrder, ensureCouponUsageLinked, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
+import { makeCodRiskGate } from '@/lib/server/codVerification'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
@@ -547,6 +548,8 @@ export async function POST(req: NextRequest) {
       // ── Loyalty ─────────────────────────────────────────────────────────
       loyaltyPointsRedeemed: d.loyalty_points_redeemed ?? 0,
       authenticatedCustomerId,
+      // Risky-COD gate (Nov 2026): refused after an earlier COD refusal on this phone; first / large COD orders need the code.
+      codRiskGate: makeCodRiskGate({ sb: sbAdmin, settings: settings as unknown as Record<string, string | undefined>, token: d.cod_verification_token }),
     }, settings), (() => {
       const budget = orderRouteBudgetMs()
       return Math.max(Math.min(8_000, budget), budget - (Date.now() - requestStartedAt))
@@ -631,7 +634,8 @@ export async function POST(req: NextRequest) {
     // Only the typed CheckoutRejectedError (customer-safe message by construction) is shown now;
     // StockReservationError and every other failure is a 500 with the generic message in production.
     if (err instanceof CheckoutRejectedError) {
-      return privateJson({ error: err.message }, { status: 409 })
+      // `code` lets the checkout react (e.g. open the verification step for COD_VERIFICATION_REQUIRED). Codes are a fixed list.
+      return privateJson({ error: err.message, code: err.code }, { status: 409 })
     }
     const status  = 500
     const clientMessage = process.env.NODE_ENV !== 'production'

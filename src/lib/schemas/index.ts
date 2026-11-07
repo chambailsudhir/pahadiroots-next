@@ -81,6 +81,8 @@ export const createOrderSchema = z.object({
   customer_email:         z.string().email().optional().or(z.literal('')),
   // ── Loyalty coins ────────────────────────────────────────────────────────
   loyalty_points_redeemed: z.number().int().min(0).max(100_000).optional().default(0),
+  // Nov 2026: token from /api/v1/cod-verify/confirm for a risky COD order (see lib/server/codVerification.ts).
+  cod_verification_token:  z.string().max(200).optional(),
 })
 
 // ─── Payment Schema ────────────────────────────────────────────────────────────

@@ -24,6 +24,8 @@ export type CheckoutRejectionCode =
   | 'MIN_ORDER'
   | 'LOYALTY'
   | 'NOT_SERVICEABLE'
+  | 'COD_NOT_AVAILABLE'           // Nov 2026: an earlier COD order on this phone was refused at the door → pay online
+  | 'COD_VERIFICATION_REQUIRED'   // Nov 2026: a risky COD order needs the e-mailed code (/api/v1/cod-verify)
 
 /** A customer-actionable refusal from order creation. `message` is customer-safe by construction. */
 export class CheckoutRejectedError extends Error {

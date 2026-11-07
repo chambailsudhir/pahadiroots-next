@@ -56,6 +56,8 @@ export type TransactionalEmailType =
   | 'review_request'
   // Nov 2026 (finding G): the forgot-password link mail (api/auth/route.ts) — used to bypass this module and go to Resend directly.
   | 'password_reset'
+  // Nov 2026: 6-digit code for a risky cash-on-delivery order (lib/server/codVerification.ts). Useless after 10 minutes.
+  | 'cod_verification'
 
 export interface SendTransactionalEmailParams {
   type:      TransactionalEmailType

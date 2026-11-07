@@ -1462,3 +1462,34 @@ describe('createOrder — coupon claim linking (COM-1)', () => {
     expect(mockDb.updateCalls.find(c => c.table === 'coupon_usage')).toBeUndefined()
   })
 })
+
+// Nov 2026: risky-COD gate (owner decision). createOrder calls the injected gate for a COD order once the customer and the COD
+// total are known, and a refusal stops the order before it is written.
+describe('createOrder — risky-COD gate', () => {
+  it('calls the gate for COD with the customer ids, the COD total and the phone; a refusal creates no order', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+    const { CheckoutRejectedError } = await import('@/lib/errors/checkoutErrors')
+    const gate = vi.fn(async () => { throw new CheckoutRejectedError('verify first', 'COD_VERIFICATION_REQUIRED') })
+    const { createOrder } = await import('@/lib/services/orderService')
+    await expect(createOrder({ ...BASE_INPUT, paymentMethod: 'cod', codRiskGate: gate }, DEFAULT_SETTINGS)).rejects.toMatchObject({ code: 'COD_VERIFICATION_REQUIRED' })
+    expect(gate).toHaveBeenCalledTimes(1)
+    const ctx = (gate.mock.calls[0] as unknown as [{ customerIds: string[]; codTotal: number; phone10: string | null }])[0]
+    expect(ctx.customerIds.length).toBeGreaterThan(0)
+    expect(ctx.codTotal).toBeGreaterThan(0)
+    expect(ctx.phone10).toMatch(/^\d{10}$/)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+  it('is never called for an online payment', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+    const gate = vi.fn(async () => {})
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, paymentMethod: 'razorpay', codRiskGate: gate }, DEFAULT_SETTINGS)
+    expect(gate).not.toHaveBeenCalled()
+  })
+})

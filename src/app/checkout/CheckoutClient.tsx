@@ -50,6 +50,7 @@ import SavedAddressSelector from '@/components/checkout/SavedAddressSelector'
 import AddressForm          from '@/components/checkout/AddressForm'
 import PaymentSection       from '@/components/checkout/PaymentSection'
 import OrderSummary         from '@/components/checkout/OrderSummary'
+import CodVerifyDialog      from '@/components/checkout/CodVerifyDialog'
 import { DELIVERY_BADGE, RETURNS_BADGE } from '@/lib/shippingCopy'
 import Icon, { AdminIcon } from '@/components/ui/Icon'
 
@@ -118,6 +119,7 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
     handleCoupon, handleApplyCouponHint,
     handleApplyLoyalty, handleRemoveLoyalty,
     handlePlace,
+    codVerify, codVerifyEmail, requestCodCode, confirmCodCode, closeCodVerify,
   } = useCheckoutPage(settings)
 
   // In-house funnel tracking: fires once, only once real cart items are
@@ -398,6 +400,14 @@ export function CheckoutClient({ settings: initialSettings }: { settings: SiteSe
        *       • The error message when handlePlace rejects
        *     The span is cleared when idle so it doesn't repeat "Place Order →"
        *     on every keystroke or state update unrelated to the button. */}
+      <CodVerifyDialog
+        state={codVerify}
+        email={codVerifyEmail}
+        onRequest={requestCodCode}
+        onConfirm={confirmCodCode}
+        onClose={closeCodVerify}
+        onPayOnline={razorpayEnabled ? () => { closeCodVerify(); setPayMethod('razorpay') } : undefined}
+      />
       <div className="ck-mob-bar">
         {/* A1: visually-hidden live region — see comment above */}
         <span className="sr-only" aria-live="polite" aria-atomic="true">
