@@ -26,3 +26,10 @@ sections; remove newsletter leftovers; one Help button for WhatsApp and the AI a
 ## Not in this phase
 
 Design-system migration of existing components, homepage restyle, cart and checkout restyle, tracking timeline, recently viewed, and the sandbox purchase test (needs Razorpay test keys and a non-production Supabase project).
+
+## Follow-up (owner feedback, Nov 2026)
+
+- **Help launcher removed.** WhatsApp and the Pahadi_AI assistant are back as their own floating buttons, and the
+  phone bottom bar's "Chat" opens WhatsApp again. Back-to-top stays hidden on phones (it covered Add to Cart).
+- **Discount next to the price.** Product cards show "N% off" beside the price (same rule as the photo tag: at least
+  5% and in stock). On narrow phone cards it wraps under the price.

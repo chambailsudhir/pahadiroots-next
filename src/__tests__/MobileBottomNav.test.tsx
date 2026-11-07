@@ -17,8 +17,8 @@
  *     .active class + aria-current="page" only on '/'.
  *   • Cart badge count reflects the cart store and caps display at "9+".
  *   • Search/cart/menu buttons call the right useUIStore action.
- *   • "Help" opens the shared help sheet (WhatsApp + AI assistant, see
- *     HelpLauncher.test.tsx); there is no direct WhatsApp link in the bar.
+ *   • WhatsApp "Chat" link is present only when settings.whatsapp_number
+ *     is set, and strips non-digit characters for the wa.me href.
  *   • Scroll-to-top button visibility is driven by the sentinel's
  *     IntersectionObserver, not a scroll listener.
  */
@@ -200,18 +200,18 @@ describe('MobileBottomNav — search/cart/menu wire into the shared useUIStore',
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Help (was a direct WhatsApp "Chat" link until the Nov 2026 redesign)
+// WhatsApp chat link
 // ─────────────────────────────────────────────────────────────────────────────
-describe('MobileBottomNav — Help', () => {
-  it('has no direct WhatsApp link any more (WhatsApp lives in the help sheet)', () => {
-    const { container } = renderNav({ settings: { ...settings, whatsapp_number: '+91 98765-43210' } })
+describe('MobileBottomNav — WhatsApp chat link', () => {
+  it('is absent when settings.whatsapp_number is not set', () => {
+    const { container } = renderNav()
     expect(container.querySelector('a[href^="https://wa.me/"]')).toBeNull()
   })
 
-  it('opens the help sheet', () => {
-    const { getByRole } = renderNav()
-    fireEvent.click(getByRole('button', { name: 'Help' }))
-    expect(useUIStore.getState().isHelpOpen).toBe(true)
+  it('links to wa.me with only digits from whatsapp_number', () => {
+    const { container } = renderNav({ settings: { ...settings, whatsapp_number: '+91 98765-43210' } })
+    const link = container.querySelector('a[href^="https://wa.me/"]') as HTMLAnchorElement
+    expect(link.href).toContain('https://wa.me/919876543210')
   })
 })
 

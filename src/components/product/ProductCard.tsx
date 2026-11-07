@@ -342,10 +342,13 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             checkout, PDP) that adds Indian thousands-grouping. Any product
             ≥ ₹1,000 rendered as "₹12500" here instead of "₹12,500". */}
         <div className="pfoot" style={{ marginTop: 8 }}>
-          <div className="prow" style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
+          {/* flexWrap: the "N% off" note drops onto its own line on narrow phone cards instead of widening the card. */}
+          <div className="prow" style={{ display: 'flex', alignItems: 'baseline', gap: 6, rowGap: 2, flexWrap: 'wrap', marginBottom: 10 }}>
             <span className="pnow">{formatPrice(price)}</span>
             {mrp > price && <span className="pwas">{formatPrice(mrp)}</span>}
             {unitLabel && <span className="punt">{unitLabel}</span>}
+            {/* Owner request (Nov 2026): the discount next to the price as well as on the photo tag. Same rule as the tag. */}
+            {savings >= 5 && inStock && <span className="psave">{savings}% off</span>}
           </div>
 
           {/* ATC / Notify — buttons are now real siblings of the stretched
