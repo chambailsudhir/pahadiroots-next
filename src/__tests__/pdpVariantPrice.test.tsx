@@ -69,18 +69,19 @@ describe('hero price block follows the selected pack', () => {
     const { container } = render(<Page />)
     expect(heroPrice(container)).toBe('₹500')
     expect(heroMrp(container)).toBe('₹600')
-    expect(badge(container)).toBe('SAVE 17%')
+    expect(badge(container)).toBe('17% off')
     expect(container.querySelector('.pdp-tax-note')!.textContent).toContain('250g')
   })
 
-  it('updates price, MRP, SAVE %, size note and gallery badge when another pack is chosen', () => {
+  it('updates price, MRP, "N% off" and size note when another pack is chosen', () => {
     const { container } = render(<Page />)
     fireEvent.click(screen.getByLabelText(/500g/))
     expect(heroPrice(container)).toBe('₹900')
     expect(heroMrp(container)).toBe('₹1,200')   // en-IN grouping, like the cards (formatPrice)
-    expect(badge(container)).toBe('SAVE 25%')
+    expect(badge(container)).toBe('25% off')
     expect(container.querySelector('.pdp-tax-note')!.textContent).toContain('500g')
-    expect(container.textContent).toContain('-25%')       // gallery badge, no longer stuck on the server value (-17%)
+    // Nov 2026: no discount badge on the gallery photo any more; the price block carries it ("25% off").
+    expect(container.textContent).not.toContain('-25%')
     expect(container.textContent).not.toContain('-17%')
   })
 
@@ -129,9 +130,10 @@ describe('stock line + low-stock notice follow the selected pack (no invented ur
 })
 
 describe('outside a provider (QuickView, tests) nothing crashes', () => {
-  it('AddToCartSection and ProductGallery fall back to their own props', () => {
+  it('AddToCartSection and ProductGallery render without a provider; the photo carries no discount badge', () => {
     const { container } = render(<><ProductGallery images={[{ url: '/a.jpg', alt: 'a' }]} productName="x" savings={17} /><AddToCartSection product={product} variants={variants} /></>)
-    expect(container.textContent).toContain('-17%')
+    expect(container.querySelector('img')).not.toBeNull()
+    expect(container.textContent).not.toContain('-17%')
   })
 })
 

@@ -565,3 +565,11 @@ details.pdp-acc-item[open] .pdp-acc-chevron svg{stroke:#c8920a}
   .pdp-info-col>.pdp-tagline{order:1;margin:18px 0 8px;font-size:15px;line-height:1.65}
   .pdp-info-col>.pdp-share-row,.pdp-info-col>.pdp-delivery-bar,.pdp-info-col>.pdp-fine-print,.pdp-info-col>.pdp-benefits-card{order:2}
 }
+
+/* Nov 2026: one discount style across the site — "N% off" in bold green text next to the price (was a red "SAVE N%"
+   pill here and a red badge on the photo). */
+.pdp-save-badge{background:none!important;color:#1a3a1e!important;font-size:15px!important;font-weight:800!important;padding:0!important;border-radius:0!important;box-shadow:none!important;letter-spacing:0!important}
+.pdp-vc-save{color:#1a3a1e!important}
+.pdp-mob-save{font-size:12px;font-weight:800;color:#1a3a1e;white-space:nowrap}
+html.premium .pdp-save-badge,html.premium .pdp-vc-save,html.premium .pdp-mob-save{color:var(--gd2)!important}
+.pdp-mob-price-col{flex-wrap:wrap;row-gap:0;flex-shrink:1;min-width:0}

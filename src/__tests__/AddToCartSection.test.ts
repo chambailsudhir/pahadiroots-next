@@ -378,13 +378,13 @@ describe('AddToCartSection — variant save % display', () => {
     const variants = [makeVariant({ id: 11, size: '500g', price: 250, mrp: 300, available_stock: 10 })]
     render(el({ product: makeProduct(), variants }))
     // (1 - 250/300) * 100 = 16.67% -> rounds to 17%
-    expect(screen.getByText(/save 17%/i)).toBeTruthy()
+    expect(screen.getByText('17% off')).toBeTruthy()   // Nov 2026 wording: "N% off", same as the product cards
   })
 
   it('shows no save badge when mrp equals price', () => {
     const variants = [makeVariant({ id: 11, size: '500g', price: 250, mrp: 250, available_stock: 10 })]
     render(el({ product: makeProduct(), variants }))
-    expect(screen.queryByText(/save \d+%/i)).toBeNull()
+    expect(screen.queryByText(/\d+% off/)).toBeNull()
   })
 })
 

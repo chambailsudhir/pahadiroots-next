@@ -193,7 +193,7 @@ export default function QuickViewModal({ product, initialVariant, onClose }: Pro
         .qv-price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
         .qv-price { font-size: 24px; font-weight: 900; color: #1a3a1e; }
         .qv-mrp { font-size: 14px; color: #999; text-decoration: line-through; }
-        .qv-savings { font-size: 12px; font-weight: 700; color: #8a6508; }
+        .qv-savings { font-size: 12px; font-weight: 800; color: #1a3a1e; }
         .qv-variants { margin-bottom: 16px; }
         .qv-variants-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #8a6508; margin-bottom: 8px; }
         .qv-variants-list { display: flex; flex-wrap: wrap; gap: 8px; }
