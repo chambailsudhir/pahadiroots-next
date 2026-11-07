@@ -73,10 +73,10 @@ describe('payment confirmation e-mail — recipient', () => {
     expect(mail!.html).not.toContain('Pahadi Coins')       // guest: no coins promise
   })
 
-  it('an account holder gets the coins line (account = auth_user_id; there is no is_guest column)', async () => {
+  it('an account holder gets no coins line on a ₹350 order (no coins below ₹500, owner rule Nov 2026)', async () => {
     const mail = await run({ first_name: 'A', email: 'a@example.org', auth_user_id: 'u-1', shipping_address: { state: 'Himachal Pradesh' }, order_items: [] })
     expect(mail?.to).toBe('a@example.org')
-    expect(mail!.html).toContain('You will earn 1 Pahadi Coin when this order is delivered')   // ₹350 order: 1 coin per ₹200
+    expect(mail!.html).not.toContain('Pahadi Coin')
   })
 })
 

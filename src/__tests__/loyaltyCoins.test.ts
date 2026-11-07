@@ -1,29 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { coinsForOrderValue, coinsPerOrder, coinStepRupees } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue, coinsMaxPerOrder, coinStepRupees, coinsPerStep } from '@/lib/loyaltyCoins'
 
-// Owner decision (Nov 2026): 1 coin per ₹200 of order value, at least 1, at most 5 per order, paid on delivery.
+// Owner rule (Nov 2026, second revision): no coins below ₹500; 5 coins for every full ₹500; no per-order limit. Paid on delivery.
+// The SQL function delivery_coins_for (db_migration_v36) holds the same formula and gave these exact numbers on production.
 describe('coinsForOrderValue', () => {
-  it('1 coin per ₹200, minimum 1, maximum 5', () => {
-    expect(coinsForOrderValue(50, {})).toBe(1)        // minimum 1
-    expect(coinsForOrderValue(199, {})).toBe(1)
-    expect(coinsForOrderValue(200, {})).toBe(1)
-    expect(coinsForOrderValue(399, {})).toBe(1)
-    expect(coinsForOrderValue(400, {})).toBe(2)
-    expect(coinsForOrderValue(800, {})).toBe(4)
-    expect(coinsForOrderValue(1000, {})).toBe(5)
-    expect(coinsForOrderValue(25_000, {})).toBe(5)    // the maximum per order
+  it('₹2 → 0, ₹499 → 0, ₹500 → 5, ₹999 → 5, ₹1,000 → 10, ₹2,999 → 25, ₹3,000 → 30, ₹10,000 → 100 (no limit)', () => {
+    const cases: Array<[number, number]> = [[2, 0], [499, 0], [500, 5], [999, 5], [1000, 10], [2999, 25], [3000, 30], [10_000, 100]]
+    for (const [value, coins] of cases) expect(coinsForOrderValue(value, {}), `₹${value}`).toBe(coins)
   })
-  it('both numbers are admin settings; a bad value falls back to the defaults; 0 switches earning off', () => {
-    expect(coinStepRupees({})).toBe(200)
-    expect(coinStepRupees({ loyalty_coin_step_rupees: '100' })).toBe(100)
-    expect(coinStepRupees({ loyalty_coin_step_rupees: '0' })).toBe(200)
-    expect(coinStepRupees({ loyalty_coin_step_rupees: 'abc' })).toBe(200)
-    expect(coinsPerOrder({ loyalty_coins_per_order: '10' })).toBe(10)
-    expect(coinsForOrderValue(900, { loyalty_coins_per_order: '10', loyalty_coin_step_rupees: '100' })).toBe(9)
+  it('all three numbers are admin settings; junk falls back to the defaults', () => {
+    expect(coinStepRupees({})).toBe(500)
+    expect(coinsPerStep({})).toBe(5)
+    expect(coinsMaxPerOrder({})).toBeNull()
+    expect(coinStepRupees({ loyalty_coin_step_rupees: '0' })).toBe(500)
+    expect(coinStepRupees({ loyalty_coin_step_rupees: 'abc' })).toBe(500)
+    expect(coinsForOrderValue(1000, { loyalty_coin_step_rupees: '250', loyalty_coins_per_step: '2' })).toBe(8)
+  })
+  it('an optional per-order maximum caps it; 0 switches earning off', () => {
+    expect(coinsForOrderValue(10_000, { loyalty_coins_per_order: '50' })).toBe(50)
+    expect(coinsForOrderValue(1000, { loyalty_coins_per_order: '50' })).toBe(10)
     expect(coinsForOrderValue(5000, { loyalty_coins_per_order: '0' })).toBe(0)
   })
-  it('never NaN for a junk order value', () => {
-    expect(coinsForOrderValue(Number.NaN, {})).toBe(1)
-    expect(coinsForOrderValue(-5, {})).toBe(1)
+  it('never NaN or negative for a junk order value', () => {
+    expect(coinsForOrderValue(Number.NaN, {})).toBe(0)
+    expect(coinsForOrderValue(-5, {})).toBe(0)
   })
 })

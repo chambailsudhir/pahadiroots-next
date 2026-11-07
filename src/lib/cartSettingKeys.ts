@@ -12,6 +12,7 @@ export const CART_SETTING_KEYS = [
   'loyalty_enabled',
   'loyalty_coins_per_order',
   'loyalty_coin_step_rupees',
+  'loyalty_coins_per_step',
   'loyalty_points_value',
   'loyalty_points_label',
   'loyalty_min_redeem',

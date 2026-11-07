@@ -38,6 +38,8 @@ interface LoyaltyData {
   max_redeem_pct: number
   earn_per_order?: number
   earn_step_rupees?: number
+  earn_per_step?: number
+  earn_max_per_order?: number | null
   referral_bonus?: number
   referral_min_order?: number
   referral_hold_days?: number
@@ -52,10 +54,12 @@ export function referralCopy(bonus = 100, minOrder = 499, holdDays = 7): string 
 }
 
 /** Owner decision (Nov 2026): 1 coin per ₹`step` of order value, at most `max` per order, paid on DELIVERY, taken back on return / refund. */
-export function earnCopy(max: number | undefined, step?: number): string {
-  const m = typeof max === 'number' && Number.isFinite(max) && max >= 0 ? Math.floor(max) : 5
-  const st = typeof step === 'number' && Number.isFinite(step) && step >= 1 ? Math.floor(step) : 200
-  return `Earn 1 coin for every ₹${st.toLocaleString('en-IN')} of your order, up to ${m} ${m === 1 ? 'coin' : 'coins'} per order, once it is delivered (taken back if you return it)`
+export function earnCopy(perStep: number | undefined, step?: number, max?: number | null): string {
+  // Owner rule (Nov 2026): `perStep` coins for every full ₹`step` of a delivered order, nothing below one step; `max` null = no limit.
+  const p  = typeof perStep === 'number' && Number.isFinite(perStep) && perStep >= 0 ? Math.floor(perStep) : 5
+  const st = typeof step === 'number' && Number.isFinite(step) && step >= 1 ? Math.floor(step) : 500
+  const cap = typeof max === 'number' && Number.isFinite(max) && max > 0 ? `, up to ${Math.floor(max)} coins per order` : ''
+  return `Earn ${p} ${p === 1 ? 'coin' : 'coins'} for every ₹${st.toLocaleString('en-IN')} of your order${cap}, once it is delivered (orders below ₹${st.toLocaleString('en-IN')} earn none; coins are taken back if you return the order)`
 }
 
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
@@ -266,7 +270,7 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
       {/* ── How it works ──────────────────────────────────────── */}
       <div className={styles.lyHowGrid}>
         {[
-          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_order, data.earn_step_rupees) }]),
+          ...(data.earn_per_order === 0 ? [] : [{ icon: '🛍️', title: 'Shop & Earn',  desc: earnCopy(data.earn_per_step ?? 5, data.earn_step_rupees, data.earn_max_per_order) }]),
           { icon: '💸', title: 'Redeem',        desc: `1 coin = ₹${earnRate} off at checkout` },
           { icon: '🔒', title: 'Min Redeem',    desc: `Minimum ${data.min_redeem} coins per redemption` },
           { icon: '📊', title: 'Max Per Order', desc: `Redeem up to ${data.max_redeem_pct}% of order value` },
