@@ -13,7 +13,7 @@ import {
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
 } from '@/lib/api/serverUtils'
-import { coinsPerOrder, coinStepRupees } from '@/lib/loyaltyCoins'
+import { coinsMaxPerOrder, coinStepRupees, coinsPerStep } from '@/lib/loyaltyCoins'
 
 // ── Helpers ───────────────────────────────────────────────────
 function asNumber(v: string | undefined, fallback: number) {
@@ -27,7 +27,7 @@ function asNumber(v: string | undefined, fallback: number) {
 async function getSettings(): Promise<Record<string, string>> {
   const rows: Array<{ key: string; value: string }> = await sbAdmin(
     'GET',
-    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_coin_step_rupees,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days)',
+    '/rest/v1/site_settings?key=in.(loyalty_enabled,loyalty_points_per_rupee,loyalty_coins_per_order,loyalty_coin_step_rupees,loyalty_coins_per_step,loyalty_points_value,loyalty_max_redeem_pct,loyalty_points_label,loyalty_min_redeem,referral_bonus_points,referral_min_order,referral_hold_days)',
   ).catch(() => [])
   return Object.fromEntries((rows || []).map(r => [r.key, r.value]))
 }
@@ -72,8 +72,12 @@ export async function GET(req: NextRequest) {
       points_value:  pointsValue,                        // per-point value in ₹
       min_redeem:    minRedeem,
       max_redeem_pct: maxRedeemPct,
-      earn_per_order:  coinsPerOrder(settings),           // MAXIMUM coins per DELIVERED order
-      earn_step_rupees: coinStepRupees(settings),         // 1 coin per this many ₹ of order value
+      // Coin rule (owner, Nov 2026): earn_per_step coins for every full earn_step_rupees ₹ of a DELIVERED order (nothing below one
+      // step); earn_max_per_order is null for "no limit". earn_per_order is kept for older clients: 0 only when earning is off.
+      earn_per_step:      coinsPerStep(settings),
+      earn_step_rupees:   coinStepRupees(settings),
+      earn_max_per_order: coinsMaxPerOrder(settings),
+      earn_per_order:     coinsMaxPerOrder(settings) === 0 || coinsPerStep(settings) === 0 ? 0 : (coinsMaxPerOrder(settings) ?? coinsPerStep(settings)),
       referral_bonus:  referralBonus,                    // coins each side gets for a referral
       referral_min_order: asNumber(settings.referral_min_order, 499),   // friend's order must be at least this (₹)
       referral_hold_days: asNumber(settings.referral_hold_days, 7),     // reward is released this long AFTER delivery

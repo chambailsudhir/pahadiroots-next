@@ -1,15 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { earnCopy } from '@/app/account/_sections/LoyaltySection'
 
+// Owner rule (Nov 2026, second revision): 5 coins for every full ₹500, nothing below ₹500, no per-order limit.
 describe('earnCopy', () => {
-  it('states the per-₹ rule, the per-order maximum and the delivery / return rule', () => {
-    expect(earnCopy(5, 200)).toBe('Earn 1 coin for every ₹200 of your order, up to 5 coins per order, once it is delivered (taken back if you return it)')
-    expect(earnCopy(1, 1000)).toContain('for every ₹1,000')
-    expect(earnCopy(1, 1000)).toContain('up to 1 coin per order')
+  it('states the per-₹500 rule, that smaller orders earn none, and the delivery / return rule', () => {
+    expect(earnCopy(5, 500)).toBe('Earn 5 coins for every ₹500 of your order, once it is delivered (orders below ₹500 earn none; coins are taken back if you return the order)')
+    expect(earnCopy(1, 1000)).toContain('Earn 1 coin for every ₹1,000')
   })
-  it('falls back to 5 coins / ₹200 for missing or invalid values', () => {
-    expect(earnCopy(undefined)).toContain('up to 5 coins')
-    expect(earnCopy(undefined)).toContain('₹200')
-    expect(earnCopy(Number.NaN, 0)).toContain('₹200')
+  it('mentions a per-order limit only when one is set', () => {
+    expect(earnCopy(5, 500, null)).not.toContain('up to')
+    expect(earnCopy(5, 500, 50)).toContain('up to 50 coins per order')
+  })
+  it('falls back to 5 coins / ₹500 for missing or invalid values', () => {
+    expect(earnCopy(undefined)).toContain('Earn 5 coins for every ₹500')
+    expect(earnCopy(Number.NaN, 0)).toContain('₹500')
   })
 })

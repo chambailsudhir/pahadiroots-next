@@ -20,7 +20,7 @@ describe('settingsForCheckout — ALLOW-list for the /checkout client tree (L-09
   it('is exactly the set of keys the checkout client reads — nothing more', () => {
     expect([...CHECKOUT_CLIENT_SETTING_KEYS].sort()).toEqual([
       'cod_enabled', 'cod_max_value', 'cod_surcharge_amount', 'flat_shipping_charge', 'free_shipping_min',
-      'loyalty_coin_step_rupees', 'loyalty_coins_per_order', 'loyalty_enabled', 'loyalty_max_redeem_pct', 'loyalty_min_redeem',
+      'loyalty_coin_step_rupees', 'loyalty_coins_per_order', 'loyalty_coins_per_step', 'loyalty_enabled', 'loyalty_max_redeem_pct', 'loyalty_min_redeem',
       'loyalty_points_label', 'loyalty_points_value', 'min_order_amount', 'prepaid_discount_pct', 'upi_enabled', 'whatsapp_number',
     ])
   })
