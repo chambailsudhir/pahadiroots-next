@@ -37,6 +37,21 @@ describe('runBackgroundSweepsIfDue (OPS-001)', () => {
     expect(ran).toBe(true)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
+  // Nov 2026 verification: run one after the other, the e-mail retry was usually cut off by the function limit.
+  it('starts both sweeps at once (the e-mail retry does not wait for the expiry sweep)', async () => {
+    const started: string[] = []
+    let releaseFirst!: () => void
+    const fetchImpl = vi.fn((url: string) => {
+      started.push(url)
+      return url.endsWith('expire-pending-orders') ? new Promise<Response>(r => { releaseFirst = () => r(new Response('{}')) }) : Promise.resolve(new Response('{}'))
+    })
+    const p = runBackgroundSweepsIfDue('https://x.test', { fetchImpl: fetchImpl as unknown as typeof fetch, gate: async () => 'allowed', env: { CRON_SECRET: 's' } })
+    await new Promise(r => setTimeout(r, 0))
+    expect(started).toHaveLength(2)                       // both requests are on the wire before the first one answered
+    releaseFirst()
+    expect(await p).toBe(true)
+  })
+
   it('never throws even if the limiter itself throws', async () => {
     expect(await runBackgroundSweepsIfDue('https://x.test', { gate: async () => { throw new Error('kv down') }, env: { CRON_SECRET: 's' } })).toBe(false)
   })

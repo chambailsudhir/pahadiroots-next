@@ -38,6 +38,7 @@
  *     so Next.js can extract, deduplicate, and cache the rules properly.
  */
 
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import './cart-item-card.css'
 
 import { memo, useCallback } from 'react'
@@ -128,7 +129,7 @@ const CartItemCard = memo(function CartItemCard({ item, qtyAnim, onQtyChange, on
               className="cic-qty-btn"
               onClick={handleIncr}
               aria-label="Increase quantity"
-              disabled={item.qty >= (item.maxQty ?? 99)}
+              disabled={item.qty >= Math.min(item.maxQty ?? MAX_LINE_QTY, MAX_LINE_QTY)}
             >+</button>
           </div>
 

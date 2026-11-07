@@ -22,6 +22,15 @@ export function isLegacyEvidenceLink(value: unknown): value is string {
   return typeof value === 'string' && /^https:\/\//i.test(value)
 }
 
+/** The object path inside a legacy `/object/sign/return-evidence/<path>?token=` link, or null for any other link. */
+export function legacyEvidencePath(link: string): string | null {
+  const m = /\/storage\/v1\/object\/sign\/return-evidence\/([^?#]+)/.exec(link)
+  if (!m) return null
+  let path: string
+  try { path = decodeURIComponent(m[1]) } catch { return null }
+  return path && !path.includes('..') ? path : null
+}
+
 /** Signs ONE object; null when it is missing, the storage call fails, or the answer points anywhere else. */
 async function signOne(path: string, env: StorageEnv, fetchImpl: typeof fetch): Promise<string | null> {
   try {
@@ -69,7 +78,14 @@ export async function evidenceReadLinks(stored: unknown, env: StorageEnv, fetchI
   if (!Array.isArray(stored)) return []
   const links: string[] = []
   for (const value of stored) {
-    if (isLegacyEvidenceLink(value)) { links.push(value); continue }
+    if (isLegacyEvidenceLink(value)) {
+      // Nov 2026 verification: a legacy link signed for a YEAR in this bucket is re-signed from its object path, so the
+      // reader gets a 15-minute link and the year-long one stops being handed out. Anything else (an old public URL) as is.
+      const legacyPath = legacyEvidencePath(value)
+      const fresh = legacyPath ? await signOne(legacyPath, env, fetchImpl) : null
+      links.push(fresh ?? value)
+      continue
+    }
     if (typeof value !== 'string' || !value || value.includes('..')) continue
     const link = await signOne(value, env, fetchImpl)
     if (link) links.push(link)

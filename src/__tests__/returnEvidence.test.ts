@@ -57,13 +57,23 @@ describe('evidenceReadLinks — read time mints a fresh short-lived link per vie
     expect(links).toEqual([`https://proj.supabase.co/storage/v1/object/sign/${EVIDENCE_BUCKET}/returns/5/1-a.jpg?token=abc`])
     expect(JSON.parse((f.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toEqual({ expiresIn: 15 * 60 })
   })
-  it('passes a legacy full signed link (row written before L-8) through unchanged without calling storage', async () => {
-    const f = vi.fn()
+  // Nov 2026 verification: a legacy year-long link is re-signed from its object path (15 minutes) instead of being handed out.
+  it('re-signs a legacy full signed link (row written before L-8) for 15 minutes from its object path', async () => {
+    const f = signer()
     const legacy = `https://proj.supabase.co/storage/v1/object/sign/${EVIDENCE_BUCKET}/returns/4/1-old.jpg?token=year-long`
-    expect(await evidenceReadLinks([legacy], env, f as unknown as typeof fetch)).toEqual([legacy])
-    expect(f).not.toHaveBeenCalled()
+    expect(await evidenceReadLinks([legacy], env, f as unknown as typeof fetch))
+      .toEqual([`https://proj.supabase.co/storage/v1/object/sign/${EVIDENCE_BUCKET}/returns/4/1-old.jpg?token=abc`])
     expect(isLegacyEvidenceLink(legacy)).toBe(true)
     expect(isLegacyEvidenceLink('returns/4/1-old.jpg')).toBe(false)
+  })
+  it('keeps the legacy link when re-signing fails, and never re-signs a link from another bucket', async () => {
+    const legacy = `https://proj.supabase.co/storage/v1/object/sign/${EVIDENCE_BUCKET}/returns/4/1-old.jpg?token=year-long`
+    const failing = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({}) }) as unknown as Response)
+    expect(await evidenceReadLinks([legacy], env, failing as unknown as typeof fetch)).toEqual([legacy])
+    const other = 'https://proj.supabase.co/storage/v1/object/public/pahadi-images/returns/4/1.jpg'
+    const f = vi.fn()
+    expect(await evidenceReadLinks([other], env, f as unknown as typeof fetch)).toEqual([other])
+    expect(f).not.toHaveBeenCalled()
   })
   it('mixes both forms in stored order and drops junk (null column, non-strings, traversal, unsignable)', async () => {
     const f = vi.fn()

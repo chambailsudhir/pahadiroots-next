@@ -69,6 +69,7 @@
  *   4. PERF: CartDrawerItem memoized; stable useCallback handlers per row.
  */
 
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import { likelyPaymentMethod, cartSubtotal } from '@/components/cart/cartPaymentMethod'
 import Link from 'next/link'
@@ -158,7 +159,7 @@ export const CartDrawerItem = memo(function CartDrawerItem({
             <button
               type="button"
               onClick={handleIncr}
-              disabled={item.qty >= (item.maxQty ?? 99)}
+              disabled={item.qty >= Math.min(item.maxQty ?? MAX_LINE_QTY, MAX_LINE_QTY)}
               className="w-7 h-7 flex items-center justify-center text-stone-500 hover:bg-stone-50 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-400"
               aria-label={`Increase quantity of ${item.name}`}
             >+</button>

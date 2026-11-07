@@ -48,14 +48,19 @@ async function resolveDbOrderId(
   db: ReturnType<typeof getServiceClient>,
   payment: RazorpayPaymentEntity,
 ): Promise<string | null> {
-  const fromNotes = payment.notes?.db_order_id
-  if (fromNotes) return String(fromNotes)
-  if (!isRazorpayOrderId(payment.order_id)) return null
-  const { data, error } = await db.from('orders').select('id').eq('payment_id', payment.order_id).maybeSingle()
-  if (error && (error as { code?: string }).code !== 'PGRST116') {
-    throw new Error('webhook order lookup by razorpay order id failed: ' + error.message)
+  // Nov 2026 verification: the SERVER's pairing comes first. payment.notes are set by the browser (Checkout options), so a
+  // shopper could pay their own order with notes.db_order_id pointing at someone else's paid order and raise a false
+  // "double charge, refund needed" alert there. An unpaid order still holds its Razorpay order id in orders.payment_id;
+  // the note is only the fallback for an order that no longer does (already paid → payment_id is the pay_ id).
+  if (isRazorpayOrderId(payment.order_id)) {
+    const { data, error } = await db.from('orders').select('id').eq('payment_id', payment.order_id).maybeSingle()
+    if (error && (error as { code?: string }).code !== 'PGRST116') {
+      throw new Error('webhook order lookup by razorpay order id failed: ' + error.message)
+    }
+    if (data?.id != null) return String(data.id)
   }
-  return data?.id != null ? String(data.id) : null
+  const fromNotes = payment.notes?.db_order_id
+  return fromNotes ? String(fromNotes) : null
 }
 
 export async function POST(req: Request) {
@@ -83,6 +88,10 @@ export async function POST(req: Request) {
 
   // Read raw body for HMAC verification
   const rawBody = await req.text()
+  // A chunked body carries no Content-Length, so the gate above never saw it (Nov 2026 verification): check what was read.
+  if (rawBody.length > 1_048_576) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
   const signature = req.headers.get('x-razorpay-signature') || ''
 
   // Verify webhook signature using the WEBHOOK secret (configured in Razorpay Dashboard →
@@ -234,7 +243,21 @@ export async function POST(req: Request) {
         // twice for one order (two tabs / a retry that also succeeded). This branch used to log at info level and move on, so
         // the second charge was invisible until the customer complained. Same payment id = the normal duplicate delivery.
         const paidWith = typeof order.payment_id === 'string' ? order.payment_id : ''
+        // A different payment is a double charge ONLY if it was made against THIS order's Razorpay order (recorded on the
+        // payment_verified event). Otherwise the note pointed here by mistake or on purpose: never tell ops to refund this order.
+        let sameRazorpayOrder = true
         if (paidWith.startsWith('pay_') && paidWith !== paymentId) {
+          const { data: ver } = await db.from('order_events').select('metadata').eq('order_id', order.id).eq('event', 'payment_verified').limit(1)
+          const recorded = (Array.isArray(ver) ? ver[0] : null)?.metadata?.razorpay_order_id
+          sameRazorpayOrder = typeof recorded === 'string' && !!payment.order_id && safeEqual(recorded, String(payment.order_id))
+          if (!sameRazorpayOrder) {
+            captureError(new Error('payment.captured whose note points at another, already-paid order — not a double charge of that order'), {
+              action: 'webhook.razorpay.payment_captured.foreign_note', payment_id: paymentId, razorpay_order_id: payment.order_id,
+              noted_order_id: order.id, alert: true,
+            })
+          }
+        }
+        if (paidWith.startsWith('pay_') && paidWith !== paymentId && sameRazorpayOrder) {
           captureError(new Error('payment.captured for an order already paid by a different payment — possible double charge, refund needed'), {
             action: 'webhook.razorpay.payment_captured.duplicate_payment', payment_id: paymentId, paid_with: paidWith,
             order_id: order.id, amount_paise: payment.amount, alert: true,

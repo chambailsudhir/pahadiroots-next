@@ -203,6 +203,18 @@ describe('expireStalePendingOrders — never releases a paid / possibly-paid ord
     expect(h.restoreReporting).not.toHaveBeenCalled()
   })
 
+  // Nov 2026 verification: the recovered order's e-mails were fire-and-forget in the cron and could be lost when it answered.
+  it('a recovered order waits for its deferred e-mails before the sweep finishes', async () => {
+    h.fetchOrderPayments.mockResolvedValue([rzpPay({ status: 'captured' })])
+    let mailed = false
+    h.sideEffects.mockImplementation(async (_db: unknown, args: { defer: (fn: () => Promise<void>) => void }) => {
+      args.defer(async () => { await new Promise(r => setTimeout(r, 20)); mailed = true })
+    })
+    const { db } = makeDb({ candidates: [order()] })
+    await expireStalePendingOrders(db, { now: NOW, olderThanMinutes: 30 })
+    expect(mailed).toBe(true)
+  })
+
   it('captured but for the WRONG amount → not treated as paid (and not released if in doubt is impossible: it is released only because nothing valid was paid)', async () => {
     h.fetchOrderPayments.mockResolvedValue([rzpPay({ status: 'captured', amount: 100 })])
     const { db } = makeDb({ candidates: [order()], items: [] })

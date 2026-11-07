@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { Resend } from 'resend'
-import { MAX_DLQ_ATTEMPTS, isPermanentEmailFailure } from '@/lib/server/email'
+import { MAX_DLQ_ATTEMPTS, isPermanentEmailFailure, emailIdempotencyKey, sendWithIdempotency } from '@/lib/server/email'
 import { logger, captureError } from '@/lib/logger'
 
 // Cap per-invocation work so this stays comfortably inside Vercel's function
@@ -183,12 +183,9 @@ export async function GET(req: NextRequest) {
       // already claimed ('retrying'), fail the whole cron and leave the row stuck for 15 minutes on every run.
       const resend = new Resend(process.env.RESEND_API_KEY)
       const { error } = await withTimeout(
-        resend.emails.send({
-          from:    row.from_address,
-          to:      [row.to_email],
-          subject: row.subject,
-          html:    row.html,
-        }),
+        // Same Idempotency-Key as the original inline attempts (same content), so a mail Resend already accepted is not sent twice.
+        sendWithIdempotency(resend, { from: row.from_address, to: [row.to_email], subject: row.subject, html: row.html },
+          emailIdempotencyKey(row.type, row.to_email, row.subject, row.html)),
         SEND_TIMEOUT_MS,
       )
       errMessage = error ? (error.message || JSON.stringify(error)) : null

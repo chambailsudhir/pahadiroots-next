@@ -45,10 +45,14 @@ export const AUTHORIZED_GRACE_HOURS = 24
 export const DEFAULT_BATCH = 50
 /**
  * Wall clock budget for one run. The cron route is allowed 30 s (vercel.json); every order costs
- * a Razorpay round trip, so stop starting new orders at 22 s and let the next run continue
+ * a Razorpay round trip, so stop starting new orders at 16 s and let the next run continue
  * (oldest first, so nothing is starved).
  */
-export const DEFAULT_TIME_BUDGET_MS = 22_000
+// Nov 2026 verification: the budget is checked only BEFORE an order starts, and one order can then take up to ~12 s (Razorpay
+// lookup up to 8 s + the release flip, item read and stock restore). With 22 s an order started at ~21.9 s ran past the 30 s
+// limit and could be killed between the payment_failed flip and the stock restore — that stock was never returned (no later
+// sweep sees a non-pending order). 30 s − 12 s − 2 s margin.
+export const DEFAULT_TIME_BUDGET_MS = 16_000
 
 /** admin setting `pending_order_expiry_minutes`, clamped to a safe range. */
 export function resolveExpiryMinutes(raw: string | undefined | null): number {
@@ -231,14 +235,18 @@ async function processOne(
           orderId: order.id, razorpayPaymentId: paid.id, amountInr: paid.amount / 100,
           alertAction: 'cron.expire_pending_orders.payments_insert',
         })
+        const deferred: Array<Promise<unknown>> = []
         await runPaidSideEffects(db, {
           order: {
             id: order.id, order_number: order.order_number, total_amount: order.total_amount,
             customer_id: order.customer_id, loyalty_points_redeemed: order.loyalty_points_redeemed,
           },
           razorpayOrderId: order.payment_id!, razorpayPaymentId: paid.id, settings,
-          defer: (fn) => { void fn() },   // no request lifecycle in a cron — run inline
+          // Nov 2026 verification: these were fire-and-forget, so the function could answer (and be frozen) before the customer
+          // and owner e-mails left — and the webhook that would re-drive them is exactly what was lost here. Awaited below.
+          defer: (fn) => { deferred.push(fn()) },
         })
+        await Promise.allSettled(deferred)
         return 'recovered'
       }
       if (confirm.outcome === 'error') throw new Error('sweep confirm failed: ' + confirm.message)
