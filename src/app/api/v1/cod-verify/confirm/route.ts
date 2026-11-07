@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
   const email = parsed.data.email.toLowerCase()
 
   const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
-  if (!await checkRateLimitKv(`mw:rl:codconfirm:ip:${ip}`, 30, 3600)) {
+  // R4A-4: also per phone, so a distributed client cannot try codes from many addresses.
+  if (!await checkRateLimitKv(`mw:rl:codconfirm:ip:${ip}`, 30, 3600) || !await checkRateLimitKv(`mw:rl:codconfirm:phone:${phone}`, 10, 900)) {
     return privateJson({ error: 'Too many attempts. Please wait a few minutes.' }, { status: 429, headers: { 'Retry-After': '900' } })
   }
 
@@ -37,9 +38,15 @@ export async function POST(req: NextRequest) {
     if (row.attempts >= COD_MAX_ATTEMPTS) {
       return privateJson({ error: 'Too many wrong codes. Please request a new one.', code: 'CODE_LOCKED' }, { status: 429 })
     }
+    // R4A-4 (Nov 2026): every guess must first WIN the counter increment (compare-and-set on the value just read). The old
+    // code compared first and incremented after, so N parallel guesses that all read the same count were all checked. A
+    // guess that loses the race is refused without being compared, so at most COD_MAX_ATTEMPTS guesses are ever checked.
+    const counted = await sbAdmin('PATCH', `/rest/v1/cod_verifications?id=eq.${row.id}&attempts=eq.${row.attempts}&verified_at=is.null`,
+      { attempts: row.attempts + 1 }) as unknown[] | null
+    if (!Array.isArray(counted) || counted.length === 0) {
+      return privateJson({ error: 'Please wait a moment and try the code again.', code: 'CODE_BUSY' }, { status: 429, headers: { 'Retry-After': '2' } })
+    }
     if (!sameHash(row.code_hash, hashCodCode(parsed.data.code, phone, email))) {
-      // Conditional increment: two concurrent guesses cannot both slip under the limit.
-      await sbAdmin('PATCH', `/rest/v1/cod_verifications?id=eq.${row.id}&attempts=eq.${row.attempts}`, { attempts: row.attempts + 1 }, 'return=minimal')
       const left = Math.max(0, COD_MAX_ATTEMPTS - row.attempts - 1)
       return privateJson({ error: left > 0 ? `That code is not right. ${left} attempt${left === 1 ? '' : 's'} left.` : 'Too many wrong codes. Please request a new one.', code: 'CODE_WRONG', attempts_left: left }, { status: 400 })
     }

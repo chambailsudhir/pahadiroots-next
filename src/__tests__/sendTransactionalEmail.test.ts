@@ -118,6 +118,17 @@ describe('sendTransactionalEmail', () => {
     expect(insertCalls.length).toBe(1)
   })
 
+  // R4A-6 (Nov 2026): a one-time COD code must never be stored in plaintext in failed_emails.
+  it('a failed cod_verification e-mail is NOT dead-lettered (the customer simply requests a new code)', async () => {
+    mockSend.mockRejectedValue(new Error('fetch failed: ECONNRESET'))
+    const result = await sendTransactionalEmail({
+      type: 'cod_verification', to: 'customer@example.com',
+      subject: '123456 is your code', html: '<p>123456</p>', timeoutMs: 1000,
+    })
+    expect(result).toMatchObject({ sent: false, deadLettered: false })
+    expect(insertCalls.length).toBe(0)
+  })
+
   it('handles a genuinely thrown exception (network failure / our own timeout)', async () => {
     mockSend.mockRejectedValue(new Error('fetch failed: ECONNRESET'))
 

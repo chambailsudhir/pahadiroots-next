@@ -212,6 +212,10 @@ export async function sendTransactionalEmail(
 
   console.error(`[email] ${type} to ${to} failed after ${INLINE_ATTEMPTS} attempt(s):`, lastError)
 
+  // R4A-6 (Nov 2026): one-time codes are useless after a few minutes and must not sit in plaintext in failed_emails —
+  // the caller tells the customer to try again instead.
+  if (type === 'cod_verification') return { sent: false, error: lastError, deadLettered: false }
+
   // Dead-letter so the cron sweep can retry later instead of the email
   // being lost the moment this request finishes.
   try {

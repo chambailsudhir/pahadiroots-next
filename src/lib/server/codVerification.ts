@@ -71,24 +71,53 @@ export function codVerificationEmailHtml(code: string): { subject: string; headi
 // ── Order-time gate (used by the orders route through CreateOrderInput.codRiskGate) ──────────────────────────────────
 type SbAdmin = (method: string, path: string, body?: unknown, prefer?: string) => Promise<unknown>
 
-/** True when `token` was issued by /cod-verify/confirm for this phone within the last 30 minutes. */
-export async function isValidCodToken(sb: SbAdmin, token: string | null | undefined, phone: string | null): Promise<boolean> {
-  if (!token || !phone || token.length > 200) return false
+/**
+ * Spend a verification token on ONE order (R4A-3, Nov 2026). Valid only when it was issued by /cod-verify/confirm for THIS
+ * phone AND this order's e-mail within the last 30 minutes, and it is not yet used by another order. The claim is an atomic
+ * conditional PATCH (used_at IS NULL), so parallel orders cannot share a token; a retry of the same order (same idempotency
+ * key) may reuse its own claim.
+ */
+export async function claimCodToken(
+  sb: SbAdmin, token: string | null | undefined, phone: string | null, email: string | null | undefined, orderKey: string,
+): Promise<boolean> {
+  const mail = email ? norm(email) : ''
+  if (!token || !phone || !mail || token.length > 200 || !/^[\w-]{1,100}$/.test(orderKey)) return false
   const since = new Date(Date.now() - COD_TOKEN_TTL_MS).toISOString()
-  const rows = await sb('GET', `/rest/v1/cod_verifications?token_hash=eq.${hashCodToken(token)}&phone10=eq.${phone}` +
-    `&verified_at=gt.${encodeURIComponent(since)}&select=id&limit=1`) as unknown[] | null
-  return Array.isArray(rows) && rows.length > 0
+  const base = `/rest/v1/cod_verifications?token_hash=eq.${hashCodToken(token)}&phone10=eq.${phone}` +
+    `&email=eq.${encodeURIComponent(mail)}&verified_at=gt.${encodeURIComponent(since)}`
+  const claimed = await sb('PATCH', `${base}&used_at=is.null`, { used_at: new Date().toISOString(), used_for: orderKey }) as unknown[] | null
+  if (Array.isArray(claimed) && claimed.length > 0) return true
+  const mine = await sb('GET', `${base}&used_for=eq.${encodeURIComponent(orderKey)}&select=id&limit=1`) as unknown[] | null
+  return Array.isArray(mine) && mine.length > 0
+}
+
+export interface CodGateContext {
+  customerIds:              string[]                 // the order's customer row + phone/e-mail matches (stricter checks)
+  codTotal:                 number
+  phone10:                  string | null
+  email?:                   string | null
+  orderKey:                 string                   // idempotency key of the order being placed
+  authenticatedCustomerId?: string | number | null
 }
 
 /** Builds the gate the orders route hands to createOrder. Refuses with a typed CheckoutRejectedError (customer-safe message). */
 export function makeCodRiskGate(deps: { sb: SbAdmin; settings: Record<string, string | undefined>; token?: string | null }) {
-  return async ({ customerIds, codTotal, phone10 }: { customerIds: string[]; codTotal: number; phone10: string | null }) => {
-    const ids = customerIds.filter(id => /^[\w-]+$/.test(id))
-    if (ids.length === 0) return
-    const list = ids.join(',')
+  return async ({ customerIds, codTotal, phone10, email, orderKey, authenticatedCustomerId }: CodGateContext) => {
+    const safe = (ids: Array<string | number>) => Array.from(new Set(ids.map(String))).filter(id => /^[\w-]{1,40}$/.test(id))
+    // R4A-1: the "refused at the door" block is per PHONE — look the phone up even for a signed-in customer, so a new
+    // account cannot carry a blocked number back to COD.
+    let phoneIds: string[] = []
+    if (phone10) {
+      const rows = await deps.sb('GET', `/rest/v1/customers?normalized_phone=eq.${phone10}&select=id&limit=25`) as Array<{ id: unknown }> | null
+      phoneIds = safe((Array.isArray(rows) ? rows : []).map(r => r?.id as string).filter(v => v != null))
+    }
+    const rtoIds = safe([...customerIds, ...phoneIds, ...(authenticatedCustomerId != null ? [authenticatedCustomerId] : [])])
+    // R4A-2: trust ("already has a delivered order") comes only from the signed-in account or the phone itself — never from
+    // an e-mail match, which anyone can type. E-mail matches may only make the decision stricter (they stay in rtoIds).
+    const trustIds = safe(authenticatedCustomerId != null ? [authenticatedCustomerId] : phoneIds)
     const [delivered, rto] = await Promise.all([
-      deps.sb('GET', `/rest/v1/orders?customer_id=in.(${list})&order_status=eq.delivered&select=id&limit=1`),
-      deps.sb('GET', `/rest/v1/orders?customer_id=in.(${list})&payment_method=in.(cod,whatsapp_cod)&order_status=eq.returned&delivered_at=is.null&select=id&limit=1`),
+      trustIds.length ? deps.sb('GET', `/rest/v1/orders?customer_id=in.(${trustIds.join(',')})&order_status=eq.delivered&select=id&limit=1`) : Promise.resolve([]),
+      rtoIds.length ? deps.sb('GET', `/rest/v1/orders?customer_id=in.(${rtoIds.join(',')})&payment_method=in.(cod,whatsapp_cod)&order_status=eq.returned&delivered_at=is.null&select=id&limit=1`) : Promise.resolve([]),
     ]) as [unknown[] | null, unknown[] | null]
     const risk = decideCodRisk({
       settings: deps.settings, codTotal,
@@ -98,7 +127,7 @@ export function makeCodRiskGate(deps: { sb: SbAdmin; settings: Record<string, st
     if (risk === 'blocked') {
       throw new CheckoutRejectedError('Cash on Delivery is not available for this mobile number because an earlier COD order was not accepted. Please pay online — UPI, cards and net banking are all available.', 'COD_NOT_AVAILABLE')
     }
-    if (risk === 'verify' && !(await isValidCodToken(deps.sb, deps.token, phone10))) {
+    if (risk === 'verify' && !(await claimCodToken(deps.sb, deps.token, phone10, email, orderKey))) {
       throw new CheckoutRejectedError('Please confirm this Cash on Delivery order with the code we send to your e-mail.', 'COD_VERIFICATION_REQUIRED')
     }
   }
