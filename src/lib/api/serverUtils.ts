@@ -82,11 +82,11 @@ export function checkCsrf(req: NextRequest): NextResponse | null {
   if (!source) {
     // No origin header at all — only safe to allow in non-production (e.g. curl in dev)
     if (process.env.NODE_ENV !== 'production') return null
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_HEADERS })
   }
 
   if (!isAllowedOrigin(source)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_HEADERS })
   }
   return null  // valid
 }

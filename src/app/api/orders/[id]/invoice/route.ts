@@ -24,7 +24,7 @@ import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
 function fail(status: number, msg: string, requestId = '') {
   return new NextResponse(msg, {
     status,
-    headers: { 'Content-Type': 'text/plain', ...(requestId ? { [REQUEST_ID_HEADER]: requestId } : {}) },
+    headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'private, no-store', ...(requestId ? { [REQUEST_ID_HEADER]: requestId } : {}) },
   })
 }
 

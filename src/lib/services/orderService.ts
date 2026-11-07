@@ -1649,6 +1649,23 @@ export async function createOrder(
     confirmationToken = null
   }
 
+  // 9b. Record the prepaid discount on the order (db_migration_v34, Nov 2026 verification). The stored tax credits the GST of the
+  //     coupon AND the prepaid discount, but the RPC has no parameter for the latter; writing it here makes the fee-change trigger
+  //     recompute orders.tax, so the invoice's tax matches its net taxable value. Never fatal: the order and its total are right,
+  //     only the stored GST would be the pre-discount figure (ops are alerted).
+  if (pricing.prepaidDiscount > 0) {
+    try {
+      const { error: ppErr } = await withTimeout(
+        db.from('orders').update({ prepaid_discount: pricing.prepaidDiscount }).eq('id', newOrder.id),
+        5_000,
+        'prepaid_discount update',
+      )
+      if (ppErr) throw new Error(ppErr.message)
+    } catch (e) {
+      captureError(e, { action: 'createOrder.prepaid_discount', orderId: newOrder.id, alert: true })
+    }
+  }
+
   // 10. Attach the order to the coupon claim taken in step 4 (F-07).
   //     uses_count was already incremented, race-free, inside claim_coupon_use(); here the claim row
   //     (coupon_usage, order_id NULL) gets its order, customer and discount so the admin Coupons

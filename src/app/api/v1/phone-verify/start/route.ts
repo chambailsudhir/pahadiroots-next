@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { fail, sbAdmin, checkCsrf, checkRateLimitShared } from '@/lib/api/serverUtils'
+import { privateJson } from '@/lib/api/privateJson'
 import {
   isPhoneVerificationEnabled, phoneVerifyEnv, notFound, authCustomer, authedJson,
   hashCode, MOBILE_RE, CODE_TTL_SECONDS,
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   // 5 codes per hour per customer, shared across instances (each code also invalidates the previous one).
   if (!(await checkRateLimitShared(`phone_verify_start:${customerId}`, 5, 60 * 60_000))) {
-    return NextResponse.json(
+    return privateJson(
       { error: 'Too many verification attempts — please try again in an hour.' },
       { status: 429, headers: { 'Retry-After': '3600' } },
     )

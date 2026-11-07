@@ -157,10 +157,15 @@ export async function GET(req: NextRequest) {
     if (!profile) return fail(404, 'Profile not found')
 
     // Read wishlist_items column — may be null for users who haven't used wishlist yet
-    const rows = await sbAdmin(
-      'GET',
-      `/rest/v1/customers?id=eq.${profile.id}&select=wishlist_items&limit=1`,
-    ).catch(() => null)
+    // BUG FIX (Nov 2026 verification): a failed read used to answer 200 {wishlist: []}. The client treats the answer as the server's
+    // list, so every synced item vanished from this device (taken for "removed elsewhere"). A read failure is now a 503, which the
+    // client ignores (its local list stays as it is).
+    let rows: unknown
+    try {
+      rows = await sbAdmin('GET', `/rest/v1/customers?id=eq.${profile.id}&select=wishlist_items&limit=1`)
+    } catch {
+      return fail(503, 'Wishlist is temporarily unavailable')
+    }
 
     let wishlist: string[] = []
     if (Array.isArray(rows) && rows.length > 0) {

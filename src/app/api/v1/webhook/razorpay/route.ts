@@ -21,6 +21,8 @@ interface RazorpayPaymentEntity {
   order_id?: string | null
   amount: number
   currency?: string
+  /** Unix seconds when Razorpay created the payment (always present on a payment entity). */
+  created_at?: number
   error_reason?: string
   notes?: { db_order_id?: string }
 }
@@ -262,12 +264,19 @@ export async function POST(req: Request) {
             //  2. it died in the deferred e-mail phase      -> marker present (new runs flag emails_tracked) but an e-mail marker missing.
             // Orders paid before e-mail markers existed carry no emails_tracked flag and are never re-mailed.
             const emailsMissing = !!verified?.metadata?.emails_tracked && (!has(PAID_EMAIL_CUSTOMER_SENT) || !has(PAID_EMAIL_ADMIN_SENT))
+            // 90 s guard: measured from the last write (the pending->paid flip) so a still-running original is never raced.
             const paidForMs = fresh?.updated_at ? Date.now() - Date.parse(String(fresh.updated_at)) : 0
+            // 7-day cap (Nov 2026 verification): measured from WHEN THE PAYMENT HAPPENED. It used to use updated_at too, and any
+            // later write (an admin edit, shipping, the tax trigger) restarted the window, so an order paid weeks ago could still be
+            // re-driven and re-mailed by a late duplicate delivery. Razorpay's own payment time first, else the order's creation.
+            const paymentAgeMs = typeof payment.created_at === 'number' && payment.created_at > 0
+              ? Date.now() - payment.created_at * 1000
+              : order.created_at ? Date.now() - Date.parse(String(order.created_at)) : Number.POSITIVE_INFINITY
             // only for the SAME payment that confirmed this order (an order marked paid some other way — admin, or a different
             // payment id — must not get coins / e-mails just because a capture event arrived)
             // Verification L-3: never re-drive an order paid long ago (a late duplicate delivery for a pre-marker order must not mail it).
             const REDRIVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
-            if (paidWith === paymentId && (!verified || emailsMissing) && paidForMs > 90_000 && paidForMs < REDRIVE_MAX_AGE_MS) {
+            if (paidWith === paymentId && (!verified || emailsMissing) && paidForMs > 90_000 && paymentAgeMs < REDRIVE_MAX_AGE_MS) {
               await logOrderEvent(order.id, 'paid_side_effects_redriven', 'razorpay', { razorpay_payment_id: paymentId, reason: verified ? 'emails_missing' : 'no_marker' })
               const settings = await getFreshSiteSettings()
               await runPaidSideEffects(db, {
@@ -295,7 +304,8 @@ export async function POST(req: Request) {
           : !isRazorpayOrderId(order.payment_id)                            ? 'no_stored_razorpay_order_id'
           : !payment.order_id || !safeEqual(order.payment_id, payment.order_id) ? 'razorpay_order_id_mismatch'
           : payment.amount !== expectedPaise                                ? 'amount_mismatch'
-          : payment.currency && payment.currency !== 'INR'                  ? 'currency_mismatch'
+          // A missing currency is held too (Nov 2026 verification): Razorpay always sends it, so its absence is not a capture we can trust.
+          : payment.currency !== 'INR'                                      ? 'currency_mismatch'
           : null
 
         if (problem) {

@@ -9,6 +9,7 @@ import { clientIpKey } from '@/lib/api/clientIp'
 import { releaseOwnAbandonedOnlineOrders } from '@/lib/server/pendingOrders'
 // AUDIT S1-004: the online path now resolves the signed-in customer exactly like /api/v1/orders does.
 import { checkCsrf, sbAuth, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
+import { privateJson } from '@/lib/api/privateJson'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 // REFACTOR: replaced inline checkPaymentRateLimit() (~40 lines of duplicated
 // Upstash boilerplate) with the shared helper. Key is unchanged.
@@ -66,7 +67,7 @@ const TEN_MINUTES_SEC = 600
 
 /** AUDIT S1-016(a): neither KV nor the DB fallback could count — refuse briefly instead of reserving uncapped stock. */
 function rateLimiterUnavailable() {
-  return NextResponse.json(
+  return privateJson(
     { error: 'Our server is briefly busy — please try again in a few seconds.' },
     { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC) } },
   )
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
   if (ipLimit === 'unavailable') return rateLimiterUnavailable()
   if (ipLimit === 'blocked') {
     // BUG FIX 13a: missing Retry-After header on 429.
-    return NextResponse.json(
+    return privateJson(
       { error: 'Too many requests — please wait a moment' },
       { status: 429, headers: { 'Retry-After': '60' } },
     )
@@ -101,12 +102,12 @@ export async function POST(req: NextRequest) {
     // Mirrors the guard added to orders/route.ts — same class of risk.
     const rawContentLength = Number(req.headers.get('content-length'))
     if (Number.isFinite(rawContentLength) && rawContentLength > 65_536) {
-      return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+      return privateJson({ error: 'Request too large' }, { status: 413 })
     }
 
     // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
     const body   = await req.json().catch(() => undefined)
-    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    if (body === undefined) return privateJson({ error: 'Invalid JSON' }, { status: 400 })
 
     // BUG FIX: `body.action as string` is an unsafe cast — if the client sends
     // action: null, action: 42, or omits the field entirely, TypeScript's type
@@ -116,14 +117,14 @@ export async function POST(req: NextRequest) {
     // Validate explicitly so malformed payloads are logged with a clear message.
     const action = typeof body.action === 'string' ? body.action : null
     if (!action) {
-      return NextResponse.json({ error: 'Missing or invalid action field' }, { status: 400 })
+      return privateJson({ error: 'Missing or invalid action field' }, { status: 400 })
     }
 
     // ── ACTION 1: Initiate payment ─────────────────────────────────────────
     if (action === 'create_payment') {
       const parsed = createOrderSchema.safeParse(body)
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+        return privateJson({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
       }
 
       const pd       = parsed.data
@@ -139,14 +140,14 @@ export async function POST(req: NextRequest) {
       ])
       if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
       if (phoneLimit === 'blocked') {
-        return NextResponse.json(
+        return privateJson(
           { error: 'Too many payment attempts for this phone number — please wait a few minutes and try again' },
           { status: 429, headers: { 'Retry-After': String(TEN_MINUTES_SEC) } },
         )
       }
       if (ipLimit10m === 'unavailable') return rateLimiterUnavailable()
       if (ipLimit10m === 'blocked') {
-        return NextResponse.json(
+        return privateJson(
           { error: 'Too many payment attempts — please wait a few minutes and try again' },
           { status: 429, headers: { 'Retry-After': String(TEN_MINUTES_SEC) } },
         )
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       // customer's payment taken but their order unconfirmed, which is worse
       // than letting an already-initiated transaction finish.
       if (!isStoreOpen(settings)) {
-        return NextResponse.json(
+        return privateJson(
           { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
           { status: 503 },
         )
@@ -253,7 +254,7 @@ export async function POST(req: NextRequest) {
         // not an ORDER ID ("order_xxx"). Passing a payment ID as Razorpay's order_id
         // crashes the SDK silently on the client.
         if (existingRow?.payment_status === 'paid') {
-          return withAuthCookies(NextResponse.json({
+          return withAuthCookies(privateJson({
             success:           true,
             order_id:          String(order.id),
             already_confirmed: true,
@@ -269,7 +270,7 @@ export async function POST(req: NextRequest) {
           // Fall through to create a fresh Razorpay order rather than crash the SDK.
         } else {
           // Valid "order_xxx" — reuse so the client resumes the same checkout session.
-          return withAuthCookies(NextResponse.json({
+          return withAuthCookies(privateJson({
             success:           true,
             order_id:          String(order.id),
             razorpay_order_id: existingRow.payment_id,
@@ -295,7 +296,7 @@ export async function POST(req: NextRequest) {
       // Never hand out a payable Razorpay order we failed to link to our order (see helper).
       await storeRazorpayOrderId(db, order.id, rzpOrder.id)
 
-      return withAuthCookies(NextResponse.json({
+      return withAuthCookies(privateJson({
         success:           true,
         order_id:          String(order.id),
         razorpay_order_id: rzpOrder.id,
@@ -315,7 +316,7 @@ export async function POST(req: NextRequest) {
       // regex constraint on razorpay_signature). Single source of truth.
       const vParsed = verifyPaymentSchema.safeParse(body)
       if (!vParsed.success) {
-        return NextResponse.json({ error: 'Invalid payment verification fields' }, { status: 400 })
+        return privateJson({ error: 'Invalid payment verification fields' }, { status: 400 })
       }
       const {
         razorpay_order_id,
@@ -348,7 +349,7 @@ export async function POST(req: NextRequest) {
         await logOrderEvent(order_id, 'payment_signature_mismatch', 'system', {
           razorpay_order_id, razorpay_payment_id,
         }).catch(() => null)
-        return NextResponse.json({ error: 'Payment verification failed — signature mismatch' }, { status: 400 })
+        return privateJson({ error: 'Payment verification failed — signature mismatch' }, { status: 400 })
       }
 
       // 2. Fetch order upfront — used for idempotency check AND razorpay_order_id
@@ -364,7 +365,7 @@ export async function POST(req: NextRequest) {
         // BUG FIX 13d: order lookup failure logged with raw console.error —
         // not parseable by log aggregators. Use structured logger.error.
         logger.error('payments: order not found for verify_payment', { action: 'payments.verify.order_not_found', order_id, error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) })
-        return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+        return privateJson({ error: 'Order not found' }, { status: 404 })
       }
 
       // 2a. P1 SECURITY: only Razorpay-method orders can ever be confirmed here.
@@ -377,7 +378,7 @@ export async function POST(req: NextRequest) {
         await logOrderEvent(order_id, 'payment_verify_rejected', 'system', {
           reason: 'not_a_razorpay_order', razorpay_order_id, razorpay_payment_id,
         }).catch(() => null)
-        return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+        return privateJson({ error: 'Payment verification failed' }, { status: 400 })
       }
 
       // 2b. Idempotency: order already confirmed — no side-effects, just return success.
@@ -392,13 +393,13 @@ export async function POST(req: NextRequest) {
           captureError(new Error('verify_payment on paid order with mismatched payment id'), {
             action: 'payments.verify.paid_mismatch', order_id, razorpay_payment_id, alert: true,
           })
-          return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+          return privateJson({ error: 'Payment verification failed' }, { status: 400 })
         }
         await logOrderEvent(order_id, 'payment_verify_duplicate', 'razorpay', {
           razorpay_payment_id, razorpay_order_id,
           note: 'Order already confirmed — idempotency guard (pre-update check)',
         }).catch(() => null)
-        return NextResponse.json({
+        return privateJson({
           success:      true,
           order_number: currentOrder.order_number || order_id,
           confirmation_token: currentOrder.confirmation_token ?? undefined,
@@ -426,7 +427,7 @@ export async function POST(req: NextRequest) {
           razorpay_order_id, razorpay_payment_id,
           stored_payment_id: currentOrder.payment_id,
         }).catch(() => null)
-        return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+        return privateJson({ error: 'Payment verification failed' }, { status: 400 })
       }
 
       // 2d. P1: independent server-to-server check with Razorpay — the HMAC says nothing
@@ -448,7 +449,7 @@ export async function POST(req: NextRequest) {
             }).catch(() => null)
             // order_number + token let the client land on the order-success page, which
             // polls until the webhook confirms (the HMAC + order binding already passed).
-            return NextResponse.json(
+            return privateJson(
               {
                 error: 'Your payment is being confirmed. Please do not pay again — your order will be confirmed shortly.',
                 pending: true,
@@ -464,7 +465,7 @@ export async function POST(req: NextRequest) {
           await logOrderEvent(order_id, 'payment_verify_rejected', 'system', {
             reason: check.reason, detail: check.detail, razorpay_order_id, razorpay_payment_id,
           }).catch(() => null)
-          return NextResponse.json({ error: 'Payment verification failed' }, { status: 400 })
+          return privateJson({ error: 'Payment verification failed' }, { status: 400 })
         }
         verifiedPaymentAmountInr = rzpPayment.amount / 100
       } catch (e) {
@@ -474,7 +475,7 @@ export async function POST(req: NextRequest) {
           action: 'payments.verify.rzp_fetch_failed', order_id, razorpay_payment_id,
           error: e instanceof Error ? e.message : String(e),
         })
-        return NextResponse.json(
+        return privateJson(
           {
             error: 'We could not confirm your payment right now. Please do not pay again — it will be confirmed automatically, or contact support with payment ID: ' + razorpay_payment_id,
             pending: true,
@@ -510,7 +511,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (confirm.outcome === 'not_found') {
-        return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+        return privateJson({ error: 'Order not found' }, { status: 404 })
       }
 
       if (confirm.outcome === 'not_confirmable') {
@@ -523,7 +524,7 @@ export async function POST(req: NextRequest) {
         await logOrderEvent(order_id, 'payment_received_for_unconfirmable_order', 'razorpay', {
           razorpay_payment_id, order_status: confirm.orderStatus, payment_status: confirm.paymentStatus,
         }).catch(() => null)
-        return NextResponse.json(
+        return privateJson(
           { error: 'Your payment was received but this order could not be confirmed automatically. Please contact support with payment ID: ' + razorpay_payment_id },
           { status: 409 },
         )
@@ -536,7 +537,7 @@ export async function POST(req: NextRequest) {
           razorpay_payment_id, razorpay_order_id,
           note: 'Concurrent race — order confirmed by another process between read and update',
         }).catch(() => null)
-        return NextResponse.json({
+        return privateJson({
           success:      true,
           order_number: currentOrder.order_number || order_id,
           confirmation_token: currentOrder.confirmation_token ?? undefined,
@@ -555,13 +556,13 @@ export async function POST(req: NextRequest) {
         settings, defer: (fn) => after(fn),
       })
 
-      return NextResponse.json({
+      return privateJson({
         success:      true,
         order_number: currentOrder.order_number || order_id,
         confirmation_token: currentOrder.confirmation_token ?? undefined,
       })
     }
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+    return privateJson({ error: 'Unknown action' }, { status: 400 })
 
   } catch (err: unknown) {
     const internalMessage = err instanceof Error ? err.message : 'Payment error'
@@ -571,19 +572,19 @@ export async function POST(req: NextRequest) {
     // client mint a fresh key and ask the customer to re-confirm, instead of looping.
     if (err instanceof IdempotencyConflictError) {
       logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+      return privateJson({ error: err.message, code: err.code }, { status: 409 })
     }
     // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
     // Nov 2026 audit: a guest used a registered account's mobile number — ask them to sign in.
     if (err instanceof GuestPhoneRegisteredError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+      return privateJson({ error: err.message, code: err.code }, { status: 409 })
     }
     if (err instanceof LoyaltyAuthRequiredError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
+      return privateJson({ error: err.message, code: err.code }, { status: 401 })
     }
     // AUDIT S1-005/S1-006: the order may have committed; nothing was undone. Retry with the same key.
     if (err instanceof OrderOutcomeUnknownError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
+      return privateJson({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
     }
     // Customer-actionable refusals from createOrder() (insufficient stock, expired/capped coupon,
     // below-minimum order, unavailable product, COD caps, loyalty shortfall, serviceability…) are
@@ -594,12 +595,12 @@ export async function POST(req: NextRequest) {
     // 409s. Only the typed CheckoutRejectedError (customer-safe message by construction) is shown
     // now; everything else is logged above and hidden behind the generic message in production.
     if (err instanceof CheckoutRejectedError) {
-      return NextResponse.json({ error: err.message }, { status: 409 })
+      return privateJson({ error: err.message }, { status: 409 })
     }
     const status = 500
     const clientMessage = process.env.NODE_ENV !== 'production'
       ? internalMessage
       : 'Payment processing failed. Please try again or contact support.'
-    return NextResponse.json({ error: clientMessage }, { status })
+    return privateJson({ error: clientMessage }, { status })
   }
 }

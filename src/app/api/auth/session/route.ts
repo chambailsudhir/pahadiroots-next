@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { COOKIE_TOKEN, COOKIE_REFRESH } from '@/lib/auth/cookies'
 import { checkCsrf } from '@/lib/api/serverUtils'
+import { privateJson } from '@/lib/api/privateJson'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 
@@ -23,7 +24,7 @@ function cookieBase() {
 export async function GET(req: NextRequest) {
   const token   = req.cookies.get(COOKIE_TOKEN)?.value
   const refresh = req.cookies.get(COOKIE_REFRESH)?.value
-  return NextResponse.json({ loggedIn: !!token, hasRefresh: !!refresh }, { headers: { 'Cache-Control': 'private, no-store' } })
+  return privateJson({ loggedIn: !!token, hasRefresh: !!refresh }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 export async function POST(req: NextRequest) {
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   let body: { action?: string } = {}
   try { body = await req.json() } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    return privateJson({ error: 'Invalid JSON' }, { status: 400 })
   }
 
   // AUDIT (auth-B #1): `action: 'set'` (store caller-supplied tokens as the session) is REMOVED. It
@@ -49,15 +50,15 @@ export async function POST(req: NextRequest) {
   // Sessions are now only created server-side by /api/auth (email_login, email_signup, google_callback —
   // the latter redeems a PKCE code with an HttpOnly verifier cookie), which set the cookies themselves.
   if (body.action === 'set') {
-    return NextResponse.json({ error: 'This action is no longer available' }, { status: 410 })
+    return privateJson({ error: 'This action is no longer available' }, { status: 410 })
   }
 
   if (body.action === 'clear') {
-    const res = NextResponse.json({ ok: true })
+    const res = privateJson({ ok: true })
     res.cookies.set(COOKIE_TOKEN,   '', { ...cookieBase(), maxAge: 0 })
     res.cookies.set(COOKIE_REFRESH, '', { ...cookieBase(), maxAge: 0 })
     return res
   }
 
-  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+  return privateJson({ error: 'Unknown action' }, { status: 400 })
 }

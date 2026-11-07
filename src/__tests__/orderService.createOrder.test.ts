@@ -1183,6 +1183,32 @@ describe('createOrder — product image resolution (order-confirmation email fix
   })
 })
 
+// Nov 2026 verification (db_migration_v34): the stored tax credits the prepaid discount's GST only if the order records it.
+describe('createOrder — records the prepaid discount on the order', () => {
+  it('an online order with a prepaid discount writes prepaid_discount to the new order', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess({ id: 'order-pp-1' })
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, paymentMethod: 'razorpay' }, { ...DEFAULT_SETTINGS, prepaid_discount_pct: '5' })
+    const upd = mockDb.updateCalls.find(c => c.table === 'orders' && (c.payload as { prepaid_discount?: number })?.prepaid_discount != null)
+    expect(upd).toBeDefined()
+    expect((upd!.payload as { prepaid_discount: number }).prepaid_discount).toBeGreaterThan(0)
+    expect(upd!.eqCalls).toContainEqual(['id', 'order-pp-1'])
+  })
+
+  it('a COD order (no prepaid discount) writes nothing extra', async () => {
+    mockDb.responses['orders'] = null
+    mockDb.rpcResponses['reserve_stock_at_order'] = true
+    wireHappyPathFetch()
+    wireOrderRpcSuccess({ id: 'order-pp-2' })
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder({ ...BASE_INPUT, paymentMethod: 'cod' }, { ...DEFAULT_SETTINGS, prepaid_discount_pct: '5' })
+    expect(mockDb.updateCalls.find(c => c.table === 'orders' && (c.payload as { prepaid_discount?: number })?.prepaid_discount != null)).toBeUndefined()
+  })
+})
+
 describe('createOrder — confirmation_token generation (guest-safe order lookup)', () => {
   it('generates a cryptographically random UUID token and persists it via a normal REST update (not raw SQL)', async () => {
     mockDb.responses['orders'] = null

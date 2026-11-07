@@ -27,7 +27,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ pin:
   const { pin } = await params
   if (!PIN_REGEX.test(pin ?? '')) return NextResponse.json({ error: 'Invalid pincode' }, { status: 400 })
 
-  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  // clientIpKey (Nov 2026 verification): the raw address let one IPv6 host rotate through its /64 to dodge the limit.
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
   if (!checkRateLimit(`pincode:${ip}`, 60, 60_000)) {
     return NextResponse.json({ error: 'Too many lookups — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }

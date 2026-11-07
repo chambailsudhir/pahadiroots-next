@@ -12,14 +12,13 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
-import { clientIpKey } from '@/lib/api/clientIp'
 import { evidenceReadLinks } from '@/lib/server/returnEvidence'
+import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh,
   checkRateLimitShared,
-  releaseRateLimitShared,
   checkCsrf,
   applyNewCookies,
 } from '@/lib/api/serverUtils'
@@ -32,7 +31,9 @@ export async function GET(req: NextRequest) {
   // ── Per-IP guard (per instance) ──────────────────────────────
   // A DoS guard only: it counts every attempt, so it is generous. The real "3 exports per 24 h" quota is per ACCOUNT
   // (shared) and is consumed only by an export that actually succeeds (see below).
-  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  // Shared limiter and /64 key (Nov 2026 verification): the in-process one was per serverless instance, and a raw IPv6 address
+  // could be rotated inside its /64.
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
   if (!await checkRateLimitShared(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
     return fail(429, 'Too many export requests — please try again later.', { 'Retry-After': '3600' })
   }
@@ -43,24 +44,20 @@ export async function GET(req: NextRequest) {
   if (!token && !refreshed) return fail(401, 'Not logged in')
   if (refreshed) token = refreshed.token
 
-  let quotaKey: string | null = null
   try {
     // ── Resolve user ─────────────────────────────────────────────
     const user = await sbAuth('/user', null, token!)
     const userId = user.id as string
 
-    // Per-ACCOUNT quota (3 / 24 h, shared across instances; ACC-041). Nov 2026 audit: this used to run only AFTER the whole
-    // paginated export had been built, so an exhausted account could still make the server do all of that work. The hit is now
-    // RESERVED here, before any export work, and refunded in the catch block below if the export then fails, so a failed
-    // attempt still does not count.
-    quotaKey = `data_export:${userId}`
-    if (!await checkRateLimitShared(quotaKey, 3, 24 * 60 * 60_000)) {
-      quotaKey = null   // nothing was taken, nothing to refund
-      return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
+    // Attempt cap BEFORE the (paged, expensive) build (Nov 2026 verification): the 3-per-day quota is only spent by an export
+    // that succeeds, so once it was used up every further call still ran the whole build before answering 429. At most 10
+    // attempts per account per day now reach the database; the success quota below is unchanged.
+    if (!await checkRateLimitShared(`data_export_attempt:${userId}`, 10, 24 * 60 * 60_000)) {
+      return fail(429, 'You can download your data up to 3 times per day. Please try again tomorrow.', { 'Retry-After': '3600' })
     }
 
     // NOTE: no `.catch(() => [])` anywhere below. A transient DB error used to produce HTTP 200 with empty sections AND
-    // burn one of the 3 exports. Any failing section now fails the whole request (5xx) and the reserved quota hit is refunded.
+    // burn one of the 3 exports. Any failing section now fails the whole request (5xx) before the quota is touched.
     const customers = await sbAdmin(
       'GET',
       `/rest/v1/customers?auth_user_id=eq.${userId}&select=*&limit=1`,
@@ -178,9 +175,14 @@ export async function GET(req: NextRequest) {
       orders: orders.map(o => ({ ...o, items: itemsByOrder.get(String(o.id)) ?? [] })),
     }
 
+    // Count the quota only now that the whole export was built successfully (per ACCOUNT, shared across instances;
+    // ACC-041: the in-process limiter was never really enforced).
+    if (!await checkRateLimitShared(`data_export:${userId}`, 3, 24 * 60 * 60_000)) {
+      return fail(429, 'Too many export requests — please wait 24 hours.', { 'Retry-After': String(24 * 60 * 60) })
+    }
+
     // ── Return as downloadable JSON file ──────────────────────────
     const json = JSON.stringify(exportData, null, 2)
-    quotaKey = null   // built successfully — the reserved hit stays counted
     const res = new NextResponse(json, {
       status: 200,
       headers: {
@@ -198,7 +200,6 @@ export async function GET(req: NextRequest) {
     return res
   } catch (e: unknown) {
     console.error('[data-export] Failed:', e)
-    if (quotaKey) await releaseRateLimitShared(quotaKey)   // the failed attempt must not count towards the 3 / 24 h
     const err = e as { status?: number }
     if (err.status === 401) return fail(401, 'Session expired — please login again')
     return fail(500, 'Could not export your data — please try again. This attempt did not count towards your export limit.')

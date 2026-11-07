@@ -14,12 +14,12 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
-import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
+  checkRateLimit,
   checkRateLimitShared,
   checkCsrf,
 } from '@/lib/api/serverUtils'
@@ -73,8 +73,12 @@ export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
-  if (!await checkRateLimitShared(`notif_post:${ip}`, 30, 60_000)) {
+  const ip = (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  )
+  if (!checkRateLimit(`notif_post:${ip}`, 30, 60_000)) {
     return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 

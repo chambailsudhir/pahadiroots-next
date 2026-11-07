@@ -123,8 +123,13 @@ async function sbAuth(path: string, body: Record<string, unknown> | null = null,
     signal: AbortSignal.timeout(8_000),
   })
   const text = await res.text()
-  const data = text ? JSON.parse(text) : {}
-  if (!res.ok) throw { status: res.status, message: data.msg || data.error_description || data.message || 'Auth error' }
+  // An upstream HTML error page (502 / gateway) used to throw a SyntaxError here, which the login answered as a 401 carrying
+  // "Unexpected token <". Non-JSON bodies are treated as an upstream failure with the HTTP status (Nov 2026 verification).
+  let data: any = {}
+  try { data = text ? JSON.parse(text) : {} } catch {
+    if (res.ok) throw { status: 502, message: 'Auth service returned an unreadable answer' }
+  }
+  if (!res.ok) throw { status: res.status, message: String(data.msg || data.error_description || data.message || 'Auth error') }
   return data
 }
 
@@ -204,7 +209,7 @@ async function getCustomerOrders(customerId: string) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204 })
+  return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 // ── Sign-up verification e-mail fallback (account audit, Nov 2026 — ACC-025) ────────────────────────────
@@ -447,10 +452,17 @@ export async function POST(req: NextRequest) {
       })
       return withAuthCookies(res as NextResponse, data.access_token, data.refresh_token)
     } catch (e: unknown) {
+      // Never relay the auth provider's raw message (Nov 2026 verification): it leaked upstream wording and, for a gateway error,
+      // a JSON parse error. Only the one case the customer can act on keeps its own message.
       const e2 = e as { status?: number; message?: string }
-      // Only a credential REJECTION (GoTrue 400/401/422) counts — an upstream 5xx / timeout is not a failed password.
+      if (/not confirmed/i.test(e2.message || '')) {
+        return err(403, 'Please confirm your e-mail first — check your inbox, or use "Forgot password" to get a fresh link.')
+      }
+      if (e2.status === 429) return err(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
+      if (!e2.status || e2.status >= 500) return err(503, 'Sign-in is temporarily unavailable. Please try again in a moment.')
+      // Only a credential REJECTION (GoTrue 400/401/422) counts toward the account-wide cap — never an outage.
       if ((e2.status === 400 || e2.status === 401 || e2.status === 422) && await recordFailure()) return tooMany()
-      return err(e2.status || 401, e2.message || 'Invalid email or password')
+      return err(400, 'Invalid email or password')   // 400 as before (GoTrue's status for bad credentials); never 401 = "signed out"
     }
   }
 

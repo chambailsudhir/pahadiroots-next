@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { validateCouponSchema } from '@/lib/schemas'
 import { validateCouponServer } from '@/lib/services/pricingService'
 import { checkCsrf, getToken, sbAuth, sbAdmin } from '@/lib/api/serverUtils'
+import { privateJson } from '@/lib/api/privateJson'
 // REFACTOR: replaced the ~40-line inline checkCouponRateLimit() with the shared
 // helper.  The key `mw:rl:coupon:${ip}` is unchanged so the shared counter with
 // middleware.ts is preserved — a middleware hit still counts here.
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!await checkRateLimitKv(`mw:rl:coupon:${ip}`, 5)) {
     // BUG FIX 11: missing Retry-After header on 429. RFC 6585 §4 requires it.
     // Without it, clients don't know how long to wait and may hammer immediately.
-    return NextResponse.json(
+    return privateJson(
       { error: 'Too many attempts — please wait a moment' },
       { status: 429, headers: { 'Retry-After': '60' } },
     )
@@ -50,10 +51,10 @@ export async function POST(req: NextRequest) {
   try {
     // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
     const body   = await req.json().catch(() => undefined)
-    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    if (body === undefined) return privateJson({ error: 'Invalid JSON' }, { status: 400 })
     const parsed = validateCouponSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+      return privateJson({ error: 'Invalid request' }, { status: 400 })
     }
     const result = await validateCouponServer(parsed.data.code, parsed.data.subtotal, {
       phone:      parsed.data.phone,
@@ -63,9 +64,9 @@ export async function POST(req: NextRequest) {
       lines:      parsed.data.lines,
     })
     if (!result.valid) {
-      return NextResponse.json({ error: result.error }, { status: 400 })
+      return privateJson({ error: result.error }, { status: 400 })
     }
-    return NextResponse.json({ success: true, coupon: result.coupon })
+    return privateJson({ success: true, coupon: result.coupon })
   } catch (err: unknown) {
     // BUG FIX [ERROR HANDLING]: previously exposed raw e.message in production
     // (Supabase internals, table names, constraint violations) with no logging.
@@ -73,6 +74,6 @@ export async function POST(req: NextRequest) {
     const message = process.env.NODE_ENV === 'production'
       ? 'Coupon validation failed — please try again'
       : (err instanceof Error ? err.message : 'Server error')
-    return NextResponse.json({ error: message }, { status: 500 })
+    return privateJson({ error: message }, { status: 500 })
   }
 }

@@ -101,11 +101,13 @@ export function calcPriceSummary(
     const r = Number.isFinite(Number(rate)) && Number(rate) > 0 ? Number(rate) : 0
     return (value * r) / (100 + r)
   }
-  const lineValues  = items.map(item => ({ v: item.price * item.qty * (1 - cutFraction), r: item.gstRate }))
-  const goodsValue  = lineValues.reduce((s, l) => s + l.v, 0)
+  //  • The fee is shared by each line's value BEFORE the discount (Nov 2026 verification): the stored tax (order_fee_gst, v29)
+  //    shares it that way, and with a coupon covering all the goods the after-discount share was 0/0 — the checkout then showed
+  //    no GST on shipping while the order stored it. With a uniform discount fraction both shares are identical otherwise.
+  const lineValues  = items.map(item => ({ gross: item.price * item.qty, v: item.price * item.qty * (1 - cutFraction), r: item.gstRate }))
   const feeValue    = shipping + codSurcharge
   const gstExact    = lineValues.reduce(
-    (s, l) => s + lineGst(l.v, l.r) + (goodsValue > 0 ? lineGst(feeValue * (l.v / goodsValue), l.r) : 0), 0)
+    (s, l) => s + lineGst(l.v, l.r) + (grossLines > 0 ? lineGst(feeValue * (l.gross / grossLines), l.r) : 0), 0)
   const gstTotal    = Math.round(gstExact)
 
   // BUG FIX: total could go negative if an admin sets prepaid_discount_pct > 100
