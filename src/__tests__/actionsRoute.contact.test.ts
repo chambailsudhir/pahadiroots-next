@@ -15,6 +15,8 @@ vi.mock('@/lib/supabase', () => ({ getServiceClient: vi.fn(() => ({ from: vi.fn(
 const mockSend = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/lib/server/email', () => ({ sendTransactionalEmail: (...a: unknown[]) => mockSend(...a) }))
 const mockRateLimit = vi.fn()
+const mockCapture = vi.fn()
+vi.mock('@/lib/logger', async (orig) => ({ ...(await orig<typeof import('@/lib/logger')>()), captureError: (...a: unknown[]) => mockCapture(...a) }))
 vi.mock('@/lib/api/rateLimitKv', () => ({ checkRateLimitKv: (...a: unknown[]) => mockRateLimit(...a) }))
 
 import { POST } from '@/app/api/v1/actions/route'
@@ -71,6 +73,8 @@ describe('contact action — anti-spam', () => {
     const res = await POST(req(GOOD))
     expect(res.status).toBe(429)
     expect(mockSend).not.toHaveBeenCalled()
+    // R3-3: tripping the shared cap closes the form for everyone, so ops is alerted
+    expect(mockCapture).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ action: 'contact.global_cap_tripped', alert: true }))
   })
 
   it('keys IPv6 callers by their /64 (clientIpKey), so rotating addresses inside one /64 shares the cap', async () => {
