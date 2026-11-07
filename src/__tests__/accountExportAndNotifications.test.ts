@@ -9,7 +9,7 @@ import { hasUnsafeTextChars } from '@/lib/server/sanitize'
 
 const mocks = vi.hoisted(() => ({
   sbAuth: vi.fn(), sbAdmin: vi.fn(), getToken: vi.fn(), tryRefresh: vi.fn(), syncCustomerProfile: vi.fn(),
-  checkRateLimit: vi.fn(), checkRateLimitShared: vi.fn(), checkCsrf: vi.fn(),
+  checkRateLimit: vi.fn(), checkRateLimitShared: vi.fn(), releaseRateLimitShared: vi.fn(async () => {}), checkCsrf: vi.fn(),
 }))
 vi.mock('@/lib/api/serverUtils', async () => {
   const { NextResponse } = await import('next/server')
@@ -18,7 +18,7 @@ vi.mock('@/lib/api/serverUtils', async () => {
     fail: (status: number, msg: string, headers?: Record<string, string>) => NextResponse.json({ error: msg }, { status, headers }),
     sbAuth: mocks.sbAuth, sbAdmin: mocks.sbAdmin, getToken: mocks.getToken, tryRefresh: mocks.tryRefresh,
     syncCustomerProfile: mocks.syncCustomerProfile, checkRateLimit: mocks.checkRateLimit,
-    checkRateLimitShared: mocks.checkRateLimitShared, checkCsrf: mocks.checkCsrf, applyNewCookies: (r: NextResponse) => r,
+    checkRateLimitShared: mocks.checkRateLimitShared, releaseRateLimitShared: mocks.releaseRateLimitShared, checkCsrf: mocks.checkCsrf, applyNewCookies: (r: NextResponse) => r,
   }
 })
 
@@ -60,14 +60,24 @@ describe('GET /api/account/data-export', () => {
     })
     const res = await exportReq()
     expect(res.status).toBe(500)
-    expect(mocks.checkRateLimitShared).not.toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
+    // the quota hit reserved up front is refunded, so the failed attempt does not count
+    expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
+    expect(mocks.releaseRateLimitShared).toHaveBeenCalledWith('data_export:u1')
   })
 
-  it('counts the account quota only after a successful build, and answers 429 when exhausted', async () => {
+  it('checks the account quota BEFORE building the export, and answers 429 without doing the export work (Nov 2026 audit)', async () => {
     mocks.checkRateLimitShared.mockImplementation(async (k: string) => k !== 'data_export:u1')
     const res = await exportReq()
     expect(res.status).toBe(429)
     expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
+    expect(mocks.sbAdmin).not.toHaveBeenCalled()
+    expect(mocks.releaseRateLimitShared).not.toHaveBeenCalled()
+  })
+
+  it('a successful export keeps its quota hit (no refund)', async () => {
+    const res = await exportReq()
+    expect(res.status).toBe(200)
+    expect(mocks.releaseRateLimitShared).not.toHaveBeenCalled()
   })
 
   it('exports the own-data whitelist: gstin, address_line2, items, order notes, referral, consent; never notes/tags/is_blocked', async () => {

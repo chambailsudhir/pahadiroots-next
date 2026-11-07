@@ -534,3 +534,19 @@ export async function checkRateLimitShared(
     return local
   }
 }
+
+/**
+ * Refund one hit taken by checkRateLimitShared(key) — for quotas that are reserved up front but must not count an attempt
+ * that then failed (Nov 2026 audit, data export). Best effort: decrements the in-process counter and the shared KV counter
+ * (never below zero). The Postgres limiter fallback cannot be refunded, so during a KV outage the attempt still counts.
+ */
+export async function releaseRateLimitShared(key: string): Promise<void> {
+  const entry = _rateLimitMap.get(key)
+  if (entry && entry.count > 0 && Date.now() <= entry.reset) entry.count--
+  try {
+    const { releaseRateLimitKv } = await import('@/lib/api/rateLimitKv')
+    await releaseRateLimitKv(`mw:rl:acct:${key}`)
+  } catch (err) {
+    captureError(err, { action: 'serverUtils.rateLimitShared.release_error', key_prefix: key.split(':')[0] })
+  }
+}

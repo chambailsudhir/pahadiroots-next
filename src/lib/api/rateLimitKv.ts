@@ -237,3 +237,34 @@ async function resolveRateLimit(
     return checkRateLimitDb(key, limit, windowSec)
   }
 }
+
+/**
+ * Give back ONE hit previously taken on `key` (Nov 2026 audit: the data-export quota is now reserved BEFORE the export is built
+ * and refunded when the export fails, so a failed attempt does not count). Best effort, never throws, never goes below zero
+ * (atomic Lua on Upstash). Upstash only: the Postgres fallback (rate_limit_check RPC) has no release form, so while KV is
+ * unavailable a failed attempt still counts — returns false in that case.
+ */
+export async function releaseRateLimitKv(key: string): Promise<boolean> {
+  const kvUrl   = process.env.UPSTASH_REDIS_REST_URL
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!kvUrl || !kvToken) return false
+  try {
+    const res = await fetch(`${kvUrl}/pipeline`, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ['EVAL', "local v = tonumber(redis.call('GET', KEYS[1]) or '0') if v > 0 then return redis.call('DECR', KEYS[1]) end return 0", 1, key],
+      ]),
+      signal: AbortSignal.timeout(1500),
+    })
+    if (!res.ok) {
+      logger.metric('kv.release.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key, status: res.status })
+      return false
+    }
+    const body = await res.json() as Array<{ result?: unknown; error?: string }>
+    return !body[0]?.error
+  } catch {
+    logger.metric('kv.release.error', 1, 'count', { key_prefix: key.split(':')[2] ?? key })
+    return false
+  }
+}
