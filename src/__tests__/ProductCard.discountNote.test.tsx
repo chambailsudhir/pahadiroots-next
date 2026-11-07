@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Owner request (Nov 2026): the discount is shown next to the price ("20% off"), using the same rule as the photo tag.
+// Owner request (Nov 2026): the discount is shown once, next to the price ("20% off"), and no longer as a tag on the photo.
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 import React from 'react'
@@ -21,9 +21,10 @@ describe('ProductCard discount next to the price', () => {
     const { container } = render(<ProductCard product={p()} />)
     expect(note(container)).toBe('20% off')
   })
-  it('matches the photo tag', () => {
+  it('is the only discount on the card (no "-N%" tag on the photo)', () => {
     const { container } = render(<ProductCard product={p()} />)
-    expect(container.querySelector('.pdisc-ribbon')?.textContent).toBe('-20%')
+    expect(container.querySelector('.pdisc-ribbon')).toBeNull()
+    expect(container.textContent).not.toContain('-20%')
   })
   it('is hidden when there is no real discount', () => {
     const { container } = render(<ProductCard product={p({ mrp: 400 })} />)

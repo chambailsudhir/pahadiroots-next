@@ -206,10 +206,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         </div>
       )}
 
-      {/* ── Discount ribbon — top-right corner ── */}
-      {savings >= 5 && inStock && (
-        <div className="pdisc-ribbon">-{savings}%</div>
-      )}
+      {/* Owner decision (Nov 2026): no "-N%" ribbon on the photo; the discount is shown once, next to the price. */}
 
       {/* ── Image wrapper ── */}
       <div className="piw" style={{ background: product.card_bg || '#f5f0e8' }}>
@@ -347,7 +344,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             <span className="pnow">{formatPrice(price)}</span>
             {mrp > price && <span className="pwas">{formatPrice(mrp)}</span>}
             {unitLabel && <span className="punt">{unitLabel}</span>}
-            {/* Owner request (Nov 2026): the discount next to the price as well as on the photo tag. Same rule as the tag. */}
+            {/* Owner request (Nov 2026): the discount is shown here only (at least 5%, in stock). */}
             {savings >= 5 && inStock && <span className="psave">{savings}% off</span>}
           </div>
 
