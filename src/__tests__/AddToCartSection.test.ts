@@ -464,3 +464,17 @@ describe('AddToCartSection — mobile sticky bar (.pdp-mob-bar)', () => {
     expect(instance?.disconnect).toHaveBeenCalled()
   })
 })
+
+// Nov 2026 verification: the variant chips and the mobile sticky bar printed raw prices (₹266.67, ₹1399) while cards, cart and
+// checkout show the rounded, en-IN grouped price (₹267, ₹1,399).
+describe('AddToCartSection — prices use the shared formatter', () => {
+  it('variant chips show ₹1,399 / ₹267 like the cards, never ₹1399 or ₹266.67', () => {
+    const variants = [makeVariant({ id: 21, size: '1kg', price: 1399, mrp: 1600 }), makeVariant({ id: 22, size: '500g', price: 266.67, mrp: 300 })]
+    const { container } = render(el({ variants }))
+    const text = container.textContent || ''
+    expect(text).toContain('₹1,399')
+    expect(text).toContain('₹267')
+    expect(text).not.toContain('₹1399')
+    expect(text).not.toContain('266.67')
+  })
+})
