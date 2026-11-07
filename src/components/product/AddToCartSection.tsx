@@ -1,6 +1,7 @@
 'use client'
 
 import { MAX_LINE_QTY } from '@/lib/cartLimits'
+import { formatPrice } from '@/lib/utils'
 import { ga4AddToWishlist } from '@/lib/analytics/ga4'
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
@@ -287,9 +288,9 @@ export default function AddToCartSection({ product, variants }: Props) {
                   )}
                   <span className="pdp-vc-size">{v.size}</span>
                   <span className="pdp-vc-price">
-                    ₹{v.price}
+                    {formatPrice(v.price)}
                     {v.mrp && v.mrp > v.price && (
-                      <span className="pdp-vc-orig"> ₹{v.mrp}</span>
+                      <span className="pdp-vc-orig"> {formatPrice(v.mrp)}</span>
                     )}
                   </span>
                   {savePct > 0 && <span className="pdp-vc-save">Save {savePct}%</span>}
@@ -391,8 +392,8 @@ export default function AddToCartSection({ product, variants }: Props) {
       {showMobBar && (
         <div className="pdp-mob-bar" role="region" aria-label={`Quick add — ${product.name}`}>
           <div className="pdp-mob-price-col">
-            <span className="pdp-mob-price">₹{price}</span>
-            {mrp > price && <span className="pdp-mob-mrp">₹{mrp}</span>}
+            <span className="pdp-mob-price">{formatPrice(price)}</span>
+            {mrp > price && <span className="pdp-mob-mrp">{formatPrice(mrp)}</span>}
           </div>
           <div className="pdp-mob-actions">
             <button
