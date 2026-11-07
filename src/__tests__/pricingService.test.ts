@@ -311,6 +311,24 @@ describe('calcPriceSummary — GST is charged after seller discounts (CGST s.15(
   it('empty cart is still 0', () => {
     expect(calcPriceSummary([], LIVE, coupon50).gstTotal).toBe(0)
   })
+
+  // Nov 2026 verification: with a coupon covering ALL the goods, the fee share was 0/0 in the app, so the checkout showed no GST on
+  // the shipping fee while the stored order (order_fee_gst, shared by pre-discount line value) carried it.
+  it('a coupon covering all the goods still carries GST on the shipping fee, at the goods rate (matches the stored tax)', () => {
+    const s = makeSettings({ free_shipping_min: '1000', flat_shipping_charge: '50', prepaid_discount_pct: '0' } as Partial<SiteSettings>)
+    const r = calcPriceSummary([makeItem({ price: 300, qty: 1, gstRate: 5 })], s, { code: 'ALL', discount: 300, type: 'flat' }, 'razorpay')
+    expect(r.shipping).toBeGreaterThan(0)
+    expect(r.gstTotal).toBe(Math.round(r.shipping * 5 / 105))
+  })
+
+  it('mixed rates: the fee is shared by each line value before the discount, each share at its own rate', () => {
+    const s = makeSettings({ free_shipping_min: '100000', flat_shipping_charge: '100', prepaid_discount_pct: '0' } as Partial<SiteSettings>)
+    const items = [makeItem({ price: 300, qty: 1, gstRate: 5 }), makeItem({ productId: '2', variantId: 'vb', price: 100, qty: 1, gstRate: 18 })]
+    const r = calcPriceSummary(items, s, null, 'razorpay')
+    const fee = r.shipping
+    const expected = 300 * 5 / 105 + 100 * 18 / 118 + fee * 0.75 * 5 / 105 + fee * 0.25 * 18 / 118
+    expect(r.gstTotal).toBe(Math.round(expected))
+  })
 })
 
 // ─── Prepaid discount ─────────────────────────────────────────────────────────
