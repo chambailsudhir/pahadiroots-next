@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
   if (!env || !(await isPhoneVerificationEnabled())) return notFound()
 
   // Signature over the RAW body, before any parsing.
+  // Size cap (Nov 2026 verification): there was none. Meta's message notifications are a few KB.
+  const declared = Number(req.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > 262_144) return new NextResponse('Payload too large', { status: 413 })
   const raw = await req.text()
+  if (raw.length > 262_144) return new NextResponse('Payload too large', { status: 413 })
   if (!verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'), env.appSecret)) {
     return new NextResponse('Unauthorized', { status: 401 })
   }

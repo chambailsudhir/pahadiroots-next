@@ -38,8 +38,11 @@ export async function runBackgroundSweepsIfDue(origin: string, deps: SweepDeps =
     // limit 1 per window: the first caller in each window wins, everyone else is 'blocked' (or the limiter is unavailable → skip)
     if (await gate('mw:sweep:background', 1, SWEEP_INTERVAL_SEC) !== 'allowed') return false
 
+    // In PARALLEL (Nov 2026 verification): one after the other, the expiry sweep (up to ~25 s) ran first inside the order request's
+    // after() phase, and the e-mail retry was usually cut off by the 40 s function limit — while this window's gate was already
+    // spent, so failed confirmations waited for the next window or the daily cron.
     const doFetch = deps.fetchImpl ?? fetch
-    for (const path of SWEEP_PATHS) {
+    await Promise.allSettled(SWEEP_PATHS.map(async path => {
       try {
         const res = await doFetch(origin + path, {
           headers: { Authorization: `Bearer ${secret}` },
@@ -49,7 +52,7 @@ export async function runBackgroundSweepsIfDue(origin: string, deps: SweepDeps =
       } catch (e) {
         logger.warn('background sweep failed', { action: 'sweeps.background', path, error: e instanceof Error ? e.message : String(e) })
       }
-    }
+    }))
     return true
   } catch {
     return false   // a sweep problem must never affect an order

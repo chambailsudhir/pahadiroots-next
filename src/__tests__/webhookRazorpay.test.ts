@@ -493,6 +493,8 @@ describe('POST /webhook/razorpay — payment.captured', () => {
   // PAY-DUP (Nov 2026 audit): a DIFFERENT payment captured for an order that is already paid = the customer was charged twice.
   it('flags a second, different payment captured on an already-paid order (double charge) and never re-confirms or re-awards', async () => {
     mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_first' }
+    // the first payment was verified against this order's own Razorpay order (order_rzp_1), like the second one
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: { razorpay_order_id: 'order_rzp_1' } }]
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
     const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_second' })))
 
@@ -503,6 +505,18 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     )
     expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
     expect(mockAward).not.toHaveBeenCalled()
+  })
+
+  // Nov 2026 verification: payment notes come from the browser. A payment made against ANOTHER Razorpay order whose note points at
+  // this already-paid order must not raise "double charge, refund needed" here (a refund would hand the goods out for free).
+  it('a payment for a DIFFERENT Razorpay order whose note points at this paid order is NOT reported as its double charge', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_first' }
+    mockDb.responses['order_events'] = [{ event: 'payment_verified', metadata: { razorpay_order_id: 'order_rzp_VICTIM' } }]
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_attacker', razorpayOrderId: 'order_rzp_ATTACKER' })))
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'duplicate_payment_captured', 'razorpay', expect.anything())
+    expect(mockDb.updateCalls.find(c => c.table === 'orders')).toBeUndefined()
   })
 
   // PAY-HOOK (Nov 2026 audit): the payment carries no client note; our stored Razorpay order id still finds the order.
