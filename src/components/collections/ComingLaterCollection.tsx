@@ -1,8 +1,7 @@
 // components/collections/ComingLaterCollection.tsx — shown on a collection that has no products yet (Nov 2026 redesign).
 //
-// Empty categories are no longer linked from any menu, tile or filter chip (see withProducts() in lib/storeData.ts),
-// but their URLs stay live so old links, shares and search results don't 404. Instead of "0 Products" and an empty
-// sort bar, the page says plainly that the range isn't available, offers a WhatsApp question pre-filled with the
+// Every category the admin switches on is listed in the menus, footer, filters and homepage strip, even before it has
+// products (owner decision). Instead of "0 Products" and an empty sort bar, an empty collection page says plainly that the range isn't available, offers a WhatsApp question pre-filled with the
 // category name, and shows what can be bought today. Server component: no client JS beyond the product cards.
 import Link from 'next/link'
 import ProductCard from '@/components/product/ProductCard'

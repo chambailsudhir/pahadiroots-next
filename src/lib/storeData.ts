@@ -302,21 +302,6 @@ export async function getStoreData(force = false): Promise<StoreData> {
   return { ...prod, ...meta }
 }
 
-// ── Which categories actually have something to buy ─────────────────────────────────────────────────────────────
-// The header menu and footer list every ACTIVE category, but six of the ten have no product yet: the customer clicks "Himalayan Tea" and lands on
-// a "coming soon" page. This returns the ids of categories with at least one active, non-deleted product (5-minute Data Cache, same tags as the rest
-// of the catalogue). null means "could not tell" — callers then show every category rather than hide any.
-async function _fetchPopulatedCategoryIds(): Promise<number[]> {
-  const db = getServiceClient()
-  const { data, error } = await db.from('products').select('category_id').eq('is_active', true).eq('is_deleted', false)
-  if (error) throw error
-  return Array.from(new Set((data ?? []).map((r: { category_id: number | null }) => r.category_id).filter((x): x is number => x != null)))
-}
-const _getCachedPopulatedCategoryIds = unstable_cache(_fetchPopulatedCategoryIds, ['populated-category-ids'], { revalidate: 300, tags: ['store-data', 'catalog-products'] })
-export async function getPopulatedCategoryIds(): Promise<Set<number> | null> {
-  try { return new Set(await _getCachedPopulatedCategoryIds()) } catch { return null }
-}
-
 /** Categories / states / state images / settings only — the small, slow-moving
  *  half of the catalog. Layout, header and any page that doesn't need products
  *  should call THIS instead of getStoreData() or querying Supabase directly:
@@ -386,22 +371,8 @@ export function imgFor(cat: Category, settings: Record<string, string>): string 
 // way images silently broke). categories.show_on_homepage is now the single
 // source of truth. Legacy settings kept as a logged fallback for the same
 // admin-deploy transition window as imgFor().
-// ── Only categories with something to buy (Nov 2026 redesign, P0) ───────────────────────────────────────────────────
-// The shop filter chips listed every active category, but most had no product yet, so a shopper
-// tapping "Himalayan Tea" or "Shilajit" landed on an empty page. The header and footer already drop empty categories via
-// getPopulatedCategoryIds() in layout.tsx; this applies the same rule from the products already loaded here. The
-// collection URLs themselves stay live (collections/[slug] looks the category up in storeData.categories directly) and
-// show a "coming later" state, so shared links and SEO keep working. If the product list is empty (a failed or partial
-// read) nothing is hidden: showing a dead end is better than an empty menu.
-export function withProducts<T extends { id: number }>(categories: T[], products: Pick<Product, 'category_id'>[] | undefined): T[] {
-  if (!products?.length) return categories
-  const ids = new Set(products.map(p => p.category_id).filter(id => id != null).map(Number))
-  return categories.filter(c => ids.has(Number(c.id)))
-}
-
-// Owner decision (Nov 2026): the homepage "Browse Collections" strip keeps every category exactly as before, including
-// ones with no products yet (those open the "coming later" collection page). Only the menus, footer and shop filter
-// chips drop empty categories (buildBrowseCategories below, and layout.tsx).
+// Owner decision (Nov 2026): every category the admin has switched on is listed (homepage strip, menus, footer, shop
+// filters), including ones with no products yet; those open the "not available yet" collection page.
 export function buildCategories(storeData: StoreData) {
   const { categories, settings } = storeData
   return categories
@@ -435,7 +406,7 @@ export function buildCategories(storeData: StoreData) {
 // buildCategories().
 export function buildBrowseCategories(storeData: StoreData) {
   const { categories, settings } = storeData
-  return [...withProducts(categories, storeData.products)]
+  return [...categories]
     .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
     .map(c => ({ ...c, image_url: imgFor(c, settings) || null }))
 }
