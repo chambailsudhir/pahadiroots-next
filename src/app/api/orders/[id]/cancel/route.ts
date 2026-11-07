@@ -73,7 +73,7 @@ export async function POST(
     // IDOR guard — id AND owner in the same query; a foreign / unknown order is just "not found".
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=id,order_number,order_status,payment_method,payment_status,tracking_number,shipped_at,total_amount&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&select=id,order_number,order_status,payment_method,payment_status,tracking_number,shipped_at,total_amount&limit=1`,
     )
     const order = Array.isArray(rows) ? rows[0] : null
     if (!order) return fail(404, 'Order not found')
@@ -90,7 +90,7 @@ export async function POST(
     try {
       updated = await sbAdmin(
         'PATCH',
-        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&payment_method=eq.cod&order_status=in.(pending,confirmed)&or=(tracking_number.is.null,tracking_number.eq.)&shipped_at=is.null`,
+        `/rest/v1/orders?id=eq.${order.id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&payment_method=eq.cod&order_status=in.(pending,confirmed)&or=(tracking_number.is.null,tracking_number.eq.)&shipped_at=is.null`,
         { order_status: 'cancelled', updated_at: new Date().toISOString() },
         'return=representation',
       ) ?? []

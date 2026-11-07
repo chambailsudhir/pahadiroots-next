@@ -30,7 +30,7 @@ import path from 'node:path'
 export const LIVE_ORDERS_COLUMNS = [
   'id', 'order_number', 'customer_id', 'total_amount', 'payment_status',
   'order_status', 'payment_method', 'created_at', 'shipping_address',
-  'tracking_number', 'courier', 'shipped_at', 'delivered_at',
+  'tracking_number', 'courier', 'shipped_at', 'delivered_at', 'is_deleted',
 ] as const
 
 // Mirrored from the live `customers` table — only what the track route reads.

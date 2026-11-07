@@ -82,7 +82,7 @@ export async function POST(
     // Ownership check — same as the sibling /return route
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=id,order_status,delivered_at&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&select=id,order_status,delivered_at&limit=1`,
     ).catch(() => null)
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return fail(404, 'Order not found')

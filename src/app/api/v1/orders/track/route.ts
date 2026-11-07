@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
   try {
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&select=${TRACK_FETCH_SELECT}&limit=1`,
+      `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&is_deleted=not.is.true&select=${TRACK_FETCH_SELECT}&limit=1`,
     ).catch(() => null)
 
     // Uniform message for "no such order" AND "phone doesn't match" — same

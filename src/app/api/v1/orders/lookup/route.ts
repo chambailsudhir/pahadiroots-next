@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
     if (token && /^[0-9a-f-]{36}$/i.test(token)) {
       const rows = await sbAdmin(
         'GET',
-        `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&confirmation_token=eq.${encodeURIComponent(token)}&select=${ORDER_SELECT}&limit=1`,
+        `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&is_deleted=not.is.true&confirmation_token=eq.${encodeURIComponent(token)}&select=${ORDER_SELECT}&limit=1`,
       ).catch(() => null)
 
       if (Array.isArray(rows) && rows.length > 0 && !isConfirmationTokenExpired((rows[0] as Record<string, unknown>).created_at)) {
@@ -192,7 +192,7 @@ export async function GET(req: NextRequest) {
       if (profile) {
         const rows = await sbAdmin(
           'GET',
-          `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&customer_id=eq.${profile.id}&select=${ORDER_SELECT}&limit=1`,
+          `/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&is_deleted=not.is.true&customer_id=eq.${profile.id}&select=${ORDER_SELECT}&limit=1`,
         ).catch(() => null)
 
         if (Array.isArray(rows) && rows.length > 0) {

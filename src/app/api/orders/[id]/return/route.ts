@@ -182,7 +182,7 @@ export async function POST(
     // Fetch order with ownership check
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&select=id,order_status,delivered_at,updated_at,order_number&limit=1`,
+      `/rest/v1/orders?id=eq.${id}&customer_id=eq.${profile.id}&is_deleted=not.is.true&select=id,order_status,delivered_at,updated_at,order_number&limit=1`,
     ).catch(() => null)
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
