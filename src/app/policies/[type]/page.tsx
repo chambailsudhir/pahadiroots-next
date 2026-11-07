@@ -348,7 +348,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
     title: 'Privacy Policy',
     content: (
       <div className="text-sm leading-relaxed space-y-6">
-        <p className="text-stone-500 text-xs">Last updated: March 2026 · {OPERATOR_LINE}, {SHORT_LOCATION}</p>
+        <p className="text-stone-500 text-xs">Last updated: November 2026 · {OPERATOR_LINE}, {SHORT_LOCATION}</p>
         <p className="text-stone-600">We are committed to safeguarding the privacy of our website visitors and customers. This policy explains what personal data we collect, how we use it, and your rights. By using pahadiroots.com and agreeing to this policy, you consent to our data practices as described below.</p>
 
         <section>
@@ -358,7 +358,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li><strong>Account data:</strong> Name, email address, phone number, delivery address</li>
             <li><strong>Transaction data:</strong> Products ordered, payment method, order history</li>
             <li><strong>Unfinished checkouts:</strong> If you enter your phone number or email at checkout but do not complete the order, we keep the cart and those contact details so that you can finish the order and so that we can follow up about it. Write to us to have them deleted.</li>
-            <li><strong>Newsletter:</strong> Email address if you subscribe</li>
+            <li><strong>Back-in-stock alerts:</strong> Email address, if you ask us to tell you when a sold-out product is available again</li>
             <li><strong>Communications:</strong> Messages you send us by email or WhatsApp</li>
           </ul>
         </section>
@@ -378,7 +378,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>To send order confirmations and shipping updates by email</li>
             <li>To respond to enquiries and complaints</li>
             <li>To improve products, website, and customer experience</li>
-            <li>To send newsletters or offers — <strong>only if you have subscribed or consented</strong></li>
+            <li>To email you when a product you asked about is back in stock</li>
             <li>To provide anonymised, non-identifying statistics for analytics</li>
             <li>To comply with legal obligations</li>
           </ul>
@@ -417,7 +417,7 @@ const POLICIES: Record<string, { title: string; content: React.ReactNode }> = {
             <li>Raise a grievance with us about how your data is handled</li>
           </ul>
           <p className="text-stone-500 text-xs mt-2">These rights follow the Digital Personal Data Protection Act, 2023. If we do not resolve your grievance, the Act allows you to complain to the Data Protection Board of India.</p>
-          <p className="text-stone-600 mt-2"><strong>Account deletion.</strong> When you delete your account we erase your name, phone number, e-mail, GSTIN, saved addresses, wishlist, carts, subscriptions, order notes and return photos, and the phone number and e-mail stored with past orders. For completed orders we are legally required to keep invoice records, so we retain only the recipient name, delivery address (and GSTIN for business orders) and the invoice amounts for up to 6 years, as required by GST law (CGST Act, 2017, section 36 and Rule 56); this data is used for no other purpose. Orders still in progress must be delivered or cancelled before an account can be deleted. Reviews you posted remain on the product page but are no longer linked to you.</p>
+          <p className="text-stone-600 mt-2"><strong>Account deletion.</strong> When you delete your account we erase your name, phone number, e-mail, GSTIN, saved addresses, wishlist, carts, back-in-stock alerts, order notes and return photos, and the phone number and e-mail stored with past orders. For completed orders we are legally required to keep invoice records, so we retain only the recipient name, delivery address (and GSTIN for business orders) and the invoice amounts for up to 6 years, as required by GST law (CGST Act, 2017, section 36 and Rule 56); this data is used for no other purpose. Orders still in progress must be delivered or cancelled before an account can be deleted. Reviews you posted remain on the product page but are no longer linked to you.</p>
           <p className="text-stone-600 mt-2">To exercise any right: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-forest-700 underline">{SUPPORT_EMAIL}</a></p>
         </section>
 

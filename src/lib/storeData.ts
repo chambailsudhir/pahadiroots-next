@@ -302,21 +302,6 @@ export async function getStoreData(force = false): Promise<StoreData> {
   return { ...prod, ...meta }
 }
 
-// ── Which categories actually have something to buy ─────────────────────────────────────────────────────────────
-// The header menu and footer list every ACTIVE category, but six of the ten have no product yet: the customer clicks "Himalayan Tea" and lands on
-// a "coming soon" page. This returns the ids of categories with at least one active, non-deleted product (5-minute Data Cache, same tags as the rest
-// of the catalogue). null means "could not tell" — callers then show every category rather than hide any.
-async function _fetchPopulatedCategoryIds(): Promise<number[]> {
-  const db = getServiceClient()
-  const { data, error } = await db.from('products').select('category_id').eq('is_active', true).eq('is_deleted', false)
-  if (error) throw error
-  return Array.from(new Set((data ?? []).map((r: { category_id: number | null }) => r.category_id).filter((x): x is number => x != null)))
-}
-const _getCachedPopulatedCategoryIds = unstable_cache(_fetchPopulatedCategoryIds, ['populated-category-ids'], { revalidate: 300, tags: ['store-data', 'catalog-products'] })
-export async function getPopulatedCategoryIds(): Promise<Set<number> | null> {
-  try { return new Set(await _getCachedPopulatedCategoryIds()) } catch { return null }
-}
-
 /** Categories / states / state images / settings only — the small, slow-moving
  *  half of the catalog. Layout, header and any page that doesn't need products
  *  should call THIS instead of getStoreData() or querying Supabase directly:
@@ -386,6 +371,8 @@ export function imgFor(cat: Category, settings: Record<string, string>): string 
 // way images silently broke). categories.show_on_homepage is now the single
 // source of truth. Legacy settings kept as a logged fallback for the same
 // admin-deploy transition window as imgFor().
+// Owner decision (Nov 2026): every category the admin has switched on is listed (homepage strip, menus, footer, shop
+// filters), including ones with no products yet; those open the "not available yet" collection page.
 export function buildCategories(storeData: StoreData) {
   const { categories, settings } = storeData
   return categories

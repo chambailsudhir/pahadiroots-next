@@ -47,11 +47,6 @@ export type TransactionalEmailType =
   | 'order_cancelled'
   | 'signup_verification'
   | 'contact_form'
-  // BUG FIX (P1 — trust): added for the newsletter signup discount-code
-  // email (api/v1/actions/route.ts `subscribe`). The homepage previously
-  // promised "5% off, check your inbox" without ever generating a code or
-  // sending anything — this type is what actually fulfills that promise.
-  | 'newsletter_welcome'
   // Nov 2026: "How was your order?" mail sent a few days after delivery (lib/server/reviewRequests.ts).
   | 'review_request'
   // Nov 2026: "your coins expire on …" ~15 days ahead (lib/server/coinExpiryReminders.ts).

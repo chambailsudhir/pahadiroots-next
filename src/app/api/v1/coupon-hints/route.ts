@@ -31,9 +31,10 @@ const ANON_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUP
 // below and are never returned.
 const HINT_SELECT = 'code,type,value,min_order,expires_at,max_uses,description'
 
-// AUDIT S1-010: the newsletter `subscribe` action mints one personal coupon per
-// subscriber (`WELCOME5-<hash>`, max_uses=1, description 'Newsletter welcome…' —
-// see lib/welcomeCoupon.ts, api/v1/actions/route.ts). Ordered by value with few
+// AUDIT S1-010: the old newsletter `subscribe` action minted one personal coupon per
+// subscriber (`WELCOME5-<hash>`, max_uses=1, description 'Newsletter welcome…').
+// The newsletter was removed in Nov 2026, but those single-use codes can still be in
+// the coupons table, so this filter stays. Ordered by value with few
 // higher-value public codes, those single-use personal codes filled this public
 // hint list, so anyone could burn another subscriber's one-time code. A hint
 // must only ever be a genuinely public, multi-use code.

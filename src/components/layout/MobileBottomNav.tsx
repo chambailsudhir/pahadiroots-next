@@ -29,11 +29,22 @@ interface Props {
   settings: SiteSettings
 }
 
-export default function MobileBottomNav({ settings }: Props) {
+/**
+ * Routes where this bar is not rendered: /account for a signed-in customer (it has its own tab bar) and /checkout (it
+ * has its own sticky pay bar). Shared with HelpLauncher, which shows its floating button on phones only here.
+ */
+export function bottomNavHidden(pathname: string | null, signedIn: boolean): boolean {
+  return Boolean((pathname?.startsWith('/account') && signedIn) || pathname?.startsWith('/checkout'))
+}
+
+// `settings` is still passed by layout.tsx (and kept in Props) though the bar no longer reads it: the WhatsApp number moved
+// to the help sheet.
+export default function MobileBottomNav(_props: Props) {
   const cartCount = useCartStore(selectCartCount)
   const openSearch     = useUIStore(s => s.openSearch)
   const openCart       = useUIStore(s => s.openCart)
   const openMobileMenu = useUIStore(s => s.openMobileMenu)
+  const openHelp       = useUIStore(s => s.openHelp)
   const pathname = usePathname()
   // ACC-018: /account only has its own tab bar for a SIGNED-IN customer. The sign-in gate has none, and the mobile header
   // has no cart button — so a logged-out visitor on /account had no way to reach the cart or menu. Show this bar there.
@@ -64,8 +75,6 @@ export default function MobileBottomNav({ settings }: Props) {
     return () => observer.disconnect()
   }, [])
 
-  const waNumber = settings.whatsapp_number?.replace(/\D/g, '') || ''
-
   // BUG FIX (found on re-check): /account already renders its own
   // contextual mobile tab bar (account.module.css .mobTabs — Orders,
   // Wishlist, etc.) and /checkout has its own sticky mobile CTA bar
@@ -73,7 +82,7 @@ export default function MobileBottomNav({ settings }: Props) {
   // global bar on top of either would stack two fixed bottom bars on
   // the same screen. Large sites suppress the generic bottom nav on
   // these focused/contextual flows for exactly this reason.
-  if ((pathname?.startsWith('/account') && signedIn) || pathname?.startsWith('/checkout')) return null
+  if (bottomNavHidden(pathname, signedIn)) return null
 
   return (
     <>
@@ -136,19 +145,15 @@ export default function MobileBottomNav({ settings }: Props) {
           Cart
         </button>
 
-        {waNumber && (
-          <a
-            href={`https://wa.me/${waNumber}?text=${encodeURIComponent('Hi, I need help')}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mbn-item"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-            </svg>
-            Chat
-          </a>
-        )}
+        {/* Nov 2026 redesign: "Chat" (straight to WhatsApp) became "Help", which opens the shared help sheet — WhatsApp with
+            pre-filled starting messages, the AI assistant and order tracking (see HelpLauncher.tsx). */}
+        <button type="button" onClick={openHelp} className="mbn-item" aria-haspopup="dialog" aria-controls="help-sheet" data-help-trigger>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 12a8 8 0 1 1 3.2 6.4L4 19.5l1-3.3A7.96 7.96 0 0 1 4 12z" />
+            <path strokeLinecap="round" d="M9.6 9.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-.9.8-.9 1.4v.3" />
+          </svg>
+          Help
+        </button>
 
         <button type="button" onClick={openMobileMenu} className="mbn-item" aria-label="More menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
