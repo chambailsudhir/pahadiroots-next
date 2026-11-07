@@ -40,6 +40,10 @@ const HINT_SELECT = 'code,type,value,min_order,expires_at,max_uses,description'
 const WELCOME_CODE_PREFIX   = 'WELCOME5-'
 const WELCOME_DESC_PREFIX   = 'Newsletter welcome'
 
+// Nov 2026 audit: owner opt-in for the public hint list (see GET below).
+const SHOW_IN_HINTS_COLUMN = 'show_in_hints'
+const SHOW_IN_HINTS_FILTER = `${SHOW_IN_HINTS_COLUMN}=eq.true`
+
 interface RawHint {
   code:         string
   type:         'flat' | 'percent'
@@ -84,8 +88,12 @@ export async function GET() {
     // codes are excluded in the DB query so they can never crowd out — or
     // appear in — the public list. (and=(or(...),or(...)) is PostgREST's
     // syntax for two OR groups; a bare repeated `or=` would be ambiguous.)
-    const url = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&and=(or(expires_at.is.null,expires_at.gte.${nowIso}),or(max_uses.is.null,max_uses.gt.1))&code=not.ilike.${WELCOME_CODE_PREFIX}*&select=${HINT_SELECT}&order=value.desc&limit=10`
-    const res = await fetch(url, {
+    // Nov 2026 audit: any active multi-use coupon used to be advertised. Only coupons the owner opted in
+    // (`coupons.show_in_hints = true`) are hints now. The column arrives with a DB migration (existing rows backfilled to
+    // true, so today's list is preserved); until it exists PostgREST answers 400 for the unknown column, and the route
+    // then retries ONCE without the filter (the previous behaviour) so the cart keeps its hints before the migration lands.
+    const base = `${SUPABASE_URL}/rest/v1/coupons?is_active=eq.true&and=(or(expires_at.is.null,expires_at.gte.${nowIso}),or(max_uses.is.null,max_uses.gt.1))&code=not.ilike.${WELCOME_CODE_PREFIX}*&select=${HINT_SELECT}&order=value.desc&limit=10`
+    const read = (url: string) => fetch(url, {
       headers: {
         apikey:        ANON_KEY,
         Authorization: `Bearer ${ANON_KEY}`,
@@ -97,6 +105,18 @@ export async function GET() {
       signal: AbortSignal.timeout(fallback ? FAST_TIMEOUT_MS : 4000),
       next: { revalidate: 120 }, // cache 2 min — hints don't need to be real-time
     })
+
+    let res = await read(`${base}&${SHOW_IN_HINTS_FILTER}`)
+    if (res.status === 400) {
+      const body = await res.text().catch(() => '')
+      if (body.includes(SHOW_IN_HINTS_COLUMN)) {
+        logger.warn('coupon_hints_show_in_hints_missing', {
+          action: 'coupon_hints.show_in_hints_missing',
+          hint:   'coupons.show_in_hints column not found — serving hints without the opt-in filter until the migration is applied',
+        })
+        res = await read(base)
+      }
+    }
 
     if (!res.ok) throw new Error(`Supabase coupons: ${res.status}`)
 
