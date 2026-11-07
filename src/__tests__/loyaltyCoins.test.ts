@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coinsForOrderValue, coinsMaxPerOrder, coinStepRupees, coinsPerStep } from '@/lib/loyaltyCoins'
+import { coinsForOrderValue, coinsMaxPerOrder, coinStepRupees, coinsPerStep, coinNudge } from '@/lib/loyaltyCoins'
 
 // Owner rule (Nov 2026, second revision): no coins below ₹500; 5 coins for every full ₹500; no per-order limit. Paid on delivery.
 // The SQL function delivery_coins_for (db_migration_v36) holds the same formula and gave these exact numbers on production.
@@ -24,5 +24,22 @@ describe('coinsForOrderValue', () => {
   it('never NaN or negative for a junk order value', () => {
     expect(coinsForOrderValue(Number.NaN, {})).toBe(0)
     expect(coinsForOrderValue(-5, {})).toBe(0)
+  })
+})
+
+describe('coinNudge — "add ₹X more to earn N coins"', () => {
+  it('below ₹500: how much to reach the first 5 coins', () => {
+    expect(coinNudge(380, {})).toEqual({ addRupees: 120, coins: 5, more: false })
+    expect(coinNudge(0, {})).toEqual({ addRupees: 500, coins: 5, more: false })
+  })
+  it('above ₹500: how much to reach the next step ("more")', () => {
+    expect(coinNudge(750, {})).toEqual({ addRupees: 250, coins: 5, more: true })
+    expect(coinNudge(1000, {})).toEqual({ addRupees: 500, coins: 5, more: true })
+    expect(coinNudge(999.4, {})).toEqual({ addRupees: 1, coins: 5, more: true })
+  })
+  it('nothing when coins are off, or when a set maximum is already reached; a partial last step is honest', () => {
+    expect(coinNudge(300, { loyalty_coins_per_order: '0' })).toBeNull()
+    expect(coinNudge(2000, { loyalty_coins_per_order: '20' })).toBeNull()
+    expect(coinNudge(1600, { loyalty_coins_per_order: '18' })).toEqual({ addRupees: 400, coins: 3, more: true })
   })
 })

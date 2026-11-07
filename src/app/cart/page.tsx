@@ -42,6 +42,7 @@
  *   6. parseFloat NaN guard added for minOrderAmt.
  */
 
+import CoinNudge from '@/components/loyalty/CoinNudge'
 import './cart-page.css'
 import { DELIVERY_BADGE, RETURNS_BADGE } from '@/lib/shippingCopy'
 
@@ -313,6 +314,7 @@ export default function CartPage() {
               minOrderAmt={minOrderAmt}
               onCheckout={flushPendingRemovals}
             />
+            <CoinNudge total={pricing.total} settings={settings as unknown as Record<string, string | undefined>} style={{ marginTop: 12 }} />
           </div>
         </div>}
       </div>
