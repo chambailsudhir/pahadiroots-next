@@ -502,6 +502,7 @@ describe('createOrder — S-01 server-side guards (named stock error, NaN COD ca
     const { createOrder } = await import('@/lib/services/orderService')
     const err = await createOrder(BASE_INPUT, DEFAULT_SETTINGS).catch((e: Error) => e)
     expect(err).toBeInstanceOf(Error)
+    expect((err as { code?: string }).code).toBe('OUT_OF_STOCK')
     expect((err as Error).message).toMatch(/Insufficient stock for one of the items/)
     expect((err as Error).message).not.toContain(VARIANT_ID)
   })
@@ -570,6 +571,18 @@ describe('createOrder — coupon server-side re-validation (defence in depth)', 
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(createOrder({ ...BASE_INPUT, couponCode: 'EXPIRED' }, DEFAULT_SETTINGS))
       .rejects.toThrow(/expired/i)
+  })
+
+  it('customer-facing refusals are typed CheckoutRejectedError (stock + coupon) so routes never need message sniffing', async () => {
+    const { CheckoutRejectedError } = await import('@/lib/errors/checkoutErrors')
+    mockDb.responses['coupons'] = {
+      code: 'EXPIRED', value: 10, type: 'percent', max_uses: null, uses_count: 0,
+      is_active: true, expires_at: '2020-01-01T00:00:00Z', min_order: null, max_discount: null,
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const err = await createOrder({ ...BASE_INPUT, couponCode: 'EXPIRED' }, DEFAULT_SETTINGS).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(CheckoutRejectedError)
+    expect((err as InstanceType<typeof CheckoutRejectedError>).code).toBe('COUPON_INVALID')
   })
 
   it('rejects an order below the coupon min_order threshold even though the client already checked', async () => {
@@ -1354,5 +1367,98 @@ describe('createOrder — delivery phone is snapshotted on the order (ACC-035)',
     const ship = (mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')!.args as { p_shipping_address: { phone: string } }).p_shipping_address
     expect(ship.phone).toBe(normalizePhoneForLookup('098765 43210'))
     expect(ship.phone).toHaveLength(10)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COM-1 (Nov 2026 audit): a committed order's coupon claim must end up LINKED (coupon_usage.order_id set) — the 30-minute
+// release_stale_coupon_claims sweep deletes unlinked claims and the coupon becomes reusable.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createOrder — coupon claim linking (COM-1)', () => {
+  const COUPON = {
+    id: 3, code: 'TRACK5', value: 10, type: 'percent', max_uses: 100, uses_count: 5,
+    is_active: true, expires_at: null, min_order: null, max_discount: null,
+  }
+
+  it('step 10: retries the attach once when the first PATCH fails, and the order still succeeds', async () => {
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+    mockDb.responses['coupons'] = COUPON
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: true, usage_id: 42 }
+    let usageCalls = 0
+    mockDb.responses['coupon_usage'] = () => (++usageCalls === 1 ? new Error('connection reset') : [])
+    const { createOrder } = await import('@/lib/services/orderService')
+    const r = await createOrder({ ...BASE_INPUT, couponCode: 'TRACK5' }, DEFAULT_SETTINGS)
+    expect(r.alreadyExists).toBe(false)
+    const attaches = mockDb.updateCalls.filter(c => c.table === 'coupon_usage')
+    expect(attaches).toHaveLength(2)
+    expect(attaches.every(a => a.eqCalls.some(e => e[0] === 'id' && e[1] === 42))).toBe(true)
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'release_coupon_claim')).toBeUndefined()
+  })
+
+  it('step 10: a persistent attach failure is alerted but does not fail the committed order', async () => {
+    wireHappyPathFetch()
+    wireOrderRpcSuccess()
+    mockDb.responses['coupons'] = COUPON
+    mockDb.rpcResponses['claim_coupon_use'] = { ok: true, usage_id: 42 }
+    mockDb.responses['coupon_usage'] = new Error('permission denied')
+    const { createOrder } = await import('@/lib/services/orderService')
+    const r = await createOrder({ ...BASE_INPUT, couponCode: 'TRACK5' }, DEFAULT_SETTINGS)
+    expect(r.order.id).toBe('order-db-uuid-001')
+    expect(mockDb.updateCalls.filter(c => c.table === 'coupon_usage')).toHaveLength(2)
+  })
+
+  it('idempotent replay: links the existing order to this customer\'s still-unlinked claim before returning it', async () => {
+    const { couponIdentityKey } = await import('@/lib/server/couponClaim')
+    const key = couponIdentityKey('9876543210')
+    mockDb.responses['orders'] = {
+      id: 'order-existing-001', order_number: 'PREXIST01', total_amount: 500, order_status: 'confirmed',
+      payment_method: 'cod', loyalty_points_redeemed: 0, coupon_discount: 40, created_at: '2026-11-06T10:00:00Z',
+    }
+    mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+    mockDb.responses['coupons'] = COUPON
+    let usageCalls = 0
+    mockDb.responses['coupon_usage'] = () => {
+      usageCalls++
+      if (usageCalls === 1) return []                                                         // nothing linked to the order yet
+      if (usageCalls === 2) return [
+        { id: 90, customer_id: null, identity_key: 'ph:someone-else' },                       // another person's claim — never taken
+        { id: 77, customer_id: null, identity_key: key },
+      ]
+      return []                                                                                // the PATCH
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, customerPhone: '9876543210', couponCode: 'TRACK5' }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(true)
+    const attach = mockDb.updateCalls.find(c => c.table === 'coupon_usage')
+    expect(attach).toBeDefined()
+    expect(attach!.eqCalls.some(a => a[0] === 'id' && a[1] === 77)).toBe(true)
+    expect(attach!.payload).toMatchObject({ order_id: 'order-existing-001', discount_amount: 40 })
+    expect(mockDb.rpcCalls.find(c => c.rpcName === 'create_order_with_items')).toBeUndefined()
+  })
+
+  it('idempotent replay: an already-linked claim is left alone (idempotent)', async () => {
+    mockDb.responses['orders'] = {
+      id: 'order-existing-001', order_number: 'PREXIST01', total_amount: 500, order_status: 'confirmed',
+      payment_method: 'cod', loyalty_points_redeemed: 0, coupon_discount: 40,
+    }
+    mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+    mockDb.responses['coupons'] = COUPON
+    mockDb.responses['coupon_usage'] = [{ id: 77 }]
+    const { createOrder } = await import('@/lib/services/orderService')
+    const result = await createOrder({ ...BASE_INPUT, couponCode: 'TRACK5' }, DEFAULT_SETTINGS)
+    expect(result.alreadyExists).toBe(true)
+    expect(mockDb.updateCalls.find(c => c.table === 'coupon_usage')).toBeUndefined()
+  })
+
+  it('idempotent replay without a coupon does not touch coupon_usage', async () => {
+    mockDb.responses['orders'] = {
+      id: 'order-existing-001', order_number: 'PREXIST01', total_amount: 500, order_status: 'confirmed',
+      payment_method: 'cod', loyalty_points_redeemed: 0,
+    }
+    mockDb.responses['order_items'] = [{ product_id: PRODUCT_ID, variant_id: VARIANT_ID, quantity: 2 }]
+    const { createOrder } = await import('@/lib/services/orderService')
+    await createOrder(BASE_INPUT, DEFAULT_SETTINGS)
+    expect(mockDb.updateCalls.find(c => c.table === 'coupon_usage')).toBeUndefined()
   })
 })

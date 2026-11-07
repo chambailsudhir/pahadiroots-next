@@ -29,6 +29,10 @@ describe('assertPaymentMethodAvailable (server side gate used by createOrder)', 
     expect(() => assertPaymentMethodAvailable('razorpay', s)).toThrow('Online payment is not available at this time')
     expect(() => assertPaymentMethodAvailable('cod', s)).not.toThrow()
   })
+  it('throws the typed customer-facing CheckoutRejectedError (Nov 2026 error-leakage audit)', async () => {
+    const { CheckoutRejectedError } = await import('@/lib/errors/checkoutErrors')
+    expect(() => assertPaymentMethodAvailable('cod', { cod_enabled: 'false' })).toThrow(CheckoutRejectedError)
+  })
   it('both off → both rejected', () => {
     const s = { cod_enabled: 'false', upi_enabled: 'false' }
     expect(() => assertPaymentMethodAvailable('cod', s)).toThrow()

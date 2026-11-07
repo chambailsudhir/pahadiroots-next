@@ -43,6 +43,7 @@
 import { NextRequest } from 'next/server'
 import { ok, fail, sbAdmin } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 // Deliberately minimal — this is a PUBLIC, unauthenticated endpoint. No
 // address, no items, no customer name/email — just enough for the status
@@ -84,7 +85,7 @@ async function fetchCustomerPhone(customerId: unknown): Promise<string | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!await checkRateLimitKv(`mw:rl:order_track_ip:${ip}`, 20)) {
     return fail(429, 'Too many requests — please wait a moment')
   }

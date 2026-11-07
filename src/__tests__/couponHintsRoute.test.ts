@@ -123,3 +123,41 @@ describe('GET /api/v1/coupon-hints (AUDIT S1-010)', () => {
     expect(url).toMatch(/select=[^&]*max_uses/)
   })
 })
+
+// Nov 2026 audit: only owner-opted-in coupons (coupons.show_in_hints = true) are advertised. Until the column's migration is applied
+// PostgREST answers 400 for the unknown column; the route must then keep today's behaviour (retry once without the filter).
+describe('coupon-hints show_in_hints opt-in (Nov 2026 audit)', () => {
+  afterEach(async () => { await loadRouteWithServiceKey(undefined) })
+
+  it('asks PostgREST only for coupons with show_in_hints=eq.true', async () => {
+    const { GET } = await loadRouteWithServiceKey('svc')
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('show_in_hints=eq.true')
+  })
+
+  it('column not there yet (PostgREST 400 naming it) → logs and retries once WITHOUT the filter, serving the old list', async () => {
+    const { logger } = await import('@/lib/logger')
+    fetchMock.mockReset()
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 400, text: async () => '{"code":"42703","message":"column coupons.show_in_hints does not exist"}', json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ROWS })
+    const { GET } = await loadRouteWithServiceKey('svc')
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain('show_in_hints')
+    expect((await res.json()).hints.map((h: { code: string }) => h.code)).toEqual(['FLAT100', 'FESTIVE20', 'MONSOON15'])
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith('coupon_hints_show_in_hints_missing', expect.anything())
+  })
+
+  it('a 400 that is NOT about the column is not retried without the filter', async () => {
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue({ ok: false, status: 400, text: async () => '{"message":"bad request"}', json: async () => ({}) })
+    const { GET } = await loadRouteWithServiceKey('svc')
+    const res = await GET()
+    expect(res.status).toBe(500)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})

@@ -22,8 +22,8 @@ import { COOKIE_TOKEN, COOKIE_REFRESH, COOKIE_OAUTH_VERIFIER, OAUTH_VERIFIER_MAX
 import { generatePkceVerifier, pkceChallenge, isPlausibleVerifier } from '@/lib/auth/pkce'
 import { isRecoveryToken } from '@/lib/auth/recoveryToken'
 import { cleanEmail, cleanName, isPasswordString, LOGIN_PASSWORD_MAX } from '@/lib/auth/inputLimits'
-import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
-import { clientIpKey } from '@/lib/api/clientIp'
+import { checkRateLimitKv, peekRateLimitKv } from '@/lib/api/rateLimitKv'
+import { clientIpKey, ipv6Slash48Key } from '@/lib/api/clientIp'
 import { syncCustomerProfile, toPublicProfile, checkCsrf } from '@/lib/api/serverUtils'
 import { RETURN_STATUS_TO_DISPLAY, RETURN_REASON_CODES } from '@/lib/account/constants'
 import { validate as validators } from '@/lib/account/validation'
@@ -91,11 +91,23 @@ async function rateLimit(key: string, maxHits = 5, windowMs = 60_000): Promise<b
 //   • per (account + client network): 10 attempts block THAT network only — a stranger can lock only themselves out;
 //   • per account across all networks: a much higher botnet backstop (100 / 15 min) that caps online guessing for one account
 //     at 100 tries per window while making a deliberate lock-out ten times more expensive.
+//   • Nov 2026 audit: per (account + IPv6 /48) as well — one ISP customer usually owns a whole /48 (65 536 /64s).
 const LOGIN_FAIL_MAX     = 10
+const LOGIN_FAIL_48_MAX  = 20
 const LOGIN_FAIL_ANY_MAX = 100
 const LOGIN_FAIL_WINDOW  = 15 * 60
 const loginFailKey    = (email: string, ipKey: string) => `mw:rl:auth_login_fail:${email.toLowerCase()}:${ipKey}`
+const loginFail48Key  = (email: string, site48: string) => `mw:rl:auth_login_fail48:${email.toLowerCase()}:${site48}`
 const loginFailAnyKey = (email: string) => `mw:rl:auth_login_fail_any:${email.toLowerCase()}`
+/**
+ * Is the account-wide failed-login counter over the cap? Upstash has a read-only peek; the Postgres fallback does not, so when
+ * peek cannot answer (no KV) this falls back to the increment check — used ONLY on a correct-password login, which only the
+ * account owner can produce, so the extra count can never be used to lock someone out.
+ */
+async function peekOverCapByIncrement(accountKey: string): Promise<boolean> {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) return false   // peek already answered
+  return !(await checkRateLimitKv(accountKey, LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW))
+}
 
 async function sbAuth(path: string, body: Record<string, unknown> | null = null, token?: string) {
   const url = `${SUPABASE_URL}/auth/v1${path}`
@@ -396,30 +408,43 @@ export async function POST(req: NextRequest) {
     // consumed before the password was checked, so a stranger sending 10 bad logins for a victim's e-mail
     // locked the victim out). Generic wording — identical for real and non-existent accounts.
     const loginIp = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
-    // Both counters are ATOMIC increments BEFORE the password is checked, through checkRateLimitKv (Upstash, else the Postgres
-    // rate_limit_check RPC — so they work when the KV env is missing at runtime, which has been the live state).
+    // Per-NETWORK counters are ATOMIC increments BEFORE the password is checked, through checkRateLimitKv (Upstash, else the
+    // Postgres rate_limit_check RPC — so they work when the KV env is missing at runtime, which has been the live state):
     //   • per (account + network), 10 / 15 min: only ever limits the caller's own network;
-    //   • per account across all networks, 100 / 15 min: the botnet backstop. VERIFY ROUND (F-9): this used to be a read-only
-    //     "peek" that is Upstash-only — without KV it always said "not blocked", so distributed guessing (one /64 per try) was
-    //     unbounded and GoTrue evaluated every password. It now counts every attempt up front and refuses the 101st. Trade-off,
-    //     accepted: a stranger needs 100 attempts in 15 minutes against ONE address to inconvenience its owner for 15 minutes
-    //     (ten times the per-network cost), versus an attacker otherwise getting unlimited tries.
-    // BUG FIX (Nov 2026 verification): both counters used to be bumped on every request, so a network that was ALREADY
-    // blocked kept feeding the account-wide counter (about 75 requests / 15 min per network under the 5/min route limit):
-    // two /64s could lock any customer out, again and again. The account-wide counter now only counts attempts the
-    // caller's network was still allowed to make, so each network adds at most LOGIN_FAIL_MAX (10) to it and locking an
-    // account needs ~10 distinct networks inside one window.
+    //   • per (account + IPv6 /48), 20 / 15 min (Nov 2026 audit): one site's 65 536 /64s count as one bucket here.
+    // BUG FIX (Nov 2026 verification): a network that was ALREADY blocked used to keep feeding the account-wide counter; the
+    // /48 and account-wide counters are only ever reached by attempts the caller's network was still allowed to make.
     const withinNetworkQuota = await checkRateLimitKv(loginFailKey(email, loginIp), LOGIN_FAIL_MAX, LOGIN_FAIL_WINDOW)
-    const withinAccountQuota = withinNetworkQuota
-      ? await checkRateLimitKv(loginFailAnyKey(email), LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW)
+    const site48 = ipv6Slash48Key(loginIp)
+    const withinSiteQuota = withinNetworkQuota && site48
+      ? await checkRateLimitKv(loginFail48Key(email, site48), LOGIN_FAIL_48_MAX, LOGIN_FAIL_WINDOW)
       : true
-    if (!withinNetworkQuota || !withinAccountQuota) {
-      return fail(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
-    }
+    const tooMany = () => fail(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
+    if (!withinNetworkQuota || !withinSiteQuota) return tooMany()
+
+    // Per ACCOUNT across all networks, 100 FAILED passwords / 15 min: the botnet backstop (VERIFY ROUND F-9).
+    // Nov 2026 audit: it used to count every ATTEMPT up front, so ~10 IPv6 /64s sending their 10 allowed tries could lock any
+    // customer out. It is now incremented only AFTER GoTrue rejects the credentials. Because the Postgres fallback has no
+    // read-only form, the decision is made after the password check: once over the cap EVERY answer is the same 429 — wrong
+    // password or right — and no session is handed out, so guesses past the cap reveal nothing. Where Upstash is reachable, an
+    // account already over the cap is also refused up front without asking GoTrue (peekRateLimitKv; false without KV).
+    const accountKey = loginFailAnyKey(email)
+    if (await peekRateLimitKv(accountKey, LOGIN_FAIL_ANY_MAX + 1)) return tooMany()
+    const recordFailure = async () => !(await checkRateLimitKv(accountKey, LOGIN_FAIL_ANY_MAX, LOGIN_FAIL_WINDOW))   // true = now over the cap
     try {
       const data = await sbAuth('/token?grant_type=password', { email, password })
       const user = data.user || data
-      if (!user || !user.id) return err(401, 'Invalid email or password')
+      if (!user || !user.id) {
+        if (await recordFailure()) return tooMany()
+        return err(401, 'Invalid email or password')
+      }
+      // Correct password: refuse it too while the account is over the cap (otherwise guessing past the cap would still pay).
+      // Without a read-only limiter form this check adds one to the counter — only the real owner can cause that.
+      const overCap = await peekRateLimitKv(accountKey, LOGIN_FAIL_ANY_MAX + 1) || await peekOverCapByIncrement(accountKey)
+      if (overCap) {
+        try { if (data.access_token) await sbAuth('/logout?scope=local', {}, data.access_token) } catch { /* best effort */ }
+        return tooMany()
+      }
       const profile = await syncCustomerProfile(user)
       const res = ok({
         success: true,
@@ -435,6 +460,8 @@ export async function POST(req: NextRequest) {
       }
       if (e2.status === 429) return err(429, 'Too many attempts. Please wait a few minutes before trying again.', { 'Retry-After': '900' })
       if (!e2.status || e2.status >= 500) return err(503, 'Sign-in is temporarily unavailable. Please try again in a moment.')
+      // Only a credential REJECTION (GoTrue 400/401/422) counts toward the account-wide cap — never an outage.
+      if ((e2.status === 400 || e2.status === 401 || e2.status === 422) && await recordFailure()) return tooMany()
       return err(400, 'Invalid email or password')   // 400 as before (GoTrue's status for bad credentials); never 401 = "signed out"
     }
   }

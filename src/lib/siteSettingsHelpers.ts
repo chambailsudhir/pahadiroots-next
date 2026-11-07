@@ -1,3 +1,4 @@
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 // ── Client-safe site-settings helpers ──────────────────────────────────────
 // Split out of getSiteSettings.ts (Oct 2026 build fix) — that file imports
 // `revalidateTag`/`unstable_cache` from 'next/cache', which are server-only
@@ -57,10 +58,10 @@ export function assertPaymentMethodAvailable(
   settings: Record<string, string | undefined | null>,
 ): void {
   if (method === 'cod' && !isCodEnabled(settings as Record<string, string | undefined>)) {
-    throw new Error('COD is not available at this time')
+    throw new CheckoutRejectedError('COD is not available at this time', 'PAYMENT_METHOD_UNAVAILABLE')
   }
   if (method === 'razorpay' && !isRazorpayEnabledByAdmin(settings as Record<string, string | undefined>)) {
-    throw new Error('Online payment is not available at this time')
+    throw new CheckoutRejectedError('Online payment is not available at this time', 'PAYMENT_METHOD_UNAVAILABLE')
   }
 }
 

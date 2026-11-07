@@ -116,3 +116,21 @@ describe('transcribe input shaping', () => {
     for (const m of ['text/html', 'application/pdf', 'video/mp4', '', 5, undefined]) expect(isAllowedAudioMime(m as any)).toBe(false)
   })
 })
+
+describe('rate-limit IP key (Nov 2026 audit)', () => {
+  it('collapses IPv6 to its /64 so one host cannot rotate addresses past the limits', async () => {
+    const { getClientIp, getRawClientIp } = await import('@/lib/api/aiGuard')
+    const a = req({ 'x-forwarded-for': '2001:db8:1:2:aaaa::1' })
+    const b = req({ 'x-forwarded-for': '2001:db8:1:2:bbbb::99, 10.0.0.1' })
+    expect(getClientIp(a)).toBe(getClientIp(b))
+    expect(getClientIp(a)).toBe('2001:db8:1:2::/64')
+    expect(getClientIp(req({ 'x-forwarded-for': '1.2.3.4' }))).toBe('1.2.3.4')
+    expect(getRawClientIp(a)).toBe('2001:db8:1:2:aaaa::1')   // Turnstile still gets the real address
+  })
+  it('guardAiRequest keys its per-IP limits on the /64', async () => {
+    await guardAiRequest(req({ origin: 'https://www.pahadiroots.com', 'x-forwarded-for': '2001:db8:1:2:dead::1', 'content-length': '2' }), OPTS)
+    const keys = limiter.mock.calls.map(c => String(c[0]))
+    expect(keys.some(k => k.includes('2001:db8:1:2::/64'))).toBe(true)
+    expect(keys.some(k => k.includes('dead'))).toBe(false)
+  })
+})

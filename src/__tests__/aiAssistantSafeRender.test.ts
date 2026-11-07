@@ -36,3 +36,12 @@ describe('ai-assistant safe rendering', () => {
     expect(src).not.toContain('buildSystemPrompt(')
   })
 })
+
+describe('ai-assistant header (Nov 2026 audit)', () => {
+  it('no longer reads a localStorage name/tagline override and never concatenates them into innerHTML', () => {
+    expect(src).not.toContain("localStorage.getItem('pahadi_ai_config')")
+    expect(src).not.toMatch(/innerHTML[^;]*AI_CFG\.(name|tagline)/)
+    expect(src).toMatch(/#pr-name'\)\.textContent\s*=\s*AI_CFG\.name/)
+    expect(src).toMatch(/#pr-tagline'\)\.textContent\s*=\s*AI_CFG\.tagline/)
+  })
+})

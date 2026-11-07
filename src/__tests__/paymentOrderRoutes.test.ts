@@ -29,6 +29,7 @@ import {
   type MockInstance,
 } from 'vitest'
 import crypto from 'crypto'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { Resend } from 'resend'
 
@@ -390,7 +391,7 @@ describe('POST /api/v1/payments — create_payment', () => {
   // classify and expose the same set of user-actionable errors consistently.
   it('exposes a stock error from createOrder as 409 with the real message (consistent with orders/route.ts)', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('Insufficient stock for item var-uuid-1 — please reduce quantity')
+      new CheckoutRejectedError('Insufficient stock for item var-uuid-1 — please reduce quantity')
     )
     const body = { action: 'create_payment', ...BASE_ORDER_BODY }
     const res  = await callPayments(body)
@@ -410,7 +411,7 @@ describe('POST /api/v1/payments — create_payment', () => {
   // a genuine server crash would.
   it('exposes the COD-active-orders-limit error as 409 with the real message, not a generic 500', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
+      new CheckoutRejectedError('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
     )
     const body = { action: 'create_payment', ...BASE_ORDER_BODY }
     const res  = await callPayments(body)
@@ -422,7 +423,7 @@ describe('POST /api/v1/payments — create_payment', () => {
 
   it('exposes the COD-max-order-value error as 409 with the real message, not a generic 500', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('COD is only available for orders up to ₹3000. Please pay online for this order.')
+      new CheckoutRejectedError('COD is only available for orders up to ₹3000. Please pay online for this order.')
     )
     const body = { action: 'create_payment', ...BASE_ORDER_BODY }
     const res  = await callPayments(body)
@@ -667,7 +668,7 @@ describe('POST /api/v1/orders — COD', () => {
 
   it('stock error → 409 with user-facing message', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('Insufficient stock for item var-uuid-1 — please reduce quantity')
+      new CheckoutRejectedError('Insufficient stock for item var-uuid-1 — please reduce quantity')
     )
     const res  = await callOrders(COD_ORDER_BODY)
     const json = await res.json()
@@ -693,7 +694,7 @@ describe('POST /api/v1/orders — COD', () => {
 
   it('COD disabled → 500/409 with COD message', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('COD is not available at this time')
+      new CheckoutRejectedError('COD is not available at this time')
     )
     const res  = await callOrders(COD_ORDER_BODY)
     const json = await res.json()
@@ -708,7 +709,7 @@ describe('POST /api/v1/orders — COD', () => {
   // gap for these two createOrder() COD guardrails).
   it('COD active-orders limit error → 409 with the real message, not a generic 500', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
+      new CheckoutRejectedError('You have 3 COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.')
     )
     const res  = await callOrders(COD_ORDER_BODY)
     const json = await res.json()
@@ -719,7 +720,7 @@ describe('POST /api/v1/orders — COD', () => {
 
   it('COD max-order-value error → 409 with the real message, not a generic 500', async () => {
     mockCreateOrder.mockRejectedValueOnce(
-      new Error('COD is only available for orders up to ₹3000. Please pay online for this order.')
+      new CheckoutRejectedError('COD is only available for orders up to ₹3000. Please pay online for this order.')
     )
     const res  = await callOrders(COD_ORDER_BODY)
     const json = await res.json()
@@ -1304,5 +1305,70 @@ describe('POST /api/v1/payments and /api/v1/orders — a body that is not JSON',
     const res = await POST(bad() as any)
     expect(res.status).toBe(400)
     expect((await res.json()).error).toBe('Invalid JSON')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Security audit (Nov 2026): internal errors that merely CONTAIN "coupon"/"stock" must not leak.
+// Only CheckoutRejectedError is customer-facing; everything else → 500 + generic message (prod).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('error leakage — typed customer errors only (Nov 2026 audit)', () => {
+  async function callPayments(body: object) {
+    const { POST } = await import('@/app/api/v1/payments/route')
+    return POST(makeReq(body, { csrfHeader: true }) as any)
+  }
+  async function callOrders(body: object) {
+    const { POST } = await import('@/app/api/v1/orders/route')
+    return POST(makeReq(body, { csrfHeader: true }) as any)
+  }
+  const internal = [
+    new Error('coupon claim failed: permission denied for table coupon_usage'),
+    new Error('coupon fetch timed out after 8000ms'),
+    new Error('Stock check failed: relation "product_variants" does not exist'),
+  ]
+
+  for (const e of internal) {
+    it(`payments: hides "${e.message}" behind a generic 500 in production`, async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      mockCreateOrder.mockRejectedValueOnce(e)
+      const res  = await callPayments({ action: 'create_payment', ...BASE_ORDER_BODY })
+      const json = await res.json()
+      expect(res.status).toBe(500)
+      expect(json.error).toBe('Payment processing failed. Please try again or contact support.')
+      vi.unstubAllEnvs()
+    })
+    it(`orders: hides "${e.message}" behind a generic 500 in production`, async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      mockCreateOrder.mockRejectedValueOnce(e)
+      const res  = await callOrders(COD_ORDER_BODY)
+      const json = await res.json()
+      expect(res.status).toBe(500)
+      expect(json.error).toBe('Order placement failed. Please try again or contact support.')
+      vi.unstubAllEnvs()
+    })
+  }
+
+  it('payments: StockReservationError (infra) is a 500, not a 409 stock message', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const { StockReservationError } = await import('@/lib/services/inventoryService')
+    mockCreateOrder.mockRejectedValueOnce(new StockReservationError(new Error('22P02'), 'var-1'))
+    const res  = await callPayments({ action: 'create_payment', ...BASE_ORDER_BODY })
+    const json = await res.json()
+    expect(res.status).toBe(500)
+    expect(json.error).not.toMatch(/stock|var-1/i)
+    vi.unstubAllEnvs()
+  })
+
+  it('payments + orders: a typed coupon refusal keeps its customer wording and 409 in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    mockCreateOrder.mockRejectedValueOnce(new CheckoutRejectedError('This coupon has expired', 'COUPON_INVALID'))
+    let res = await callPayments({ action: 'create_payment', ...BASE_ORDER_BODY })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('This coupon has expired')
+    mockCreateOrder.mockRejectedValueOnce(new CheckoutRejectedError('Invalid or inactive coupon code', 'COUPON_INVALID'))
+    res = await callOrders(COD_ORDER_BODY)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('Invalid or inactive coupon code')
+    vi.unstubAllEnvs()
   })
 })

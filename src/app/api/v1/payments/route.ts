@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import crypto from 'crypto'
 import { createOrderSchema, verifyPaymentSchema } from '@/lib/schemas'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup } from '@/lib/services/orderService'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { getServiceClient } from '@/lib/supabase'
@@ -585,39 +586,19 @@ export async function POST(req: NextRequest) {
     if (err instanceof OrderOutcomeUnknownError) {
       return privateJson({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
     }
-    // BUG FIX [ERROR HANDLING]: this previously had NO user-facing carve-out at
-    // all in production — every error, including the exact same user-actionable
-    // messages createOrder() throws in the COD path (insufficient stock, expired/
-    // capped coupon, below-minimum-order coupon, unavailable product, insufficient
-    // loyalty balance), was flattened to a single generic "Payment processing
-    // failed. Please try again or contact support." A Razorpay customer had zero
-    // way to know their coupon expired or an item went out of stock, while a COD
-    // customer hitting the identical createOrder() failure saw the real reason —
-    // an inconsistency between the two checkout paths for the same underlying
-    // errors. Genuine internal failures (Razorpay API/config errors, DB/RPC
-    // errors) still stay hidden behind the generic message in production.
-    const lowerMessage = internalMessage.toLowerCase()
-    const isUserFacing = lowerMessage.includes('stock')
-      || lowerMessage.includes('cod is not available')
-      // BUG FIX [ERROR HANDLING] (kept in sync with orders/route.ts — see
-      // that file for the full incident writeup): these are the same
-      // createOrder() COD guardrails hitting the identical gap here.
-      || lowerMessage.includes('cod is only available')
-      || lowerMessage.includes('already in progress')
-      || lowerMessage.includes('coupon')
-      || lowerMessage.includes('no longer available')
-      || lowerMessage.includes('multiple options')
-      || lowerMessage.includes('invalid cart item')
-      || lowerMessage.includes('insufficient loyalty balance')
-      || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
-      || lowerMessage.includes('minimum order is')          // admin min_order_amount
-      || lowerMessage.includes('online payment is not available')
-      || lowerMessage.includes('cannot be paid online')
-      || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
-      || lowerMessage.includes('cannot be paid online')       // S1-013 sub-₹1 online total
-    // Never leak Razorpay / Supabase internals to the client in production
-    const status = isUserFacing ? 409 : 500
-    const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
+    // Customer-actionable refusals from createOrder() (insufficient stock, expired/capped coupon,
+    // below-minimum order, unavailable product, COD caps, loyalty shortfall, serviceability…) are
+    // shown verbatim as 409s, exactly as on the COD path in orders/route.ts.
+    // Security audit (Nov 2026): this used to be decided by sniffing the message for words like
+    // "coupon"/"stock", which leaked internal failures (`coupon claim failed: <postgres detail>`,
+    // `coupon fetch timed out after 8000ms`, `Stock reservation infra failure for item <id>`) as
+    // 409s. Only the typed CheckoutRejectedError (customer-safe message by construction) is shown
+    // now; everything else is logged above and hidden behind the generic message in production.
+    if (err instanceof CheckoutRejectedError) {
+      return privateJson({ error: err.message }, { status: 409 })
+    }
+    const status = 500
+    const clientMessage = process.env.NODE_ENV !== 'production'
       ? internalMessage
       : 'Payment processing failed. Please try again or contact support.'
     return privateJson({ error: clientMessage }, { status })

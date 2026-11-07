@@ -1,7 +1,7 @@
 import { NextRequest, after } from 'next/server'
-import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
+import { createOrder, ensureCouponUsageLinked, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
-import { StockReservationError } from '@/lib/services/inventoryService'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
@@ -105,6 +105,29 @@ interface CommittedOrder {
   customer_id: number | string | null
   /** Stored GST (written by the DB trigger) and the coins actually charged — the e-mail must show the same figures as the invoice. */
   tax: number | null; loyalty_points_redeemed: number | null
+  created_at?: string | null
+}
+
+interface RecoveryCouponContext { couponCode: string | null; customerPhone: string | null; authenticatedCustomerId: string | number | null }
+
+/**
+ * COM-1 (Nov 2026 audit): when createOrder() outlived this request, the order's coupon claim may still be unlinked
+ * (coupon_usage.order_id NULL) — and the 30-minute stale-claim sweep would then free the use. Link it now. Never throws.
+ */
+async function linkRecoveredCoupon(committed: CommittedOrder, ctx: RecoveryCouponContext | null): Promise<void> {
+  if (!ctx?.couponCode) return
+  try {
+    await ensureCouponUsageLinked({
+      orderId:                 committed.id,
+      orderCreatedAt:          committed.created_at ?? null,
+      couponCode:              ctx.couponCode,
+      couponDiscount:          committed.coupon_discount,
+      authenticatedCustomerId: ctx.authenticatedCustomerId,
+      customerPhone:           ctx.customerPhone,
+    })
+  } catch (e) {
+    captureError(e, { action: 'orders.timeout_recovery_coupon_link', order_id: committed.id, alert: true })
+  }
 }
 
 async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrder | null> {
@@ -112,7 +135,7 @@ async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrd
   try {
     const rows = await sbAdmin(
       'GET',
-      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token,total_amount,subtotal,shipping_charge,cod_surcharge,coupon_discount,customer_id,tax,loyalty_points_redeemed&limit=1`,
+      `/rest/v1/orders?idempotency_key=eq.${idempotencyKey}&select=id,order_number,confirmation_token,total_amount,subtotal,shipping_charge,cod_surcharge,coupon_discount,customer_id,tax,loyalty_points_redeemed,created_at&limit=1`,
     )
     const r = Array.isArray(rows) ? rows[0] : null
     if (!r) return null
@@ -121,6 +144,7 @@ async function findCommittedOrder(idempotencyKey: unknown): Promise<CommittedOrd
       total_amount: Number(r.total_amount) || 0, subtotal: Number(r.subtotal) || 0,
       shipping_charge: Number(r.shipping_charge) || 0, cod_surcharge: Number(r.cod_surcharge) || 0,
       coupon_discount: Number(r.coupon_discount) || 0, customer_id: r.customer_id ?? null,
+      created_at: typeof r.created_at === 'string' ? r.created_at : null,
       tax: r.tax != null && Number.isFinite(Number(r.tax)) ? Number(r.tax) : null,
       loyalty_points_redeemed: r.loyalty_points_redeemed != null && Number.isFinite(Number(r.loyalty_points_redeemed)) ? Number(r.loyalty_points_redeemed) : null,
     }
@@ -228,6 +252,8 @@ export async function POST(req: NextRequest) {
   // Remembered outside the try so the catch can look the order up if createOrder() times out (ACC-032).
   let idempotencyKeyForRecovery: unknown = null
   let finalizeForRecovery: ((order: CreatedOrder, alreadyExists: boolean, customerId: string | null) => Promise<void>) | null = null
+  // COM-1: what the timeout recovery needs to link the order's coupon claim (see linkRecoveredCoupon).
+  let couponForRecovery: RecoveryCouponContext | null = null
   try {
     // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
     const body   = await req.json().catch(() => undefined)
@@ -504,6 +530,7 @@ export async function POST(req: NextRequest) {
       } catch { /* never blocks order creation */ }
     }
 
+    couponForRecovery = { couponCode: d.coupon_code ?? null, customerPhone: a.phone, authenticatedCustomerId: authenticatedCustomerId ?? null }
     const { order, alreadyExists, customerId } = await withTimeout(createOrder({
       customerName:   name,
       customerPhone:  a.phone,
@@ -565,6 +592,7 @@ export async function POST(req: NextRequest) {
       const committed = await findCommittedOrder(idempotencyKeyForRecovery)
       if (committed) {
         logger.warn('orders: outcome-unknown resolved — order was committed', { action: 'orders.recovered', order_id: committed.id, order_number: committed.order_number })
+        await linkRecoveredCoupon(committed, couponForRecovery)
         await finalizeRecoveredOrder(committed, finalizeForRecovery)
         return privateJson({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
@@ -584,6 +612,7 @@ export async function POST(req: NextRequest) {
         // The loyalty award and the confirmation / admin e-mails normally run right after createOrder() returns,
         // which this request never reached — run them now, once, then tell the customer their order exists.
         logger.warn('orders: create budget exceeded — order was committed, recovering', { action: 'orders.timeout_recovered', order_id: committed.id, order_number: committed.order_number })
+        await linkRecoveredCoupon(committed, couponForRecovery)
         await finalizeRecoveredOrder(committed, finalizeForRecovery)
         return privateJson({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
@@ -593,53 +622,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
-    // but never expose raw DB error messages in production — they leak table names,
-    // constraint names, and Supabase internals to attackers.
-    //
-    // BUG FIX [ERROR HANDLING]: the original check only matched 'stock' and 'COD',
-    // so every other user-actionable error thrown by createOrder() — an expired
-    // or usage-capped coupon, a below-minimum-order coupon, a product that became
-    // unavailable between add-to-cart and checkout, or a loyalty-balance race —
-    // fell through to the generic "Order placement failed. Please try again or
-    // contact support." message in production. The user had no way to know they
-    // needed to remove their coupon or an unavailable item; clicking "try again"
-    // would fail identically every time, and "contact support" for something they
-    // could have fixed themselves in five seconds. Widened to a case-insensitive
-    // check covering every user-actionable message createOrder() can throw, while
-    // still hiding genuinely internal failures (DB/RPC errors, "could not create
-    // customer record", etc.) behind the generic message.
-    // TYPE-SAFE CHECK FIRST: infra/DB failures (bad RPC types, connection drop,
-    // permission errors) must always be 500s — never shown to the customer as
-    // an actionable stock message, even though the word "stock" appears in
-    // both the error and the message-sniffing checks below.
-    const isInfraFailure = err instanceof StockReservationError
-    const lowerMessage = internalMessage.toLowerCase()
-    const isUserFacing = !isInfraFailure && (
-      lowerMessage.includes('stock')
-      || lowerMessage.includes('cod is not available')
-      // BUG FIX [ERROR HANDLING] (found via a live "Order placement failed"
-      // report — Vercel logs showed the real reason was a legitimate,
-      // user-actionable rejection, not a crash, but the customer only ever
-      // saw the generic 500 message): both of these are createOrder()'s own
-      // COD guardrails, thrown as plain, perfectly clear messages — they
-      // just didn't match any existing substring here, so they fell through
-      // to the generic "contact support" 500 like a genuine server crash.
-      || lowerMessage.includes('cod is only available')       // per-order COD value cap (cod_max_value)
-      || lowerMessage.includes('already in progress')         // active-COD-order count cap (cod_max_active_orders)
-      || lowerMessage.includes('coupon')
-      || lowerMessage.includes('no longer available')
-      || lowerMessage.includes('multiple options')
-      || lowerMessage.includes('invalid cart item')
-      || lowerMessage.includes('insufficient loyalty balance')
-      || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
-      || lowerMessage.includes('minimum order is')          // admin min_order_amount
-      || lowerMessage.includes('online payment is not available')
-      || lowerMessage.includes('cannot be paid online')
-      || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
-    )
-    const status  = isUserFacing ? 409 : 500
-    const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
+    // SEC-4: expose customer-actionable refusals (stock, coupon, COD caps, minimum order, unavailable
+    // product, loyalty shortfall, serviceability…) so the customer can act on them, but never raw
+    // DB/RPC/infra messages — they leak table names, constraint names and Supabase internals.
+    // Security audit (Nov 2026): this used to be decided by sniffing the message for words like
+    // "coupon"/"stock" (with a StockReservationError exclusion), which still leaked e.g.
+    // `coupon claim failed: <postgres detail>` or `coupon fetch timed out after 8000ms` as 409s.
+    // Only the typed CheckoutRejectedError (customer-safe message by construction) is shown now;
+    // StockReservationError and every other failure is a 500 with the generic message in production.
+    if (err instanceof CheckoutRejectedError) {
+      return privateJson({ error: err.message }, { status: 409 })
+    }
+    const status  = 500
+    const clientMessage = process.env.NODE_ENV !== 'production'
       ? internalMessage
       : 'Order placement failed. Please try again or contact support.'
     return privateJson({ error: clientMessage }, { status })

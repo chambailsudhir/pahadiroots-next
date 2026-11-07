@@ -12,13 +12,13 @@
 
 import { randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
   toPublicProfile,
-  checkRateLimit,
   checkRateLimitShared,
   checkCsrf,
 } from '@/lib/api/serverUtils'
@@ -168,12 +168,8 @@ export async function POST(req: NextRequest) {
   // ── Rate limiting: 20 writes per minute per user (IP-based for unauthenticated
   //    attempts, user-ID-based after token verification).
   //    Applied before token check so even unauthenticated hammering is blocked.
-  const ip = (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
-  if (!checkRateLimit(`profile_post:${ip}`, 20, 60_000)) {
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  if (!await checkRateLimitShared(`profile_post:${ip}`, 20, 60_000)) {
     return fail(429, 'Too many requests — please wait a moment before trying again.', { 'Retry-After': '60' })
   }
 

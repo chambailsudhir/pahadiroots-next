@@ -59,30 +59,40 @@ describe('POST /api/v1/analytics/track — batched writes', () => {
 })
 
 // Overview audit OV-080: purchase events are idempotent per order.
+// H2-3 (Nov 2026): a purchase is kept only for a real, recent, paid / confirmed-COD order (looked up server-side).
+const paidOrder = (order_number: string, total_amount = 100) =>
+  ({ order_number, total_amount, payment_status: 'paid', payment_method: 'razorpay', order_status: 'confirmed', created_at: new Date().toISOString() })
+const eventsCall = () => mocks.sbAdmin.mock.calls.find((c: unknown[]) => String(c[1]).includes('analytics_events'))
 describe('POST /api/v1/analytics/track — purchase idempotency', () => {
-  beforeEach(() => { mocks.sbAdmin.mockReset(); mocks.sbAdmin.mockResolvedValue(undefined) })
+  beforeEach(() => {
+    mocks.sbAdmin.mockReset()
+    mocks.sbAdmin.mockImplementation(async (method: string, path: string) =>
+      method === 'GET' && String(path).startsWith('/rest/v1/orders') ? [paidOrder('ORD-2026-00131'), paidOrder('ORD-9', 250)] : undefined)
+  })
 
-  it('a purchase event carries dedupe_key "purchase:<order number>"; every other event carries null (and every row has the same keys)', async () => {
+  it('a purchase event carries dedupe_key "purchase:<order number>" and the stored order total; every other event carries null (and every row has the same keys)', async () => {
     const { POST } = await import('@/app/api/v1/analytics/track/route')
-    await POST(post({ events: [ev(), ev({ event_type: 'purchase', metadata: { order_id: 'ORD-2026-00131', value: 100 } })] }))
-    const rows = mocks.sbAdmin.mock.calls[1][2]
+    await POST(post({ events: [ev(), ev({ event_type: 'purchase', metadata: { order_id: 'ORD-2026-00131', value: 99999 } })] }))
+    const rows = eventsCall()![2]
     expect(rows.map((r: any) => r.dedupe_key)).toEqual([null, 'purchase:ORD-2026-00131'])
+    expect(rows[1].metadata.value).toBe(100)
     expect(new Set(rows.map((r: object) => Object.keys(r).sort().join())).size).toBe(1)
   })
 
-  it('a purchase without a usable order number gets no key (it is still recorded, just not deduplicated)', async () => {
+  it('a purchase without a real order number is dropped (H2-3), and a batch of only those is rejected', async () => {
     const { POST } = await import('@/app/api/v1/analytics/track/route')
-    await POST(post({ events: [ev({ event_type: 'purchase', metadata: {} }), ev({ event_type: 'purchase', metadata: { order_id: 42 } }), ev({ event_type: 'purchase', metadata: { order_id: 'x'.repeat(61) } })] }))
-    expect(mocks.sbAdmin.mock.calls[1][2].map((r: any) => r.dedupe_key)).toEqual([null, null, null])
+    const res = await POST(post({ events: [ev({ event_type: 'purchase', metadata: {} }), ev({ event_type: 'purchase', metadata: { order_id: 42 } }), ev({ event_type: 'purchase', metadata: { order_id: 'NOT-AN-ORDER' } })] }))
+    expect(res.status).toBe(400)
+    expect(eventsCall()).toBeUndefined()
   })
 
   it('the same order sent twice in one batch is sent as two rows with the SAME key — the database (unique index + ignore-duplicates) keeps one', async () => {
     const { POST } = await import('@/app/api/v1/analytics/track/route')
     const p = ev({ event_type: 'purchase', metadata: { order_id: 'ORD-9' } })
     await POST(post({ events: [p, p] }))
-    const rows = mocks.sbAdmin.mock.calls[1][2]
-    expect(rows).toHaveLength(2)
-    expect(new Set(rows.map((r: any) => r.dedupe_key))).toEqual(new Set(['purchase:ORD-9']))
-    expect(mocks.sbAdmin.mock.calls[1][3]).toMatch(/ignore-duplicates/)
+    const call = eventsCall()!
+    expect(call[2]).toHaveLength(2)
+    expect(new Set(call[2].map((r: any) => r.dedupe_key))).toEqual(new Set(['purchase:ORD-9']))
+    expect(call[3]).toMatch(/ignore-duplicates/)
   })
 })

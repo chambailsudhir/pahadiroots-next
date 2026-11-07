@@ -38,8 +38,11 @@ jobs:
           status=0
           for path in expire-pending-orders retry-failed-emails; do
             echo "→ $path"
-            curl --fail-with-body --silent --show-error --max-time 60 \
-              -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/v1/cron/$path" || status=1
-            echo
+            # This repository is public, so its Actions logs are too: print only the HTTP status, never the response body
+            # (the sweep stats reveal order and e-mail volumes).
+            code=$(curl --silent --show-error --max-time 60 -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/v1/cron/$path") || code=000
+            echo "  HTTP $code"
+            case "$code" in 2??) ;; *) status=1 ;; esac
           done
           exit $status

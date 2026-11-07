@@ -162,6 +162,8 @@ import { checkServiceability } from '@/lib/serviceability'
 import { countPriorCouponUse, couponReuseProblem } from '@/lib/couponHistory'
 import { sameDeliveryAddress } from '@/lib/addressMatch'
 import { claimCouponUse, couponIdentityKey, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
+export { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 
 // ── Module-level Supabase REST helpers ───────────────────────
 // Declared once here so createOrder() doesn't re-create closures
@@ -361,7 +363,7 @@ const SAFE_ITEM_ID = /^[A-Za-z0-9_-]{1,64}$/
 function assertSafeItemIds(items: Array<{ productId: string; variantId: string }>): void {
   for (const i of items) {
     if (!SAFE_ITEM_ID.test(String(i.productId)) || !SAFE_ITEM_ID.test(String(i.variantId))) {
-      throw new Error('Invalid cart item — please refresh your cart')
+      throw new CheckoutRejectedError('Invalid cart item — please refresh your cart', 'INVALID_CART')
     }
   }
 }
@@ -455,6 +457,86 @@ function existingOrderResult(existing: ExistingOrderRow): { order: CreatedOrder;
   }
 }
 
+/**
+ * COM-1 (Nov 2026 audit): make sure a COMMITTED order that used a coupon has its coupon_usage row linked (order_id set).
+ * createOrder claims the coupon BEFORE the order exists (claim_coupon_use → coupon_usage row with order_id NULL) and links
+ * it afterwards (step 10). When that link never happens — the create RPC outlived our timeout, step 10 failed, or the request
+ * died — the 30-minute sweep release_stale_coupon_claims() deletes the unlinked row and the coupon becomes reusable although
+ * an order carries its discount. Called from the idempotent-replay path and from the routes' timeout recovery.
+ *
+ * Idempotent: does nothing when a row is already linked to the order. The claim to link is `usageId` when known, else the
+ * latest UNLINKED claim of this coupon taken by the SAME person (verified account or phone-derived identity key) no later
+ * than the order's creation — never someone else's. Best effort: never throws; a miss is alerted for ops.
+ */
+export async function ensureCouponUsageLinked(args: {
+  orderId:                  string | number
+  couponCode:               string | null | undefined
+  orderCreatedAt?:          string | null
+  couponDiscount?:          number | null
+  authenticatedCustomerId?: string | number | null
+  customerPhone?:           string | null
+  usageId?:                 number | null
+}): Promise<'linked' | 'already_linked' | 'no_coupon' | 'not_found' | 'error'> {
+  if (!args.couponCode) return 'no_coupon'
+  // An order that got no coupon discount did not use the coupon (only checked when the stored value is known).
+  if (args.couponDiscount != null && Number(args.couponDiscount) <= 0) return 'no_coupon'
+  const db = getServiceClient()
+  try {
+    const { data: linked, error: linkedErr } = await withTimeout(
+      db.from('coupon_usage').select('id').eq('order_id', args.orderId).limit(1), 5_000, 'coupon usage link check',
+    )
+    if (linkedErr) throw new Error(linkedErr.message)
+    if (Array.isArray(linked) && linked.length > 0) return 'already_linked'
+
+    let usageId = args.usageId ?? null
+    if (usageId == null) {
+      const authId = args.authenticatedCustomerId == null ? null : String(args.authenticatedCustomerId)
+      const identityKey = couponIdentityKey(normalizePhoneForLookup(args.customerPhone))
+      if (!authId && !identityKey) return 'not_found'   // no way to tell whose claim is whose
+      const { data: coupon, error: couponErr } = await withTimeout(
+        db.from('coupons').select('id').eq('code', args.couponCode.trim().toUpperCase()).maybeSingle(), 5_000, 'coupon id lookup',
+      )
+      if (couponErr) throw new Error(couponErr.message)
+      if (!coupon?.id) return 'not_found'
+      let q = db.from('coupon_usage').select('id, customer_id, identity_key').eq('coupon_id', coupon.id).is('order_id', null)
+      if (args.orderCreatedAt) q = q.lte('used_at', args.orderCreatedAt)
+      const { data: claims, error: claimsErr } = await withTimeout(q.order('id', { ascending: false }).limit(20), 5_000, 'coupon claim lookup')
+      if (claimsErr) throw new Error(claimsErr.message)
+      const mine = (Array.isArray(claims) ? claims : []).find((c: { customer_id?: unknown; identity_key?: unknown }) =>
+        (identityKey && c.identity_key === identityKey) || (authId && c.customer_id != null && String(c.customer_id) === authId))
+      if (!mine) {
+        captureError(new Error('Committed order used a coupon but no claim could be linked (already released by the sweep?)'), {
+          action: 'couponUsage.link_not_found', orderId: args.orderId, code: args.couponCode, alert: true,
+        })
+        return 'not_found'
+      }
+      usageId = Number((mine as { id: number }).id)
+    }
+
+    // The same PATCH as createOrder's step 10 (guarded by order_id IS NULL, so it is harmless to repeat).
+    const patch: Record<string, unknown> = { order_id: args.orderId }
+    if (args.couponDiscount != null) patch.discount_amount = Number(args.couponDiscount) || 0
+    let lastErr: string | null = null
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { error } = await withTimeout(
+          db.from('coupon_usage').update(patch).eq('id', usageId).is('order_id', null), 8_000, 'coupon usage attach (recovery)',
+        )
+        lastErr = error ? error.message : null
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e)
+      }
+      if (lastErr === null) break
+    }
+    if (lastErr !== null) throw new Error(lastErr)
+    logger.warn('[createOrder] linked a coupon claim that had been left unlinked', { action: 'couponUsage.linked_late', orderId: args.orderId, usage_id: usageId })
+    return 'linked'
+  } catch (e) {
+    captureError(e, { action: 'couponUsage.link_error', orderId: args.orderId, code: args.couponCode, alert: true })
+    return 'error'
+  }
+}
+
 // AUDIT S1-002: a guest row is flagged so the CRM can tell "checked out without an account" from a
 // real profile. The column (`customers.is_guest boolean default false`) is proposed for the DB batch;
 // until it exists PostgREST rejects the insert, which is detected once per instance and the flag is
@@ -475,7 +557,7 @@ export async function createOrder(
   // 1. Idempotency check — return existing order if same key
   const { data: existing } = await withTimeout(
     db.from('orders')
-      .select('id, order_number, total_amount, order_status, payment_status, payment_method, loyalty_points_redeemed, confirmation_token, shipping_address')
+      .select('id, order_number, total_amount, order_status, payment_status, payment_method, loyalty_points_redeemed, confirmation_token, shipping_address, coupon_discount, created_at')
       .eq('idempotency_key', input.idempotencyKey)
       .maybeSingle(),
     8_000,
@@ -529,7 +611,21 @@ export async function createOrder(
     if (mismatch) throw new IdempotencyConflictError(mismatch)
   }
 
-  if (existing) return existingOrderResult(existing as ExistingOrderRow)
+  if (existing) {
+    // COM-1 (Nov 2026 audit): a retry of a request whose first attempt timed out (or whose step-10 attach failed) lands here.
+    // If that order used a coupon whose claim was never linked, link it now — otherwise the stale-claim sweep frees the use.
+    if (input.couponCode) {
+      await ensureCouponUsageLinked({
+        orderId:                 existing.id,
+        orderCreatedAt:          (existing as { created_at?: string | null }).created_at ?? null,
+        couponCode:              input.couponCode,
+        couponDiscount:          (existing as { coupon_discount?: number | null }).coupon_discount ?? null,
+        authenticatedCustomerId: input.authenticatedCustomerId ?? null,
+        customerPhone:           input.customerPhone,
+      })
+    }
+    return existingOrderResult(existing as ExistingOrderRow)
+  }
 
   /**
    * AUDIT S1-005/S1-006/S1-013: "did this key already produce an order?" — asked again when the
@@ -579,7 +675,7 @@ export async function createOrder(
   if (resolutions.some(r => r.kind === 'foreign_variant')) {
     // A legacy/stale line whose variant slot holds the product id of ANOTHER product's variant.
     // Never attach it to that variant.
-    throw new Error('Product no longer available — please remove it from your cart and add it again')
+    throw new CheckoutRejectedError('Product no longer available — please remove it from your cart and add it again', 'PRODUCT_UNAVAILABLE')
   }
   const lineKinds: LineKind[] = resolutions.map(r => r.kind as LineKind)
 
@@ -589,7 +685,7 @@ export async function createOrder(
     const rows = await sbGet('product_variants', `select=id,product_id&product_id=in.(${ids})&is_active=eq.true`)
     const hasVariants = new Set((rows ?? []).map((r: { product_id: unknown }) => String(r.product_id)))
     if (noVariantLines.some(i => hasVariants.has(String(i.productId)))) {
-      throw new Error('An item in your cart has multiple options — please remove it and add it again with the size you want')
+      throw new CheckoutRejectedError('An item in your cart has multiple options — please remove it and add it again with the size you want', 'INVALID_CART')
     }
   }
 
@@ -597,7 +693,7 @@ export async function createOrder(
   //     optional `serviceable_states` / `blocked_pincodes` settings; with neither set this is a no-op
   //     (all of India). Runs BEFORE stock is reserved so a refusal has nothing to undo.
   const serviceable = checkServiceability({ state: input.state, pincode: input.pincode }, settings as unknown as Record<string, string | undefined>)
-  if (!serviceable.ok) throw new Error(serviceable.reason)
+  if (!serviceable.ok) throw new CheckoutRejectedError(serviceable.reason, 'NOT_SERVICEABLE')
 
   // 2. Atomic stock reservation — replaces the old read-only checkStockAvailability.
   //
@@ -634,7 +730,7 @@ export async function createOrder(
         failedName = Array.isArray(rows) ? rows[0]?.name : undefined
       }
     } catch { /* fall back to the generic wording */ }
-    throw new Error(`Insufficient stock for ${failedName ? `“${failedName}”` : 'one of the items'} — please reduce quantity or remove the item`)
+    throw new CheckoutRejectedError(`Insufficient stock for ${failedName ? `“${failedName}”` : 'one of the items'} — please reduce quantity or remove the item`, 'OUT_OF_STOCK')
   }
 
   // ── STOCK SAFETY WRAPPER ─────────────────────────────────────────────────
@@ -683,7 +779,7 @@ export async function createOrder(
     for (const item of itemsWithVariant) {
       const v = variantRows.find((vv: any) => String(vv.id) === String(item.variantId))
       if (!v || String(v.product_id) !== String(item.productId)) {
-        throw new Error('Product no longer available')
+        throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
       }
     }
   }
@@ -744,13 +840,13 @@ export async function createOrder(
   for (const v of variantRows) {
     const p = productMap.get(String(v.product_id))
     if (!v.is_active || p?.is_deleted || p?.is_active === false || p?.status !== 'active') {
-      throw new Error('Product no longer available')
+      throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
     }
   }
   for (const item of itemsNoVariant) {
     const p = productMap.get(String(item.productId))
     if (!p || p.is_deleted || p.is_active === false || p.status !== 'active') {
-      throw new Error('Product no longer available')
+      throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
     }
   }
 
@@ -882,19 +978,19 @@ export async function createOrder(
 
     // BUG FIX (Oct 2026 audit): an unknown/inactive code used to be IGNORED silently, so the
     // customer saw a discounted total in the UI while the server charged the full price. Say so.
-    if (!coupon) throw new Error('Invalid or inactive coupon code')
+    if (!coupon) throw new CheckoutRejectedError('Invalid or inactive coupon code', 'COUPON_INVALID')
 
     // ── Fast-fail guards (the authoritative, race-free versions run inside claim_coupon_use) ──
     if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
-      throw new Error('Coupon usage limit reached')
+      throw new CheckoutRejectedError('Coupon usage limit reached', 'COUPON_INVALID')
     }
     if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
-      throw new Error('This coupon has expired')
+      throw new CheckoutRejectedError('This coupon has expired', 'COUPON_INVALID')
     }
     // Min order check (against the live server-computed subtotal)
     const subtotalForCheck = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0)
     if (coupon.min_order && subtotalForCheck < coupon.min_order) {
-      throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
+      throw new CheckoutRejectedError(`Minimum order ₹${coupon.min_order} required for this coupon`, 'COUPON_INVALID')
     }
 
     // F-08 (Oct 2026 audit): restrictions that were configurable but never enforced.
@@ -910,7 +1006,7 @@ export async function createOrder(
         const cat = productMap.get(String(i.productId))?.category_id
         return allowedCategories.includes(String(cat)) ? sum + i.price * i.qty : sum
       }, 0)
-      if (eligibleSubtotal <= 0) throw new Error('This coupon does not apply to the items in your cart')
+      if (eligibleSubtotal <= 0) throw new CheckoutRejectedError('This coupon does not apply to the items in your cart', 'COUPON_INVALID')
     }
     if (toIdList(coupon.excluded_skus).length > 0) {
       logger.warn('[createOrder] coupon has excluded_skus but products carry no SKU — restriction NOT enforced', {
@@ -928,7 +1024,7 @@ export async function createOrder(
         'orders',
         `customer_id=in.(${historyIds.join(',')})&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=id&limit=1`,
       )
-      if (prior) throw new Error('This coupon is valid on your first order only')
+      if (prior) throw new CheckoutRejectedError('This coupon is valid on your first order only', 'COUPON_INVALID')
     }
     // …and a household that already ordered counts too: an earlier non-cancelled order to the same address (any customer) is not a first order.
     if (coupon.first_order_only && /^\d{6}$/.test(String(input.pincode ?? ''))) {
@@ -939,7 +1035,7 @@ export async function createOrder(
       const line = [input.flat, input.area].filter(Boolean).join(', ')
       if ((sameAreaOrders ?? []).some(o => sameDeliveryAddress(
         { pincode: input.pincode, line }, { pincode: o.shipping_address?.pincode, line: o.shipping_address?.address_line1 },
-      ))) throw new Error('This coupon is valid on your first order only')
+      ))) throw new CheckoutRejectedError('This coupon is valid on your first order only', 'COUPON_INVALID')
     }
     // NOV 2026 — "one person / one address, one time only". The old guest pre-check looked for coupon_usage rows by customer_id, but a
     // guest's use is recorded with customer_id NULL (S1-002), so it could never find an earlier guest use, and the delivery address was
@@ -953,7 +1049,7 @@ export async function createOrder(
         addressLine: [input.flat, input.area].filter(Boolean).join(', '),
       })
       const reuse = couponReuseProblem(prior, Number(coupon.user_limit))
-      if (reuse) throw new Error(reuse)
+      if (reuse) throw new CheckoutRejectedError(reuse, 'COUPON_INVALID')
     }
 
     // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a
@@ -961,7 +1057,7 @@ export async function createOrder(
     // S1-002: only a VERIFIED identity is attached to the claim — never a phone-matched row.
     // v32 (verification F-2): the phone-derived identity key makes the per-person limit race-free for GUESTS too.
     const claim = await claimCouponUse(db, coupon.id, input.authenticatedCustomerId ?? null, couponIdentityKey(normalizedPhone))
-    if (!claim.ok) throw new Error(claim.error)
+    if (!claim.ok) throw new CheckoutRejectedError(claim.error, 'COUPON_INVALID')
     couponClaimUsageId = claim.usageId
     couponDbRow = { id: coupon.id, code: coupon.code }
 
@@ -1029,7 +1125,7 @@ export async function createOrder(
     const minRedeemRaw = parseFloat(String(settings.loyalty_min_redeem ?? '').trim() || '40')
     const minRedeem    = Number.isFinite(minRedeemRaw) && minRedeemRaw >= 0 ? minRedeemRaw : 40
     if (input.loyaltyPointsRedeemed! < minRedeem) {
-      throw new Error(`Minimum ${minRedeem} points required to redeem`)
+      throw new CheckoutRejectedError(`Minimum ${minRedeem} points required to redeem`, 'LOYALTY')
     }
     // Charge only for the discount actually granted (never more than requested): a request clamped
     // by the max-% cap, or a points_value < 1 floor(), no longer burns coins for nothing.
@@ -1079,7 +1175,7 @@ export async function createOrder(
     const codMaxRaw = parseFloat(settings.cod_max_value || '3000')
     const codMaxValue = Number.isFinite(codMaxRaw) ? codMaxRaw : 3000   // a malformed admin value must not silently lift the cap
     if (pricing.total > codMaxValue) {
-      throw new Error(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`)
+      throw new CheckoutRejectedError(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`, 'COD_LIMIT')
     }
   }
 
@@ -1087,7 +1183,7 @@ export async function createOrder(
   {
     const minOrder = parseFloat(settings.min_order_amount || '0')
     if (Number.isFinite(minOrder) && minOrder > 0 && pricing.subtotal < minOrder) {
-      throw new Error(`Minimum order is ₹${minOrder}. Please add more items.`)
+      throw new CheckoutRejectedError(`Minimum order is ₹${minOrder}. Please add more items.`, 'MIN_ORDER')
     }
   }
 
@@ -1095,7 +1191,7 @@ export async function createOrder(
   // covering the subtotal) used to be created as `pending`, fail at Razorpay with a hidden 500 and
   // hold its stock until the sweep. Refuse it here, before the row exists (stock is restored below).
   if (input.paymentMethod === 'razorpay' && pricing.total < 1) {
-    throw new Error('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.')
+    throw new CheckoutRejectedError('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.', 'PAYMENT_METHOD_UNAVAILABLE')
   }
 
   // 7. Generate order number — shown to customers and support.
@@ -1254,7 +1350,7 @@ export async function createOrder(
         `customer_id=in.(${codIds.join(',')})&payment_method=in.(cod,whatsapp_cod)` +
         `&order_status=not.in.(delivered,cancelled,returned)&select=id`)
       if ((activeCodOrders?.length ?? 0) >= codMaxActive) {
-        throw new Error(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
+        throw new CheckoutRejectedError(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
       }
     }
   }
@@ -1332,7 +1428,7 @@ export async function createOrder(
     const availablePoints = Math.max(0, liveBalance - heldPoints)
 
     if (loyaltyPointsToStore > availablePoints) {
-      throw new Error(
+      throw new CheckoutRejectedError(
         `Insufficient loyalty balance — available: ${availablePoints} pts, ` +
         `requested: ${loyaltyPointsToStore} pts` +
         (heldPoints > 0 ? ` (${heldPoints} pts are held by another unpaid order)` : '')
@@ -1574,27 +1670,43 @@ export async function createOrder(
   //     uses_count was already incremented, race-free, inside claim_coupon_use(); here the claim row
   //     (coupon_usage, order_id NULL) gets its order, customer and discount so the admin Coupons
   //     report (which sums coupon_usage) sees it. Guarded with order_id IS NULL so a retry is harmless.
+  //     COM-1 (Nov 2026 audit): an UNLINKED claim is not just a missing report line — the 30-minute sweep
+  //     release_stale_coupon_claims() deletes every coupon_usage row with order_id NULL and gives the use back, so a
+  //     committed order whose claim stayed unlinked made its coupon reusable. The attach is therefore retried once, and a
+  //     failure no longer throws out of createOrder for an order that is already committed.
   if (couponClaimUsageId != null && couponDbRow) {
-    const { error: attachErr } = await withTimeout(
-      db.from('coupon_usage')
-        .update({
-          order_id:        newOrder!.id,
-          // S1-002: a row the guest did not prove they own must not be credited with the use.
-          customer_id:     custIdAdopted ? null : custId,
-          discount_amount: appliedCoupon?.discount ?? 0,
-        })
-        .eq('id', couponClaimUsageId)
-        .is('order_id', null),
-      8_000,
-      'coupon usage attach',
-    )
-    if (attachErr) {
-      // The order is committed and the use is counted; only the reporting link is missing.
-      captureError(new Error(attachErr.message), {
-        action:  'createOrder.coupon_usage_attach',
-        code:    couponDbRow.code,
-        orderId: newOrder!.id,
-        alert:   true,
+    let attachErrMsg: string | null = null
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const { error: attachErr } = await withTimeout(
+          db.from('coupon_usage')
+            .update({
+              order_id:        newOrder!.id,
+              // S1-002: a row the guest did not prove they own must not be credited with the use.
+              customer_id:     custIdAdopted ? null : custId,
+              discount_amount: appliedCoupon?.discount ?? 0,
+            })
+            .eq('id', couponClaimUsageId)
+            .is('order_id', null),
+          8_000,
+          'coupon usage attach',
+        )
+        attachErrMsg = attachErr ? attachErr.message : null
+      } catch (e) {
+        attachErrMsg = e instanceof Error ? e.message : String(e)
+      }
+      if (attachErrMsg === null) break
+    }
+    if (attachErrMsg !== null) {
+      // The order is committed but its coupon use is still unlinked: unless ops (or a retry of this request, see
+      // ensureCouponUsageLinked) attach it within ~30 minutes, the sweep frees the use.
+      captureError(new Error(attachErrMsg), {
+        action:   'createOrder.coupon_usage_attach',
+        code:     couponDbRow.code,
+        orderId:  newOrder!.id,
+        usage_id: couponClaimUsageId,
+        alert:    true,
+        hint:     'coupon_usage row is unlinked (order_id NULL) — attach it to this order before release_stale_coupon_claims frees it',
       })
     }
   }

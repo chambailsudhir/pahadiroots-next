@@ -30,9 +30,9 @@
 // Rate limit: 3 req/hour per IP
 // ─────────────────────────────────────────────────────────────
 
-import { clientIpKey } from '@/lib/api/clientIp'
 import { createHmac } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,

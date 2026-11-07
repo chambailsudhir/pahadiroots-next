@@ -15,9 +15,10 @@ vi.mock('next/server', async () => {
 
 const mockCreateOrder = vi.fn()
 const mockLogOrderEvent = vi.fn().mockResolvedValue(undefined)
+const mockEnsureLinked = vi.fn().mockResolvedValue('linked')
 vi.mock('@/lib/services/orderService', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/orderService')>()
-  return { ...actual, createOrder: mockCreateOrder, logOrderEvent: mockLogOrderEvent }
+  return { ...actual, createOrder: mockCreateOrder, logOrderEvent: mockLogOrderEvent, ensureCouponUsageLinked: mockEnsureLinked }
 })
 
 const mockSbAdmin = vi.fn()
@@ -53,12 +54,12 @@ const BODY = {
   customer_email:  'ramesh@example.com',
 }
 
-async function callOrders() {
+async function callOrders(extra: Record<string, unknown> = {}) {
   const { POST } = await import('@/app/api/v1/orders/route')
   return POST(new Request('http://localhost/api/v1/orders', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1', origin: 'http://localhost:3000' },
-    body: JSON.stringify(BODY),
+    body: JSON.stringify({ ...BODY, ...extra }),
   }) as any)
 }
 
@@ -212,5 +213,23 @@ describe('a replay of a committed-but-never-finalised order finishes its post-or
     const res = await callOrders()
     expect(res.status).toBe(201)
     expect(mockRedeem).not.toHaveBeenCalled()
+  })
+})
+
+// COM-1 (Nov 2026 audit): createOrder outlived the request, so its coupon claim may still be unlinked — the 30-minute sweep would
+// then free the use. The recovery links it (idempotent helper; see orderService.ensureCouponUsageLinked).
+describe('recovered order gets its coupon claim linked (COM-1)', () => {
+  it('links the claim for an order placed with a coupon', async () => {
+    wireDb({ order: [{ ...COMMITTED_ROW, coupon_discount: 50, created_at: '2026-11-06T10:00:00Z' }] })
+    const res = await callOrders({ coupon_code: 'TRACK5' })
+    expect(res.status).toBe(200)
+    expect(mockEnsureLinked).toHaveBeenCalledWith(expect.objectContaining({
+      orderId: 163, couponCode: 'TRACK5', couponDiscount: 50, customerPhone: '9876543210', orderCreatedAt: '2026-11-06T10:00:00Z',
+    }))
+  })
+  it('does nothing for an order without a coupon', async () => {
+    wireDb()
+    expect((await callOrders()).status).toBe(200)
+    expect(mockEnsureLinked).not.toHaveBeenCalled()
   })
 })

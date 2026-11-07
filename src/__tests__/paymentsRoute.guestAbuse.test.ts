@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 
 vi.mock('next/server', async () => {
   const actual = await vi.importActual<typeof import('next/server')>('next/server')
@@ -262,7 +263,7 @@ describe('S1-002 / S1-005 — error mapping', () => {
   })
 
   it('payments: the sub-₹1 online-total refusal is shown to the customer as 409, not hidden as 500', async () => {
-    h.createOrder.mockRejectedValue(new Error('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.'))
+    h.createOrder.mockRejectedValue(new CheckoutRejectedError('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.'))
     const res = await callPayments()
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/cannot be paid online/)

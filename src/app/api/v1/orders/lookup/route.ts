@@ -41,6 +41,7 @@ import {
 } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { isConfirmationTokenExpired } from '@/lib/confirmationToken'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 // Same join shape as /api/orders/[id]/route.ts — proven, already in
 // production use for the logged-in "my orders" detail view. hsn_code and
@@ -145,7 +146,7 @@ async function fetchLoyaltyPointValue(): Promise<number | null> {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!await checkRateLimitKv(`mw:rl:order_lookup_ip:${ip}`, 20)) {
     return fail(429, 'Too many requests — please wait a moment')
   }
