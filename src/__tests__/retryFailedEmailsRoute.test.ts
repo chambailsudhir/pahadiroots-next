@@ -350,6 +350,14 @@ describe('GET /api/v1/cron/retry-failed-emails — stale e-mails are closed, not
     expect(String((closed!.payload as { last_error?: string }).last_error)).toMatch(/password-reset link older than 55 min/)
   })
 
+  it('a COD verification code older than 9 minutes is closed without sending (it expires after 10)', async () => {
+    mockSend.mockResolvedValue({ error: null })
+    mockDb.candidates = [row({ id: 'c-old', type: 'cod_verification', created_at: hoursAgo(0.25) }), row({ id: 'c-new', type: 'cod_verification', created_at: hoursAgo(0.05) })]
+    const { GET } = await import('@/app/api/v1/cron/retry-failed-emails/route')
+    const json = await (await GET(auth())).json()
+    expect(json).toMatchObject({ sent: 1, expired: 1 })
+  })
+
   it('exactly at the boundary side: 71h is sent, 73h is closed', async () => {
     mockSend.mockResolvedValue({ error: null })
     mockDb.candidates = [row({ id: 'a', created_at: hoursAgo(71) }), row({ id: 'b', created_at: hoursAgo(73) })]

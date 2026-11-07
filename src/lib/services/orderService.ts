@@ -254,6 +254,12 @@ export interface CreateOrderInput {
   // free-text form fields — and passes that customer_id here directly,
   // skipping the phone/email fallback matching entirely.
   authenticatedCustomerId?: string | number | null
+  /**
+   * Risky-COD gate (Nov 2026). Injected by the orders route (server-only code, kept out of this module because client
+   * components import it). Called for a COD order once the customer and the COD total are known; throws a
+   * CheckoutRejectedError to refuse (COD_NOT_AVAILABLE) or to ask for a verification code (COD_VERIFICATION_REQUIRED).
+   */
+  codRiskGate?: (ctx: { customerIds: string[]; codTotal: number; phone10: string | null }) => Promise<void>
 }
 
 export interface OrderEmailItem {
@@ -1353,6 +1359,13 @@ export async function createOrder(
         throw new CheckoutRejectedError(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
       }
     }
+  }
+
+  // 7c-ii. Risky-COD gate (Nov 2026, owner decision): a phone with a COD order refused at the door pays online; a first order or
+  //        a large COD total needs the verification code. Runs before any stock or coupon is committed to the order.
+  if (input.paymentMethod === 'cod' && input.codRiskGate) {
+    const ids = Array.from(new Set([String(custId), ...(await resolveRelatedCustomerIds()).map(String)]))
+    await input.codRiskGate({ customerIds: ids, codTotal: pricing.total, phone10: normalizePhoneForLookup(input.customerPhone) || null })
   }
 
   // 7c. Loyalty balance guard — verify the customer still holds enough points

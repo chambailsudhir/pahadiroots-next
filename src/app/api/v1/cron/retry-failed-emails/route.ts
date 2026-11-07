@@ -159,13 +159,15 @@ export async function GET(req: NextRequest) {
 
     // Too old to be worth sending → close it out instead (see MAX_EMAIL_AGE_HOURS).
     const createdMs = row.created_at ? Date.parse(row.created_at) : NaN
-    const resetTooOld = row.type === 'password_reset' && Number.isFinite(createdMs)
-      && createdMs < Date.now() - MAX_PASSWORD_RESET_AGE_MINUTES * 60_000
+    // A COD verification code is only valid for 10 minutes (lib/server/codVerification.ts): never re-send an older one.
+    const shortLived = row.type === 'password_reset' ? MAX_PASSWORD_RESET_AGE_MINUTES : row.type === 'cod_verification' ? 9 : null
+    const resetTooOld = shortLived !== null && Number.isFinite(createdMs)
+      && createdMs < Date.now() - shortLived * 60_000
     if (Number.isFinite(createdMs) && (createdMs < staleBefore || resetTooOld)) {
       await db.from('failed_emails').update({
         status:          'dead',
         last_error:      resetTooOld && createdMs >= staleBefore
-          ? `expired: password-reset link older than ${MAX_PASSWORD_RESET_AGE_MINUTES} min (link no longer valid) — closed without sending`
+          ? `expired: ${row.type === 'cod_verification' ? 'verification code older than 9 min' : `password-reset link older than ${MAX_PASSWORD_RESET_AGE_MINUTES} min`} (no longer valid) — closed without sending`
           : `expired: not delivered within ${MAX_EMAIL_AGE_HOURS}h — closed without sending`,
         last_attempt_at: new Date().toISOString(),
       }).eq('id', row.id)

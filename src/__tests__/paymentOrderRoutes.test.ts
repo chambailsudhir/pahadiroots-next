@@ -628,6 +628,17 @@ describe('POST /api/v1/orders — COD', () => {
     expect(json.order_number).toBe('PR1A2B3C4D')
   })
 
+  // Nov 2026: risky-COD verification. The route hands createOrder a gate carrying the client's token, and a refusal comes back
+  // with its typed code so the checkout can open the verification step.
+  it('passes the COD verification gate (with the token) to createOrder and answers a refusal with its code', async () => {
+    mockCreateOrder.mockRejectedValueOnce(new CheckoutRejectedError('Please confirm this Cash on Delivery order with the code we send to your e-mail.', 'COD_VERIFICATION_REQUIRED'))
+    const res = await callOrders({ ...COD_ORDER_BODY, cod_verification_token: 'tok-123' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'COD_VERIFICATION_REQUIRED' })
+    const input = mockCreateOrder.mock.calls.at(-1)![0] as { codRiskGate?: unknown }
+    expect(typeof input.codRiskGate).toBe('function')
+  })
+
   it('idempotency — duplicate key returns 200 (not 201)', async () => {
     mockCreateOrder.mockResolvedValueOnce({
       order: {

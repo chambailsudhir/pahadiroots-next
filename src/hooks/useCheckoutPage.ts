@@ -198,6 +198,15 @@ function applyProfileData(
   setSavedFn(allAddrs)
 }
 
+export interface CodVerifyState {
+  open:       boolean
+  sending:    boolean
+  sentTo:     string     // masked e-mail the code went to ('' = not sent yet)
+  confirming: boolean
+  error:      string
+}
+const COD_VERIFY_CLOSED: CodVerifyState = { open: false, sending: false, sentTo: '', confirming: false, error: '' }
+
 // ─── Public return type ───────────────────────────────────────────────────────
 export interface CheckoutPageState {
   // hydration
@@ -222,6 +231,13 @@ export interface CheckoutPageState {
   razorpayLoadFailed: boolean
   setRazorpayLoadFailed: (v: boolean) => void
   error:           string
+  /** Nov 2026: verification step for a risky Cash on Delivery order (code e-mailed to the customer). */
+  codVerify:       CodVerifyState
+  /** The e-mail the code goes to (the form's, else the signed-in account's). */
+  codVerifyEmail:  string
+  requestCodCode:  () => Promise<void>
+  confirmCodCode:  (code: string) => Promise<void>
+  closeCodVerify:  () => void
 
   // coupon
   couponCode:          string
@@ -328,6 +344,10 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // 'cod' (the no-discount, no-gateway basis), and `payMethodChosen` says whether the customer has actually picked.
   const [payChoice, setPayChoice] = useState<'razorpay' | 'cod' | null>(null)
   const payMethodChosen = payChoice !== null
+  // Nov 2026 risky-COD verification: the dialog state, the token for THIS phone, and a COD refusal for this phone.
+  const [codVerify, setCodVerify] = useState<CodVerifyState>(COD_VERIFY_CLOSED)
+  const codTokenRef = useRef<{ token: string; phone: string } | null>(null)
+  const [codBlockedPhone, setCodBlockedPhone] = useState<string | null>(null)
   const setPayMethod = setPayChoice as (m: 'razorpay' | 'cod') => void
   const [placing,        setPlacing]        = useState(false)
   // BUG FIX (live self-inflicted 429 on order placement): `placing` (state)
@@ -537,7 +557,8 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
   // It used to compare the raw subtotal, so ₹2,950 of goods + shipping + fee showed COD and then failed at Place Order, while a
   // ₹3,400 cart with a ₹500 coupon hid COD that the server would have accepted.
   const codTotal      = useMemo(() => calcPriceSummary(items, s, coupon, 'cod', loyaltyRedemption?.discount_inr ?? 0).total, [items, s, coupon, loyaltyRedemption])
-  const codOk         = useMemo(() => codEnabled && codTotal <= codMax,               [codEnabled, codTotal, codMax])
+  const codOk         = useMemo(() => codEnabled && codTotal <= codMax && !(codBlockedPhone && codBlockedPhone === addr.phone.replace(/\D/g, '').slice(-10)),
+    [codEnabled, codTotal, codMax, codBlockedPhone, addr.phone])
   // Until a method is chosen, price as the method the customer CAN pay with (Nov 2026 verification): with COD off or over its
   // cap, the page priced as 'cod' anyway — a COD fee for a method they cannot pick and a higher total than the cart showed.
   const payMethod: 'razorpay' | 'cod' = payChoice ?? (!codOk && razorpayEnabled ? 'razorpay' : 'cod')
@@ -1183,6 +1204,9 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
         coupon_code:             coupon?.code,
         idempotency_key:         orderKey,
         loyalty_points_redeemed: loyaltyRedemption?.points ?? 0,
+        // Only a token issued for THIS phone is sent (the server checks the phone again).
+        ...(payMethod === 'cod' && codTokenRef.current && codTokenRef.current.phone === addr.phone.replace(/\D/g, '').slice(-10)
+          ? { cod_verification_token: codTokenRef.current.token } : {}),
       }
 
       if (payMethod === 'cod') {
@@ -1209,6 +1233,16 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
           // P3: key reused for a different request — mint a fresh one so the next
           // press places the order the customer is actually looking at.
           if (dbData.code === 'IDEMPOTENCY_CONFLICT') resetIdempotencyKey()
+          // Nov 2026 risky-COD verification: open the code step instead of failing; the order is placed once it is confirmed.
+          if (dbData.code === 'COD_VERIFICATION_REQUIRED') {
+            codTokenRef.current = null
+            setCodVerify({ ...COD_VERIFY_CLOSED, open: true })
+            placingRef.current = false
+            setPlacing(false)
+            return
+          }
+          // COD refused for this phone (an earlier COD order was not accepted): COD disappears, the customer pays online.
+          if (dbData.code === 'COD_NOT_AVAILABLE') setCodBlockedPhone(addr.phone.replace(/\D/g, '').slice(-10))
           // BUG FIX: dbData.error is now only populated when the body genuinely
           // parsed as JSON with that field. When the server/platform returned
           // something else entirely (HTML error page, empty body, etc.),
@@ -1379,8 +1413,49 @@ export function useCheckoutPage(settings: SiteSettings): CheckoutPageState {
     pricingShipping, pricingTotal, waNumber,
   ])
 
+  // ── Risky-COD verification (Nov 2026) ──────────────────────────────────────
+  const handlePlaceRef = useRef(handlePlace)
+  useEffect(() => { handlePlaceRef.current = handlePlace }, [handlePlace])
+  const verifyEmail = (email || user?.email || '').trim()
+  const requestCodCode = useCallback(async () => {
+    if (!verifyEmail) { setCodVerify(v => ({ ...v, error: 'Please enter your e-mail address above so we can send you the code.' })); return }
+    setCodVerify(v => ({ ...v, sending: true, error: '' }))
+    try {
+      const res = await fetch('/api/v1/cod-verify/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: addr.phone, email: verifyEmail }),
+      })
+      const data = await res.json().catch(() => ({})) as { to?: string; error?: string }
+      if (!mountedRef.current) return
+      setCodVerify(v => res.ok
+        ? { ...v, sending: false, sentTo: data.to || verifyEmail, error: '' }
+        : { ...v, sending: false, error: data.error || 'Could not send the code. Please try again, or pay online.' })
+    } catch {
+      if (mountedRef.current) setCodVerify(v => ({ ...v, sending: false, error: 'Could not send the code. Please check your connection.' }))
+    }
+  }, [verifyEmail, addr.phone])
+  const confirmCodCode = useCallback(async (code: string) => {
+    setCodVerify(v => ({ ...v, confirming: true, error: '' }))
+    try {
+      const res = await fetch('/api/v1/cod-verify/confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: addr.phone, email: verifyEmail, code: code.trim() }),
+      })
+      const data = await res.json().catch(() => ({})) as { token?: string; error?: string }
+      if (!mountedRef.current) return
+      if (!res.ok || !data.token) { setCodVerify(v => ({ ...v, confirming: false, error: data.error || 'That code did not work. Please try again.' })); return }
+      codTokenRef.current = { token: data.token, phone: addr.phone.replace(/\D/g, '').slice(-10) }
+      setCodVerify(COD_VERIFY_CLOSED)
+      await handlePlaceRef.current()   // place the order the customer already confirmed
+    } catch {
+      if (mountedRef.current) setCodVerify(v => ({ ...v, confirming: false, error: 'Could not check the code. Please check your connection.' }))
+    }
+  }, [verifyEmail, addr.phone])
+  const closeCodVerify = useCallback(() => setCodVerify(COD_VERIFY_CLOSED), [])
+
   // ── Public API ─────────────────────────────────────────────────────────────
   return {
+    codVerify, codVerifyEmail: verifyEmail, requestCodCode, confirmCodCode, closeCodVerify,
     storeReady,
     cartNotices, dismissCartNotices,
     items, coupon, removeCoupon,
