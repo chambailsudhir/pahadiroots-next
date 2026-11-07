@@ -103,6 +103,8 @@ describe('POST /api/v1/revalidate — { settings: true }', () => {
     expect(json.revalidated).toContain('/checkout')
     expect(json.revalidated).toContain('/our-stories')
     expect(json.revalidated).toContain('/blog')
+    // Nov 2026 verification: settings-dependent articles, sitemap and merchant feed are refreshed too.
+    expect(calledPaths).toEqual(expect.arrayContaining(['/blog/[slug]', '/sitemap.xml', '/feeds/google-merchant.xml']))
   })
 
   it('rejects a request with the wrong secret without touching any cache', async () => {

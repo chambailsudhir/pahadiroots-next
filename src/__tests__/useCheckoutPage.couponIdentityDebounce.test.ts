@@ -128,4 +128,14 @@ describe('useCheckoutPage — coupon identity re-check is debounced at 2.5 s', (
     expect(useCartStore.getState().coupon).toBeNull()
     expect(result.current.couponError).toBe('This coupon was already used at this address')
   })
+
+  // Nov 2026 verification: a 200 with a DIFFERENT discount was thrown away, so the page kept the old (larger) discount.
+  it('a 200 carrying a different discount updates the coupon on the page', async () => {
+    const result = await mountSettled()
+    couponResponses = [res(200, { valid: true, coupon: { ...COUPON, discount: COUPON.discount - 30 } })]
+    fillIdentity(result)
+    await advance(2500)
+    expect(useCartStore.getState().coupon?.discount).toBe(COUPON.discount - 30)
+  })
 })
+

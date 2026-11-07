@@ -1,5 +1,6 @@
 'use client'
 
+import { MAX_LINE_QTY } from '@/lib/cartLimits'
 import { ga4AddToWishlist } from '@/lib/analytics/ga4'
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
@@ -103,6 +104,9 @@ export default function AddToCartSection({ product, variants }: Props) {
   const mrp      = selectedVariant?.mrp     ?? product.mrp ?? product.selling_price ?? product.price
   const maxStock = selectedVariant?.available_stock ?? product.available_stock ?? 0
   const inStock  = maxStock > 0
+  // The stepper stops at the per-line cart limit too (Nov 2026 verification: it went up to the stock, e.g. 187, and an order above
+  // 50 was refused at Place Order).
+  const qtyCap   = Math.min(maxStock || MAX_LINE_QTY, MAX_LINE_QTY)
 
   // BUG FIX (HIGH – audit finding #4): fires GA4/Meta view_item once per
   // product page load; add_to_cart fires from handleAdd() below.
@@ -142,7 +146,7 @@ export default function AddToCartSection({ product, variants }: Props) {
   }
 
   function changeQty(d: number) {
-    setQty(q => Math.max(1, Math.min(q + d, maxStock || 99)))
+    setQty(q => Math.max(1, Math.min(q + d, qtyCap)))
   }
 
   // BUG FIX: track timers so they can be cleared on unmount.
@@ -326,7 +330,7 @@ export default function AddToCartSection({ product, variants }: Props) {
                 type="button"
                 className="pdp-qty-btn"
                 onClick={() => changeQty(1)}
-                disabled={qty >= (maxStock || 99)}
+                disabled={qty >= qtyCap}
                 aria-label="Increase quantity"
               >+</button>
             </div>

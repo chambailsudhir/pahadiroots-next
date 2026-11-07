@@ -2,6 +2,7 @@
 // Price block + stock row that follow the selected pack size (PDP audit P1-2). Markup and class names are
 // identical to the server-rendered blocks they replace, so no CSS or layout changes.
 import { usePdpSelection } from './PdpVariantContext'
+import { formatPrice } from '@/lib/utils'
 
 /** The admin treats ≤10 units as "critically low" (pahadi-admin dashboard); the PDP uses the same line. */
 export const LOW_STOCK_THRESHOLD = 10
@@ -22,10 +23,12 @@ export function PdpPriceBlock({ hasVariants }: { hasVariants: boolean }) {
   return (
     <div className="pdp-price-block">
       <div className="pdp-price-row">
-        <span className="pdp-price">₹{price}</span>
+        {/* Nov 2026 verification: printed the raw number (₹266.67, ₹1200) while every card uses formatPrice (₹267, ₹1,200),
+            so the same pack read differently on the listing and the PDP. Display only — JSON-LD / feed keep the real price. */}
+        <span className="pdp-price">{formatPrice(price)}</span>
         {mrp > price && (
           <>
-            <span className="pdp-mrp">₹{mrp}</span>
+            <span className="pdp-mrp">{formatPrice(mrp)}</span>
             <span className="pdp-save-badge">SAVE {savings}%</span>
           </>
         )}

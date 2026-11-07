@@ -138,6 +138,27 @@ describe('ProductListingClient — query string applied in the browser', () => {
     expect(screen.queryAllByTestId('product-card')).toHaveLength(0)
   })
 
+  // Nov 2026 verification
+  it('an unknown ?state= shows the honest empty state, a way back, and no phantom filter count', async () => {
+    params = new URLSearchParams('state=zz')
+    stubCatalog()
+    renderProducts()
+    await waitFor(() => expect(screen.getByText('This filter no longer exists.')).toBeTruthy())
+    expect(screen.queryAllByTestId('product-card')).toHaveLength(0)
+    expect(screen.getByText('Show all products').closest('a')?.getAttribute('href')).toBe('/products')
+    expect(screen.queryByText('Filters:')).toBeNull()
+    expect(document.querySelector('.mfb-trigger-badge')).toBeNull()   // mobile "Filters & Sort" count
+  })
+
+  it('an unknown ?category= also offers the "Show all products" link', async () => {
+    params = new URLSearchParams('category=nope')
+    stubCatalog()
+    renderProducts()
+    await waitFor(() => expect(screen.getByText('This filter no longer exists.')).toBeTruthy())
+    expect(screen.getByText('Show all products').closest('a')?.getAttribute('href')).toBe('/products')
+    expect(screen.queryByText('Filters:')).toBeNull()
+  })
+
   it('a page past the last one is replaced by the last real page (Issue 6.3, now client-side)', async () => {
     params = new URLSearchParams('page=99')
     stubCatalog()
@@ -179,6 +200,14 @@ describe('ProductListingClient — new-arrivals variant', () => {
     // Honey C is 400 days old: not a new arrival even though it is in stock.
     await waitFor(() => expect(screen.getAllByTestId('product-card').map(c => c.textContent)).toEqual(['Honey A']))
     expect(screen.getByText(/1 new Himalayan product •/)).toBeTruthy()
+  })
+
+  it('Nov 2026 verification: ?state= (no region filter here) is an unknown filter, not a silent empty list', async () => {
+    params = new URLSearchParams('state=hp')
+    stubCatalog()
+    renderNew()
+    await waitFor(() => expect(screen.getByText('This filter no longer exists.')).toBeTruthy())
+    expect(screen.getByText('Show all new arrivals').closest('a')?.getAttribute('href')).toBe('/new-arrivals')
   })
 
   it('builds its links on /new-arrivals and shows the hero copy', () => {

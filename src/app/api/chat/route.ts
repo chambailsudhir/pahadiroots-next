@@ -10,6 +10,7 @@ import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { verifyChatToken, chatTokenEnabled } from '@/lib/api/chatToken'
 import { verifyChatPow, verifyTurnstile, turnstileEnabled } from '@/lib/api/chatChallenge'
 import { buildChatSystemPrompt, resolveChatLang, CHAT_ROUTE_LIMITS } from './systemPrompt'
+import { shapeChatHistory } from './history'
 import { buildLiveStoreFacts } from '@/lib/chatStoreFacts'
 import { getRequestId, requestLogger, REQUEST_ID_HEADER } from '@/lib/logger'
 
@@ -78,7 +79,8 @@ export async function POST(req: NextRequest) {
   if (lastUser.length > CHAT_ROUTE_LIMITS.maxUserTurnChars) {
     return withId(NextResponse.json({ error: 'Message too long' }, { status: 413 }))
   }
-  const contents = contentsClean
+  // Nov 2026 verification: client history is capped (total size, per-turn size, model turns) — see ./history.ts.
+  const contents = shapeChatHistory(contentsClean)
   const { code: langCode, name: langName } = resolveChatLang(parsed.body?.lang)
   const systemText = buildChatSystemPrompt(langCode, langName, await buildLiveStoreFacts())
   const system_instruction = { parts: [{ text: systemText }] }

@@ -22,6 +22,9 @@ import { captureError, logger } from '@/lib/logger'
 
 type Db = ReturnType<typeof getServiceClient>
 
+/** Longest one review-request send can take: two 5 s Resend attempts, the retry pause and the dead-letter insert. */
+const WORST_CASE_SEND_MS = 12_000
+
 export const REVIEW_REQUEST_DEFAULT_DAYS = 7
 export const REVIEW_REQUEST_COOLDOWN_DAYS = 7    // never mail the same customer more often than this
 export const REVIEW_REQUEST_WINDOW_DAYS = 14   // width of the eligibility window, counted back from (now - review_request_days)
@@ -143,6 +146,10 @@ export async function sendReviewRequests(
           for (const r of (mine ?? []) as Array<{ product_id: number | string }>) products.delete(String(r.product_id))
           if (products.size === 0) { stats.skipped++; continue }
 
+          // Nov 2026 verification: the budget was checked once per order, but a send can take ~12 s (two 5 s attempts + the dead-
+          // letter insert). Claimed and then killed mid-send meant that customer was never asked. Only start a send that fits.
+          if (budget - (Date.now() - startedAt) < WORST_CASE_SEND_MS) { stats.timeBudgetHit = true; return stats }
+
           // Claim BEFORE sending - exactly one concurrent run wins.
           const { data: won, error: claimErr } = await db
             .from('review_requests')
@@ -166,7 +173,7 @@ export async function sendReviewRequests(
             subject: `How was your order ${orderNo}?`,
             html: brandedEmail({
               heading: 'How was your order?',
-              bodyHtml: `<p style="margin:0 0 12px">${greet}</p><p style="margin:0 0 12px">Your order <strong>${esc(orderNo)}</strong> was delivered. We would love to hear what you think - your review helps other families choose, and it takes less than a minute.</p><table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;width:100%">${shown}${more}</table><p style="margin:0">Reviews appear on the product page after a quick check by our team.</p>`,
+              bodyHtml: `<p style="margin:0 0 12px">${greet}</p><p style="margin:0 0 12px">Your order <strong>${esc(orderNo)}</strong> was delivered. We would love to hear what you think - your review helps other families choose, and it takes less than a minute.</p><table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;width:100%">${shown}${more}</table><p style="margin:0">Reviews appear on the product page after a quick check by our team.</p><p style="margin:16px 0 0;font-size:12px;color:#6b6256">Don't want these e-mails? <a href="${siteUrl}/account?tab=notifications" style="color:#6b6256">Change your e-mail preferences</a>.</p>`,
               cta: { label: 'Rate & review', href: `${siteUrl}/account/orders/${order.id}/review` },
             }),
             context: { order_id: order.id, order_number: orderNo },

@@ -122,6 +122,15 @@ describe('cartStore.addItem', () => {
     expect(useCartStore.getState().items.find(i => i.variantId === 'v50')!.qty).toBe(50)
   })
 
+  // Nov 2026 verification: a NEW line was clamped to the stock only (the PDP passes the real stock, e.g. 187), so 60 went in the cart
+  // and Place Order failed with a 400 (orders accept at most MAX_LINE_QTY per line).
+  it('a NEW line is capped at MAX_LINE_QTY even when the stock is higher', () => {
+    useCartStore.getState().addItem({ ...makeItem({ variantId: 'v60', maxQty: 187 }), qty: 60 })
+    const line = useCartStore.getState().items.find(i => i.variantId === 'v60')!
+    expect(line.qty).toBe(MAX_LINE_QTY)
+    expect(line.maxQty).toBe(MAX_LINE_QTY)
+  })
+
   it('a later add can never RAISE the cap, but a lower (fresher) stock figure lowers it', () => {
     const store = useCartStore.getState()
     store.addItem(makeItem({ variantId: 'v9', maxQty: 10, qty: 1 }))

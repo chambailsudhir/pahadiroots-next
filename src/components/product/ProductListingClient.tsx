@@ -63,17 +63,23 @@ export default function ProductListingClient({
   // An unknown ?category= slug used to 404 on the server. The page is static now, so it shows the
   // honest empty state ("No products found") instead of silently falling through to All Products.
   const unknownCat = Boolean(catSlug && !activeCat)
+  // Nov 2026 verification: an unknown ?state= (a removed region, a typo, or any ?state= on /new-arrivals, which offers no
+  // region filter) still filtered the list down to nothing while the page title said "All Products", and counted as an
+  // active filter (a phantom "1" on the mobile Filters button, a "Filters: Clear all" row with no chip). Same handling as
+  // unknownCat: honest empty state, never counted as a filter, plus a visible way back.
+  const unknownState = Boolean(stateId && (isNew || !activeState))
+  const unknownFilter = unknownCat || unknownState
 
   const listing = defaultView
     ? computeListing(params, initialProducts, {}, LISTING_PAGE_SIZE, totalCount)
-    : computeListing(params, unknownCat ? [] : base, { categoryId: activeCat?.id, stateId }, LISTING_PAGE_SIZE, totalCount)
+    : computeListing(params, unknownFilter ? [] : base, { categoryId: activeCat?.id, stateId }, LISTING_PAGE_SIZE, totalCount)
   // The default view ships only the first page: the count/pagination come from the server's total.
   const count      = defaultView ? totalCount : listing.count
   const totalPages = defaultView ? Math.ceil(totalCount / LISTING_PAGE_SIZE) : listing.totalPages
   const { paged, priceBounds, offset } = listing
   // Built from the view's real page count (the default view ships one page but may have more).
   const paginationItems = buildPaginationList(page, totalPages)
-  const ready = defaultView || Boolean(base) || unknownCat
+  const ready = defaultView || Boolean(base) || unknownFilter
 
   const urlState = { sort, category: catSlug, state: isNew ? '' : stateId, instock, minPrice: minPrice != null ? String(minPrice) : undefined, maxPrice: maxPrice != null ? String(maxPrice) : undefined }
   const url = (overrides: Parameters<typeof buildProductsUrl>[1]) => buildProductsUrl(urlState, overrides, basePath)
@@ -88,7 +94,7 @@ export default function ProductListingClient({
     : activeState ? `${activeState.name} Products` : activeCat ? activeCat.name : 'All Products'
   const rootLabel = isNew ? 'New Arrivals' : 'All Products'
   const allLabel  = isNew ? '🆕 All New Arrivals' : '🌿 All Products'
-  const hasFilters = Boolean(catSlug || stateId || instock || sort !== 'newest' || minPrice != null || maxPrice != null)
+  const hasFilters = Boolean(activeCat || (stateId && !unknownState) || instock || sort !== 'newest' || minPrice != null || maxPrice != null)
   const countText = loading ? '…' : String(count)
 
   const chip = (href: string, label: string, gold = false) => (
@@ -248,8 +254,8 @@ export default function ProductListingClient({
           {/* Mobile: a sticky Filters & Sort bar under the header */}
           <MobileFilterBar
             categories={sidebarCategories}
-            activeCatSlug={catSlug}
-            activeStateId={isNew ? '' : stateId}
+            activeCatSlug={unknownCat ? '' : catSlug}
+            activeStateId={isNew || unknownState ? '' : stateId}
             activeStateName={activeState?.name ?? null}
             sort={sort}
             instock={instock}
@@ -268,7 +274,14 @@ export default function ProductListingClient({
             Showing {Math.min(offset + 1, count)}–{Math.min(offset + LISTING_PAGE_SIZE, count)} of {countText} products
           </div>
 
-          {loading ? (
+          {unknownFilter && !loading ? (
+            <div data-testid="unknown-filter" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1a3a1e', marginBottom: '8px' }}>No products found</h3>
+              <p style={{ color: '#5a5448', fontSize: '14px', marginBottom: '20px', maxWidth: 360 }}>This filter no longer exists.</p>
+              <Link href={basePath} style={ctaStyle}>{isNew ? 'Show all new arrivals' : 'Show all products'}</Link>
+            </div>
+          ) : loading ? (
             <div aria-busy="true" data-testid="listing-loading"><ProductGridSkeleton count={8} /></div>
           ) : failed ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>

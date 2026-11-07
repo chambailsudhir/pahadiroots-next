@@ -191,12 +191,18 @@ export async function POST(req: NextRequest) {
       revalidatePath('/our-stories')
       revalidatePath('/mountain-stories') // gated by show_life_in_mountains, revalidate=3600
       revalidatePath('/blog')
+      // Nov 2026 verification: articles, the sitemap and the merchant feed now also read settings (show_blog, page
+      // toggles, store_open), so a toggle must reach them too instead of waiting out their 1h-24h ISR windows.
+      revalidatePath('/blog/[slug]', 'page')
+      revalidatePath('/sitemap.xml')
+      revalidatePath('/feeds/google-merchant.xml')
       // F-02 / F-05: both pages now render shipping + COD wording from these settings.
       revalidatePath('/payment')
       revalidatePath('/policies/[type]', 'page')
       revalidated.push(
         '/ (layout)', '/ (page)', '/maintenance', '/api/v1/cart-settings',
         '/checkout', '/products/[slug] (all)', '/our-stories', '/mountain-stories', '/blog',
+        '/blog/[slug] (all)', '/sitemap.xml', '/feeds/google-merchant.xml',
         '/payment', '/policies/[type] (all)'
       )
     }

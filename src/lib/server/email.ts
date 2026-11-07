@@ -34,6 +34,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
 import { Resend } from 'resend'
+import { createHash } from 'node:crypto'
 import { getServiceClient } from '@/lib/supabase'
 import { getSiteSettings } from '@/lib/getSiteSettings'
 import { sanitizeHtml } from '@/lib/server/sanitize'
@@ -110,6 +111,28 @@ export function isPermanentEmailFailure(error: { name?: string; message?: string
   return PERMANENT_RESEND_MESSAGE.test(error.message || '')
 }
 
+/**
+ * One e-mail = one Resend `Idempotency-Key` (Nov 2026 verification). A 5 s client timeout on a send that Resend DID accept was
+ * retried inline, dead-lettered and re-sent by the sweep, so a payment confirmation could arrive two or three times. The key is a
+ * hash of what is sent (type, recipient, subject, body), so the inline retries and every later dead-letter retry of the same mail
+ * share it and Resend delivers it once (keys live 24 h on Resend's side). SDK 3.x has no option for it, but its post() merges
+ * request options, so the client's own auth headers are copied and the key is added; without them the mail is sent as before.
+ */
+export function emailIdempotencyKey(type: string, to: string, subject: string, html: string): string {
+  return `${type}:` + createHash('sha256').update(`${type}\n${to}\n${subject}\n${html}`).digest('hex').slice(0, 48)
+}
+export function sendWithIdempotency(
+  resend: Resend,
+  payload: { from: string; to: string[]; subject: string; html: string },
+  idempotencyKey: string,
+): ReturnType<Resend['emails']['send']> {
+  const base = (resend as unknown as { headers?: unknown }).headers
+  if (!(base instanceof Headers)) return resend.emails.send(payload)
+  const headers = new Headers(base)
+  headers.set('Idempotency-Key', idempotencyKey)
+  return resend.emails.send(payload, { headers } as unknown as Parameters<Resend['emails']['send']>[1])
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
@@ -169,12 +192,7 @@ export async function sendTransactionalEmail(
   for (let attempt = 1; attempt <= INLINE_ATTEMPTS; attempt++) {
     try {
       const { error } = await withTimeout(
-        resend.emails.send({
-          from,
-          to:      [to],
-          subject,
-          html,
-        }),
+        sendWithIdempotency(resend, { from, to: [to], subject, html }, emailIdempotencyKey(type, to, subject, html)),
         timeoutMs,
       )
       // The check that was missing everywhere: Resend resolves successfully

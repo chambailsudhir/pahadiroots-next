@@ -53,6 +53,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const rawDesc = meta?.description || state.description || `Explore pure natural products from ${state.name}, sourced directly from mountain farming communities.`
   const desc = truncate(rawDesc, 155)
   const canonicalUrl = `${BASE}/regions/${state.id}`
+  // Nov 2026 verification: a region with no live products (e.g. /regions/jk) was indexed as a thin "coming soon" page
+  // and listed in the sitemap. Same rule as empty collections: noindex (links still followed) until it has products.
+  const isEmpty = !(await getNormalizedProducts()).some((p: any) => String(p.state_id ?? '').toLowerCase() === String(state.id).toLowerCase())
 
   // Same image resolution used by the page body (state_images sort_order,
   // falling back to state.image_path).
@@ -68,6 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // BUG FIX (#13): no canonical previously — added so the /regions/{id}
     // URL is always declared authoritative.
     alternates: { canonical: canonicalUrl },
+    robots: isEmpty ? { index: false, follow: true } : undefined,
     // BUG FIX (#14): no openGraph block previously — sharing a region page
     // link got a blank/default preview card instead of the state's own
     // photo, name, and description.

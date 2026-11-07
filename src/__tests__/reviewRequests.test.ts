@@ -73,6 +73,20 @@ describe('sendReviewRequests', () => {
     expect(upsert[1]).toMatchObject({ onConflict: 'order_id', ignoreDuplicates: true })
   })
 
+  // Nov 2026 verification: a send can take ~12 s; one started with less time left was killed after the claim and that customer
+  // was never asked. A send that cannot fit is not started (and nothing is claimed).
+  it('does not claim or send when less than one worst-case send fits in the remaining budget', async () => {
+    const stats = await run({ timeBudgetMs: 5_000 })
+    expect(h.send).not.toHaveBeenCalled()
+    expect(log.some(o => o.table === 'review_requests' && o.ops.some(([n]) => n === 'upsert'))).toBe(false)
+    expect(stats).toMatchObject({ timeBudgetHit: true, sent: 0 })
+  })
+
+  it('the review request offers a way to change e-mail preferences', async () => {
+    await run()
+    expect(h.send.mock.calls[0][0].html).toContain('https://shop.test/account?tab=notifications')
+  })
+
   // Nov 2026 (finding F): the review link went through raw NEXT_PUBLIC_SITE_URL; a preview / localhost / trailing-slash value
   // would have put a broken link in the customer's inbox. emailSiteUrl() falls back to the canonical origin.
   it('the review link uses emailSiteUrl(): a localhost / http / trailing-slash env never reaches the mail', async () => {

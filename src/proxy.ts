@@ -142,6 +142,56 @@ async function readStoreClosed(): Promise<boolean> {
   }
 }
 
+// ── Maintenance response (503, served in place) ───────────────────────────
+interface MaintenanceCopy { message: string; whatsapp: string }
+const DEFAULT_MAINTENANCE_MESSAGE = "HimVeda by Pahadi Roots is currently undergoing maintenance. We're working hard to bring you the freshest mountain products."
+let maintenanceCopyCache: { v: MaintenanceCopy; expiresAt: number } | null = null
+
+// Only read while the store is closed (the open path never pays for it); cached for a minute, defaults on any failure.
+async function getMaintenanceCopy(): Promise<MaintenanceCopy> {
+  const now = Date.now()
+  if (maintenanceCopyCache && maintenanceCopyCache.expiresAt > now) return maintenanceCopyCache.v
+  const v: MaintenanceCopy = { message: '', whatsapp: '' }
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/site_settings?key=in.(maintenance_message,whatsapp_number)&select=key,value`,
+      { headers: { apikey: SUPABASE_ANON as string, Authorization: `Bearer ${SUPABASE_ANON as string}` }, signal: AbortSignal.timeout(1_500), cache: 'no-store' },
+    )
+    if (res.ok) {
+      const rows = await res.json() as { key?: string; value?: string }[]
+      for (const r of Array.isArray(rows) ? rows : []) {
+        if (r.key === 'maintenance_message') v.message = String(r.value ?? '')
+        if (r.key === 'whatsapp_number') v.whatsapp = String(r.value ?? '')
+      }
+    }
+  } catch { /* defaults below */ }
+  maintenanceCopyCache = { v, expiresAt: now + 60_000 }
+  return v
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+}
+
+/** The store-closed page: 503 + Retry-After at the requested URL (never a redirect), noindex, never cached. */
+export function maintenanceResponse(copy: Partial<MaintenanceCopy> = {}, head = false): NextResponse {
+  const message = escapeHtml(copy.message?.trim() || DEFAULT_MAINTENANCE_MESSAGE)
+  const digits = (copy.whatsapp || '').replace(/\D/g, '')
+  const whatsapp = digits ? `+${digits}` : '+91 98999 84895'
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="noindex"><title>We&#39;ll be back soon | HimVeda by Pahadi Roots</title>' +
+    '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f2a1d;color:#fff;' +
+    'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px;box-sizing:border-box;text-align:center}' +
+    'main{max-width:28rem}h1{font-size:1.5rem;margin:0 0 .75rem}p{color:#9fc5ad;font-size:.875rem;margin:0 0 1.5rem;line-height:1.5}' +
+    'small{color:#7aa88c;font-size:.75rem}.icon{font-size:3.5rem;margin-bottom:1.5rem}</style></head>' +
+    '<body><main><div class="icon" aria-hidden="true">&#x1F3D4;&#xFE0F;</div><h1>We&#39;ll be back soon</h1>' +
+    `<p>${message}</p><small>For urgent queries, WhatsApp us at ${escapeHtml(whatsapp)}</small></main></body></html>`
+  return new NextResponse(head ? null : html, {
+    status: 503,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '3600', 'Cache-Control': 'no-store' },
+  })
+}
+
 // ── Strict CSP inputs ───────────────────────────────────────────────────
 // The consent bootstrap script in the root layout depends on two owner settings; its CSP hash must be computed from the same
 // values. Read them (anon key, same RLS-safe table as the store_open read above) at most once a minute.
@@ -224,7 +274,11 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
   const isPageRead = req.method === 'GET' || req.method === 'HEAD'
   if (isPageRead && !MAINTENANCE_EXEMPT_PATTERN.test(pathname)) {
     if (await isStoreClosed()) {
-      return NextResponse.redirect(new URL('/maintenance', req.url))
+      // Nov 2026 verification: the gate answered a 307 to /maintenance, a URL robots.txt disallowed, so every crawled page
+      // looked like a redirect into a blocked URL (and could be dropped from the index). A temporary outage must be a 503
+      // with Retry-After served at the ORIGINAL URL. A middleware rewrite cannot carry the 503 (Next renders the rewritten
+      // page with its own 200), so the maintenance page is answered inline from here.
+      return maintenanceResponse(await getMaintenanceCopy(), req.method === 'HEAD')
     }
   }
 

@@ -103,4 +103,18 @@ describe('useCheckoutPage — handleCoupon network-error handling', () => {
     expect(result.current.couponError).toBeFalsy()
     expect(result.current.couponLoading).toBe(false)
   })
+
+  // Nov 2026 verification: handleCoupon was the only coupon call without the cart lines, so a category-limited coupon was priced on
+  // the whole subtotal on screen while the order applied it to the eligible lines only.
+  it('sends the cart lines with a coupon typed at checkout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ coupon: { code: 'TEA10', discount: 14, type: 'percent', value: 10 } }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useCheckoutPage(settings))
+    act(() => { result.current.setCouponCode('TEA10') })
+    await act(async () => { await result.current.handleCoupon() })
+    const call = fetchMock.mock.calls.find(c => String(c[0]) === '/api/v1/coupons')!
+    const body = JSON.parse((call[1] as RequestInit).body as string)
+    expect(Array.isArray(body.lines)).toBe(true)
+    expect(body.lines.length).toBe(1)
+  })
 })
