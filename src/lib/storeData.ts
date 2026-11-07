@@ -387,7 +387,7 @@ export function imgFor(cat: Category, settings: Record<string, string>): string 
 // source of truth. Legacy settings kept as a logged fallback for the same
 // admin-deploy transition window as imgFor().
 // ── Only categories with something to buy (Nov 2026 redesign, P0) ───────────────────────────────────────────────────
-// The homepage tiles and the shop filter chips listed every active category, but most had no product yet, so a shopper
+// The shop filter chips listed every active category, but most had no product yet, so a shopper
 // tapping "Himalayan Tea" or "Shilajit" landed on an empty page. The header and footer already drop empty categories via
 // getPopulatedCategoryIds() in layout.tsx; this applies the same rule from the products already loaded here. The
 // collection URLs themselves stay live (collections/[slug] looks the category up in storeData.categories directly) and
@@ -399,9 +399,12 @@ export function withProducts<T extends { id: number }>(categories: T[], products
   return categories.filter(c => ids.has(Number(c.id)))
 }
 
+// Owner decision (Nov 2026): the homepage "Browse Collections" strip keeps every category exactly as before, including
+// ones with no products yet (those open the "coming later" collection page). Only the menus, footer and shop filter
+// chips drop empty categories (buildBrowseCategories below, and layout.tsx).
 export function buildCategories(storeData: StoreData) {
   const { categories, settings } = storeData
-  return withProducts(categories, storeData.products)
+  return categories
     .filter(c => {
       if (c.show_on_homepage === false) return false
       if (c.show_on_homepage === true) return true

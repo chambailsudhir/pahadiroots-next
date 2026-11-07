@@ -39,9 +39,10 @@ describe('withProducts', () => {
 })
 
 describe('homepage and browse category lists', () => {
-  it('buildCategories drops empty categories from the homepage tiles', async () => {
+  it('buildCategories keeps every category on the homepage strip (owner decision), empty ones included', async () => {
     const { buildCategories } = await import('@/lib/storeData')
-    expect(buildCategories(store([{ id: 10, category_id: 1 }])).map(c => c.slug)).toEqual(['himalayan-honey'])
+    expect(buildCategories(store([{ id: 10, category_id: 1 }])).map(c => c.slug))
+      .toEqual(['himalayan-honey', 'himalayan-tea', 'himalayan-ghee'])
   })
 
   it('buildBrowseCategories drops empty categories from the filter chips', async () => {
