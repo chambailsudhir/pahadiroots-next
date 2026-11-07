@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 export interface AiGuardOptions {
   /** Short name used in limiter keys + log lines. */
@@ -30,9 +31,17 @@ export interface AiGuardOptions {
   perDayGlobal: number
 }
 
-export function getClientIp(req: NextRequest): string {
-  // Vercel overwrites x-forwarded-for with the real client address.
+/** The raw client address (Vercel overwrites x-forwarded-for with it). For APIs that need a real IP, e.g. Turnstile's remoteip. */
+export function getRawClientIp(req: NextRequest): string {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+}
+
+/**
+ * The RATE-LIMIT key for the client: clientIpKey() collapses IPv6 to its /64 (Nov 2026 audit — keyed on the full
+ * address, one IPv6 host could rotate through billions of "different" clients), like proxy.ts and auth/route.ts.
+ */
+export function getClientIp(req: NextRequest): string {
+  return clientIpKey(getRawClientIp(req))
 }
 
 /**

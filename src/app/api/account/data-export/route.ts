@@ -12,12 +12,12 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
+import { clientIpKey } from '@/lib/api/clientIp'
 import { evidenceReadLinks } from '@/lib/server/returnEvidence'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh,
-  checkRateLimit,
   checkRateLimitShared,
   checkCsrf,
   applyNewCookies,
@@ -31,12 +31,8 @@ export async function GET(req: NextRequest) {
   // ── Per-IP guard (per instance) ──────────────────────────────
   // A DoS guard only: it counts every attempt, so it is generous. The real "3 exports per 24 h" quota is per ACCOUNT
   // (shared) and is consumed only by an export that actually succeeds (see below).
-  const ip = (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
-  if (!checkRateLimit(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  if (!await checkRateLimitShared(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
     return fail(429, 'Too many export requests — please try again later.', { 'Retry-After': '3600' })
   }
 

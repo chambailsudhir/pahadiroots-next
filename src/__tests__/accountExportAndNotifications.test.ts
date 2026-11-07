@@ -60,11 +60,11 @@ describe('GET /api/account/data-export', () => {
     })
     const res = await exportReq()
     expect(res.status).toBe(500)
-    expect(mocks.checkRateLimitShared).not.toHaveBeenCalled()
+    expect(mocks.checkRateLimitShared).not.toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
   })
 
   it('counts the account quota only after a successful build, and answers 429 when exhausted', async () => {
-    mocks.checkRateLimitShared.mockResolvedValue(false)
+    mocks.checkRateLimitShared.mockImplementation(async (k: string) => k !== 'data_export:u1')
     const res = await exportReq()
     expect(res.status).toBe(429)
     expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
@@ -158,10 +158,11 @@ describe('POST /api/account/notifications', () => {
     })))
 
   it('uses the shared limiter keyed by user id', async () => {
-    mocks.checkRateLimitShared.mockResolvedValue(false)
+    // the per-IP guard (also shared now) passes; the per-user one refuses
+    mocks.checkRateLimitShared.mockImplementation(async (k: string) => !k.startsWith('notif_post_user:'))
     const res = await notif()
     expect(res.status).toBe(429)
-    expect(mocks.checkRateLimitShared.mock.calls[0][0]).toBe('notif_post_user:u1')
+    expect(mocks.checkRateLimitShared.mock.calls.map(c => c[0])).toContain('notif_post_user:u1')
     expect(calls().some(([m]) => m === 'PATCH')).toBe(false)
   })
 
@@ -176,5 +177,16 @@ describe('hasUnsafeTextChars', () => {
   })
   it.each(['Flat 4, Mall Road', 'D-12/3 (near temple), Shimla', 'Åsa Rana', 'राना'])('allows %j', v => {
     expect(hasUnsafeTextChars(v)).toBe(false)
+  })
+})
+
+describe('per-IP guards use the shared limiter with a normalised IPv6 key (Nov 2026 audit)', () => {
+  it('notifications POST: per-IP key is the /64 and goes through checkRateLimitShared', async () => {
+    const { POST } = await import('@/app/api/account/notifications/route')
+    await POST(new NextRequest('https://pahadiroots.com/api/account/notifications', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '2001:db8:5:6:1::2', origin: 'https://pahadiroots.com' },
+      body: JSON.stringify({ notif_email_marketing: true }),
+    }))
+    expect(mocks.checkRateLimitShared.mock.calls.map(c => c[0])).toContain('notif_post:2001:db8:5:6::/64')
   })
 })

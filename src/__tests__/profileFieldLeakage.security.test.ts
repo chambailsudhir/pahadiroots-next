@@ -117,6 +117,7 @@ vi.mock('@/lib/api/serverUtils', async () => {
     tryRefresh: mocks.tryRefresh,
     applyNewCookies: mocks.applyNewCookies,
     checkRateLimit: mocks.checkRateLimit,
+    checkRateLimitShared: async () => true,
     checkCsrf: mocks.checkCsrf,
     syncCustomerProfile: mocks.syncCustomerProfile,
   }

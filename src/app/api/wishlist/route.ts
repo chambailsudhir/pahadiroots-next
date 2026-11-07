@@ -25,12 +25,13 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server'
+import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh, applyNewCookies,
   syncCustomerProfile,
-  checkRateLimit,
+  checkRateLimitShared,
   checkCsrf,
 } from '@/lib/api/serverUtils'
 // VERIFY ROUND (L-6): answers built here by hand (error bodies with a `code`) carry the same header as ok()/fail() — a
@@ -83,8 +84,8 @@ export async function PATCH(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
-  if (!checkRateLimit(`wishlist_patch:${ip}`, 60, 60_000)) {
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  if (!await checkRateLimitShared(`wishlist_patch:${ip}`, 60, 60_000)) {
     return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 
@@ -201,12 +202,8 @@ export async function PUT(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  const ip = (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
-  if (!checkRateLimit(`wishlist_put:${ip}`, 60, 60_000)) {
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
+  if (!await checkRateLimitShared(`wishlist_put:${ip}`, 60, 60_000)) {
     return fail(429, 'Too many requests — please wait a moment.', { 'Retry-After': '60' })
   }
 

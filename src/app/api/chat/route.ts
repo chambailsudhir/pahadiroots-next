@@ -5,7 +5,7 @@
 // Keys stored in Vercel Environment Variables — never exposed to browser.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { guardAiRequest, readCappedJson, sanitizeChatContents, getClientIp, toClientChatResponse } from '@/lib/api/aiGuard'
+import { guardAiRequest, readCappedJson, sanitizeChatContents, getClientIp, getRawClientIp, toClientChatResponse } from '@/lib/api/aiGuard'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { verifyChatToken, chatTokenEnabled } from '@/lib/api/chatToken'
 import { verifyChatPow, verifyTurnstile, turnstileEnabled } from '@/lib/api/chatChallenge'
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   // Bot challenge (audit C-10): Turnstile when configured, otherwise a proof of work bound to the session token.
   if (turnstileEnabled()) {
-    if (!await verifyTurnstile(req.headers.get('x-turnstile-token'), getClientIp(req))) {
+    if (!await verifyTurnstile(req.headers.get('x-turnstile-token'), getRawClientIp(req))) {
       return withId(NextResponse.json({ error: 'Verification failed — please refresh the page' }, { status: 403 }))
     }
   } else if (chatTokenEnabled() && !verifyChatPow(req.headers.get('x-chat-token'), req.headers.get('x-chat-pow'))) {

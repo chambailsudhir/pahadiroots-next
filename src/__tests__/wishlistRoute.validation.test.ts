@@ -11,7 +11,7 @@ vi.mock('@/lib/api/serverUtils', async () => {
     ok:   (d: unknown) => NextResponse.json(d),
     fail: (status: number, msg: string) => NextResponse.json({ error: msg }, { status }),
     sbAuth: mocks.sbAuth, sbAdmin: mocks.sbAdmin, syncCustomerProfile: mocks.syncCustomerProfile, getToken: mocks.getToken,
-    tryRefresh: mocks.tryRefresh, checkRateLimit: mocks.checkRateLimit, checkCsrf: mocks.checkCsrf, applyNewCookies: (r: NextResponse) => r,
+    tryRefresh: mocks.tryRefresh, checkRateLimit: mocks.checkRateLimit, checkRateLimitShared: async (...a: [string, number?, number?]) => mocks.checkRateLimit(...a), checkCsrf: mocks.checkCsrf, applyNewCookies: (r: NextResponse) => r,
   }
 })
 
