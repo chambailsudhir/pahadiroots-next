@@ -18,3 +18,5 @@ export const rateLimitKvMock = {
 
 export function resetInMemoryRateLimit() { counts.clear() }
 export function rateLimitCount(key: string) { return counts.get(key) ?? 0 }
+/** The live counter map, for tests that need to clear one limiter while keeping another. */
+export function rateLimitCountsForTest() { return counts }

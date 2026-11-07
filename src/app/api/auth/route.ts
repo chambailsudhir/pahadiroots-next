@@ -227,9 +227,34 @@ function isSupabaseMailFailure(e: { status?: number; message?: string }): boolea
 // Supabase path AND the SMTP-fallback path. A fresh object each time so nothing can be mutated between callers.
 const SIGNUP_GENERIC_OK = () => ok({ success: true, verification_sent: true })
 
-async function signupViaOwnMailer(email: string, password: string, fullName: string) {
+// Round 8 (Nov 2026): Supabase's own mailer is capped project-wide (Auth → Rate Limits → e-mails per hour), so the healthy
+// path can never be turned into a bulk mailer. This fallback bypassed that cap: a botnet rotating networks (5 sign-ups /
+// minute each) could make our domain send thousands of "verify your e-mail" messages to arbitrary inboxes — spam complaints
+// get the sending domain suspended at Resend, which also stops order e-mails. Same shape as forgot_password's caps.
+// Checked BEFORE generate_link, so a capped request creates no user and sends nothing.
+const SIGNUP_FALLBACK_CAPS = {
+  globalPerHour: 50,   // real sign-ups are a handful a day; Supabase's default custom-SMTP limit is 30 / hour
+  perNetworkPerDay: 5,
+  perAddressPerDay: 3,
+} as const
+
+async function withinSignupFallbackCaps(email: string, ipKey: string): Promise<boolean> {
+  const HOUR = 60 * 60_000, DAY = 24 * HOUR
+  const target = email.toLowerCase()
+  return (await rateLimit(`signup_fallback_email:global`, SIGNUP_FALLBACK_CAPS.globalPerHour, HOUR))
+      && (await rateLimit(`signup_fallback_email_ip:${ipKey}`, SIGNUP_FALLBACK_CAPS.perNetworkPerDay, DAY))
+      && (await rateLimit(`signup_fallback_email_to:${target}`, SIGNUP_FALLBACK_CAPS.perAddressPerDay, DAY))
+}
+
+async function signupViaOwnMailer(email: string, password: string, fullName: string, ipKey: string) {
   const SITE_URL = emailSiteUrl()   // finding F: a clean https origin only — never a preview / localhost value in the verification link
   const FRIENDLY = 'We created your account but could not send the verification e-mail right now. Please try again in a few minutes, or continue with Google.'
+  if (!(await withinSignupFallbackCaps(email, ipKey))) {
+    captureError(new Error('signup fallback: e-mail cap reached — fix the Supabase SMTP credentials (Auth → SMTP)'), {
+      action: 'auth.signup.fallback_capped', alert: true,
+    })
+    return err(503, 'We could not send the verification e-mail right now. Please try again later, or continue with Google.')
+  }
   try {
     // type "signup" creates the (unconfirmed) user AND returns the verification link WITHOUT sending any mail.
     const genRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
@@ -383,7 +408,8 @@ export async function POST(req: NextRequest) {
         captureError(new Error(`Supabase Auth could not send the sign-up e-mail (${e2.message}) — SMTP credentials in Supabase → Auth → SMTP are probably invalid; using the Resend fallback`), {
           action: 'auth.signup.supabase_smtp_failed', alert: true,
         })
-        return signupViaOwnMailer(email, password, resolvedName)
+        const ipKey = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
+        return signupViaOwnMailer(email, password, resolvedName, ipKey)
       }
       // SECURITY (F-8): GoTrue's message is never relayed. With e-mail confirmation OFF it says "User already registered"
       // (422) for an existing address — the same oracle as above — so that case gets the generic 200 too. Any other

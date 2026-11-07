@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { NextRequest } from 'next/server'
+import { resetInMemoryRateLimit, rateLimitCountsForTest } from './helpers/inMemoryRateLimit'
 
 const mocks = vi.hoisted(() => ({ sendTransactionalEmail: vi.fn(), syncCustomerProfile: vi.fn() }))
 vi.mock('@/lib/api/rateLimitKv', async () => (await import('./helpers/inMemoryRateLimit')).rateLimitKvMock)
@@ -42,7 +43,7 @@ let generateLink: () => ReturnType<typeof json>
 const urls = () => fetchMock.mock.calls.map(c => String(c[0]))
 
 beforeEach(() => {
-  fetchMock.mockReset(); vi.clearAllMocks()
+  fetchMock.mockReset(); vi.clearAllMocks(); resetInMemoryRateLimit()
   smtpBroken = true
   generateLink = () => json(200, { id: 'u-new', email: 'new@user.com', action_link: 'https://example.supabase.co/auth/v1/verify?token=abc&type=signup' })
   mocks.syncCustomerProfile.mockResolvedValue({ id: 70 })
@@ -181,3 +182,59 @@ describe('email_signup — mail fallback (ACC-025)', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('email_signup — mail fallback caps (round 8: the fallback must not become a bulk mailer)', () => {
+  const genCalls = () => urls().filter(u => u.endsWith('/admin/generate_link')).length
+
+  it('one network gets at most 5 fallback sign-up e-mails a day; the 6th creates no user and sends nothing', async () => {
+    const { POST } = await import('@/app/api/auth/route')
+    const same = (n: number) => new NextRequest('https://pahadiroots.com/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', origin: 'https://pahadiroots.com', 'x-forwarded-for': '198.51.100.7' },
+      body: JSON.stringify({ ...SIGNUP, email: `victim${n}@example.com` }),
+    })
+    // the route's own per-network limiter allows 5 sign-ups a minute, so 5 succeed here
+    for (let n = 0; n < 5; n++) expect((await POST(same(n))).status).toBe(200)
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(5)
+    resetPerMinuteLimiter()
+    const sixth = await POST(same(5))
+    expect(sixth.status).toBe(503)
+    expect(genCalls()).toBe(5)                              // no 6th user created
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(5)
+  })
+
+  it('one address gets at most 3 fallback e-mails a day, whatever network asks', async () => {
+    const { POST } = await import('@/app/api/auth/route')
+    for (let n = 0; n < 3; n++) expect((await POST(reqFrom(`203.0.113.${n + 1}`, SIGNUP))).status).toBe(200)
+    expect((await POST(reqFrom('203.0.113.99', SIGNUP))).status).toBe(503)
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(3)
+  })
+
+  it('at most 50 fallback e-mails an hour across all networks and addresses', async () => {
+    const { POST } = await import('@/app/api/auth/route')
+    for (let n = 0; n < 50; n++) expect((await POST(reqFrom(`10.0.${n}.1`, { ...SIGNUP, email: `bulk${n}@example.com` }))).status).toBe(200)
+    expect((await POST(reqFrom('10.1.0.1', { ...SIGNUP, email: 'bulk-over@example.com' }))).status).toBe(503)
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(50)
+  })
+
+  it('the caps never touch the healthy Supabase path', async () => {
+    smtpBroken = false
+    const { POST } = await import('@/app/api/auth/route')
+    for (let n = 0; n < 6; n++) expect((await POST(reqFrom(`10.2.${n}.1`, SIGNUP))).status).toBe(200)
+    expect(genCalls()).toBe(0)
+  })
+})
+
+function reqFrom(addr: string, body: unknown) {
+  return new NextRequest('https://pahadiroots.com/api/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', origin: 'https://pahadiroots.com', 'x-forwarded-for': addr },
+    body: JSON.stringify(body),
+  })
+}
+
+// The route's general limiter (5 / minute per network, key mw:rl:auth_email_signup:<ip>) is separate from the fallback caps.
+function resetPerMinuteLimiter() {
+  // counts live in the shared in-memory helper; only the per-minute key is cleared so the daily fallback counts survive
+  ;(rateLimitCountsForTest() as Map<string, number>).forEach((_v, k, m) => { if (k.startsWith('mw:rl:auth_email_signup:')) m.delete(k) })
+}
