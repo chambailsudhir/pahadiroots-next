@@ -33,7 +33,6 @@ import { RETURNABLE_WINDOW_HOURS, returnWindowStart } from '@/lib/account/consta
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY!
 const BUCKET        = 'return-evidence'   // PRIVATE (db_migration_v18); read links are signed when the return is submitted
-const MAX_PHOTOS_PER_RETURN = 4
 
 // AUDIT S2-011: size / MIME / extension / path rules live in ./validate.ts (unit-tested; a route
 // file may only export handlers).
@@ -110,18 +109,10 @@ export async function POST(
     const enabled = Array.isArray(settingRows) && settingRows[0]?.value === 'true'
     if (!enabled) return fail(403, 'Photo upload is currently unavailable')
 
-    // Cheap abuse guard — cap how many photos can accumulate under one
-    // order's return, independent of whatever the client's own UI allows.
-    const existingPhotoCount = await sbAdmin(
-      'GET',
-      `/rest/v1/returns?order_id=eq.${id}&status=not.in.(refunded,rejected,replaced)&select=photo_urls&order=created_at.desc&limit=1`,
-    ).catch(() => null)
-    const existingCount = Array.isArray(existingPhotoCount) && existingPhotoCount[0]?.photo_urls
-      ? (existingPhotoCount[0].photo_urls as string[]).length
-      : 0
-    if (existingCount >= MAX_PHOTOS_PER_RETURN) {
-      return fail(400, `Maximum ${MAX_PHOTOS_PER_RETURN} photos per return`)
-    }
+    // BUG FIX (Nov 2026 verification): this used to count the photos of the order's newest OPEN return and refuse once it had 4.
+    // Photos are attached only when a return is created (POST /return keeps at most 4 per return), so that count belonged to a
+    // DIFFERENT, already-filed return: a second item's return in the same order could not get any photo. The per-return cap
+    // lives in POST /return; abuse is capped per customer above (12 upload links per hour).
 
     // Namespaced path per order — keeps evidence photos organized and
     // prevents one customer's upload from colliding with another's.

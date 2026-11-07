@@ -13,11 +13,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { evidenceReadLinks } from '@/lib/server/returnEvidence'
+import { clientIpKey } from '@/lib/api/clientIp'
 import {
   ok, fail,
   sbAuth, sbAdmin,
   getToken, tryRefresh,
-  checkRateLimit,
   checkRateLimitShared,
   checkCsrf,
   applyNewCookies,
@@ -31,12 +31,10 @@ export async function GET(req: NextRequest) {
   // ── Per-IP guard (per instance) ──────────────────────────────
   // A DoS guard only: it counts every attempt, so it is generous. The real "3 exports per 24 h" quota is per ACCOUNT
   // (shared) and is consumed only by an export that actually succeeds (see below).
-  const ip = (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
-  if (!checkRateLimit(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
+  // Shared limiter and /64 key (Nov 2026 verification): the in-process one was per serverless instance, and a raw IPv6 address
+  // could be rotated inside its /64.
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))
+  if (!await checkRateLimitShared(`data_export_ip:${ip}`, 30, 60 * 60_000)) {
     return fail(429, 'Too many export requests — please try again later.', { 'Retry-After': '3600' })
   }
 
@@ -50,6 +48,13 @@ export async function GET(req: NextRequest) {
     // ── Resolve user ─────────────────────────────────────────────
     const user = await sbAuth('/user', null, token!)
     const userId = user.id as string
+
+    // Attempt cap BEFORE the (paged, expensive) build (Nov 2026 verification): the 3-per-day quota is only spent by an export
+    // that succeeds, so once it was used up every further call still ran the whole build before answering 429. At most 10
+    // attempts per account per day now reach the database; the success quota below is unchanged.
+    if (!await checkRateLimitShared(`data_export_attempt:${userId}`, 10, 24 * 60 * 60_000)) {
+      return fail(429, 'You can download your data up to 3 times per day. Please try again tomorrow.', { 'Retry-After': '3600' })
+    }
 
     // NOTE: no `.catch(() => [])` anywhere below. A transient DB error used to produce HTTP 200 with empty sections AND
     // burn one of the 3 exports. Any failing section now fails the whole request (5xx) before the quota is touched.
