@@ -183,6 +183,8 @@ function makeEvent(overrides: Partial<{
   dbOrderId: string | undefined
   errorReason: string
   razorpayOrderId: string
+  currency: string | undefined
+  paymentCreatedAt: number
 }> = {}) {
   const {
     event = 'payment.captured',
@@ -191,7 +193,10 @@ function makeEvent(overrides: Partial<{
     dbOrderId = 'order-db-uuid-001',
     errorReason = 'card_declined',
     razorpayOrderId = 'order_rzp_1',
+    paymentCreatedAt = Math.floor(Date.now() / 1000) - 10 * 60,
   } = overrides
+  // Razorpay always sends the currency on a payment entity; a test can drop it explicitly with { currency: undefined }.
+  const currency = 'currency' in overrides ? overrides.currency : 'INR'
   return {
     event,
     payload: {
@@ -200,6 +205,8 @@ function makeEvent(overrides: Partial<{
           id: paymentId,
           order_id: razorpayOrderId,
           amount,
+          ...(currency !== undefined ? { currency } : {}),
+          created_at: paymentCreatedAt,
           error_reason: errorReason,
           notes: dbOrderId !== undefined ? { db_order_id: dbOrderId } : {},
         },
@@ -460,9 +467,27 @@ describe('POST /webhook/razorpay — payment.captured', () => {
     mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString() }
     mockDb.responses['order_events'] = []
     const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
-    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc' })))
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc', paymentCreatedAt: Math.floor(Date.now() / 1000) - 30 * 86_400 })))
     expect(res.status).toBe(200)
     expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+  })
+
+  // Nov 2026 verification: the 7-day window used orders.updated_at, so ANY later write (admin edit, shipping, the tax trigger)
+  // restarted it and an order paid weeks ago could be re-mailed. It is measured from the payment itself now.
+  it('does NOT re-drive an order paid 30 days ago even though the order row was edited 10 minutes ago', async () => {
+    mockDb.responses['orders'] = { ...PAYABLE, order_status: 'confirmed', payment_status: 'paid', payment_id: 'pay_abc', updated_at: new Date(Date.now() - 10 * 60_000).toISOString() }
+    mockDb.responses['order_events'] = []
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    const res = await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, paymentId: 'pay_abc', paymentCreatedAt: Math.floor(Date.now() / 1000) - 30 * 86_400 })))
+    expect(res.status).toBe(200)
+    expect(mockLogOrderEvent).not.toHaveBeenCalledWith(PAYABLE.id, 'paid_side_effects_redriven', 'razorpay', expect.anything())
+  })
+
+  it('holds a capture with NO currency for review instead of confirming it', async () => {
+    mockDb.responses['orders'] = PAYABLE
+    const { POST } = await import('@/app/api/v1/webhook/razorpay/route')
+    await POST(makeReq(makeEvent({ dbOrderId: PAYABLE.id, currency: undefined })))
+    expect(mockDb.updateCalls.find(c => c.table === 'orders' && (c.payload as { payment_status?: string })?.payment_status === 'paid')).toBeUndefined()
   })
 
   // PAY-DUP (Nov 2026 audit): a DIFFERENT payment captured for an order that is already paid = the customer was charged twice.

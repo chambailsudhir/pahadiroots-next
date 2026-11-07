@@ -101,3 +101,32 @@ describe('wishlist sync sends deltas, never the whole list', () => {
     expect(calls()).toHaveLength(1)
   })
 })
+
+// Nov 2026 verification: a PATCH answer containing ids added on ANOTHER device went into lastSynced but not into the local list,
+// so the next login merge (setWishlist) took them for "removed on this device" and hid them here for good.
+describe('items added on another device', () => {
+  it('appear on this device after a sync and survive the next login merge', async () => {
+    const store = await loadStore()
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ wishlist: ['Y', 'X'] }) })   // server: Y (other device) + X (this one)
+    store.getState().addToWishlist('X')
+    await tick()
+    expect(store.getState().wishlist.sort()).toEqual(['X', 'Y'])
+    fetchMock.mockClear()
+    store.getState().setWishlist(['Y', 'X'])          // next login applies the server list
+    expect(store.getState().wishlist.sort()).toEqual(['X', 'Y'])
+    await tick()
+    expect(calls()).toHaveLength(0)                    // bringing Y in is not a customer edit: nothing is sent back
+  })
+
+  it('an id the customer removed here while the request was in flight is NOT brought back', async () => {
+    const store = await loadStore()
+    store.setState({ wishlist: ['Z'], lastSynced: ['Z'] }); await tick(); fetchMock.mockClear()
+    let resolve!: (v: unknown) => void
+    fetchMock.mockImplementationOnce(() => new Promise(r => { resolve = r }))
+    store.getState().addToWishlist('X'); await tick()           // PATCH {add:[X]} on the wire
+    store.getState().removeFromWishlist('Z')                    // removal queued, not yet sent
+    resolve({ ok: true, json: async () => ({ wishlist: ['Z', 'X'] }) })
+    await tick(0)
+    expect(store.getState().wishlist).not.toContain('Z')
+  })
+})
