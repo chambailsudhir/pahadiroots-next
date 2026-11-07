@@ -10,6 +10,7 @@ import './OrderSummary.css'  // PERF FIX: extracted from inline <style> block �
 import Icon from '@/components/ui/Icon'
 import { useUserStore } from '@/store/userStore'
 import { coinsForOrderValue } from '@/lib/loyaltyCoins'
+import CoinNudge from '@/components/loyalty/CoinNudge'
 
 interface CouponHint { code: string; label: string }
 
@@ -415,6 +416,8 @@ const OrderSummary = memo(function OrderSummary({
               <Icon name="star" /> Earn up to <strong>{loyaltyPts} {loyaltyLabel}</strong> when this order is delivered
             </div>
           )}
+          {/* Owner request (Nov 2026): coins come in full ₹500 steps — show how close the next ones are. */}
+          {!loyaltyRedemption && <CoinNudge total={pricing.total} settings={settings as unknown as Record<string, string | undefined>} style={{ marginTop: 8 }} />}
         </div>
       </div>
 

@@ -39,3 +39,20 @@ export function coinsForOrderValue(orderValue: number, settings: Settings): numb
   const pts = Math.floor(v / coinStepRupees(settings) + 1e-9) * coinsPerStep(settings)
   return Math.max(0, max != null ? Math.min(pts, max) : pts)
 }
+
+/**
+ * "Add ₹X more to earn N coins" (Nov 2026, owner request): how far this order is from the next full step. null when earning is off,
+ * or when a per-order maximum is set and already reached. `more` = the order already earns coins (so the next ones are "more").
+ */
+export function coinNudge(orderValue: number, settings: Settings): { addRupees: number; coins: number; more: boolean } | null {
+  const max = coinsMaxPerOrder(settings)
+  const perStep = coinsPerStep(settings)
+  if (max === 0 || perStep <= 0) return null
+  const v = Number.isFinite(Number(orderValue)) && Number(orderValue) > 0 ? Number(orderValue) : 0
+  const step = coinStepRupees(settings)
+  const now = coinsForOrderValue(v, settings)
+  if (max != null && now >= max) return null
+  const nextAt = (Math.floor(v / step + 1e-9) + 1) * step
+  const coins = max != null ? Math.min(perStep, max - now) : perStep
+  return { addRupees: Math.max(1, Math.ceil(nextAt - v)), coins, more: now > 0 }
+}
