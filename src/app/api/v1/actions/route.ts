@@ -119,6 +119,27 @@ export async function POST(req: NextRequest) {
       if (!emailValid) {
         return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
       }
+      // Nov 2026 verification: the only guard was the shared 10/min per-IP limit, so a bot could relay ~14k e-mails a day
+      // per IP (and unlimited across IPs) into the admin inbox, with empty names and one-character messages.
+      //  - `website` is a honeypot input hidden from people (contact/page.tsx); a filled one is a bot → answer success so it
+      //    learns nothing, but send nothing.
+      //  - name required, message at least 10 characters.
+      //  - at most 5 messages per IP per day and 200 in total per day (caps the damage of a distributed flood).
+      if (String(body.website ?? '').trim() !== '') {
+        return NextResponse.json({ success: true })
+      }
+      if (!stripTags(rawName)) {
+        return NextResponse.json({ error: 'Please enter your name' }, { status: 400 })
+      }
+      if (stripTags(rawMessage).length < 10) {
+        return NextResponse.json({ error: 'Please write a message of at least 10 characters' }, { status: 400 })
+      }
+      if (!(await checkRateLimitKv(`mw:rl:contact:ip:${ip}`, 5, 86400)) || !(await checkRateLimitKv('mw:rl:contact:global', 200, 86400))) {
+        return NextResponse.json(
+          { error: 'Too many messages today — please WhatsApp us instead' },
+          { status: 429, headers: { 'Retry-After': '3600' } },
+        )
+      }
 
       // BUG FIX (same class as the checkout 504 fix): the admin-notification
       // email is deferred to after() — validation above still runs

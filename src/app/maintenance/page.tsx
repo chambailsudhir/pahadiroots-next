@@ -1,4 +1,8 @@
+import type { Metadata } from 'next'
 import { getSiteSettings } from '@/lib/getSiteSettings'
+
+// Nov 2026 verification: no longer robots-disallowed (see robots.ts), so it says noindex itself.
+export const metadata: Metadata = { robots: { index: false, follow: false } }
 
 // BUG FIX: was static hardcoded copy, ignoring settings.maintenance_message —
 // the one field an admin can actually edit for this exact page — so the

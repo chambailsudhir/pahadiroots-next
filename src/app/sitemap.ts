@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next'
 import { supabase } from '@/lib/supabase'
+import { getSiteSettings, isEnabled } from '@/lib/getSiteSettings'
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'
 
@@ -38,11 +39,18 @@ const toDate = (v?: string | null) => (v ? new Date(v) : null)
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
+  // Nov 2026 verification: /blog (+ every post), /our-stories and /mountain-stories were always listed, even with their admin
+  // toggles off — those URLs 404, so the sitemap advertised dead pages. Use the exact same rules as the pages themselves.
+  // strict: a settings outage must fail the sitemap (last good copy keeps serving), not silently drop sections.
+  const settings = await getSiteSettings({ strict: true })
+  const blogOn         = settings.show_blog !== 'false'                 // blog/page.tsx, blog/[slug]/page.tsx
+  const ourStoriesOn   = settings.about_page_enabled !== 'false'        // our-stories/page.tsx
+  const mountainOn     = isEnabled(settings.show_life_in_mountains)     // mountain-stories/page.tsx
 
   // Products
-  let products: { slug: string; updated_at: string | null; image_url: string | null; category_id: number | null }[] = []
+  let products: { slug: string; updated_at: string | null; image_url: string | null; category_id: number | null; state_id?: string | null }[] = []
   try {
-    products = await fetchAll(( from, to ) => supabase.from('products').select('slug, updated_at, image_url, category_id, is_active')
+    products = await fetchAll(( from, to ) => supabase.from('products').select('slug, updated_at, image_url, category_id, state_id, is_active')
       .eq('is_deleted', false).eq('status', 'active').order('id').range(from, to))
     products = products.filter(p => (p as { is_active?: boolean | null }).is_active !== false)  // SEC-001: deactivated products are not submitted
   } catch (e: unknown) { console.error('[sitemap] products fetch failed:', e); throw e }
@@ -79,7 +87,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     states = await fetchAll(( from, to ) => supabase.from('states').select('id, updated_at').eq('is_active', true).order('id').range(from, to))
   } catch (e: unknown) { console.error('[sitemap] states fetch failed:', e); throw e }
 
-  const regionPages: MetadataRoute.Sitemap = states.map(s => ({
+  // Nov 2026 verification: a region with no live products (e.g. /regions/jk) is a thin page (noindex on the page itself);
+  // same rule as collections — it rejoins the sitemap once it has products.
+  const populatedStateIds = new Set(products.map(p => String(p.state_id ?? '').toLowerCase()).filter(Boolean))
+  const regionPages: MetadataRoute.Sitemap = states.filter(s => populatedStateIds.has(String(s.id).toLowerCase())).map(s => ({
     url:             `${BASE}/regions/${s.id}`,
     lastModified:    s.updated_at ? new Date(s.updated_at) : catalogueUpdated,
     changeFrequency: 'weekly' as const,
@@ -89,7 +100,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Blog posts — only published rows are ever eligible (the editorial `status` column is kept in sync with
   // is_published by a DB trigger).
   let blogPosts: { slug: string; updated_at: string | null; published_at: string | null }[] = []
-  try {
+  if (blogOn) try {
     blogPosts = await fetchAll(( from, to ) => supabase.from('blog_posts').select('slug, updated_at, published_at')
       .eq('is_published', true).order('published_at', { ascending: false }).range(from, to))
   } catch (e: unknown) { console.error('[sitemap] blog fetch failed:', e); throw e }
@@ -110,9 +121,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/products`,     lastModified: catalogueUpdated, changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE}/new-arrivals`, lastModified: catalogueUpdated, changeFrequency: 'daily',   priority: 0.7 },
     { url: `${BASE}/regions`,      lastModified: regionUpdated,    changeFrequency: 'weekly',  priority: 0.7 },
-    { url: `${BASE}/blog`,         lastModified: blogUpdated,      changeFrequency: 'weekly',  priority: 0.7 },
-    { url: `${BASE}/our-stories`,  lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${BASE}/mountain-stories`, lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.5 },
+    ...(blogOn ? [{ url: `${BASE}/blog`, lastModified: blogUpdated, changeFrequency: 'weekly' as const, priority: 0.7 }] : []),
+    ...(ourStoriesOn ? [{ url: `${BASE}/our-stories`, lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly' as const, priority: 0.6 }] : []),
+    ...(mountainOn ? [{ url: `${BASE}/mountain-stories`, lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly' as const, priority: 0.5 }] : []),
     { url: `${BASE}/contact`,      lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/lab-reports`,  lastModified: CONTENT_REVIEWED, changeFrequency: 'monthly', priority: 0.6 },
     // Shipping / returns policy pages get real search volume for FMCG ("cash on delivery available", "return policy").

@@ -8,6 +8,8 @@ import { truncate } from '@/lib/utils'
 import BlogArticle from '@/components/blog/BlogArticle'
 import { addHeadingIds } from '@/lib/blogToc'
 import type { Product } from '@/types'
+import { getSiteSettings } from '@/lib/getSiteSettings'
+import { blogMetaTitle } from '@/lib/blogMetaTitle'
 
 export const revalidate = 86400
 
@@ -64,7 +66,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await fetchPost(slug)
   if (!post) return { title: 'Article Not Found' }
 
-  const title = post.meta_title || post.title
+  const title = blogMetaTitle(post.meta_title, post.title)
   const rawDesc = post.meta_description || post.excerpt || ''
   const description = truncate(rawDesc.replace(/<[^>]+>/g, ''), 155)
   const canonicalUrl = post.canonical_url || `${BASE}/blog/${post.slug}`
@@ -73,7 +75,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // products, causing a broken WhatsApp/Facebook share preview for any post
   // without a photo. Falls back to the real logo instead.
   const image = post.og_image || post.cover_image || '/og-default.jpg'
-  const ogImages = [{ url: image, width: 1200, height: 630, alt: post.title }]
+  // Nov 2026 verification: every image was declared 1200x630 whatever its real size (cover photos are rarely that), so
+  // scrapers cropped/stretched to a wrong box. No dimensions: they read the image's own.
+  const ogImages = [{ url: image, alt: post.title }]
 
   return {
     title,
@@ -101,6 +105,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function BlogArticlePage({ params }: Props) {
   const { slug } = await params
+  // Nov 2026 verification: the blog index 404s when show_blog === 'false' but every article stayed reachable (and
+  // indexable). Same gate here. strict: an outage must not freeze a 404 for a live article into the 24h ISR cache.
+  const settings = await getSiteSettings({ strict: true })
+  if (settings.show_blog === 'false') notFound()
   const post = await fetchPost(slug)
   if (!post) notFound()
 

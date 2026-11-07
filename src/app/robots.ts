@@ -19,7 +19,10 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow:     '/',
-        disallow:  ['/api/', '/checkout', '/order-success', '/maintenance'],
+        // Nov 2026 verification: '/maintenance' was disallowed while the store-closed gate 307'd every page there, so
+        // crawlers saw each URL redirect into a blocked one. The gate now answers 503 + Retry-After in place (proxy.ts) and
+        // /maintenance carries its own noindex, so it no longer needs (and must not have) a disallow.
+        disallow:  ['/api/', '/checkout', '/order-success'],
       },
     ],
     sitemap: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pahadiroots.com'}/sitemap.xml`,
