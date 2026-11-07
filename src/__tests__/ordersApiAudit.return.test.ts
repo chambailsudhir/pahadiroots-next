@@ -224,6 +224,27 @@ describe('upload-url — only for returnable orders', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })
+
+  // Nov 2026 verification: a replacement still on its way (window start in the future) got an upload link; POST /return refuses it.
+  it('422s while a replacement is still in transit', async () => {
+    order = { ...ORDER, delivered_at: new Date(Date.now() - 20 * 86_400_000).toISOString() }
+    returnsRows = [{ status: 'replaced', variant_id: 11, replacement_shipped_at: new Date().toISOString() }]
+    expect((await upload()).status).toBe(422)
+  })
+
+  // Nov 2026 verification: the old cap counted the photos of ANOTHER, already-filed return in the same order, so a second item's
+  // return could get no photo at all. The per-return cap lives in POST /return.
+  it('an earlier open return with 4 photos does not block photos for a new return in the same order', async () => {
+    returnsRows = [{ id: 7, status: 'requested', variant_id: 12, photo_urls: ['a', 'b', 'c', 'd'] }]
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) => {
+      const url = String(u)
+      const objectPath = url.split('/object/upload/sign/')[1] ?? ''
+      return new Response(JSON.stringify({ url: `/object/upload/sign/${objectPath}?token=t` }), { status: 200 })
+    })
+    const res = await upload()
+    fetchSpy.mockRestore()
+    expect(res.status).toBe(200)
+  })
 })
 
 describe('GET /api/orders — status allow-list and paging', () => {

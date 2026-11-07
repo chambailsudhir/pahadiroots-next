@@ -30,6 +30,7 @@
 // Rate limit: 3 req/hour per IP
 // ─────────────────────────────────────────────────────────────
 
+import { clientIpKey } from '@/lib/api/clientIp'
 import { createHmac } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import {
@@ -184,11 +185,7 @@ export async function DELETE(req: NextRequest) {
   if (csrfError) return csrfError
 
   // ── Rate limit ────────────────────────────────────────────────
-  const ip = (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    'unknown'
-  )
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 → /64
   // VERIFY ROUND (L-7): shared (KV / Postgres) limiter like export and profile — the in-process one was per serverless instance.
   if (!await checkRateLimitShared(`account_delete:${ip}`, 3, 60 * 60_000)) {
     return fail(429, 'Too many requests — please wait before trying again.', { 'Retry-After': '3600' })

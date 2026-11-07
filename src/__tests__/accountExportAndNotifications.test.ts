@@ -60,14 +60,22 @@ describe('GET /api/account/data-export', () => {
     })
     const res = await exportReq()
     expect(res.status).toBe(500)
-    expect(mocks.checkRateLimitShared).not.toHaveBeenCalled()
+    expect(mocks.checkRateLimitShared).not.toHaveBeenCalledWith('data_export:u1', expect.anything(), expect.anything())
   })
 
   it('counts the account quota only after a successful build, and answers 429 when exhausted', async () => {
-    mocks.checkRateLimitShared.mockResolvedValue(false)
+    mocks.checkRateLimitShared.mockImplementation(async (key: string) => key !== 'data_export:u1')
     const res = await exportReq()
     expect(res.status).toBe(429)
     expect(mocks.checkRateLimitShared).toHaveBeenCalledWith('data_export:u1', 3, 24 * 60 * 60_000)
+  })
+
+  // Nov 2026 verification: once the success quota was used up, every further call still ran the whole paged build first.
+  it('an account past 10 attempts a day is refused BEFORE any data is read', async () => {
+    mocks.checkRateLimitShared.mockImplementation(async (key: string) => !key.startsWith('data_export_attempt:'))
+    const res = await exportReq()
+    expect(res.status).toBe(429)
+    expect(mocks.sbAdmin).not.toHaveBeenCalled()
   })
 
   it('exports the own-data whitelist: gstin, address_line2, items, order notes, referral, consent; never notes/tags/is_blocked', async () => {

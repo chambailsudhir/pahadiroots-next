@@ -181,3 +181,30 @@ describe('email_login failed-attempt throttle (ACC-034, reworked in the round-2 
     expect(owner.status).not.toBe(429)
   })
 })
+
+// Nov 2026 verification: the login relayed the auth provider's raw message, and an upstream HTML error page became a 401
+// carrying "Unexpected token <".
+describe('email_login error answers', () => {
+  it('wrong password → 400 with the generic message (no upstream wording)', async () => {
+    fetchMock.mockResolvedValue(json(400, { msg: 'Invalid login credentials' }))
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(makeRequest({ action: 'email_login', email: `w-${Date.now()}@example.com`, password: 'Wrong-Pass-1!' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('Invalid email or password')
+  })
+  it('unconfirmed e-mail → 403 with a message the customer can act on', async () => {
+    fetchMock.mockResolvedValue(json(400, { error_description: 'Email not confirmed' }))
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(makeRequest({ action: 'email_login', email: `u-${Date.now()}@example.com`, password: 'Some-Pass-1!' }))
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toMatch(/confirm your e-mail/i)
+  })
+  it('an upstream HTML 502 → 503 "temporarily unavailable", never a parser message', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 502, json: async () => { throw new Error('x') }, text: async () => '<html>Bad gateway</html>' })
+    const { POST } = await import('@/app/api/auth/route')
+    const res = await POST(makeRequest({ action: 'email_login', email: `g-${Date.now()}@example.com`, password: 'Some-Pass-1!' }))
+    expect(res.status).toBe(503)
+    const body = JSON.stringify(await res.json())
+    expect(body).not.toMatch(/Unexpected token|JSON|<html/i)
+  })
+})
