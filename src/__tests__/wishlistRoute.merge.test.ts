@@ -104,3 +104,22 @@ describe('PUT /api/wishlist — can no longer erase a saved list (legacy clients
     expect(JSON.parse(writes()[0][2].wishlist_items)).toEqual(['7'])
   })
 })
+
+// Nov 2026 verification: a failed read answered 200 {wishlist: []}; the client applied that as the server list and every synced
+// item vanished from the device. A read failure is a 503 now (the client keeps its local list on any non-OK answer).
+describe('GET /api/wishlist', () => {
+  const get = () => import('@/app/api/wishlist/route').then(m => m.GET(new NextRequest('https://pahadiroots.com/api/wishlist', {
+    headers: { origin: 'https://pahadiroots.com', 'x-forwarded-for': '7.7.7.7' },
+  })))
+  it('returns the stored list', async () => {
+    const res = await get()
+    expect(res.status).toBe(200)
+    expect((await res.json()).wishlist).toEqual(['1', '2'])
+  })
+  it('answers 503 — never an empty list — when the stored list cannot be read', async () => {
+    mocks.sbAdmin.mockRejectedValue({ status: 500, message: 'db down' })
+    const res = await get()
+    expect(res.status).toBe(503)
+    expect(JSON.stringify(await res.json())).not.toContain('"wishlist":[]')
+  })
+})

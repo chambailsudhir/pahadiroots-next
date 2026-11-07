@@ -192,7 +192,7 @@ async function getCustomerOrders(customerId: string) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204 })
+  return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'private, no-store' } })
 }
 
 // ── Sign-up verification e-mail fallback (account audit, Nov 2026 — ACC-025) ────────────────────────────

@@ -198,7 +198,13 @@ if (typeof window !== 'undefined') {
         try { const j = await res.json(); if (Array.isArray(j?.wishlist)) serverList = j.wishlist.map(String) } catch { /* body optional */ }
         const st = useUserStore.getState()
         const base = serverList ?? [...new Set([...(st.lastSynced ?? []), ...add])].filter(id => !remove.includes(id))
-        useUserStore.setState({ lastSynced: base })
+        // BUG FIX (Nov 2026 verification): ids the server holds that this device never had (added on another device) went into
+        // lastSynced but not into the local list, so the next setWishlist read them as "removed here" and hid them for good.
+        // Bring them into the local list in the same update (the subscriber sees lastSynced change and queues nothing), except
+        // ids the customer removed here meanwhile — that removal is still waiting to be sent.
+        const local = new Set(st.wishlist)
+        const fromServer = base.filter(id => !local.has(id) && !pendingRemove.has(id))
+        useUserStore.setState(fromServer.length > 0 ? { lastSynced: base, wishlist: [...st.wishlist, ...fromServer] } : { lastSynced: base })
       } else if (res.status === 409) {
         // list is full (cap) → these adds can never succeed; anything else (concurrent edit) is retried
         let full = false

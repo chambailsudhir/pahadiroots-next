@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
 import { StockReservationError } from '@/lib/services/inventoryService'
@@ -8,6 +8,7 @@ import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
 import { adminNotifyAddress } from '@/lib/server/adminNotify'
 import { loadAdminOrderEmail, describeOrigin } from '@/lib/server/adminOrderEmail'
 import { checkCsrf, sbAuth, sbAdmin, syncCustomerProfile, getToken, tryRefresh, applyNewCookies } from '@/lib/api/serverUtils'
+import { privateJson } from '@/lib/api/privateJson'
 import { createOrderSchema } from '@/lib/schemas'
 // ── Security: server-only imports (build-time guard against client-bundle leaks) ──
 import { redeemLoyaltyPoints } from '@/lib/server/loyalty'
@@ -69,7 +70,7 @@ class OrderCreateTimeoutError extends Error {
 
 /** AUDIT S1-016(a): neither KV nor the DB fallback could count — refuse briefly instead of creating uncapped orders. */
 function rateLimiterUnavailable() {
-  return NextResponse.json(
+  return privateJson(
     { error: 'Our server is briefly busy — please try again in a few seconds.' },
     { status: 503, headers: { 'Retry-After': String(RATE_LIMIT_UNAVAILABLE_RETRY_AFTER_SEC) } },
   )
@@ -212,7 +213,7 @@ export async function POST(req: NextRequest) {
   const ipLimit = await checkRateLimitKvStrict(`mw:rl:orders_ip:${ip}`, 10)
   if (ipLimit === 'unavailable') return rateLimiterUnavailable()
   if (ipLimit === 'blocked') {
-    return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
+    return privateJson({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   // ── Body size cap — 64 KB is generous for an order payload ───────────────
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest) {
   // this guard (1 MB); order/payment payloads are far smaller in practice.
   const rawContentLength = Number(req.headers.get('content-length'))
   if (Number.isFinite(rawContentLength) && rawContentLength > 65_536) {
-    return NextResponse.json({ error: 'Request too large' }, { status: 413 })
+    return privateJson({ error: 'Request too large' }, { status: 413 })
   }
 
   // Remembered outside the try so the catch can look the order up if createOrder() times out (ACC-032).
@@ -230,7 +231,7 @@ export async function POST(req: NextRequest) {
   try {
     // A body that is not JSON is the caller's mistake (400), not a server fault (500 — it also raised error alerts for every bot probe).
     const body   = await req.json().catch(() => undefined)
-    if (body === undefined) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    if (body === undefined) return privateJson({ error: 'Invalid JSON' }, { status: 400 })
     idempotencyKeyForRecovery = (body as { idempotency_key?: unknown } | null)?.idempotency_key ?? null
     const parsed = createOrderSchema.safeParse(body)
     if (!parsed.success) {
@@ -242,7 +243,7 @@ export async function POST(req: NextRequest) {
       // Vercel function logs going forward.
       const fieldErrors = parsed.error.flatten().fieldErrors
       logger.warn('orders: schema validation failed', { action: 'orders.post.validate', fieldErrors })
-      return NextResponse.json({ error: 'Invalid request', details: fieldErrors }, { status: 400 })
+      return privateJson({ error: 'Invalid request', details: fieldErrors }, { status: 400 })
     }
 
     const d = parsed.data
@@ -258,7 +259,7 @@ export async function POST(req: NextRequest) {
       logger.warn('orders: non-COD payment_method rejected on /api/v1/orders', {
         action: 'orders.post.non_cod', payment_method: d.payment_method,
       })
-      return NextResponse.json(
+      return privateJson(
         { error: 'Online payments must be started from the payment flow. Please use Pay Online at checkout.' },
         { status: 400 },
       )
@@ -269,7 +270,7 @@ export async function POST(req: NextRequest) {
     const phoneLimit = await checkRateLimitKvStrict(`mw:rl:orders_phone:${normalizePhoneForLookup(a.phone) || a.phone}`, 3)
     if (phoneLimit === 'unavailable') return rateLimiterUnavailable()
     if (phoneLimit === 'blocked') {
-      return NextResponse.json({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
+      return privateJson({ error: 'Too many order attempts — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
     }
 
     // ── Round-2 audit: the same 10-minute abuse caps the online path got in S1-003 ──────────────────────────────────────────
@@ -281,7 +282,7 @@ export async function POST(req: NextRequest) {
     ])
     if (phone10m === 'unavailable' || ip10m === 'unavailable') return rateLimiterUnavailable()
     if (phone10m === 'blocked' || ip10m === 'blocked') {
-      return NextResponse.json({ error: 'Too many order attempts — please wait a few minutes and try again' }, { status: 429, headers: { 'Retry-After': '600' } })
+      return privateJson({ error: 'Too many order attempts — please wait a few minutes and try again' }, { status: 429, headers: { 'Retry-After': '600' } })
     }
 
     const name  = sanitize(a.name)
@@ -310,7 +311,7 @@ export async function POST(req: NextRequest) {
     // closed. `settings` was already being fetched on this line for other
     // fields; store_open just wasn't one of the things checked.
     if (!isStoreOpen(settings)) {
-      return NextResponse.json(
+      return privateJson(
         { error: 'Sorry, we are temporarily not accepting orders. Please check back soon.' },
         { status: 503 },
       )
@@ -535,7 +536,7 @@ export async function POST(req: NextRequest) {
     const sweepOrigin = new URL(req.url).origin
     after(() => runBackgroundSweepsIfDue(sweepOrigin).then(() => undefined))
 
-    const successRes = NextResponse.json(
+    const successRes = privateJson(
       { success: true, order_number: order.order_number, order_id: order.id, confirmation_token: order.confirmationToken },
       { status: alreadyExists ? 200 : 201 }
     )
@@ -548,15 +549,15 @@ export async function POST(req: NextRequest) {
     // client mint a fresh key and ask the customer to re-confirm, instead of looping.
     if (err instanceof IdempotencyConflictError) {
       logger.warn('idempotency key reused with a different request', { action: 'idempotency.conflict', reason: err.reason })
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+      return privateJson({ error: err.message, code: err.code }, { status: 409 })
     }
     // AUDIT S1-002: redeeming coins without a verified session is refused, not silently ignored.
     // Nov 2026 audit: a guest used a registered account's mobile number — ask them to sign in.
     if (err instanceof GuestPhoneRegisteredError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
+      return privateJson({ error: err.message, code: err.code }, { status: 409 })
     }
     if (err instanceof LoyaltyAuthRequiredError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 401 })
+      return privateJson({ error: err.message, code: err.code }, { status: 401 })
     }
     // AUDIT S1-005/S1-006: the order may have committed; nothing was undone. Same retry contract as
     // the route-level timeout below — the idempotency key makes the retry safe.
@@ -565,9 +566,9 @@ export async function POST(req: NextRequest) {
       if (committed) {
         logger.warn('orders: outcome-unknown resolved — order was committed', { action: 'orders.recovered', order_id: committed.id, order_number: committed.order_number })
         await finalizeRecoveredOrder(committed, finalizeForRecovery)
-        return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
+        return privateJson({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
-      return NextResponse.json({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
+      return privateJson({ error: err.message, code: err.code }, { status: 503, headers: { 'Retry-After': '5' } })
     }
     const internalMessage = err instanceof Error ? err.message : 'Internal server error'
 
@@ -584,9 +585,9 @@ export async function POST(req: NextRequest) {
         // which this request never reached — run them now, once, then tell the customer their order exists.
         logger.warn('orders: create budget exceeded — order was committed, recovering', { action: 'orders.timeout_recovered', order_id: committed.id, order_number: committed.order_number })
         await finalizeRecoveredOrder(committed, finalizeForRecovery)
-        return NextResponse.json({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
+        return privateJson({ success: true, order_number: committed.order_number, order_id: committed.id, confirmation_token: committed.confirmation_token }, { status: 200 })
       }
-      return NextResponse.json(
+      return privateJson(
         { error: 'Our server is briefly slow right now — please try again in a few seconds.' },
         { status: 503, headers: { 'Retry-After': '5' } },
       )
@@ -641,6 +642,6 @@ export async function POST(req: NextRequest) {
     const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
       ? internalMessage
       : 'Order placement failed. Please try again or contact support.'
-    return NextResponse.json({ error: clientMessage }, { status })
+    return privateJson({ error: clientMessage }, { status })
   }
 }
