@@ -328,8 +328,6 @@ section.sec { padding: 52px 40px; }
 .pbd-nw { background:#3b82f6; }
 .pbadge-text { font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:#1a1a1a; line-height:1; }
 
-/* Discount ribbon — top-right corner */
-.pdisc-ribbon { position:absolute; top:0; right:0; z-index:6; background:#1b4332; color:#fff; font-size:10px; font-weight:800; padding:5px 10px 5px 12px; border-radius:0 18px 0 12px; letter-spacing:.3px; box-shadow:-2px 2px 6px rgba(0,0,0,.15); }
 
 /* Checkout offer tag */
 /* BUG FIX (P3): .pcard-checkout-tag removed — confirmed zero usages
