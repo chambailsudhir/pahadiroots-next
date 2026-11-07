@@ -1341,3 +1341,50 @@ html:root:root { --pr-fab-bottom: calc(20px + env(safe-area-inset-bottom,0px)); 
    used to cover product cards' Add to Cart buttons. */
 @media (min-width:901px) { .stt-btn { bottom:calc(84px + env(safe-area-inset-bottom,0px)); } }
 @media (max-width:900px) { .stt-btn { display:none; } }
+
+/* ── Product card (Nov 2026 redesign) — components/product/ProductCard.tsx ───────────────────────────────────────
+   Calmer card: 10px radius, no lift-and-shadow on hover (just a slow image zoom), one badge, the saving as text beside
+   the price, a 44px wishlist target top-right, a single stock line, and an outlined Add to Cart that fills on hover.
+   Placed last so it overrides the older .pcard rules above; html.premium overrides (higher specificity) still apply. */
+.pcard { border-radius:var(--pr-r-md); border:1px solid var(--pr-line); box-shadow:none; background:var(--pr-paper); }
+.pcard:hover { transform:none; box-shadow:0 10px 28px rgba(36,39,31,.08); }
+.pcard > .piw { border-radius:var(--pr-r-md) var(--pr-r-md) 0 0; }
+.pcard:hover .piw img { transform:scale(1.035); }
+.piw img { transition:transform .7s var(--pr-ease); }
+
+.pbadge-stack { top:10px; left:10px; }
+.pbadge-wrap { background:var(--pr-paper); border-radius:4px; padding:5px 8px; box-shadow:none; }
+.pbadge-dot { display:none; }
+.pbadge-text { font-size:10.5px; font-weight:700; letter-spacing:.1em; color:var(--pr-ink); }
+
+.piw-wl-btn { top:4px; right:4px; bottom:auto; width:44px; height:44px; background:transparent; backdrop-filter:none; box-shadow:none; }
+.piw-wl-btn:hover { background:transparent; transform:none !important; }
+.piw-wl-dot { width:34px; height:34px; border-radius:50%; background:rgba(255,253,248,.94); display:grid; place-items:center; box-shadow:0 1px 4px rgba(36,39,31,.12); transition:transform var(--pr-fast) var(--pr-ease); }
+.piw-wl-btn:hover .piw-wl-dot { transform:scale(1.08); }
+.piw-wl-btn:focus-visible { outline:none; }
+.piw-wl-btn:focus-visible .piw-wl-dot { outline:2px solid var(--pr-foil); outline-offset:2px; }
+@media (hover:hover) and (pointer:fine) { .piw-wl-btn { opacity:1; transform:none; } }
+
+.pbody { padding:14px 14px 16px; }
+.pregion { color:var(--pr-foil-text); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.pname { font-weight:400; font-size:16.5px; color:var(--pr-ink); line-height:1.3; }
+.stock-label { font-size:12px; font-weight:700; margin-top:2px; }
+.stock-label.high, .stock-label.mid { color:#2E6B3F; }
+.stock-label.low { color:var(--pr-buransh); }
+.prow { flex-wrap:wrap; row-gap:2px; }
+.pnow { font-weight:700; color:var(--pr-ink); font-variant-numeric:tabular-nums; }
+.pwas { color:var(--pr-stone); }
+.punt { color:var(--pr-stone); }
+.psave { font-size:12px; font-weight:700; color:var(--pr-forest); }
+
+.pcard .atc { background:transparent; color:var(--pr-forest); border:1.5px solid var(--pr-forest); border-radius:var(--pr-r-sm); min-height:44px; font-weight:700; transition:background var(--pr-fast) var(--pr-ease), color var(--pr-fast) var(--pr-ease); }
+.pcard .atc:hover, .pcard:focus-within .atc { background:var(--pr-forest); color:var(--pr-ivory); }
+.pcard .atc:disabled { opacity:.7; }
+.pcard .atc:focus-visible { outline:2px solid var(--pr-foil); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { .pcard:hover .piw img { transform:none; } }
+
+/* Homepage category carousel (CategoryTiles.tsx): no arrows when every tile already fits — 2 visible on phones, 4 on
+   tablets, 6 on desktop (same breakpoints as getVisible()). !important beats the arrows' inline display:flex. */
+.cgrid-wrap:is([data-count="1"],[data-count="2"]) .cgrid-arrow { display:none !important; }
+@media (min-width:640px) { .cgrid-wrap:is([data-count="3"],[data-count="4"]) .cgrid-arrow { display:none !important; } }
+@media (min-width:960px) { .cgrid-wrap:is([data-count="5"],[data-count="6"]) .cgrid-arrow { display:none !important; } }

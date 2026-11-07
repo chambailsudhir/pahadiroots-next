@@ -198,8 +198,9 @@ export default function CategoryTiles({ categories }: Props) {
         </p>
       </div>
 
-      {/* Carousel */}
-      <div style={{ position: 'relative', padding: '12px 52px 28px', boxSizing: 'border-box', overflow: 'hidden' }}>
+      {/* Carousel. data-count lets globals.css hide the arrows at widths where every tile already fits (Nov 2026: with
+          only the categories that have products, there are 3 tiles, which fit on tablet and desktop). */}
+      <div className="cgrid-wrap" data-count={active.length} style={{ position: 'relative', padding: '12px 52px 28px', boxSizing: 'border-box', overflow: 'hidden' }}>
 
         <button type="button" className="cgrid-arrow left" aria-label="Previous" style={{
           position: 'absolute', top: '50%', transform: 'translateY(-60%)', zIndex: 10,
