@@ -1285,59 +1285,9 @@ html.premium .mob-nav-logo { color: #f1d98a; }
 @media (min-width:1100px) { .coming-later-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media (max-width:640px) { .coming-later { padding:24px 16px 48px; gap:28px; } .coming-later-note { padding:20px; } }
 
-/* ── Help launcher (Nov 2026 redesign) — components/layout/HelpLauncher.tsx ─────────────────────────────────────────
-   One Help entry point replaces the separate WhatsApp button, the Pahadi_AI avatar and (on phones) back-to-top.
-   Layers: bottom nav 35 < Help button 36 < drawers/overlays 40-50; the sheet uses 45 (it is exclusive with them). */
-.help-fab { position:fixed; right:16px; bottom:calc(24px + env(safe-area-inset-bottom,0px)); z-index:36;
-  display:inline-flex; align-items:center; gap:8px; min-height:48px; padding:0 18px 0 14px; border-radius:999px;
-  background:var(--pr-forest); color:var(--pr-ivory); border:1px solid rgba(255,255,255,.14); cursor:pointer;
-  font:700 14.5px/1 var(--font-lato),Lato,system-ui,sans-serif; box-shadow:0 6px 18px rgba(31,59,45,.22);
-  transition:transform var(--pr-fast) var(--pr-ease), background var(--pr-fast) var(--pr-ease); }
-.help-fab svg { width:20px; height:20px; }
-.help-fab:hover { background:#16301f; transform:translateY(-1px); }
-.help-fab:focus-visible { outline:2px solid var(--pr-foil); outline-offset:3px; }
-/* Phones: the bottom nav's Help item opens the sheet, so no floating button — except on routes without that nav. */
-@media (max-width:900px) {
-  .help-root .help-fab { display:none; }
-  .help-root-always .help-fab { display:inline-flex; bottom:calc(84px + env(safe-area-inset-bottom,0px)); }
-}
-/* While the AI chat is open its own ✕ launcher sits in this spot (below); hide Help underneath it. */
-body:has(#pr-ai-fab.open) .help-fab { visibility:hidden; }
-
-.help-sheet { position:fixed; right:16px; bottom:calc(84px + env(safe-area-inset-bottom,0px)); z-index:45; width:min(340px, calc(100vw - 32px));
-  background:var(--pr-paper); color:var(--pr-ink); border:1px solid var(--pr-line); border-radius:var(--pr-r-md);
-  box-shadow:0 18px 48px rgba(36,39,31,.18); padding:18px 18px 12px; display:grid; gap:14px;
-  font-family:var(--font-lato),Lato,system-ui,sans-serif; animation:help-in var(--pr-med) var(--pr-ease); }
-.help-sheet[hidden] { display:none; }
-@keyframes help-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-.help-sheet-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.help-sheet-head h2 { margin:0; font:400 21px/1.2 var(--font-playfair),'Playfair Display',Georgia,serif; color:var(--pr-ink); }
-.help-close { width:44px; height:44px; margin:-10px -10px -10px 0; display:grid; place-items:center; background:none; border:0; color:var(--pr-stone); cursor:pointer; border-radius:var(--pr-r-sm); }
-.help-close svg { width:18px; height:18px; }
-.help-close:focus-visible, .help-group a:focus-visible, .help-group button:focus-visible { outline:2px solid var(--pr-foil); outline-offset:2px; }
-.help-label { margin:0 0 4px; font:700 11.5px/1.3 var(--font-lato),Lato,sans-serif; letter-spacing:.14em; text-transform:uppercase; color:var(--pr-foil-text); }
-.help-group ul { list-style:none; margin:0; padding:0; border-top:1px solid var(--pr-line); }
-.help-group li { border-bottom:1px solid var(--pr-line); }
-.help-group a, .help-group button { display:flex; width:100%; align-items:center; justify-content:space-between; gap:12px;
-  min-height:46px; padding:8px 2px; background:none; border:0; text-align:left; color:var(--pr-ink); font:400 15px/1.35 var(--font-lato),Lato,sans-serif; text-decoration:none; cursor:pointer; }
-.help-group a span, .help-group button span { color:var(--pr-forest); font-weight:700; }
-.help-group a:hover, .help-group button:hover { color:var(--pr-forest); }
-@media (max-width:900px) {
-  /* Bottom sheet on phones. */
-  .help-sheet { left:0; right:0; bottom:0; width:auto; border-radius:14px 14px 0 0; border-bottom:0;
-    padding:18px max(18px, env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(18px, env(safe-area-inset-left,0px)); }
-}
-@media (prefers-reduced-motion: reduce) { .help-sheet { animation:none; } .help-fab { transition:none; } }
-
-/* Pahadi_AI widget (public/js/ai-assistant.js): its own launcher and WhatsApp button are replaced by Help. The launcher
-   only shows while the chat is open, as the ✕ in Help's spot. html body raises specificity above the widget's own
-   injected #id rules, which load later. */
-html body #pr-wa { display:none !important; }
-html body #pr-ai-fab:not(.open) { display:none !important; }
-html:root:root { --pr-fab-bottom: calc(20px + env(safe-area-inset-bottom,0px)); }
-@media (max-width:900px) { html:root:root { --pr-fab-bottom: calc(84px + env(safe-area-inset-bottom,0px)); } }
-
-/* Back-to-top: above Help on desktop; dropped on phones, where the bottom nav and Help already crowd the corner and it
-   used to cover product cards' Add to Cart buttons. */
-@media (min-width:901px) { .stt-btn { bottom:calc(84px + env(safe-area-inset-bottom,0px)); } }
+/* Back-to-top: hidden on phones, where it covered product cards' Add to Cart buttons (Nov 2026). Desktop unchanged. */
 @media (max-width:900px) { .stt-btn { display:none; } }
+
+/* Product card: discount next to the price (ProductCard.tsx .psave). Same green as the price. */
+.psave { font-size:12px; font-weight:800; color:var(--g); white-space:nowrap; }
+html.premium .psave { color:var(--gd2); }

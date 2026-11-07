@@ -13,7 +13,6 @@ import Header from '@/components/layout/Header'
 import Footer from '@/components/layout/Footer'
 import MobileBottomNav from '@/components/layout/MobileBottomNav'
 import LazyOverlays from '@/components/layout/LazyOverlays'
-import HelpLauncher from '@/components/layout/HelpLauncher'
 import Script from 'next/script'
 import { settingsForShell } from '@/lib/clientSettings'
 import { Providers } from './providers'
@@ -378,8 +377,6 @@ export default async function RootLayout({
               {/* PERF (audit): cart drawer, search, mobile menu and login modal load on demand (see LazyOverlays.tsx). */}
               <LazyOverlays settings={shellSettings} categories={categories} states={states} />
               <MobileBottomNav settings={shellSettings} />
-              {/* One Help entry point for WhatsApp + Pahadi_AI (Nov 2026 redesign; see HelpLauncher.tsx). */}
-              <HelpLauncher whatsappNumber={waNumber} />
               <GoogleAuthHandler />
               <ReferralCapture />
               <ProfilePrefetcher />
