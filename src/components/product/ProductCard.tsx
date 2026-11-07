@@ -67,6 +67,13 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   const stock   = baseVariant?.available_stock ?? product.available_stock ?? 0
   const inStock = stock > 0
   const sClass  = stock > 20 ? 'high' : stock > 5 ? 'mid' : 'low'
+  // BUG FIX (P3): this used to be Math.min(100, stock/50*100) — for
+  // "mid" tier stock (6-20 units), that formula produces only a
+  // 12%-40%-full bar, which visually reads as critically low despite
+  // being labeled "mid" and colored amber, not red. Pegging the fill to
+  // each tier's own meaningful range instead, so the bar's width never
+  // contradicts its own color/label.
+  const sPct    = sClass === 'high' ? 100 : sClass === 'mid' ? Math.round(60 + (Math.min(stock, 20) - 6) / 14 * 30) : Math.round(15 + Math.min(stock, 5) / 5 * 15)
   // AUDIT C-4: "Only N left" is scarcity messaging — only show it when it is true urgency (5 or fewer), never for 6-20 units.
   const sLbl    = !inStock ? 'Out of Stock' : stock > 5 ? 'In Stock' : `Only ${stock} left`
 
@@ -86,8 +93,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
   if (isOrganic)    activeBadges.push({ label: 'Natural',     dotClass: 'pbd-og' })
   if (isPremium)    activeBadges.push({ label: 'Premium',     dotClass: 'pbd-pm' })
   if (isNew)        activeBadges.push({ label: 'New Arrival', dotClass: 'pbd-nw' })
-  // Nov 2026 redesign: one badge per card (two stacked pills crowded the photo). Highest priority wins.
-  const visibleBadges = activeBadges.slice(0, 1)
+  const visibleBadges = activeBadges.slice(0, 2)
 
   // Region: old site shows p.region (state name). We use categories.name as fallback
   const region = product.region || product.categories?.name || ''
@@ -188,7 +194,7 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         aria-label={product.name}
       />
 
-      {/* ── Badge — top-left, at most one ── */}
+      {/* ── Badges — top-left, stacked pills (up to 2) ── */}
       {visibleBadges.length > 0 && (
         <div className="pbadge-stack">
           {visibleBadges.map(b => (
@@ -200,7 +206,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
         </div>
       )}
 
-      {/* Nov 2026 redesign: the dark "-22%" corner ribbon is gone; the saving is shown as text beside the price. */}
+      {/* ── Discount ribbon — top-right corner ── */}
+      {savings >= 5 && inStock && (
+        <div className="pdisc-ribbon">-{savings}%</div>
+      )}
 
       {/* ── Image wrapper ── */}
       <div className="piw" style={{ background: product.card_bg || '#f5f0e8' }}>
@@ -282,14 +291,14 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           </button>
         </div>
 
-        {/* Wishlist heart — top-right, 44px touch target (Nov 2026 redesign; was a 32px button bottom-right) */}
+        {/* Wishlist heart — bottom-right, shows on hover */}
         {showWishlist && (
           <button
             className={`piw-wl-btn${inWishlist ? ' active' : ''}`}
             onClick={handleWishlist}
             aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
           >
-            <span className="piw-wl-dot" aria-hidden="true"><Icon name="heart" filled={inWishlist} size="1.15em" style={{ color: inWishlist ? '#9B2F2A' : '#24271F' }} /></span>
+            <Icon name="heart" filled={inWishlist} size="1.25em" style={{ color: inWishlist ? '#c0392b' : '#555' }} />
           </button>
         )}
       </div>
@@ -322,8 +331,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
           </div>
         )}
 
-        {/* Stock label (Nov 2026 redesign: the coloured progress bar under every name was dropped as visual noise;
-            the honest text label stays, red only for genuine low stock). */}
+        {/* Stock bar + label */}
+        <div className="stock-bar">
+          <div className={`stock-fill ${sClass}`} style={{ width: `${sPct}%` }} />
+        </div>
         <div className={`stock-label ${sClass}`}>{sLbl}</div>
 
         {/* Price + ATC — BUG FIX: was raw `₹{price}` interpolation, skipping
@@ -335,7 +346,6 @@ export default function ProductCard({ product, showWishlist = true, priority = f
             <span className="pnow">{formatPrice(price)}</span>
             {mrp > price && <span className="pwas">{formatPrice(mrp)}</span>}
             {unitLabel && <span className="punt">{unitLabel}</span>}
-            {savings >= 5 && inStock && <span className="psave">Save {savings}%</span>}
           </div>
 
           {/* ATC / Notify — buttons are now real siblings of the stretched
@@ -386,9 +396,10 @@ export default function ProductCard({ product, showWishlist = true, priority = f
                 onClick={handleNotifyClick}
                 style={{ position: 'relative', zIndex: 3 }}
               >
-                {notifyState === 'sending' ? 'Sending…' : notifyState === 'error' ? 'Try again' : 'Notify Me'}
+                {notifyState === 'sending' ? 'Sending…' : notifyState === 'error' ? '⚠ Try again' : '🔔 Notify Me'}
               </button>
             )}
+            <span className="atc-hint">View Details →</span>
           </div>
         </div>
       </div>
