@@ -31,3 +31,10 @@ export function toPublicCatalogProduct(p: Record<string, unknown>): Record<strin
   }
   return out
 }
+
+/** Real sold percentage for the PDP fill bar (0–95), computed server-side so the exact stock and initial stock stay private. */
+export function soldPercent(stock: unknown, initial: unknown): number | null {
+  const st = Number(stock), init = Number(initial)
+  if (!Number.isFinite(init) || init <= 0 || !Number.isFinite(st)) return null
+  return Math.max(0, Math.min(Math.round((1 - st / init) * 100), 95))
+}

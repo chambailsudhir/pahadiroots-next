@@ -233,3 +233,26 @@ describe('recovered order gets its coupon claim linked (COM-1)', () => {
     expect(mockEnsureLinked).not.toHaveBeenCalled()
   })
 })
+
+// R3-1 (Nov 2026): a request killed between claiming the marker and redeeming coins left the coins un-deducted forever.
+describe('coins on a recovered COD order are always settled, even when the marker is already taken (R3-1)', () => {
+  const WITH_COINS = { ...COMMITTED_ROW, loyalty_points_redeemed: 40 }
+  it('marker already claimed by a request that died -> the replay still redeems the coins (idempotent RPC), once', async () => {
+    wireDb({ order: [WITH_COINS], finalised: true })
+    const res = await callOrders()
+    expect(res.status).toBe(200)
+    expect(mockRedeem).toHaveBeenCalledWith('58', '163', 40)
+    expect(recoveryRuns()).toBe(0)                   // e-mails etc. are still not re-run
+  })
+  it('a failed redemption on recovery is flagged for ops', async () => {
+    wireDb({ order: [WITH_COINS], finalised: true })
+    mockRedeem.mockResolvedValueOnce(false)
+    await callOrders()
+    expect(mockLogOrderEvent).toHaveBeenCalledWith('163', 'loyalty_redeem_failed', 'system', expect.objectContaining({ points: 40, via: 'recovery' }))
+  })
+  it('an order without coins never calls the redeem RPC', async () => {
+    wireDb({ finalised: true })
+    await callOrders()
+    expect(mockRedeem).not.toHaveBeenCalled()
+  })
+})

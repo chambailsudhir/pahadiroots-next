@@ -10,7 +10,7 @@ export const LOW_STOCK_THRESHOLD = 10
 export function PdpPriceBlock({ hasVariants }: { hasVariants: boolean }) {
   const ctx = usePdpSelection()
   if (!ctx) return null
-  const { price, mrp, savings, size, stock, initialStock } = ctx.selected
+  const { price, mrp, savings, size, stock, soldPct } = ctx.selected
 
   // PDP audit P2-1 (and the admin's own brand rule: "never fake urgency"):
   //  • only at the admin's own low-stock line (≤10), not "< 50";
@@ -18,7 +18,6 @@ export function PdpPriceBlock({ hasVariants }: { hasVariants: boolean }) {
   //  • the fill bar shows a REAL sold-percentage and only when initial stock is known — the old invented
   //    fallback formula is gone.
   const showLow = stock > 0 && stock <= LOW_STOCK_THRESHOLD
-  const soldPct = initialStock ? Math.max(0, Math.min(Math.round((1 - stock / initialStock) * 100), 95)) : null
 
   return (
     <div className="pdp-price-block">

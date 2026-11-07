@@ -5,7 +5,7 @@ import { checkCsrf } from '@/lib/api/serverUtils'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { esc } from '@/lib/server/htmlEscape'
 import { sendTransactionalEmail } from '@/lib/server/email'
-import { logger } from '@/lib/logger'
+import { logger, captureError } from '@/lib/logger'
 import { submitVerifiedReview } from '@/lib/server/reviewSubmit'
 import { clientIpKey } from '@/lib/api/clientIp'
 
@@ -35,6 +35,8 @@ function stripTags(str: string): string {
  * none of these actions are cart-related. Renamed to /api/v1/actions.
  * The old path /api/v1/cart now 308-redirects here for backwards compatibility.
  */
+
+let lastContactCapAlert = 0
 
 export async function POST(req: NextRequest) {
   // ── CSRF guard — protects every action ──────────────
@@ -134,7 +136,17 @@ export async function POST(req: NextRequest) {
       if (stripTags(rawMessage).length < 10) {
         return NextResponse.json({ error: 'Please write a message of at least 10 characters' }, { status: 400 })
       }
-      if (!(await checkRateLimitKv(`mw:rl:contact:ip:${ip}`, 5, 86400)) || !(await checkRateLimitKv('mw:rl:contact:global', 200, 86400))) {
+      const ipOk = await checkRateLimitKv(`mw:rl:contact:ip:${ip}`, 5, 86400)
+      const globalOk = ipOk && await checkRateLimitKv('mw:rl:contact:global', 200, 86400)
+      if (ipOk && !globalOk) {
+        // R3-3 (Nov 2026): the shared daily cap protects the inbox, but a few dozen IPs can trip it and close the form for
+        // everyone. Page ops the moment that happens (at most ~hourly per instance) so it is never a silent outage.
+        if (Date.now() - lastContactCapAlert > 3_600_000) {
+          lastContactCapAlert = Date.now()
+          captureError(new Error('Contact form global daily cap reached — form is refusing all senders'), { action: 'contact.global_cap_tripped', alert: true })
+        }
+      }
+      if (!ipOk || !globalOk) {
         return NextResponse.json(
           { error: 'Too many messages today — please WhatsApp us instead' },
           { status: 429, headers: { 'Retry-After': '3600' } },
