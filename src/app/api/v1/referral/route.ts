@@ -15,12 +15,13 @@ import {
   sbAuth, sbAdmin, getToken, tryRefresh, applyNewCookies, syncCustomerProfile,
 } from '@/lib/api/serverUtils'
 import { normalizeReferralCode, referralMessage } from '@/lib/referral'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 export async function POST(req: NextRequest) {
   const csrfError = checkCsrf(req)
   if (csrfError) return csrfError
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!checkRateLimit(`referral_apply:${ip}`, 10, 60_000)) {
     return fail(429, 'Too many attempts — please wait a minute.', { 'Retry-After': '60' })
   }

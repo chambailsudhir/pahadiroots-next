@@ -7,6 +7,7 @@ import { checkCsrf, getToken, sbAuth, sbAdmin } from '@/lib/api/serverUtils'
 // middleware.ts is preserved — a middleware hit still counts here.
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { logger } from '@/lib/logger'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 /**
  * The signed-in customer's id, from the session cookie — READ-ONLY (no profile sync, no writes). Null for guests / expired sessions.
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   // deployment an attacker can hit 5 attempts per instance, giving them N×5
   // attempts per minute. Replaced with the same Upstash KV pipeline used by
   // middleware.ts so the counter is global and consistent across replicas.
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!await checkRateLimitKv(`mw:rl:coupon:${ip}`, 5)) {
     // BUG FIX 11: missing Retry-After header on 429. RFC 6585 §4 requires it.
     // Without it, clients don't know how long to wait and may hammer immediately.

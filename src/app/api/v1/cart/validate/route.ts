@@ -13,13 +13,14 @@ import { orderItemSchema } from '@/lib/schemas'
 import { checkRateLimitKv } from '@/lib/api/rateLimitKv'
 import { validateCartLines } from '@/lib/server/cartValidation'
 import { logger } from '@/lib/logger'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 export const dynamic = 'force-dynamic'
 
 const bodySchema = z.object({ items: z.array(orderItemSchema).min(1).max(30) })
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!await checkRateLimitKv(`mw:rl:cart_validate_ip:${ip}`, 60)) {
     return NextResponse.json({ error: 'Too many requests — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }

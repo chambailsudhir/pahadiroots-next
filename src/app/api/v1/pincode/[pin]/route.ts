@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/api/serverUtils'
 import { PIN_REGEX } from '@/lib/pincodeZones'
+import { clientIpKey } from '@/lib/api/clientIp'
 
 const UPSTREAM_TIMEOUT_MS = 4_000
 const THIRTY_DAYS = 30 * 24 * 60 * 60
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ pin:
   const { pin } = await params
   if (!PIN_REGEX.test(pin ?? '')) return NextResponse.json({ error: 'Invalid pincode' }, { status: 400 })
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const ip = clientIpKey(req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip'))   // IPv6 -> its /64
   if (!checkRateLimit(`pincode:${ip}`, 60, 60_000)) {
     return NextResponse.json({ error: 'Too many lookups — please wait a moment' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
