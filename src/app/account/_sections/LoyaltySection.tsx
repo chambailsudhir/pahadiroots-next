@@ -10,6 +10,7 @@ import { normalizeReferralCode, referralMessage } from '@/lib/referral'
 import styles from '../styles/account.module.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 import Icon, { AdminIcon } from '@/components/ui/Icon'
+import { expirySpan } from '@/lib/loyaltyCoins'
 
 // BUG FIX (found in a fresh audit): the referral link below used to
 // hardcode 'https://www.pahadiroots.com' in two places, independent of the
@@ -44,6 +45,7 @@ interface LoyaltyData {
   referral_min_order?: number
   referral_hold_days?: number
   expiry_days?: number
+  next_expiry?: { date: string; coins: number } | null
   can_apply_referral?: boolean
   label:          string
   referral_code:  string | null
@@ -56,11 +58,17 @@ export function referralCopy(bonus = 50, minOrder = 999, holdDays = 7): string {
 
 /** Owner decision (Nov 2026): 1 coin per ₹`step` of order value, at most `max` per order, paid on DELIVERY, taken back on return / refund. */
 /** "Coins expire 4 months after you earn them." from loyalty_expiry_days (0 = never → no sentence). */
+/** "⏰ 20 coins expire on 6 March 2027" — the next batch, from loyalty_expiry_schedule (db_migration_v40). */
+export function nextExpiryCopy(n: { date: string; coins: number }): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(n.date))
+  const when = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : String(n.date)
+  const c = Math.floor(n.coins)
+  return `⏰ ${c} ${c === 1 ? 'coin expires' : 'coins expire'} on ${when}`
+}
+
 export function expiryCopy(days?: number): string {
-  const d = typeof days === 'number' && Number.isFinite(days) && days >= 0 ? Math.floor(days) : 120
-  if (d === 0) return ''
-  const span = d === 365 || d === 366 ? '12 months' : d % 30 === 0 ? `${d / 30} ${d === 30 ? 'month' : 'months'}` : `${d} days`
-  return ` Coins expire ${span} after you earn them.`
+  const span = expirySpan(days)
+  return span ? ` Coins expire ${span} after you earn them.` : ''
 }
 
 export function earnCopy(perStep: number | undefined, step?: number, max?: number | null, expiryDays?: number): string {
@@ -271,6 +279,9 @@ export default function LoyaltySection({ showToast, markExpired }: LoyaltyProps)
           <div className={styles.lyBalanceLbl}>{data.label}</div>
           {pointsVal > 0 && (
             <div className={styles.lyBalanceVal}>≈ ₹{pointsVal} redeemable value</div>
+          )}
+          {data.next_expiry && data.next_expiry.coins > 0 && (
+            <div className={styles.lyBalanceVal} style={{ marginTop: 4 }}>{nextExpiryCopy(data.next_expiry)}</div>
           )}
         </div>
         <div className={styles.lyBalanceCoin} aria-hidden="true"><Icon name="coins" size="1em" /></div>

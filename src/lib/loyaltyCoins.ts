@@ -31,6 +31,14 @@ export function coinsPerStep(settings: Settings): number {
   return n != null ? n : 5
 }
 
+/** "4 months" / "12 months" / "45 days" for loyalty_expiry_days; null when coins never expire (0). Default 120 days. */
+export function expirySpan(days?: number | string | null): string | null {
+  const raw = typeof days === 'string' ? (days.trim() === '' ? NaN : Number(days)) : days
+  const d = typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 120
+  if (d === 0) return null
+  return d === 365 || d === 366 ? '12 months' : d % 30 === 0 ? `${d / 30} ${d === 30 ? 'month' : 'months'}` : `${d} days`
+}
+
 /**
  * The value coins (and the ₹999 referral minimum) are measured on: the GOODS the customer paid for — order total minus shipping and
  * the COD fee (coupon, prepaid discount and coins are already off the total). Same as big marketplaces, which never reward delivery
