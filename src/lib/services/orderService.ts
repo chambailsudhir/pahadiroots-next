@@ -162,6 +162,8 @@ import { checkServiceability } from '@/lib/serviceability'
 import { countPriorCouponUse, couponReuseProblem } from '@/lib/couponHistory'
 import { sameDeliveryAddress } from '@/lib/addressMatch'
 import { claimCouponUse, couponIdentityKey, releaseCouponClaim, toIdList } from '@/lib/server/couponClaim'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
+export { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 
 // ── Module-level Supabase REST helpers ───────────────────────
 // Declared once here so createOrder() doesn't re-create closures
@@ -361,7 +363,7 @@ const SAFE_ITEM_ID = /^[A-Za-z0-9_-]{1,64}$/
 function assertSafeItemIds(items: Array<{ productId: string; variantId: string }>): void {
   for (const i of items) {
     if (!SAFE_ITEM_ID.test(String(i.productId)) || !SAFE_ITEM_ID.test(String(i.variantId))) {
-      throw new Error('Invalid cart item — please refresh your cart')
+      throw new CheckoutRejectedError('Invalid cart item — please refresh your cart', 'INVALID_CART')
     }
   }
 }
@@ -579,7 +581,7 @@ export async function createOrder(
   if (resolutions.some(r => r.kind === 'foreign_variant')) {
     // A legacy/stale line whose variant slot holds the product id of ANOTHER product's variant.
     // Never attach it to that variant.
-    throw new Error('Product no longer available — please remove it from your cart and add it again')
+    throw new CheckoutRejectedError('Product no longer available — please remove it from your cart and add it again', 'PRODUCT_UNAVAILABLE')
   }
   const lineKinds: LineKind[] = resolutions.map(r => r.kind as LineKind)
 
@@ -589,7 +591,7 @@ export async function createOrder(
     const rows = await sbGet('product_variants', `select=id,product_id&product_id=in.(${ids})&is_active=eq.true`)
     const hasVariants = new Set((rows ?? []).map((r: { product_id: unknown }) => String(r.product_id)))
     if (noVariantLines.some(i => hasVariants.has(String(i.productId)))) {
-      throw new Error('An item in your cart has multiple options — please remove it and add it again with the size you want')
+      throw new CheckoutRejectedError('An item in your cart has multiple options — please remove it and add it again with the size you want', 'INVALID_CART')
     }
   }
 
@@ -597,7 +599,7 @@ export async function createOrder(
   //     optional `serviceable_states` / `blocked_pincodes` settings; with neither set this is a no-op
   //     (all of India). Runs BEFORE stock is reserved so a refusal has nothing to undo.
   const serviceable = checkServiceability({ state: input.state, pincode: input.pincode }, settings as unknown as Record<string, string | undefined>)
-  if (!serviceable.ok) throw new Error(serviceable.reason)
+  if (!serviceable.ok) throw new CheckoutRejectedError(serviceable.reason, 'NOT_SERVICEABLE')
 
   // 2. Atomic stock reservation — replaces the old read-only checkStockAvailability.
   //
@@ -634,7 +636,7 @@ export async function createOrder(
         failedName = Array.isArray(rows) ? rows[0]?.name : undefined
       }
     } catch { /* fall back to the generic wording */ }
-    throw new Error(`Insufficient stock for ${failedName ? `“${failedName}”` : 'one of the items'} — please reduce quantity or remove the item`)
+    throw new CheckoutRejectedError(`Insufficient stock for ${failedName ? `“${failedName}”` : 'one of the items'} — please reduce quantity or remove the item`, 'OUT_OF_STOCK')
   }
 
   // ── STOCK SAFETY WRAPPER ─────────────────────────────────────────────────
@@ -683,7 +685,7 @@ export async function createOrder(
     for (const item of itemsWithVariant) {
       const v = variantRows.find((vv: any) => String(vv.id) === String(item.variantId))
       if (!v || String(v.product_id) !== String(item.productId)) {
-        throw new Error('Product no longer available')
+        throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
       }
     }
   }
@@ -744,13 +746,13 @@ export async function createOrder(
   for (const v of variantRows) {
     const p = productMap.get(String(v.product_id))
     if (!v.is_active || p?.is_deleted || p?.is_active === false || p?.status !== 'active') {
-      throw new Error('Product no longer available')
+      throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
     }
   }
   for (const item of itemsNoVariant) {
     const p = productMap.get(String(item.productId))
     if (!p || p.is_deleted || p.is_active === false || p.status !== 'active') {
-      throw new Error('Product no longer available')
+      throw new CheckoutRejectedError('Product no longer available', 'PRODUCT_UNAVAILABLE')
     }
   }
 
@@ -882,19 +884,19 @@ export async function createOrder(
 
     // BUG FIX (Oct 2026 audit): an unknown/inactive code used to be IGNORED silently, so the
     // customer saw a discounted total in the UI while the server charged the full price. Say so.
-    if (!coupon) throw new Error('Invalid or inactive coupon code')
+    if (!coupon) throw new CheckoutRejectedError('Invalid or inactive coupon code', 'COUPON_INVALID')
 
     // ── Fast-fail guards (the authoritative, race-free versions run inside claim_coupon_use) ──
     if (coupon.max_uses != null && (coupon.uses_count ?? 0) >= coupon.max_uses) {
-      throw new Error('Coupon usage limit reached')
+      throw new CheckoutRejectedError('Coupon usage limit reached', 'COUPON_INVALID')
     }
     if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
-      throw new Error('This coupon has expired')
+      throw new CheckoutRejectedError('This coupon has expired', 'COUPON_INVALID')
     }
     // Min order check (against the live server-computed subtotal)
     const subtotalForCheck = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0)
     if (coupon.min_order && subtotalForCheck < coupon.min_order) {
-      throw new Error(`Minimum order ₹${coupon.min_order} required for this coupon`)
+      throw new CheckoutRejectedError(`Minimum order ₹${coupon.min_order} required for this coupon`, 'COUPON_INVALID')
     }
 
     // F-08 (Oct 2026 audit): restrictions that were configurable but never enforced.
@@ -910,7 +912,7 @@ export async function createOrder(
         const cat = productMap.get(String(i.productId))?.category_id
         return allowedCategories.includes(String(cat)) ? sum + i.price * i.qty : sum
       }, 0)
-      if (eligibleSubtotal <= 0) throw new Error('This coupon does not apply to the items in your cart')
+      if (eligibleSubtotal <= 0) throw new CheckoutRejectedError('This coupon does not apply to the items in your cart', 'COUPON_INVALID')
     }
     if (toIdList(coupon.excluded_skus).length > 0) {
       logger.warn('[createOrder] coupon has excluded_skus but products carry no SKU — restriction NOT enforced', {
@@ -928,7 +930,7 @@ export async function createOrder(
         'orders',
         `customer_id=in.(${historyIds.join(',')})&payment_status=in.(paid,cod_pending,refund_pending,refunded)&order_status=neq.cancelled&select=id&limit=1`,
       )
-      if (prior) throw new Error('This coupon is valid on your first order only')
+      if (prior) throw new CheckoutRejectedError('This coupon is valid on your first order only', 'COUPON_INVALID')
     }
     // …and a household that already ordered counts too: an earlier non-cancelled order to the same address (any customer) is not a first order.
     if (coupon.first_order_only && /^\d{6}$/.test(String(input.pincode ?? ''))) {
@@ -939,7 +941,7 @@ export async function createOrder(
       const line = [input.flat, input.area].filter(Boolean).join(', ')
       if ((sameAreaOrders ?? []).some(o => sameDeliveryAddress(
         { pincode: input.pincode, line }, { pincode: o.shipping_address?.pincode, line: o.shipping_address?.address_line1 },
-      ))) throw new Error('This coupon is valid on your first order only')
+      ))) throw new CheckoutRejectedError('This coupon is valid on your first order only', 'COUPON_INVALID')
     }
     // NOV 2026 — "one person / one address, one time only". The old guest pre-check looked for coupon_usage rows by customer_id, but a
     // guest's use is recorded with customer_id NULL (S1-002), so it could never find an earlier guest use, and the delivery address was
@@ -953,7 +955,7 @@ export async function createOrder(
         addressLine: [input.flat, input.area].filter(Boolean).join(', '),
       })
       const reuse = couponReuseProblem(prior, Number(coupon.user_limit))
-      if (reuse) throw new Error(reuse)
+      if (reuse) throw new CheckoutRejectedError(reuse, 'COUPON_INVALID')
     }
 
     // F-07: ATOMIC claim — cap + per-customer limit + reservation under one row lock. Throws a
@@ -961,7 +963,7 @@ export async function createOrder(
     // S1-002: only a VERIFIED identity is attached to the claim — never a phone-matched row.
     // v32 (verification F-2): the phone-derived identity key makes the per-person limit race-free for GUESTS too.
     const claim = await claimCouponUse(db, coupon.id, input.authenticatedCustomerId ?? null, couponIdentityKey(normalizedPhone))
-    if (!claim.ok) throw new Error(claim.error)
+    if (!claim.ok) throw new CheckoutRejectedError(claim.error, 'COUPON_INVALID')
     couponClaimUsageId = claim.usageId
     couponDbRow = { id: coupon.id, code: coupon.code }
 
@@ -1029,7 +1031,7 @@ export async function createOrder(
     const minRedeemRaw = parseFloat(String(settings.loyalty_min_redeem ?? '').trim() || '40')
     const minRedeem    = Number.isFinite(minRedeemRaw) && minRedeemRaw >= 0 ? minRedeemRaw : 40
     if (input.loyaltyPointsRedeemed! < minRedeem) {
-      throw new Error(`Minimum ${minRedeem} points required to redeem`)
+      throw new CheckoutRejectedError(`Minimum ${minRedeem} points required to redeem`, 'LOYALTY')
     }
     // Charge only for the discount actually granted (never more than requested): a request clamped
     // by the max-% cap, or a points_value < 1 floor(), no longer burns coins for nothing.
@@ -1079,7 +1081,7 @@ export async function createOrder(
     const codMaxRaw = parseFloat(settings.cod_max_value || '3000')
     const codMaxValue = Number.isFinite(codMaxRaw) ? codMaxRaw : 3000   // a malformed admin value must not silently lift the cap
     if (pricing.total > codMaxValue) {
-      throw new Error(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`)
+      throw new CheckoutRejectedError(`COD is only available for orders up to ₹${codMaxValue}. Please pay online for this order.`, 'COD_LIMIT')
     }
   }
 
@@ -1087,7 +1089,7 @@ export async function createOrder(
   {
     const minOrder = parseFloat(settings.min_order_amount || '0')
     if (Number.isFinite(minOrder) && minOrder > 0 && pricing.subtotal < minOrder) {
-      throw new Error(`Minimum order is ₹${minOrder}. Please add more items.`)
+      throw new CheckoutRejectedError(`Minimum order is ₹${minOrder}. Please add more items.`, 'MIN_ORDER')
     }
   }
 
@@ -1095,7 +1097,7 @@ export async function createOrder(
   // covering the subtotal) used to be created as `pending`, fail at Razorpay with a hidden 500 and
   // hold its stock until the sweep. Refuse it here, before the row exists (stock is restored below).
   if (input.paymentMethod === 'razorpay' && pricing.total < 1) {
-    throw new Error('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.')
+    throw new CheckoutRejectedError('This order total cannot be paid online — please choose Cash on Delivery or adjust your cart.', 'PAYMENT_METHOD_UNAVAILABLE')
   }
 
   // 7. Generate order number — shown to customers and support.
@@ -1254,7 +1256,7 @@ export async function createOrder(
         `customer_id=in.(${codIds.join(',')})&payment_method=in.(cod,whatsapp_cod)` +
         `&order_status=not.in.(delivered,cancelled,returned)&select=id`)
       if ((activeCodOrders?.length ?? 0) >= codMaxActive) {
-        throw new Error(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
+        throw new CheckoutRejectedError(`You have ${activeCodOrders.length} COD order(s) already in progress. Please pay online, or wait for an existing order to be delivered before placing another COD order.`)
       }
     }
   }
@@ -1332,7 +1334,7 @@ export async function createOrder(
     const availablePoints = Math.max(0, liveBalance - heldPoints)
 
     if (loyaltyPointsToStore > availablePoints) {
-      throw new Error(
+      throw new CheckoutRejectedError(
         `Insufficient loyalty balance — available: ${availablePoints} pts, ` +
         `requested: ${loyaltyPointsToStore} pts` +
         (heldPoints > 0 ? ` (${heldPoints} pts are held by another unpaid order)` : '')

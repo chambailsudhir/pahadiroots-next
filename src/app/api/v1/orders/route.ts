@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createOrder, GuestPhoneRegisteredError, IdempotencyConflictError, LoyaltyAuthRequiredError, OrderOutcomeUnknownError, logOrderEvent, normalizePhoneForLookup, type CreatedOrder } from '@/lib/services/orderService'
 import { refreshCatalogIfSoldOut } from '@/lib/server/catalogFreshness'
-import { StockReservationError } from '@/lib/services/inventoryService'
+import { CheckoutRejectedError } from '@/lib/errors/checkoutErrors'
 import { getFreshSiteSettings } from '@/lib/getSiteSettings'
 import { sendTransactionalEmail } from '@/lib/server/email'
 import { buildOrderEmail, orderEmailSubject } from '@/lib/server/orderEmail'
@@ -565,53 +565,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // SEC-4 FIX: expose stock/COD errors to the user (they need to act on them)
-    // but never expose raw DB error messages in production — they leak table names,
-    // constraint names, and Supabase internals to attackers.
-    //
-    // BUG FIX [ERROR HANDLING]: the original check only matched 'stock' and 'COD',
-    // so every other user-actionable error thrown by createOrder() — an expired
-    // or usage-capped coupon, a below-minimum-order coupon, a product that became
-    // unavailable between add-to-cart and checkout, or a loyalty-balance race —
-    // fell through to the generic "Order placement failed. Please try again or
-    // contact support." message in production. The user had no way to know they
-    // needed to remove their coupon or an unavailable item; clicking "try again"
-    // would fail identically every time, and "contact support" for something they
-    // could have fixed themselves in five seconds. Widened to a case-insensitive
-    // check covering every user-actionable message createOrder() can throw, while
-    // still hiding genuinely internal failures (DB/RPC errors, "could not create
-    // customer record", etc.) behind the generic message.
-    // TYPE-SAFE CHECK FIRST: infra/DB failures (bad RPC types, connection drop,
-    // permission errors) must always be 500s — never shown to the customer as
-    // an actionable stock message, even though the word "stock" appears in
-    // both the error and the message-sniffing checks below.
-    const isInfraFailure = err instanceof StockReservationError
-    const lowerMessage = internalMessage.toLowerCase()
-    const isUserFacing = !isInfraFailure && (
-      lowerMessage.includes('stock')
-      || lowerMessage.includes('cod is not available')
-      // BUG FIX [ERROR HANDLING] (found via a live "Order placement failed"
-      // report — Vercel logs showed the real reason was a legitimate,
-      // user-actionable rejection, not a crash, but the customer only ever
-      // saw the generic 500 message): both of these are createOrder()'s own
-      // COD guardrails, thrown as plain, perfectly clear messages — they
-      // just didn't match any existing substring here, so they fell through
-      // to the generic "contact support" 500 like a genuine server crash.
-      || lowerMessage.includes('cod is only available')       // per-order COD value cap (cod_max_value)
-      || lowerMessage.includes('already in progress')         // active-COD-order count cap (cod_max_active_orders)
-      || lowerMessage.includes('coupon')
-      || lowerMessage.includes('no longer available')
-      || lowerMessage.includes('multiple options')
-      || lowerMessage.includes('invalid cart item')
-      || lowerMessage.includes('insufficient loyalty balance')
-      || lowerMessage.includes('required to redeem')           // loyalty_min_redeem
-      || lowerMessage.includes('minimum order is')          // admin min_order_amount
-      || lowerMessage.includes('online payment is not available')
-      || lowerMessage.includes('cannot be paid online')
-      || lowerMessage.includes('we do not deliver')           // F-09 serviceability refusal
-    )
-    const status  = isUserFacing ? 409 : 500
-    const clientMessage = isUserFacing || process.env.NODE_ENV !== 'production'
+    // SEC-4: expose customer-actionable refusals (stock, coupon, COD caps, minimum order, unavailable
+    // product, loyalty shortfall, serviceability…) so the customer can act on them, but never raw
+    // DB/RPC/infra messages — they leak table names, constraint names and Supabase internals.
+    // Security audit (Nov 2026): this used to be decided by sniffing the message for words like
+    // "coupon"/"stock" (with a StockReservationError exclusion), which still leaked e.g.
+    // `coupon claim failed: <postgres detail>` or `coupon fetch timed out after 8000ms` as 409s.
+    // Only the typed CheckoutRejectedError (customer-safe message by construction) is shown now;
+    // StockReservationError and every other failure is a 500 with the generic message in production.
+    if (err instanceof CheckoutRejectedError) {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+    const status  = 500
+    const clientMessage = process.env.NODE_ENV !== 'production'
       ? internalMessage
       : 'Order placement failed. Please try again or contact support.'
     return NextResponse.json({ error: clientMessage }, { status })

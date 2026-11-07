@@ -502,6 +502,7 @@ describe('createOrder — S-01 server-side guards (named stock error, NaN COD ca
     const { createOrder } = await import('@/lib/services/orderService')
     const err = await createOrder(BASE_INPUT, DEFAULT_SETTINGS).catch((e: Error) => e)
     expect(err).toBeInstanceOf(Error)
+    expect((err as { code?: string }).code).toBe('OUT_OF_STOCK')
     expect((err as Error).message).toMatch(/Insufficient stock for one of the items/)
     expect((err as Error).message).not.toContain(VARIANT_ID)
   })
@@ -570,6 +571,18 @@ describe('createOrder — coupon server-side re-validation (defence in depth)', 
     const { createOrder } = await import('@/lib/services/orderService')
     await expect(createOrder({ ...BASE_INPUT, couponCode: 'EXPIRED' }, DEFAULT_SETTINGS))
       .rejects.toThrow(/expired/i)
+  })
+
+  it('customer-facing refusals are typed CheckoutRejectedError (stock + coupon) so routes never need message sniffing', async () => {
+    const { CheckoutRejectedError } = await import('@/lib/errors/checkoutErrors')
+    mockDb.responses['coupons'] = {
+      code: 'EXPIRED', value: 10, type: 'percent', max_uses: null, uses_count: 0,
+      is_active: true, expires_at: '2020-01-01T00:00:00Z', min_order: null, max_discount: null,
+    }
+    const { createOrder } = await import('@/lib/services/orderService')
+    const err = await createOrder({ ...BASE_INPUT, couponCode: 'EXPIRED' }, DEFAULT_SETTINGS).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(CheckoutRejectedError)
+    expect((err as InstanceType<typeof CheckoutRejectedError>).code).toBe('COUPON_INVALID')
   })
 
   it('rejects an order below the coupon min_order threshold even though the client already checked', async () => {
