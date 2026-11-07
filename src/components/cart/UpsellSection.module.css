@@ -154,6 +154,8 @@
 
 .priceRow {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 1px;
   align-items: center;
   gap: 5px;
   margin-top: 3px;

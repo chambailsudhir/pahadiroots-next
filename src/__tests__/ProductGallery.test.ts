@@ -49,14 +49,10 @@ describe('ProductGallery', () => {
     expect(screen.getAllByAltText('Front view').length).toBeGreaterThan(0)
   })
 
-  it('shows the discount badge only when savings >= 5', () => {
-    const { rerender } = render(
-      React.createElement(ProductGallery, { images, productName: 'Wild Honey', savings: 3 })
-    )
-    expect(screen.queryByText('-3%')).toBeNull()
-
-    rerender(React.createElement(ProductGallery, { images, productName: 'Wild Honey', savings: 20 }))
-    expect(screen.getByText('-20%')).toBeTruthy()
+  it('never draws a discount badge on the photo (Nov 2026: the price block shows "N% off" instead)', () => {
+    render(React.createElement(ProductGallery, { images, productName: 'Wild Honey', savings: 20 }))
+    expect(screen.queryByText('-20%')).toBeNull()
+    expect(screen.queryByText(/% off/)).toBeNull()
   })
 
   it('clicking a thumbnail changes the active image and updates aria-pressed / the counter', () => {

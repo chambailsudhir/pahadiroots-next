@@ -3,15 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
-import { usePdpSelection } from './PdpVariantContext'
 
 interface GalleryImage { url: string; alt: string }
 interface Props { images: GalleryImage[]; productName: string; savings?: number }
 
-export default function ProductGallery({ images, productName, savings: serverSavings = 0 }: Props) {
-  // PDP audit P1-2: the discount badge follows the selected pack (falls back to the server value outside a provider).
-  const pdpSel = usePdpSelection()
-  const savings = pdpSel ? pdpSel.selected.savings : serverSavings
+// `savings` is still accepted (page.tsx passes it) but no longer drawn: the discount is shown next to the price only.
+export default function ProductGallery({ images, productName }: Props) {
   const [active, setActive]   = useState(0)
   const [zoomed, setZoomed]   = useState(false)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -160,17 +157,7 @@ export default function ProductGallery({ images, productName, savings: serverSav
           onClick={handleTriggerClick}
           style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 'none', padding: 0, cursor: 'zoom-in' }}
         />
-        {/* Discount badge */}
-        {savings >= 5 && (
-          <div style={{
-            position: 'absolute', top: '16px', right: '16px',
-            background: '#c0392b', color: '#fff', fontSize: '12px',
-            fontWeight: 900, padding: '5px 13px', borderRadius: '20px',
-            zIndex: 2, letterSpacing: '.3px', pointerEvents: 'none'
-          }}>
-            -{savings}%
-          </div>
-        )}
+        {/* Owner decision (Nov 2026): no discount badge on the photo; the price block shows "N% off" instead. */}
 
         {/* BUG FIX (3.7): zoom icon was permanently invisible because class
             pdp-gallery-zoom-icon had zero matching CSS rules anywhere in the

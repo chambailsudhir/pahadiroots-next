@@ -1,7 +1,7 @@
 'use client'
 
 import { MAX_LINE_QTY } from '@/lib/cartLimits'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, savingsPercent } from '@/lib/utils'
 import { ga4AddToWishlist } from '@/lib/analytics/ga4'
 import { useState, useEffect, useRef } from 'react'
 import { useCartStore } from '@/store/cartStore'
@@ -270,7 +270,7 @@ export default function AddToCartSection({ product, variants }: Props) {
                 v.size,
                 `₹${v.price}`,
                 v.mrp && v.mrp > v.price ? `₹${v.mrp}` : null,
-                savePct > 0 ? `Save ${savePct}%` : null,
+                savePct > 0 ? `${savePct}% off` : null,
                 oos ? 'Out of stock' : null,
               ].filter(Boolean).join(' ')
               return (
@@ -293,7 +293,7 @@ export default function AddToCartSection({ product, variants }: Props) {
                       <span className="pdp-vc-orig"> {formatPrice(v.mrp)}</span>
                     )}
                   </span>
-                  {savePct > 0 && <span className="pdp-vc-save">Save {savePct}%</span>}
+                  {savePct > 0 && <span className="pdp-vc-save">{savePct}% off</span>}
                 </button>
               )
             })}
@@ -394,6 +394,7 @@ export default function AddToCartSection({ product, variants }: Props) {
           <div className="pdp-mob-price-col">
             <span className="pdp-mob-price">{formatPrice(price)}</span>
             {mrp > price && <span className="pdp-mob-mrp">{formatPrice(mrp)}</span>}
+            {savingsPercent(mrp, price) >= 5 && <span className="pdp-mob-save">{savingsPercent(mrp, price)}% off</span>}
           </div>
           <div className="pdp-mob-actions">
             <button

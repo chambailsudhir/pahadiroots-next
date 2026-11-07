@@ -33,7 +33,7 @@
 
 import { memo, useMemo, useState } from 'react'
 import Image from 'next/image'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, savingsPercent } from '@/lib/utils'
 import type { UpsellItem } from '@/types'
 import styles from './UpsellSection.module.css'
 import Icon from '@/components/ui/Icon'
@@ -164,6 +164,8 @@ const UpsellSection = memo(function UpsellSection({
                         </s>
                       )}
                       <span className={styles.price}>{formatPrice(p.price)}</span>
+                      {/* Same "N% off" as the product cards (Nov 2026). */}
+                      {savingsPercent(p.mrp, p.price) >= 5 && <span className="psave">{savingsPercent(p.mrp, p.price)}% off</span>}
                     </div>
                   </div>
                   <button

@@ -28,7 +28,8 @@ export function PdpPriceBlock({ hasVariants }: { hasVariants: boolean }) {
         {mrp > price && (
           <>
             <span className="pdp-mrp">{formatPrice(mrp)}</span>
-            <span className="pdp-save-badge">SAVE {savings}%</span>
+            {/* Same wording as every product card (Nov 2026): "N% off" next to the price. */}
+            <span className="pdp-save-badge">{savings}% off</span>
           </>
         )}
       </div>

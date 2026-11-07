@@ -132,13 +132,7 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '50px' }}>
               {p.emoji || '🌿'}
             </div>}
-        {disc > 0 && (
-          <span style={{
-            position: 'absolute', top: '10px', right: '10px',
-            background: '#c0392b', color: '#fff', fontSize: '10px',
-            fontWeight: 900, padding: '3px 8px', borderRadius: '12px',
-          }}>-{disc}%</span>
-        )}
+        {/* Owner decision (Nov 2026): no discount tag on the photo; "N% off" sits next to the price below. */}
       </div>
 
       {/* Body */}
@@ -146,11 +140,12 @@ export default function RelatedCard({ product: p }: { product: RelatedProduct })
         <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a1a1a', marginBottom: '8px', lineHeight: 1.35 }}>
           {p.name}
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', rowGap: '2px', flexWrap: 'wrap', marginBottom: '10px' }}>
           <span style={{ fontSize: '15px', fontWeight: 900, color: '#1a3a1e' }}>₹{price}</span>
           {mrp && mrp > price && (
             <span style={{ fontSize: '12px', color: '#6b6b6b', textDecoration: 'line-through' }}>₹{mrp}</span>
           )}
+          {disc >= 5 && <span className="psave">{disc}% off</span>}
         </div>
         <button
           type="button"
