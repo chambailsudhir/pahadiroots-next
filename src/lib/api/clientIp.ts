@@ -42,3 +42,13 @@ export function clientIpKey(raw: string | null | undefined): string {
   if (groups.slice(0, 5).every(g => parseInt(g, 16) === 0) && parseInt(groups[5], 16) === 0xffff) return hexPairToIpv4(groups[6], groups[7])
   return groups.slice(0, 4).map(g => g.replace(/^0+(?=.)/, '')).join(':') + '::/64'
 }
+
+/**
+ * The /48 site prefix ("2001:db8:1::/48") for an IPv6 key produced by clientIpKey(), else null (IPv4 / unknown / unparsable).
+ * Nov 2026 audit: an ISP typically hands a customer a whole /48 (65 536 /64s), so per-/64 limits alone let one site act as tens of
+ * thousands of "networks". Used as an extra bucket alongside the /64 one where that matters (customer login).
+ */
+export function ipv6Slash48Key(ipKey: string): string | null {
+  const m = ipKey.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4}):([0-9a-f]{1,4}):[0-9a-f]{1,4}::\/64$/)
+  return m ? `${m[1]}:${m[2]}:${m[3]}::/48` : null
+}

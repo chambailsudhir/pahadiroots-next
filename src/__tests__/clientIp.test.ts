@@ -30,3 +30,14 @@ describe('clientIpKey', () => {
     expect(clientIpKey('not-an-ip:::x')).toBe('not-an-ip:::x')
   })
 })
+
+describe('ipv6Slash48Key (Nov 2026 audit — login /48 bucket)', () => {
+  it('maps a /64 key to its /48 and ignores IPv4 / unknown', async () => {
+    const { clientIpKey, ipv6Slash48Key } = await import('@/lib/api/clientIp')
+    expect(ipv6Slash48Key(clientIpKey('2001:db8:abcd:12::1'))).toBe('2001:db8:abcd::/48')
+    expect(ipv6Slash48Key(clientIpKey('2001:db8:abcd:ffff:1:2:3:4'))).toBe('2001:db8:abcd::/48')
+    expect(ipv6Slash48Key(clientIpKey('::ffff:1.2.3.4'))).toBeNull()
+    expect(ipv6Slash48Key('1.2.3.4')).toBeNull()
+    expect(ipv6Slash48Key('unknown')).toBeNull()
+  })
+})
