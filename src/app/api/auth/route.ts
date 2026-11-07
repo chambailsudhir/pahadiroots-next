@@ -241,9 +241,11 @@ const SIGNUP_FALLBACK_CAPS = {
 async function withinSignupFallbackCaps(email: string, ipKey: string): Promise<boolean> {
   const HOUR = 60 * 60_000, DAY = 24 * HOUR
   const target = email.toLowerCase()
-  return (await rateLimit(`signup_fallback_email:global`, SIGNUP_FALLBACK_CAPS.globalPerHour, HOUR))
+  // Narrowest caps first (verification, Nov 2026): a network already over its own cap must not keep using up the shared hourly
+  // budget that real sign-ups from other networks need.
+  return (await rateLimit(`signup_fallback_email_to:${target}`, SIGNUP_FALLBACK_CAPS.perAddressPerDay, DAY))
       && (await rateLimit(`signup_fallback_email_ip:${ipKey}`, SIGNUP_FALLBACK_CAPS.perNetworkPerDay, DAY))
-      && (await rateLimit(`signup_fallback_email_to:${target}`, SIGNUP_FALLBACK_CAPS.perAddressPerDay, DAY))
+      && (await rateLimit(`signup_fallback_email:global`, SIGNUP_FALLBACK_CAPS.globalPerHour, HOUR))
 }
 
 async function signupViaOwnMailer(email: string, password: string, fullName: string, ipKey: string) {
@@ -253,7 +255,10 @@ async function signupViaOwnMailer(email: string, password: string, fullName: str
     captureError(new Error('signup fallback: e-mail cap reached — fix the Supabase SMTP credentials (Auth → SMTP)'), {
       action: 'auth.signup.fallback_capped', alert: true,
     })
-    return err(503, 'We could not send the verification e-mail right now. Please try again later, or continue with Google.')
+    // Verification (Nov 2026): only NEW / unconfirmed addresses ever reach this fallback, so a distinct 503 here told an attacker who
+    // had used up a cap that an address answering 200 is a confirmed customer (the F-8 oracle). Same generic answer as every
+    // other sign-up; the alert above tells ops, and the person can still continue with Google or ask for a fresh link.
+    return SIGNUP_GENERIC_OK()
   }
   try {
     // type "signup" creates the (unconfirmed) user AND returns the verification link WITHOUT sending any mail.

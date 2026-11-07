@@ -1,6 +1,6 @@
 // "Your Pahadi Coins expire soon" e-mails (owner request, Nov 2026) — sent ~15 days before a batch of coins expires.
 //
-// Run from the daily expire-pending-orders sweep, after the expiry step. Safety rules (same shape as reviewRequests.ts):
+// Run from the daily retry-failed-emails cron (04:00 UTC, after the 03:00 expiry run). Safety rules (same shape as reviewRequests.ts):
 //   * Candidates come from the database (loyalty_expiry_reminder_candidates, db_migration_v40): registered customers with an e-mail
 //     address and order e-mails on, whose next batch expires within REMINDER_DAYS, not yet reminded for that date and not reminded
 //     at all in the last 7 days. The dates use the same FIFO ledger walk as the expiry itself, so the e-mail never promises a date
@@ -35,17 +35,20 @@ export function formatExpiryDate(ymd: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
-export function coinExpiryEmail(c: { firstName: string | null; coins: number; expiresOn: string; balance: number; label?: string; expiryDays?: string }, siteUrl: string) {
+export function coinExpiryEmail(c: { firstName: string | null; coins: number; expiresOn: string; balance: number; label?: string; expiryDays?: string; pointValue?: string }, siteUrl: string) {
   const label = c.label || 'Pahadi Coins'
   const when = formatExpiryDate(c.expiresOn)
   const n = Math.max(0, Math.floor(c.coins))
   const greet = c.firstName && c.firstName !== 'Deleted' ? `Hi ${esc(c.firstName)},` : 'Hi,'
-  const subject = `${n} ${label} expire on ${when}`
+  // `coins` is everything expiring inside the reminder window, which can be more than one batch: say "from <first date>", never
+  // that all of them go on that one day (verification, Nov 2026).
+  const pv = Number(c.pointValue); const worth = Math.floor(n * (Number.isFinite(pv) && pv >= 0 ? pv : 1))
+  const subject = `${n} ${label} start expiring on ${when}`
   const html = brandedEmail({
     heading: `Your ${esc(label)} expire soon`,
     bodyHtml:
       `<p style="margin:0 0 12px">${greet}</p>` +
-      `<p style="margin:0 0 12px"><strong>${n} ${n === 1 ? 'coin' : 'coins'}</strong> (worth ₹${n}) in your account will expire on <strong>${esc(when)}</strong>. ` +
+      `<p style="margin:0 0 12px"><strong>${n} ${n === 1 ? 'coin' : 'coins'}</strong> (worth ₹${worth}) in your account will expire soon, starting on <strong>${esc(when)}</strong>. ` +
       `You have ${Math.max(0, Math.floor(c.balance))} coins in total.</p>` +
       `<p style="margin:0 0 12px">Use them on your next order: coins take money off at checkout (together with any coupon, up to the limit shown there). Coins you spend are always taken from your oldest coins first.</p>` +
       `<p style="margin:16px 0 0;font-size:12px;color:#6b6256">Coins expire ${expirySpan(c.expiryDays) ?? '4 months'} after you earn them — see our <a href="${siteUrl}/policies/terms" style="color:#6b6256">Terms</a>. ` +
@@ -61,7 +64,7 @@ export async function sendCoinExpiryReminders(db: Db, opts: { limit?: number; ti
   const budget = opts.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS
   try {
     const { data: srows, error: serr } = await db.from('site_settings').select('key, value')
-      .in('key', ['loyalty_enabled', 'loyalty_expiry_reminder_enabled', 'loyalty_expiry_days', 'loyalty_points_label'])
+      .in('key', ['loyalty_enabled', 'loyalty_expiry_reminder_enabled', 'loyalty_expiry_days', 'loyalty_points_label', 'loyalty_points_value'])
     if (serr) throw new Error('settings read failed: ' + serr.message)
     const s = Object.fromEntries(((srows ?? []) as Array<{ key: string; value: string }>).map(r => [r.key, String(r.value ?? '').trim()]))
     if (s.loyalty_enabled === 'false' || s.loyalty_expiry_reminder_enabled === 'false' || s.loyalty_expiry_days === '0') {
@@ -84,7 +87,7 @@ export async function sendCoinExpiryReminders(db: Db, opts: { limit?: number; ti
           .select('id')
         if (claimErr) throw new Error('claim failed: ' + claimErr.message)
         if (!won || won.length === 0) { stats.skipped++; continue }
-        const { subject, html } = coinExpiryEmail({ firstName: c.first_name, coins: Number(c.coins), expiresOn: c.expires_on, balance: Number(c.balance), label: s.loyalty_points_label, expiryDays: s.loyalty_expiry_days }, siteUrl)
+        const { subject, html } = coinExpiryEmail({ firstName: c.first_name, coins: Number(c.coins), expiresOn: c.expires_on, balance: Number(c.balance), label: s.loyalty_points_label, expiryDays: s.loyalty_expiry_days, pointValue: s.loyalty_points_value }, siteUrl)
         const result = await sendTransactionalEmail({ type: 'coin_expiry_reminder', to: email, subject, html, context: { customer_id: c.customer_id, expires_on: c.expires_on } })
         if (result.sent || result.deadLettered) stats.sent++
         else {

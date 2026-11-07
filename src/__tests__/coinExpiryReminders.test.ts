@@ -18,7 +18,7 @@ describe('coin expiry wording', () => {
   })
   it('builds an escaped e-mail with the amount, date and span', () => {
     const { subject, html } = coinExpiryEmail({ firstName: '<b>Asha</b>', coins: 25, expiresOn: '2027-03-06', balance: 40, expiryDays: '120' }, 'https://www.pahadiroots.com')
-    expect(subject).toBe('25 Pahadi Coins expire on 6 March 2027')
+    expect(subject).toBe('25 Pahadi Coins start expiring on 6 March 2027')
     expect(html).toContain('&lt;b&gt;Asha')
     expect(html).toContain('worth ₹25')
     expect(html).toContain('4 months')
